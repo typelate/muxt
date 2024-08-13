@@ -2,6 +2,7 @@
 package fake
 
 import (
+	"context"
 	"net/http"
 	"sync"
 
@@ -21,6 +22,19 @@ type FakeReceiver struct {
 		result2 error
 	}
 	editRowReturnsOnCall map[int]struct {
+		result1 any
+		result2 error
+	}
+	TasteStub        func(context.Context) (any, error)
+	tasteMutex       sync.RWMutex
+	tasteArgsForCall []struct {
+		arg1 context.Context
+	}
+	tasteReturns struct {
+		result1 any
+		result2 error
+	}
+	tasteReturnsOnCall map[int]struct {
 		result1 any
 		result2 error
 	}
@@ -94,11 +108,77 @@ func (fake *FakeReceiver) EditRowReturnsOnCall(i int, result1 any, result2 error
 	}{result1, result2}
 }
 
+func (fake *FakeReceiver) Taste(arg1 context.Context) (any, error) {
+	fake.tasteMutex.Lock()
+	ret, specificReturn := fake.tasteReturnsOnCall[len(fake.tasteArgsForCall)]
+	fake.tasteArgsForCall = append(fake.tasteArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.TasteStub
+	fakeReturns := fake.tasteReturns
+	fake.recordInvocation("Taste", []interface{}{arg1})
+	fake.tasteMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeReceiver) TasteCallCount() int {
+	fake.tasteMutex.RLock()
+	defer fake.tasteMutex.RUnlock()
+	return len(fake.tasteArgsForCall)
+}
+
+func (fake *FakeReceiver) TasteCalls(stub func(context.Context) (any, error)) {
+	fake.tasteMutex.Lock()
+	defer fake.tasteMutex.Unlock()
+	fake.TasteStub = stub
+}
+
+func (fake *FakeReceiver) TasteArgsForCall(i int) context.Context {
+	fake.tasteMutex.RLock()
+	defer fake.tasteMutex.RUnlock()
+	argsForCall := fake.tasteArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeReceiver) TasteReturns(result1 any, result2 error) {
+	fake.tasteMutex.Lock()
+	defer fake.tasteMutex.Unlock()
+	fake.TasteStub = nil
+	fake.tasteReturns = struct {
+		result1 any
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeReceiver) TasteReturnsOnCall(i int, result1 any, result2 error) {
+	fake.tasteMutex.Lock()
+	defer fake.tasteMutex.Unlock()
+	fake.TasteStub = nil
+	if fake.tasteReturnsOnCall == nil {
+		fake.tasteReturnsOnCall = make(map[int]struct {
+			result1 any
+			result2 error
+		})
+	}
+	fake.tasteReturnsOnCall[i] = struct {
+		result1 any
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeReceiver) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.editRowMutex.RLock()
 	defer fake.editRowMutex.RUnlock()
+	fake.tasteMutex.RLock()
+	defer fake.tasteMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

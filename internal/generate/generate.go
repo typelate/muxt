@@ -29,8 +29,8 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		handlerFuncIdentName  string
 	)
 	flagSet := flag.NewFlagSet("generate", flag.ContinueOnError)
-	flagSet.StringVar(&receiverTypeIdentName, "receiver", "Receiver", "the name of an interface type used for template data function calls")
-	flagSet.StringVar(&handlerFuncIdentName, "handler", "TemplateRoutes", "the name of the generated function registering routes on an *http.ServeMux")
+	flagSet.StringVar(&receiverTypeIdentName, "receiver", receiverTypeIdentNameDefault, "the name of an interface type used for template data function calls")
+	flagSet.StringVar(&handlerFuncIdentName, "handler", handlerFuncIdentNameDefault, "the name of the generated function registering routes on an *http.ServeMux")
 	if err := flagSet.Parse(args); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			return cmp.Compare(strings.Join([]string{a.Path, a.Method, a.Handler}, " "), strings.Join([]string{b.Path, b.Method, b.Handler}, " "))
 		})
 		for _, pat := range templateNames {
-			handleFunc, methodField, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
+			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
 				return err
 			}
@@ -123,6 +123,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			}
 			handler.Body.List = append(handler.Body.List, &ast.ExprStmt{X: handleFunc})
 			logger.Println(handlerFuncIdentName, "has route for", pat.String())
+			stdLibImports = append(stdLibImports, handlerImports...)
 		}
 	}
 
@@ -183,18 +184,20 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 }
 
 const (
-	responseIdentName     = "response"
-	requestIdentName      = "request"
-	receiverIdentName     = "receiver"
-	contextIdentName      = "ctx"
-	dataIdentName         = "data"
-	serveMuxIdentName     = "mux"
-	errorIdentName        = "err"
-	errorHandlerIdentName = "handleError"
-	executeIdentName      = "execute"
+	responseIdentName            = "response"
+	requestIdentName             = "request"
+	receiverIdentName            = "receiver"
+	contextIdentName             = "ctx"
+	dataIdentName                = "data"
+	serveMuxIdentName            = "mux"
+	errorIdentName               = "err"
+	errorHandlerIdentName        = "handleError"
+	executeIdentName             = "execute"
+	receiverTypeIdentNameDefault = "Receiver"
+	handlerFuncIdentNameDefault  = "TemplateRoutes"
 )
 
-func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, error) {
+func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
 	handler := &ast.FuncLit{
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{
@@ -210,26 +213,27 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 	}
 	var methodField *ast.Field
 	data := ast.NewIdent(requestIdentName)
+	var imports []string
 	if e.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
 		exp, err := parser.ParseExpr(e.Handler)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		call, ok := exp.(*ast.CallExpr)
 		if !ok {
-			return nil, nil, fmt.Errorf("expected call expression")
+			return nil, nil, nil, fmt.Errorf("expected call expression")
 		}
 		if call.Ellipsis != token.NoPos {
-			return nil, nil, fmt.Errorf("ellipsis calls not permitted")
+			return nil, nil, nil, fmt.Errorf("ellipsis calls not permitted")
 		}
 		methodIdent, ok := call.Fun.(*ast.Ident)
 		if !ok {
-			return nil, nil, fmt.Errorf("expected method name identifier")
+			return nil, nil, nil, fmt.Errorf("expected method name identifier")
 		}
 		pathParameters, err := e.PathParameters()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		methodFuncType := &ast.FuncType{
 			Params: &ast.FieldList{},
@@ -244,7 +248,7 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 		for _, arg := range call.Args {
 			ai, ok := arg.(*ast.Ident)
 			if !ok {
-				return nil, nil, fmt.Errorf("arguments must be identifiers")
+				return nil, nil, nil, fmt.Errorf("arguments must be identifiers")
 			}
 			switch ai.Name {
 			case responseIdentName:
@@ -280,9 +284,10 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 						Sel: ast.NewIdent("Context"),
 					},
 				})
+				imports = append(imports, "context")
 			default:
 				if !slices.Contains(pathParameters, ai.Name) {
-					return nil, nil, fmt.Errorf("unknown variable %s", ai.Name)
+					return nil, nil, nil, fmt.Errorf("unknown variable %s", ai.Name)
 				}
 				handler.Body.List = append(handler.Body.List, &ast.AssignStmt{
 					Tok: token.DEFINE,
@@ -380,7 +385,7 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 			},
 			handler,
 		},
-	}, methodField, nil
+	}, methodField, imports, nil
 }
 
 func generalDeclaration(p *packages.Package, ident *ast.Ident) (*ast.ValueSpec, *ast.GenDecl, error) {
