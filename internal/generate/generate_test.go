@@ -1,60 +1,42 @@
-package generate
+package generate_test
 
 import (
-	"os"
+	"bytes"
+	"log"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/crhntr/muxt/internal/generate"
 )
 
 func TestCommand(t *testing.T) {
-	cmdDir, err := os.Getwd()
+	dir, err := filepath.Abs(filepath.FromSlash("testdata/fruit"))
 	require.NoError(t, err)
-	dir := filepath.Join(cmdDir, filepath.FromSlash("testdata/fruit"))
-	t.Setenv("GOLINE", "14")
-	t.Setenv("GOFILE", "execute.go")
-	t.Setenv("GOPACKAGE", "fruit")
-	require.NoError(t, Command(dir, []string{}))
+	logBuffer := bytes.NewBuffer(nil)
+	logger := log.New(logBuffer, "", 0)
+	require.NoError(t, generate.Command([]string{}, dir, logger, defaultLookupEnv(t)))
+
+	assert.Contains(t, logBuffer.String(), ` has route for GET /fruits/{fruit}/edit`)
+	assert.Contains(t, logBuffer.String(), ` has route for PATCH /fruits/{fruit} EditRow(response, request, fruit)`)
+	assert.Contains(t, logBuffer.String(), ` has route for GET /farm`)
 }
 
-func Test_parsePatterns(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		input    string
-		expected []string
-	}{
-		{
-			name:     "quoted globs with double quotes",
-			input:    `*.txt "*.md" "images/*.png"`,
-			expected: []string{"*.txt", "*.md", "images/*.png"},
-		},
-		{
-			name:     "quoted globs with backticks",
-			input:    "*.go `*.js` `css/*.css`",
-			expected: []string{"*.go", "*.js", "css/*.css"},
-		},
-		{
-			name:     "glob with spaces",
-			input:    `"file with spaces.txt"`,
-			expected: []string{"file with spaces.txt"},
-		},
-		{
-			name:     "unclosed quote",
-			input:    `"unclosed quote`,
-			expected: []string{"unclosed quote"},
-		},
-		{
-			name:     "plain files",
-			input:    "plain `other`",
-			expected: []string{"plain", "other"},
-		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parsePatterns(tt.input)
-			require.NoError(t, err)
-			assert.EqualValues(t, tt.expected, result)
-		})
+func defaultLookupEnv(t *testing.T) func(name string) (string, bool) {
+	return func(name string) (string, bool) {
+		t.Helper()
+		switch name {
+		case "GOLINE":
+			return "14", true
+		case "GOFILE":
+			return "execute.go", true
+		case "GOPACKAGE":
+			return "fruit", true
+		default:
+			t.Errorf("unexpected LookupEnv call %q", name)
+			return "", false
+		}
 	}
 }

@@ -13,7 +13,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := generate.Command(wd, os.Args[1:]); err != nil {
+	if err := generate.Command(os.Args[1:], wd, log.Default(), os.LookupEnv); err != nil {
 		log.Fatal(err)
 	}
 }

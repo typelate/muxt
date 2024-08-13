@@ -2,6 +2,7 @@ package generate
 
 import (
 	"bytes"
+	"cmp"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -10,19 +11,19 @@ import (
 	"go/token"
 	"go/types"
 	"html/template"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/crhntr/muxt"
 )
 
-func Command(wd string, args []string) error {
+func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string) (string, bool)) error {
 	var (
 		receiverTypeIdentName string
 		handlerFuncIdentName  string
@@ -33,16 +34,33 @@ func Command(wd string, args []string) error {
 	if err := flagSet.Parse(args); err != nil {
 		return err
 	}
+	const (
+		goPackageEnvVar = "GOPACKAGE"
+		goFileEnvVar    = "GOFILE"
+		goLineEnvVar    = "GOLINE"
+	)
+	goPackage, ok := lookupEnv(goPackageEnvVar)
+	if !ok {
+		return fmt.Errorf("%s is not set", goPackageEnvVar)
+	}
+	goFile, ok := lookupEnv(goFileEnvVar)
+	if !ok {
+		return fmt.Errorf("%s is not set", goFileEnvVar)
+	}
+	goLine, ok := lookupEnv(goLineEnvVar)
+	if !ok {
+		return fmt.Errorf("%s is not set", goLineEnvVar)
+	}
 
-	pkg, err := loadPackage(wd)
+	pkg, err := loadPackage(wd, goPackage)
 	if err != nil {
 		return err
 	}
-	file, err := findFile(pkg)
+	file, err := findFile(pkg, goFile)
 	if err != nil {
 		return err
 	}
-	spec, err := valueSpec(pkg.Fset, file)
+	spec, err := valueSpec(pkg.Fset, file, goLine)
 	if err != nil || spec == nil {
 		return err
 	}
@@ -73,18 +91,25 @@ func Command(wd string, args []string) error {
 			return err
 		}
 
+		var templateNames []muxt.TemplateName
 		for _, t := range ts.Templates() {
-			pat, err, ok := muxt.NewTemplateName(t.Name())
+			name, err, ok := muxt.NewTemplateName(t.Name())
 			if !ok {
 				continue
 			}
 			if err != nil {
 				return err
 			}
-			if _, ok := patSet[pat.Pattern]; ok {
-				return fmt.Errorf("duplicate route pattern: %s", pat.Pattern)
+			if _, ok := patSet[name.Pattern]; ok {
+				return fmt.Errorf("duplicate route pattern: %s", name.Pattern)
 			}
-			handleFunc, methodField, err := templateHandlers(t, pat, pkg, n)
+			templateNames = append(templateNames, name)
+		}
+		slices.SortFunc(templateNames, func(a, b muxt.TemplateName) int {
+			return cmp.Compare(a.String(), b.String())
+		})
+		for _, pat := range templateNames {
+			handleFunc, methodField, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
 				return err
 			}
@@ -92,7 +117,7 @@ func Command(wd string, args []string) error {
 				receiverType.Methods.List = append(receiverType.Methods.List, methodField)
 			}
 			handler.Body.List = append(handler.Body.List, &ast.ExprStmt{X: handleFunc})
-			fmt.Println(handlerFuncIdentName, "has route for", pat.String())
+			logger.Println(handlerFuncIdentName, "has route for", pat.String())
 		}
 	}
 
@@ -449,12 +474,7 @@ func readComments(s *strings.Builder, groups ...*ast.CommentGroup) {
 	}
 }
 
-func valueSpec(set *token.FileSet, file *ast.File) (*ast.ValueSpec, error) {
-	const envVar = "GOLINE"
-	goLine, ok := os.LookupEnv(envVar)
-	if !ok {
-		return nil, fmt.Errorf("%s is not set", envVar)
-	}
+func valueSpec(set *token.FileSet, file *ast.File, goLine string) (*ast.ValueSpec, error) {
 	number, err := strconv.Atoi(goLine)
 	if err != nil {
 		return nil, err
@@ -493,12 +513,7 @@ func valueSpec(set *token.FileSet, file *ast.File) (*ast.ValueSpec, error) {
 	return nil, nil
 }
 
-func findFile(p *packages.Package) (*ast.File, error) {
-	const envVar = "GOFILE"
-	goFile, ok := os.LookupEnv(envVar)
-	if !ok {
-		return nil, fmt.Errorf("%s is not set", envVar)
-	}
+func findFile(p *packages.Package, goFile string) (*ast.File, error) {
 	i := slices.IndexFunc(p.Syntax, func(file *ast.File) bool {
 		fp := p.Fset.Position(file.Pos())
 		return filepath.Base(fp.Filename) == goFile
@@ -509,12 +524,7 @@ func findFile(p *packages.Package) (*ast.File, error) {
 	return p.Syntax[i], nil
 }
 
-func loadPackage(wd string) (*packages.Package, error) {
-	const envVar = "GOPACKAGE"
-	goPackage, ok := os.LookupEnv(envVar)
-	if !ok {
-		return nil, fmt.Errorf("%s is not set", envVar)
-	}
+func loadPackage(wd, goPackage string) (*packages.Package, error) {
 	list, err := packages.Load(&packages.Config{
 		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps | packages.NeedEmbedFiles,
 		Dir:   ".", // Current directory
@@ -528,49 +538,4 @@ func loadPackage(wd string) (*packages.Package, error) {
 		return nil, fmt.Errorf("package %s not found", goPackage)
 	}
 	return list[i], nil
-}
-
-func parsePatterns(input string) ([]string, error) {
-	var (
-		patterns       []string
-		currentPattern strings.Builder
-		inQuote        = false
-		quoteChar      rune
-	)
-
-	for _, r := range input {
-		switch {
-		case r == '"' || r == '`':
-			if !inQuote {
-				inQuote = true
-				quoteChar = r
-				continue
-			}
-			if r != quoteChar {
-				currentPattern.WriteRune(r)
-				continue
-			}
-			patterns = append(patterns, currentPattern.String())
-			currentPattern.Reset()
-			inQuote = false
-		case unicode.IsSpace(r):
-			if inQuote {
-				currentPattern.WriteRune(r)
-				continue
-			}
-			if currentPattern.Len() > 0 {
-				patterns = append(patterns, currentPattern.String())
-				currentPattern.Reset()
-			}
-		default:
-			currentPattern.WriteRune(r)
-		}
-	}
-
-	// Add any remaining pattern
-	if currentPattern.Len() > 0 {
-		patterns = append(patterns, currentPattern.String())
-	}
-
-	return patterns, nil
 }
