@@ -46,6 +46,13 @@ func TestCommand001(t *testing.T) {
 	assert.Contains(t, logBuffer.String(), ` has route for GET /farm`)
 
 	out := bytes.NewBuffer(nil)
+	fakes := exec.Command("go", "generate", "-run=counterfeiter")
+	fakes.Dir = dir
+	fakes.Stderr = out
+	fakes.Stdout = out
+	assert.NoError(t, fakes.Run(), out.String())
+
+	out.Reset()
 	test := exec.Command("go", "test")
 	test.Dir = dir
 	test.Stderr = out

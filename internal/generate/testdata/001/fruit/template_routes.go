@@ -17,7 +17,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver Receiver) {
 	mux.HandleFunc("PATCH /fruits/taste", func(response http.ResponseWriter, request *http.Request) {
 		data, err := receiver.Taste(request.Context())
 		if err != nil {
-			handleError(response, request, templates, err)
+			handleError(response, request, templates, http.StatusInternalServerError, err)
 			return
 		}
 		execute(response, request, templates.Lookup("PATCH /fruits/taste Taste(ctx)"), http.StatusOK, data)
@@ -26,7 +26,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver Receiver) {
 		fruit := request.PathValue("fruit")
 		data, err := receiver.EditRow(response, request, fruit)
 		if err != nil {
-			handleError(response, request, templates, err)
+			handleError(response, request, templates, http.StatusInternalServerError, err)
 			return
 		}
 		execute(response, request, templates.Lookup("PATCH /fruits/{fruit} EditRow(response, request, fruit)"), http.StatusOK, data)

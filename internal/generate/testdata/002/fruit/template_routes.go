@@ -18,7 +18,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver Receiver) {
 		fruit := request.PathValue("fruit")
 		data, err := receiver.EditRow(response, request, fruit)
 		if err != nil {
-			handleError(response, request, templates, err)
+			handleError(response, request, templates, http.StatusInternalServerError, err)
 			return
 		}
 		execute(response, request, templates.Lookup("PATCH /fruits/{fruit} EditRow(response, request, fruit)"), http.StatusOK, data)
@@ -40,6 +40,6 @@ func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, cod
 }
 
 // handleError is a default implementation add a function with the same signature to the package and this function will not be generated
-func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
-	http.Error(res, err.Error(), http.StatusInternalServerError)
+func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, code int, err error) {
+	http.Error(res, err.Error(), code)
 }

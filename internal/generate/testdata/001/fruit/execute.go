@@ -24,8 +24,8 @@ func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, cod
 	_, _ = buf.WriteTo(res)
 }
 
-func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
-	http.Error(res, err.Error(), http.StatusInternalServerError)
+func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, code int, err error) {
+	http.Error(res, err.Error(), code)
 }
 
 type Row struct {

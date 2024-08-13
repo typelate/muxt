@@ -23,6 +23,21 @@ import (
 	"github.com/crhntr/muxt"
 )
 
+const (
+	responseIdentName     = "response"
+	requestIdentName      = "request"
+	receiverIdentName     = "receiver"
+	contextIdentName      = "ctx"
+	dataIdentName         = "data"
+	serveMuxIdentName     = "mux"
+	errorIdentName        = "err"
+	errorHandlerIdentName = "handleError"
+	executeIdentName      = "execute"
+
+	receiverTypeIdentNameDefault = "Receiver"
+	handlerFuncIdentNameDefault  = "TemplateRoutes"
+)
+
 func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string) (string, bool)) error {
 	var (
 		receiverTypeIdentName string
@@ -183,30 +198,9 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	return os.WriteFile(filepath.Join(wd, "template_routes.go"), out, 0666)
 }
 
-const (
-	responseIdentName            = "response"
-	requestIdentName             = "request"
-	receiverIdentName            = "receiver"
-	contextIdentName             = "ctx"
-	dataIdentName                = "data"
-	serveMuxIdentName            = "mux"
-	errorIdentName               = "err"
-	errorHandlerIdentName        = "handleError"
-	executeIdentName             = "execute"
-	receiverTypeIdentNameDefault = "Receiver"
-	handlerFuncIdentNameDefault  = "TemplateRoutes"
-)
-
-func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
+func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
 	handler := &ast.FuncLit{
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{
-				List: []*ast.Field{
-					{Names: []*ast.Ident{ast.NewIdent(responseIdentName)}, Type: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("ResponseWriter")}},
-					{Names: []*ast.Ident{ast.NewIdent(requestIdentName)}, Type: &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Request")}}},
-				},
-			},
-		},
+		Type: httpHandlerFuncType(),
 		Body: &ast.BlockStmt{
 			List: make([]ast.Stmt, 0, 2),
 		},
@@ -214,9 +208,9 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 	var methodField *ast.Field
 	data := ast.NewIdent(requestIdentName)
 	var imports []string
-	if e.Handler != "" {
+	if name.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
-		exp, err := parser.ParseExpr(e.Handler)
+		exp, err := parser.ParseExpr(name.Handler)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -231,7 +225,7 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("expected method name identifier")
 		}
-		pathParameters, err := e.PathParameters()
+		pathParameters, err := name.PathParameters()
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -252,23 +246,11 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 			}
 			switch ai.Name {
 			case responseIdentName:
-				args = append(args, ast.NewIdent(ai.Name))
-				methodFuncType.Params.List = append(methodFuncType.Params.List, &ast.Field{
-					Names: []*ast.Ident{ast.NewIdent(ai.Name)},
-					Type: &ast.SelectorExpr{
-						X:   ast.NewIdent("http"),
-						Sel: ast.NewIdent("ResponseWriter"),
-					},
-				})
+				args = append(args, ast.NewIdent(responseIdentName))
+				methodFuncType.Params.List = append(methodFuncType.Params.List, httpResponseField())
 			case requestIdentName:
-				args = append(args, ast.NewIdent(ai.Name))
-				methodFuncType.Params.List = append(methodFuncType.Params.List, &ast.Field{
-					Names: []*ast.Ident{ast.NewIdent(ai.Name)},
-					Type: &ast.StarExpr{X: &ast.SelectorExpr{
-						X:   ast.NewIdent("http"),
-						Sel: ast.NewIdent("Request"),
-					}},
-				})
+				args = append(args, ast.NewIdent(requestIdentName))
+				methodFuncType.Params.List = append(methodFuncType.Params.List, httpRequestField())
 			case contextIdentName:
 				args = append(args, &ast.CallExpr{
 					Fun: &ast.SelectorExpr{
@@ -277,13 +259,7 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 					},
 					Args: make([]ast.Expr, 0),
 				})
-				methodFuncType.Params.List = append(methodFuncType.Params.List, &ast.Field{
-					Names: []*ast.Ident{ast.NewIdent(ai.Name)},
-					Type: &ast.SelectorExpr{
-						X:   ast.NewIdent("context"),
-						Sel: ast.NewIdent("Context"),
-					},
-				})
+				methodFuncType.Params.List = append(methodFuncType.Params.List, contextContextField())
 				imports = append(imports, "context")
 			default:
 				if !slices.Contains(pathParameters, ai.Name) {
@@ -332,60 +308,12 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 				},
 			},
 		}
-		errCheck := &ast.IfStmt{
-			Cond: &ast.BinaryExpr{X: ast.NewIdent(errorIdentName), Op: token.NEQ, Y: ast.NewIdent("nil")},
-			Body: &ast.BlockStmt{
-				List: []ast.Stmt{
-					&ast.ExprStmt{X: &ast.CallExpr{
-						Fun: ast.NewIdent(errorHandlerIdentName),
-						Args: []ast.Expr{
-							ast.NewIdent(responseIdentName),
-							ast.NewIdent(requestIdentName),
-							ast.NewIdent(templatesVariable.Name),
-							ast.NewIdent(errorIdentName),
-						},
-					}},
-					&ast.ReturnStmt{Results: make([]ast.Expr, 0)},
-				},
-			},
-		}
-		handler.Body.List = append(handler.Body.List, assignData, errCheck)
+		handler.Body.List = append(handler.Body.List, assignData, checkError(templatesVariable, "StatusInternalServerError"))
 	}
 
-	execute := &ast.ExprStmt{X: &ast.CallExpr{
-		Fun: ast.NewIdent(executeIdentName),
-		Args: []ast.Expr{
-			ast.NewIdent(responseIdentName),
-			ast.NewIdent(requestIdentName),
-			&ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   ast.NewIdent(templatesVariable.Name),
-					Sel: ast.NewIdent("Lookup"),
-				},
-				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(e.String())}},
-			},
-			&ast.SelectorExpr{
-				X:   ast.NewIdent("http"),
-				Sel: ast.NewIdent("StatusOK"),
-			},
-			data,
-		},
-	}}
-	handler.Body.List = append(handler.Body.List, execute)
+	handler.Body.List = append(handler.Body.List, executeCall(name, templatesVariable, data))
 
-	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(serveMuxIdentName),
-			Sel: ast.NewIdent("HandleFunc"),
-		},
-		Args: []ast.Expr{
-			&ast.BasicLit{
-				Kind:  token.STRING,
-				Value: strconv.Quote(e.Pattern),
-			},
-			handler,
-		},
-	}, methodField, imports, nil
+	return handleFuncCall(name, handler), methodField, imports, nil
 }
 
 func generalDeclaration(p *packages.Package, ident *ast.Ident) (*ast.ValueSpec, *ast.GenDecl, error) {
@@ -575,6 +503,92 @@ func loadPackage(wd, goPackage string) (*packages.Package, error) {
 	return list[i], nil
 }
 
+func httpResponseField() *ast.Field {
+	return &ast.Field{Names: []*ast.Ident{ast.NewIdent(responseIdentName)}, Type: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("ResponseWriter")}}
+}
+
+func httpRequestField() *ast.Field {
+	return &ast.Field{Names: []*ast.Ident{ast.NewIdent(requestIdentName)}, Type: &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Request")}}}
+}
+
+func httpHandlerFuncType() *ast.FuncType {
+	return &ast.FuncType{
+		Params: &ast.FieldList{List: []*ast.Field{httpResponseField(), httpRequestField()}},
+	}
+}
+
+func contextContextField() *ast.Field {
+	return &ast.Field{
+		Names: []*ast.Ident{ast.NewIdent(contextIdentName)},
+		Type: &ast.SelectorExpr{
+			X:   ast.NewIdent("context"),
+			Sel: ast.NewIdent("Context"),
+		},
+	}
+}
+
+func checkError(templatesVariable *ast.Ident, statusNameSelector string) *ast.IfStmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errorIdentName), Op: token.NEQ, Y: ast.NewIdent("nil")},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ExprStmt{X: &ast.CallExpr{
+					Fun: ast.NewIdent(errorHandlerIdentName),
+					Args: []ast.Expr{
+						ast.NewIdent(responseIdentName),
+						ast.NewIdent(requestIdentName),
+						ast.NewIdent(templatesVariable.Name),
+						&ast.SelectorExpr{
+							X:   ast.NewIdent("http"),
+							Sel: ast.NewIdent(statusNameSelector),
+						},
+						ast.NewIdent(errorIdentName),
+					},
+				}},
+				&ast.ReturnStmt{Results: make([]ast.Expr, 0)},
+			},
+		},
+	}
+}
+
+func executeCall(name muxt.TemplateName, templatesVariable, data *ast.Ident) *ast.ExprStmt {
+	return &ast.ExprStmt{X: &ast.CallExpr{
+		Fun: ast.NewIdent(executeIdentName),
+		Args: []ast.Expr{
+			ast.NewIdent(responseIdentName),
+			ast.NewIdent(requestIdentName),
+			&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(templatesVariable.Name),
+					Sel: ast.NewIdent("Lookup"),
+				},
+				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name.String())}},
+			},
+			&ast.SelectorExpr{
+				X:   ast.NewIdent("http"),
+				Sel: ast.NewIdent("StatusOK"),
+			},
+			data,
+		},
+	}}
+}
+
+func handleFuncCall(name muxt.TemplateName, handler *ast.FuncLit) *ast.CallExpr {
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(serveMuxIdentName),
+			Sel: ast.NewIdent("HandleFunc"),
+		},
+		Args: []ast.Expr{
+			&ast.BasicLit{
+				Kind:  token.STRING,
+				Value: strconv.Quote(name.Pattern),
+			},
+			handler,
+		},
+	}
+}
+
 const (
 	defaultExecuteImplementation = `
 // execute is a default implementation add a function with the same signature to the package and this function will not be generated
@@ -591,8 +605,8 @@ func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, cod
 
 	defaultHandleErrorImplementation = `
 // handleError is a default implementation add a function with the same signature to the package and this function will not be generated
-func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
-	http.Error(res, err.Error(), http.StatusInternalServerError)
+func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, code int, err error) {
+	http.Error(res, err.Error(), code)
 }
 `
 )
