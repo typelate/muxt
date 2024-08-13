@@ -107,7 +107,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			templateNames = append(templateNames, name)
 		}
 		slices.SortFunc(templateNames, func(a, b muxt.TemplateName) int {
-			return cmp.Compare(a.String(), b.String())
+			return cmp.Compare(strings.Join([]string{a.Path, a.Method, a.Handler}, " "), strings.Join([]string{b.Path, b.Method, b.Handler}, " "))
 		})
 		for _, pat := range templateNames {
 			handleFunc, methodField, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
