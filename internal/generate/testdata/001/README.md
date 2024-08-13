@@ -1,6 +1,6 @@
-# Fruit
+# 1
 
-This test is what I used to generate the first generation version of the CLI.
+This test is what I used to generate the first iteration of the CLI.
 
 It does not configure any flags.
 

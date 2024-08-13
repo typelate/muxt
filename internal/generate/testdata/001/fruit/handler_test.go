@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/html/atom"
 
-	"github.com/crhntr/muxt/internal/generate/testdata/test001/fruit"
-	"github.com/crhntr/muxt/internal/generate/testdata/test001/fruit/fake"
+	"github.com/crhntr/muxt/internal/generate/testdata/001/fruit"
+	"github.com/crhntr/muxt/internal/generate/testdata/001/fruit/fake"
 )
 
 //go:generate counterfeiter -generate
