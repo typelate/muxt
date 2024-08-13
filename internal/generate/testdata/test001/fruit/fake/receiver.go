@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/crhntr/muxt/internal/generate/testdata/fruit"
+	"github.com/crhntr/muxt/internal/generate/testdata/test001/fruit"
 )
 
 type FakeReceiver struct {
