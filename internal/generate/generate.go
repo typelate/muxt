@@ -51,6 +51,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	if !ok {
 		return fmt.Errorf("%s is not set", goLineEnvVar)
 	}
+	_ = os.Remove(filepath.Join(wd, "template_routes.go"))
 
 	pkg, err := loadPackage(wd, goPackage)
 	if err != nil {
@@ -121,29 +122,65 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		}
 	}
 
-	fileAST := &ast.File{
-		Name: ast.NewIdent(file.Name.Name),
-		Decls: []ast.Decl{
-			&ast.GenDecl{
-				Tok: token.IMPORT,
-				Specs: []ast.Spec{
-					&ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("net/http")}},
-				},
-			},
-			&ast.GenDecl{
-				Tok: token.TYPE,
-				Specs: []ast.Spec{&ast.TypeSpec{
-					Name: ast.NewIdent("Receiver"),
-					Type: receiverType,
-				}},
-			},
-			handler,
+	imports := &ast.GenDecl{
+		Tok: token.IMPORT,
+		Specs: []ast.Spec{
+			&ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("net/http")}},
 		},
+	}
+
+	outputDecl := []ast.Decl{
+		imports,
+		&ast.GenDecl{
+			Tok: token.TYPE,
+			Specs: []ast.Spec{&ast.TypeSpec{
+				Name: ast.NewIdent("Receiver"),
+				Type: receiverType,
+			}},
+		},
+		handler,
+	}
+
+	executeFound := false
+	handleErrorFound := false
+	for _, f := range pkg.Syntax {
+		executeFound = executeFound || f.Scope.Lookup(executeIdentName) != nil
+		handleErrorFound = handleErrorFound || f.Scope.Lookup("handleError") != nil
+	}
+	if !executeFound {
+		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("html/template")}})
+		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("bytes")}})
+	}
+	if !handleErrorFound {
+		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("html/template")}})
+	}
+
+	fileAST := &ast.File{
+		Name:  ast.NewIdent(file.Name.Name),
+		Decls: outputDecl,
 	}
 
 	var buf bytes.Buffer
 	if err := format.Node(&buf, token.NewFileSet(), fileAST); err != nil {
 		return err
+	}
+	if !executeFound {
+		logger.Println("adding default implementation for func handleError")
+		buf.WriteString("\n" + `func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	res.WriteHeader(code)
+	_, _ = buf.WriteTo(res)
+}` + "\n")
+	}
+	if !handleErrorFound {
+		logger.Println("adding default implementation for func handleError")
+		buf.WriteString("\n" + `func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
+	http.Error(res, err.Error(), http.StatusInternalServerError)
+}` + "\n")
 	}
 	out, err := format.Source(buf.Bytes())
 	if err != nil {
@@ -161,6 +198,7 @@ const (
 	serveMuxIdentName     = "mux"
 	errorIdentName        = "err"
 	errorHandlerIdentName = "handleError"
+	executeIdentName      = "execute"
 )
 
 func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, error) {
@@ -318,7 +356,7 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 	}
 
 	execute := &ast.ExprStmt{X: &ast.CallExpr{
-		Fun: ast.NewIdent("execute"),
+		Fun: ast.NewIdent(executeIdentName),
 		Args: []ast.Expr{
 			ast.NewIdent(responseIdentName),
 			ast.NewIdent(requestIdentName),
