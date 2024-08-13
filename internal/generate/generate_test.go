@@ -35,7 +35,8 @@ func TestCommand001(t *testing.T) {
 
 	dir, err := filepath.Abs(filepath.FromSlash("testdata/001/fruit"))
 	require.NoError(t, err)
-	_ = os.Remove(filepath.Join(dir, "template_routes.go"))
+	gen := filepath.Join(dir, "template_routes.go")
+	_ = os.Remove(gen)
 	logBuffer := bytes.NewBuffer(nil)
 	logger := log.New(logBuffer, "", 0)
 	require.NoError(t, generate.Command([]string{}, dir, logger, lookupEnv))
@@ -45,11 +46,18 @@ func TestCommand001(t *testing.T) {
 	assert.Contains(t, logBuffer.String(), ` has route for GET /farm`)
 
 	out := bytes.NewBuffer(nil)
-	cmd := exec.Command("go", "test")
-	cmd.Dir = dir
-	cmd.Stderr = out
-	cmd.Stdout = out
-	assert.NoError(t, cmd.Run(), out.String())
+	test := exec.Command("go", "test")
+	test.Dir = dir
+	test.Stderr = out
+	test.Stdout = out
+	assert.NoError(t, test.Run(), out.String())
+
+	out.Reset()
+	diff := exec.Command("git", "diff", "--exit-code", gen)
+	diff.Dir = dir
+	diff.Stderr = out
+	diff.Stdout = out
+	assert.NoError(t, diff.Run(), out.String())
 }
 
 // TestCommand002 covers when both execute and handleError are not in package scope
@@ -71,7 +79,8 @@ func TestCommand002(t *testing.T) {
 
 	dir, err := filepath.Abs(filepath.FromSlash("testdata/002/fruit"))
 	require.NoError(t, err)
-	_ = os.Remove(filepath.Join(dir, "template_routes.go"))
+	gen := filepath.Join(dir, "template_routes.go")
+	_ = os.Remove(gen)
 	logBuffer := bytes.NewBuffer(nil)
 	logger := log.New(logBuffer, "", 0)
 	require.NoError(t, generate.Command([]string{}, dir, logger, lookupEnv))
@@ -86,4 +95,11 @@ func TestCommand002(t *testing.T) {
 	cmd.Stderr = out
 	cmd.Stdout = out
 	assert.NoError(t, cmd.Run(), out.String())
+
+	out.Reset()
+	diff := exec.Command("git", "diff", "--exit-code", gen)
+	diff.Dir = dir
+	diff.Stderr = out
+	diff.Stdout = out
+	assert.NoError(t, diff.Run(), out.String())
 }

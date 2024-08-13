@@ -13,7 +13,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := generate.Command(os.Args[1:], wd, log.New(os.Stdout, "muxt: ", 0), os.LookupEnv); err != nil {
+	logger := log.New(os.Stdout, "muxt: ", 0)
+	if err := generate.Command(os.Args[1:], wd, logger, os.LookupEnv); err != nil {
 		log.Fatal(err)
 	}
 }
