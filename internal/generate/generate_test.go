@@ -1,4 +1,4 @@
-package main
+package generate
 
 import (
 	"os"
@@ -18,7 +18,7 @@ func Test(t *testing.T) {
 		t.Setenv("GOFILE", "main.go")
 		t.Setenv("GOPACKAGE", "main")
 	}
-	require.NoError(t, generate(dir, []string{}))
+	require.NoError(t, Command(dir, []string{}))
 }
 
 func Test_parsePatterns(t *testing.T) {
