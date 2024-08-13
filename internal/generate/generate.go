@@ -165,22 +165,12 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		return err
 	}
 	if !executeFound {
-		logger.Println("adding default implementation for func handleError")
-		buf.WriteString("\n" + `func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	res.WriteHeader(code)
-	_, _ = buf.WriteTo(res)
-}` + "\n")
+		logger.Println("adding default implementation for func execute")
+		buf.WriteString(defaultExecuteImplementation)
 	}
 	if !handleErrorFound {
 		logger.Println("adding default implementation for func handleError")
-		buf.WriteString("\n" + `func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
-	http.Error(res, err.Error(), http.StatusInternalServerError)
-}` + "\n")
+		buf.WriteString(defaultHandleErrorImplementation)
 	}
 	out, err := format.Source(buf.Bytes())
 	if err != nil {
@@ -577,3 +567,19 @@ func loadPackage(wd, goPackage string) (*packages.Package, error) {
 	}
 	return list[i], nil
 }
+
+const (
+	defaultExecuteImplementation = "\n" + `func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	res.WriteHeader(code)
+	_, _ = buf.WriteTo(res)
+}` + "\n"
+
+	defaultHandleErrorImplementation = "\n" + `func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
+	http.Error(res, err.Error(), http.StatusInternalServerError)
+}` + "\n"
+)

@@ -85,9 +85,8 @@ func TestCommand002(t *testing.T) {
 	logger := log.New(logBuffer, "", 0)
 	require.NoError(t, generate.Command([]string{}, dir, logger, lookupEnv))
 
-	assert.Contains(t, logBuffer.String(), ` has route for GET /fruits/{fruit}/edit`)
-	assert.Contains(t, logBuffer.String(), ` has route for PATCH /fruits/{fruit} EditRow(response, request, fruit)`)
-	assert.Contains(t, logBuffer.String(), ` has route for GET /farm`)
+	assert.Contains(t, logBuffer.String(), `adding default implementation for func execute`)
+	assert.Contains(t, logBuffer.String(), `adding default implementation for func handleError`)
 
 	out := bytes.NewBuffer(nil)
 	cmd := exec.Command("go", "test")
