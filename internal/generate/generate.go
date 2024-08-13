@@ -2,6 +2,7 @@ package generate
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -22,6 +23,17 @@ import (
 )
 
 func Command(wd string, args []string) error {
+	var (
+		receiverTypeIdentName string
+		handlerFuncIdentName  string
+	)
+	flagSet := flag.NewFlagSet("generate", flag.ContinueOnError)
+	flagSet.StringVar(&receiverTypeIdentName, "receiver", "Receiver", "the name of an interface type used for template data function calls")
+	flagSet.StringVar(&handlerFuncIdentName, "handler", "TemplateRoutes", "the name of the generated function registering routes on an *http.ServeMux")
+	if err := flagSet.Parse(args); err != nil {
+		return err
+	}
+
 	pkg, err := loadPackage(wd)
 	if err != nil {
 		return err
@@ -36,12 +48,12 @@ func Command(wd string, args []string) error {
 	}
 
 	handler := &ast.FuncDecl{
-		Name: ast.NewIdent("TemplateRoutes"),
+		Name: ast.NewIdent(handlerFuncIdentName),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{
 				List: []*ast.Field{
 					{Names: []*ast.Ident{ast.NewIdent(serveMuxIdentName)}, Type: &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("ServeMux")}}},
-					{Names: []*ast.Ident{ast.NewIdent(receiverIdentName)}, Type: ast.NewIdent("Receiver")},
+					{Names: []*ast.Ident{ast.NewIdent(receiverIdentName)}, Type: ast.NewIdent(receiverTypeIdentName)},
 				},
 			},
 		},
@@ -80,6 +92,7 @@ func Command(wd string, args []string) error {
 				receiverType.Methods.List = append(receiverType.Methods.List, methodField)
 			}
 			handler.Body.List = append(handler.Body.List, &ast.ExprStmt{X: handleFunc})
+			fmt.Println(handlerFuncIdentName, "has route for", pat.String())
 		}
 	}
 

@@ -9,15 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test(t *testing.T) {
+func TestCommand(t *testing.T) {
 	cmdDir, err := os.Getwd()
 	require.NoError(t, err)
-	dir := filepath.Join(filepath.Dir(cmdDir), "example")
-	{
-		t.Setenv("GOLINE", "17")
-		t.Setenv("GOFILE", "main.go")
-		t.Setenv("GOPACKAGE", "main")
-	}
+	dir := filepath.Join(cmdDir, filepath.FromSlash("testdata/fruit"))
+	t.Setenv("GOLINE", "14")
+	t.Setenv("GOFILE", "execute.go")
+	t.Setenv("GOPACKAGE", "fruit")
 	require.NoError(t, Command(dir, []string{}))
 }
 

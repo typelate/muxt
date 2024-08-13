@@ -23,7 +23,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "GET /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
@@ -37,7 +37,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "GET  /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
@@ -51,7 +51,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "POST /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodPost,
 					Host:    "",
 					Path:    "/",
@@ -65,7 +65,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "PATCH /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodPatch,
 					Host:    "",
 					Path:    "/",
@@ -79,7 +79,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "DELETE /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodDelete,
 					Host:    "",
 					Path:    "/",
@@ -93,7 +93,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "PUT /",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/",
@@ -107,7 +107,7 @@ func Test_endpoint(t *testing.T) {
 			TemplateName: "PUT /ping/pong/{$}",
 			ExpMatch:     true,
 			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.Equal(t, muxt.TemplateName{
+				assert.EqualExportedValues(t, muxt.TemplateName{
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/ping/pong/{$}",

@@ -1,4 +1,4 @@
-package main
+package fruit
 
 import "net/http"
 
@@ -19,7 +19,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver Receiver) {
 		}
 		execute(response, request, templates.Lookup("PATCH /fruits/{fruit} EditRow(response, request, fruit)"), http.StatusOK, data)
 	})
-	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
-		execute(response, request, templates.Lookup("GET /help"), http.StatusOK, request)
+	mux.HandleFunc("GET /farm", func(response http.ResponseWriter, request *http.Request) {
+		execute(response, request, templates.Lookup("GET /farm"), http.StatusOK, request)
 	})
 }
