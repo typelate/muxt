@@ -13,9 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
-	"regexp"
 	"slices"
-	"strings"
 	"sync"
 )
 
@@ -103,7 +101,7 @@ func applyOptions(options []Options) *Options {
 func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) error {
 	o := applyOptions(options)
 	for _, t := range ts.Templates() {
-		pattern, err, match := NewEndpointDefinition(t.Name())
+		pattern, err, match := NewTemplateName(t.Name())
 		if !match {
 			continue
 		}
@@ -132,8 +130,8 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 	return nil
 }
 
-func callMethodHandler(o *Options, t *template.Template, pattern EndpointDefinition, call *ast.CallExpr) (http.HandlerFunc, error) {
-	pathParams, err := pattern.pathParams()
+func callMethodHandler(o *Options, t *template.Template, pattern TemplateName, call *ast.CallExpr) (http.HandlerFunc, error) {
+	pathParams, err := pattern.PathParameters()
 	if err != nil {
 		return nil, err
 	}
@@ -340,58 +338,6 @@ func simpleTemplateHandler(ex ExecuteFunc[any], t *template.Template, logger *sl
 	return func(res http.ResponseWriter, req *http.Request) {
 		ex(res, req, t, logger, req)
 	}
-}
-
-type EndpointDefinition struct {
-	Method, Host, Path, Pattern string
-	Handler                     string
-}
-
-var pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
-
-func (def EndpointDefinition) pathParams() ([]string, error) {
-	var result []string
-	for _, matches := range pathSegmentPattern.FindAllStringSubmatch(def.Path, strings.Count(def.Path, "/")) {
-		n := matches[1]
-		if n == "$" {
-			continue
-		}
-		n = strings.TrimSuffix(n, "...")
-		if !token.IsIdentifier(n) {
-			return nil, fmt.Errorf("path parameter name not permitted: %q is not a Go identifier", n)
-		}
-		result = append(result, n)
-	}
-	for i, n := range result {
-		if slices.Contains(result[:i], n) {
-			return nil, fmt.Errorf("path parameter %s defined at least twice", n)
-		}
-	}
-	return result, nil
-}
-
-var templateNameMux = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
-
-func NewEndpointDefinition(in string) (EndpointDefinition, error, bool) {
-	if !templateNameMux.MatchString(in) {
-		return EndpointDefinition{}, nil, false
-	}
-	matches := templateNameMux.FindStringSubmatch(in)
-	p := EndpointDefinition{
-		Method:  matches[templateNameMux.SubexpIndex("Method")],
-		Host:    matches[templateNameMux.SubexpIndex("Host")],
-		Path:    matches[templateNameMux.SubexpIndex("Path")],
-		Handler: matches[templateNameMux.SubexpIndex("Handler")],
-		Pattern: matches[templateNameMux.SubexpIndex("Pattern")],
-	}
-
-	switch p.Method {
-	default:
-		return p, fmt.Errorf("%s method not allowed", p.Method), true
-	case "", http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-	}
-
-	return p, nil, true
 }
 
 type ExecuteFunc[T any] func(http.ResponseWriter, *http.Request, *template.Template, *slog.Logger, T)
