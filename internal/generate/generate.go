@@ -66,6 +66,10 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		return err
 	}
 
+	stdLibImports := []string{
+		"net/http",
+	}
+
 	handler := &ast.FuncDecl{
 		Name: ast.NewIdent(handlerFuncIdentName),
 		Type: &ast.FuncType{
@@ -122,25 +126,6 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		}
 	}
 
-	imports := &ast.GenDecl{
-		Tok: token.IMPORT,
-		Specs: []ast.Spec{
-			&ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("net/http")}},
-		},
-	}
-
-	outputDecl := []ast.Decl{
-		imports,
-		&ast.GenDecl{
-			Tok: token.TYPE,
-			Specs: []ast.Spec{&ast.TypeSpec{
-				Name: ast.NewIdent("Receiver"),
-				Type: receiverType,
-			}},
-		},
-		handler,
-	}
-
 	executeFound := false
 	handleErrorFound := false
 	for _, f := range pkg.Syntax {
@@ -148,16 +133,34 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		handleErrorFound = handleErrorFound || f.Scope.Lookup("handleError") != nil
 	}
 	if !executeFound {
-		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("html/template")}})
-		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("bytes")}})
+		stdLibImports = append(stdLibImports, "html/template", "bytes")
 	}
 	if !handleErrorFound {
-		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("html/template")}})
+		stdLibImports = append(stdLibImports, "html/template")
+	}
+
+	imports := &ast.GenDecl{
+		Tok: token.IMPORT,
+	}
+	slices.Sort(stdLibImports)
+	stdLibImports = slices.Compact(stdLibImports)
+	for _, im := range stdLibImports {
+		imports.Specs = append(imports.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(im)}})
 	}
 
 	fileAST := &ast.File{
-		Name:  ast.NewIdent(file.Name.Name),
-		Decls: outputDecl,
+		Name: ast.NewIdent(file.Name.Name),
+		Decls: []ast.Decl{
+			imports,
+			&ast.GenDecl{
+				Tok: token.TYPE,
+				Specs: []ast.Spec{&ast.TypeSpec{
+					Name: ast.NewIdent(receiverTypeIdentName),
+					Type: receiverType,
+				}},
+			},
+			handler,
+		},
 	}
 
 	var buf bytes.Buffer
@@ -281,7 +284,6 @@ func templateHandlers(_ *template.Template, e muxt.TemplateName, _ *packages.Pac
 				if !slices.Contains(pathParameters, ai.Name) {
 					return nil, nil, fmt.Errorf("unknown variable %s", ai.Name)
 				}
-				// fruit := req.PathValue("fruit")
 				handler.Body.List = append(handler.Body.List, &ast.AssignStmt{
 					Tok: token.DEFINE,
 					Lhs: []ast.Expr{ast.NewIdent(ai.Name)},
@@ -569,7 +571,9 @@ func loadPackage(wd, goPackage string) (*packages.Package, error) {
 }
 
 const (
-	defaultExecuteImplementation = "\n" + `func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
+	defaultExecuteImplementation = `
+// execute is a default implementation add a function with the same signature to the package and this function will not be generated
+func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
@@ -577,9 +581,13 @@ const (
 	}
 	res.WriteHeader(code)
 	_, _ = buf.WriteTo(res)
-}` + "\n"
+}
+`
 
-	defaultHandleErrorImplementation = "\n" + `func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
+	defaultHandleErrorImplementation = `
+// handleError is a default implementation add a function with the same signature to the package and this function will not be generated
+func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
 	http.Error(res, err.Error(), http.StatusInternalServerError)
-}` + "\n"
+}
+`
 )

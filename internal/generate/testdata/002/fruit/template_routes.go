@@ -28,6 +28,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver Receiver) {
 	})
 }
 
+// execute is a default implementation add a function with the same signature to the package and this function will not be generated
 func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
@@ -38,6 +39,7 @@ func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, cod
 	_, _ = buf.WriteTo(res)
 }
 
+// handleError is a default implementation add a function with the same signature to the package and this function will not be generated
 func handleError(res http.ResponseWriter, _ *http.Request, _ *template.Template, err error) {
 	http.Error(res, err.Error(), http.StatusInternalServerError)
 }
