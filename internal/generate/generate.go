@@ -43,6 +43,9 @@ const (
 	goPackageEnvVar = "GOPACKAGE"
 	goFileEnvVar    = "GOFILE"
 	goLineEnvVar    = "GOLINE"
+
+	// httpStatusInternalServerError is the identifier for http.StatusInternalServerError
+	httpStatusInternalServerError = "StatusInternalServerError"
 )
 
 func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string) (string, bool)) error {
@@ -298,7 +301,7 @@ func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.
 				},
 			},
 		}
-		handler.Body.List = append(handler.Body.List, assignData, checkError(templatesVariable, "StatusInternalServerError"))
+		handler.Body.List = append(handler.Body.List, assignData, checkError(templatesVariable, httpStatusInternalServerError))
 	}
 
 	handler.Body.List = append(handler.Body.List, executeCall(name, templatesVariable, data))
@@ -372,18 +375,7 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 			if !ok {
 				return nil, fmt.Errorf("%s.%s expected a variable with type embed.FS as the first argument", name.Name, sel.Sel.Name)
 			}
-			val, dec, err := generalDeclaration(p, fsIdent)
-			if err != nil || dec == nil || val == nil {
-				return nil, err
-			}
-			var comment strings.Builder
-			readComments(&comment, val.Doc, dec.Doc)
-
-			patterns, err := parsePatterns(comment.String())
-			if err != nil {
-				return nil, err
-			}
-			files, err := embeddedFilesMatchingPatternList(dir, p, patterns)
+			files, err := embedFSFilepaths(dir, p, fsIdent)
 			if err != nil {
 				return nil, err
 			}
@@ -391,6 +383,24 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 		}
 	}
 	return nil, nil
+}
+
+func embedFSFilepaths(dir string, p *packages.Package, fsIdent *ast.Ident) ([]string, error) {
+	val, dec, err := generalDeclaration(p, fsIdent)
+	if err != nil || dec == nil || val == nil {
+		return nil, err
+	}
+	var comment strings.Builder
+	readComments(&comment, val.Doc, dec.Doc)
+	patterns, err := parsePatterns(comment.String())
+	if err != nil {
+		return nil, err
+	}
+	files, err := embeddedFilesMatchingPatternList(dir, p, patterns)
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func embeddedFilesMatchingPatternList(dir string, p *packages.Package, patterns []string) ([]string, error) {
@@ -434,26 +444,21 @@ func valueSpecForComment(set *token.FileSet, file *ast.File, commentLine int) (*
 			continue
 		}
 		if decl.Doc != nil && len(decl.Specs) == 1 {
-			p := set.Position(decl.Doc.Pos())
-			if p.Line != commentLine {
-				continue
-			}
 			spec, ok := decl.Specs[0].(*ast.ValueSpec)
 			if !ok {
+				continue
+			}
+			if p := set.Position(decl.Doc.Pos()); p.Line != commentLine {
 				continue
 			}
 			return spec, nil
 		}
 		for _, s := range decl.Specs {
 			spec, ok := s.(*ast.ValueSpec)
-			if !ok {
+			if !ok || spec.Doc == nil {
 				continue
 			}
-			if spec.Doc != nil {
-				continue
-			}
-			p := set.Position(spec.Comment.Pos())
-			if p.Line != commentLine {
+			if p := set.Position(spec.Doc.Pos()); p.Line != commentLine {
 				continue
 			}
 			return spec, nil
