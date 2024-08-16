@@ -60,7 +60,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	if err != nil {
 		return err
 	}
-	pkg, err := loadPackage(wd, goPackage, packages.Load)
+	pkg, err := loadPackage(wd, goPackage)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	if err != nil {
 		return err
 	}
-	spec, err := valueSpec(pkg.Fset, file, goLine)
+	spec, err := valueSpecForComment(pkg.Fset, file, goLine)
 	if err != nil || spec == nil {
 		return err
 	}
@@ -427,7 +427,7 @@ func readComments(s *strings.Builder, groups ...*ast.CommentGroup) {
 	}
 }
 
-func valueSpec(set *token.FileSet, file *ast.File, number int) (*ast.ValueSpec, error) {
+func valueSpecForComment(set *token.FileSet, file *ast.File, commentLine int) (*ast.ValueSpec, error) {
 	for _, d := range file.Decls {
 		decl, ok := d.(*ast.GenDecl)
 		if !ok || decl.Tok != token.VAR {
@@ -435,7 +435,7 @@ func valueSpec(set *token.FileSet, file *ast.File, number int) (*ast.ValueSpec, 
 		}
 		if decl.Doc != nil && len(decl.Specs) == 1 {
 			p := set.Position(decl.Doc.Pos())
-			if p.Line != number {
+			if p.Line != commentLine {
 				continue
 			}
 			spec, ok := decl.Specs[0].(*ast.ValueSpec)
@@ -453,13 +453,13 @@ func valueSpec(set *token.FileSet, file *ast.File, number int) (*ast.ValueSpec, 
 				continue
 			}
 			p := set.Position(spec.Comment.Pos())
-			if p.Line != number {
+			if p.Line != commentLine {
 				continue
 			}
 			return spec, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("comment on line %d must be followed by a variable declaration", commentLine)
 }
 
 func findFile(p *packages.Package, goFile string) (*ast.File, error) {
@@ -473,10 +473,8 @@ func findFile(p *packages.Package, goFile string) (*ast.File, error) {
 	return p.Syntax[i], nil
 }
 
-type loadPackageTypesFunc func(cfg *packages.Config, patterns ...string) ([]*packages.Package, error)
-
-func loadPackage(wd, goPackage string, load loadPackageTypesFunc) (*packages.Package, error) {
-	list, err := load(&packages.Config{
+func loadPackage(wd, goPackage string) (*packages.Package, error) {
+	list, err := packages.Load(&packages.Config{
 		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps | packages.NeedEmbedFiles,
 		Dir:   wd,
 		Tests: true,
