@@ -2,6 +2,7 @@ package muxt_test
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ import (
 	"github.com/crhntr/muxt"
 )
 
-func Test_endpoint(t *testing.T) {
+func TestTemplateName(t *testing.T) {
 	for _, tt := range []struct {
 		Name         string
 		TemplateName string
@@ -136,4 +137,66 @@ func Test_endpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTemplateName_ByPathThenMethod(t *testing.T) {
+	for _, tt := range []struct {
+		Name    string
+		In, Exp []muxt.TemplateName
+	}{
+		{
+			Name: "sort by path then method",
+			In: []muxt.TemplateName{
+				mustNewTemplateName("GET /b"),
+				mustNewTemplateName("POST /a"),
+				mustNewTemplateName("GET /a"),
+			},
+			Exp: []muxt.TemplateName{
+				mustNewTemplateName("GET /a"),
+				mustNewTemplateName("POST /a"),
+				mustNewTemplateName("GET /b"),
+			},
+		},
+		{
+			Name: "sort just paths",
+			In: []muxt.TemplateName{
+				mustNewTemplateName("/b"),
+				mustNewTemplateName("/c"),
+				mustNewTemplateName("/a"),
+			},
+			Exp: []muxt.TemplateName{
+				mustNewTemplateName("/a"),
+				mustNewTemplateName("/b"),
+				mustNewTemplateName("/c"),
+			},
+		},
+		{
+			Name: "sort just methods",
+			In: []muxt.TemplateName{
+				mustNewTemplateName("DELETE /"),
+				mustNewTemplateName("POST /"),
+				mustNewTemplateName("GET /"),
+				mustNewTemplateName("PATCH /"),
+			},
+			Exp: []muxt.TemplateName{
+				mustNewTemplateName("DELETE /"),
+				mustNewTemplateName("GET /"),
+				mustNewTemplateName("PATCH /"),
+				mustNewTemplateName("POST /"),
+			},
+		},
+	} {
+		t.Run(tt.Name, func(t *testing.T) {
+			slices.SortFunc(tt.In, muxt.TemplateName.ByPathThenMethod)
+			assert.Equal(t, tt.Exp, tt.In)
+		})
+	}
+}
+
+func mustNewTemplateName(in string) muxt.TemplateName {
+	p, err, _ := muxt.NewTemplateName(in)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }

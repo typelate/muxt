@@ -1,6 +1,7 @@
 package muxt
 
 import (
+	"cmp"
 	"fmt"
 	"go/token"
 	"net/http"
@@ -42,6 +43,16 @@ func (def TemplateName) String() string {
 	return def.name
 }
 
+func (def TemplateName) ByPathThenMethod(d TemplateName) int {
+	if n := cmp.Compare(def.Path, d.Path); n != 0 {
+		return n
+	}
+	if m := cmp.Compare(def.Method, d.Method); m != 0 {
+		return m
+	}
+	return cmp.Compare(def.Handler, d.Handler)
+}
+
 var templateNameMux = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
 
 func NewTemplateName(in string) (TemplateName, error, bool) {
@@ -61,7 +72,7 @@ func NewTemplateName(in string) (TemplateName, error, bool) {
 	switch p.Method {
 	default:
 		return p, fmt.Errorf("%s method not allowed", p.Method), true
-	case "", http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
 	return p, nil, true

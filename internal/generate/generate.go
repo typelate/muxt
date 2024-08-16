@@ -2,7 +2,6 @@ package generate
 
 import (
 	"bytes"
-	"cmp"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -118,9 +117,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			}
 			templateNames = append(templateNames, name)
 		}
-		slices.SortFunc(templateNames, func(a, b muxt.TemplateName) int {
-			return cmp.Compare(strings.Join([]string{a.Path, a.Method, a.Handler}, " "), strings.Join([]string{b.Path, b.Method, b.Handler}, " "))
-		})
+		slices.SortFunc(templateNames, muxt.TemplateName.ByPathThenMethod)
 		for _, pat := range templateNames {
 			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
