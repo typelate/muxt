@@ -361,11 +361,24 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 			}
 			return parseTemplates(dir, p, name, call.Args[0])
 		case "ParseFS":
-			x, ok := sel.X.(*ast.Ident)
-			if !ok {
-				return nil, fmt.Errorf("expected %s.%s", name.Name, sel.Sel.Name)
-			}
-			if x.Name != "template" {
+			var parseFiles func(files ...string) (*template.Template, error)
+			switch x := sel.X.(type) {
+			case *ast.Ident:
+				x, ok := sel.X.(*ast.Ident)
+				if !ok {
+					return nil, fmt.Errorf("expected %s.%s", name.Name, sel.Sel.Name)
+				}
+				if x.Name != "template" {
+					return nil, fmt.Errorf("expected %s.%s", name.Name, sel.Sel.Name)
+				}
+				parseFiles = template.ParseFiles
+			case *ast.CallExpr:
+				ts, err := parseTemplates(dir, p, name, x)
+				if err != nil {
+					return nil, err
+				}
+				parseFiles = ts.ParseFiles
+			default:
 				return nil, fmt.Errorf("expected %s.%s", name.Name, sel.Sel.Name)
 			}
 			if len(call.Args) < 1 {
@@ -379,7 +392,7 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 			if err != nil {
 				return nil, err
 			}
-			return template.ParseFiles(files...)
+			return parseFiles(files...)
 		}
 	}
 	return nil, nil
