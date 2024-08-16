@@ -382,7 +382,7 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 				return nil, fmt.Errorf("expected %s.%s", name.Name, sel.Sel.Name)
 			}
 			if len(call.Args) < 1 {
-				return nil, fmt.Errorf("%s.%s is missing arguments", name.Name, sel.Sel.Name)
+				return nil, fmt.Errorf("%s.%s is missing required fs.FS argument", name.Name, sel.Sel.Name)
 			}
 			fsIdent, ok := call.Args[0].(*ast.Ident)
 			if !ok {
@@ -392,6 +392,36 @@ func parseTemplates(dir string, p *packages.Package, name *ast.Ident, exp ast.Ex
 			if err != nil {
 				return nil, err
 			}
+			globs := make([]string, 0, len(call.Args[1:]))
+			for _, a := range call.Args[1:] {
+				switch arg := a.(type) {
+				case *ast.BasicLit:
+					if arg.Kind != token.STRING {
+						return nil, fmt.Errorf("expected string literal")
+					}
+					value, err := strconv.Unquote(arg.Value)
+					if err != nil {
+						return nil, err
+					}
+					globs = append(globs, value)
+				}
+			}
+			filtered := files[:0]
+			for _, file := range files {
+				rel, err := filepath.Rel(dir, file)
+				if err != nil {
+					return nil, err
+				}
+				for _, pattern := range globs {
+					match, err := filepath.Match(pattern, rel)
+					if err != nil || !match {
+						continue
+					}
+					filtered = append(filtered, file)
+					break
+				}
+			}
+			files = slices.Clip(filtered)
 			return parseFiles(files...)
 		}
 	}
@@ -425,6 +455,15 @@ func embeddedFilesMatchingPatternList(dir string, p *packages.Package, patterns 
 		}
 		for _, pattern := range patterns {
 			pat := filepath.FromSlash(pattern)
+
+			fullPat := filepath.Join(dir, filepath.FromSlash(pat)) + "/"
+			if i := slices.IndexFunc(p.EmbedFiles, func(file string) bool {
+				return strings.HasPrefix(file, fullPat)
+			}); i >= 0 {
+				matches = append(matches, p.EmbedFiles[i])
+				continue
+			}
+
 			if matched, err := filepath.Match(pat, rel); err != nil {
 				return nil, err
 			} else if matched {
@@ -493,7 +532,7 @@ func findFile(p *packages.Package, goFile string) (*ast.File, error) {
 
 func loadPackage(wd, goPackage string) (*packages.Package, error) {
 	list, err := packages.Load(&packages.Config{
-		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps | packages.NeedEmbedFiles,
+		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedEmbedPatterns | packages.NeedDeps | packages.NeedEmbedFiles,
 		Dir:   wd,
 		Tests: true,
 	}, wd)
@@ -536,9 +575,7 @@ func httpRequestField() *ast.Field {
 }
 
 func httpHandlerFuncType() *ast.FuncType {
-	return &ast.FuncType{
-		Params: &ast.FieldList{List: []*ast.Field{httpResponseField(), httpRequestField()}},
-	}
+	return &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{httpResponseField(), httpRequestField()}}}
 }
 
 func contextContextField() *ast.Field {

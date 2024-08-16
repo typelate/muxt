@@ -6,6 +6,7 @@ import (
 )
 
 func parsePatterns(input string) ([]string, error) {
+	// todo: refactor to use strconv.QuotedPrefix
 	var (
 		patterns       []string
 		currentPattern strings.Builder
