@@ -97,7 +97,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		Methods: &ast.FieldList{},
 	}
 
-	patSet := make(map[string]struct{})
+	patternSet := make(map[string][]muxt.TemplateName)
 	for i := 0; i < len(spec.Names) && i < len(spec.Values) && len(spec.Names) == len(spec.Values); i++ {
 		n, v := spec.Names[i], spec.Values[i]
 
@@ -115,9 +115,10 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			if err != nil {
 				return err
 			}
-			if _, ok := patSet[name.Pattern]; ok {
-				return fmt.Errorf("duplicate route pattern: %s", name.Pattern)
+			if existing, ok := patternSet[name.Pattern]; ok {
+				return errDuplicateTemplateName(append(existing, name))
 			}
+			patternSet[name.Pattern] = append(patternSet[name.Pattern], name)
 			templateNames = append(templateNames, name)
 		}
 		slices.SortFunc(templateNames, muxt.TemplateName.ByPathThenMethod)
@@ -189,6 +190,18 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		return err
 	}
 	return os.WriteFile(filepath.Join(wd, "template_routes.go"), out, 0666)
+}
+
+func errDuplicateTemplateName(existing []muxt.TemplateName) error {
+	slices.SortFunc(existing, muxt.TemplateName.ByPathThenMethod)
+	var b strings.Builder
+	for i, n := range existing {
+		b.WriteString(strconv.Quote(n.String()))
+		if i < len(existing)-1 {
+			b.WriteString(", ")
+		}
+	}
+	return fmt.Errorf("duplicate route pattern: %s", b.String())
 }
 
 func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
