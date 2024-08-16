@@ -1,0 +1,72 @@
+env GOLINE=13
+env GOPACKAGE=server
+env GOFILE=template.go
+
+generate
+! stdout execute
+
+exec go test -v -cover
+stdout '^execute input type \*http.Request$'
+
+-- template.gohtml --
+{{define "PATCH /" }}
+	<h1>Greetings</h1>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+	"fmt"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+//go:generate go run github.com/crhntr/muxt/cmd/muxt
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
+	fmt.Printf("execute input type %T\n", data)
+	res.WriteHeader(code)
+	 t.Execute(res, data)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+	"net/http"
+	"net/http/httptest"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPatch, "/", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	if body := rec.Body.String(); !strings.Contains(body, "Greetings") {
+  		t.Errorf("expected %q to contain Greetings", body)
+  	}
+}

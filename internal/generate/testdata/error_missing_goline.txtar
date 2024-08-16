@@ -1,0 +1,25 @@
+env GOPACKAGE=server
+env GOFILE=template.go
+
+! generate
+stdout 'GOLINE'
+
+-- template.gohtml --
+{{printf "Hello, %s!", "world"}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+//go:generate go run github.com/crhntr/muxt/cmd/muxt
+var templates = template.New()

@@ -2,110 +2,47 @@ package generate_test
 
 import (
 	"bytes"
+	"context"
 	"log"
-	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"rsc.io/script"
+	"rsc.io/script/scripttest"
 
 	"github.com/crhntr/muxt/internal/generate"
 )
 
-// TestCommand001 is the initial iteration for the generate command
-// It is factored to allow debugging.
-// After generating the handler, it runs go test.
-func TestCommand001(t *testing.T) {
-	t.Parallel()
-	lookupEnv := func(name string) (string, bool) {
-		switch name {
-		case "GOLINE":
-			return "14", true
-		case "GOFILE":
-			return "execute.go", true
-		case "GOPACKAGE":
-			return "fruit", true
-		default:
-			t.Errorf("unexpected LookupEnv call %q", name)
-			return "", false
-		}
+func Test(t *testing.T) {
+	e := script.NewEngine()
+	e.Quiet = true
+	e.Cmds = scripttest.DefaultCmds()
+	e.Cmds["generate"] = script.Command(script.CmdUsage{
+		Summary: "executes muxt generate",
+		Args:    "",
+	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
+		return func(state *script.State) (string, string, error) {
+			var buf bytes.Buffer
+			logger := log.New(&buf, "", 0)
+			err := generate.Command(args, state.Getwd(), logger, state.LookupEnv)
+			if err != nil {
+				buf.WriteString(err.Error())
+			}
+			return buf.String(), "", err
+		}, nil
+	})
+	testFiles, err := filepath.Glob(filepath.FromSlash("testdata/*.txtar"))
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	dir, err := filepath.Abs(filepath.FromSlash("testdata/001/fruit"))
-	require.NoError(t, err)
-	gen := filepath.Join(dir, "template_routes.go")
-	_ = os.Remove(gen)
-	logBuffer := bytes.NewBuffer(nil)
-	logger := log.New(logBuffer, "", 0)
-	require.NoError(t, generate.Command([]string{}, dir, logger, lookupEnv))
-
-	assert.Contains(t, logBuffer.String(), ` has route for GET /fruits/{fruit}/edit`)
-	assert.Contains(t, logBuffer.String(), ` has route for PATCH /fruits/{fruit} EditRow(response, request, fruit)`)
-	assert.Contains(t, logBuffer.String(), ` has route for GET /farm`)
-
-	out := bytes.NewBuffer(nil)
-	fakes := exec.Command("go", "generate", "-run=counterfeiter")
-	fakes.Dir = dir
-	fakes.Stderr = out
-	fakes.Stdout = out
-	assert.NoError(t, fakes.Run(), out.String())
-
-	out.Reset()
-	test := exec.Command("go", "test")
-	test.Dir = dir
-	test.Stderr = out
-	test.Stdout = out
-	assert.NoError(t, test.Run(), out.String())
-
-	out.Reset()
-	diff := exec.Command("git", "diff", "--exit-code", gen)
-	diff.Dir = dir
-	diff.Stderr = out
-	diff.Stdout = out
-	assert.NoError(t, diff.Run(), out.String())
-}
-
-// TestCommand002 covers when both execute and handleError are not in package scope
-func TestCommand002(t *testing.T) {
-	t.Parallel()
-	lookupEnv := func(name string) (string, bool) {
-		switch name {
-		case "GOLINE":
-			return "13", true
-		case "GOFILE":
-			return "execute.go", true
-		case "GOPACKAGE":
-			return "fruit", true
-		default:
-			t.Errorf("unexpected LookupEnv call %q", name)
-			return "", false
-		}
+	for _, filePath := range testFiles {
+		name := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			scripttest.Test(t, ctx, e, nil, filePath)
+		})
 	}
-
-	dir, err := filepath.Abs(filepath.FromSlash("testdata/002/fruit"))
-	require.NoError(t, err)
-	gen := filepath.Join(dir, "template_routes.go")
-	_ = os.Remove(gen)
-	logBuffer := bytes.NewBuffer(nil)
-	logger := log.New(logBuffer, "", 0)
-	require.NoError(t, generate.Command([]string{}, dir, logger, lookupEnv))
-
-	assert.Contains(t, logBuffer.String(), `adding default implementation for func execute`)
-	assert.Contains(t, logBuffer.String(), `adding default implementation for func handleError`)
-
-	out := bytes.NewBuffer(nil)
-	cmd := exec.Command("go", "test")
-	cmd.Dir = dir
-	cmd.Stderr = out
-	cmd.Stdout = out
-	assert.NoError(t, cmd.Run(), out.String())
-
-	out.Reset()
-	diff := exec.Command("git", "diff", "--exit-code", gen)
-	diff.Dir = dir
-	diff.Stderr = out
-	diff.Stdout = out
-	assert.NoError(t, diff.Run(), out.String())
 }

@@ -34,8 +34,16 @@ const (
 	errorHandlerIdentName = "handleError"
 	executeIdentName      = "execute"
 
+	outputFilename = "template_routes.go"
+
 	receiverTypeIdentNameDefault = "Receiver"
 	handlerFuncIdentNameDefault  = "TemplateRoutes"
+
+	goEmbedCommentPrefix = "//go:embed"
+
+	goPackageEnvVar = "GOPACKAGE"
+	goFileEnvVar    = "GOFILE"
+	goLineEnvVar    = "GOLINE"
 )
 
 func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string) (string, bool)) error {
@@ -49,26 +57,11 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	if err := flagSet.Parse(args); err != nil {
 		return err
 	}
-	const (
-		goPackageEnvVar = "GOPACKAGE"
-		goFileEnvVar    = "GOFILE"
-		goLineEnvVar    = "GOLINE"
-	)
-	goPackage, ok := lookupEnv(goPackageEnvVar)
-	if !ok {
-		return fmt.Errorf("%s is not set", goPackageEnvVar)
+	goPackage, goFile, goLine, err := goGenerateEnv(lookupEnv)
+	if err != nil {
+		return err
 	}
-	goFile, ok := lookupEnv(goFileEnvVar)
-	if !ok {
-		return fmt.Errorf("%s is not set", goFileEnvVar)
-	}
-	goLine, ok := lookupEnv(goLineEnvVar)
-	if !ok {
-		return fmt.Errorf("%s is not set", goLineEnvVar)
-	}
-	_ = os.Remove(filepath.Join(wd, "template_routes.go"))
-
-	pkg, err := loadPackage(wd, goPackage)
+	pkg, err := loadPackage(wd, goPackage, packages.Load)
 	if err != nil {
 		return err
 	}
@@ -80,7 +73,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	if err != nil || spec == nil {
 		return err
 	}
-
+	_ = os.Remove(filepath.Join(wd, outputFilename))
 	stdLibImports := []string{
 		"net/http",
 	}
@@ -428,20 +421,16 @@ func readComments(s *strings.Builder, groups ...*ast.CommentGroup) {
 			continue
 		}
 		for _, line := range c.List {
-			if !strings.HasPrefix(line.Text, "//go:embed") {
+			if !strings.HasPrefix(line.Text, goEmbedCommentPrefix) {
 				continue
 			}
-			s.WriteString(strings.TrimSpace(strings.TrimPrefix(line.Text, "//go:embed")))
+			s.WriteString(strings.TrimSpace(strings.TrimPrefix(line.Text, goEmbedCommentPrefix)))
 			s.WriteByte(' ')
 		}
 	}
 }
 
-func valueSpec(set *token.FileSet, file *ast.File, goLine string) (*ast.ValueSpec, error) {
-	number, err := strconv.Atoi(goLine)
-	if err != nil {
-		return nil, err
-	}
+func valueSpec(set *token.FileSet, file *ast.File, number int) (*ast.ValueSpec, error) {
 	for _, d := range file.Decls {
 		decl, ok := d.(*ast.GenDecl)
 		if !ok || decl.Tok != token.VAR {
@@ -487,10 +476,12 @@ func findFile(p *packages.Package, goFile string) (*ast.File, error) {
 	return p.Syntax[i], nil
 }
 
-func loadPackage(wd, goPackage string) (*packages.Package, error) {
-	list, err := packages.Load(&packages.Config{
+type loadPackageTypesFunc func(cfg *packages.Config, patterns ...string) ([]*packages.Package, error)
+
+func loadPackage(wd, goPackage string, load loadPackageTypesFunc) (*packages.Package, error) {
+	list, err := load(&packages.Config{
 		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps | packages.NeedEmbedFiles,
-		Dir:   ".", // Current directory
+		Dir:   wd,
 		Tests: true,
 	}, wd)
 	if err != nil {
@@ -501,6 +492,26 @@ func loadPackage(wd, goPackage string) (*packages.Package, error) {
 		return nil, fmt.Errorf("package %s not found", goPackage)
 	}
 	return list[i], nil
+}
+
+func goGenerateEnv(lookupEnv func(string) (string, bool)) (string, string, int, error) {
+	goPackage, ok := lookupEnv(goPackageEnvVar)
+	if !ok {
+		return "", "", 0, fmt.Errorf("%s is not set", goPackageEnvVar)
+	}
+	goFile, ok := lookupEnv(goFileEnvVar)
+	if !ok {
+		return "", "", 0, fmt.Errorf("%s is not set", goFileEnvVar)
+	}
+	goLine, ok := lookupEnv(goLineEnvVar)
+	if !ok {
+		return "", "", 0, fmt.Errorf("%s is not set", goLineEnvVar)
+	}
+	number, err := strconv.Atoi(goLine)
+	if err != nil {
+		return "", "", 0, err
+	}
+	return goPackage, goFile, number, nil
 }
 
 func httpResponseField() *ast.Field {
