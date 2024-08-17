@@ -13,18 +13,18 @@ import (
 	"strings"
 )
 
-type TemplateName struct {
+type Pattern struct {
 	name                        string
 	Method, Host, Path, Pattern string
 	Handler                     string
 }
 
-func NewTemplateName(in string) (TemplateName, error, bool) {
+func NewPattern(in string) (Pattern, error, bool) {
 	if !templateNameMux.MatchString(in) {
-		return TemplateName{}, nil, false
+		return Pattern{}, nil, false
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
-	p := TemplateName{
+	p := Pattern{
 		name:    in,
 		Method:  matches[templateNameMux.SubexpIndex("Method")],
 		Host:    matches[templateNameMux.SubexpIndex("Host")],
@@ -47,7 +47,7 @@ var (
 	templateNameMux    = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
 )
 
-func (def TemplateName) PathParameters() ([]string, error) {
+func (def Pattern) PathParameters() ([]string, error) {
 	var result []string
 	for _, matches := range pathSegmentPattern.FindAllStringSubmatch(def.Path, strings.Count(def.Path, "/")) {
 		n := matches[1]
@@ -68,11 +68,11 @@ func (def TemplateName) PathParameters() ([]string, error) {
 	return result, nil
 }
 
-func (def TemplateName) String() string {
+func (def Pattern) String() string {
 	return def.name
 }
 
-func (def TemplateName) ByPathThenMethod(d TemplateName) int {
+func (def Pattern) ByPathThenMethod(d Pattern) int {
 	if n := cmp.Compare(def.Path, d.Path); n != 0 {
 		return n
 	}
@@ -82,7 +82,7 @@ func (def TemplateName) ByPathThenMethod(d TemplateName) int {
 	return cmp.Compare(def.Handler, d.Handler)
 }
 
-func (def TemplateName) CallExpr() (*ast.CallExpr, *ast.Ident, error) {
+func (def Pattern) CallExpr() (*ast.CallExpr, *ast.Ident, error) {
 	e, err := parser.ParseExpr(def.Handler)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse handler expression: %v", err)

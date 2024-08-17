@@ -16,15 +16,15 @@ func TestTemplateName(t *testing.T) {
 		Name         string
 		TemplateName string
 		ExpMatch     bool
-		Pattern      func(t *testing.T, pat muxt.TemplateName)
+		Pattern      func(t *testing.T, pat muxt.Pattern)
 		Error        func(t *testing.T, err error)
 	}{
 		{
 			Name:         "get root",
 			TemplateName: "GET /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
@@ -37,8 +37,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "multiple spaces after method",
 			TemplateName: "GET  /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
@@ -51,8 +51,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "post root",
 			TemplateName: "POST /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodPost,
 					Host:    "",
 					Path:    "/",
@@ -65,8 +65,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "patch root",
 			TemplateName: "PATCH /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodPatch,
 					Host:    "",
 					Path:    "/",
@@ -79,8 +79,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "delete root",
 			TemplateName: "DELETE /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodDelete,
 					Host:    "",
 					Path:    "/",
@@ -93,8 +93,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "put root",
 			TemplateName: "PUT /",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/",
@@ -107,8 +107,8 @@ func TestTemplateName(t *testing.T) {
 			Name:         "with end of path wildcard",
 			TemplateName: "PUT /ping/pong/{$}",
 			ExpMatch:     true,
-			Pattern: func(t *testing.T, pat muxt.TemplateName) {
-				assert.EqualExportedValues(t, muxt.TemplateName{
+			Pattern: func(t *testing.T, pat muxt.Pattern) {
+				assert.EqualExportedValues(t, muxt.Pattern{
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/ping/pong/{$}",
@@ -127,7 +127,7 @@ func TestTemplateName(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			pat, err, match := muxt.NewTemplateName(tt.TemplateName)
+			pat, err, match := muxt.NewPattern(tt.TemplateName)
 			require.Equal(t, tt.ExpMatch, match)
 			if tt.Error != nil {
 				tt.Error(t, err)
@@ -142,16 +142,16 @@ func TestTemplateName(t *testing.T) {
 func TestTemplateName_ByPathThenMethod(t *testing.T) {
 	for _, tt := range []struct {
 		Name    string
-		In, Exp []muxt.TemplateName
+		In, Exp []muxt.Pattern
 	}{
 		{
 			Name: "sort by path then method",
-			In: []muxt.TemplateName{
+			In: []muxt.Pattern{
 				mustNewTemplateName("GET /b"),
 				mustNewTemplateName("POST /a"),
 				mustNewTemplateName("GET /a"),
 			},
-			Exp: []muxt.TemplateName{
+			Exp: []muxt.Pattern{
 				mustNewTemplateName("GET /a"),
 				mustNewTemplateName("POST /a"),
 				mustNewTemplateName("GET /b"),
@@ -159,12 +159,12 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 		},
 		{
 			Name: "sort just paths",
-			In: []muxt.TemplateName{
+			In: []muxt.Pattern{
 				mustNewTemplateName("/b"),
 				mustNewTemplateName("/c"),
 				mustNewTemplateName("/a"),
 			},
-			Exp: []muxt.TemplateName{
+			Exp: []muxt.Pattern{
 				mustNewTemplateName("/a"),
 				mustNewTemplateName("/b"),
 				mustNewTemplateName("/c"),
@@ -172,13 +172,13 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 		},
 		{
 			Name: "sort just methods",
-			In: []muxt.TemplateName{
+			In: []muxt.Pattern{
 				mustNewTemplateName("DELETE /"),
 				mustNewTemplateName("POST /"),
 				mustNewTemplateName("GET /"),
 				mustNewTemplateName("PATCH /"),
 			},
-			Exp: []muxt.TemplateName{
+			Exp: []muxt.Pattern{
 				mustNewTemplateName("DELETE /"),
 				mustNewTemplateName("GET /"),
 				mustNewTemplateName("PATCH /"),
@@ -187,14 +187,14 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			slices.SortFunc(tt.In, muxt.TemplateName.ByPathThenMethod)
+			slices.SortFunc(tt.In, muxt.Pattern.ByPathThenMethod)
 			assert.Equal(t, tt.Exp, tt.In)
 		})
 	}
 }
 
-func mustNewTemplateName(in string) muxt.TemplateName {
-	p, err, _ := muxt.NewTemplateName(in)
+func mustNewTemplateName(in string) muxt.Pattern {
+	p, err, _ := muxt.NewPattern(in)
 	if err != nil {
 		panic(err)
 	}
@@ -232,7 +232,7 @@ func TestTemplateName_CallExpr(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			p, err, ok := muxt.NewTemplateName(tt.In)
+			p, err, ok := muxt.NewPattern(tt.In)
 			require.True(t, ok)
 			require.NoError(t, err)
 			require.NotZero(t, p.Handler)

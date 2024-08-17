@@ -99,7 +99,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		Methods: &ast.FieldList{},
 	}
 
-	patternSet := make(map[string][]muxt.TemplateName)
+	patternSet := make(map[string][]muxt.Pattern)
 	for i := 0; i < len(spec.Names) && i < len(spec.Values) && len(spec.Names) == len(spec.Values); i++ {
 		n, v := spec.Names[i], spec.Values[i]
 
@@ -108,22 +108,22 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			return err
 		}
 
-		var templateNames []muxt.TemplateName
+		var templateNames []muxt.Pattern
 		for _, t := range ts.Templates() {
-			name, err, ok := muxt.NewTemplateName(t.Name())
+			pat, err, ok := muxt.NewPattern(t.Name())
 			if !ok {
 				continue
 			}
 			if err != nil {
 				return err
 			}
-			if existing, ok := patternSet[name.Pattern]; ok {
-				return errDuplicateTemplateName(append(existing, name))
+			if existing, ok := patternSet[pat.Pattern]; ok {
+				return errDuplicateTemplateName(append(existing, pat))
 			}
-			patternSet[name.Pattern] = append(patternSet[name.Pattern], name)
-			templateNames = append(templateNames, name)
+			patternSet[pat.Pattern] = append(patternSet[pat.Pattern], pat)
+			templateNames = append(templateNames, pat)
 		}
-		slices.SortFunc(templateNames, muxt.TemplateName.ByPathThenMethod)
+		slices.SortFunc(templateNames, muxt.Pattern.ByPathThenMethod)
 		for _, pat := range templateNames {
 			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
@@ -194,8 +194,8 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	return os.WriteFile(filepath.Join(wd, "template_routes.go"), out, 0666)
 }
 
-func errDuplicateTemplateName(existing []muxt.TemplateName) error {
-	slices.SortFunc(existing, muxt.TemplateName.ByPathThenMethod)
+func errDuplicateTemplateName(existing []muxt.Pattern) error {
+	slices.SortFunc(existing, muxt.Pattern.ByPathThenMethod)
 	var b strings.Builder
 	for i, n := range existing {
 		b.WriteString(strconv.Quote(n.String()))
@@ -206,7 +206,7 @@ func errDuplicateTemplateName(existing []muxt.TemplateName) error {
 	return fmt.Errorf("duplicate route pattern: %s", b.String())
 }
 
-func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
+func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
 	handler := &ast.FuncLit{
 		Type: httpHandlerFuncType(),
 		Body: &ast.BlockStmt{
@@ -216,13 +216,13 @@ func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.
 	var methodField *ast.Field
 	data := ast.NewIdent(requestIdentName)
 	var imports []string
-	if name.Handler != "" {
+	if pat.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
-		call, methodIdent, err := name.CallExpr()
+		call, methodIdent, err := pat.CallExpr()
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		pathParameters, err := name.PathParameters()
+		pathParameters, err := pat.PathParameters()
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -308,9 +308,9 @@ func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.
 		handler.Body.List = append(handler.Body.List, assignData, checkError(templatesVariable, httpStatusInternalServerError))
 	}
 
-	handler.Body.List = append(handler.Body.List, executeCall(name, templatesVariable, data))
+	handler.Body.List = append(handler.Body.List, executeCall(pat, templatesVariable, data))
 
-	return handleFuncCall(name, handler), methodField, imports, nil
+	return handleFuncCall(pat, handler), methodField, imports, nil
 }
 
 func generalDeclaration(p *packages.Package, ident *ast.Ident) (*ast.ValueSpec, *ast.GenDecl, error) {
@@ -616,7 +616,7 @@ func checkError(templatesVariable *ast.Ident, statusNameSelector string) *ast.If
 	}
 }
 
-func executeCall(name muxt.TemplateName, templatesVariable, data *ast.Ident) *ast.ExprStmt {
+func executeCall(name muxt.Pattern, templatesVariable, data *ast.Ident) *ast.ExprStmt {
 	return &ast.ExprStmt{X: &ast.CallExpr{
 		Fun: ast.NewIdent(executeIdentName),
 		Args: []ast.Expr{
@@ -638,7 +638,7 @@ func executeCall(name muxt.TemplateName, templatesVariable, data *ast.Ident) *as
 	}}
 }
 
-func handleFuncCall(name muxt.TemplateName, handler *ast.FuncLit) *ast.CallExpr {
+func handleFuncCall(name muxt.Pattern, handler *ast.FuncLit) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
 			X:   ast.NewIdent(serveMuxIdentName),

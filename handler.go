@@ -100,7 +100,7 @@ func applyOptions(options []Options) *Options {
 func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) error {
 	o := applyOptions(options)
 	for _, t := range ts.Templates() {
-		name, err, match := NewTemplateName(t.Name())
+		name, err, match := NewPattern(t.Name())
 		if !match {
 			continue
 		}
@@ -124,7 +124,7 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 	return nil
 }
 
-func callMethodHandler(o *Options, t *template.Template, pattern TemplateName, fun *ast.Ident, call *ast.CallExpr) (http.HandlerFunc, error) {
+func callMethodHandler(o *Options, t *template.Template, pattern Pattern, fun *ast.Ident, call *ast.CallExpr) (http.HandlerFunc, error) {
 	pathParams, err := pattern.PathParameters()
 	if err != nil {
 		return nil, err
