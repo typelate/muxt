@@ -105,3 +105,9 @@ func formatNode(node ast.Node) string {
 	}
 	return buf.String()
 }
+
+const (
+	PatternScopeIdentifierHTTPRequest  = "request"
+	PatternScopeIdentifierHTTPResponse = "response"
+	PatternScopeIdentifierContext      = "ctx"
+)

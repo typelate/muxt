@@ -24,9 +24,9 @@ import (
 const (
 	serveMuxIdentName = "mux"
 
-	contextIdentName  = "ctx"
-	requestIdentName  = "request"
-	responseIdentName = "response"
+	contextIdentName  = muxt.PatternScopeIdentifierContext
+	requestIdentName  = muxt.PatternScopeIdentifierHTTPRequest
+	responseIdentName = muxt.PatternScopeIdentifierHTTPResponse
 
 	receiverIdentName = "receiver"
 	dataIdentName     = "data"

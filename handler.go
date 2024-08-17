@@ -206,13 +206,13 @@ func printNode(node ast.Node) string {
 
 const (
 	// requestArgumentIdentifier identifies an *http.Request
-	requestArgumentIdentifier = "request"
+	requestArgumentIdentifier = PatternScopeIdentifierHTTPRequest
 
 	// contextArgumentIdentifier identifies a context.Context off of *http.Request
-	contextArgumentIdentifier = "ctx"
+	contextArgumentIdentifier = PatternScopeIdentifierContext
 
 	// responseArgumentIdentifier identifies an http.ResponseWriter
-	responseArgumentIdentifier = "response"
+	responseArgumentIdentifier = PatternScopeIdentifierHTTPResponse
 
 	// loggerArgumentIdentifier identifies an *slog.Logger
 	loggerArgumentIdentifier = "logger"
