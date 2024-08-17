@@ -108,7 +108,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			return err
 		}
 
-		var templateNames []muxt.Pattern
+		var patterns []muxt.Pattern
 		for _, t := range ts.Templates() {
 			pat, err, ok := muxt.NewPattern(t.Name())
 			if !ok {
@@ -121,10 +121,10 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 				return errDuplicateTemplateName(append(existing, pat))
 			}
 			patternSet[pat.Pattern] = append(patternSet[pat.Pattern], pat)
-			templateNames = append(templateNames, pat)
+			patterns = append(patterns, pat)
 		}
-		slices.SortFunc(templateNames, muxt.Pattern.ByPathThenMethod)
-		for _, pat := range templateNames {
+		slices.SortFunc(patterns, muxt.Pattern.ByPathThenMethod)
+		for _, pat := range patterns {
 			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
 				return err

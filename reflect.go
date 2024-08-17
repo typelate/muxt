@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
-	"go/token"
 	"html/template"
 	"io"
 	"log/slog"
@@ -119,7 +118,7 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 }
 
 func newReflectHandlerFunc(o *Options, t *template.Template, pat Pattern) (http.HandlerFunc, error) {
-	m, err := serviceMethod(o, pat.CallExpr(), pat.FunIdent())
+	m, err := serviceMethod(o, pat.FunIdent())
 	if err != nil {
 		return nil, err
 	}
@@ -169,12 +168,9 @@ func valuesResultHandler(o *Options, t *template.Template, method reflect.Value,
 	}
 }
 
-func serviceMethod(o *Options, call *ast.CallExpr, method *ast.Ident) (reflect.Value, error) {
+func serviceMethod(o *Options, method *ast.Ident) (reflect.Value, error) {
 	if o.receiver == nil {
 		return reflect.Value{}, fmt.Errorf("receiver is nil")
-	}
-	if call.Ellipsis != token.NoPos {
-		return reflect.Value{}, fmt.Errorf("ellipsis call not allowed")
 	}
 	r := reflect.ValueOf(o.receiver)
 	m := r.MethodByName(method.Name)
