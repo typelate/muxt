@@ -11,7 +11,7 @@ import (
 	"github.com/crhntr/muxt"
 )
 
-func TestTemplateName(t *testing.T) {
+func TestNewPattern(t *testing.T) {
 	for _, tt := range []struct {
 		Name         string
 		TemplateName string
@@ -193,15 +193,7 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 	}
 }
 
-func mustNewTemplateName(in string) muxt.Pattern {
-	p, err, _ := muxt.NewPattern(in)
-	if err != nil {
-		panic(err)
-	}
-	return p
-}
-
-func TestTemplateName_CallExpr(t *testing.T) {
+func TestPattern_ParseHandler(t *testing.T) {
 	for _, tt := range []struct {
 		Name   string
 		In     string
@@ -249,4 +241,12 @@ func TestTemplateName_CallExpr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustNewTemplateName(in string) muxt.Pattern {
+	p, err, _ := muxt.NewPattern(in)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
