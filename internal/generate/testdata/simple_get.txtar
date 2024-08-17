@@ -29,7 +29,6 @@ var formHTML embed.FS
 
 //go:generate go run github.com/crhntr/muxt/cmd/muxt
 var templates = template.Must(template.ParseFS(formHTML, "*"))
-
 -- template_test.go --
 package server
 

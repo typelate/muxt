@@ -27,15 +27,14 @@ var formHTML embed.FS
 
 //go:generate go run github.com/crhntr/muxt/cmd/muxt
 var templates = template.Must(template.ParseFS(formHTML, "*"))
-
 -- template_test.go --
 package server
 
 import (
-  "context"
-	"testing"
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 )
 
 type T struct{}

@@ -29,20 +29,19 @@ var formHTML embed.FS
 
 //go:generate go run github.com/crhntr/muxt/cmd/muxt
 var templates = template.Must(template.ParseFS(formHTML, "*"))
-
 -- template_test.go --
 package server
 
 import (
-  "strings"
-	"testing"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"testing"
 )
 
 type T struct{}
 
-type Data struct{
+type Data struct {
 	Name string
 }
 
@@ -65,6 +64,6 @@ func Test(t *testing.T) {
 	}
 
 	if body := rec.Body.String(); !strings.Contains(body, "PEACH") {
-    t.Errorf("expected %q to contain PEACH", body)
-  }
+		t.Errorf("expected %q to contain PEACH", body)
+	}
 }

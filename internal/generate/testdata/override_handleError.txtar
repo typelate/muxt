@@ -23,9 +23,9 @@ package server
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"net/http"
-	"fmt"
 )
 
 //go:embed *.gohtml
@@ -38,14 +38,13 @@ func handleError(res http.ResponseWriter, _ *http.Request, t *template.Template,
 	fmt.Println("ERROR", err)
 	http.Error(res, err.Error(), code)
 }
-
 -- template_test.go --
 package server
 
 import (
-	"testing"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 )
 
 func Test(t *testing.T) {

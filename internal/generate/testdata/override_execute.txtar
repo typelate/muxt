@@ -23,9 +23,9 @@ package server
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"net/http"
-	"fmt"
 )
 
 //go:embed *.gohtml
@@ -37,17 +37,16 @@ var templates = template.Must(template.ParseFS(formHTML, "*"))
 func execute(res http.ResponseWriter, _ *http.Request, t *template.Template, code int, data any) {
 	fmt.Printf("execute input type %T\n", data)
 	res.WriteHeader(code)
-	 t.Execute(res, data)
+	t.Execute(res, data)
 }
-
 -- template_test.go --
 package server
 
 import (
-	"strings"
-	"testing"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"testing"
 )
 
 func Test(t *testing.T) {
@@ -67,6 +66,6 @@ func Test(t *testing.T) {
 	}
 
 	if body := rec.Body.String(); !strings.Contains(body, "Greetings") {
-  		t.Errorf("expected %q to contain Greetings", body)
-  	}
+		t.Errorf("expected %q to contain Greetings", body)
+	}
 }
