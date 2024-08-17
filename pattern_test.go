@@ -27,7 +27,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
-					Pattern: "GET /",
+					Route:   "GET /",
 					Handler: "",
 				}, pat)
 			},
@@ -41,7 +41,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodGet,
 					Host:    "",
 					Path:    "/",
-					Pattern: "GET  /",
+					Route:   "GET  /",
 					Handler: "",
 				}, pat)
 			},
@@ -55,7 +55,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodPost,
 					Host:    "",
 					Path:    "/",
-					Pattern: "POST /",
+					Route:   "POST /",
 					Handler: "",
 				}, pat)
 			},
@@ -69,7 +69,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodPatch,
 					Host:    "",
 					Path:    "/",
-					Pattern: "PATCH /",
+					Route:   "PATCH /",
 					Handler: "",
 				}, pat)
 			},
@@ -83,7 +83,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodDelete,
 					Host:    "",
 					Path:    "/",
-					Pattern: "DELETE /",
+					Route:   "DELETE /",
 					Handler: "",
 				}, pat)
 			},
@@ -97,7 +97,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/",
-					Pattern: "PUT /",
+					Route:   "PUT /",
 					Handler: "",
 				}, pat)
 			},
@@ -111,7 +111,7 @@ func TestNewPattern(t *testing.T) {
 					Method:  http.MethodPut,
 					Host:    "",
 					Path:    "/ping/pong/{$}",
-					Pattern: "PUT /ping/pong/{$}",
+					Route:   "PUT /ping/pong/{$}",
 					Handler: "",
 				}, pat)
 			},

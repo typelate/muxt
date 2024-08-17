@@ -103,14 +103,14 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 	for _, pat := range patterns {
 		t := ts.Lookup(pat.String())
 		if pat.Handler == "" {
-			mux.HandleFunc(pat.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
+			mux.HandleFunc(pat.Route, simpleTemplateHandler(o.execute, t, o.logger))
 			continue
 		}
 		h, err := newReflectHandlerFunc(o, t, pat)
 		if err != nil {
 			return fmt.Errorf("failed to create handler for %q: %w", pat.String(), err)
 		}
-		mux.HandleFunc(pat.Pattern, h)
+		mux.HandleFunc(pat.Route, h)
 	}
 	return nil
 }

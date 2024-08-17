@@ -615,7 +615,7 @@ func handleFuncCall(name muxt.Pattern, handler *ast.FuncLit) *ast.CallExpr {
 		Args: []ast.Expr{
 			&ast.BasicLit{
 				Kind:  token.STRING,
-				Value: strconv.Quote(name.Pattern),
+				Value: strconv.Quote(name.Route),
 			},
 			handler,
 		},

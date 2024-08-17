@@ -24,10 +24,8 @@ func TemplatePatterns(ts *template.Template) ([]Pattern, error) {
 		if err != nil {
 			return patterns, err
 		}
-		if slices.ContainsFunc(patterns, func(pattern Pattern) bool {
-			return pattern.Pattern == pat.Pattern
-		}) {
-			return patterns, fmt.Errorf("duplicate route pattern: %s", pat.Pattern)
+		if slices.ContainsFunc(patterns, pat.sameRoute) {
+			return patterns, fmt.Errorf("duplicate route pattern: %s", pat.Route)
 		}
 		patterns = append(patterns, pat)
 	}
@@ -36,9 +34,9 @@ func TemplatePatterns(ts *template.Template) ([]Pattern, error) {
 }
 
 type Pattern struct {
-	name                        string
-	Method, Host, Path, Pattern string
-	Handler                     string
+	name                      string
+	Method, Host, Path, Route string
+	Handler                   string
 
 	fun  *ast.Ident
 	call *ast.CallExpr
@@ -56,7 +54,7 @@ func NewPattern(in string) (Pattern, error, bool) {
 		Host:    matches[templateNameMux.SubexpIndex("Host")],
 		Path:    matches[templateNameMux.SubexpIndex("Path")],
 		Handler: matches[templateNameMux.SubexpIndex("Handler")],
-		Pattern: matches[templateNameMux.SubexpIndex("Pattern")],
+		Route:   matches[templateNameMux.SubexpIndex("Route")],
 	}
 
 	switch p.Method {
@@ -70,7 +68,7 @@ func NewPattern(in string) (Pattern, error, bool) {
 
 var (
 	pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
-	templateNameMux    = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
+	templateNameMux    = regexp.MustCompile(`^(?P<Route>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
 )
 
 func (def Pattern) PathParameters() ([]string, error) {
@@ -111,6 +109,8 @@ func (def Pattern) byPathThenMethod(d Pattern) int {
 	}
 	return cmp.Compare(def.Handler, d.Handler)
 }
+
+func (def Pattern) sameRoute(p Pattern) bool { return def.Route == p.Route }
 
 func parseHandler(def *Pattern) error {
 	if def.Handler == "" {
