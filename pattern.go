@@ -82,23 +82,59 @@ func (def Pattern) ByPathThenMethod(d Pattern) int {
 	return cmp.Compare(def.Handler, d.Handler)
 }
 
-func (def Pattern) CallExpr() (*ast.CallExpr, *ast.Ident, error) {
+type Handler struct {
+	*ast.Ident
+	Call *ast.CallExpr
+	Args []*ast.Ident
+}
+
+func (def Pattern) ParseHandler() (*Handler, error) {
 	e, err := parser.ParseExpr(def.Handler)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse handler expression: %v", err)
+		return nil, fmt.Errorf("failed to parse handler expression: %v", err)
 	}
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
-		return nil, nil, fmt.Errorf("expected call, got: %s", formatNode(e))
+		return nil, fmt.Errorf("expected call, got: %s", formatNode(e))
 	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return nil, nil, fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
+		return nil, fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
 	}
 	if call.Ellipsis != token.NoPos {
-		return nil, nil, fmt.Errorf("unexpected ellipsis")
+		return nil, fmt.Errorf("unexpected ellipsis")
 	}
-	return call, fun, nil
+	pathParams, err := def.PathParameters()
+	if err != nil {
+		return nil, err
+	}
+	args := make([]*ast.Ident, len(call.Args))
+	for i, a := range call.Args {
+		arg, ok := a.(*ast.Ident)
+		if !ok {
+			return nil, fmt.Errorf("expected only argument expressions as arguments, argument at index %d is: %s", i, formatNode(a))
+		}
+		switch name := arg.Name; name {
+		case PatternScopeIdentifierHTTPRequest,
+			PatternScopeIdentifierHTTPResponse,
+			PatternScopeIdentifierContext,
+			PatternScopeIdentifierTemplate,
+			PatternScopeIdentifierLogger:
+			if slices.Contains(pathParams, name) {
+				return nil, fmt.Errorf("the name %s is not allowed as a path paramenter it is alredy in scope", name)
+			}
+		default:
+			if !slices.Contains(pathParams, name) {
+				return nil, fmt.Errorf("unknown argument %s at index %d", name, i)
+			}
+		}
+		args[i] = arg
+	}
+	return &Handler{
+		Call:  call,
+		Ident: fun,
+		Args:  args,
+	}, nil
 }
 
 func formatNode(node ast.Node) string {
@@ -113,4 +149,6 @@ const (
 	PatternScopeIdentifierHTTPRequest  = "request"
 	PatternScopeIdentifierHTTPResponse = "response"
 	PatternScopeIdentifierContext      = "ctx"
+	PatternScopeIdentifierTemplate     = "template"
+	PatternScopeIdentifierLogger       = "logger"
 )

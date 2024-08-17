@@ -5,14 +5,12 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/token"
 	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
-	"slices"
 	"sync"
 )
 
@@ -100,44 +98,36 @@ func applyOptions(options []Options) *Options {
 func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) error {
 	o := applyOptions(options)
 	for _, t := range ts.Templates() {
-		name, err, match := NewPattern(t.Name())
+		pat, err, match := NewPattern(t.Name())
 		if !match {
 			continue
 		}
 		if err != nil {
 			return fmt.Errorf("failed to parse NewPattern for template %q: %w", t.Name(), err)
 		}
-		if name.Handler == "" {
-			mux.HandleFunc(name.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
+		if pat.Handler == "" {
+			mux.HandleFunc(pat.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
 			continue
 		}
-		call, fun, err := name.CallExpr()
+		handler, err := pat.ParseHandler()
 		if err != nil {
 			return err
 		}
-		h, err := callMethodHandler(o, t, name, fun, call)
+		h, err := newReflectHandlerFunc(o, t, handler, handler.Ident)
 		if err != nil {
-			return fmt.Errorf("failed to create handler for %q: %w", name.Pattern+" "+name.Handler, err)
+			return fmt.Errorf("failed to create handler for %q: %w", pat.String(), err)
 		}
-		mux.HandleFunc(name.Pattern, h)
+		mux.HandleFunc(pat.Pattern, h)
 	}
 	return nil
 }
 
-func callMethodHandler(o *Options, t *template.Template, pattern Pattern, fun *ast.Ident, call *ast.CallExpr) (http.HandlerFunc, error) {
-	pathParams, err := pattern.PathParameters()
+func newReflectHandlerFunc(o *Options, t *template.Template, h *Handler, method *ast.Ident) (http.HandlerFunc, error) {
+	m, err := serviceMethod(o, h.Call, method)
 	if err != nil {
 		return nil, err
 	}
-	return createSelectorHandler(o, t, call, fun, pathParams)
-}
-
-func createSelectorHandler(o *Options, t *template.Template, call *ast.CallExpr, method *ast.Ident, pathParams []string) (http.HandlerFunc, error) {
-	m, err := serviceMethod(o, call, method)
-	if err != nil {
-		return nil, err
-	}
-	inputs, err := generateInputsFunction(o, t, m.Type(), call, pathParams)
+	inputs, err := generateInputsFunction(o, t, m.Type(), h)
 	if err != nil {
 		return nil, err
 	}
@@ -198,56 +188,18 @@ func serviceMethod(o *Options, call *ast.CallExpr, method *ast.Ident) (reflect.V
 	return m, nil
 }
 
-func printNode(node ast.Node) string {
-	buf := bytes.NewBuffer(nil)
-	_ = format.Node(buf, token.NewFileSet(), node)
-	return buf.String()
-}
-
-const (
-	// requestArgumentIdentifier identifies an *http.Request
-	requestArgumentIdentifier = PatternScopeIdentifierHTTPRequest
-
-	// contextArgumentIdentifier identifies a context.Context off of *http.Request
-	contextArgumentIdentifier = PatternScopeIdentifierContext
-
-	// responseArgumentIdentifier identifies an http.ResponseWriter
-	responseArgumentIdentifier = PatternScopeIdentifierHTTPResponse
-
-	// loggerArgumentIdentifier identifies an *slog.Logger
-	loggerArgumentIdentifier = "logger"
-
-	// loggerArgumentTemplate identifies a *template.Template
-	loggerArgumentTemplate = "template"
-)
-
-func rootScope() []string {
-	return []string{
-		requestArgumentIdentifier,
-		contextArgumentIdentifier,
-		responseArgumentIdentifier,
-		loggerArgumentIdentifier,
-		loggerArgumentTemplate,
-	}
-}
-
-func generateInputsFunction(o *Options, t *template.Template, method reflect.Type, call *ast.CallExpr, pathParams []string) (inputsFunc, error) {
-	if method.NumIn() != len(call.Args) {
+func generateInputsFunction(o *Options, t *template.Template, method reflect.Type, h *Handler) (inputsFunc, error) {
+	if method.NumIn() != len(h.Args) {
 		return nil, fmt.Errorf("wrong number of arguments")
 	}
-	if len(call.Args) == 0 {
+	if len(h.Args) == 0 {
 		return func(http.ResponseWriter, *http.Request) []reflect.Value {
 			return nil
 		}, nil
 	}
-	for _, pp := range pathParams {
-		if slices.Contains(rootScope(), pp) {
-			return nil, fmt.Errorf("identfier %s is already defined", pp)
-		}
-	}
 	var args []string
-	for i, exp := range call.Args {
-		arg, err := typeCheckMethodParameters(pathParams, method.In(i), exp)
+	for i, exp := range h.Args {
+		arg, err := typeCheckMethodParameters(method.In(i), exp)
 		if err != nil {
 			return nil, fmt.Errorf("method argument at index %d: %w", i, err)
 		}
@@ -257,70 +209,60 @@ func generateInputsFunction(o *Options, t *template.Template, method reflect.Typ
 		var in []reflect.Value
 		for _, arg := range args {
 			switch arg {
-			case requestArgumentIdentifier:
-				in = append(in, reflect.ValueOf(req))
-			case contextArgumentIdentifier:
-				in = append(in, reflect.ValueOf(req.Context()))
-			case responseArgumentIdentifier:
+			case PatternScopeIdentifierHTTPResponse:
 				in = append(in, reflect.ValueOf(res))
-			case loggerArgumentIdentifier:
+			case PatternScopeIdentifierHTTPRequest:
+				in = append(in, reflect.ValueOf(req))
+			case PatternScopeIdentifierContext:
+				in = append(in, reflect.ValueOf(req.Context()))
+			case PatternScopeIdentifierLogger:
 				in = append(in, reflect.ValueOf(o.logger))
-			case loggerArgumentTemplate:
+			case PatternScopeIdentifierTemplate:
 				in = append(in, reflect.ValueOf(t))
 			default:
-				if slices.Index(pathParams, arg) >= 0 {
-					in = append(in, reflect.ValueOf(req.PathValue(arg)))
-				}
+				in = append(in, reflect.ValueOf(req.PathValue(arg)))
 			}
 		}
 		return in
 	}, nil
 }
 
-var argumentType = sync.OnceValue(func() func(argName string, pathParams []string) (reflect.Type, error) {
+var argumentType = sync.OnceValue(func() func(argName string) (reflect.Type, error) {
 	requestType := reflect.TypeFor[*http.Request]()
 	contextType := reflect.TypeFor[context.Context]()
 	responseType := reflect.TypeFor[http.ResponseWriter]()
 	loggerType := reflect.TypeFor[*slog.Logger]()
 	templateType := reflect.TypeFor[*template.Template]()
 	stringType := reflect.TypeFor[string]()
-	return func(argName string, pathParams []string) (reflect.Type, error) {
+	return func(argName string) (reflect.Type, error) {
 		var argType reflect.Type
 		switch argName {
-		case requestArgumentIdentifier:
+		case PatternScopeIdentifierHTTPRequest:
 			argType = requestType
-		case contextArgumentIdentifier:
+		case PatternScopeIdentifierContext:
 			argType = contextType
-		case responseArgumentIdentifier:
+		case PatternScopeIdentifierHTTPResponse:
 			argType = responseType
-		case loggerArgumentIdentifier:
+		case PatternScopeIdentifierLogger:
 			argType = loggerType
-		case loggerArgumentTemplate:
+		case PatternScopeIdentifierTemplate:
 			argType = templateType
 		default:
-			if !slices.Contains(pathParams, argName) {
-				return nil, fmt.Errorf("unknown argument type for %s", argName)
-			}
 			argType = stringType
 		}
 		return argType, nil
 	}
 })
 
-func typeCheckMethodParameters(pathParams []string, paramType reflect.Type, exp ast.Expr) (string, error) {
-	switch arg := exp.(type) {
-	case *ast.Ident:
-		argType, err := argumentType()(arg.Name, pathParams)
-		if err != nil {
-			return arg.Name, err
-		}
-		if !argType.AssignableTo(paramType) {
-			return arg.Name, fmt.Errorf("argument %s %s is not assignable to parameter type %s", arg.Name, argType, paramType)
-		}
-		return arg.Name, nil
-	default:
-		return "", fmt.Errorf("argument is not an identifier got %s", printNode(exp))
+func typeCheckMethodParameters(paramType reflect.Type, arg *ast.Ident) (string, error) {
+	argType, err := argumentType()(arg.Name)
+	if err != nil {
+		return arg.Name, err
 	}
+	if !argType.AssignableTo(paramType) {
+		return arg.Name, fmt.Errorf("argument %s %s is not assignable to parameter type %s", arg.Name, argType, paramType)
+	}
+	return arg.Name, nil
 }
 
 func simpleTemplateHandler(ex ExecuteFunc[any], t *template.Template, logger *slog.Logger) http.HandlerFunc {

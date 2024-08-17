@@ -241,7 +241,7 @@ func TestTemplateName_CallExpr(t *testing.T) {
 			require.True(t, ok)
 			require.NoError(t, err)
 			require.NotZero(t, p.Handler)
-			_, _, err = p.CallExpr()
+			_, err = p.ParseHandler()
 			if tt.ExpErr != "" {
 				assert.ErrorContains(t, err, tt.ExpErr)
 			} else {

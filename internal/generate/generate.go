@@ -218,7 +218,7 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 	var imports []string
 	if pat.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
-		call, methodIdent, err := pat.CallExpr()
+		h, err := pat.ParseHandler()
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -235,13 +235,9 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 				},
 			},
 		}
-		args := make([]ast.Expr, 0, len(call.Args))
-		for _, arg := range call.Args {
-			ai, ok := arg.(*ast.Ident)
-			if !ok {
-				return nil, nil, nil, fmt.Errorf("arguments must be identifiers")
-			}
-			switch ai.Name {
+		args := make([]ast.Expr, 0, len(h.Args))
+		for _, arg := range h.Args {
+			switch arg.Name {
 			case responseIdentName:
 				args = append(args, ast.NewIdent(responseIdentName))
 				methodFuncType.Params.List = append(methodFuncType.Params.List, httpResponseField())
@@ -259,12 +255,12 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 				methodFuncType.Params.List = append(methodFuncType.Params.List, contextContextField())
 				imports = append(imports, "context")
 			default:
-				if !slices.Contains(pathParameters, ai.Name) {
-					return nil, nil, nil, fmt.Errorf("unknown variable %s", ai.Name)
+				if !slices.Contains(pathParameters, arg.Name) {
+					return nil, nil, nil, fmt.Errorf("unknown variable %s", arg.Name)
 				}
 				handler.Body.List = append(handler.Body.List, &ast.AssignStmt{
 					Tok: token.DEFINE,
-					Lhs: []ast.Expr{ast.NewIdent(ai.Name)},
+					Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
 					Rhs: []ast.Expr{&ast.CallExpr{
 						Fun: &ast.SelectorExpr{
 							X:   ast.NewIdent(requestIdentName),
@@ -273,20 +269,20 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 						Args: []ast.Expr{
 							&ast.BasicLit{
 								Kind:  token.STRING,
-								Value: strconv.Quote(ai.Name),
+								Value: strconv.Quote(arg.Name),
 							},
 						},
 					}},
 				})
-				args = append(args, ast.NewIdent(ai.Name))
+				args = append(args, ast.NewIdent(arg.Name))
 				methodFuncType.Params.List = append(methodFuncType.Params.List, &ast.Field{
-					Names: []*ast.Ident{ast.NewIdent(ai.Name)},
+					Names: []*ast.Ident{ast.NewIdent(arg.Name)},
 					Type:  ast.NewIdent("string"),
 				})
 			}
 		}
 		methodField = &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(methodIdent.Name)},
+			Names: []*ast.Ident{ast.NewIdent(h.Ident.Name)},
 			Type:  methodFuncType,
 		}
 		assignData := &ast.AssignStmt{
@@ -299,7 +295,7 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 				&ast.CallExpr{
 					Fun: &ast.SelectorExpr{
 						X:   ast.NewIdent(receiverIdentName),
-						Sel: methodIdent,
+						Sel: ast.NewIdent(h.Ident.Name),
 					},
 					Args: args,
 				},

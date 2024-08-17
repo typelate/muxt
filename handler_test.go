@@ -140,7 +140,7 @@ func TestRoutes(t *testing.T) {
 	})
 
 	t.Run("function must be an identifier", func(t *testing.T) {
-		ts := template.Must(template.New("simple path").Parse(`{{define "GET / func().Method(req)" }}{{.}}{{end}}`))
+		ts := template.Must(template.New("simple path").Parse(`{{define "GET / func().Method(request)" }}{{.}}{{end}}`))
 		mux := http.NewServeMux()
 		rec := new(fake.Receiver)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(rec))
@@ -148,14 +148,14 @@ func TestRoutes(t *testing.T) {
 	})
 
 	t.Run("receiver is nil and a method is expected", func(t *testing.T) {
-		ts := template.Must(template.New("simple path").Parse(`{{define "GET / Method(req)" }}{{.}}{{end}}`))
+		ts := template.Must(template.New("simple path").Parse(`{{define "GET / Method(request)" }}{{.}}{{end}}`))
 		mux := http.NewServeMux()
 		err := muxt.Handlers(mux, ts)
 		require.ErrorContains(t, err, "receiver is nil")
 	})
 
 	t.Run("method not found on basic type", func(t *testing.T) {
-		ts := template.Must(template.New("simple path").Parse(`{{define "GET / Foo(req)" }}{{.}}{{end}}`))
+		ts := template.Must(template.New("simple path").Parse(`{{define "GET / Foo(request)" }}{{.}}{{end}}`))
 		mux := http.NewServeMux()
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(100))
 		require.ErrorContains(t, err, `method Foo not found on int`)
@@ -197,7 +197,7 @@ func TestRoutes(t *testing.T) {
 			mux := http.NewServeMux()
 			s := new(fake.Receiver)
 			err := muxt.Handlers(mux, ts, muxt.WithReceiver(s))
-			require.ErrorContains(t, err, fmt.Sprintf(`identfier %s is already defined`, name))
+			require.ErrorContains(t, err, fmt.Sprintf(`the name %s is not allowed as a path paramenter it is alredy in scop`, name))
 		})
 
 		t.Run(name+" can be used when no handler is defined", func(t *testing.T) {
@@ -331,7 +331,7 @@ func TestRoutes(t *testing.T) {
 		s := new(fake.Receiver)
 		s.NumAuthorsReturns(234)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(s))
-		require.ErrorContains(t, err, `method argument at index 1: argument is not an identifier got 3`)
+		require.ErrorContains(t, err, `expected only argument expressions as arguments, argument at index 1 is: 3`)
 	})
 
 	t.Run("query param", func(t *testing.T) {
@@ -357,7 +357,7 @@ func TestRoutes(t *testing.T) {
 		s := new(fake.Receiver)
 		s.NumAuthorsReturns(234)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(s))
-		require.ErrorContains(t, err, `method argument at index 0: unknown argument type for enemy`)
+		require.ErrorContains(t, err, `unknown argument enemy at index 0`)
 	})
 
 	t.Run("full handler func signature", func(t *testing.T) {
