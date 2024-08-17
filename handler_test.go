@@ -166,7 +166,7 @@ func TestRoutes(t *testing.T) {
 		mux := http.NewServeMux()
 		s := new(fake.Receiver)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(s))
-		require.ErrorContains(t, err, `ellipsis call not allowed`)
+		require.ErrorContains(t, err, `unexpected ellipsis`)
 	})
 
 	t.Run("duplicate path param identifier", func(t *testing.T) {

@@ -230,6 +230,11 @@ func TestTemplateName_CallExpr(t *testing.T) {
 			In:     "GET / func() {} ()",
 			ExpErr: "expected function identifier",
 		},
+		{
+			Name:   "call ellipsis",
+			In:     "GET /{fileName} F(fileName...)",
+			ExpErr: "unexpected ellipsis",
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			p, err, ok := muxt.NewPattern(tt.In)

@@ -95,6 +95,9 @@ func (def Pattern) CallExpr() (*ast.CallExpr, *ast.Ident, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
 	}
+	if call.Ellipsis != token.NoPos {
+		return nil, nil, fmt.Errorf("unexpected ellipsis")
+	}
 	return call, fun, nil
 }
 
