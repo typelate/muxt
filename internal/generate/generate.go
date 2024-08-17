@@ -113,7 +113,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		}
 
 		for _, pat := range patterns {
-			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
+			handleFunc, methodField, handlerImports, err := templateHandlers(pat, n)
 			if err != nil {
 				return err
 			}
@@ -182,7 +182,7 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 	return os.WriteFile(filepath.Join(wd, "template_routes.go"), out, 0666)
 }
 
-func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
+func templateHandlers(pat muxt.Pattern, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {
 	handler := &ast.FuncLit{
 		Type: httpHandlerFuncType(),
 		Body: &ast.BlockStmt{
