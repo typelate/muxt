@@ -200,3 +200,48 @@ func mustNewTemplateName(in string) muxt.TemplateName {
 	}
 	return p
 }
+
+func TestTemplateName_CallExpr(t *testing.T) {
+	for _, tt := range []struct {
+		Name   string
+		In     string
+		ExpErr string
+	}{
+		{
+			Name: "no arg post",
+			In:   "GET / F()",
+		},
+		{
+			Name: "no arg get",
+			In:   "POST / F()",
+		},
+		{
+			Name:   "int as handler",
+			In:     "POST / 1",
+			ExpErr: "expected call, got: 1",
+		},
+		{
+			Name:   "not an expression",
+			In:     "GET / package main",
+			ExpErr: "failed to parse handler expression: ",
+		},
+		{
+			Name:   "function literal",
+			In:     "GET / func() {} ()",
+			ExpErr: "expected function identifier",
+		},
+	} {
+		t.Run(tt.Name, func(t *testing.T) {
+			p, err, ok := muxt.NewTemplateName(tt.In)
+			require.True(t, ok)
+			require.NoError(t, err)
+			require.NotZero(t, p.Handler)
+			_, _, err = p.CallExpr()
+			if tt.ExpErr != "" {
+				assert.ErrorContains(t, err, tt.ExpErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

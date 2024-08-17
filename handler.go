@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
-	"go/parser"
 	"go/token"
 	"html/template"
 	"io"
@@ -101,46 +100,36 @@ func applyOptions(options []Options) *Options {
 func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) error {
 	o := applyOptions(options)
 	for _, t := range ts.Templates() {
-		pattern, err, match := NewTemplateName(t.Name())
+		name, err, match := NewTemplateName(t.Name())
 		if !match {
 			continue
 		}
 		if err != nil {
 			return fmt.Errorf("failed to parse NewPattern for template %q: %w", t.Name(), err)
 		}
-		if pattern.Handler == "" {
-			mux.HandleFunc(pattern.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
+		if name.Handler == "" {
+			mux.HandleFunc(name.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
 			continue
 		}
-		ex, err := parser.ParseExpr(pattern.Handler)
+		call, fun, err := name.CallExpr()
 		if err != nil {
-			return fmt.Errorf("failed to parse handler expression: %w", err)
+			return err
 		}
-		switch exp := ex.(type) {
-		case *ast.CallExpr:
-			h, err := callMethodHandler(o, t, pattern, exp)
-			if err != nil {
-				return fmt.Errorf("failed to create handler for %q: %w", pattern.Pattern+" "+pattern.Handler, err)
-			}
-			mux.HandleFunc(pattern.Pattern, h)
-		default:
-			return fmt.Errorf("unexpected handler expression %v", pattern.Handler)
+		h, err := callMethodHandler(o, t, name, fun, call)
+		if err != nil {
+			return fmt.Errorf("failed to create handler for %q: %w", name.Pattern+" "+name.Handler, err)
 		}
+		mux.HandleFunc(name.Pattern, h)
 	}
 	return nil
 }
 
-func callMethodHandler(o *Options, t *template.Template, pattern TemplateName, call *ast.CallExpr) (http.HandlerFunc, error) {
+func callMethodHandler(o *Options, t *template.Template, pattern TemplateName, fun *ast.Ident, call *ast.CallExpr) (http.HandlerFunc, error) {
 	pathParams, err := pattern.PathParameters()
 	if err != nil {
 		return nil, err
 	}
-	switch function := call.Fun.(type) {
-	default:
-		return nil, fmt.Errorf("expected method call on receiver")
-	case *ast.Ident:
-		return createSelectorHandler(o, t, call, function, pathParams)
-	}
+	return createSelectorHandler(o, t, call, fun, pathParams)
 }
 
 func createSelectorHandler(o *Options, t *template.Template, call *ast.CallExpr, method *ast.Ident, pathParams []string) (http.HandlerFunc, error) {

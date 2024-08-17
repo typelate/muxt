@@ -3,6 +3,9 @@ package muxt
 import (
 	"cmp"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/printer"
 	"go/token"
 	"net/http"
 	"regexp"
@@ -16,7 +19,33 @@ type TemplateName struct {
 	Handler                     string
 }
 
-var pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
+func NewTemplateName(in string) (TemplateName, error, bool) {
+	if !templateNameMux.MatchString(in) {
+		return TemplateName{}, nil, false
+	}
+	matches := templateNameMux.FindStringSubmatch(in)
+	p := TemplateName{
+		name:    in,
+		Method:  matches[templateNameMux.SubexpIndex("Method")],
+		Host:    matches[templateNameMux.SubexpIndex("Host")],
+		Path:    matches[templateNameMux.SubexpIndex("Path")],
+		Handler: matches[templateNameMux.SubexpIndex("Handler")],
+		Pattern: matches[templateNameMux.SubexpIndex("Pattern")],
+	}
+
+	switch p.Method {
+	default:
+		return p, fmt.Errorf("%s method not allowed", p.Method), true
+	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	}
+
+	return p, nil, true
+}
+
+var (
+	pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
+	templateNameMux    = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
+)
 
 func (def TemplateName) PathParameters() ([]string, error) {
 	var result []string
@@ -53,27 +82,26 @@ func (def TemplateName) ByPathThenMethod(d TemplateName) int {
 	return cmp.Compare(def.Handler, d.Handler)
 }
 
-var templateNameMux = regexp.MustCompile(`^(?P<Pattern>(((?P<Method>[A-Z]+)\s+)?)(?P<Host>([^/])*)(?P<Path>(/(\S)*)))(?P<Handler>.*)$`)
-
-func NewTemplateName(in string) (TemplateName, error, bool) {
-	if !templateNameMux.MatchString(in) {
-		return TemplateName{}, nil, false
+func (def TemplateName) CallExpr() (*ast.CallExpr, *ast.Ident, error) {
+	e, err := parser.ParseExpr(def.Handler)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse handler expression: %v", err)
 	}
-	matches := templateNameMux.FindStringSubmatch(in)
-	p := TemplateName{
-		name:    in,
-		Method:  matches[templateNameMux.SubexpIndex("Method")],
-		Host:    matches[templateNameMux.SubexpIndex("Host")],
-		Path:    matches[templateNameMux.SubexpIndex("Path")],
-		Handler: matches[templateNameMux.SubexpIndex("Handler")],
-		Pattern: matches[templateNameMux.SubexpIndex("Pattern")],
+	call, ok := e.(*ast.CallExpr)
+	if !ok {
+		return nil, nil, fmt.Errorf("expected call, got: %s", formatNode(e))
 	}
-
-	switch p.Method {
-	default:
-		return p, fmt.Errorf("%s method not allowed", p.Method), true
-	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	fun, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return nil, nil, fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
 	}
+	return call, fun, nil
+}
 
-	return p, nil, true
+func formatNode(node ast.Node) string {
+	var buf strings.Builder
+	if err := printer.Fprint(&buf, token.NewFileSet(), node); err != nil {
+		return fmt.Sprintf("formatting error: %v", err)
+	}
+	return buf.String()
 }

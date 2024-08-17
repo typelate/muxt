@@ -144,7 +144,7 @@ func TestRoutes(t *testing.T) {
 		mux := http.NewServeMux()
 		rec := new(fake.Receiver)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(rec))
-		require.ErrorContains(t, err, `expected method call on receiver`)
+		require.ErrorContains(t, err, `expected function identifier`)
 	})
 
 	t.Run("receiver is nil and a method is expected", func(t *testing.T) {
@@ -282,7 +282,7 @@ func TestRoutes(t *testing.T) {
 		mux := http.NewServeMux()
 		s := new(fake.Receiver)
 		err := muxt.Handlers(mux, ts, muxt.WithReceiver(s))
-		require.ErrorContains(t, err, "unexpected handler expression")
+		require.ErrorContains(t, err, "expected call")
 	})
 
 	t.Run("single return", func(t *testing.T) {

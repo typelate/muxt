@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"html/template"
@@ -23,13 +22,16 @@ import (
 )
 
 const (
-	responseIdentName     = "response"
-	requestIdentName      = "request"
-	receiverIdentName     = "receiver"
-	contextIdentName      = "ctx"
-	dataIdentName         = "data"
-	serveMuxIdentName     = "mux"
-	errorIdentName        = "err"
+	serveMuxIdentName = "mux"
+
+	contextIdentName  = "ctx"
+	requestIdentName  = "request"
+	responseIdentName = "response"
+
+	receiverIdentName = "receiver"
+	dataIdentName     = "data"
+	errorIdentName    = "err"
+
 	errorHandlerIdentName = "handleError"
 	executeIdentName      = "execute"
 
@@ -216,20 +218,9 @@ func templateHandlers(_ *template.Template, name muxt.TemplateName, _ *packages.
 	var imports []string
 	if name.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
-		exp, err := parser.ParseExpr(name.Handler)
+		call, methodIdent, err := name.CallExpr()
 		if err != nil {
 			return nil, nil, nil, err
-		}
-		call, ok := exp.(*ast.CallExpr)
-		if !ok {
-			return nil, nil, nil, fmt.Errorf("expected call expression")
-		}
-		if call.Ellipsis != token.NoPos {
-			return nil, nil, nil, fmt.Errorf("ellipsis calls not permitted")
-		}
-		methodIdent, ok := call.Fun.(*ast.Ident)
-		if !ok {
-			return nil, nil, nil, fmt.Errorf("expected method name identifier")
 		}
 		pathParameters, err := name.PathParameters()
 		if err != nil {
