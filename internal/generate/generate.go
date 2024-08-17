@@ -218,10 +218,6 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 	var imports []string
 	if pat.Handler != "" {
 		data = ast.NewIdent(dataIdentName)
-		h, err := pat.ParseHandler()
-		if err != nil {
-			return nil, nil, nil, err
-		}
 		pathParameters, err := pat.PathParameters()
 		if err != nil {
 			return nil, nil, nil, err
@@ -235,8 +231,8 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 				},
 			},
 		}
-		args := make([]ast.Expr, 0, len(h.Args))
-		for _, arg := range h.Args {
+		args := make([]ast.Expr, 0, len(pat.ArgIdents()))
+		for _, arg := range pat.ArgIdents() {
 			switch arg.Name {
 			case responseIdentName:
 				args = append(args, ast.NewIdent(responseIdentName))
@@ -282,7 +278,7 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 			}
 		}
 		methodField = &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(h.Ident.Name)},
+			Names: []*ast.Ident{ast.NewIdent(pat.FunIdent().Name)},
 			Type:  methodFuncType,
 		}
 		assignData := &ast.AssignStmt{
@@ -295,7 +291,7 @@ func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Packag
 				&ast.CallExpr{
 					Fun: &ast.SelectorExpr{
 						X:   ast.NewIdent(receiverIdentName),
-						Sel: ast.NewIdent(h.Ident.Name),
+						Sel: ast.NewIdent(pat.FunIdent().Name),
 					},
 					Args: args,
 				},

@@ -109,11 +109,7 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 			mux.HandleFunc(pat.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
 			continue
 		}
-		handler, err := pat.ParseHandler()
-		if err != nil {
-			return err
-		}
-		h, err := newReflectHandlerFunc(o, t, handler, handler.Ident)
+		h, err := newReflectHandlerFunc(o, t, pat)
 		if err != nil {
 			return fmt.Errorf("failed to create handler for %q: %w", pat.String(), err)
 		}
@@ -122,12 +118,12 @@ func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) err
 	return nil
 }
 
-func newReflectHandlerFunc(o *Options, t *template.Template, h *Handler, method *ast.Ident) (http.HandlerFunc, error) {
-	m, err := serviceMethod(o, h.Call, method)
+func newReflectHandlerFunc(o *Options, t *template.Template, pat Pattern) (http.HandlerFunc, error) {
+	m, err := serviceMethod(o, pat.CallExpr(), pat.FunIdent())
 	if err != nil {
 		return nil, err
 	}
-	inputs, err := generateInputsFunction(o, t, m.Type(), h)
+	inputs, err := generateInputsFunction(o, t, m.Type(), pat)
 	if err != nil {
 		return nil, err
 	}
@@ -188,18 +184,18 @@ func serviceMethod(o *Options, call *ast.CallExpr, method *ast.Ident) (reflect.V
 	return m, nil
 }
 
-func generateInputsFunction(o *Options, t *template.Template, method reflect.Type, h *Handler) (inputsFunc, error) {
-	if method.NumIn() != len(h.Args) {
+func generateInputsFunction(o *Options, t *template.Template, method reflect.Type, pat Pattern) (inputsFunc, error) {
+	if method.NumIn() != len(pat.ArgIdents()) {
 		return nil, fmt.Errorf("wrong number of arguments")
 	}
-	if len(h.Args) == 0 {
+	if len(pat.ArgIdents()) == 0 {
 		return func(http.ResponseWriter, *http.Request) []reflect.Value {
 			return nil
 		}, nil
 	}
 	var args []string
-	for i, exp := range h.Args {
-		arg, err := typeCheckMethodParameters(method.In(i), exp)
+	for i, argIdent := range pat.ArgIdents() {
+		arg, err := typeCheckMethodParameters(method.In(i), argIdent)
 		if err != nil {
 			return nil, fmt.Errorf("method argument at index %d: %w", i, err)
 		}

@@ -17,6 +17,10 @@ type Pattern struct {
 	name                        string
 	Method, Host, Path, Pattern string
 	Handler                     string
+
+	fun  *ast.Ident
+	call *ast.CallExpr
+	args []*ast.Ident
 }
 
 func NewPattern(in string) (Pattern, error, bool) {
@@ -39,7 +43,7 @@ func NewPattern(in string) (Pattern, error, bool) {
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
-	return p, nil, true
+	return p, parseHandler(&p), true
 }
 
 var (
@@ -68,6 +72,10 @@ func (def Pattern) PathParameters() ([]string, error) {
 	return result, nil
 }
 
+func (def Pattern) CallExpr() *ast.CallExpr { return def.call }
+func (def Pattern) ArgIdents() []*ast.Ident { return def.args }
+func (def Pattern) FunIdent() *ast.Ident    { return def.fun }
+
 func (def Pattern) String() string {
 	return def.name
 }
@@ -82,37 +90,34 @@ func (def Pattern) ByPathThenMethod(d Pattern) int {
 	return cmp.Compare(def.Handler, d.Handler)
 }
 
-type Handler struct {
-	*ast.Ident
-	Call *ast.CallExpr
-	Args []*ast.Ident
-}
-
-func (def Pattern) ParseHandler() (*Handler, error) {
+func parseHandler(def *Pattern) error {
+	if def.Handler == "" {
+		return nil
+	}
 	e, err := parser.ParseExpr(def.Handler)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse handler expression: %v", err)
+		return fmt.Errorf("failed to parse handler expression: %v", err)
 	}
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
-		return nil, fmt.Errorf("expected call, got: %s", formatNode(e))
+		return fmt.Errorf("expected call, got: %s", formatNode(e))
 	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return nil, fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
+		return fmt.Errorf("expected function identifier, got got: %s", formatNode(call.Fun))
 	}
 	if call.Ellipsis != token.NoPos {
-		return nil, fmt.Errorf("unexpected ellipsis")
+		return fmt.Errorf("unexpected ellipsis")
 	}
 	pathParams, err := def.PathParameters()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	args := make([]*ast.Ident, len(call.Args))
 	for i, a := range call.Args {
 		arg, ok := a.(*ast.Ident)
 		if !ok {
-			return nil, fmt.Errorf("expected only argument expressions as arguments, argument at index %d is: %s", i, formatNode(a))
+			return fmt.Errorf("expected only argument expressions as arguments, argument at index %d is: %s", i, formatNode(a))
 		}
 		switch name := arg.Name; name {
 		case PatternScopeIdentifierHTTPRequest,
@@ -121,20 +126,19 @@ func (def Pattern) ParseHandler() (*Handler, error) {
 			PatternScopeIdentifierTemplate,
 			PatternScopeIdentifierLogger:
 			if slices.Contains(pathParams, name) {
-				return nil, fmt.Errorf("the name %s is not allowed as a path paramenter it is alredy in scope", name)
+				return fmt.Errorf("the name %s is not allowed as a path paramenter it is alredy in scope", name)
 			}
 		default:
 			if !slices.Contains(pathParams, name) {
-				return nil, fmt.Errorf("unknown argument %s at index %d", name, i)
+				return fmt.Errorf("unknown argument %s at index %d", name, i)
 			}
 		}
 		args[i] = arg
 	}
-	return &Handler{
-		Call:  call,
-		Ident: fun,
-		Args:  args,
-	}, nil
+	def.fun = fun
+	def.call = call
+	def.args = args
+	return nil
 }
 
 func formatNode(node ast.Node) string {

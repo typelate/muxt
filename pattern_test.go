@@ -193,7 +193,7 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 	}
 }
 
-func TestPattern_ParseHandler(t *testing.T) {
+func TestPattern_parseHandler(t *testing.T) {
 	for _, tt := range []struct {
 		Name   string
 		In     string
@@ -231,9 +231,7 @@ func TestPattern_ParseHandler(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			p, err, ok := muxt.NewPattern(tt.In)
 			require.True(t, ok)
-			require.NoError(t, err)
 			require.NotZero(t, p.Handler)
-			_, err = p.ParseHandler()
 			if tt.ExpErr != "" {
 				assert.ErrorContains(t, err, tt.ExpErr)
 			} else {
