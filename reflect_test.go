@@ -109,7 +109,7 @@ func TestRoutes(t *testing.T) {
 		ts := template.Must(template.New("simple path").Parse(`{{define "CONNECT /articles" }}{{.}}{{end}}`))
 		mux := http.NewServeMux()
 		err := muxt.Handlers(mux, ts)
-		require.ErrorContains(t, err, `failed to parse NewPattern for template "CONNECT /articles": CONNECT method not allowed`)
+		require.ErrorContains(t, err, `CONNECT method not allowed`)
 	})
 
 	t.Run("no method", func(t *testing.T) {

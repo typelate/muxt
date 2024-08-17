@@ -7,11 +7,33 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"html/template"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
 )
+
+func TemplatePatterns(ts *template.Template) ([]Pattern, error) {
+	var patterns []Pattern
+	for _, t := range ts.Templates() {
+		pat, err, ok := NewPattern(t.Name())
+		if !ok {
+			continue
+		}
+		if err != nil {
+			return patterns, err
+		}
+		if slices.ContainsFunc(patterns, func(pattern Pattern) bool {
+			return pattern.Pattern == pat.Pattern
+		}) {
+			return patterns, fmt.Errorf("duplicate route pattern: %s", pat.Pattern)
+		}
+		patterns = append(patterns, pat)
+	}
+	slices.SortFunc(patterns, Pattern.byPathThenMethod)
+	return patterns, nil
+}
 
 type Pattern struct {
 	name                        string
@@ -80,7 +102,7 @@ func (def Pattern) String() string {
 	return def.name
 }
 
-func (def Pattern) ByPathThenMethod(d Pattern) int {
+func (def Pattern) byPathThenMethod(d Pattern) int {
 	if n := cmp.Compare(def.Path, d.Path); n != 0 {
 		return n
 	}

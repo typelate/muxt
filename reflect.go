@@ -96,14 +96,12 @@ func applyOptions(options []Options) *Options {
 
 func Handlers(mux *http.ServeMux, ts *template.Template, options ...Options) error {
 	o := applyOptions(options)
-	for _, t := range ts.Templates() {
-		pat, err, match := NewPattern(t.Name())
-		if !match {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("failed to parse NewPattern for template %q: %w", t.Name(), err)
-		}
+	patterns, err := TemplatePatterns(ts)
+	if err != nil {
+		return err
+	}
+	for _, pat := range patterns {
+		t := ts.Lookup(pat.String())
 		if pat.Handler == "" {
 			mux.HandleFunc(pat.Pattern, simpleTemplateHandler(o.execute, t, o.logger))
 			continue

@@ -99,7 +99,6 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		Methods: &ast.FieldList{},
 	}
 
-	patternSet := make(map[string][]muxt.Pattern)
 	for i := 0; i < len(spec.Names) && i < len(spec.Values) && len(spec.Names) == len(spec.Values); i++ {
 		n, v := spec.Names[i], spec.Values[i]
 
@@ -108,22 +107,11 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 			return err
 		}
 
-		var patterns []muxt.Pattern
-		for _, t := range ts.Templates() {
-			pat, err, ok := muxt.NewPattern(t.Name())
-			if !ok {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if existing, ok := patternSet[pat.Pattern]; ok {
-				return errDuplicateTemplateName(append(existing, pat))
-			}
-			patternSet[pat.Pattern] = append(patternSet[pat.Pattern], pat)
-			patterns = append(patterns, pat)
+		patterns, err := muxt.TemplatePatterns(ts)
+		if err != nil {
+			return err
 		}
-		slices.SortFunc(patterns, muxt.Pattern.ByPathThenMethod)
+
 		for _, pat := range patterns {
 			handleFunc, methodField, handlerImports, err := templateHandlers(ts.Lookup(pat.String()), pat, pkg, n)
 			if err != nil {
@@ -192,18 +180,6 @@ func Command(args []string, wd string, logger *log.Logger, lookupEnv func(string
 		return err
 	}
 	return os.WriteFile(filepath.Join(wd, "template_routes.go"), out, 0666)
-}
-
-func errDuplicateTemplateName(existing []muxt.Pattern) error {
-	slices.SortFunc(existing, muxt.Pattern.ByPathThenMethod)
-	var b strings.Builder
-	for i, n := range existing {
-		b.WriteString(strconv.Quote(n.String()))
-		if i < len(existing)-1 {
-			b.WriteString(", ")
-		}
-	}
-	return fmt.Errorf("duplicate route pattern: %s", b.String())
 }
 
 func templateHandlers(_ *template.Template, pat muxt.Pattern, _ *packages.Package, templatesVariable *ast.Ident) (*ast.CallExpr, *ast.Field, []string, error) {

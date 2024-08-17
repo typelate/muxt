@@ -3,7 +3,7 @@ env GOPACKAGE=server
 env GOFILE=template.go
 
 ! generate
-stdout 'duplicate route pattern: "GET / Greetings\(\)", "GET / Welcome\(\)"'
+stdout 'duplicate route pattern: GET /'
 
 -- template.gohtml --
 {{define "GET / Greetings()" }}
