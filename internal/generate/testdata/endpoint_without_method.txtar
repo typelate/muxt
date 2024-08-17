@@ -1,0 +1,61 @@
+env GOLINE=11
+env GOPACKAGE=server
+env GOFILE=template.go
+
+generate
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "/some-path" }}
+	<h1>Hello, world!</h1>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+//go:generate go run github.com/crhntr/muxt/cmd/muxt
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+-- template_test.go --
+package server
+
+import (
+	"testing"
+
+	"net/http"
+	"net/http/httptest"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil)
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/some-path", nil)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			res := rec.Result()
+
+			if res.StatusCode != http.StatusOK {
+				t.Error("expected OK")
+			}
+		})
+	}
+}
