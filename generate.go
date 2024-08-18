@@ -421,7 +421,8 @@ func (def Pattern) httpRequestReceiverTemplateHandlerFunc(templatesVariableName 
 }
 
 func (def Pattern) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
-	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != def.fun.Name || funcDecl.Recv == nil && len(funcDecl.Recv.List) < 1 {
+	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != def.fun.Name ||
+		funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {
 		return false
 	}
 	exp := funcDecl.Recv.List[0].Type
