@@ -1,0 +1,32 @@
+env GOLINE=12
+env GOPACKAGE=server
+env GOFILE=template.go
+
+muxt generate --routes-func=TemplateRoutes
+stdout 'Routes has route for GET /'
+
+-- index.gohtml --
+{{define "GET /" }}
+	<h1>Hello, world!</h1>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	formHTML embed.FS
+
+	//go:generate go run github.com/crhntr/muxt/cmd/muxt
+	templates = template.Must(template.ParseFS(formHTML, "*"))
+)

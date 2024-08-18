@@ -53,7 +53,7 @@ func NewPattern(in string) (Pattern, error, bool) {
 		Method:  matches[templateNameMux.SubexpIndex("Method")],
 		Host:    matches[templateNameMux.SubexpIndex("Host")],
 		Path:    matches[templateNameMux.SubexpIndex("Path")],
-		Handler: matches[templateNameMux.SubexpIndex("Handler")],
+		Handler: strings.TrimSpace(matches[templateNameMux.SubexpIndex("Handler")]),
 		Route:   matches[templateNameMux.SubexpIndex("Route")],
 	}
 

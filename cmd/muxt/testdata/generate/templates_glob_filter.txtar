@@ -1,0 +1,58 @@
+env GOLINE=11
+env GOPACKAGE=server
+env GOFILE=template.go
+
+muxt generate --routes-func=TemplateRoutes
+! stdout 'Routes has route for GET /example'
+
+exec go test
+
+-- assets/index.gohtml --
+{{define "GET /" }}
+	<h1>Hello, world!</h1>
+{{end}}
+
+-- assets/form_admin.gohtml --
+{{define "POST /form" }}
+	<p>Form submitted</p>
+{{end}}
+
+{{define "GET /form" }}
+	<form action"=/form" method="POST"></form>
+{{end}}
+
+-- assets/main.html --
+
+<p>You can let muxt help you create cool UIs</p>
+<pre>
+{{define "GET /example" }}
+	<h1>Hello, world!</h1>
+{{end}}
+</pre>
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed assets
+var formHTML embed.FS
+
+//go:generate go run github.com/crhntr/muxt/cmd/muxt
+var templates = template.Must(template.ParseFS(formHTML, "assets/*.gohtml"))
+-- template_test.go --
+package server
+
+import "testing"
+
+func Test(t *testing.T) {
+	t.Log(templates.DefinedTemplates())
+}
