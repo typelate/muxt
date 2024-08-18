@@ -2,16 +2,35 @@
 
 This is especially helpful when you are writing HTMX.
 
-## Example
+Given the following files
 
-The "define" blocks in the following template register handlers with the server mux.
+### main.go
 
-The http method, http host, and path semantics match those of in the HTTP package.
+```go
+package main
 
-This library extends this to add custom data handler invocations see "PATCH /fruits/{fruit}". It is configured to call EditRow on template parse time provided receiver.
+import (
+    "html/template"
+    "log"
+    "net/http"
+)
 
-When no handler method is specified in the "declare" string (as is the case with "GET /fruits/{fruit}/edit" in the example), the template receives the *http.Request.  
+//go:embed *.gohtml
+var templateSource embed.FS
 
+var templates = template.Must(template.ParseFS(templateSource, "*"))
+
+type Backend struct {}
+
+func main() {
+	mux := http.NewServeMux()
+	muxt := Routes(mux, templates)
+	
+	
+}
+```
+
+### index.gohtml
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -36,7 +55,6 @@ When no handler method is specified in the "declare" string (as is the case with
         </thead>
         <tbody>
 
-        {{- range . -}}
         {{- block "fruit row" . -}}
         <tr>
             <td>{{ .Fruit }}</td>
@@ -45,8 +63,10 @@ When no handler method is specified in the "declare" string (as is the case with
             </td>
         </tr>
         {{- end -}}
+        
+        {{- define "GET /{} List(ctx)" -}}
+            {{template "index.gohtml" .}}
         {{- end -}}
-
 
         {{- define "GET /fruits/{fruit}/edit" -}}
         <tr>

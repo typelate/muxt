@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+{{block "head" "example"}}
+<head>
+    <meta charset='UTF-8'/>
+    <title>{{.}}</title>
+    <script src='https://unpkg.com/htmx.org@2.0.1' integrity='sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/' crossorigin='anonymous'></script>
+    <script src='https://unpkg.com/htmx-ext-response-targets@2.0.0/response-targets.js'></script>
+
+    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css'>
+</head>
+{{end}}
+<body hx-ext='response-targets'>
+<main class='container'>
+    <table>
+        <thead>
+        <tr>
+            <th>Fruit</th>
+            <th>Count</th>
+        </tr>
+        </thead>
+        <tbody hx-target="closest tr" hx-swap="outerHTML">
+
+        {{- define "fruit row" -}}
+        <tr>
+            <td>{{ .Name }}</td>
+            <td id="count" hx-get='/fruits/{{.Name}}/edit'>{{ .Value }}</td>
+        </tr>
+        {{- end -}}
+
+        {{range .}}
+        {{template "fruit row" .}}
+        {{end}}
+
+        {{- define "GET /{$} List(ctx)" -}}
+        {{template "index.gohtml" .}}
+        {{- end -}}
+
+        {{- define "GET /fruits/{fruit}/edit GetFormEditRow(fruit)" -}}
+        <tr>
+            <td>{{ .Row.Name }}</td>
+            <td>
+                <form hx-patch='/fruits/{{.Row.Name}}'>
+                    <input aria-label='Count' type='number' name='count' value='{{ .Row.Value }}' step='1' min='0'>
+                    <input type='submit' value='Update'>
+                </form>
+                <p id='error'>{{.Error}}</p>
+            </td>
+        </tr>
+        {{- end -}}
+
+        {{- define "PATCH /fruits/{fruit} SubmitFormEditRow(request, fruit)" }}
+            {{- if .Error -}}
+                {{template  "GET /fruits/{fruit}/edit GetFormEditRow(fruit)" .}}
+            {{- else -}}
+                {{template "fruit row" .Row}}
+            {{- end -}}
+        {{ end -}}
+
+        </tbody>
+    </table>
+</main>
+</body>
+</html>
+
+{{define "GET /help"}}
+<!DOCTYPE html>
+<html lang='us-en'>
+{{template "head" "Help"}}
+<body>
+<main class='container'>
+    Hello, help!
+</main>
+</body>
+</html>
+{{end}}

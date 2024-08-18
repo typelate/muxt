@@ -28,7 +28,7 @@ func command(wd string, args []string, getEnv func(string) string, stdout, stder
 
 func handleError(err error) int {
 	if err != nil {
-		_, _ = os.Stderr.WriteString(err.Error())
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		return 1
 	}
 	return 0

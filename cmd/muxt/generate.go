@@ -27,6 +27,7 @@ type Generate struct {
 	templatesVariable string
 	outputFilename    string
 	routesFunction    string
+	receiverIdent     string
 }
 
 func (g Generate) ImportReceiverMethods(tp, method string) (*ast.FuncType, []*ast.ImportSpec, bool) {
@@ -43,9 +44,11 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 	flagSet.StringVar(&config.templatesVariable, "templates-variable", muxt.DefaultTemplatesVariableName, "templates variable name")
 	flagSet.StringVar(&config.outputFilename, "output-file", "template_routes.go", "file name of generated output")
 	flagSet.StringVar(&config.routesFunction, "routes-func", muxt.DefaultRoutesFunctionName, "file name of generated output")
+	flagSet.StringVar(&config.receiverIdent, "receiver", "", "static receiver type identifier")
 	if err := flagSet.Parse(args); err != nil {
 		return err
 	}
+	_ = os.Remove(filepath.Join(workingDirectory, config.outputFilename))
 	list, err := packages.Load(&packages.Config{
 		Mode:  packages.NeedFiles | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
 		Dir:   workingDirectory,
@@ -72,7 +75,7 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 		return err
 	}
 	out := log.New(stdout, "", 0)
-	s, err := muxt.Generate(patterns, config.goPackage, config.templatesVariable, config.routesFunction, "", config.Package.Fset, config.Package.Syntax, config.Package.Syntax, out)
+	s, err := muxt.Generate(patterns, config.goPackage, config.templatesVariable, config.routesFunction, config.receiverIdent, config.Package.Fset, config.Package.Syntax, config.Package.Syntax, out)
 	if err != nil {
 		return err
 	}

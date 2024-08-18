@@ -77,11 +77,11 @@ func Generate(patterns []Pattern, packageName, templatesVariableName, routesFunc
 				Type:  method,
 			})
 		}
-		handlerFunc, handerSignatureImports, err := pattern.funcLit(templatesVariableName, method)
+		handlerFunc, methodImports, err := pattern.funcLit(templatesVariableName, method)
 		if err != nil {
 			return "", err
 		}
-		imports = source.SortImports(append(imports, handerSignatureImports...))
+		imports = source.SortImports(append(imports, methodImports...))
 		routes.Body.List = append(routes.Body.List, pattern.callHandleFunc(handlerFunc))
 		log.Printf("%s has route for %s", routesFunctionName, pattern.String())
 	}
@@ -163,12 +163,12 @@ func (def Pattern) funcLit(templatesVariableIdent string, method *ast.FuncType) 
 		}
 	}
 
+	const dataVarIdent = "data"
 	if method != nil && len(method.Results.List) > 1 {
-		dataVar := ast.NewIdent(dataVarIdent)
 		errVar := ast.NewIdent("err")
 
 		lit.Body.List = append(lit.Body.List,
-			&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVar.Name), ast.NewIdent(errVar.Name)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+			&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(errVar.Name)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
 			&ast.IfStmt{
 				Cond: &ast.BinaryExpr{X: ast.NewIdent(errVar.Name), Op: token.NEQ, Y: ast.NewIdent("nil")},
 				Body: &ast.BlockStmt{
@@ -194,11 +194,10 @@ func (def Pattern) funcLit(templatesVariableIdent string, method *ast.FuncType) 
 				},
 			},
 		)
+	} else {
+		lit.Body.List = append(lit.Body.List, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}})
 	}
-
-	data := ast.NewIdent(dataVarIdent)
-	lit.Body.List = append(lit.Body.List, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(data.Name)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}})
-	lit.Body.List = append(lit.Body.List, def.executeCall(ast.NewIdent(templatesVariableIdent), httpStatusCode(httpStatusCode200Ident), data))
+	lit.Body.List = append(lit.Body.List, def.executeCall(ast.NewIdent(templatesVariableIdent), httpStatusCode(httpStatusCode200Ident), ast.NewIdent(dataVarIdent)))
 	return lit, imports, nil
 }
 
@@ -422,7 +421,16 @@ func (def Pattern) httpRequestReceiverTemplateHandlerFunc(templatesVariableName 
 }
 
 func (def Pattern) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
-	return funcDecl.Name.Name == def.fun.Name && funcDecl.Recv != nil && len(funcDecl.Recv.List) == 1 && funcDecl.Recv.List[0].Type.(*ast.Ident).Name == receiverTypeIdent
+	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != def.fun.Name || funcDecl.Recv == nil && len(funcDecl.Recv.List) < 1 {
+		return false
+	}
+	exp := funcDecl.Recv.List[0].Type
+	if star, ok := exp.(*ast.StarExpr); ok {
+		exp = star.X
+	}
+	ident, ok := exp.(*ast.Ident)
+	return ok && ident.Name == receiverTypeIdent
+
 }
 
 func executeFuncDecl() *ast.FuncDecl {
