@@ -21,7 +21,6 @@ const (
 	muxVarIdent  = "mux"
 
 	requestPathValue         = "PathValue"
-	templatesLookup          = "Lookup"
 	httpRequestContextMethod = "Context"
 	httpPackageIdent         = "http"
 	httpResponseWriterIdent  = "ResponseWriter"
