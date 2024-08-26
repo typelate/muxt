@@ -60,33 +60,33 @@ func Generate(templateNames []TemplateName, _ *template.Template, packageName, t
 	imports := []*ast.ImportSpec{
 		importSpec("net/" + httpPackageIdent),
 	}
-	for _, pattern := range templateNames {
+	for _, name := range templateNames {
 		var method *ast.FuncType
-		if pattern.fun != nil {
+		if name.fun != nil {
 			for _, funcDecl := range source.IterateFunctions(receiverPackage) {
-				if !pattern.matchReceiver(funcDecl, receiverTypeIdent) {
+				if !name.matchReceiver(funcDecl, receiverTypeIdent) {
 					continue
 				}
 				method = funcDecl.Type
 				break
 			}
 			if method == nil {
-				me, im := pattern.funcType()
+				me, im := name.funcType()
 				method = me
 				imports = append(imports, im...)
 			}
 			receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
-				Names: []*ast.Ident{ast.NewIdent(pattern.fun.Name)},
+				Names: []*ast.Ident{ast.NewIdent(name.fun.Name)},
 				Type:  method,
 			})
 		}
-		handlerFunc, methodImports, err := pattern.funcLit(method)
+		handlerFunc, methodImports, err := name.funcLit(method)
 		if err != nil {
 			return "", err
 		}
 		imports = sortImports(append(imports, methodImports...))
-		routes.Body.List = append(routes.Body.List, pattern.callHandleFunc(handlerFunc))
-		log.Printf("%s has route for %s", routesFunctionName, pattern.String())
+		routes.Body.List = append(routes.Body.List, name.callHandleFunc(handlerFunc))
+		log.Printf("%s has route for %s", routesFunctionName, name.String())
 	}
 	importGen := &ast.GenDecl{
 		Tok: token.IMPORT,
