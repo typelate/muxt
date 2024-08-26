@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"html/template"
 	"log"
 	"slices"
 	"strconv"
@@ -41,7 +42,7 @@ const (
 	receiverInterfaceIdent       = "RoutesReceiver"
 )
 
-func Generate(templateNames []TemplateName, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent string, _ *token.FileSet, receiverPackage, templatesPackage []*ast.File, log *log.Logger) (string, error) {
+func Generate(templateNames []TemplateName, _ *template.Template, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent string, _ *token.FileSet, receiverPackage, templatesPackage []*ast.File, log *log.Logger) (string, error) {
 	packageName = cmp.Or(packageName, defaultPackageName)
 	templatesVariableName = cmp.Or(templatesVariableName, DefaultTemplatesVariableName)
 	routesFunctionName = cmp.Or(routesFunctionName, DefaultRoutesFunctionName)
