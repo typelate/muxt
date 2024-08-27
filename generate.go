@@ -164,8 +164,21 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 			call.Args = append(call.Args, ast.NewIdent(TemplateNameScopeIdentifierContext))
 			imports = append(imports, importSpec("context"))
 		default:
-			errVar := ast.NewIdent("err")
-			errCheck := paramParseError(errVar)
+			const errVarIdent = "err"
+			errCheck := source.ErrorCheckReturn(errVarIdent, &ast.ExprStmt{X: &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(httpPackageIdent),
+					Sel: ast.NewIdent("Error"),
+				},
+				Args: []ast.Expr{
+					ast.NewIdent(httpResponseField().Names[0].Name),
+					&ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent("err"), Sel: ast.NewIdent("Error")},
+						Args: []ast.Expr{},
+					},
+					source.HTTPStatusCode(httpPackageIdent, http.StatusBadRequest),
+				},
+			}}, &ast.ReturnStmt{})
 			src := &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
 					X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
@@ -173,7 +186,7 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 				},
 				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
 			}
-			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar, src, token.DEFINE, errCheck)
+			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVarIdent, src, token.DEFINE, errCheck)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -391,17 +404,17 @@ func contextAssignment() *ast.AssignStmt {
 	}
 }
 
-func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident, str ast.Expr, assignTok token.Token, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
+func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident, errVarIdent string, str ast.Expr, assignTok token.Token, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
 	for typeIndex, typeExp := range source.IterateFieldTypes(method.Params.List) {
 		if typeIndex != i {
 			continue
 		}
-		return parseStringStatements(arg.Name, ast.NewIdent(arg.Name), errVar, str, typeExp, assignTok, errCheck)
+		return parseStringStatements(arg.Name, ast.NewIdent(arg.Name), errVarIdent, str, typeExp, assignTok, errCheck)
 	}
 	return nil, nil, fmt.Errorf("type for argumement %d not found", i)
 }
 
-func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str, typeExp ast.Expr, assignTok token.Token, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
+func parseStringStatements(name string, result ast.Expr, errVarIdent string, str, typeExp ast.Expr, assignTok token.Token, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
 	const parsedVarSuffix = "Parsed"
 	paramTypeIdent, ok := typeExp.(*ast.Ident)
 	if !ok {
@@ -413,7 +426,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		return nil, nil, fmt.Errorf("method param type %s not supported", source.Format(typeExp))
 	case "bool":
 		assign := &ast.AssignStmt{
-			Lhs: []ast.Expr{result, ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{result, ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -429,7 +442,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -454,7 +467,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -479,7 +492,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -504,7 +517,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -527,7 +540,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 	case "int64":
 		assign := &ast.AssignStmt{
-			Lhs: []ast.Expr{result, ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{result, ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -543,7 +556,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -568,7 +581,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -593,7 +606,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -617,7 +630,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 	case "uint64":
 
 		assign := &ast.AssignStmt{
-			Lhs: []ast.Expr{result, ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{result, ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -633,7 +646,7 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 		tmp := name + parsedVarSuffix
 
 		parse := &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVar.Name)},
+			Lhs: []ast.Expr{ast.NewIdent(tmp), ast.NewIdent(errVarIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -661,34 +674,6 @@ func parseStringStatements(name string, result ast.Expr, errVar *ast.Ident, str,
 			Rhs: []ast.Expr{str},
 		}
 		return []ast.Stmt{assign}, nil, nil
-	}
-}
-
-func paramParseError(errVar *ast.Ident) *ast.IfStmt {
-	return &ast.IfStmt{
-		Cond: &ast.BinaryExpr{X: ast.NewIdent(errVar.Name), Op: token.NEQ, Y: ast.NewIdent("nil")},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ExprStmt{X: &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent(httpPackageIdent),
-						Sel: ast.NewIdent("Error"),
-					},
-					Args: []ast.Expr{
-						ast.NewIdent(httpResponseField().Names[0].Name),
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent("err"),
-								Sel: ast.NewIdent("Error"),
-							},
-							Args: []ast.Expr{},
-						},
-						source.HTTPStatusCode(httpPackageIdent, http.StatusBadRequest),
-					},
-				}},
-				&ast.ReturnStmt{},
-			},
-		},
 	}
 }
 

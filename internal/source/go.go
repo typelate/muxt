@@ -224,3 +224,10 @@ func HTTPStatusCode(pkg string, n int) ast.Expr {
 }
 
 func Int(n int) *ast.BasicLit { return &ast.BasicLit{Value: strconv.Itoa(n), Kind: token.INT} }
+
+func ErrorCheckReturn(errVarIdent string, body ...ast.Stmt) *ast.IfStmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errVarIdent), Op: token.NEQ, Y: ast.NewIdent("nil")},
+		Body: &ast.BlockStmt{List: body},
+	}
+}
