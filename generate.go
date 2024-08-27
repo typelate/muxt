@@ -164,7 +164,8 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 			call.Args = append(call.Args, ast.NewIdent(TemplateNameScopeIdentifierContext))
 			imports = append(imports, importSpec("context"))
 		default:
-			statements, parseImports, err := httpPathValueAssignment(method, i, arg)
+			errVar := ast.NewIdent("err")
+			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -382,7 +383,7 @@ func contextAssignment() *ast.AssignStmt {
 	}
 }
 
-func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast.Stmt, []*ast.ImportSpec, error) {
+func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident) ([]ast.Stmt, []*ast.ImportSpec, error) {
 	const parsedVarSuffix = "Parsed"
 	for typeIndex, typeExp := range source.IterateFieldTypes(method.Params.List) {
 		if typeIndex != i {
@@ -396,8 +397,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 		default:
 			return nil, nil, fmt.Errorf("method param type %s not supported", source.Format(typeExp))
 		case "bool":
-			errVar := ast.NewIdent("err")
-
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name), ast.NewIdent(errVar.Name)},
 				Tok: token.DEFINE,
@@ -420,8 +419,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{assign, errCheck}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "int":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -458,8 +455,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "int16":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -496,8 +491,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "int32":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -534,8 +527,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "int8":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -572,8 +563,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "int64":
-			errVar := ast.NewIdent("err")
-
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name), ast.NewIdent(errVar.Name)},
 				Tok: token.DEFINE,
@@ -600,8 +589,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{assign, errCheck}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "uint":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -638,8 +625,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "uint16":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -676,8 +661,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "uint32":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
@@ -715,8 +698,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 			return []ast.Stmt{parse, errCheck, assign}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "uint64":
 
-			errVar := ast.NewIdent("err")
-
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name), ast.NewIdent(errVar.Name)},
 				Tok: token.DEFINE,
@@ -743,8 +724,6 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg *ast.Ident) ([]ast
 
 			return []ast.Stmt{assign, errCheck}, []*ast.ImportSpec{importSpec("strconv")}, nil
 		case "uint8":
-			errVar := ast.NewIdent("err")
-
 			tmp := arg.Name + parsedVarSuffix
 
 			parse := &ast.AssignStmt{
