@@ -173,8 +173,6 @@ const (
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierContext      = "ctx"
-	TemplateNameScopeIdentifierTemplate     = "template"
-	TemplateNameScopeIdentifierLogger       = "logger"
 )
 
 func patternScope() []string {
@@ -182,7 +180,5 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierHTTPRequest,
 		TemplateNameScopeIdentifierHTTPResponse,
 		TemplateNameScopeIdentifierContext,
-		TemplateNameScopeIdentifierTemplate,
-		TemplateNameScopeIdentifierLogger,
 	}
 }
