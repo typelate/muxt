@@ -401,6 +401,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 		if !ok {
 			return nil, nil, fmt.Errorf("unsupported type: %s", source.Format(typeExp))
 		}
+		base10 := source.Int(10)
 		switch paramTypeIdent.Name {
 		default:
 			return nil, nil, fmt.Errorf("method param type %s not supported", source.Format(typeExp))
@@ -427,7 +428,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun: &ast.SelectorExpr{
 						X:   ast.NewIdent("strconv"),
-						Sel: ast.NewIdent("ParseInt"),
+						Sel: ast.NewIdent("Atoi"),
 					},
 					Args: []ast.Expr{str},
 				}},
@@ -454,7 +455,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{str},
+					Args: []ast.Expr{str, base10, source.Int(16)},
 				}},
 			}
 
@@ -479,11 +480,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "32", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(32)},
 				}},
 			}
 
@@ -508,11 +505,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "8", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(8)},
 				}},
 			}
 
@@ -535,11 +528,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "64", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(64)},
 				}},
 			}
 
@@ -555,11 +544,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseUint"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "64", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(64)},
 				}},
 			}
 
@@ -584,11 +569,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseUint"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "16", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(16)},
 				}},
 			}
 
@@ -613,11 +594,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseUint"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "32", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(32)},
 				}},
 			}
 
@@ -641,11 +618,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseUint"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "64", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(64)},
 				}},
 			}
 
@@ -661,11 +634,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseUint"),
 					},
-					Args: []ast.Expr{
-						str,
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "8", Kind: token.INT},
-					},
+					Args: []ast.Expr{str, base10, source.Int(8)},
 				}},
 			}
 

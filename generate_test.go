@@ -452,7 +452,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET /bool/{value}   PassBool(value)", http.StatusOK, data)
 	})
 	mux.HandleFunc("GET /int/{value}", func(response http.ResponseWriter, request *http.Request) {
-		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 64)
+		valueParsed, err := strconv.Atoi(request.PathValue("value"))
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
 			return

@@ -222,3 +222,5 @@ func HTTPStatusCode(pkg string, n int) ast.Expr {
 		Sel: ast.NewIdent(ident),
 	}
 }
+
+func Int(n int) *ast.BasicLit { return &ast.BasicLit{Value: strconv.Itoa(n), Kind: token.INT} }
