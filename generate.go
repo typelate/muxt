@@ -166,7 +166,14 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 		default:
 			errVar := ast.NewIdent("err")
 			errCheck := paramParseError(errVar)
-			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar, errCheck)
+			src := &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+					Sel: ast.NewIdent(requestPathValue),
+				},
+				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
+			}
+			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar, src, errCheck)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -384,7 +391,7 @@ func contextAssignment() *ast.AssignStmt {
 	}
 }
 
-func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
+func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident, str ast.Expr, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
 	const parsedVarSuffix = "Parsed"
 	for typeIndex, typeExp := range source.IterateFieldTypes(method.Params.List) {
 		if typeIndex != i {
@@ -406,13 +413,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseBool"),
 					},
-					Args: []ast.Expr{&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-							Sel: ast.NewIdent(requestPathValue),
-						},
-						Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-					}},
+					Args: []ast.Expr{str},
 				}},
 			}
 
@@ -428,17 +429,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "64", Kind: token.INT},
-					},
+					Args: []ast.Expr{str},
 				}},
 			}
 
@@ -463,17 +454,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						X:   ast.NewIdent("strconv"),
 						Sel: ast.NewIdent("ParseInt"),
 					},
-					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
-						&ast.BasicLit{Value: "10", Kind: token.INT},
-						&ast.BasicLit{Value: "16", Kind: token.INT},
-					},
+					Args: []ast.Expr{str},
 				}},
 			}
 
@@ -499,13 +480,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseInt"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "32", Kind: token.INT},
 					},
@@ -534,13 +509,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseInt"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "8", Kind: token.INT},
 					},
@@ -567,13 +536,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseInt"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "64", Kind: token.INT},
 					},
@@ -593,13 +556,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseUint"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "64", Kind: token.INT},
 					},
@@ -628,13 +585,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseUint"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "16", Kind: token.INT},
 					},
@@ -663,13 +614,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseUint"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "32", Kind: token.INT},
 					},
@@ -697,13 +642,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseUint"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "64", Kind: token.INT},
 					},
@@ -723,13 +662,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 						Sel: ast.NewIdent("ParseUint"),
 					},
 					Args: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent(requestPathValue),
-							},
-							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-						},
+						str,
 						&ast.BasicLit{Value: "10", Kind: token.INT},
 						&ast.BasicLit{Value: "8", Kind: token.INT},
 					},
