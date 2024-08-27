@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"html/template"
 	"log"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,9 +28,6 @@ const (
 	httpResponseWriterIdent  = "ResponseWriter"
 	httpServeMuxIdent        = "ServeMux"
 	httpRequestIdent         = "Request"
-	httpStatusCode200Ident   = "StatusOK"
-	httpStatusCode500Ident   = "StatusInternalServerError"
-	httpStatusCode400Ident   = "StatusBadRequest"
 	httpHandleFuncIdent      = "HandleFunc"
 
 	contextPackageIdent     = "context"
@@ -200,7 +198,7 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 									},
 									Args: []ast.Expr{},
 								},
-								httpStatusCode(httpStatusCode500Ident),
+								source.HTTPStatusCode(httpPackageIdent, http.StatusInternalServerError),
 							},
 						}},
 						&ast.ReturnStmt{},
@@ -211,7 +209,7 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 	} else {
 		lit.Body.List = append(lit.Body.List, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}})
 	}
-	lit.Body.List = append(lit.Body.List, def.executeCall(httpStatusCode(httpStatusCode200Ident), ast.NewIdent(dataVarIdent), writeHeader))
+	lit.Body.List = append(lit.Body.List, def.executeCall(source.HTTPStatusCode(httpPackageIdent, http.StatusOK), ast.NewIdent(dataVarIdent), writeHeader))
 	return lit, imports, nil
 }
 
@@ -369,13 +367,6 @@ func callReceiverMethod(fun *ast.Ident) *ast.SelectorExpr {
 
 func contextContextType() *ast.SelectorExpr {
 	return &ast.SelectorExpr{X: ast.NewIdent(contextPackageIdent), Sel: ast.NewIdent(contextContextTypeIdent)}
-}
-
-func httpStatusCode(name string) *ast.SelectorExpr {
-	return &ast.SelectorExpr{
-		X:   ast.NewIdent(httpPackageIdent),
-		Sel: ast.NewIdent(name),
-	}
 }
 
 func contextAssignment() *ast.AssignStmt {
@@ -827,7 +818,7 @@ func paramParseError(errVar *ast.Ident) *ast.IfStmt {
 							},
 							Args: []ast.Expr{},
 						},
-						httpStatusCode(httpStatusCode400Ident),
+						source.HTTPStatusCode(httpPackageIdent, http.StatusBadRequest),
 					},
 				}},
 				&ast.ReturnStmt{},
@@ -853,7 +844,7 @@ func (def TemplateName) executeCall(status, data ast.Expr, writeHeader bool) *as
 func (def TemplateName) httpRequestReceiverTemplateHandlerFunc() *ast.FuncLit {
 	return &ast.FuncLit{
 		Type: httpHandlerFuncType(),
-		Body: &ast.BlockStmt{List: []ast.Stmt{def.executeCall(httpStatusCode(httpStatusCode200Ident), ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), true)}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{def.executeCall(source.HTTPStatusCode(httpPackageIdent, http.StatusOK), ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), true)}},
 	}
 }
 
@@ -932,7 +923,7 @@ func executeFuncDecl(templatesVariableIdent string) *ast.FuncDecl {
 										},
 										Args: []ast.Expr{},
 									},
-									httpStatusCode(httpStatusCode500Ident),
+									source.HTTPStatusCode(httpPackageIdent, http.StatusInternalServerError),
 								},
 							}},
 							&ast.ReturnStmt{},

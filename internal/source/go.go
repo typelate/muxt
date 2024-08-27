@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -139,5 +140,85 @@ func IterateFieldTypes(list []*ast.Field) func(func(int, ast.Expr) bool) {
 				}
 			}
 		}
+	}
+}
+
+var httpCodes = map[int]string{
+	http.StatusContinue:           "StatusContinue",
+	http.StatusSwitchingProtocols: "StatusSwitchingProtocols",
+	http.StatusProcessing:         "StatusProcessing",
+	http.StatusEarlyHints:         "StatusEarlyHints",
+
+	http.StatusOK:                   "StatusOK",
+	http.StatusCreated:              "StatusCreated",
+	http.StatusAccepted:             "StatusAccepted",
+	http.StatusNonAuthoritativeInfo: "StatusNonAuthoritativeInfo",
+	http.StatusNoContent:            "StatusNoContent",
+	http.StatusResetContent:         "StatusResetContent",
+	http.StatusPartialContent:       "StatusPartialContent",
+	http.StatusMultiStatus:          "StatusMultiStatus",
+	http.StatusAlreadyReported:      "StatusAlreadyReported",
+	http.StatusIMUsed:               "StatusIMUsed",
+
+	http.StatusMultipleChoices:   "StatusMultipleChoices",
+	http.StatusMovedPermanently:  "StatusMovedPermanently",
+	http.StatusFound:             "StatusFound",
+	http.StatusSeeOther:          "StatusSeeOther",
+	http.StatusNotModified:       "StatusNotModified",
+	http.StatusUseProxy:          "StatusUseProxy",
+	http.StatusTemporaryRedirect: "StatusTemporaryRedirect",
+	http.StatusPermanentRedirect: "StatusPermanentRedirect",
+
+	http.StatusBadRequest:                   "StatusBadRequest",
+	http.StatusUnauthorized:                 "StatusUnauthorized",
+	http.StatusPaymentRequired:              "StatusPaymentRequired",
+	http.StatusForbidden:                    "StatusForbidden",
+	http.StatusNotFound:                     "StatusNotFound",
+	http.StatusMethodNotAllowed:             "StatusMethodNotAllowed",
+	http.StatusNotAcceptable:                "StatusNotAcceptable",
+	http.StatusProxyAuthRequired:            "StatusProxyAuthRequired",
+	http.StatusRequestTimeout:               "StatusRequestTimeout",
+	http.StatusConflict:                     "StatusConflict",
+	http.StatusGone:                         "StatusGone",
+	http.StatusLengthRequired:               "StatusLengthRequired",
+	http.StatusPreconditionFailed:           "StatusPreconditionFailed",
+	http.StatusRequestEntityTooLarge:        "StatusRequestEntityTooLarge",
+	http.StatusRequestURITooLong:            "StatusRequestURITooLong",
+	http.StatusUnsupportedMediaType:         "StatusUnsupportedMediaType",
+	http.StatusRequestedRangeNotSatisfiable: "StatusRequestedRangeNotSatisfiable",
+	http.StatusExpectationFailed:            "StatusExpectationFailed",
+	http.StatusTeapot:                       "StatusTeapot",
+	http.StatusMisdirectedRequest:           "StatusMisdirectedRequest",
+	http.StatusUnprocessableEntity:          "StatusUnprocessableEntity",
+	http.StatusLocked:                       "StatusLocked",
+	http.StatusFailedDependency:             "StatusFailedDependency",
+	http.StatusTooEarly:                     "StatusTooEarly",
+	http.StatusUpgradeRequired:              "StatusUpgradeRequired",
+	http.StatusPreconditionRequired:         "StatusPreconditionRequired",
+	http.StatusTooManyRequests:              "StatusTooManyRequests",
+	http.StatusRequestHeaderFieldsTooLarge:  "StatusRequestHeaderFieldsTooLarge",
+	http.StatusUnavailableForLegalReasons:   "StatusUnavailableForLegalReasons",
+
+	http.StatusInternalServerError:           "StatusInternalServerError",
+	http.StatusNotImplemented:                "StatusNotImplemented",
+	http.StatusBadGateway:                    "StatusBadGateway",
+	http.StatusServiceUnavailable:            "StatusServiceUnavailable",
+	http.StatusGatewayTimeout:                "StatusGatewayTimeout",
+	http.StatusHTTPVersionNotSupported:       "StatusHTTPVersionNotSupported",
+	http.StatusVariantAlsoNegotiates:         "StatusVariantAlsoNegotiates",
+	http.StatusInsufficientStorage:           "StatusInsufficientStorage",
+	http.StatusLoopDetected:                  "StatusLoopDetected",
+	http.StatusNotExtended:                   "StatusNotExtended",
+	http.StatusNetworkAuthenticationRequired: "StatusNetworkAuthenticationRequired",
+}
+
+func HTTPStatusCode(pkg string, n int) ast.Expr {
+	ident, ok := httpCodes[n]
+	if !ok {
+		return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)}
+	}
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(pkg),
+		Sel: ast.NewIdent(ident),
 	}
 }
