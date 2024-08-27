@@ -173,7 +173,7 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 				},
 				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
 			}
-			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar, src, errCheck)
+			statements, parseImports, err := httpPathValueAssignment(method, i, arg, errVar, src, token.DEFINE, errCheck)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -391,7 +391,7 @@ func contextAssignment() *ast.AssignStmt {
 	}
 }
 
-func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident, str ast.Expr, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
+func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident, str ast.Expr, assignTok token.Token, errCheck *ast.IfStmt) ([]ast.Stmt, []*ast.ImportSpec, error) {
 	const parsedVarSuffix = "Parsed"
 	for typeIndex, typeExp := range source.IterateFieldTypes(method.Params.List) {
 		if typeIndex != i {
@@ -436,7 +436,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -461,7 +461,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -486,7 +486,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -511,7 +511,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -550,7 +550,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -575,7 +575,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -600,7 +600,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -640,7 +640,7 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
+				Tok: assignTok,
 				Rhs: []ast.Expr{&ast.CallExpr{
 					Fun:  ast.NewIdent(paramTypeIdent.Name),
 					Args: []ast.Expr{ast.NewIdent(tmp)},
@@ -651,16 +651,9 @@ func httpPathValueAssignment(method *ast.FuncType, i int, arg, errVar *ast.Ident
 		case "string":
 			assign := &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(arg.Name)},
-				Tok: token.DEFINE,
-				Rhs: []ast.Expr{&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-						Sel: ast.NewIdent(requestPathValue),
-					},
-					Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-				}},
+				Tok: assignTok,
+				Rhs: []ast.Expr{str},
 			}
-
 			return []ast.Stmt{assign}, nil, nil
 		}
 	}
