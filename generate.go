@@ -163,6 +163,10 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 			lit.Body.List = append(lit.Body.List, contextAssignment())
 			call.Args = append(call.Args, ast.NewIdent(TemplateNameScopeIdentifierContext))
 			imports = append(imports, importSpec("context"))
+		case TemplateNameScopeIdentifierForm:
+			_, tp, _ := source.FieldIndex(method.Params.List, i)
+			lit.Body.List = append(lit.Body.List, formDeclaration(arg.Name, tp))
+			call.Args = append(call.Args, ast.NewIdent(arg.Name))
 		default:
 			const errVarIdent = "err"
 			errCheck := source.ErrorCheckReturn(errVarIdent, &ast.ExprStmt{X: &ast.CallExpr{
@@ -401,6 +405,20 @@ func contextAssignment() *ast.AssignStmt {
 				Sel: ast.NewIdent(httpRequestContextMethod),
 			},
 		}},
+	}
+}
+
+func formDeclaration(ident string, typeExp ast.Expr) *ast.DeclStmt {
+	return &ast.DeclStmt{
+		Decl: &ast.GenDecl{
+			Tok: token.VAR,
+			Specs: []ast.Spec{
+				&ast.ValueSpec{
+					Names: []*ast.Ident{ast.NewIdent(ident)},
+					Type:  typeExp,
+				},
+			},
+		},
 	}
 }
 

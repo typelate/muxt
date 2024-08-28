@@ -231,3 +231,17 @@ func ErrorCheckReturn(errVarIdent string, body ...ast.Stmt) *ast.IfStmt {
 		Body: &ast.BlockStmt{List: body},
 	}
 }
+
+func FieldIndex(fields []*ast.Field, i int) (*ast.Ident, ast.Expr, bool) {
+	n := 0
+	for _, field := range fields {
+		for _, name := range field.Names {
+			if n != i {
+				n++
+				continue
+			}
+			return name, field.Type, true
+		}
+	}
+	return nil, nil, false
+}

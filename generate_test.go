@@ -563,6 +563,51 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 }
 `,
 		},
+		{
+			Name:      "form has no fields",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type T struct{}
+
+type In struct{}
+
+func (T) F(form In) any { return nil }
+`,
+			Receiver: "T",
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F(form In) any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		var form In
+		data := receiver.F(form)
+		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))
