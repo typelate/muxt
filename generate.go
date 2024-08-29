@@ -181,18 +181,7 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 				formDeclaration(arg.Name, tp))
 			if formStruct != nil {
 				for _, field := range formStruct.Fields.List {
-					var inputNameTag string
-					if field.Tag != nil {
-						v, _ := strconv.Unquote(field.Tag.Value)
-						tags := reflect.StructTag(v)
-						n, hasInputTag := tags.Lookup("input")
-						if hasInputTag {
-							inputNameTag = n
-						}
-					}
-
 					for _, name := range field.Names {
-						inputName := cmp.Or(inputNameTag, name.Name)
 						lit.Body.List = append(lit.Body.List, &ast.AssignStmt{
 							Tok: token.ASSIGN,
 							Lhs: []ast.Expr{
@@ -210,7 +199,7 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 									Args: []ast.Expr{
 										&ast.BasicLit{
 											Kind:  token.STRING,
-											Value: strconv.Quote(inputName),
+											Value: strconv.Quote(formInputName(field, name)),
 										},
 									},
 								},
@@ -292,6 +281,18 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 	}
 	lit.Body.List = append(lit.Body.List, def.executeCall(source.HTTPStatusCode(httpPackageIdent, http.StatusOK), ast.NewIdent(dataVarIdent), writeHeader))
 	return lit, imports, nil
+}
+
+func formInputName(field *ast.Field, name *ast.Ident) string {
+	if field.Tag != nil {
+		v, _ := strconv.Unquote(field.Tag.Value)
+		tags := reflect.StructTag(v)
+		n, hasInputTag := tags.Lookup("input")
+		if hasInputTag {
+			return n
+		}
+	}
+	return name.Name
 }
 
 func (def TemplateName) funcType() (*ast.FuncType, []*ast.ImportSpec) {
