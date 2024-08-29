@@ -983,6 +983,25 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 }
 `,
 		},
+		{
+			Name:      "F is defined and form has unsupported field type",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type (
+	T struct{}
+	In struct{
+		ts time.Time
+	}
+)
+
+func (T) F(form In) int { return 0 }
+`,
+			Receiver:      "T",
+			ExpectedError: "failed to generate parse statements for form field ts: unsupported type: time.Time",
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))

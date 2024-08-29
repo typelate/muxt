@@ -215,7 +215,7 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 							},
 						}, field.Type, token.ASSIGN, errCheck)
 						if err != nil {
-							return nil, nil, err
+							return nil, nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", name.Name, err)
 						}
 						lit.Body.List = append(lit.Body.List, statements...)
 						imports = append(imports, parseImports...)
