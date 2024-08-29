@@ -151,6 +151,7 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 			}
 		}
 	}
+	const errVarIdent = "err"
 	var (
 		imports     []*ast.ImportSpec
 		writeHeader = true
@@ -182,29 +183,42 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 			if formStruct != nil {
 				for _, field := range formStruct.Fields.List {
 					for _, name := range field.Names {
-						lit.Body.List = append(lit.Body.List, &ast.AssignStmt{
-							Tok: token.ASSIGN,
-							Lhs: []ast.Expr{
-								&ast.SelectorExpr{
-									X:   ast.NewIdent(arg.Name),
-									Sel: ast.NewIdent(name.Name),
-								},
+						fieldExpr := &ast.SelectorExpr{
+							X:   ast.NewIdent(arg.Name),
+							Sel: ast.NewIdent(name.Name),
+						}
+						errCheck := source.ErrorCheckReturn(errVarIdent, &ast.ExprStmt{X: &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X:   ast.NewIdent(httpPackageIdent),
+								Sel: ast.NewIdent("Error"),
 							},
-							Rhs: []ast.Expr{
+							Args: []ast.Expr{
+								ast.NewIdent(httpResponseField().Names[0].Name),
 								&ast.CallExpr{
-									Fun: &ast.SelectorExpr{
-										X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-										Sel: ast.NewIdent("FormValue"),
-									},
-									Args: []ast.Expr{
-										&ast.BasicLit{
-											Kind:  token.STRING,
-											Value: strconv.Quote(formInputName(field, name)),
-										},
-									},
+									Fun:  &ast.SelectorExpr{X: ast.NewIdent("err"), Sel: ast.NewIdent("Error")},
+									Args: []ast.Expr{},
+								},
+								source.HTTPStatusCode(httpPackageIdent, http.StatusBadRequest),
+							},
+						}}, &ast.ReturnStmt{})
+
+						statements, parseImports, err := parseStringStatements(name.Name, fieldExpr, errVarIdent, &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+								Sel: ast.NewIdent("FormValue"),
+							},
+							Args: []ast.Expr{
+								&ast.BasicLit{
+									Kind:  token.STRING,
+									Value: strconv.Quote(formInputName(field, name)),
 								},
 							},
-						})
+						}, field.Type, token.ASSIGN, errCheck)
+						if err != nil {
+							return nil, nil, err
+						}
+						lit.Body.List = append(lit.Body.List, statements...)
+						imports = append(imports, parseImports...)
 					}
 				}
 			} else {
@@ -212,7 +226,6 @@ func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.F
 			}
 			call.Args = append(call.Args, ast.NewIdent(arg.Name))
 		default:
-			const errVarIdent = "err"
 			errCheck := source.ErrorCheckReturn(errVarIdent, &ast.ExprStmt{X: &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
 					X:   ast.NewIdent(httpPackageIdent),

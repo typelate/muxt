@@ -802,6 +802,187 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 }
 `,
 		},
+		{
+			Name:      "F is defined and form has two string fields",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type (
+	T struct{}
+	In struct{
+		fieldInt    int
+		fieldInt64  int64
+		fieldInt32  int32
+		fieldInt16  int16
+		fieldInt8   int8
+		fieldUint   uint
+		fieldUint64 uint64
+		fieldUint16 uint16
+		fieldUint32 uint32
+		fieldUint16 uint16
+		fieldUint8  uint8
+		fieldBool   bool
+	}
+)
+
+func (T) F(form In) int { return 0 }
+`,
+			Receiver: "T",
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"strconv"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F(form In) int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
+		var form In
+		fieldIntParsed, err := strconv.Atoi(request.FormValue("fieldInt"))
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldInt = int(fieldIntParsed)
+		form.fieldInt64, err := strconv.ParseInt(request.FormValue("fieldInt64"), 10, 64)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		fieldInt32Parsed, err := strconv.ParseInt(request.FormValue("fieldInt32"), 10, 32)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldInt32 = int32(fieldInt32Parsed)
+		fieldInt16Parsed, err := strconv.ParseInt(request.FormValue("fieldInt16"), 10, 16)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldInt16 = int16(fieldInt16Parsed)
+		fieldInt8Parsed, err := strconv.ParseInt(request.FormValue("fieldInt8"), 10, 8)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldInt8 = int8(fieldInt8Parsed)
+		fieldUintParsed, err := strconv.ParseUint(request.FormValue("fieldUint"), 10, 64)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldUint = uint(fieldUintParsed)
+		form.fieldUint64, err := strconv.ParseUint(request.FormValue("fieldUint64"), 10, 64)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		fieldUint16Parsed, err := strconv.ParseUint(request.FormValue("fieldUint16"), 10, 16)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldUint16 = uint16(fieldUint16Parsed)
+		fieldUint32Parsed, err := strconv.ParseUint(request.FormValue("fieldUint32"), 10, 32)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldUint32 = uint32(fieldUint32Parsed)
+		fieldUint16Parsed, err := strconv.ParseUint(request.FormValue("fieldUint16"), 10, 16)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldUint16 = uint16(fieldUint16Parsed)
+		fieldUint8Parsed, err := strconv.ParseUint(request.FormValue("fieldUint8"), 10, 8)
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		form.fieldUint8 = uint8(fieldUint8Parsed)
+		form.fieldBool, err := strconv.ParseBool(request.FormValue("fieldBool"))
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		data := receiver.F(form)
+		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
+		{
+			Name:      "F is defined and form has two string fields",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type (
+	T struct{}
+	In struct{
+		field1, field2 string
+	}
+)
+
+func (T) F(form In) int { return 0 }
+`,
+			Receiver: "T",
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F(form In) int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
+		var form In
+		form.field1 = request.FormValue("field1")
+		form.field2 = request.FormValue("field2")
+		data := receiver.F(form)
+		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))
