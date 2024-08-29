@@ -17,6 +17,7 @@ func TestTemplateName_funcLit(t *testing.T) {
 		Out     string
 		Imports []string
 		Method  *ast.FuncType
+		Form    *ast.StructType
 	}{
 		{
 			Name: "get",
@@ -105,7 +106,7 @@ func TestTemplateName_funcLit(t *testing.T) {
 			pat, err, ok := NewTemplateName(tt.In)
 			require.True(t, ok)
 			require.NoError(t, err)
-			out, _, err := pat.funcLit(tt.Method)
+			out, _, err := pat.funcLit(tt.Method, tt.Form)
 			require.NoError(t, err)
 			assert.Equal(t, tt.Out, source.Format(out))
 		})
@@ -118,6 +119,7 @@ func TestTemplateName_HandlerFuncLit_err(t *testing.T) {
 		In     string
 		ErrSub string
 		Method *ast.FuncType
+		Form   *ast.StructType
 	}{
 		{
 			Name: "missing arguments",
@@ -211,7 +213,7 @@ func TestTemplateName_HandlerFuncLit_err(t *testing.T) {
 			pat, err, ok := NewTemplateName(tt.In)
 			require.True(t, ok)
 			require.NoError(t, err)
-			_, _, err = pat.funcLit(tt.Method)
+			_, _, err = pat.funcLit(tt.Method, tt.Form)
 			assert.ErrorContains(t, err, tt.ErrSub)
 		})
 	}

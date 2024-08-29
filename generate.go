@@ -59,7 +59,10 @@ func Generate(templateNames []TemplateName, _ *template.Template, packageName, t
 		importSpec("net/" + httpPackageIdent),
 	}
 	for _, name := range templateNames {
-		var method *ast.FuncType
+		var (
+			method *ast.FuncType
+			form   *ast.StructType
+		)
 		if name.fun != nil {
 			for _, funcDecl := range source.IterateFunctions(receiverPackage) {
 				if !name.matchReceiver(funcDecl, receiverTypeIdent) {
@@ -78,7 +81,7 @@ func Generate(templateNames []TemplateName, _ *template.Template, packageName, t
 				Type:  method,
 			})
 		}
-		handlerFunc, methodImports, err := name.funcLit(method)
+		handlerFunc, methodImports, err := name.funcLit(method, form)
 		if err != nil {
 			return "", err
 		}
@@ -127,7 +130,7 @@ func (def TemplateName) callHandleFunc(handlerFuncLit *ast.FuncLit) *ast.ExprStm
 	}}
 }
 
-func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.ImportSpec, error) {
+func (def TemplateName) funcLit(method *ast.FuncType, _ *ast.StructType) (*ast.FuncLit, []*ast.ImportSpec, error) {
 	if def.handler == "" {
 		return def.httpRequestReceiverTemplateHandlerFunc(), nil, nil
 	}
@@ -165,7 +168,16 @@ func (def TemplateName) funcLit(method *ast.FuncType) (*ast.FuncLit, []*ast.Impo
 			imports = append(imports, importSpec("context"))
 		case TemplateNameScopeIdentifierForm:
 			_, tp, _ := source.FieldIndex(method.Params.List, i)
-			lit.Body.List = append(lit.Body.List, formDeclaration(arg.Name, tp))
+			lit.Body.List = append(lit.Body.List,
+				&ast.ExprStmt{X: &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+						Sel: ast.NewIdent("ParseForm"),
+					},
+					Args: []ast.Expr{},
+				}},
+				formDeclaration(arg.Name, tp))
+			imports = append(imports, importSpec("net/url"))
 			call.Args = append(call.Args, ast.NewIdent(arg.Name))
 		default:
 			const errVarIdent = "err"
@@ -257,6 +269,8 @@ func (def TemplateName) funcType() (*ast.FuncType, []*ast.ImportSpec) {
 		case TemplateNameScopeIdentifierContext:
 			method.Params.List = append(method.Params.List, contextContextField())
 			imports = append(imports, importSpec(contextPackageIdent))
+		case TemplateNameScopeIdentifierForm:
+			method.Params.List = append(method.Params.List, urlValuesField(arg.Name))
 		default:
 			method.Params.List = append(method.Params.List, pathValueField(arg.Name))
 		}
@@ -310,6 +324,11 @@ func checkArgument(method *ast.FuncType, argIndex int, exp ast.Expr, argType ast
 	case TemplateNameScopeIdentifierContext:
 		if !matchSelectorIdents(argType, contextPackageIdent, contextContextTypeIdent, false) {
 			return fmt.Errorf("method expects type %s but %s is %s.%s", source.Format(argType), arg.Name, contextPackageIdent, contextContextTypeIdent)
+		}
+		return nil
+	case TemplateNameScopeIdentifierForm:
+		if !matchSelectorIdents(argType, "url", "Values", false) {
+			return fmt.Errorf("method expects type %s but %s is %s.%s", source.Format(argType), arg.Name, "url", "Values")
 		}
 		return nil
 	default:
@@ -376,6 +395,13 @@ func routesFuncType(receiverType ast.Expr) *ast.FuncType {
 	}}
 }
 
+func urlValuesField(ident string) *ast.Field {
+	return &ast.Field{
+		Names: []*ast.Ident{ast.NewIdent(ident)},
+		Type:  &ast.SelectorExpr{X: ast.NewIdent("url"), Sel: ast.NewIdent("Values")},
+	}
+}
+
 func httpRequestField() *ast.Field {
 	return &ast.Field{
 		Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
@@ -409,6 +435,23 @@ func contextAssignment() *ast.AssignStmt {
 }
 
 func formDeclaration(ident string, typeExp ast.Expr) *ast.DeclStmt {
+	if matchSelectorIdents(typeExp, "url", "Values", false) {
+		return &ast.DeclStmt{
+			Decl: &ast.GenDecl{
+				Tok: token.VAR,
+				Specs: []ast.Spec{
+					&ast.ValueSpec{
+						Names: []*ast.Ident{ast.NewIdent(ident)},
+						Type:  typeExp,
+						Values: []ast.Expr{
+							&ast.SelectorExpr{X: ast.NewIdent(httpResponseField().Names[0].Name), Sel: ast.NewIdent("Form")},
+						},
+					},
+				},
+			},
+		}
+	}
+
 	return &ast.DeclStmt{
 		Decl: &ast.GenDecl{
 			Tok: token.VAR,
