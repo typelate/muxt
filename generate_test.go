@@ -590,6 +590,7 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
 		var form In
 		data := receiver.F(form)
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
@@ -634,6 +635,106 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		request.ParseForm()
 		var form url.Values = response.Form
+		data := receiver.F(form)
+		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
+		{
+			Name:      "F is defined and form type is a struct",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type (
+	T struct{}
+	In struct{
+		field string
+	}
+)
+
+func (T) F(form In) int { return 0 }
+`,
+			Receiver: "T",
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F(form In) int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
+		var form In
+		form.field = request.FormValue("field")
+		data := receiver.F(form)
+		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
+		{
+			Name:      "F is defined and form field has an input tag",
+			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
+			ReceiverPackage: `
+-- in.go --
+package main
+
+type (
+	T struct{}
+	In struct{
+		field string ` + "`input:\"some-field\"`" + `
+	}
+)
+
+func (T) F(form In) int { return 0 }
+`,
+			Receiver: "T",
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F(form In) int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
+		var form In
+		form.field = request.FormValue("some-field")
 		data := receiver.F(form)
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})

@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -59,10 +60,7 @@ func Generate(templateNames []TemplateName, _ *template.Template, packageName, t
 		importSpec("net/" + httpPackageIdent),
 	}
 	for _, name := range templateNames {
-		var (
-			method *ast.FuncType
-			form   *ast.StructType
-		)
+		var method *ast.FuncType
 		if name.fun != nil {
 			for _, funcDecl := range source.IterateFunctions(receiverPackage) {
 				if !name.matchReceiver(funcDecl, receiverTypeIdent) {
@@ -81,7 +79,7 @@ func Generate(templateNames []TemplateName, _ *template.Template, packageName, t
 				Type:  method,
 			})
 		}
-		handlerFunc, methodImports, err := name.funcLit(method, form)
+		handlerFunc, methodImports, err := name.funcLit(method, receiverPackage)
 		if err != nil {
 			return "", err
 		}
@@ -130,7 +128,7 @@ func (def TemplateName) callHandleFunc(handlerFuncLit *ast.FuncLit) *ast.ExprStm
 	}}
 }
 
-func (def TemplateName) funcLit(method *ast.FuncType, _ *ast.StructType) (*ast.FuncLit, []*ast.ImportSpec, error) {
+func (def TemplateName) funcLit(method *ast.FuncType, files []*ast.File) (*ast.FuncLit, []*ast.ImportSpec, error) {
 	if def.handler == "" {
 		return def.httpRequestReceiverTemplateHandlerFunc(), nil, nil
 	}
@@ -139,13 +137,17 @@ func (def TemplateName) funcLit(method *ast.FuncType, _ *ast.StructType) (*ast.F
 		Body: &ast.BlockStmt{},
 	}
 	call := &ast.CallExpr{Fun: callReceiverMethod(def.fun)}
+	var formStruct *ast.StructType
 	if method != nil {
 		if method.Params.NumFields() != len(def.call.Args) {
 			return nil, nil, errWrongNumberOfArguments(def, method)
 		}
 		for pi, pt := range fieldListTypes(method.Params) {
-			if err := checkArgument(method, pi, def.call.Args[pi], pt); err != nil {
+			if err := checkArgument(method, pi, def.call.Args[pi], pt, files); err != nil {
 				return nil, nil, err
+			}
+			if s, ok := findFormStruct(pt, files); ok {
+				formStruct = s
 			}
 		}
 	}
@@ -177,7 +179,48 @@ func (def TemplateName) funcLit(method *ast.FuncType, _ *ast.StructType) (*ast.F
 					Args: []ast.Expr{},
 				}},
 				formDeclaration(arg.Name, tp))
-			imports = append(imports, importSpec("net/url"))
+			if formStruct != nil {
+				for _, field := range formStruct.Fields.List {
+					var inputNameTag string
+					if field.Tag != nil {
+						v, _ := strconv.Unquote(field.Tag.Value)
+						tags := reflect.StructTag(v)
+						n, hasInputTag := tags.Lookup("input")
+						if hasInputTag {
+							inputNameTag = n
+						}
+					}
+
+					for _, name := range field.Names {
+						inputName := cmp.Or(inputNameTag, name.Name)
+						lit.Body.List = append(lit.Body.List, &ast.AssignStmt{
+							Tok: token.ASSIGN,
+							Lhs: []ast.Expr{
+								&ast.SelectorExpr{
+									X:   ast.NewIdent(arg.Name),
+									Sel: ast.NewIdent(name.Name),
+								},
+							},
+							Rhs: []ast.Expr{
+								&ast.CallExpr{
+									Fun: &ast.SelectorExpr{
+										X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+										Sel: ast.NewIdent("FormValue"),
+									},
+									Args: []ast.Expr{
+										&ast.BasicLit{
+											Kind:  token.STRING,
+											Value: strconv.Quote(inputName),
+										},
+									},
+								},
+							},
+						})
+					}
+				}
+			} else {
+				imports = append(imports, importSpec("net/url"))
+			}
 			call.Args = append(call.Args, ast.NewIdent(arg.Name))
 		default:
 			const errVarIdent = "err"
@@ -307,7 +350,7 @@ func errWrongNumberOfArguments(def TemplateName, method *ast.FuncType) error {
 	return fmt.Errorf("handler %s expects %d arguments but call %s has %d", source.Format(&ast.FuncDecl{Name: ast.NewIdent(def.fun.Name), Type: method}), method.Params.NumFields(), def.handler, len(def.call.Args))
 }
 
-func checkArgument(method *ast.FuncType, argIndex int, exp ast.Expr, argType ast.Expr) error {
+func checkArgument(method *ast.FuncType, argIndex int, exp ast.Expr, argType ast.Expr, files []*ast.File) error {
 	// TODO: rewrite to "cannot use 32 (untyped int constant) as string value in argument to strings.ToUpper"
 	arg := exp.(*ast.Ident)
 	switch arg.Name {
@@ -327,8 +370,12 @@ func checkArgument(method *ast.FuncType, argIndex int, exp ast.Expr, argType ast
 		}
 		return nil
 	case TemplateNameScopeIdentifierForm:
-		if !matchSelectorIdents(argType, "url", "Values", false) {
-			return fmt.Errorf("method expects type %s but %s is %s.%s", source.Format(argType), arg.Name, "url", "Values")
+		if matchSelectorIdents(argType, "url", "Values", false) {
+			return nil
+		}
+		_, ok := findFormStruct(argType, files)
+		if !ok {
+			return fmt.Errorf("method expects form to have type url.Values or T (where T is some struct type)")
 		}
 		return nil
 	default:
@@ -345,6 +392,27 @@ func checkArgument(method *ast.FuncType, argIndex int, exp ast.Expr, argType ast
 		}
 		return nil
 	}
+}
+
+func findFormStruct(argType ast.Expr, files []*ast.File) (*ast.StructType, bool) {
+	if argTypeIdent, ok := argType.(*ast.Ident); ok {
+		for _, file := range files {
+			for _, d := range file.Decls {
+				decl, ok := d.(*ast.GenDecl)
+				if !ok || decl.Tok != token.TYPE {
+					continue
+				}
+				for _, s := range decl.Specs {
+					spec := s.(*ast.TypeSpec)
+					structType, isStruct := spec.Type.(*ast.StructType)
+					if isStruct && spec.Name.Name == argTypeIdent.Name {
+						return structType, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
 }
 
 func matchSelectorIdents(expr ast.Expr, pkg, name string, star bool) bool {
