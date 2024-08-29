@@ -1002,6 +1002,222 @@ func (T) F(form In) int { return 0 }
 			Receiver:      "T",
 			ExpectedError: "failed to generate parse statements for form field ts: unsupported type: time.Time",
 		},
+		{
+			Name:        "call F",
+			Templates:   `{{define "GET / F()"}}Hello, world!{{end}}`,
+			Receiver:    "T",
+			PackageName: "main",
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+`,
+			ExpectedFile: `package main
+
+import (
+	"net/http"
+	"bytes"
+)
+
+type RoutesReceiver interface {
+	F() any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		data := receiver.F()
+		execute(response, request, true, "GET / F()", http.StatusOK, data)
+	})
+}
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
+	buf := bytes.NewBuffer(nil)
+	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if writeHeader {
+		response.WriteHeader(code)
+	}
+	_, _ = buf.WriteTo(response)
+}
+`,
+		},
+		{
+			Name:        "no handler",
+			Templates:   `{{define "GET /"}}Hello, world!{{end}}`,
+			Receiver:    "T",
+			PackageName: "main",
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		execute(response, request, true, "GET /", http.StatusOK, request)
+	})
+}
+`,
+		},
+		{
+			Name:        "no handler",
+			Templates:   `{{define "GET /"}}Hello, world!{{end}}`,
+			Receiver:    "T",
+			PackageName: "main",
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		execute(response, request, true, "GET /", http.StatusOK, request)
+	})
+}
+`,
+		},
+		{
+			Name:      "call F with argument response",
+			Templates: `{{define "GET / F(response)"}}{{end}}`,
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func (T) F(http.ResponseWriter) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+	F(response http.ResponseWriter) any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		data := receiver.F(response)
+		execute(response, request, false, "GET / F(response)", http.StatusOK, data)
+	})
+}
+`,
+		},
+		{
+			Name:      "call F with argument context",
+			Templates: `{{define "GET / F(ctx)"}}{{end}}`,
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func (T) F(ctx context.Context) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import (
+	"context"
+	"net/http"
+)
+
+type RoutesReceiver interface {
+	F(ctx context.Context) any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		ctx := request.Context()
+		data := receiver.F(ctx)
+		execute(response, request, true, "GET / F(ctx)", http.StatusOK, data)
+	})
+}
+`,
+		},
+		{
+			Name:      "call F with argument path param",
+			Templates: `{{define "GET /{param} F(param)"}}{{end}}`,
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func (T) F(param string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+	F(param string) any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /{param}", func(response http.ResponseWriter, request *http.Request) {
+		param := request.PathValue("param")
+		data := receiver.F(param)
+		execute(response, request, true, "GET /{param} F(param)", http.StatusOK, data)
+	})
+}
+`,
+		},
+		{
+			Name:      "call F with multiple arguments",
+			Templates: `{{define "GET /{userName} F(ctx, userName)"}}{{end}}`,
+			ReceiverPackage: `-- in.go --
+package main
+
+import "context"
+
+type T struct{}
+
+func (T) F(ctx context.Context, userName string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedFile: `package main
+
+import (
+	"context"
+	"net/http"
+)
+
+type RoutesReceiver interface {
+	F(ctx context.Context, userName string) any
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /{userName}", func(response http.ResponseWriter, request *http.Request) {
+		ctx := request.Context()
+		userName := request.PathValue("userName")
+		data := receiver.F(ctx, userName)
+		execute(response, request, true, "GET /{userName} F(ctx, userName)", http.StatusOK, data)
+	})
+}
+`,
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))
