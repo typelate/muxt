@@ -184,14 +184,12 @@ package main
 type T struct{}
 
 func (*T) F(username string) int { return 30 }
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(username string) int
@@ -203,17 +201,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F(username)
 		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -258,17 +245,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 -- receiver.go --
 package main
 
+import "net/http"
+
 type T struct{}
 
 func (T) F(username string) (int, error) { return 30, error }
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(username string) (int, error)
@@ -285,17 +272,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
 	})
 }
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
 `,
 		},
 		{
@@ -308,7 +284,8 @@ package main
 type T struct{}
 
 func (T) F(ctx context.Context) int { return 30 }
-`,
+
+` + executeGo,
 			Receiver:      "T",
 			ExpectedError: "method expects type context.Context but request is *http.Request",
 		},
@@ -337,14 +314,14 @@ func (T0) F(ctx context.Context) int { return 30 }
 func (T) F1(ctx context.Context, username string) int { return 30 }
 
 func (T) F(ctx context.Context, username string) int { return 30 }
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
 	"context"
 	"net/http"
-	"bytes"
 )
 
 type RoutesReceiver interface {
@@ -358,17 +335,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F(ctx, username)
 		execute(response, request, true, "GET /age/{username} F(ctx, username)", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -417,13 +383,12 @@ func (T) PassUint8(in uint8) uint8    { return in }
 func (T) PassBool(in bool) bool       { return in }
 func (T) PassByte(in byte) byte       { return in }
 func (T) PassRune(in rune) rune       { return in }
-`,
+` + executeGo,
 			ExpectedFile: `package main
 
 import (
 	"net/http"
 	"strconv"
-	"bytes"
 )
 
 type RoutesReceiver interface {
@@ -549,17 +514,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET /uint8/{value}  PassUint8(value)", http.StatusOK, data)
 	})
 }
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
 `,
 		},
 		{
@@ -574,14 +528,12 @@ type T struct{}
 type In struct{}
 
 func (T) F(form In) any { return nil }
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(form In) any
@@ -595,17 +547,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
 }
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
 `,
 		},
 		{
@@ -616,14 +557,14 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 package main
 
 type T struct{}
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
 	"net/http"
 	"net/url"
-	"bytes"
 )
 
 type RoutesReceiver interface {
@@ -637,17 +578,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F(form)
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -666,14 +596,12 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-`,
+
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -688,17 +616,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
 }
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
 `,
 		},
 		{
@@ -716,14 +633,11 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-`,
+` + executeGo,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -737,67 +651,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F(form)
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
-`,
-		},
-		{
-			Name:      "F is defined and form field has an input tag",
-			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
-			ReceiverPackage: `
--- in.go --
-package main
-
-type (
-	T struct{}
-	In struct{
-		field string ` + "`input:\"some-field\"`" + `
-	}
-)
-
-func (T) F(form In) int { return 0 }
-`,
-			Receiver: "T",
-			ExpectedFile: `package main
-
-import (
-	"net/http"
-	"bytes"
-)
-
-type RoutesReceiver interface {
-	F(form In) int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		request.ParseForm()
-		var form In
-		form.field = request.FormValue("some-field")
-		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
-	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -807,6 +660,8 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 			ReceiverPackage: `
 -- in.go --
 package main
+
+import "net/http"
 
 type (
 	T struct{}
@@ -827,6 +682,8 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			Receiver: "T",
 			ExpectedFile: `package main
@@ -834,7 +691,6 @@ func (T) F(form In) int { return 0 }
 import (
 	"net/http"
 	"strconv"
-	"bytes"
 )
 
 type RoutesReceiver interface {
@@ -918,25 +774,16 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
 }
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
-}
 `,
 		},
 		{
-			Name:      "F is defined and form has two string fields",
+			Name:      "F is defined and form has two two names for a single field",
 			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
 			ReceiverPackage: `
 -- in.go --
 package main
+
+import "net/http"
 
 type (
 	T struct{}
@@ -946,14 +793,13 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -968,17 +814,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F(form)
 		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -997,6 +832,8 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			Receiver:      "T",
 			ExpectedError: "failed to generate parse statements for form field ts: unsupported type: time.Time",
@@ -1010,13 +847,12 @@ func (T) F(form In) int { return 0 }
 package main
 
 type T struct{}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import (
-	"net/http"
-	"bytes"
-)
+import "net/http"
 
 type RoutesReceiver interface {
 	F() any
@@ -1027,17 +863,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		data := receiver.F()
 		execute(response, request, true, "GET / F()", http.StatusOK, data)
 	})
-}
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -1392,3 +1217,11 @@ func methodFuncTypeLoader(t *testing.T, set *token.FileSet, in string) []*ast.Fi
 	}
 	return files
 }
+
+const executeGo = `-- execute.go --
+package main
+
+import "net/http"
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`
