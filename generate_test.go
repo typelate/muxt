@@ -26,7 +26,6 @@ func TestGenerate(t *testing.T) {
 		TemplatesVar    string
 		RoutesFunc      string
 		Imports         []string
-		Method          *ast.FuncType
 
 		ExpectedError string
 		ExpectedFile  string
@@ -1186,6 +1185,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			Name:      "call F with multiple arguments",
 			Templates: `{{define "GET /{userName} F(ctx, userName)"}}{{end}}`,
+			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
 package main
 
@@ -1217,6 +1217,150 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	})
 }
 `,
+		},
+		{
+			Name:      "missing arguments",
+			Templates: `{{define "GET / F()"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+type T struct{}
+
+func (T) F(string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+
+			ExpectedError: "handler func F(string) any expects 1 arguments but call F() has 0",
+		},
+		{
+			Name:      "extra arguments",
+			Templates: `{{define "GET /{name} F(ctx, name)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import ( 
+	"context"
+	"net/html"
+)
+
+type T struct{}
+
+func (T) F(context.Context) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "handler func F(context.Context) any expects 1 arguments but call F(ctx, name) has 2",
+		},
+		{
+			Name:      "wrong argument type request",
+			Templates: `{{define "GET / F(request)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import ( 
+	"context"
+	"net/html"
+)
+
+type T struct{}
+
+func (T) F(string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method expects type string but request is *http.Request",
+		},
+		{
+			Name:      "wrong argument type ctx",
+			Templates: `{{define "GET / F(ctx)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import "net/html"
+
+type T struct{}
+
+func (T) F(string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method expects type string but ctx is context.Context",
+		},
+		{
+			Name:      "wrong argument type response",
+			Templates: `{{define "GET / F(response)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import "net/html"
+
+type T struct{}
+
+func (T) F(string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method expects type string but response is http.ResponseWriter",
+		},
+		{
+			Name:      "wrong argument type path value",
+			Templates: `{{define "GET /{name} F(name)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import "net/html"
+
+type T struct{}
+
+func (T) F(float64) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method param type float64 not supported",
+		},
+		{
+			Name:      "wrong argument type request ptr",
+			Templates: `{{define "GET / F(request)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import "net/html"
+
+type T struct{}
+
+func (T) F(*T) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method expects type *T but request is *http.Request",
+		},
+		{
+			Name:      "wrong argument type in field list",
+			Templates: `{{define "GET /post/{postID}/comment/{commentID} F(ctx, request, commentID)"}}{{end}}`,
+			Receiver:  "T",
+			ReceiverPackage: `-- in.go --
+package main
+
+import (
+	"context"
+	"net/html"
+)
+
+type T struct{}
+
+func (T) F(context.Context, string, string) any {return nil}
+
+func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
+`,
+			ExpectedError: "method expects type string but request is *http.Request",
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
