@@ -1,0 +1,93 @@
+muxt generate --receiver-static-type=T
+
+cat template_routes.go
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST / Method(form)" }}<script>var _ = {{.}}</script>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type Form struct {
+	Count    []int `json:"count"`
+	Str string `input:"some-string" json:"str"`
+}
+
+type T struct {
+	spy func(Form) Form
+}
+
+func (t T) Method(form Form) Form {
+	return t.spy(form)
+}
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"slices"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+
+	service.spy = func(form Form) Form {
+		if exp := []int{7, 14, 21, 29}; !slices.Equal(exp, form.Count) {
+			t.Errorf("exp %v, got %v", exp, form.Count)
+		}
+		if exp := "apple"; form.Str != exp {
+			t.Errorf("exp %v, got %v", exp, form.Str)
+		}
+		return form
+	}
+
+	routes(mux, service)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(url.Values{
+		"some-string": []string{"apple"},
+		"Count":       []string{"7", "14", "21", "29"},
+	}.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if exp := `<script>var _ = {"count":[7,14,21,29],"str":"apple"}</script>`; string(body) != exp {
+		t.Errorf("exp %v, got %v", exp, string(body))
+	}
+}
