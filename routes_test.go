@@ -1868,7 +1868,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			logs := log.New(io.Discard, "", 0)
 			set := token.NewFileSet()
 			goFiles := methodFuncTypeLoader(t, set, tt.ReceiverPackage)
-			out, err := muxt.Generate(templateNames, tt.PackageName, tt.TemplatesVar, tt.RoutesFunc, tt.Receiver, tt.Interface, muxt.DefaultOutputFileName, set, goFiles, logs)
+			out, err := muxt.Routes(templateNames, tt.PackageName, tt.TemplatesVar, tt.RoutesFunc, tt.Receiver, tt.Interface, muxt.DefaultOutputFileName, set, goFiles, logs)
 			if tt.ExpectedError == "" {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.ExpectedFile, out)

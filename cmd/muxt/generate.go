@@ -109,7 +109,7 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 		return err
 	}
 	out := log.New(stdout, "", 0)
-	s, err := muxt.Generate(templates, g.goPackage, g.templatesVariable, g.routesFunction, g.receiverIdent, g.receiverInterfaceIdent, g.outputFilename, g.Package.Fset, g.Package.Syntax, out)
+	s, err := muxt.Routes(templates, g.goPackage, g.templatesVariable, g.routesFunction, g.receiverIdent, g.receiverInterfaceIdent, g.outputFilename, g.Package.Fset, g.Package.Syntax, out)
 	if err != nil {
 		return err
 	}

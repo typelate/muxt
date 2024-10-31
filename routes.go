@@ -49,7 +49,7 @@ const (
 	errIdent = "err"
 )
 
-func Generate(templates []Template, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent, receiverInterfaceIdent, output string, fileSet *token.FileSet, receiverPackage []*ast.File, log *log.Logger) (string, error) {
+func Routes(templates []Template, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent, receiverInterfaceIdent, output string, fileSet *token.FileSet, receiverPackage []*ast.File, log *log.Logger) (string, error) {
 	packageName = cmp.Or(packageName, defaultPackageName)
 	templatesVariableName = cmp.Or(templatesVariableName, DefaultTemplatesVariableName)
 	routesFunctionName = cmp.Or(routesFunctionName, DefaultRoutesFunctionName)
