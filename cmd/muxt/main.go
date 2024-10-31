@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime/debug"
 
 	"rsc.io/script"
 )
@@ -57,18 +56,4 @@ func scriptCommand() script.Cmd {
 			return stdout.String(), stderr.String(), err
 		}, nil
 	})
-}
-
-func versionCommand(stdout io.Writer) error {
-	v, _ := cliVersion()
-	_, err := io.WriteString(stdout, v)
-	return err
-}
-
-func cliVersion() (string, bool) {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok || bi.Main.Version == "" {
-		return "", false
-	}
-	return bi.Main.Version, true
 }
