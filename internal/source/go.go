@@ -8,7 +8,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
+
+func Load(dir string, patterns ...string) ([]*packages.Package, error) {
+	return packages.Load(&packages.Config{
+		Mode:  packages.NeedModule | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
+		Dir:   dir,
+		Tests: false,
+	}, patterns...)
+}
 
 func IterateGenDecl(files []*ast.File, tok token.Token) func(func(*ast.File, *ast.GenDecl) bool) {
 	return func(yield func(*ast.File, *ast.GenDecl) bool) {
@@ -295,30 +305,4 @@ func FindFieldWithName(list *ast.FieldList, name string) (*ast.Field, bool) {
 func HasFieldWithName(list *ast.FieldList, name string) bool {
 	_, ok := FindFieldWithName(list, name)
 	return ok
-}
-
-func StaticTypeMethods(files []*ast.File, typeName string) *ast.FieldList {
-	methods := new(ast.FieldList)
-	for _, funcDecl := range IterateFunctions(files) {
-		if !isMethodForType(typeName, funcDecl) {
-			continue
-		}
-		methods.List = append(methods.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(funcDecl.Name.Name)},
-			Type:  funcDecl.Type,
-		})
-	}
-	return methods
-}
-
-func isMethodForType(receiverTypeIdent string, funcDecl *ast.FuncDecl) bool {
-	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {
-		return false
-	}
-	exp := funcDecl.Recv.List[0].Type
-	if star, ok := exp.(*ast.StarExpr); ok {
-		exp = star.X
-	}
-	ident, ok := exp.(*ast.Ident)
-	return ok && ident.Name == receiverTypeIdent
 }

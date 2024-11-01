@@ -82,11 +82,7 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 	if err != nil {
 		return err
 	}
-	packageList, err := packages.Load(&packages.Config{
-		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
-		Dir:   workingDirectory,
-		Tests: false,
-	}, workingDirectory)
+	packageList, err := source.Load(workingDirectory, "./...")
 	if err != nil {
 		return err
 	}
@@ -109,7 +105,7 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 		return err
 	}
 	out := log.New(stdout, "", 0)
-	s, err := muxt.Routes(templates, g.goPackage, g.templatesVariable, g.routesFunction, g.receiverIdent, g.receiverInterfaceIdent, g.outputFilename, g.Package.Fset, g.Package.Syntax, out)
+	s, err := muxt.Routes(templates, g.goPackage, g.templatesVariable, g.routesFunction, g.receiverIdent, g.receiverInterfaceIdent, g.outputFilename, packageList, out)
 	if err != nil {
 		return err
 	}

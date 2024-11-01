@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"html/template"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/crhntr/dom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/crhntr/muxt/internal/source"
 )
@@ -49,15 +51,35 @@ const (
 	errIdent = "err"
 )
 
-func Routes(templates []Template, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent, receiverInterfaceIdent, output string, fileSet *token.FileSet, receiverPackage []*ast.File, log *log.Logger) (string, error) {
+func Routes(templates []Template, packageName, templatesVariableName, routesFunctionName, receiverTypeIdent, receiverInterfaceIdent, output string, packageList []*packages.Package, log *log.Logger) (string, error) {
 	packageName = cmp.Or(packageName, defaultPackageName)
 	templatesVariableName = cmp.Or(templatesVariableName, DefaultTemplatesVariableName)
 	routesFunctionName = cmp.Or(routesFunctionName, DefaultRoutesFunctionName)
 	receiverInterfaceIdent = cmp.Or(receiverInterfaceIdent, DefaultReceiverInterfaceName)
 
 	imports := source.NewImports(&ast.GenDecl{Tok: token.IMPORT})
-
-	receiverInterface := receiverInterfaceType(imports, source.StaticTypeMethods(receiverPackage, receiverTypeIdent), templates)
+	var (
+		receiverType    *types.Named
+		pkg             *packages.Package
+		receiverPackage []*ast.File
+	)
+	for _, p := range packageList {
+		if p.Types.Name() == packageName {
+			pkg = p
+			receiverPackage = pkg.Syntax
+			break
+		}
+	}
+	if pkg != nil {
+		receiverTypeObj := pkg.Types.Scope().Lookup(receiverTypeIdent)
+		if receiverTypeObj != nil {
+			named, ok := receiverTypeObj.Type().(*types.Named)
+			if ok {
+				receiverType = named
+			}
+		}
+	}
+	receiverInterface := receiverInterfaceType(imports, packageList, receiverType, templates)
 	routesFunc, err := routesFuncDeclaration(imports, routesFunctionName, receiverInterfaceIdent, receiverInterface, receiverPackage, templates, log)
 	if err != nil {
 		return "", err
@@ -79,22 +101,20 @@ func Routes(templates []Template, packageName, templatesVariableName, routesFunc
 			routesFunc,
 		},
 	}
-	addExecuteFunction(imports, fileSet, receiverPackage, output, file, templatesVariableName)
+	if pkg != nil {
+		if obj := pkg.Types.Scope().Lookup(executeIdentName); obj == nil {
+			file.Decls = append(file.Decls, executeFuncDecl(imports, templatesVariableName))
+		} else {
+			pos := pkg.Fset.Position(obj.Pos())
+			if filepath.Base(pos.Filename) == output {
+				file.Decls = append(file.Decls, executeFuncDecl(imports, templatesVariableName))
+			}
+		}
+	} else {
+		file.Decls = append(file.Decls, executeFuncDecl(imports, templatesVariableName))
+	}
 
 	return source.Format(file), nil
-}
-
-func addExecuteFunction(imports *source.Imports, fileSet *token.FileSet, files []*ast.File, output string, file *ast.File, templatesVariableName string) {
-	for _, fn := range source.IterateFunctions(files) {
-		if fn.Recv == nil && fn.Name.Name == executeIdentName {
-			p := fileSet.Position(fn.Pos())
-			if filepath.Base(p.Filename) != output {
-				return
-			}
-			break
-		}
-	}
-	file.Decls = append(file.Decls, executeFuncDecl(imports, templatesVariableName))
 }
 
 func routesFuncDeclaration(imports *source.Imports, routesFunctionName, receiverInterfaceIdent string, receiverInterfaceType *ast.InterfaceType, receiverPackage []*ast.File, templateNames []Template, log *log.Logger) (*ast.FuncDecl, error) {
@@ -122,7 +142,7 @@ func routesFuncDeclaration(imports *source.Imports, routesFunctionName, receiver
 	return routes, nil
 }
 
-func receiverInterfaceType(imports *source.Imports, receiverMethods *ast.FieldList, templateNames []Template) *ast.InterfaceType {
+func receiverInterfaceType(imports *source.Imports, packageList []*packages.Package, receiverType *types.Named, templateNames []Template) *ast.InterfaceType {
 	interfaceMethods := new(ast.FieldList)
 
 	for _, tn := range templateNames {
@@ -139,8 +159,33 @@ func receiverInterfaceType(imports *source.Imports, receiverMethods *ast.FieldLi
 				if source.HasFieldWithName(interfaceMethods, callIdent.Name) {
 					continue
 				}
-				if field, ok := source.FindFieldWithName(receiverMethods, callIdent.Name); ok {
-					interfaceMethods.List = append(interfaceMethods.List, field)
+				if receiverType != nil {
+					obj, _, _ := types.LookupFieldOrMethod(receiverType, true, receiverType.Obj().Pkg(), callIdent.Name)
+					if obj != nil {
+						fn, ok := obj.(*types.Func)
+						if !ok {
+							continue
+						}
+						for _, pkg := range packageList {
+							if pkg.PkgPath != obj.Pkg().Path() {
+								continue
+							}
+							for _, file := range pkg.Syntax {
+								for _, decl := range file.Decls {
+									fd, ok := decl.(*ast.FuncDecl)
+									if !ok {
+										continue
+									}
+									if fd.Name.Pos() == fn.Pos() {
+										interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
+											Names: []*ast.Ident{ast.NewIdent(fd.Name.Name)},
+											Type:  fd.Type,
+										})
+									}
+								}
+							}
+						}
+					}
 					continue
 				}
 				interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
@@ -152,9 +197,34 @@ func receiverInterfaceType(imports *source.Imports, receiverMethods *ast.FieldLi
 		if source.HasFieldWithName(interfaceMethods, tn.fun.Name) {
 			continue
 		}
-		if field, ok := source.FindFieldWithName(receiverMethods, tn.fun.Name); ok {
-			interfaceMethods.List = append(interfaceMethods.List, field)
-			continue
+		if receiverType != nil {
+			obj, _, _ := types.LookupFieldOrMethod(receiverType, true, receiverType.Obj().Pkg(), tn.fun.Name)
+			if obj != nil {
+				fn, ok := obj.(*types.Func)
+				if !ok {
+					continue
+				}
+				for _, pkg := range packageList {
+					if pkg.PkgPath != obj.Pkg().Path() {
+						continue
+					}
+					for _, file := range pkg.Syntax {
+						for _, decl := range file.Decls {
+							fd, ok := decl.(*ast.FuncDecl)
+							if !ok {
+								continue
+							}
+							if fd.Name.Pos() == fn.Pos() {
+								interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
+									Names: []*ast.Ident{ast.NewIdent(fd.Name.Name)},
+									Type:  fd.Type,
+								})
+							}
+						}
+					}
+				}
+				continue
+			}
 		}
 		interfaceMethods.List = append(interfaceMethods.List, tn.methodField(imports))
 	}
@@ -518,7 +588,10 @@ func generateFuncTypeFromArguments(imports *source.Imports, call *ast.CallExpr) 
 		Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("any")}}},
 	}
 	for _, a := range call.Args {
-		arg := a.(*ast.Ident)
+		arg, ok := a.(*ast.Ident)
+		if !ok {
+			continue
+		}
 		switch arg.Name {
 		case TemplateNameScopeIdentifierHTTPRequest:
 			method.Params.List = append(method.Params.List, httpRequestField(imports))

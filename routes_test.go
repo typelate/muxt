@@ -1,19 +1,20 @@
 package muxt_test
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"html/template"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/txtar"
 
 	"github.com/crhntr/muxt"
+	"github.com/crhntr/muxt/internal/source"
 )
 
 func TestGenerate(t *testing.T) {
@@ -26,7 +27,6 @@ func TestGenerate(t *testing.T) {
 		TemplatesVar    string
 		RoutesFunc      string
 		Interface       string
-		Imports         []string
 
 		ExpectedError string
 		ExpectedFile  string
@@ -293,7 +293,7 @@ func (T) F() (int, []error) { return 30, nil }
 		{
 			Name:      "method receiver is a pointer",
 			Templates: `{{define "GET /age/{username} F(username)"}}Hello, {{.}}!{{end}}`,
-			ReceiverPackage: `s
+			ReceiverPackage: `
 -- receiver.go --
 package main
 
@@ -323,7 +323,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			Name:      "execute function defined in receiver file",
 			Templates: `{{define "GET /age/{username} F(username)"}}Hello, {{.}}!{{end}}`,
-			ReceiverPackage: `s
+			ReceiverPackage: `
 -- receiver.go --
 package main
 
@@ -1379,12 +1379,13 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			Name:      "call F with argument response",
 			Templates: `{{define "GET / F(response)"}}{{end}}`,
+			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
 package main
 
 type T struct{}
 
-func (T) F(http.ResponseWriter) any {return nil}
+func (T) F(response http.ResponseWriter) any {return nil}
 
 func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
@@ -1407,6 +1408,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			Name:      "call F with argument context",
 			Templates: `{{define "GET / F(ctx)"}}{{end}}`,
+			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
 package main
 
@@ -1439,6 +1441,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			Name:      "call F with argument path param",
 			Templates: `{{define "GET /{param} F(param)"}}{{end}}`,
+			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
 package main
 
@@ -1860,15 +1863,83 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 `,
 		},
+		{
+			Name:      "use embedded field methods",
+			Templates: `{{define "GET / F()"}}{{end}}`,
+			Receiver:  "Server",
+			ReceiverPackage: `
+-- server.go --
+package main
+
+type T struct{}
+
+func (T) F() int { return 0 }
+
+type Server struct {
+	T
+}
+` + executeGo,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+	F() int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		data := receiver.F()
+		execute(response, request, true, "GET / F()", http.StatusOK, data)
+	})
+}
+`,
+		},
+		{
+			Name:      "use embedded field methods from another package",
+			Templates: `{{define "GET / F()"}}{{end}}`,
+			Receiver:  "Server",
+			ReceiverPackage: `
+-- another/t.go --
+package another
+
+type T struct{}
+
+func (T) F() int { return 0 }
+
+-- server.go --
+package main
+
+import "example.com/another"
+
+type Server struct {
+	another.T
+}
+` + executeGo,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+	F() int
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		data := receiver.F()
+		execute(response, request, true, "GET / F()", http.StatusOK, data)
+	})
+}
+`,
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))
 			templateNames, err := muxt.Templates(ts)
 			require.NoError(t, err)
 			logs := log.New(io.Discard, "", 0)
-			set := token.NewFileSet()
-			goFiles := methodFuncTypeLoader(t, set, tt.ReceiverPackage)
-			out, err := muxt.Routes(templateNames, tt.PackageName, tt.TemplatesVar, tt.RoutesFunc, tt.Receiver, tt.Interface, muxt.DefaultOutputFileName, set, goFiles, logs)
+			pkg := loadPackage(t, tt.ReceiverPackage)
+			out, err := muxt.Routes(templateNames, tt.PackageName, tt.TemplatesVar, tt.RoutesFunc, tt.Receiver, tt.Interface, muxt.DefaultOutputFileName, pkg, logs)
 			if tt.ExpectedError == "" {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.ExpectedFile, out)
@@ -1879,16 +1950,20 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	}
 }
 
-func methodFuncTypeLoader(t *testing.T, set *token.FileSet, in string) []*ast.File {
+func loadPackage(t *testing.T, in string) []*packages.Package {
 	t.Helper()
 	archive := txtar.Parse([]byte(in))
-	var files []*ast.File
-	for _, file := range archive.Files {
-		f, err := parser.ParseFile(set, file.Name, file.Data, parser.AllErrors)
-		require.NoError(t, err)
-		files = append(files, f)
-	}
-	return files
+	archiveDir, err := txtar.FS(archive)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	require.NoError(t, os.CopyFS(dir, archiveDir))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com\n"), 0644))
+
+	packageList, err := source.Load(dir, "./...")
+	require.NoError(t, err)
+
+	return packageList
 }
 
 const executeGo = `-- execute.go --
