@@ -144,7 +144,6 @@ func routesFuncDeclaration(imports *source.Imports, routesFunctionName, receiver
 
 func receiverInterfaceType(imports *source.Imports, packageList []*packages.Package, receiverType *types.Named, templateNames []Template) *ast.InterfaceType {
 	interfaceMethods := new(ast.FieldList)
-
 	for _, tn := range templateNames {
 		if tn.fun == nil {
 			continue
@@ -156,80 +155,59 @@ func receiverInterfaceType(imports *source.Imports, packageList []*packages.Pack
 				if !ok {
 					continue
 				}
-				if source.HasFieldWithName(interfaceMethods, callIdent.Name) {
+				method, ok := interfaceMethodForCall(imports, interfaceMethods, callIdent, exp, receiverType, packageList)
+				if !ok {
 					continue
 				}
-				if receiverType != nil {
-					obj, _, _ := types.LookupFieldOrMethod(receiverType, true, receiverType.Obj().Pkg(), callIdent.Name)
-					if obj != nil {
-						fn, ok := obj.(*types.Func)
-						if !ok {
-							continue
-						}
-						for _, pkg := range packageList {
-							if pkg.PkgPath != obj.Pkg().Path() {
-								continue
-							}
-							for _, file := range pkg.Syntax {
-								for _, decl := range file.Decls {
-									fd, ok := decl.(*ast.FuncDecl)
-									if !ok {
-										continue
-									}
-									if fd.Name.Pos() == fn.Pos() {
-										interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
-											Names: []*ast.Ident{ast.NewIdent(fd.Name.Name)},
-											Type:  fd.Type,
-										})
-									}
-								}
-							}
-						}
-					}
-					continue
-				}
-				interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
-					Names: []*ast.Ident{ast.NewIdent(callIdent.Name)},
-					Type:  generateFuncTypeFromArguments(imports, exp),
-				})
+				interfaceMethods.List = append(interfaceMethods.List, method)
 			}
 		}
 		if source.HasFieldWithName(interfaceMethods, tn.fun.Name) {
 			continue
 		}
-		if receiverType != nil {
-			obj, _, _ := types.LookupFieldOrMethod(receiverType, true, receiverType.Obj().Pkg(), tn.fun.Name)
-			if obj != nil {
-				fn, ok := obj.(*types.Func)
-				if !ok {
+		method, ok := interfaceMethodForCall(imports, interfaceMethods, tn.fun, tn.call, receiverType, packageList)
+		if !ok {
+			continue
+		}
+		interfaceMethods.List = append(interfaceMethods.List, method)
+	}
+	return &ast.InterfaceType{Methods: interfaceMethods}
+}
+
+func interfaceMethodForCall(imports *source.Imports, interfaceMethods *ast.FieldList, methodName *ast.Ident, call *ast.CallExpr, receiverType *types.Named, packageList []*packages.Package) (*ast.Field, bool) {
+	if source.HasFieldWithName(interfaceMethods, methodName.Name) {
+		return nil, false
+	}
+	if receiverType != nil {
+		obj, _, _ := types.LookupFieldOrMethod(receiverType, true, receiverType.Obj().Pkg(), methodName.Name)
+		if obj != nil {
+			fn, ok := obj.(*types.Func)
+			if !ok {
+				return nil, false
+			}
+			for _, pkg := range packageList {
+				if pkg.PkgPath != obj.Pkg().Path() {
 					continue
 				}
-				for _, pkg := range packageList {
-					if pkg.PkgPath != obj.Pkg().Path() {
-						continue
-					}
-					for _, file := range pkg.Syntax {
-						for _, decl := range file.Decls {
-							fd, ok := decl.(*ast.FuncDecl)
-							if !ok {
-								continue
-							}
-							if fd.Name.Pos() == fn.Pos() {
-								interfaceMethods.List = append(interfaceMethods.List, &ast.Field{
-									Names: []*ast.Ident{ast.NewIdent(fd.Name.Name)},
-									Type:  fd.Type,
-								})
-							}
+				for _, file := range pkg.Syntax {
+					for _, decl := range file.Decls {
+						fd, ok := decl.(*ast.FuncDecl)
+						if !ok || fd.Name.Pos() != fn.Pos() {
+							continue
 						}
+						return &ast.Field{
+							Names: []*ast.Ident{ast.NewIdent(fd.Name.Name)},
+							Type:  fd.Type,
+						}, true
 					}
 				}
-				continue
 			}
 		}
-		interfaceMethods.List = append(interfaceMethods.List, tn.methodField(imports))
 	}
-
-	return &ast.InterfaceType{Methods: interfaceMethods}
+	return &ast.Field{
+		Names: []*ast.Ident{ast.NewIdent(methodName.Name)},
+		Type:  generateFuncTypeFromArguments(imports, call),
+	}, true
 }
 
 func (t Template) callHandleFunc(handlerFuncLit *ast.FuncLit) *ast.ExprStmt {
@@ -573,13 +551,6 @@ func formInputTemplate(field *ast.Field, t *template.Template) *template.Templat
 		}
 	}
 	return t
-}
-
-func (t Template) methodField(imports *source.Imports) *ast.Field {
-	return &ast.Field{
-		Names: []*ast.Ident{ast.NewIdent(t.fun.Name)},
-		Type:  generateFuncTypeFromArguments(imports, t.call),
-	}
 }
 
 func generateFuncTypeFromArguments(imports *source.Imports, call *ast.CallExpr) *ast.FuncType {
