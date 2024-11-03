@@ -406,11 +406,6 @@ func (t Template) identifierArgument(imports *source.Imports, i int, arg *ast.Id
 			}
 			break
 		}
-		errCheck := func(msg ast.Expr) ast.Stmt {
-			return &ast.ExprStmt{
-				X: imports.HTTPErrorCall(ast.NewIdent(httpResponseField(imports).Names[0].Name), msg, http.StatusBadRequest),
-			}
-		}
 		src := &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
@@ -418,11 +413,19 @@ func (t Template) identifierArgument(imports *source.Imports, i int, arg *ast.Id
 			},
 			Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
 		}
-		statements, err := httpPathValueAssignment(imports, method, i, arg, src, token.DEFINE, errCheck)
+		statements, err := httpPathValueAssignment(imports, method, i, arg, src, token.DEFINE, errCheck(imports))
 		if err != nil {
 			return nil, err
 		}
 		return statements, nil
+	}
+}
+
+func errCheck(imports *source.Imports) func(msg ast.Expr) ast.Stmt {
+	return func(msg ast.Expr) ast.Stmt {
+		return &ast.ExprStmt{
+			X: imports.HTTPErrorCall(ast.NewIdent(httpResponseField(imports).Names[0].Name), msg, http.StatusBadRequest),
+		}
 	}
 }
 
