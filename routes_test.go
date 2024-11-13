@@ -1383,6 +1383,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			ReceiverPackage: `-- in.go --
 package main
 
+import "net/http"
+
 type T struct{}
 
 func (T) F(response http.ResponseWriter) any {return nil}
