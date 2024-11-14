@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"net/http"
 	"regexp"
 	"slices"
@@ -71,7 +72,7 @@ func GenerateParseValueFromStringStatements(imports *Imports, tmp string, str, t
 	return nil, fmt.Errorf("unsupported type: %s", Format(typeExp))
 }
 
-func GenerateValidations(imports *Imports, variable, variableType ast.Expr, inputQuery, inputName, responseIdent string, fragment spec.DocumentFragment) ([]ast.Stmt, error, bool) {
+func GenerateValidations(imports *Imports, variable ast.Expr, variableType types.Type, inputQuery, inputName, responseIdent string, fragment spec.DocumentFragment) ([]ast.Stmt, error, bool) {
 	input := fragment.QuerySelector(inputQuery)
 	if input == nil {
 		return nil, nil, false

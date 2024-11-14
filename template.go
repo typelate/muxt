@@ -262,3 +262,97 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierForm,
 	}
 }
+
+func (t Template) executeCall(status, data ast.Expr, writeHeader bool) *ast.ExprStmt {
+	return &ast.ExprStmt{X: &ast.CallExpr{
+		Fun: ast.NewIdent(executeIdentName),
+		Args: []ast.Expr{
+			ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
+			ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+			ast.NewIdent(strconv.FormatBool(writeHeader)),
+			&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)},
+			status,
+			data,
+		},
+	}}
+}
+
+func (t Template) httpRequestReceiverTemplateHandlerFunc(imports *source.Imports, statusCode int) *ast.FuncLit {
+	return &ast.FuncLit{
+		Type: httpHandlerFuncType(imports),
+		Body: &ast.BlockStmt{List: []ast.Stmt{t.executeCall(source.HTTPStatusCode(imports, statusCode), ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), true)}},
+	}
+}
+
+func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
+	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != t.fun.Name ||
+		funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {
+		return false
+	}
+	exp := funcDecl.Recv.List[0].Type
+	if star, ok := exp.(*ast.StarExpr); ok {
+		exp = star.X
+	}
+	ident, ok := exp.(*ast.Ident)
+	return ok && ident.Name == receiverTypeIdent
+}
+
+func (t Template) callHandleFunc(handlerFuncLit *ast.FuncLit) *ast.ExprStmt {
+	return &ast.ExprStmt{X: &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(muxVarIdent),
+			Sel: ast.NewIdent(httpHandleFuncIdent),
+		},
+		Args: []ast.Expr{source.String(t.endpoint), handlerFuncLit},
+	}}
+}
+
+func (t Template) callReceiverMethod(imports *source.Imports, dataVarIdent string, method *ast.FuncType, call *ast.CallExpr) ([]ast.Stmt, error) {
+	const (
+		okIdent = "ok"
+	)
+	if method.Results == nil || len(method.Results.List) == 0 {
+		return nil, fmt.Errorf("method for endpoint %q has no results it should have one or two", t)
+	} else if len(method.Results.List) > 1 {
+		_, lastResultType, ok := source.FieldIndex(method.Results.List, method.Results.NumFields()-1)
+		if !ok {
+			return nil, fmt.Errorf("failed to get the last method result")
+		}
+		switch rt := lastResultType.(type) {
+		case *ast.Ident:
+			switch rt.Name {
+			case "error":
+				return []ast.Stmt{
+					&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+					&ast.IfStmt{
+						Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
+						Body: &ast.BlockStmt{
+							List: []ast.Stmt{
+								&ast.ExprStmt{X: imports.HTTPErrorCall(ast.NewIdent(httpResponseField(imports).Names[0].Name), source.CallError(errIdent), http.StatusInternalServerError)},
+								&ast.ReturnStmt{},
+							},
+						},
+					},
+				}, nil
+			case "bool":
+				return []ast.Stmt{
+					&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(okIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+					&ast.IfStmt{
+						Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
+						Body: &ast.BlockStmt{
+							List: []ast.Stmt{
+								&ast.ReturnStmt{},
+							},
+						},
+					},
+				}, nil
+			default:
+				return nil, fmt.Errorf("expected last result to be either an error or a bool")
+			}
+		default:
+			return nil, fmt.Errorf("expected last result to be either an error or a bool")
+		}
+	} else {
+		return []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}}}, nil
+	}
+}

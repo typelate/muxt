@@ -3,7 +3,7 @@ package source_test
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
+	"go/types"
 	"html/template"
 	"strings"
 	"testing"
@@ -21,20 +21,20 @@ import (
 func Test_inputValidations(t *testing.T) {
 	for _, tt := range []struct {
 		Name     string
-		Type     string
+		Type     types.Type
 		Template string
 		Result   string
 		Error    string
 	}{
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "no attributes",
 			Template: `<input type="number" name="field">`,
 			Result: `{
 }`,
 		},
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "min",
 			Template: `<input type="number" name="field" min="100">`,
 			Result: `{
@@ -45,7 +45,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "negative min",
 			Template: `<input type="number" name="field" min="-5">`,
 			Result: `{
@@ -56,7 +56,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -67,7 +67,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int8",
+			Type:     types.Universe.Lookup("int8").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -78,7 +78,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int16",
+			Type:     types.Universe.Lookup("int16").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -89,7 +89,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int32",
+			Type:     types.Universe.Lookup("int32").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -100,7 +100,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int64",
+			Type:     types.Universe.Lookup("int64").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -111,7 +111,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "uint",
+			Type:     types.Universe.Lookup("uint").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -122,7 +122,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "uint8",
+			Type:     types.Universe.Lookup("uint8").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -133,7 +133,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "uint16",
+			Type:     types.Universe.Lookup("uint16").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -144,7 +144,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "uint32",
+			Type:     types.Universe.Lookup("uint32").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -155,7 +155,7 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "uint64",
+			Type:     types.Universe.Lookup("uint64").Type(),
 			Name:     "zero min",
 			Template: `<input type="number" name="field" min="0">`,
 			Result: `{
@@ -166,91 +166,79 @@ func Test_inputValidations(t *testing.T) {
 }`,
 		},
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="18446744073709551616">`,
 			Error:    `strconv.ParseInt: parsing "18446744073709551616": value out of range`,
 		},
 		{
-			Type:     "int8",
+			Type:     types.Universe.Lookup("int8").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="256">`,
 			Error:    `strconv.ParseInt: parsing "256": value out of range`,
 		},
 		{
-			Type:     "int16",
+			Type:     types.Universe.Lookup("int16").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="32768">`,
 			Error:    `strconv.ParseInt: parsing "32768": value out of range`,
 		},
 		{
-			Type:     "int32",
+			Type:     types.Universe.Lookup("int32").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="2147483648">`,
 			Error:    `strconv.ParseInt: parsing "2147483648": value out of range`,
 		},
 		{
-			Type:     "int64",
+			Type:     types.Universe.Lookup("int64").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="9223372036854775808">`,
 			Error:    `strconv.ParseInt: parsing "9223372036854775808": value out of range`,
 		},
 		{
-			Type:     "uint",
+			Type:     types.Universe.Lookup("uint").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="-10">`,
 			Error:    `strconv.ParseUint: parsing "-10": invalid syntax`,
 		},
 		{
-			Type:     "uint8",
+			Type:     types.Universe.Lookup("uint8").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="256">`,
 			Error:    `strconv.ParseUint: parsing "256": value out of range`,
 		},
 		{
-			Type:     "uint16",
+			Type:     types.Universe.Lookup("uint16").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="65536">`,
 			Error:    `strconv.ParseUint: parsing "65536": value out of range`,
 		},
 		{
-			Type:     "uint32",
+			Type:     types.Universe.Lookup("uint32").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="4294967296">`,
 			Error:    `strconv.ParseUint: parsing "4294967296": value out of range`,
 		},
 		{
-			Type:     "uint64",
+			Type:     types.Universe.Lookup("uint64").Type(),
 			Name:     "out of range",
 			Template: `<input type="number" name="field" min="18446744073709551616">`,
 			Error:    `strconv.ParseUint: parsing "18446744073709551616": value out of range`,
 		},
 		{
-			Type:     "*T",
-			Name:     "unsupported type",
-			Template: `<input type="number" name="field" min="1">`,
-			Error:    `type *T is not supported`,
-		},
-		{
-			Type:     "T",
-			Name:     "type unknown",
-			Template: `<input type="number" name="field" min="1">`,
-			Error:    `type T unknown`,
-		},
-		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "not a number",
 			Template: `<input type="number" name="field" min="NaN">`,
 			Error:    `strconv.ParseInt: parsing "NaN": invalid syntax`,
 		},
 		{
-			Type:     "int",
+			Type:     types.Universe.Lookup("int").Type(),
 			Name:     "wrong tag",
 			Template: `<form type="number" name="field" min="32"></form>`,
 			Error:    `expected element to have tag <input> got <form>`,
 		},
 		{
-			Type:     "uint32",
+			Type:     types.Universe.Lookup("uint32").Type(),
 			Name:     "zero max",
 			Template: `<input type="number" name="field" max="0">`,
 			Result: `{
@@ -263,8 +251,6 @@ func Test_inputValidations(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("cromulent attribute type %s %s", tt.Type, tt.Name), func(t *testing.T) {
 			v := ast.NewIdent("v")
-			tp, err := parser.ParseExpr(tt.Type)
-			require.NoError(t, err)
 			ts := template.Must(template.New("").Parse(tt.Template))
 			nodes, err := html.ParseFragment(strings.NewReader(ts.Tree.Root.String()), &html.Node{
 				Type:     html.ElementNode,
@@ -273,7 +259,7 @@ func Test_inputValidations(t *testing.T) {
 			})
 			fragment := dom.NewDocumentFragment(nodes)
 			imports := source.NewImports(nil)
-			statements, err, ok := source.GenerateValidations(imports, v, tp, `[name="field"]`, "field", "response", fragment)
+			statements, err, ok := source.GenerateValidations(imports, v, tt.Type, `[name="field"]`, "field", "response", fragment)
 			require.True(t, ok)
 			if tt.Error != "" {
 				require.Error(t, err)

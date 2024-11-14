@@ -2,17 +2,13 @@ package source
 
 import (
 	"fmt"
-	"go/ast"
+	"go/types"
 	"reflect"
 	"strconv"
 )
 
-func ParseStringWithType(val string, tp ast.Expr) (reflect.Value, error) {
-	tpIdent, ok := tp.(*ast.Ident)
-	if !ok {
-		return reflect.Value{}, fmt.Errorf("type %s is not supported", Format(tp))
-	}
-	switch tpIdent.Name {
+func ParseStringWithType(val string, tp types.Type) (reflect.Value, error) {
+	switch tp.Underlying().String() {
 	case reflect.Int.String():
 		n, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
@@ -74,6 +70,6 @@ func ParseStringWithType(val string, tp ast.Expr) (reflect.Value, error) {
 		}
 		return reflect.ValueOf(n), nil
 	default:
-		return reflect.Value{}, fmt.Errorf("type %s unknown", Format(tp))
+		return reflect.Value{}, fmt.Errorf("type %s unknown", tp.String())
 	}
 }

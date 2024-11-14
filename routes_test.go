@@ -10,11 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/txtar"
 
 	"github.com/crhntr/muxt"
-	"github.com/crhntr/muxt/internal/source"
 )
 
 func TestGenerate(t *testing.T) {
@@ -444,6 +442,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 -- receiver.go --
 package main
 
+import "context"
+
 type T struct{}
 
 func (T) F(ctx context.Context) int { return 30 }
@@ -872,13 +872,16 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 `,
 		},
 		{
-			Name:      "F is defined and form has two string fields",
+			Name:      "form argument has typed parameters",
 			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
 			ReceiverPackage: `
 -- in.go --
 package main
 
-import "net/http"
+import (
+	"net/http"
+"time"
+)
 
 type (
 	T struct{}
@@ -890,7 +893,6 @@ type (
 		fieldInt8   int8
 		fieldUint   uint
 		fieldUint64 uint64
-		fieldUint16 uint16
 		fieldUint32 uint32
 		fieldUint16 uint16
 		fieldUint8  uint8
@@ -975,14 +977,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 				return
 			}
 			form.fieldUint64 = value
-		}
-		{
-			value, err := strconv.ParseUint(request.FormValue("fieldUint16"), 10, 16)
-			if err != nil {
-				http.Error(response, err.Error(), http.StatusBadRequest)
-				return
-			}
-			form.fieldUint16 = uint16(value)
 		}
 		{
 			value, err := strconv.ParseUint(request.FormValue("fieldUint32"), 10, 32)
@@ -1131,7 +1125,6 @@ type (
 		fieldInt8   []int8
 		fieldUint   []uint
 		fieldUint64 []uint64
-		fieldUint16 []uint16
 		fieldUint32 []uint32
 		fieldUint16 []uint16
 		fieldUint8  []uint8
@@ -1215,14 +1208,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 				return
 			}
 			form.fieldUint64 = append(form.fieldUint64, value)
-		}
-		for _, val := range request.Form["fieldUint16"] {
-			value, err := strconv.ParseUint(val, 10, 16)
-			if err != nil {
-				http.Error(response, err.Error(), http.StatusBadRequest)
-				return
-			}
-			form.fieldUint16 = append(form.fieldUint16, uint16(value))
 		}
 		for _, val := range request.Form["fieldUint32"] {
 			value, err := strconv.ParseUint(val, 10, 32)
@@ -1413,6 +1398,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
 package main
+
+import "context"
 
 type T struct{}
 
@@ -1714,7 +1701,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		id := idParsed
 		data := receiver.F(ctx, result0, id)
-		execute(response, request, true, "GET /{id} F(ctx, Session(response, request), id)", http.StatusOK, data)
+		execute(response, request, false, "GET /{id} F(ctx, Session(response, request), id)", http.StatusOK, data)
 	})
 }
 `,
@@ -1733,12 +1720,12 @@ import (
 
 type (
 	T struct{}
-	User struct{}
+	Session struct{}
 )
 
-func (T) F(context.Context, S, int) any {return nil}
+func (T) F(context.Context, Session, int) any {return nil}
 
-func (T) Author(int) (User, error) {return Session{}, nil}
+func (T) Author(int) (Session, error) {return Session{}, nil}
 
 func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
@@ -1751,8 +1738,8 @@ import (
 )
 
 type RoutesReceiver interface {
-	Author(int) (User, error)
-	F(context.Context, S, int) any
+	Author(int) (Session, error)
+	F(context.Context, Session, int) any
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
@@ -1794,7 +1781,7 @@ type (
 
 func (T) F(context.Context, Configuration) any {return nil}
 
-func (T) LoadConfiguration() (_ Configuration) { return }
+func (T) LoadConfiguration() Configuration { return }
 
 func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
@@ -1806,7 +1793,7 @@ import (
 )
 
 type RoutesReceiver interface {
-	LoadConfiguration() (_ Configuration)
+	LoadConfiguration() Configuration
 	F(context.Context, Configuration) any
 }
 
@@ -1821,7 +1808,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 `,
 		},
 		{
-			Name:      "call expression argument",
+			Name:      "call expression argument with response argument",
 			Templates: `{{define "GET / F(ctx, Headers(response))"}}{{end}}`,
 			Receiver:  "T",
 			ReceiverPackage: `-- in.go --
@@ -1937,13 +1924,28 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			ts := template.Must(template.New(tt.Name).Parse(tt.Templates))
-			templateNames, err := muxt.Templates(ts)
+			templates, err := muxt.Templates(ts)
 			require.NoError(t, err)
-			logs := log.New(io.Discard, "", 0)
-			pkg := loadPackage(t, tt.ReceiverPackage)
-			out, err := muxt.Routes(templateNames, tt.PackageName, tt.TemplatesVar, tt.RoutesFunc, tt.Receiver, tt.Interface, muxt.DefaultOutputFileName, pkg, logs)
+			logger := log.New(io.Discard, "", 0)
+
+			archive := txtar.Parse([]byte(tt.ReceiverPackage))
+			archiveDir, err := txtar.FS(archive)
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			require.NoError(t, os.CopyFS(dir, archiveDir))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com\n\ngo 1.20\n"), 0644))
+			out, err := muxt.TemplateRoutesFile(dir, templates, logger, muxt.RoutesFileConfiguration{
+				ReceiverInterface: tt.Interface,
+				Package:           tt.PackageName,
+				TemplatesVar:      tt.TemplatesVar,
+				RoutesFunc:        tt.RoutesFunc,
+				PackagePath:       "example.com",
+				ReceiverType:      tt.Receiver,
+				Output:            "template_routes.go",
+			})
 			if tt.ExpectedError == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.ExpectedFile, out)
 			} else {
 				assert.ErrorContains(t, err, tt.ExpectedError)
@@ -1952,21 +1954,21 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	}
 }
 
-func loadPackage(t *testing.T, in string) []*packages.Package {
-	t.Helper()
-	archive := txtar.Parse([]byte(in))
-	archiveDir, err := txtar.FS(archive)
-	require.NoError(t, err)
-
-	dir := t.TempDir()
-	require.NoError(t, os.CopyFS(dir, archiveDir))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com\n"), 0644))
-
-	packageList, err := source.Load(dir, "./...")
-	require.NoError(t, err)
-
-	return packageList
-}
+//func loadPackage(t *testing.T, in string) []*packages.Package {
+//	t.Helper()
+//	archive := txtar.Parse([]byte(in))
+//	archiveDir, err := txtar.FS(archive)
+//	require.NoError(t, err)
+//
+//	dir := t.TempDir()
+//	require.NoError(t, os.CopyFS(dir, archiveDir))
+//	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com\n"), 0644))
+//
+//	packageList, err := source.Load(dir, "./...")
+//	require.NoError(t, err)
+//
+//	return packageList
+//}
 
 const executeGo = `-- execute.go --
 package main

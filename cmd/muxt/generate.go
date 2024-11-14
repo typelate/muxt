@@ -104,11 +104,15 @@ func generateCommand(args []string, workingDirectory string, getEnv func(string)
 	if err != nil {
 		return err
 	}
-	out := log.New(stdout, "", 0)
-	s, err := muxt.Routes(templates, g.goPackage, g.templatesVariable, g.routesFunction, g.receiverIdent, g.receiverInterfaceIdent, g.outputFilename, packageList, out)
-	if err != nil {
-		return err
-	}
+	s, err := muxt.TemplateRoutesFile(workingDirectory, templates, log.New(stdout, "", 0), muxt.RoutesFileConfiguration{
+		Package:           g.goPackage,
+		PackagePath:       g.Package.PkgPath,
+		TemplatesVar:      g.templatesVariable,
+		RoutesFunc:        g.routesFunction,
+		ReceiverType:      g.receiverIdent,
+		ReceiverInterface: g.receiverInterfaceIdent,
+		Output:            g.outputFilename,
+	})
 	var sb bytes.Buffer
 	sb.WriteString(CodeGenerationComment)
 	if v, ok := cliVersion(); ok {

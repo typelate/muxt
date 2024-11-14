@@ -1,8 +1,11 @@
 package source
 
 import (
+	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
+	"go/types"
 	"log"
 	"path"
 	"slices"
@@ -12,6 +15,10 @@ import (
 
 type Imports struct {
 	*ast.GenDecl
+	fileSet       *token.FileSet
+	types         map[string]*types.Package
+	files         map[string]*ast.File
+	outputPackage string
 }
 
 func NewImports(decl *ast.GenDecl) *Imports {
@@ -20,7 +27,82 @@ func NewImports(decl *ast.GenDecl) *Imports {
 			log.Panicf("expected decl to have token.IMPORT Tok got %s", got)
 		}
 	}
-	return &Imports{GenDecl: decl}
+	return &Imports{GenDecl: decl, types: make(map[string]*types.Package), files: make(map[string]*ast.File)}
+}
+
+func (imports *Imports) AddPackages(p *types.Package) {
+	recursivelyRegisterPackages(imports.types, p)
+}
+
+func (imports *Imports) FileSet() *token.FileSet {
+	if imports.fileSet == nil {
+		imports.fileSet = token.NewFileSet()
+	}
+	return imports.fileSet
+}
+
+func (imports *Imports) SetOutputPackage(pkgPath string) {
+	imports.outputPackage = pkgPath
+}
+
+func (imports *Imports) OutputPackage() string {
+	return imports.outputPackage
+}
+
+func (imports *Imports) SyntaxFile(pos token.Pos) (*ast.File, *token.FileSet, error) {
+	position := imports.FileSet().Position(pos)
+	fSet := token.NewFileSet()
+	file, err := parser.ParseFile(fSet, position.Filename, nil, parser.AllErrors|parser.ParseComments|parser.SkipObjectResolution)
+	return file, fSet, err
+}
+
+func (imports *Imports) FieldTag(pos token.Pos) (*ast.Field, error) {
+	file, fileSet, err := imports.SyntaxFile(pos)
+	if err != nil {
+		return nil, err
+	}
+	position := imports.fileSet.Position(pos)
+	for _, d := range file.Decls {
+		switch decl := d.(type) {
+		case *ast.GenDecl:
+			for _, s := range decl.Specs {
+				switch spec := s.(type) {
+				case *ast.TypeSpec:
+					tp, ok := spec.Type.(*ast.StructType)
+					if !ok {
+						continue
+					}
+
+					for _, field := range tp.Fields.List {
+						for _, name := range field.Names {
+							p := fileSet.Position(name.Pos())
+							if p != position {
+								continue
+							}
+							return field, nil
+						}
+					}
+				}
+			}
+		}
+
+	}
+	return nil, fmt.Errorf("failed to find field")
+}
+
+func (imports *Imports) Types(pkgPath string) (*types.Package, bool) {
+	p, ok := imports.types[pkgPath]
+	return p, ok
+}
+
+func recursivelyRegisterPackages(set map[string]*types.Package, pkg *types.Package) {
+	if pkg == nil {
+		return
+	}
+	set[pkg.Path()] = pkg
+	for _, p := range pkg.Imports() {
+		recursivelyRegisterPackages(set, p)
+	}
 }
 
 func (imports *Imports) Add(pkgIdent, pkgPath string) string {
@@ -31,27 +113,29 @@ func (imports *Imports) Add(pkgIdent, pkgPath string) string {
 	if pkgIdent == "" {
 		pkgIdent = path.Base(pkgPath)
 	}
-	for _, s := range imports.GenDecl.Specs {
-		spec := s.(*ast.ImportSpec)
-		pp, _ := strconv.Unquote(spec.Path.Value)
-		if pp == pkgPath {
-			if spec.Name != nil && spec.Name.Name != "" && spec.Name.Name != pkgIdent {
-				return spec.Name.Name
+	if pkgPath != imports.outputPackage {
+		for _, s := range imports.GenDecl.Specs {
+			spec := s.(*ast.ImportSpec)
+			pp, _ := strconv.Unquote(spec.Path.Value)
+			if pp == pkgPath {
+				if spec.Name != nil && spec.Name.Name != "" && spec.Name.Name != pkgIdent {
+					return spec.Name.Name
+				}
+				return path.Base(pp)
 			}
-			return path.Base(pp)
 		}
+		var pi *ast.Ident
+		if path.Base(pkgPath) != pkgIdent {
+			pi = Ident(pkgIdent)
+		}
+		imports.GenDecl.Specs = append(imports.GenDecl.Specs, &ast.ImportSpec{
+			Path: String(pkgPath),
+			Name: pi,
+		})
+		slices.SortFunc(imports.GenDecl.Specs, func(a, b ast.Spec) int {
+			return strings.Compare(a.(*ast.ImportSpec).Path.Value, b.(*ast.ImportSpec).Path.Value)
+		})
 	}
-	var pi *ast.Ident
-	if path.Base(pkgPath) != pkgIdent {
-		pi = Ident(pkgIdent)
-	}
-	imports.GenDecl.Specs = append(imports.GenDecl.Specs, &ast.ImportSpec{
-		Path: String(pkgPath),
-		Name: pi,
-	})
-	slices.SortFunc(imports.GenDecl.Specs, func(a, b ast.Spec) int {
-		return strings.Compare(a.(*ast.ImportSpec).Path.Value, b.(*ast.ImportSpec).Path.Value)
-	})
 	return pkgIdent
 }
 

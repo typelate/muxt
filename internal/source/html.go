@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"regexp"
 	"slices"
 	"strings"
@@ -17,7 +18,7 @@ type ValidationGenerator interface {
 	GenerateValidation(imports *Imports, variable ast.Expr, handleError func(string) ast.Stmt) ast.Stmt
 }
 
-func ParseInputValidations(name string, input spec.Element, tp ast.Expr) ([]ValidationGenerator, error) {
+func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]ValidationGenerator, error) {
 	if tag := strings.ToLower(input.TagName()); tag != atom.Input.String() {
 		return nil, fmt.Errorf("expected element to have tag <input> got <%s>", tag)
 	}
