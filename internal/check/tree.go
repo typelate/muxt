@@ -7,25 +7,29 @@ import (
 	"text/template/parse"
 )
 
-func Tree(tree *parse.Tree, data types.Type, pkg *types.Package, fileSet *token.FileSet, templates map[string]*parse.Tree, funcs map[string]*types.Signature) error {
-	_, err := typeCheckNode(tree, data, pkg, fileSet, templates, funcs, tree.Root)
+type TreeFinder interface {
+	FindTree(name string) (*parse.Tree, bool)
+}
+
+func Tree(tree *parse.Tree, data types.Type, pkg *types.Package, fileSet *token.FileSet, forrest TreeFinder, funcs map[string]*types.Signature) error {
+	_, err := typeCheckNode(tree, data, pkg, fileSet, forrest, funcs, tree.Root)
 	return err
 }
 
-func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet *token.FileSet, templates map[string]*parse.Tree, funcs map[string]*types.Signature, node parse.Node) (types.Type, error) {
+func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet *token.FileSet, forrest TreeFinder, funcs map[string]*types.Signature, node parse.Node) (types.Type, error) {
 	switch n := node.(type) {
 	case *parse.DotNode:
 		return dot, nil
 	case *parse.ListNode:
 		for _, child := range n.Nodes {
-			if _, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, child); err != nil {
+			if _, err := typeCheckNode(tree, dot, pkg, fileSet, forrest, funcs, child); err != nil {
 				return nil, err
 			}
 		}
 		return nil, nil
 	case *parse.ActionNode:
 		for _, cmd := range n.Pipe.Cmds {
-			if _, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, cmd); err != nil {
+			if _, err := typeCheckNode(tree, dot, pkg, fileSet, forrest, funcs, cmd); err != nil {
 				return nil, err
 			}
 		}
@@ -33,7 +37,7 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 	case *parse.CommandNode:
 		var argTypes []types.Type
 		for _, arg := range n.Args {
-			argType, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, arg)
+			argType, err := typeCheckNode(tree, dot, pkg, fileSet, forrest, funcs, arg)
 			if err != nil {
 				return nil, err
 			}
@@ -96,7 +100,7 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 	case *parse.PipeNode:
 		x := dot
 		for _, cmd := range n.Cmds {
-			tp, err := typeCheckNode(tree, x, pkg, fileSet, templates, funcs, cmd)
+			tp, err := typeCheckNode(tree, x, pkg, fileSet, forrest, funcs, cmd)
 			if err != nil {
 				return nil, err
 			}
@@ -104,7 +108,7 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 		}
 		return x, nil
 	case *parse.IfNode:
-		tp, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, n.Pipe)
+		tp, err := typeCheckNode(tree, dot, pkg, fileSet, forrest, funcs, n.Pipe)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +116,7 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 	case *parse.TemplateNode:
 		x := dot
 		if n.Pipe != nil {
-			tp, err := typeCheckNode(tree, x, pkg, fileSet, templates, funcs, n.Pipe)
+			tp, err := typeCheckNode(tree, x, pkg, fileSet, forrest, funcs, n.Pipe)
 			if err != nil {
 				return nil, err
 			}
@@ -120,11 +124,11 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 		} else {
 			x = types.Typ[types.UntypedNil]
 		}
-		child, ok := templates[n.Name]
+		child, ok := forrest.FindTree(n.Name)
 		if !ok {
 			return nil, fmt.Errorf("template %q not found", n.Name)
 		}
-		return typeCheckNode(child, x, pkg, fileSet, templates, funcs, n.Pipe)
+		return typeCheckNode(child, x, pkg, fileSet, forrest, funcs, n.Pipe)
 	case *parse.BoolNode:
 		tp := types.Typ[types.UntypedBool]
 		return tp, nil
