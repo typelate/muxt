@@ -5,7 +5,6 @@ import (
 	"go/types"
 	"html/template"
 	"io"
-	"maps"
 	"reflect"
 	"slices"
 	"testing"
@@ -241,15 +240,11 @@ func TestTree(t *testing.T) {
 			templates, parseErr := template.New("template").Parse(tt.Template)
 			require.NoError(t, parseErr)
 
-			trees := make(map[string]*parse.Tree)
-			for _, ts := range templates.Templates() {
-				trees[ts.Tree.Name] = ts.Tree
-			}
 			fns := make(map[string]*types.Signature)
 
 			dataType := checkTestPackage.Types.Scope().Lookup(reflect.TypeOf(tt.Data).Name()).Type()
 
-			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, trees, fns); tt.Error != nil {
+			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newTextTemplateForrest(templates), fns); tt.Error != nil {
 				execErr := templates.Execute(io.Discard, tt.Data)
 				tt.Error(t, checkErr, execErr, dataType)
 			} else {
@@ -393,11 +388,6 @@ func TestExampleTemplate(t *testing.T) {
 	templates, parseErr := template.ParseFiles("../../example/index.gohtml")
 	require.NoError(t, parseErr)
 
-	tmplSet := make(map[string]*parse.Tree)
-	for _, tmpl := range templates.Templates() {
-		tmplSet[tmpl.Name()] = tmpl.Tree
-	}
-
 	ts, err := muxt.Templates(templates)
 	require.NoError(t, err)
 	for _, mt := range ts {
@@ -411,6 +401,20 @@ func TestExampleTemplate(t *testing.T) {
 			require.True(t, ok)
 			dot = fn.Signature().Results().At(0).Type()
 		}
-		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, maps.Clone(tmplSet), make(map[string]*types.Signature)))
+		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newTextTemplateForrest(templates), make(map[string]*types.Signature)))
 	}
+}
+
+type TextTemplateForrest template.Template
+
+func newTextTemplateForrest(templates *template.Template) *TextTemplateForrest {
+	return (*TextTemplateForrest)(templates)
+}
+
+func (forrest *TextTemplateForrest) FindTree(name string) (*parse.Tree, bool) {
+	ts := (*template.Template)(forrest).Lookup(name)
+	if ts == nil {
+		return nil, false
+	}
+	return ts.Tree, true
 }
