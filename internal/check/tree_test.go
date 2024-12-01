@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"html/template"
 	"io"
+	"maps"
 	"reflect"
 	"slices"
 	"testing"
@@ -392,21 +393,15 @@ func TestExampleTemplate(t *testing.T) {
 	templates, parseErr := template.ParseFiles("../../example/index.gohtml")
 	require.NoError(t, parseErr)
 
-	//trees := make(map[string]*parse.Tree)
-	//for _, ts := range templates.Templates() {
-	//	trees[ts.Tree.Name] = ts.Tree
-	//}
-	//_ := make(map[string]*types.Signature)
+	tmplSet := make(map[string]*parse.Tree)
+	for _, tmpl := range templates.Templates() {
+		tmplSet[tmpl.Name()] = tmpl.Tree
+	}
 
 	ts, err := muxt.Templates(templates)
 	require.NoError(t, err)
 	for _, mt := range ts {
-		tmplSet := make(map[string]*parse.Tree)
-		for _, tmpl := range templates.Templates() {
-			tmplSet[tmpl.Name()] = tmpl.Tree
-		}
 		var dot types.Type
-
 		if m := mt.Method(); m == "" {
 			dot = types.NewPointer(netHTTP.Types.Scope().Lookup("Request").Type())
 		} else {
@@ -416,6 +411,6 @@ func TestExampleTemplate(t *testing.T) {
 			require.True(t, ok)
 			dot = fn.Signature().Results().At(0).Type()
 		}
-		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, tmplSet, make(map[string]*types.Signature)))
+		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, maps.Clone(tmplSet), make(map[string]*types.Signature)))
 	}
 }
