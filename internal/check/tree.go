@@ -47,7 +47,7 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 				at := argTypes[i]
 				pt := sig.Params().At(i).Type()
 				if !types.AssignableTo(at, pt) {
-					return nil, fmt.Errorf("%s expects argument %d to have type %s but call has %s", n.Args[0], i-1, pt, at)
+					return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i-1, at, pt)
 				}
 			}
 		}
