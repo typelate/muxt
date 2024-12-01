@@ -42,7 +42,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "on an empty template",
 			Template: ``,
-			Type:     typeFor[EmptyStruct](checkTestPackage),
+			Type:     typeFor[T](checkTestPackage),
 			Error: func(t *testing.T, err error, tp types.Type) {
 				require.NoError(t, err)
 			},
@@ -50,7 +50,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "when accessing nil on an empty struct",
 			Template: `{{.Field}}`,
-			Type:     typeFor[EmptyStruct](checkTestPackage),
+			Type:     typeFor[T](checkTestPackage),
 			Error: func(t *testing.T, err error, tp types.Type) {
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:2: Field not found on %s`, tp))
 			},
@@ -58,7 +58,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "when accessing the dot",
 			Template: `{{.}}`,
-			Type:     typeFor[EmptyStruct](checkTestPackage),
+			Type:     typeFor[T](checkTestPackage),
 			Error: func(t *testing.T, err error, tp types.Type) {
 				require.NoError(t, err)
 			},
@@ -163,12 +163,44 @@ func TestTree(t *testing.T) {
 		},
 		{
 			Name:     "when the struct has the field of kind func",
-			Template: `{{.Field.Method}}`,
+			Template: `{{.Func.Method}}`,
 			Type:     typeFor[StructWithFuncFieldWithResultWithMethod](checkTestPackage),
 			Error: func(t *testing.T, err error, tp types.Type) {
-				field, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Field")
-				require.NotNil(t, field)
-				require.ErrorContains(t, err, fmt.Sprintf("type check failed: template:1:8: can't evaluate field Field in type %s", field.Type()))
+				fn, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Func")
+				require.NotNil(t, fn)
+				require.ErrorContains(t, err, fmt.Sprintf("type check failed: template:1:7: can't evaluate field Func in type %s", fn.Type()))
+			},
+		},
+		{
+			Name:     "when a method has an int parameter",
+			Template: `{{.F 21}}`,
+			Type:     typeFor[MethodWithIntParam](checkTestPackage),
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			Name:     "when a method argument is an bool but param is int",
+			Template: `{{.F false}}`,
+			Type:     typeFor[MethodWithIntParam](checkTestPackage),
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.Error(t, err)
+			},
+		},
+		{
+			Name:     "when a method has a bool parameter",
+			Template: `{{.F true}}`,
+			Type:     typeFor[MethodWithBoolParam](checkTestPackage),
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			Name:     "when a method argument is an int but param is bool",
+			Template: `{{.F 32}}`,
+			Type:     typeFor[MethodWithBoolParam](checkTestPackage),
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.Error(t, err)
 			},
 		},
 	} {
@@ -193,7 +225,7 @@ func typeFor[T any](pkg *packages.Package) types.Type {
 	return pkg.Types.Scope().Lookup(reflect.TypeFor[T]().Name()).Type()
 }
 
-type EmptyStruct struct{}
+type T struct{}
 
 type TypeWithMethodSignatureNoResultMethod struct{}
 
@@ -238,5 +270,13 @@ type StructWithFieldWithMethod struct {
 }
 
 type StructWithFuncFieldWithResultWithMethod struct {
-	Field func() TypeWithMethodSignatureResult
+	Func func() TypeWithMethodSignatureResult
 }
+
+type MethodWithIntParam struct{}
+
+func (MethodWithIntParam) F(int) (_ T) { return }
+
+type MethodWithBoolParam struct{}
+
+func (MethodWithBoolParam) F(bool) (_ T) { return }
