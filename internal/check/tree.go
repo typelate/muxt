@@ -14,6 +14,8 @@ func Tree(tree *parse.Tree, data types.Type, pkg *types.Package, fileSet *token.
 
 func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet *token.FileSet, templates map[string]*parse.Tree, funcs map[string]*types.Signature, node parse.Node) (types.Type, error) {
 	switch n := node.(type) {
+	case *parse.DotNode:
+		return dot, nil
 	case *parse.ListNode:
 		for _, child := range n.Nodes {
 			if _, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, child); err != nil {
@@ -91,10 +93,43 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 			}
 		}
 		return x, nil
-	case *parse.DotNode:
-		return dot, nil
+	case *parse.PipeNode:
+		x := dot
+		for _, cmd := range n.Cmds {
+			tp, err := typeCheckNode(tree, x, pkg, fileSet, templates, funcs, cmd)
+			if err != nil {
+				return nil, err
+			}
+			x = tp
+		}
+		return x, nil
+	case *parse.IfNode:
+		tp, err := typeCheckNode(tree, dot, pkg, fileSet, templates, funcs, n.Pipe)
+		if err != nil {
+			return nil, err
+		}
+		return tp, nil
+	case *parse.TemplateNode:
+		x := dot
+		if n.Pipe != nil {
+			tp, err := typeCheckNode(tree, x, pkg, fileSet, templates, funcs, n.Pipe)
+			if err != nil {
+				return nil, err
+			}
+			x = tp
+		} else {
+			x = types.Typ[types.UntypedNil]
+		}
+		child, ok := templates[n.Name]
+		if !ok {
+			return nil, fmt.Errorf("template %q not found", n.Name)
+		}
+		return typeCheckNode(child, x, pkg, fileSet, templates, funcs, n.Pipe)
 	case *parse.BoolNode:
 		tp := types.Typ[types.UntypedBool]
+		return tp, nil
+	case *parse.StringNode:
+		tp := types.Typ[types.UntypedString]
 		return tp, nil
 	case *parse.NumberNode:
 		if n.IsInt {
@@ -110,6 +145,8 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, pkg *types.Package, fileSet
 			return tp, nil
 		}
 		return nil, fmt.Errorf("failed to evaluate template *parse.NumberNode type")
+	case *parse.TextNode:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("missing node type check %T", n)
 	}
