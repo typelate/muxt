@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/crhntr/muxt"
 	"github.com/crhntr/muxt/internal/check"
 )
 
@@ -358,3 +359,63 @@ func (MethodWithFloat64Param) F(float64) (_ T) { return }
 type MethodWithFloat32Param struct{}
 
 func (MethodWithFloat32Param) F(float32) (_ T) { return }
+
+func TestExampleTemplate(t *testing.T) {
+	packageList, loadErr := packages.Load(&packages.Config{
+		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedDeps | packages.NeedTypes,
+		Tests: true,
+	}, "../../example", "net/http")
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+
+	var pkg *packages.Package
+	if i := slices.IndexFunc(packageList, func(p *packages.Package) bool {
+		return p.Name == "main"
+	}); i >= 0 {
+		pkg = packageList[i]
+	} else {
+		t.Fatal("failed to load example package")
+	}
+	var netHTTP *packages.Package
+	if i := slices.IndexFunc(packageList, func(p *packages.Package) bool {
+		return p.PkgPath == "net/http"
+	}); i >= 0 {
+		netHTTP = packageList[i]
+	} else {
+		t.Fatal("failed to load net/http package")
+	}
+
+	backend := pkg.Types.Scope().Lookup("Backend")
+	require.NotNil(t, backend)
+
+	templates, parseErr := template.ParseFiles("../../example/index.gohtml")
+	require.NoError(t, parseErr)
+
+	//trees := make(map[string]*parse.Tree)
+	//for _, ts := range templates.Templates() {
+	//	trees[ts.Tree.Name] = ts.Tree
+	//}
+	//_ := make(map[string]*types.Signature)
+
+	ts, err := muxt.Templates(templates)
+	require.NoError(t, err)
+	for _, mt := range ts {
+		tmplSet := make(map[string]*parse.Tree)
+		for _, tmpl := range templates.Templates() {
+			tmplSet[tmpl.Name()] = tmpl.Tree
+		}
+		var dot types.Type
+
+		if m := mt.Method(); m == "" {
+			dot = types.NewPointer(netHTTP.Types.Scope().Lookup("Request").Type())
+		} else {
+			method, _, _ := types.LookupFieldOrMethod(backend.Type(), true, pkg.Types, m)
+			require.NotNil(t, method)
+			fn, ok := method.(*types.Func)
+			require.True(t, ok)
+			dot = fn.Signature().Results().At(0).Type()
+		}
+		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, tmplSet, make(map[string]*types.Signature)))
+	}
+}

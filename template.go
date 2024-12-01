@@ -152,6 +152,17 @@ func checkPathValueNames(in []string) error {
 
 func (t Template) String() string { return t.name }
 
+func (t Template) Method() string {
+	if t.fun == nil {
+		return ""
+	}
+	return t.fun.Name
+}
+
+func (t Template) Template() *template.Template {
+	return t.template
+}
+
 func (t Template) byPathThenMethod(d Template) int {
 	if n := cmp.Compare(t.path, d.path); n != 0 {
 		return n
