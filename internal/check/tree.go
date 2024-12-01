@@ -22,7 +22,7 @@ func Tree(tree *parse.Tree, data types.Type, pkg *types.Package, fileSet *token.
 		pkg:            pkg,
 		fileSet:        fileSet,
 	}
-	_, err := typeCheckNode(tree, data, s, tree.Root)
+	_, err := s.typeCheckNode(tree, data, tree.Root)
 	return err
 }
 
@@ -34,24 +34,24 @@ type scope struct {
 	fileSet *token.FileSet
 }
 
-func typeCheckNode(tree *parse.Tree, dot types.Type, parent *scope, node parse.Node) (types.Type, error) {
+func (s *scope) typeCheckNode(tree *parse.Tree, dot types.Type, node parse.Node) (types.Type, error) {
 	switch n := node.(type) {
 	case *parse.DotNode:
 		return dot, nil
 	case *parse.ListNode:
-		return checkListNode(tree, dot, parent, n)
+		return s.checkListNode(tree, dot, n)
 	case *parse.ActionNode:
-		return checkActionNode(tree, dot, parent, n)
+		return s.checkActionNode(tree, dot, n)
 	case *parse.CommandNode:
-		return checkCommandNode(tree, dot, parent, n)
+		return s.checkCommandNode(tree, dot, n)
 	case *parse.FieldNode:
-		return checkFieldNode(tree, dot, parent.fileSet, n)
+		return s.checkFieldNode(tree, dot, n)
 	case *parse.PipeNode:
-		return checkPipeNode(tree, dot, parent, n)
+		return s.checkPipeNode(tree, dot, n)
 	case *parse.IfNode:
-		return checkIfNode(tree, dot, parent, n)
+		return s.checkIfNode(tree, dot, n)
 	case *parse.TemplateNode:
-		return checkTemplateNode(tree, dot, parent, n)
+		return s.checkTemplateNode(tree, dot, n)
 	case *parse.BoolNode:
 		return types.Typ[types.UntypedBool], nil
 	case *parse.StringNode:
@@ -65,28 +65,28 @@ func typeCheckNode(tree *parse.Tree, dot types.Type, parent *scope, node parse.N
 	}
 }
 
-func checkListNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.ListNode) (types.Type, error) {
+func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNode) (types.Type, error) {
 	for _, child := range n.Nodes {
-		if _, err := typeCheckNode(tree, dot, s, child); err != nil {
+		if _, err := s.typeCheckNode(tree, dot, child); err != nil {
 			return nil, err
 		}
 	}
 	return nil, nil
 }
 
-func checkActionNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.ActionNode) (types.Type, error) {
+func (s *scope) checkActionNode(tree *parse.Tree, dot types.Type, n *parse.ActionNode) (types.Type, error) {
 	for _, cmd := range n.Pipe.Cmds {
-		if _, err := typeCheckNode(tree, dot, s, cmd); err != nil {
+		if _, err := s.typeCheckNode(tree, dot, cmd); err != nil {
 			return nil, err
 		}
 	}
 	return nil, nil
 }
 
-func checkPipeNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.PipeNode) (types.Type, error) {
+func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNode) (types.Type, error) {
 	x := dot
 	for _, cmd := range n.Cmds {
-		tp, err := typeCheckNode(tree, x, s, cmd)
+		tp, err := s.typeCheckNode(tree, x, cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -95,8 +95,8 @@ func checkPipeNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.PipeNode
 	return x, nil
 }
 
-func checkIfNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.IfNode) (types.Type, error) {
-	tp, err := typeCheckNode(tree, dot, s, n.Pipe)
+func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) (types.Type, error) {
+	tp, err := s.typeCheckNode(tree, dot, n.Pipe)
 	if err != nil {
 		return nil, err
 	}
@@ -119,10 +119,10 @@ func newNumberNodeType(n *parse.NumberNode) (types.Type, error) {
 	return nil, fmt.Errorf("failed to evaluate template *parse.NumberNode type")
 }
 
-func checkTemplateNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.TemplateNode) (types.Type, error) {
+func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.TemplateNode) (types.Type, error) {
 	x := dot
 	if n.Pipe != nil {
-		tp, err := typeCheckNode(tree, x, s, n.Pipe)
+		tp, err := s.typeCheckNode(tree, x, n.Pipe)
 		if err != nil {
 			return nil, err
 		}
@@ -134,10 +134,10 @@ func checkTemplateNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.Temp
 	if !ok {
 		return nil, fmt.Errorf("template %q not found", n.Name)
 	}
-	return typeCheckNode(child, x, s, n.Pipe)
+	return s.typeCheckNode(child, x, n.Pipe)
 }
 
-func checkFieldNode(tree *parse.Tree, dot types.Type, fileSet *token.FileSet, n *parse.FieldNode) (types.Type, error) {
+func (s *scope) checkFieldNode(tree *parse.Tree, dot types.Type, n *parse.FieldNode) (types.Type, error) {
 	x := dot
 	for i, ident := range n.Ident {
 		obj, _, _ := types.LookupFieldOrMethod(x, true, nil, ident)
@@ -153,12 +153,12 @@ func checkFieldNode(tree *parse.Tree, dot types.Type, fileSet *token.FileSet, n 
 			resultLen := sig.Results().Len()
 			if resultLen < 1 || resultLen > 2 {
 				loc, _ := tree.ErrorContext(n)
-				methodPos := fileSet.Position(o.Pos())
+				methodPos := s.fileSet.Position(o.Pos())
 				return nil, fmt.Errorf("type check failed: %s: function %s has %d return values; should be 1 or 2: incorrect signature at %s", loc, ident, resultLen, methodPos)
 			}
 			if resultLen > 1 {
 				loc, _ := tree.ErrorContext(n)
-				methodPos := fileSet.Position(obj.Pos())
+				methodPos := s.fileSet.Position(obj.Pos())
 				finalResult := sig.Results().At(sig.Results().Len() - 1)
 				errorType := types.Universe.Lookup("error")
 				if !types.Identical(errorType.Type(), finalResult.Type()) {
@@ -178,10 +178,10 @@ func checkFieldNode(tree *parse.Tree, dot types.Type, fileSet *token.FileSet, n 
 	return x, nil
 }
 
-func checkCommandNode(tree *parse.Tree, dot types.Type, s *scope, n *parse.CommandNode) (types.Type, error) {
+func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.CommandNode) (types.Type, error) {
 	var argTypes []types.Type
 	for _, arg := range n.Args {
-		argType, err := typeCheckNode(tree, dot, s, arg)
+		argType, err := s.typeCheckNode(tree, dot, arg)
 		if err != nil {
 			return nil, err
 		}
