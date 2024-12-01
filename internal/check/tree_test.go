@@ -234,10 +234,55 @@ func TestTree(t *testing.T) {
 				require.NoError(t, execErr)
 			},
 		},
+		{
+			Name:     "when the method parameter is an int8",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithInt8Param{},
+		},
+		{
+			Name:     "when the method parameter is an int16",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithInt16Param{},
+		},
+		{
+			Name:     "when the method parameter is an int32",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithInt32Param{},
+		},
+		{
+			Name:     "when the method parameter is an int64",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithInt64Param{},
+		},
+		{
+			Name:     "when the method parameter is an uint",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithUintParam{},
+		},
+		{
+			Name:     "when the method parameter is an uint8",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithUint8Param{},
+		},
+		{
+			Name:     "when the method parameter is an uint16",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithUint16Param{},
+		},
+		{
+			Name:     "when the method parameter is an uint32",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithUint32Param{},
+		},
+		{
+			Name:     "when the method parameter is an uint64",
+			Template: `{{.F 32}}`,
+			Data:     MethodWithUint64Param{},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			templates, err := template.New("template").Parse(tt.Template)
-			require.NoError(t, err)
+			templates, parseErr := template.New("template").Parse(tt.Template)
+			require.NoError(t, parseErr)
 
 			trees := make(map[string]*parse.Tree)
 			for _, ts := range templates.Templates() {
@@ -250,6 +295,10 @@ func TestTree(t *testing.T) {
 			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, trees, fns); tt.Error != nil {
 				execErr := templates.Execute(io.Discard, tt.Data)
 				tt.Error(t, checkErr, execErr, dataType)
+			} else {
+				execErr := templates.Execute(io.Discard, tt.Data)
+				require.NoError(t, checkErr)
+				require.NoError(t, execErr)
 			}
 		})
 	}
@@ -306,6 +355,42 @@ type StructWithFuncFieldWithResultWithMethod struct {
 type MethodWithIntParam struct{}
 
 func (MethodWithIntParam) F(int) (_ T) { return }
+
+type MethodWithInt8Param struct{}
+
+func (MethodWithInt8Param) F(int8) (_ T) { return }
+
+type MethodWithInt16Param struct{}
+
+func (MethodWithInt16Param) F(int16) (_ T) { return }
+
+type MethodWithInt32Param struct{}
+
+func (MethodWithInt32Param) F(int32) (_ T) { return }
+
+type MethodWithInt64Param struct{}
+
+func (MethodWithInt64Param) F(int64) (_ T) { return }
+
+type MethodWithUintParam struct{}
+
+func (MethodWithUintParam) F(uint) (_ T) { return }
+
+type MethodWithUint8Param struct{}
+
+func (MethodWithUint8Param) F(uint8) (_ T) { return }
+
+type MethodWithUint16Param struct{}
+
+func (MethodWithUint16Param) F(uint16) (_ T) { return }
+
+type MethodWithUint32Param struct{}
+
+func (MethodWithUint32Param) F(uint32) (_ T) { return }
+
+type MethodWithUint64Param struct{}
+
+func (MethodWithUint64Param) F(uint64) (_ T) { return }
 
 type MethodWithBoolParam struct{}
 
