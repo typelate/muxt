@@ -44,10 +44,6 @@ func TestTree(t *testing.T) {
 			Name:     "on an empty template",
 			Template: ``,
 			Data:     T{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when accessing nil on an empty struct",
@@ -61,9 +57,6 @@ func TestTree(t *testing.T) {
 			Name:     "when accessing the dot",
 			Template: `{{.}}`,
 			Data:     T{},
-			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				require.NoError(t, err)
-			},
 		},
 		{
 			Name:     "when a method does not any results",
@@ -81,18 +74,11 @@ func TestTree(t *testing.T) {
 			Name:     "when a method does has a result",
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureResult{},
-			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				require.NoError(t, err)
-			},
 		},
 		{
 			Name:     "when a method also has an error",
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureResultAndError{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when a method has a second result that is not an error",
@@ -122,10 +108,6 @@ func TestTree(t *testing.T) {
 			Name:     "when a method is part of a field node list",
 			Template: `{{.Method.Method}}`,
 			Data:     TypeWithMethodSignatureResultHasMethod{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when result method does not have a method",
@@ -145,28 +127,16 @@ func TestTree(t *testing.T) {
 			Name:     "when the struct has the field",
 			Template: `{{.Field}}`,
 			Data:     StructWithField{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when the struct has the field and the field has a method",
 			Template: `{{.Field.Method}}`,
 			Data:     StructWithFieldWithMethod{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when the struct has the field and the field has a method",
 			Template: `{{.Field}}`,
 			Data:     StructWithFieldWithMethod{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when the struct has the field of kind func",
@@ -184,10 +154,6 @@ func TestTree(t *testing.T) {
 			Name:     "when a method has an int parameter",
 			Template: `{{.F 21}}`,
 			Data:     MethodWithIntParam{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, checkErr)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when a method argument is an bool but param is int",
@@ -202,9 +168,6 @@ func TestTree(t *testing.T) {
 			Name:     "when a method has a bool parameter",
 			Template: `{{.F true}}`,
 			Data:     MethodWithBoolParam{},
-			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				require.NoError(t, err)
-			},
 		},
 		{
 			Name:     "when a method argument is an int but param is bool",
@@ -220,19 +183,11 @@ func TestTree(t *testing.T) {
 			Name:     "when a method receives a 64 bit floating point literal",
 			Template: `{{.F 3.2}}`,
 			Data:     MethodWithFloat64Param{},
-			Error: func(t *testing.T, err, execErr error, tp types.Type) {
-				require.NoError(t, err)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when a method receives a 32 bit floating point literal",
 			Template: `{{.F 3.2}}`,
 			Data:     MethodWithFloat32Param{},
-			Error: func(t *testing.T, err, execErr error, tp types.Type) {
-				require.NoError(t, err)
-				require.NoError(t, execErr)
-			},
 		},
 		{
 			Name:     "when the method parameter is an int8",
