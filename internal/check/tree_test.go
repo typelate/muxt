@@ -240,11 +240,9 @@ func TestTree(t *testing.T) {
 			templates, parseErr := template.New("template").Parse(tt.Template)
 			require.NoError(t, parseErr)
 
-			fns := make(map[string]*types.Signature)
-
 			dataType := checkTestPackage.Types.Scope().Lookup(reflect.TypeOf(tt.Data).Name()).Type()
 
-			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newTextTemplateForrest(templates), fns); tt.Error != nil {
+			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newTextTemplateForrest(templates), nil); tt.Error != nil {
 				execErr := templates.Execute(io.Discard, tt.Data)
 				tt.Error(t, checkErr, execErr, dataType)
 			} else {
@@ -401,7 +399,7 @@ func TestExampleTemplate(t *testing.T) {
 			require.True(t, ok)
 			dot = fn.Signature().Results().At(0).Type()
 		}
-		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newTextTemplateForrest(templates), make(map[string]*types.Signature)))
+		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newTextTemplateForrest(templates), nil))
 	}
 }
 
