@@ -25,7 +25,9 @@ func TestTree(t *testing.T) {
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	checkTestPackage := findPackage(t, packageList, "github.com/crhntr/muxt/internal/check")
+	checkTestPackage := find(t, packageList, func(p *packages.Package) bool {
+		return p.Name == "check_test"
+	})
 	for _, tt := range []struct {
 		Name     string
 		Template string
@@ -432,8 +434,12 @@ func TestExampleTemplate(t *testing.T) {
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	pkg := findPackage(t, packageList, "github.com/crhntr/muxt/example")
-	netHTTP := findPackage(t, packageList, "net/http")
+	pkg := find(t, packageList, func(p *packages.Package) bool {
+		return p.PkgPath == "github.com/crhntr/muxt/example"
+	})
+	netHTTP := find(t, packageList, func(p *packages.Package) bool {
+		return p.PkgPath == "net/http"
+	})
 	backend := pkg.Types.Scope().Lookup("Backend")
 	require.NotNil(t, backend)
 
@@ -457,15 +463,14 @@ func TestExampleTemplate(t *testing.T) {
 	}
 }
 
-func findPackage(t *testing.T, list []*packages.Package, path string) *packages.Package {
+func find[T any](t *testing.T, list []T, match func(p T) bool) T {
 	t.Helper()
-	if i := slices.IndexFunc(list, func(p *packages.Package) bool {
-		return p.PkgPath == path
-	}); i >= 0 {
+	if i := slices.IndexFunc(list, match); i >= 0 {
 		return list[i]
 	} else {
-		t.Fatalf("failed to load %q package", path)
-		return nil
+		var zero T
+		t.Fatalf("failed to find")
+		return zero
 	}
 }
 
