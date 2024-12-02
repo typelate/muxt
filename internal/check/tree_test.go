@@ -235,6 +235,51 @@ func TestTree(t *testing.T) {
 			Template: `{{.F 32}}`,
 			Data:     MethodWithUint64Param{},
 		},
+		{
+			Name:     "when a method is on the dollar variable",
+			Template: `{{$.F 32}}`,
+			Data:     MethodWithUint64Param{},
+		},
+		{
+			Name:     "when accessing the dollar variable in an underlying template",
+			Template: `{{define "t1"}}{{$.F 3.2}}{{end}}{{template "t1" $.Method}}`,
+			Data:     TypeWithMethodSignatureResultMethodWithFloat32Param{},
+		},
+		{
+			Name:     "when ranging over a slice field",
+			Template: `{{range .Numbers}}{{$.F .}}{{end}}`,
+			Data: TypeWithMethodAndSliceFloat64{
+				Numbers: []float64{1, 2, 3},
+			},
+		},
+		{
+			Name:     "when ranging over an array field",
+			Template: `{{range .Numbers}}{{$.F .}}{{end}}`,
+			Data: TypeWithMethodAndArrayFloat64{
+				Numbers: [...]float64{1, 2},
+			},
+		},
+		{
+			Name:     "when passing key value range variables for slice",
+			Template: `{{range $k, $v := .Numbers}}{{$.F $k $v}}{{end}}`,
+			Data: MethodWithKeyValForSlices{
+				Numbers: []float64{1, 2},
+			},
+		},
+		{
+			Name:     "when passing key value range variables for array",
+			Template: `{{range $k, $v := .Numbers}}{{$.F $k $v}}{{end}}`,
+			Data: MethodWithKeyValForArray{
+				Numbers: [...]float64{1, 2},
+			},
+		},
+		{
+			Name:     "when passing key value range variables for map",
+			Template: `{{range $k, $v := .Numbers}}{{$.F $k $v}}{{end}}`,
+			Data: MethodWithKeyValForMap{
+				Numbers: map[int16]float32{},
+			},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			templates, parseErr := template.New("template").Parse(tt.Template)
@@ -247,8 +292,8 @@ func TestTree(t *testing.T) {
 				tt.Error(t, checkErr, execErr, dataType)
 			} else {
 				execErr := templates.Execute(io.Discard, tt.Data)
-				require.NoError(t, checkErr)
 				require.NoError(t, execErr)
+				require.NoError(t, checkErr)
 			}
 		})
 	}
@@ -353,6 +398,40 @@ func (MethodWithFloat64Param) F(float64) (_ T) { return }
 type MethodWithFloat32Param struct{}
 
 func (MethodWithFloat32Param) F(float32) (_ T) { return }
+
+type TypeWithMethodSignatureResultMethodWithFloat32Param struct{}
+
+func (TypeWithMethodSignatureResultMethodWithFloat32Param) Method() (_ MethodWithFloat32Param) {
+	return
+}
+
+type TypeWithMethodAndSliceFloat64 struct {
+	MethodWithFloat64Param
+	Numbers []float64
+}
+
+type TypeWithMethodAndArrayFloat64 struct {
+	MethodWithFloat64Param
+	Numbers [2]float64
+}
+
+type MethodWithKeyValForSlices struct {
+	Numbers []float64
+}
+
+func (MethodWithKeyValForSlices) F(int, float64) (_ T) { return }
+
+type MethodWithKeyValForArray struct {
+	Numbers [2]float64
+}
+
+func (MethodWithKeyValForArray) F(int, float64) (_ T) { return }
+
+type MethodWithKeyValForMap struct {
+	Numbers map[int16]float32
+}
+
+func (MethodWithKeyValForMap) F(int16, float32) (_ T) { return }
 
 func TestExampleTemplate(t *testing.T) {
 	packageList, loadErr := packages.Load(&packages.Config{
