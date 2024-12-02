@@ -42,7 +42,7 @@ func Templates(workingDirectory, templatesVariable string, pkg *packages.Package
 }
 
 func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
-	if pkg.Path() == path {
+	if pkg == nil || pkg.Path() == path {
 		return pkg, true
 	}
 	for _, im := range pkg.Imports() {
