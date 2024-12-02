@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"maps"
+	"strings"
 	"text/template/parse"
 )
 
@@ -81,6 +82,7 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 		return nil, fmt.Errorf("missing node type check %T", n)
 	}
 }
+
 func (s *scope) checkVariableNode(tree *parse.Tree, n *parse.VariableNode) (types.Type, error) {
 	tp, ok := s.variables[n.Ident[0]]
 	if !ok {
@@ -223,7 +225,16 @@ func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.Comm
 	}
 	for i := 0; i < len(argTypes); i++ {
 		at := argTypes[i]
-		pt := sig.Params().At(i).Type()
+		var pt types.Type
+		isVar := sig.Variadic()
+		argVar := i >= sig.Params().Len()-1
+		if isVar && argVar {
+			ps := sig.Params()
+			v := ps.At(ps.Len() - 1).Type().(*types.Slice)
+			pt = v.Elem()
+		} else {
+			pt = sig.Params().At(i).Type()
+		}
 		if !types.AssignableTo(at, pt) {
 			return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i-1, at, pt)
 		}
@@ -304,9 +315,16 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 }
 
 func (s *scope) checkIdentifierNode(n *parse.IdentifierNode) (types.Type, error) {
-	tp, ok := s.variables[n.Ident]
-	if !ok {
-		return nil, fmt.Errorf("failed to find identifier %q", n.Ident)
+	if strings.HasPrefix(n.Ident, "$") {
+		tp, ok := s.variables[n.Ident]
+		if !ok {
+			return nil, fmt.Errorf("failed to find identifier %s", n.Ident)
+		}
+		return tp, nil
 	}
-	return tp, nil
+	fn, ok := s.FindFunction(n.Ident)
+	if !ok {
+		return nil, fmt.Errorf("failed to find function %s", n.Ident)
+	}
+	return fn, nil
 }

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"text/template/parse"
 	"time"
 
 	"github.com/crhntr/dom"
@@ -22,6 +23,7 @@ import (
 	"golang.org/x/net/html/atom"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/crhntr/muxt/internal/check"
 	"github.com/crhntr/muxt/internal/source"
 )
 
@@ -54,6 +56,7 @@ const (
 )
 
 type RoutesFileConfiguration struct {
+	ExperimentalCheckTypes,
 	executeFunc bool
 	PackageName,
 	PackagePath,
@@ -82,7 +85,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	imports := source.NewImports(&ast.GenDecl{Tok: token.IMPORT})
 
 	patterns := []string{
-		wd, "net/http", "encoding",
+		wd, "encoding", "fmt", "net/http",
 	}
 
 	if config.ReceiverPackage != "" {
@@ -125,7 +128,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		receiver = types.NewNamed(types.NewTypeName(0, routesPkg.Types, "Receiver", nil), types.NewStruct(nil, nil), nil)
 	}
 
-	ts, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
+	ts, fm, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
 		return "", err
 	}
@@ -205,6 +208,16 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
 		handlerFunc.Body.List = append(handlerFunc.Body.List, t.executeCall(source.HTTPStatusCode(imports, t.statusCode), ast.NewIdent(dataVarIdent), writeHeader))
 		routesFunc.Body.List = append(routesFunc.Body.List, t.callHandleFunc(handlerFunc))
+
+		if config.ExperimentalCheckTypes {
+			dataVar := sig.Results().At(0)
+			if types.Identical(dataVar.Type(), types.Universe.Lookup("any").Type()) {
+				continue
+			}
+			if err := check.Tree(t.template.Tree, dataVar.Type(), dataVar.Pkg(), routesPkg.Fset, newForrest(ts), functionMap(fm)); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	imports.SortImports()
@@ -1033,4 +1046,29 @@ func executeFuncDecl(imports *source.Imports, templatesVariableIdent string) *as
 			},
 		},
 	}
+}
+
+type forest template.Template
+
+func newForrest(templates *template.Template) *forest {
+	return (*forest)(templates)
+}
+
+func (f *forest) FindTree(name string) (*parse.Tree, bool) {
+	ts := (*template.Template)(f).Lookup(name)
+	if ts == nil {
+		return nil, false
+	}
+	return ts.Tree, true
+}
+
+type functionMap map[string]*types.Signature
+
+func (fm functionMap) FindFunction(name string) (*types.Signature, bool) {
+	m := (map[string]*types.Signature)(fm)
+	fn, ok := m[name]
+	if !ok {
+		return nil, false
+	}
+	return fn, true
 }

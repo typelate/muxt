@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := os.WriteFile("README.md", out.Bytes(), 0644); err != nil {
+	if err := os.WriteFile("README.md", out.Bytes(), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
