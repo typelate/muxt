@@ -1,9 +1,12 @@
 package source
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/token"
+	"go/types"
 	"html/template"
 	"path/filepath"
 	"slices"
@@ -13,7 +16,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, error) {
+type TemplateFuncMap = map[string]*types.Signature
+
+func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, TemplateFuncMap, error) {
+	funcTypeMap := registerDefaultFunctions(pkg.Types)
 	for _, tv := range IterateValueSpecs(pkg.Syntax) {
 		i := slices.IndexFunc(tv.Names, func(e *ast.Ident) bool {
 			return e.Name == templatesVariable
@@ -23,19 +29,43 @@ func Templates(workingDirectory, templatesVariable string, pkg *packages.Package
 		}
 		embeddedPaths, err := relativeFilePaths(workingDirectory, pkg.EmbedFiles...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate relative path for embedded files: %w", err)
+			return nil, nil, fmt.Errorf("failed to calculate relative path for embedded files: %w", err)
 		}
 		const templatePackageIdent = "template"
-		ts, err := evaluateTemplateSelector(nil, tv.Values[i], workingDirectory, templatesVariable, templatePackageIdent, "", "", pkg.Fset, pkg.Syntax, embeddedPaths)
+		ts, err := evaluateTemplateSelector(nil, pkg.Types, tv.Values[i], workingDirectory, templatesVariable, templatePackageIdent, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, funcTypeMap, make(template.FuncMap))
 		if err != nil {
-			return nil, fmt.Errorf("run template %s failed at %w", templatesVariable, err)
+			return nil, nil, fmt.Errorf("run template %s failed at %w", templatesVariable, err)
 		}
-		return ts, nil
+		return ts, funcTypeMap, nil
 	}
-	return nil, fmt.Errorf("variable %s not found", templatesVariable)
+	return nil, nil, fmt.Errorf("variable %s not found", templatesVariable)
 }
 
-func evaluateTemplateSelector(ts *template.Template, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string) (*template.Template, error) {
+func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
+	if pkg.Path() == path {
+		return pkg, true
+	}
+	for _, im := range pkg.Imports() {
+		if p, ok := findPackage(im, path); ok {
+			return p, true
+		}
+	}
+	return nil, false
+}
+
+func registerDefaultFunctions(pkg *types.Package) TemplateFuncMap {
+	funcTypeMap := make(TemplateFuncMap)
+	fmtPkg, ok := findPackage(pkg, "fmt")
+	if !ok || fmtPkg == nil {
+		return funcTypeMap
+	}
+	funcTypeMap["printf"] = fmtPkg.Scope().Lookup("Sprintf").Type().(*types.Signature)
+	funcTypeMap["print"] = fmtPkg.Scope().Lookup("Sprint").Type().(*types.Signature)
+	funcTypeMap["println"] = fmtPkg.Scope().Lookup("Sprintln").Type().(*types.Signature)
+	return funcTypeMap
+}
+
+func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps TemplateFuncMap, fm template.FuncMap) (*template.Template, error) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok {
 		return nil, contextError(workingDirectory, fileSet, expression.Pos(), fmt.Errorf("expected call expression"))
@@ -56,7 +86,7 @@ func evaluateTemplateSelector(ts *template.Template, expression ast.Expr, workin
 			if len(call.Args) != 1 {
 				return nil, contextError(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one argument %s got %d", Format(sel.X), len(call.Args)))
 			}
-			return evaluateTemplateSelector(ts, call.Args[0], workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim, fileSet, files, embeddedPaths)
+			return evaluateTemplateSelector(ts, pkg, call.Args[0], workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim, fileSet, files, embeddedPaths, funcTypeMaps, fm)
 		case "New":
 			if len(call.Args) != 1 {
 				return nil, contextError(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
@@ -76,7 +106,7 @@ func evaluateTemplateSelector(ts *template.Template, expression ast.Expr, workin
 			return nil, contextError(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported function %s", sel.Sel.Name))
 		}
 	case *ast.CallExpr:
-		up, err := evaluateTemplateSelector(ts, sel.X, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim, fileSet, files, embeddedPaths)
+		up, err := evaluateTemplateSelector(ts, pkg, sel.X, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim, fileSet, files, embeddedPaths, funcTypeMaps, fm)
 		if err != nil {
 			return nil, err
 		}
@@ -121,44 +151,44 @@ func evaluateTemplateSelector(ts *template.Template, expression ast.Expr, workin
 			}
 			return up.Option(list...), nil
 		case "Funcs":
-			funcMap, err := evaluateFuncMap(workingDirectory, templatePackageIdent, fileSet, call)
-			if err != nil {
+			if err := evaluateFuncMap(workingDirectory, templatePackageIdent, pkg, fileSet, call, fm, funcTypeMaps); err != nil {
 				return nil, err
 			}
-			return up.Funcs(funcMap), nil
+			return up.Funcs(fm), nil
 		default:
 			return nil, contextError(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported method %s", sel.Sel.Name))
 		}
 	}
 }
 
-func evaluateFuncMap(workingDirectory, templatePackageIdent string, fileSet *token.FileSet, call *ast.CallExpr) (template.FuncMap, error) {
+func evaluateFuncMap(workingDirectory, templatePackageIdent string, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm template.FuncMap, funcTypesMap TemplateFuncMap) error {
 	const funcMapTypeIdent = "FuncMap"
-	fm := make(template.FuncMap)
 	if len(call.Args) != 1 {
-		return nil, contextError(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly 1 template.FuncMap composite literal argument"))
+		return contextError(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly 1 template.FuncMap composite literal argument"))
 	}
 	arg := call.Args[0]
 	lit, ok := arg.(*ast.CompositeLit)
 	if !ok {
-		return nil, contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
+		return contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
 	}
 	typeSel, ok := lit.Type.(*ast.SelectorExpr)
 	if !ok || typeSel.Sel.Name != funcMapTypeIdent {
-		return nil, contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
+		return contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
 	}
 	if tp, ok := typeSel.X.(*ast.Ident); !ok || tp.Name != templatePackageIdent {
-		return nil, contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
+		return contextError(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a composite literal with type %s.%s got %s", templatePackageIdent, funcMapTypeIdent, Format(arg)))
 	}
+	var buf bytes.Buffer
 	for i, exp := range lit.Elts {
 		el, ok := exp.(*ast.KeyValueExpr)
 		if !ok {
-			return nil, contextError(workingDirectory, fileSet, exp.Pos(), fmt.Errorf("expected element at index %d to be a key value pair got %s", i, Format(exp)))
+			return contextError(workingDirectory, fileSet, exp.Pos(), fmt.Errorf("expected element at index %d to be a key value pair got %s", i, Format(exp)))
 		}
 		funcName, err := evaluateStringLiteralExpression(workingDirectory, fileSet, el.Key)
 		if err != nil {
-			return nil, err
+			return err
 		}
+
 		// template.Parse does not evaluate the function signature parameters;
 		// it ensures the function name is in scope and there is one or two results.
 		// we could use something like func() string { return "" } for this signature
@@ -171,8 +201,21 @@ func evaluateFuncMap(workingDirectory, templatePackageIdent string, fileSet *tok
 		// or
 		//   fm[funcName] = func() (int, int) {return 0, 0} // will fail because the second result is not an error
 		fm[funcName] = fmt.Sprintln
+
+		if pkg == nil {
+			continue
+		}
+		buf.Reset()
+		if err := format.Node(&buf, fileSet, el.Value); err != nil {
+			return err
+		}
+		tv, err := types.Eval(fileSet, pkg, lit.Pos(), buf.String())
+		if err != nil {
+			return err
+		}
+		funcTypesMap[funcName] = tv.Type.(*types.Signature)
 	}
-	return fm, nil
+	return nil
 }
 
 func evaluateCallParseFilesArgs(workingDirectory string, fileSet *token.FileSet, call *ast.CallExpr, files []*ast.File, embeddedPaths []string) ([]string, error) {

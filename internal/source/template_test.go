@@ -23,14 +23,14 @@ func TestTemplates(t *testing.T) {
 	t.Run("non call", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir)
-		_, err := source.Templates(dir, "templatesIdent", pkg)
+		_, _, err := source.Templates(dir, "templatesIdent", pkg)
 		require.ErrorContains(t, err, "run template templatesIdent failed at template.go:32:19: expected call expression")
 	})
 
 	t.Run("call ParseFS", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/template_ParseFS.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml", "form.gohtml")
-		ts, err := source.Templates(dir, "templates", pkg)
+		ts, _, err := source.Templates(dir, "templates", pkg)
 		require.NoError(t, err)
 		var names []string
 		for _, t := range ts.Templates() {
@@ -43,7 +43,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call ParseFS with assets dir", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/assets_dir.txtar"))
 		pkg := parseGo(t, dir, "assets/index.gohtml", "assets/form.gohtml")
-		ts, err := source.Templates(dir, "templates", pkg)
+		ts, _, err := source.Templates(dir, "templates", pkg)
 		require.NoError(t, err)
 		var names []string
 		for _, t := range ts.Templates() {
@@ -56,7 +56,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		ts, err := source.Templates(dir, "templateNew", pkg)
+		ts, _, err := source.Templates(dir, "templateNew", pkg)
 		require.NoError(t, err)
 		var names []string
 		for _, t := range ts.Templates() {
@@ -69,7 +69,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New after calling ParseFS", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		ts, err := source.Templates(dir, "templateParseFSNew", pkg)
+		ts, _, err := source.Templates(dir, "templateParseFSNew", pkg)
 		require.NoError(t, err)
 		var names []string
 		for _, t := range ts.Templates() {
@@ -82,7 +82,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New before calling ParseFS", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		ts, err := source.Templates(dir, "templateNewParseFS", pkg)
+		ts, _, err := source.Templates(dir, "templateNewParseFS", pkg)
 
 		require.NoError(t, err)
 		var names []string
@@ -96,7 +96,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call new with non args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewMissingArg", pkg)
+		_, _, err := source.Templates(dir, "templateNewMissingArg", pkg)
 
 		require.ErrorContains(t, err, "expected exactly one string literal argument")
 	})
@@ -104,7 +104,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New on unknown X", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateWrongX", pkg)
+		_, _, err := source.Templates(dir, "templateWrongX", pkg)
 
 		require.ErrorContains(t, err, "template.go:20:19: expected template got UNKNOWN")
 	})
@@ -112,7 +112,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New with wrong arg count", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateWrongArgCount", pkg)
+		_, _, err := source.Templates(dir, "templateWrongArgCount", pkg)
 
 		require.ErrorContains(t, err, "template.go:22:38: expected exactly one string literal argument")
 	})
@@ -120,7 +120,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New on unexpected X", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewOnIndexed", pkg)
+		_, _, err := source.Templates(dir, "templateNewOnIndexed", pkg)
 
 		require.ErrorContains(t, err, "template.go:24:25: expected exactly one argument ts[0] got 2")
 	})
@@ -128,7 +128,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New with non string literal arg", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewArg42", pkg)
+		_, _, err := source.Templates(dir, "templateNewArg42", pkg)
 
 		require.ErrorContains(t, err, "template.go:26:34: expected string literal got 42")
 	})
@@ -136,7 +136,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New with non literal arg", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewArgIdent", pkg)
+		_, _, err := source.Templates(dir, "templateNewArgIdent", pkg)
 
 		require.ErrorContains(t, err, "template.go:28:37: expected string literal got TemplateName")
 	})
@@ -144,7 +144,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call New with upstream error", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewErrUpstream", pkg)
+		_, _, err := source.Templates(dir, "templateNewErrUpstream", pkg)
 
 		require.ErrorContains(t, err, "run template templateNewErrUpstream failed at template.go:30:40: expected string literal got fail")
 	})
@@ -152,7 +152,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("unknown templates variable", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "variableDoesNotExist", pkg)
+		_, _, err := source.Templates(dir, "variableDoesNotExist", pkg)
 
 		require.NotNil(t, err)
 		require.Equal(t, "variable variableDoesNotExist not found", err.Error())
@@ -161,7 +161,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("unknown templates variable", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "unsupportedMethod", pkg)
+		_, _, err := source.Templates(dir, "unsupportedMethod", pkg)
 
 		require.ErrorContains(t, err, "run template unsupportedMethod failed at template.go:34:22: unsupported function Unknown")
 	})
@@ -169,7 +169,7 @@ func TestTemplates(t *testing.T) {
 	t.Run("call Must with unexpected function expression", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "unexpectedFunExpression", pkg)
+		_, _, err := source.Templates(dir, "unexpectedFunExpression", pkg)
 
 		require.ErrorContains(t, err, "run template unexpectedFunExpression failed at template.go:36:28: unexpected expression *ast.IndexExpr: x[3]")
 	})
@@ -177,91 +177,91 @@ func TestTemplates(t *testing.T) {
 	t.Run("call Must on non ident receiver", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateMustNonIdentReceiver", pkg)
+		_, _, err := source.Templates(dir, "templateMustNonIdentReceiver", pkg)
 
 		require.ErrorContains(t, err, "run template templateMustNonIdentReceiver failed at template.go:38:33: unexpected expression *ast.Ident: f")
 	})
 	t.Run("call Must with two arguments", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateMustCalledWithTwoArgs", pkg)
+		_, _, err := source.Templates(dir, "templateMustCalledWithTwoArgs", pkg)
 
 		require.ErrorContains(t, err, "run template templateMustCalledWithTwoArgs failed at template.go:40:47: expected exactly one argument template got 2")
 	})
 	t.Run("call Must with one argument", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateMustCalledWithNoArg", pkg)
+		_, _, err := source.Templates(dir, "templateMustCalledWithNoArg", pkg)
 
 		require.ErrorContains(t, err, "run template templateMustCalledWithNoArg failed at template.go:42:47: expected exactly one argument template got 0")
 	})
 	t.Run("call Must wrong template package ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateMustWrongPackageIdent", pkg)
+		_, _, err := source.Templates(dir, "templateMustWrongPackageIdent", pkg)
 
 		require.ErrorContains(t, err, "run template templateMustWrongPackageIdent failed at template.go:44:34: expected template got wrong")
 	})
 	t.Run("call ParseFS wrong template package ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSWrongPackageIdent", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSWrongPackageIdent", pkg)
 
 		require.ErrorContains(t, err, "run template templateParseFSWrongPackageIdent failed at template.go:46:37: expected template got wrong")
 	})
 	t.Run("call ParseFS receiver errored", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSReceiverErr", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSReceiverErr", pkg)
 
 		require.ErrorContains(t, err, "run template templateParseFSReceiverErr failed at template.go:48:43: expected exactly one string literal argument")
 	})
 	t.Run("call ParseFS unexpected receiver", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSUnexpectedReceiver", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSUnexpectedReceiver", pkg)
 
 		require.ErrorContains(t, err, "run template templateParseFSUnexpectedReceiver failed at template.go:50:38: expected exactly one argument x[0] got 2")
 	})
 	t.Run("call ParseFS with no arguments", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSNoArgs", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSNoArgs", pkg)
 
 		require.ErrorContains(t, err, "template.go:52:42: missing required arguments")
 	})
 	t.Run("call ParseFS with first arg non ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSFirstArgNonIdent", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSFirstArgNonIdent", pkg)
 
 		require.ErrorContains(t, err, "template.go:54:53: first argument to ParseFS must be an identifier")
 	})
 	t.Run("call ParseFS with first arg non ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSNonStringLiteralGlob", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSNonStringLiteralGlob", pkg)
 		require.ErrorContains(t, err, "template.go:56:78: expected string literal got 42")
 	})
 	t.Run("call ParseFS with bad glob", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSWithBadGlob", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSWithBadGlob", pkg)
 		require.ErrorContains(t, err, `template.go:58:64: bad pattern "[fail": syntax error in pattern`)
 	})
 	t.Run("call ParseFS and fail to get relative template path", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/template_ParseFS.txtar"))
 		pkg := parseGo(t, dir)
 		pkg.EmbedFiles = []string{"\x00/index.gohtml"} // null must not be in a path
-		_, err := source.Templates(dir, "templates", pkg)
+		_, _, err := source.Templates(dir, "templates", pkg)
 		require.ErrorContains(t, err, `failed to calculate relative path for embedded files: Rel: can't make`)
 	})
 	t.Run("call ParseFS and filter filepaths by globs", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/template_ParseFS.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml", "script.html")
-		tsHTML, err := source.Templates(dir, "templatesHTML", pkg)
+		tsHTML, _, err := source.Templates(dir, "templatesHTML", pkg)
 		require.NoError(t, err)
-		tsGoHTML, err := source.Templates(dir, "templatesGoHTML", pkg)
+		tsGoHTML, _, err := source.Templates(dir, "templatesGoHTML", pkg)
 		assert.NotNil(t, tsHTML.Lookup("script.html"))
 		assert.NotNil(t, tsHTML.Lookup("console_log"))
 		assert.Nil(t, tsGoHTML.Lookup("script.html"))
@@ -270,19 +270,19 @@ func TestTemplates(t *testing.T) {
 	t.Run("call bad embed pattern", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/bad_embed_pattern.txtar"))
 		pkg := parseGo(t, dir, "greeting.gohtml")
-		_, err := source.Templates(dir, "templates", pkg)
+		_, _, err := source.Templates(dir, "templates", pkg)
 		require.ErrorContains(t, err, `template.go:9:2: embed comment malformed: syntax error in pattern`)
 	})
 	t.Run("call bad embed pattern", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/template_ParseFS.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateEmbedVariableNotFound", pkg)
+		_, _, err := source.Templates(dir, "templateEmbedVariableNotFound", pkg)
 		require.ErrorContains(t, err, `template.go:22:65: variable hiding not found`)
 	})
 	t.Run("multiple delimiter types", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/delims.txtar"))
 		pkg := parseGo(t, dir, "default.gohtml", "triple_parens.gohtml", "double_square.gohtml")
-		templates, err := source.Templates(dir, "templates", pkg)
+		templates, _, err := source.Templates(dir, "templates", pkg)
 		require.NoError(t, err)
 		var names []string
 		for _, ts := range templates.Templates() {
@@ -293,142 +293,142 @@ func TestTemplates(t *testing.T) {
 	t.Run("Run method call gets no args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewHasWrongNumberOfArgs", pkg)
+		_, _, err := source.Templates(dir, "templateNewHasWrongNumberOfArgs", pkg)
 		require.ErrorContains(t, err, `template.go:60:101: expected exactly one string literal argument`)
 	})
 	t.Run("Run method call gets wrong type of args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewHasWrongTypeOfArgs", pkg)
+		_, _, err := source.Templates(dir, "templateNewHasWrongTypeOfArgs", pkg)
 		require.ErrorContains(t, err, `template.go:62:56: expected string literal got 9000`)
 	})
 	t.Run("Run method call gets too many args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateNewHasTooManyArgs", pkg)
+		_, _, err := source.Templates(dir, "templateNewHasTooManyArgs", pkg)
 		require.ErrorContains(t, err, `template.go:64:51: expected exactly one string literal argument`)
 	})
 	t.Run("Delims method call gets no args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateDelimsGetsNoArgs", pkg)
+		_, _, err := source.Templates(dir, "templateDelimsGetsNoArgs", pkg)
 		require.ErrorContains(t, err, `template.go:66:53: expected exactly two string literal arguments`)
 	})
 	t.Run("Delims method call gets too many args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateDelimsGetsTooMany", pkg)
+		_, _, err := source.Templates(dir, "templateDelimsGetsTooMany", pkg)
 		require.ErrorContains(t, err, `template.go:68:54: expected exactly two string literal arguments`)
 	})
 	t.Run("Delims have wrong type of argument expressions", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateDelimsWrongExpressionArg", pkg)
+		_, _, err := source.Templates(dir, "templateDelimsWrongExpressionArg", pkg)
 		require.ErrorContains(t, err, `template.go:70:67: expected string literal got y`)
 	})
 	t.Run("ParseFS method fails", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateParseFSMethodFails", pkg)
+		_, _, err := source.Templates(dir, "templateParseFSMethodFails", pkg)
 		require.ErrorContains(t, err, `template.go:72:73: expected string literal got fail`)
 	})
 	t.Run("Options method requires string literals", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateOptionsRequiresStringLiterals", pkg)
+		_, _, err := source.Templates(dir, "templateOptionsRequiresStringLiterals", pkg)
 		require.ErrorContains(t, err, `template.go:74:67: expected string literal got fail`)
 	})
 	t.Run("unknown method", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateUnknownMethod", pkg)
+		_, _, err := source.Templates(dir, "templateUnknownMethod", pkg)
 		require.ErrorContains(t, err, `template.go:76:26: unsupported method Unknown`)
 	})
 	t.Run("Option call", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
-		_, err := source.Templates(dir, "templateOptionCall", pkg)
+		_, _, err := source.Templates(dir, "templateOptionCall", pkg)
 		require.NoError(t, err)
 	})
 	t.Run("Option call wrong argument", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		pkg := parseGo(t, dir, "index.gohtml")
 		assert.Panics(t, func() {
-			_, _ = source.Templates(dir, "templateOptionCallUnknownArg", pkg)
+			_, _, _ = source.Templates(dir, "templateOptionCallUnknownArg", pkg)
 		})
 	})
 	t.Run("Funcs call", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "greet.gohtml")
-		_, err := source.Templates(dir, "templates", pkg)
+		_, _, err := source.Templates(dir, "templates", pkg)
 		require.NoError(t, err)
 	})
 	t.Run("Func not defined", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesFuncNotDefined", pkg)
+		_, _, err := source.Templates(dir, "templatesFuncNotDefined", pkg)
 		require.ErrorContains(t, err, `missing_func.gohtml:1: function "enemy" not defined`)
 	})
 	t.Run("Func wrong parameter kind", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongArg", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongArg", pkg)
 		require.ErrorContains(t, err, `expected a composite literal with type template.FuncMap got wrong`)
 	})
 
 	t.Run("Func wrong too many args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesTwoArgs", pkg)
+		_, _, err := source.Templates(dir, "templatesTwoArgs", pkg)
 		require.ErrorContains(t, err, `expected exactly 1 template.FuncMap composite literal argument`)
 	})
 	t.Run("Func wrong too no args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesNoArgs", pkg)
+		_, _, err := source.Templates(dir, "templatesNoArgs", pkg)
 		require.ErrorContains(t, err, `expected exactly 1 template.FuncMap composite literal argument`)
 	})
 	t.Run("Func wrong package ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongTypePackageName", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongTypePackageName", pkg)
 		require.ErrorContains(t, err, `expected a composite literal with type template.FuncMap got wrong.FuncMap{}`)
 	})
 	t.Run("Func wrong Type ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongTypeName", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongTypeName", pkg)
 		require.ErrorContains(t, err, `expected a composite literal with type template.FuncMap got template.Wrong{}`)
 	})
 	t.Run("Func wrong Type", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongTypeExpression", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongTypeExpression", pkg)
 		require.ErrorContains(t, err, `expected a composite literal with type template.FuncMap got wrong{}`)
 	})
 	t.Run("Func wrong elem", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongTypeElem", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongTypeElem", pkg)
 		require.ErrorContains(t, err, `expected element at index 0 to be a key value pair got wrong`)
 	})
 	t.Run("Func wrong elem key", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		pkg := parseGo(t, dir, "missing_func.gohtml", "greet.gohtml")
-		_, err := source.Templates(dir, "templatesWrongElemKey", pkg)
+		_, _, err := source.Templates(dir, "templatesWrongElemKey", pkg)
 		require.ErrorContains(t, err, `expected string literal got wrong`)
 	})
 	t.Run("Parse template name from new", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/parse.txtar"))
 		pkg := parseGo(t, dir)
-		ts, err := source.Templates(dir, "templates", pkg)
+		ts, _, err := source.Templates(dir, "templates", pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, ts.Lookup("GET /"))
 	})
 	t.Run("Parse string has multiple routes", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/parse.txtar"))
 		pkg := parseGo(t, dir)
-		ts, err := source.Templates(dir, "multiple", pkg)
+		ts, _, err := source.Templates(dir, "multiple", pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, ts.Lookup("GET /"))
 		assert.NotNil(t, ts.Lookup("GET /{name}"))
@@ -436,13 +436,13 @@ func TestTemplates(t *testing.T) {
 	t.Run("Parse is missing argument", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/parse.txtar"))
 		pkg := parseGo(t, dir)
-		_, err := source.Templates(dir, "noArg", pkg)
+		_, _, err := source.Templates(dir, "noArg", pkg)
 		require.ErrorContains(t, err, "run template noArg failed at parse.go:12:35: expected exactly one string literal argument")
 	})
 	t.Run("Parse gets wrong argument type", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/parse.txtar"))
 		pkg := parseGo(t, dir)
-		_, err := source.Templates(dir, "wrongArg", pkg)
+		_, _, err := source.Templates(dir, "wrongArg", pkg)
 		require.ErrorContains(t, err, "run template wrongArg failed at parse.go:14:40: expected string literal got 500")
 	})
 }
