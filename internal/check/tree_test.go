@@ -287,7 +287,7 @@ func TestTree(t *testing.T) {
 
 			dataType := checkTestPackage.Types.Scope().Lookup(reflect.TypeOf(tt.Data).Name()).Type()
 
-			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newTextTemplateForrest(templates), nil); tt.Error != nil {
+			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newForrest(templates), nil); tt.Error != nil {
 				execErr := templates.Execute(io.Discard, tt.Data)
 				tt.Error(t, checkErr, execErr, dataType)
 			} else {
@@ -478,17 +478,17 @@ func TestExampleTemplate(t *testing.T) {
 			require.True(t, ok)
 			dot = fn.Signature().Results().At(0).Type()
 		}
-		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newTextTemplateForrest(templates), nil))
+		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newForrest(templates), nil))
 	}
 }
 
-type TextTemplateForrest template.Template
+type Forrest template.Template
 
-func newTextTemplateForrest(templates *template.Template) *TextTemplateForrest {
-	return (*TextTemplateForrest)(templates)
+func newForrest(templates *template.Template) *Forrest {
+	return (*Forrest)(templates)
 }
 
-func (forrest *TextTemplateForrest) FindTree(name string) (*parse.Tree, bool) {
+func (forrest *Forrest) FindTree(name string) (*parse.Tree, bool) {
 	ts := (*template.Template)(forrest).Lookup(name)
 	if ts == nil {
 		return nil, false
