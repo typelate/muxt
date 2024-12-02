@@ -25,16 +25,7 @@ func TestTree(t *testing.T) {
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-
-	var checkTestPackage *packages.Package
-	if i := slices.IndexFunc(packageList, func(p *packages.Package) bool {
-		return p.Name == "check_test"
-	}); i > 0 {
-		checkTestPackage = packageList[i]
-	} else {
-		t.Fatal("no check_test package")
-	}
-
+	checkTestPackage := findPackage(t, packageList, "github.com/crhntr/muxt/internal/check")
 	for _, tt := range []struct {
 		Name     string
 		Template string
@@ -441,24 +432,8 @@ func TestExampleTemplate(t *testing.T) {
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-
-	var pkg *packages.Package
-	if i := slices.IndexFunc(packageList, func(p *packages.Package) bool {
-		return p.Name == "main"
-	}); i >= 0 {
-		pkg = packageList[i]
-	} else {
-		t.Fatal("failed to load example package")
-	}
-	var netHTTP *packages.Package
-	if i := slices.IndexFunc(packageList, func(p *packages.Package) bool {
-		return p.PkgPath == "net/http"
-	}); i >= 0 {
-		netHTTP = packageList[i]
-	} else {
-		t.Fatal("failed to load net/http package")
-	}
-
+	pkg := findPackage(t, packageList, "github.com/crhntr/muxt/example")
+	netHTTP := findPackage(t, packageList, "net/http")
 	backend := pkg.Types.Scope().Lookup("Backend")
 	require.NotNil(t, backend)
 
@@ -479,6 +454,18 @@ func TestExampleTemplate(t *testing.T) {
 			dot = fn.Signature().Results().At(0).Type()
 		}
 		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, newForrest(templates), nil))
+	}
+}
+
+func findPackage(t *testing.T, list []*packages.Package, path string) *packages.Package {
+	t.Helper()
+	if i := slices.IndexFunc(list, func(p *packages.Package) bool {
+		return p.PkgPath == path
+	}); i >= 0 {
+		return list[i]
+	} else {
+		t.Fatalf("failed to load %q package", path)
+		return nil
 	}
 }
 
