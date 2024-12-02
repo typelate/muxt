@@ -50,9 +50,9 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 	case *parse.DotNode:
 		return dot, nil
 	case *parse.ListNode:
-		return s.checkListNode(tree, dot, n)
+		return nil, s.checkListNode(tree, dot, n)
 	case *parse.ActionNode:
-		return s.checkActionNode(tree, dot, n)
+		return nil, s.checkActionNode(tree, dot, n)
 	case *parse.CommandNode:
 		return s.checkCommandNode(tree, dot, n)
 	case *parse.FieldNode:
@@ -60,11 +60,11 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 	case *parse.PipeNode:
 		return s.checkPipeNode(tree, dot, n)
 	case *parse.IfNode:
-		return s.checkIfNode(tree, dot, n)
+		return nil, s.checkIfNode(tree, dot, n)
 	case *parse.RangeNode:
-		return s.checkRangeNode(tree, dot, n)
+		return nil, s.checkRangeNode(tree, dot, n)
 	case *parse.TemplateNode:
-		return s.checkTemplateNode(tree, dot, n)
+		return nil, s.checkTemplateNode(tree, dot, n)
 	case *parse.BoolNode:
 		return types.Typ[types.UntypedBool], nil
 	case *parse.StringNode:
@@ -89,22 +89,22 @@ func (s *scope) checkVariableNode(tree *parse.Tree, n *parse.VariableNode) (type
 	return s.checkIdentifiers(tree, tp, n, n.Ident[1:])
 }
 
-func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNode) (types.Type, error) {
+func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNode) error {
 	for _, child := range n.Nodes {
 		if _, err := s.checkNode(tree, dot, child); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-func (s *scope) checkActionNode(tree *parse.Tree, dot types.Type, n *parse.ActionNode) (types.Type, error) {
+func (s *scope) checkActionNode(tree *parse.Tree, dot types.Type, n *parse.ActionNode) error {
 	for _, cmd := range n.Pipe.Cmds {
 		if _, err := s.checkNode(tree, dot, cmd); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNode) (types.Type, error) {
@@ -150,15 +150,15 @@ func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNod
 	return x, nil
 }
 
-func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) (types.Type, error) {
+func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) error {
 	_, err := s.checkNode(tree, dot, n.Pipe)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := s.checkNode(tree, dot, n.List); err != nil {
-		return nil, err
+		return err
 	}
-	return nil, nil
+	return nil
 }
 
 func newNumberNodeType(n *parse.NumberNode) (types.Type, error) {
@@ -177,12 +177,12 @@ func newNumberNodeType(n *parse.NumberNode) (types.Type, error) {
 	return nil, fmt.Errorf("failed to evaluate template *parse.NumberNode type")
 }
 
-func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.TemplateNode) (types.Type, error) {
+func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.TemplateNode) error {
 	x := dot
 	if n.Pipe != nil {
 		tp, err := s.checkNode(tree, x, n.Pipe)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		x = tp
 	} else {
@@ -190,7 +190,7 @@ func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.Tem
 	}
 	childTree, ok := s.FindTree(n.Name)
 	if !ok {
-		return nil, fmt.Errorf("template %q not found", n.Name)
+		return fmt.Errorf("template %q not found", n.Name)
 	}
 	childScope := scope{
 		global: s.global,
@@ -198,7 +198,8 @@ func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.Tem
 			"$": x,
 		},
 	}
-	return childScope.checkNode(childTree, x, childTree.Root)
+	_, err := childScope.checkNode(childTree, x, childTree.Root)
+	return err
 }
 
 func (s *scope) checkFieldNode(tree *parse.Tree, dot types.Type, n *parse.FieldNode) (types.Type, error) {
@@ -271,14 +272,14 @@ func (s *scope) checkIdentifiers(tree *parse.Tree, dot types.Type, n parse.Node,
 	return x, nil
 }
 
-func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeNode) (types.Type, error) {
+func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeNode) error {
 	loopScope := &scope{
 		global:    s.global,
 		variables: maps.Clone(s.variables),
 	}
 	pipeType, err := loopScope.checkNode(tree, dot, n.Pipe)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var x types.Type
 	switch pt := pipeType.(type) {
@@ -289,17 +290,17 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 	case *types.Map:
 		x = pt.Elem()
 	default:
-		return nil, fmt.Errorf("failed to range over %s", pipeType)
+		return fmt.Errorf("failed to range over %s", pipeType)
 	}
 	if _, err := loopScope.checkNode(tree, x, n.List); err != nil {
-		return nil, err
+		return err
 	}
 	if n.ElseList != nil {
 		if _, err := loopScope.checkNode(tree, x, n.ElseList); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 func (s *scope) checkIdentifierNode(n *parse.IdentifierNode) (types.Type, error) {
