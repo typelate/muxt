@@ -222,7 +222,7 @@ func (s *scope) checkWithNode(tree *parse.Tree, dot types.Type, n *parse.WithNod
 }
 
 func newNumberNodeType(n *parse.NumberNode) (types.Type, error) {
-	if n.IsInt {
+	if n.IsInt || n.IsUint {
 		tp := types.Typ[types.UntypedInt]
 		return tp, nil
 	}
