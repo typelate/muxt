@@ -87,6 +87,8 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 		return s.checkIdentifierNode(n)
 	case *parse.TextNode:
 		return nil, nil
+	case *parse.WithNode:
+		return nil, s.checkWithNode(tree, dot, n)
 	default:
 		return nil, fmt.Errorf("missing node type check %T", n)
 	}
@@ -167,11 +169,32 @@ func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) e
 	if err != nil {
 		return err
 	}
-	if _, err := s.child().checkNode(tree, dot, n.List); err != nil {
+	ifScope := s.child()
+	if _, err := ifScope.checkNode(tree, dot, n.List); err != nil {
 		return err
 	}
 	if n.ElseList != nil {
-		if _, err := s.child().checkNode(tree, dot, n.ElseList); err != nil {
+		elseScope := s.child()
+		if _, err := elseScope.checkNode(tree, dot, n.ElseList); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *scope) checkWithNode(tree *parse.Tree, dot types.Type, n *parse.WithNode) error {
+	child := s.child()
+	x, err := child.checkNode(tree, dot, n.Pipe)
+	if err != nil {
+		return err
+	}
+	withScope := child.child()
+	if _, err := withScope.checkNode(tree, x, n.List); err != nil {
+		return err
+	}
+	if n.ElseList != nil {
+		elseScope := child.child()
+		if _, err := elseScope.checkNode(tree, dot, n.ElseList); err != nil {
 			return err
 		}
 	}
@@ -202,6 +225,7 @@ func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.Tem
 			return err
 		}
 		x = tp
+		x = downgradeUntyped(x)
 	} else {
 		x = types.Typ[types.UntypedNil]
 	}
@@ -217,6 +241,30 @@ func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.Tem
 	}
 	_, err := childScope.checkNode(childTree, x, childTree.Root)
 	return err
+}
+
+func downgradeUntyped(x types.Type) types.Type {
+	if x == nil {
+		return x
+	}
+	basic, ok := x.Underlying().(*types.Basic)
+	if !ok {
+		return x
+	}
+	switch k := basic.Kind(); k {
+	case types.UntypedInt:
+		return types.Typ[types.Int].Underlying()
+	case types.UntypedRune:
+		return types.Typ[types.Rune].Underlying()
+	case types.UntypedFloat:
+		return types.Typ[types.Float64].Underlying()
+	case types.UntypedComplex:
+		return types.Typ[types.Complex128].Underlying()
+	case types.UntypedString:
+		return types.Typ[types.String].Underlying()
+	default:
+		return x
+	}
 }
 
 func (s *scope) checkFieldNode(tree *parse.Tree, dot types.Type, n *parse.FieldNode) (types.Type, error) {
@@ -250,7 +298,8 @@ func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.Comm
 		} else {
 			pt = sig.Params().At(i).Type()
 		}
-		if !types.AssignableTo(at, pt) {
+		assignable := types.AssignableTo(at, pt)
+		if !assignable {
 			return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i, at, pt)
 		}
 	}
