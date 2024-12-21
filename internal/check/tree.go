@@ -89,9 +89,29 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 		return nil, nil
 	case *parse.WithNode:
 		return nil, s.checkWithNode(tree, dot, n)
+	case *parse.CommentNode:
+		return nil, nil
+	case *parse.NilNode:
+		return types.Typ[types.UntypedNil], nil
+	case *parse.ChainNode:
+		return s.checkChainNode(tree, dot, n)
+	case *parse.BranchNode:
+		return nil, nil
+	case *parse.BreakNode:
+		return nil, nil
+	case *parse.ContinueNode:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("missing node type check %T", n)
 	}
+}
+
+func (s *scope) checkChainNode(tree *parse.Tree, dot types.Type, n *parse.ChainNode) (types.Type, error) {
+	x, err := s.checkNode(tree, dot, n.Node)
+	if err != nil {
+		return nil, err
+	}
+	return s.checkIdentifiers(tree, x, n, n.Field)
 }
 
 func (s *scope) checkVariableNode(tree *parse.Tree, n *parse.VariableNode) (types.Type, error) {
