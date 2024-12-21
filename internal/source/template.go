@@ -16,10 +16,8 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type TemplateFuncMap = map[string]*types.Signature
-
-func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, TemplateFuncMap, error) {
-	funcTypeMap := registerDefaultFunctions(pkg.Types)
+func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, Functions, error) {
+	funcTypeMap := DefaultFunctions(pkg.Types)
 	for _, tv := range IterateValueSpecs(pkg.Syntax) {
 		i := slices.IndexFunc(tv.Names, func(e *ast.Ident) bool {
 			return e.Name == templatesVariable
@@ -53,19 +51,7 @@ func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
 	return nil, false
 }
 
-func registerDefaultFunctions(pkg *types.Package) TemplateFuncMap {
-	funcTypeMap := make(TemplateFuncMap)
-	fmtPkg, ok := findPackage(pkg, "fmt")
-	if !ok || fmtPkg == nil {
-		return funcTypeMap
-	}
-	funcTypeMap["printf"] = fmtPkg.Scope().Lookup("Sprintf").Type().(*types.Signature)
-	funcTypeMap["print"] = fmtPkg.Scope().Lookup("Sprint").Type().(*types.Signature)
-	funcTypeMap["println"] = fmtPkg.Scope().Lookup("Sprintln").Type().(*types.Signature)
-	return funcTypeMap
-}
-
-func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps TemplateFuncMap, fm template.FuncMap) (*template.Template, error) {
+func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps Functions, fm template.FuncMap) (*template.Template, error) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok {
 		return nil, contextError(workingDirectory, fileSet, expression.Pos(), fmt.Errorf("expected call expression"))
@@ -161,7 +147,7 @@ func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, express
 	}
 }
 
-func evaluateFuncMap(workingDirectory, templatePackageIdent string, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm template.FuncMap, funcTypesMap TemplateFuncMap) error {
+func evaluateFuncMap(workingDirectory, templatePackageIdent string, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm template.FuncMap, funcTypesMap Functions) error {
 	const funcMapTypeIdent = "FuncMap"
 	if len(call.Args) != 1 {
 		return contextError(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly 1 template.FuncMap composite literal argument"))
@@ -384,4 +370,31 @@ func relativeFilePaths(wd string, abs ...string) ([]string, error) {
 		result[i] = r
 	}
 	return result, nil
+}
+
+type Functions map[string]*types.Signature
+
+func NewFunctions(m map[string]*types.Signature) Functions {
+	return Functions(m)
+}
+
+func DefaultFunctions(pkg *types.Package) Functions {
+	funcTypeMap := make(Functions)
+	fmtPkg, ok := findPackage(pkg, "fmt")
+	if !ok || fmtPkg == nil {
+		return funcTypeMap
+	}
+	funcTypeMap["printf"] = fmtPkg.Scope().Lookup("Sprintf").Type().(*types.Signature)
+	funcTypeMap["print"] = fmtPkg.Scope().Lookup("Sprint").Type().(*types.Signature)
+	funcTypeMap["println"] = fmtPkg.Scope().Lookup("Sprintln").Type().(*types.Signature)
+	return funcTypeMap
+}
+
+func (functions Functions) FindFunction(name string) (*types.Signature, bool) {
+	m := (map[string]*types.Signature)(functions)
+	fn, ok := m[name]
+	if !ok {
+		return nil, false
+	}
+	return fn, true
 }
