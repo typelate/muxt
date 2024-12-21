@@ -156,6 +156,8 @@ func expectFloat32(n float32) float32 { return n }
 
 func expectComplex64(n complex64) complex64 { return n }
 
+func expectComplex128(n complex128) complex128 { return n }
+
 type (
 	LetterChainA struct {
 		A LetterChainB
