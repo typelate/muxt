@@ -388,6 +388,24 @@ func TestTree(t *testing.T) {
 				require.ErrorContains(t, checkErr, "expectComplex64 argument 0 has type complex128 expected complex64")
 			},
 		},
+		{
+			Name:     "chain node",
+			Template: `{{(.).A.B.C.D}}`,
+			Data:     LetterChainA{},
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.NoError(t, execErr)
+				require.NoError(t, checkErr)
+			},
+		},
+		{
+			Name:     "chain node with type change in term",
+			Template: `{{(.A).B.C.D}}`,
+			Data:     LetterChainA{},
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.NoError(t, execErr)
+				require.NoError(t, checkErr)
+			},
+		},
 		// not sure if I should be downgrading bool, it should be fine to let it be since there is only one basic bool type
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -579,6 +597,21 @@ func expectInt8(n int8) int8 { return n }
 func expectFloat32(n float32) float32 { return n }
 
 func expectComplex64(n complex64) complex64 { return n }
+
+type (
+	LetterChainA struct {
+		A LetterChainB
+	}
+	LetterChainB struct {
+		B LetterChainC
+	}
+	LetterChainC struct {
+		C LetterChainD
+	}
+	LetterChainD struct {
+		D T
+	}
+)
 
 func TestExampleTemplate(t *testing.T) {
 	packageList, loadErr := packages.Load(&packages.Config{
