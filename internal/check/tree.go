@@ -48,6 +48,13 @@ type scope struct {
 	variables map[string]types.Type
 }
 
+func (s *scope) child() *scope {
+	return &scope{
+		global:    s.global,
+		variables: maps.Clone(s.variables),
+	}
+}
+
 func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (types.Type, error) {
 	switch n := node.(type) {
 	case *parse.DotNode:
@@ -159,8 +166,13 @@ func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) e
 	if err != nil {
 		return err
 	}
-	if _, err := s.checkNode(tree, dot, n.List); err != nil {
+	if _, err := s.child().checkNode(tree, dot, n.List); err != nil {
 		return err
+	}
+	if n.ElseList != nil {
+		if _, err := s.child().checkNode(tree, dot, n.ElseList); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -238,7 +250,7 @@ func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.Comm
 			pt = sig.Params().At(i).Type()
 		}
 		if !types.AssignableTo(at, pt) {
-			return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i-1, at, pt)
+			return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i, at, pt)
 		}
 	}
 	return sig.Results().At(0).Type(), nil
@@ -286,11 +298,8 @@ func (s *scope) checkIdentifiers(tree *parse.Tree, dot types.Type, n parse.Node,
 }
 
 func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeNode) error {
-	loopScope := &scope{
-		global:    s.global,
-		variables: maps.Clone(s.variables),
-	}
-	pipeType, err := loopScope.checkNode(tree, dot, n.Pipe)
+	child := s.child()
+	pipeType, err := child.checkNode(tree, dot, n.Pipe)
 	if err != nil {
 		return err
 	}
@@ -305,11 +314,11 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 	default:
 		return fmt.Errorf("failed to range over %s", pipeType)
 	}
-	if _, err := loopScope.checkNode(tree, x, n.List); err != nil {
+	if _, err := child.checkNode(tree, x, n.List); err != nil {
 		return err
 	}
 	if n.ElseList != nil {
-		if _, err := loopScope.checkNode(tree, x, n.ElseList); err != nil {
+		if _, err := child.checkNode(tree, x, n.ElseList); err != nil {
 			return err
 		}
 	}

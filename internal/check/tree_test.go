@@ -15,6 +15,7 @@ import (
 
 	"github.com/crhntr/muxt"
 	"github.com/crhntr/muxt/internal/check"
+	"github.com/crhntr/muxt/internal/source"
 )
 
 func TestTree(t *testing.T) {
@@ -278,14 +279,48 @@ func TestTree(t *testing.T) {
 			Template: `{{$v := 1}}{{.F $v}}`,
 			Data:     MethodWithIntParam{},
 		},
+		{
+			Name:     "when there is an error in the else block",
+			Template: `{{$x := "wrong type"}}{{if false}}{{else}}{{.F $x}}{{end}}`,
+			Data:     MethodWithIntParam{},
+			Error: func(t *testing.T, checkErr, _ error, tp types.Type) {
+				require.Error(t, checkErr)
+				require.ErrorContains(t, checkErr, ".F argument 0 has type untyped string expected int")
+			},
+		},
+		{
+			Name:     "variable redefined in if block",
+			Template: `{{$x := 1}}{{if true}}{{$x := "str"}}{{end}}{{.F $x}}`,
+			Data:     MethodWithIntParam{},
+		},
+		{
+			Name:     "range variable does not clobber outer scope",
+			Template: `{{$x := 1}}{{range .Numbers}}{{$x := "str"}}{{end}}{{square $x}}`,
+			Data:     MethodWithKeyValForSlices{},
+		},
+		{
+			Name:     "range variable does not override outer scope",
+			Template: `{{$x := "str"}}{{range $x, $y := .Numbers}}{{$.F $x $y}}{{end}}{{printf $x}}`,
+			Data:     MethodWithKeyValForSlices{},
+		},
+		{
+			Name:     "source provided function",
+			Template: `{{square 5}}`,
+			Data:     T{},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			templates, parseErr := template.New("template").Parse(tt.Template)
+			templates, parseErr := template.New("template").Funcs(template.FuncMap{
+				"square": square,
+			}).Parse(tt.Template)
 			require.NoError(t, parseErr)
 
 			dataType := checkTestPackage.Types.Scope().Lookup(reflect.TypeOf(tt.Data).Name()).Type()
 
-			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newForrest(templates), nil); tt.Error != nil {
+			functions := source.DefaultFunctions(checkTestPackage.Types)
+			functions["square"] = checkTestPackage.Types.Scope().Lookup("square").(*types.Func).Signature()
+
+			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, newForrest(templates), functions); tt.Error != nil {
 				execErr := templates.Execute(io.Discard, tt.Data)
 				tt.Error(t, checkErr, execErr, dataType)
 			} else {
@@ -430,6 +465,10 @@ type MethodWithKeyValForMap struct {
 }
 
 func (MethodWithKeyValForMap) F(int16, float32) (_ T) { return }
+
+func square(n int) int {
+	return n * n
+}
 
 func TestExampleTemplate(t *testing.T) {
 	packageList, loadErr := packages.Load(&packages.Config{
