@@ -39,7 +39,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "when accessing nil on an empty struct",
 			Template: `{{.Field}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:2: Field not found on %s`, tp))
 			},
@@ -47,7 +47,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "when accessing the dot",
 			Template: `{{.}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		{
 			Name:     "when a method does not any results",
@@ -302,7 +302,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "source provided function",
 			Template: `{{square 5}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		{
 			Name:     "with expression",
@@ -317,7 +317,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "with expression has action with wrong dot type used in call",
 			Template: `{{with $x := "wrong"}}{{expectInt .}}{{else}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.ErrorContains(t, execErr, "wrong type for value; expected int; got string")
 				require.ErrorContains(t, checkErr, "expectInt argument 0 has type untyped string expected int")
@@ -326,12 +326,12 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "with else expression has action with correct dot type used in call",
 			Template: `{{with $x := 12}}{{with $x := 1.2}}{{else}}{{expectInt $x}}{{end}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		{
 			Name:     "with else expression has action with wrong dot type used in call",
 			Template: `{{with $outer := 12}}{{with $x := true}}{{else}}{{expectString .}}{{end}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
 				require.ErrorContains(t, checkErr, "expectString argument 0 has type untyped int expected string")
@@ -340,17 +340,17 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "complex number parses",
 			Template: `{{$x := 2i}}{{printf "%T" $x}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		{
 			Name:     "template node without parameter",
 			Template: `{{define "t"}}{{end}}{{template "t"}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		{
 			Name:     "template wrong input type",
 			Template: `{{define "t"}}{{expectInt .}}{{end}}{{if false}}{{template "t" 1.2}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
 				require.ErrorContains(t, checkErr, "expectInt argument 0 has type float64 expected int")
@@ -359,7 +359,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "it downgrades untyped integers",
 			Template: `{{define "t"}}{{expectInt8 .}}{{end}}{{if false}}{{template "t" 12}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
 				require.ErrorContains(t, checkErr, "expectInt8 argument 0 has type int expected int8")
@@ -368,7 +368,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "it downgrades untyped floats",
 			Template: `{{define "t"}}{{expectFloat32 .}}{{end}}{{if false}}{{template "t" 1.2}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
 				require.ErrorContains(t, checkErr, "expectFloat32 argument 0 has type float64 expected float32")
@@ -377,7 +377,7 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "it downgrades untyped complex",
 			Template: `{{define "t"}}{{expectComplex64 .}}{{end}}{{if false}}{{template "t" 2i}}{{end}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
 				require.ErrorContains(t, checkErr, "expectComplex64 argument 0 has type complex128 expected complex64")
@@ -410,19 +410,19 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "empty",
 			Template: "",
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"text", "some text", "some text", nil, true},
 		{
 			Name:     "text",
 			Template: "some text",
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"nil action", "{{nil}}", "", nil, false},
 		{
 			Name:     "nil action",
 			Template: `{{nil}}`,
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.ErrorContains(t, checkErr, strings.TrimPrefix(execErr.Error(), "template: "))
 			},
@@ -433,37 +433,37 @@ func TestTree(t *testing.T) {
 		{
 			Name:     "ideal int",
 			Template: `{{expectInt 3}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"ideal float", "{{typeOf 1.0}}", "float64", 0, true},
 		{
 			Name:     "ideal int",
 			Template: `{{expectFloat64 1.0}}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"ideal exp float", "{{typeOf 1e1}}", "float64", 0, true},
 		{
 			Name:     "ideal float",
 			Template: `{{expectFloat64 1e1}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"ideal complex", "{{typeOf 1i}}", "complex128", 0, true},
 		{
 			Name:     "ideal complex",
 			Template: `{{expectComplex128 1i}}`,
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"ideal int", "{{typeOf " + bigInt + "}}", "int", 0, true},
 		{
 			Name:     "ideal big int",
 			Template: fmt.Sprintf(`{{expectInt 0x%x}}}`, 1<<uint(reflect.TypeFor[int]().Bits()-1)-1),
-			Data:     T{},
+			Data:     Void{},
 		},
 		// {"ideal too big", "{{typeOf " + bigUint + "}}", "", 0, false},
 		{
 			Name:     "ideal too big",
 			Template: fmt.Sprintf(`{{expectInt 0x%x}}}`, uint(1<<uint(reflect.TypeFor[int]().Bits()-1))),
-			Data:     T{},
+			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.ErrorContains(t, execErr, "expected integer")
 				require.NoError(t, checkErr, "don't report this exec error")
@@ -530,7 +530,7 @@ func TestTree(t *testing.T) {
 		//{"*[]int[1]", "{{index .PSI 1}}", "22", tVal, true},
 		//{"NIL", "{{.NIL}}", "<nil>", tVal, true},
 		//
-		//// Empty interfaces holding values.
+		//// Void interfaces holding values.
 		//{"empty nil", "{{.Empty0}}", "<no value>", tVal, true},
 		//{"empty with int", "{{.Empty1}}", "3", tVal, true},
 		//{"empty with string", "{{.Empty2}}", "empty2", tVal, true},

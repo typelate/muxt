@@ -2,7 +2,7 @@ package check_test
 
 import "math"
 
-type T struct{}
+type Void struct{}
 
 type TypeWithMethodSignatureNoResultMethod struct{}
 
@@ -52,55 +52,55 @@ type StructWithFuncFieldWithResultWithMethod struct {
 
 type MethodWithIntParam struct{}
 
-func (MethodWithIntParam) F(int) (_ T) { return }
+func (MethodWithIntParam) F(int) (_ Void) { return }
 
 type MethodWithInt8Param struct{}
 
-func (MethodWithInt8Param) F(int8) (_ T) { return }
+func (MethodWithInt8Param) F(int8) (_ Void) { return }
 
 type MethodWithInt16Param struct{}
 
-func (MethodWithInt16Param) F(int16) (_ T) { return }
+func (MethodWithInt16Param) F(int16) (_ Void) { return }
 
 type MethodWithInt32Param struct{}
 
-func (MethodWithInt32Param) F(int32) (_ T) { return }
+func (MethodWithInt32Param) F(int32) (_ Void) { return }
 
 type MethodWithInt64Param struct{}
 
-func (MethodWithInt64Param) F(int64) (_ T) { return }
+func (MethodWithInt64Param) F(int64) (_ Void) { return }
 
 type MethodWithUintParam struct{}
 
-func (MethodWithUintParam) F(uint) (_ T) { return }
+func (MethodWithUintParam) F(uint) (_ Void) { return }
 
 type MethodWithUint8Param struct{}
 
-func (MethodWithUint8Param) F(uint8) (_ T) { return }
+func (MethodWithUint8Param) F(uint8) (_ Void) { return }
 
 type MethodWithUint16Param struct{}
 
-func (MethodWithUint16Param) F(uint16) (_ T) { return }
+func (MethodWithUint16Param) F(uint16) (_ Void) { return }
 
 type MethodWithUint32Param struct{}
 
-func (MethodWithUint32Param) F(uint32) (_ T) { return }
+func (MethodWithUint32Param) F(uint32) (_ Void) { return }
 
 type MethodWithUint64Param struct{}
 
-func (MethodWithUint64Param) F(uint64) (_ T) { return }
+func (MethodWithUint64Param) F(uint64) (_ Void) { return }
 
 type MethodWithBoolParam struct{}
 
-func (MethodWithBoolParam) F(bool) (_ T) { return }
+func (MethodWithBoolParam) F(bool) (_ Void) { return }
 
 type MethodWithFloat64Param struct{}
 
-func (MethodWithFloat64Param) F(float64) (_ T) { return }
+func (MethodWithFloat64Param) F(float64) (_ Void) { return }
 
 type MethodWithFloat32Param struct{}
 
-func (MethodWithFloat32Param) F(float32) (_ T) { return }
+func (MethodWithFloat32Param) F(float32) (_ Void) { return }
 
 type TypeWithMethodSignatureResultMethodWithFloat32Param struct{}
 
@@ -122,19 +122,19 @@ type MethodWithKeyValForSlices struct {
 	Numbers []float64
 }
 
-func (MethodWithKeyValForSlices) F(int, float64) (_ T) { return }
+func (MethodWithKeyValForSlices) F(int, float64) (_ Void) { return }
 
 type MethodWithKeyValForArray struct {
 	Numbers [2]float64
 }
 
-func (MethodWithKeyValForArray) F(int, float64) (_ T) { return }
+func (MethodWithKeyValForArray) F(int, float64) (_ Void) { return }
 
 type MethodWithKeyValForMap struct {
 	Numbers map[int16]float32
 }
 
-func (MethodWithKeyValForMap) F(int16, float32) (_ T) { return }
+func (MethodWithKeyValForMap) F(int16, float32) (_ Void) { return }
 
 func square(n int) int {
 	return n * n
@@ -169,6 +169,6 @@ type (
 		C LetterChainD
 	}
 	LetterChainD struct {
-		D T
+		D Void
 	}
 )
