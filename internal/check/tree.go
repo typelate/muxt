@@ -7,6 +7,8 @@ import (
 	"maps"
 	"strings"
 	"text/template/parse"
+
+	"github.com/crhntr/muxt/internal/assert"
 )
 
 type TreeFinder interface {
@@ -101,12 +103,8 @@ func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNod
 }
 
 func (s *scope) checkActionNode(tree *parse.Tree, dot types.Type, n *parse.ActionNode) error {
-	for _, cmd := range n.Pipe.Cmds {
-		if _, err := s.checkNode(tree, dot, cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := s.checkNode(tree, dot, n.Pipe)
+	return err
 }
 
 func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNode) (types.Type, error) {
@@ -146,6 +144,11 @@ func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNod
 				s.variables[n.Decl[1].Ident[0]] = r.Elem()
 			} else {
 				return nil, fmt.Errorf("expected 1 or 2 declaration")
+			}
+		default:
+			assert.MaxLen(n.Decl, 1, "too many variable declarations in a pipe node")
+			if len(n.Decl) == 1 {
+				s.variables[n.Decl[0].Ident[0]] = x
 			}
 		}
 	}

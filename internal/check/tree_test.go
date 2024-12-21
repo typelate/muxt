@@ -273,6 +273,11 @@ func TestTree(t *testing.T) {
 				Numbers: map[int16]float32{},
 			},
 		},
+		{
+			Name:     "when a variable is used",
+			Template: `{{$v := 1}}{{.F $v}}`,
+			Data:     MethodWithIntParam{},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			templates, parseErr := template.New("template").Parse(tt.Template)
