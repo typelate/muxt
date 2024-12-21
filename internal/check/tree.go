@@ -293,37 +293,44 @@ func (s *scope) checkFieldNode(tree *parse.Tree, dot types.Type, n *parse.FieldN
 
 func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.CommandNode) (types.Type, error) {
 	var argTypes []types.Type
-	for _, arg := range n.Args {
+	for i, arg := range n.Args {
+		if i == 0 {
+			if _, ok := arg.(*parse.NilNode); ok {
+				loc, _ := tree.ErrorContext(n)
+				return nil, fmt.Errorf("%s: executing %q at <%s>: nil is not a command", loc, tree.Name, arg.String())
+			}
+		}
 		argType, err := s.checkNode(tree, dot, arg)
 		if err != nil {
 			return nil, err
 		}
 		argTypes = append(argTypes, argType)
 	}
-	cmd := argTypes[0]
+	command := argTypes[0]
 	argTypes = argTypes[1:]
-	sig, ok := cmd.(*types.Signature)
-	if !ok {
+	switch cmd := command.(type) {
+	case *types.Signature:
+		for i := 0; i < len(argTypes); i++ {
+			at := argTypes[i]
+			var pt types.Type
+			isVar := cmd.Variadic()
+			argVar := i >= cmd.Params().Len()-1
+			if isVar && argVar {
+				ps := cmd.Params()
+				v := ps.At(ps.Len() - 1).Type().(*types.Slice)
+				pt = v.Elem()
+			} else {
+				pt = cmd.Params().At(i).Type()
+			}
+			assignable := types.AssignableTo(at, pt)
+			if !assignable {
+				return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i, at, pt)
+			}
+		}
+		return cmd.Results().At(0).Type(), nil
+	default:
 		return cmd, nil
 	}
-	for i := 0; i < len(argTypes); i++ {
-		at := argTypes[i]
-		var pt types.Type
-		isVar := sig.Variadic()
-		argVar := i >= sig.Params().Len()-1
-		if isVar && argVar {
-			ps := sig.Params()
-			v := ps.At(ps.Len() - 1).Type().(*types.Slice)
-			pt = v.Elem()
-		} else {
-			pt = sig.Params().At(i).Type()
-		}
-		assignable := types.AssignableTo(at, pt)
-		if !assignable {
-			return nil, fmt.Errorf("%s argument %d has type %s expected %s", n.Args[0], i, at, pt)
-		}
-	}
-	return sig.Results().At(0).Type(), nil
 }
 
 func (s *scope) checkIdentifiers(tree *parse.Tree, dot types.Type, n parse.Node, idents []string) (types.Type, error) {

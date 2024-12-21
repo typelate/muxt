@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"text/template/parse"
 
@@ -406,6 +407,15 @@ func TestTree(t *testing.T) {
 			},
 		},
 		// not sure if I should be downgrading bool, it should be fine to let it be since there is only one basic bool type
+
+		{
+			Name:     "nil action",
+			Template: `{{nil}}`,
+			Data:     T{},
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.ErrorContains(t, checkErr, strings.TrimPrefix(execErr.Error(), "template: "))
+			},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			functions := template.FuncMap{
