@@ -32,7 +32,7 @@ func Tree(tree *parse.Tree, data types.Type, pkg *types.Package, fileSet *token.
 			"$": data,
 		},
 	}
-	_, err := s.checkNode(tree, data, tree.Root)
+	_, err := s.walk(tree, data, tree.Root)
 	return err
 }
 
@@ -56,7 +56,7 @@ func (s *scope) child() *scope {
 	}
 }
 
-func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (types.Type, error) {
+func (s *scope) walk(tree *parse.Tree, dot types.Type, node parse.Node) (types.Type, error) {
 	switch n := node.(type) {
 	case *parse.DotNode:
 		return dot, nil
@@ -108,7 +108,7 @@ func (s *scope) checkNode(tree *parse.Tree, dot types.Type, node parse.Node) (ty
 }
 
 func (s *scope) checkChainNode(tree *parse.Tree, dot types.Type, n *parse.ChainNode) (types.Type, error) {
-	x, err := s.checkNode(tree, dot, n.Node)
+	x, err := s.walk(tree, dot, n.Node)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (s *scope) checkVariableNode(tree *parse.Tree, n *parse.VariableNode) (type
 
 func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNode) error {
 	for _, child := range n.Nodes {
-		if _, err := s.checkNode(tree, dot, child); err != nil {
+		if _, err := s.walk(tree, dot, child); err != nil {
 			return err
 		}
 	}
@@ -133,14 +133,14 @@ func (s *scope) checkListNode(tree *parse.Tree, dot types.Type, n *parse.ListNod
 }
 
 func (s *scope) checkActionNode(tree *parse.Tree, dot types.Type, n *parse.ActionNode) error {
-	_, err := s.checkNode(tree, dot, n.Pipe)
+	_, err := s.walk(tree, dot, n.Pipe)
 	return err
 }
 
 func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNode) (types.Type, error) {
 	x := dot
 	for _, cmd := range n.Cmds {
-		tp, err := s.checkNode(tree, x, cmd)
+		tp, err := s.walk(tree, x, cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -186,17 +186,17 @@ func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNod
 }
 
 func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) error {
-	_, err := s.checkNode(tree, dot, n.Pipe)
+	_, err := s.walk(tree, dot, n.Pipe)
 	if err != nil {
 		return err
 	}
 	ifScope := s.child()
-	if _, err := ifScope.checkNode(tree, dot, n.List); err != nil {
+	if _, err := ifScope.walk(tree, dot, n.List); err != nil {
 		return err
 	}
 	if n.ElseList != nil {
 		elseScope := s.child()
-		if _, err := elseScope.checkNode(tree, dot, n.ElseList); err != nil {
+		if _, err := elseScope.walk(tree, dot, n.ElseList); err != nil {
 			return err
 		}
 	}
@@ -205,17 +205,17 @@ func (s *scope) checkIfNode(tree *parse.Tree, dot types.Type, n *parse.IfNode) e
 
 func (s *scope) checkWithNode(tree *parse.Tree, dot types.Type, n *parse.WithNode) error {
 	child := s.child()
-	x, err := child.checkNode(tree, dot, n.Pipe)
+	x, err := child.walk(tree, dot, n.Pipe)
 	if err != nil {
 		return err
 	}
 	withScope := child.child()
-	if _, err := withScope.checkNode(tree, x, n.List); err != nil {
+	if _, err := withScope.walk(tree, x, n.List); err != nil {
 		return err
 	}
 	if n.ElseList != nil {
 		elseScope := child.child()
-		if _, err := elseScope.checkNode(tree, dot, n.ElseList); err != nil {
+		if _, err := elseScope.walk(tree, dot, n.ElseList); err != nil {
 			return err
 		}
 	}
@@ -241,7 +241,7 @@ func newNumberNodeType(n *parse.NumberNode) (types.Type, error) {
 func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.TemplateNode) error {
 	x := dot
 	if n.Pipe != nil {
-		tp, err := s.checkNode(tree, x, n.Pipe)
+		tp, err := s.walk(tree, x, n.Pipe)
 		if err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func (s *scope) checkTemplateNode(tree *parse.Tree, dot types.Type, n *parse.Tem
 			"$": x,
 		},
 	}
-	_, err := childScope.checkNode(childTree, x, childTree.Root)
+	_, err := childScope.walk(childTree, x, childTree.Root)
 	return err
 }
 
@@ -301,7 +301,7 @@ func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.Comm
 				return nil, fmt.Errorf("%s: executing %q at <%s>: nil is not a command", loc, tree.Name, arg.String())
 			}
 		}
-		argType, err := s.checkNode(tree, dot, arg)
+		argType, err := s.walk(tree, dot, arg)
 		if err != nil {
 			return nil, err
 		}
@@ -412,7 +412,7 @@ func (s *scope) checkIdentifiers(tree *parse.Tree, dot types.Type, n parse.Node,
 
 func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeNode) error {
 	child := s.child()
-	pipeType, err := child.checkNode(tree, dot, n.Pipe)
+	pipeType, err := child.walk(tree, dot, n.Pipe)
 	if err != nil {
 		return err
 	}
@@ -427,11 +427,11 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 	default:
 		return fmt.Errorf("failed to range over %s", pipeType)
 	}
-	if _, err := child.checkNode(tree, x, n.List); err != nil {
+	if _, err := child.walk(tree, x, n.List); err != nil {
 		return err
 	}
 	if n.ElseList != nil {
-		if _, err := child.checkNode(tree, x, n.ElseList); err != nil {
+		if _, err := child.walk(tree, x, n.ElseList); err != nil {
 			return err
 		}
 	}
