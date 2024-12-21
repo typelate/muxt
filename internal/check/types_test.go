@@ -1,6 +1,13 @@
 package check_test
 
-import "math"
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"math"
+	"strings"
+	"text/template"
+)
 
 type Void struct{}
 
@@ -172,3 +179,244 @@ type (
 		D Void
 	}
 )
+
+// T has lots of interesting pieces to use to test execution.
+type T struct {
+	// Basics
+	True        bool
+	I           int
+	U16         uint16
+	X, S        string
+	FloatZero   float64
+	ComplexZero complex128
+	// Nested structs.
+	U *U
+	// Struct with String method.
+	V0     V
+	V1, V2 *V
+	// Struct with Error method.
+	W0     W
+	W1, W2 *W
+	// Slices
+	SI      []int
+	SICap   []int
+	SIEmpty []int
+	SB      []bool
+	// Arrays
+	AI [3]int
+	// Maps
+	MSI      map[string]int
+	MSIone   map[string]int // one element, for deterministic output
+	MSIEmpty map[string]int
+	MXI      map[any]int
+	MII      map[int]int
+	MI32S    map[int32]string
+	MI64S    map[int64]string
+	MUI32S   map[uint32]string
+	MUI64S   map[uint64]string
+	MI8S     map[int8]string
+	MUI8S    map[uint8]string
+	SMSI     []map[string]int
+	// Empty interfaces; used to see if we can dig inside one.
+	Empty0 any // nil
+	Empty1 any
+	Empty2 any
+	Empty3 any
+	Empty4 any
+	// Non-empty interfaces.
+	NonEmptyInterface         I
+	NonEmptyInterfacePtS      *I
+	NonEmptyInterfaceNil      I
+	NonEmptyInterfaceTypedNil I
+	// Stringer.
+	Str fmt.Stringer
+	Err error
+	// Pointers
+	PI  *int
+	PS  *string
+	PSI *[]int
+	NIL *int
+	// Function (not method)
+	BinaryFunc             func(string, string) string
+	VariadicFunc           func(...string) string
+	VariadicFuncInt        func(int, ...string) string
+	NilOKFunc              func(*int) bool
+	ErrFunc                func() (string, error)
+	PanicFunc              func() string
+	TooFewReturnCountFunc  func()
+	TooManyReturnCountFunc func() (string, error, int)
+	InvalidReturnTypeFunc  func() (string, bool)
+	// Template to test evaluation of templates.
+	Tmpl *template.Template
+	// Unexported field; cannot be accessed by template.
+	unexported int
+}
+
+type S []string
+
+func (S) Method0() string {
+	return "M0"
+}
+
+type U struct {
+	V string
+}
+
+type V struct {
+	j int
+}
+
+func (v *V) String() string {
+	if v == nil {
+		return "nilV"
+	}
+	return fmt.Sprintf("<%d>", v.j)
+}
+
+type W struct {
+	k int
+}
+
+func (w *W) Error() string {
+	if w == nil {
+		return "nilW"
+	}
+	return fmt.Sprintf("[%d]", w.k)
+}
+
+var siVal = I(S{"a", "b"})
+
+var tVal = &T{
+	True:   true,
+	I:      17,
+	U16:    16,
+	X:      "x",
+	S:      "xyz",
+	U:      &U{"v"},
+	V0:     V{6666},
+	V1:     &V{7777}, // leave V2 as nil
+	W0:     W{888},
+	W1:     &W{999}, // leave W2 as nil
+	SI:     []int{3, 4, 5},
+	SICap:  make([]int, 5, 10),
+	AI:     [3]int{3, 4, 5},
+	SB:     []bool{true, false},
+	MSI:    map[string]int{"one": 1, "two": 2, "three": 3},
+	MSIone: map[string]int{"one": 1},
+	MXI:    map[any]int{"one": 1},
+	MII:    map[int]int{1: 1},
+	MI32S:  map[int32]string{1: "one", 2: "two"},
+	MI64S:  map[int64]string{2: "i642", 3: "i643"},
+	MUI32S: map[uint32]string{2: "u322", 3: "u323"},
+	MUI64S: map[uint64]string{2: "ui642", 3: "ui643"},
+	MI8S:   map[int8]string{2: "i82", 3: "i83"},
+	MUI8S:  map[uint8]string{2: "u82", 3: "u83"},
+	SMSI: []map[string]int{
+		{"one": 1, "two": 2},
+		{"eleven": 11, "twelve": 12},
+	},
+	Empty1:                    3,
+	Empty2:                    "empty2",
+	Empty3:                    []int{7, 8},
+	Empty4:                    &U{"UinEmpty"},
+	NonEmptyInterface:         &T{X: "x"},
+	NonEmptyInterfacePtS:      &siVal,
+	NonEmptyInterfaceTypedNil: (*T)(nil),
+	Str:                       bytes.NewBuffer([]byte("foozle")),
+	Err:                       errors.New("erroozle"),
+	PI:                        newInt(23),
+	PS:                        newString("a string"),
+	PSI:                       newIntSlice(21, 22, 23),
+	BinaryFunc:                func(a, b string) string { return fmt.Sprintf("[%s=%s]", a, b) },
+	VariadicFunc:              func(s ...string) string { return fmt.Sprint("<", strings.Join(s, "+"), ">") },
+	VariadicFuncInt:           func(a int, s ...string) string { return fmt.Sprint(a, "=<", strings.Join(s, "+"), ">") },
+	NilOKFunc:                 func(s *int) bool { return s == nil },
+	ErrFunc:                   func() (string, error) { return "bla", nil },
+	PanicFunc:                 func() string { panic("test panic") },
+	TooFewReturnCountFunc:     func() {},
+	TooManyReturnCountFunc:    func() (string, error, int) { return "", nil, 0 },
+	InvalidReturnTypeFunc:     func() (string, bool) { return "", false },
+	Tmpl:                      template.Must(template.New("x").Parse("test template")), // "x" is the value of .X
+}
+
+var tSliceOfNil = []*T{nil}
+
+// A non-empty interface.
+type I interface {
+	Method0() string
+}
+
+var iVal I = tVal
+
+// Helpers for creation.
+func newInt(n int) *int {
+	return &n
+}
+
+func newString(s string) *string {
+	return &s
+}
+
+func newIntSlice(n ...int) *[]int {
+	p := new([]int)
+	*p = make([]int, len(n))
+	copy(*p, n)
+	return p
+}
+
+// Simple methods with and without arguments.
+func (t *T) Method0() string {
+	return "M0"
+}
+
+func (t *T) Method1(a int) int {
+	return a
+}
+
+func (t *T) Method2(a uint16, b string) string {
+	return fmt.Sprintf("Method2: %d %s", a, b)
+}
+
+func (t *T) Method3(v any) string {
+	return fmt.Sprintf("Method3: %v", v)
+}
+
+func (t *T) Copy() *T {
+	n := new(T)
+	*n = *t
+	return n
+}
+
+func (t *T) MAdd(a int, b []int) []int {
+	v := make([]int, len(b))
+	for i, x := range b {
+		v[i] = x + a
+	}
+	return v
+}
+
+var myError = errors.New("my error")
+
+// MyError returns a value and an error according to its argument.
+func (t *T) MyError(error bool) (bool, error) {
+	if error {
+		return true, myError
+	}
+	return false, nil
+}
+
+// A few methods to test chaining.
+func (t *T) GetU() *U {
+	return t.U
+}
+
+func (u *U) TrueFalse(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
+}
+
+func typeOf(arg any) string {
+	return fmt.Sprintf("%T", arg)
+}

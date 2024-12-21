@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"maps"
+	"strconv"
 	"strings"
 	"text/template/parse"
 
@@ -336,39 +337,74 @@ func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.Comm
 func (s *scope) checkIdentifiers(tree *parse.Tree, dot types.Type, n parse.Node, idents []string) (types.Type, error) {
 	x := dot
 	for i, ident := range idents {
-		obj, _, _ := types.LookupFieldOrMethod(x, true, nil, ident)
-		if obj == nil {
-			loc, _ := tree.ErrorContext(n)
-			return nil, fmt.Errorf("type check failed: %s: %s not found on %s", loc, ident, x)
-		}
-		switch o := obj.(type) {
-		default:
-			x = obj.Type()
-		case *types.Func:
-			sig := o.Signature()
-			resultLen := sig.Results().Len()
-			if resultLen < 1 || resultLen > 2 {
-				loc, _ := tree.ErrorContext(n)
-				methodPos := s.fileSet.Position(o.Pos())
-				return nil, fmt.Errorf("type check failed: %s: function %s has %d return values; should be 1 or 2: incorrect signature at %s", loc, ident, resultLen, methodPos)
+		for {
+			ptr, ok := x.(*types.Pointer)
+			if !ok {
+				break
 			}
-			if resultLen > 1 {
-				loc, _ := tree.ErrorContext(n)
-				methodPos := s.fileSet.Position(obj.Pos())
-				finalResult := sig.Results().At(sig.Results().Len() - 1)
-				errorType := types.Universe.Lookup("error")
-				if !types.Identical(errorType.Type(), finalResult.Type()) {
-					return nil, fmt.Errorf("type check failed: %s: invalid function signature for %s: second return value should be error; is %s: incorrect signature at %s", loc, ident, finalResult.Type(), methodPos)
+			x = ptr.Elem()
+		}
+		switch xx := x.(type) {
+		case *types.Map:
+			switch key := xx.Key().Underlying().(type) {
+			case *types.Basic:
+				switch key.Kind() {
+				// case types.Int, types.Int64, types.Int32, types.Int16, types.Int8,
+				//	types.Uint, types.Uint64, types.Uint32, types.Uint16, types.Uint8:
+				case types.Int:
+					x = xx.Elem()
+					_, err := strconv.Atoi(ident)
+					if err != nil {
+						loc, _ := tree.ErrorContext(n)
+						return nil, fmt.Errorf(`%s: executing %q at <%s>: can't evaluate field one in type %s`, loc, tree.Name, n.String(), xx.String())
+					}
+				case types.String:
+					x = xx.Elem()
+				default:
 				}
+				continue
+			default:
+				x = xx.Elem()
 			}
-			if i == len(idents)-1 {
-				return o.Type(), nil
+			continue
+		case *types.Named:
+			obj, _, _ := types.LookupFieldOrMethod(x, true, nil, ident)
+			if obj == nil {
+				loc, _ := tree.ErrorContext(n)
+				return nil, fmt.Errorf("type check failed: %s: %s not found on %s", loc, ident, x)
 			}
-			x = sig.Results().At(0).Type()
-		}
-		if _, ok := x.(*types.Signature); ok && i < len(idents)-1 {
+			switch o := obj.(type) {
+			default:
+				x = obj.Type()
+			case *types.Func:
+				sig := o.Signature()
+				resultLen := sig.Results().Len()
+				if resultLen < 1 || resultLen > 2 {
+					loc, _ := tree.ErrorContext(n)
+					methodPos := s.fileSet.Position(o.Pos())
+					return nil, fmt.Errorf("type check failed: %s: function %s has %d return values; should be 1 or 2: incorrect signature at %s", loc, ident, resultLen, methodPos)
+				}
+				if resultLen > 1 {
+					loc, _ := tree.ErrorContext(n)
+					methodPos := s.fileSet.Position(obj.Pos())
+					finalResult := sig.Results().At(sig.Results().Len() - 1)
+					errorType := types.Universe.Lookup("error")
+					if !types.Identical(errorType.Type(), finalResult.Type()) {
+						return nil, fmt.Errorf("type check failed: %s: invalid function signature for %s: second return value should be error; is %s: incorrect signature at %s", loc, ident, finalResult.Type(), methodPos)
+					}
+				}
+				if i == len(idents)-1 {
+					return o.Type(), nil
+				}
+				x = sig.Results().At(0).Type()
+			}
+			if _, ok := x.(*types.Signature); ok && i < len(idents)-1 {
+				loc, _ := tree.ErrorContext(n)
+				return nil, fmt.Errorf("type check failed: %s: can't evaluate field %s in type %s", loc, ident, x)
+			}
+		default:
 			loc, _ := tree.ErrorContext(n)
-			return nil, fmt.Errorf("type check failed: %s: can't evaluate field %s in type %s", loc, ident, x)
+			return nil, fmt.Errorf("type check failed: %s: identifier chain not supported for type %s", loc, x.String())
 		}
 	}
 	return x, nil
