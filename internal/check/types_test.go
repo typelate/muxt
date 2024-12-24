@@ -420,3 +420,100 @@ func (u *U) TrueFalse(b bool) string {
 func typeOf(arg any) string {
 	return fmt.Sprintf("%T", arg)
 }
+
+func zeroArgs() string {
+	return "zeroArgs"
+}
+
+func oneArg(a string) string {
+	return "oneArg=" + a
+}
+
+func twoArgs(a, b string) string {
+	return "twoArgs=" + a + b
+}
+
+func dddArg(a int, b ...string) string {
+	return fmt.Sprintln(a, b)
+}
+
+// count returns a channel that will deliver n sequential 1-letter strings starting at "a"
+func count(n int) chan string {
+	if n == 0 {
+		return nil
+	}
+	c := make(chan string)
+	go func() {
+		for i := 0; i < n; i++ {
+			c <- "abcdefghijklmnop"[i : i+1]
+		}
+		close(c)
+	}()
+	return c
+}
+
+// vfunc takes a *V and a V
+func vfunc(V, *V) string {
+	return "vfunc"
+}
+
+// valueString takes a string, not a pointer.
+func valueString(v string) string {
+	return "value is ignored"
+}
+
+// returnInt returns an int
+func returnInt() int {
+	return 7
+}
+
+func add(args ...int) int {
+	sum := 0
+	for _, x := range args {
+		sum += x
+	}
+	return sum
+}
+
+func echo(arg any) any {
+	return arg
+}
+
+func makemap(arg ...string) map[string]string {
+	if len(arg)%2 != 0 {
+		panic("bad makemap")
+	}
+	m := make(map[string]string)
+	for i := 0; i < len(arg); i += 2 {
+		m[arg[i]] = arg[i+1]
+	}
+	return m
+}
+
+func stringer(s fmt.Stringer) string {
+	return s.String()
+}
+
+func mapOfThree() any {
+	return map[string]int{"three": 3}
+}
+
+func die() bool { panic("die") }
+
+func print(in ...any) string {
+	return fmt.Sprint(in...)
+}
+
+func println(in ...any) string {
+	return fmt.Sprintln(in...)
+}
+
+func printf(f string, in ...any) string {
+	return fmt.Sprintf(f, in...)
+}
+
+func not(in bool) bool { return !in }
+
+func and(...any) bool { return false }
+
+func or(...any) bool { return false }

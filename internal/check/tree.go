@@ -8,12 +8,16 @@ import (
 	"strconv"
 	"strings"
 	"text/template/parse"
-
-	"github.com/crhntr/muxt/internal/assert"
 )
 
 type TreeFinder interface {
 	FindTree(name string) (*parse.Tree, bool)
+}
+
+type FindTreeFunc func(name string) (*parse.Tree, bool)
+
+func (fn FindTreeFunc) FindTree(name string) (*parse.Tree, bool) {
+	return fn(name)
 }
 
 type FunctionFinder interface {
@@ -176,7 +180,7 @@ func (s *scope) checkPipeNode(tree *parse.Tree, dot types.Type, n *parse.PipeNod
 				return nil, fmt.Errorf("expected 1 or 2 declaration")
 			}
 		default:
-			assert.MaxLen(n.Decl, 1, "too many variable declarations in a pipe node")
+			// assert.MaxLen(n.Decl, 1, "too many variable declarations in a pipe node")
 			if len(n.Decl) == 1 {
 				s.variables[n.Decl[0].Ident[0]] = x
 			}
@@ -293,23 +297,56 @@ func (s *scope) checkFieldNode(tree *parse.Tree, dot types.Type, n *parse.FieldN
 }
 
 func (s *scope) checkCommandNode(tree *parse.Tree, dot types.Type, n *parse.CommandNode) (types.Type, error) {
-	var argTypes []types.Type
-	for i, arg := range n.Args {
-		if i == 0 {
-			if _, ok := arg.(*parse.NilNode); ok {
-				loc, _ := tree.ErrorContext(n)
-				return nil, fmt.Errorf("%s: executing %q at <%s>: nil is not a command", loc, tree.Name, arg.String())
-			}
-		}
+	if _, ok := n.Args[0].(*parse.NilNode); len(n.Args) == 1 && ok {
+		loc, _ := tree.ErrorContext(n)
+		return nil, fmt.Errorf("%s: executing %q at <%s>: nil is not a command", loc, tree.Name, n.Args[0].String())
+	}
+	argTypes := make([]types.Type, 0, len(n.Args))
+	for _, arg := range n.Args[1:] {
 		argType, err := s.walk(tree, dot, arg)
 		if err != nil {
 			return nil, err
 		}
 		argTypes = append(argTypes, argType)
 	}
-	command := argTypes[0]
-	argTypes = argTypes[1:]
-	switch cmd := command.(type) {
+	if ident, ok := n.Args[0].(*parse.IdentifierNode); ok {
+		switch ident.Ident {
+		case "slice":
+			var result types.Type
+			if slice, ok := argTypes[0].(*types.Slice); ok {
+				result = slice.Elem()
+			} else if array, ok := argTypes[0].(*types.Array); ok {
+				result = array.Elem()
+			}
+			if len(argTypes) > 1 {
+				first, ok := argTypes[1].(*types.Basic)
+				if !ok {
+					return nil, fmt.Errorf("slice expected int")
+				}
+				switch first.Kind() {
+				case types.UntypedInt, types.Int:
+				default:
+				}
+			}
+			if len(argTypes) > 2 {
+				second, ok := argTypes[1].(*types.Basic)
+				if !ok {
+					return nil, fmt.Errorf("slice expected int")
+				}
+				switch second.Kind() {
+				case types.UntypedInt, types.Int:
+				default:
+				}
+			}
+			return result, nil
+		case "index":
+		}
+	}
+	cmdType, err := s.walk(tree, dot, n.Args[0])
+	if err != nil {
+		return nil, err
+	}
+	switch cmd := cmdType.(type) {
 	case *types.Signature:
 		for i := 0; i < len(argTypes); i++ {
 			at := argTypes[i]
