@@ -1,4 +1,4 @@
-package check_test
+package templatetype_test
 
 import (
 	"bytes"
@@ -479,6 +479,8 @@ func echo(arg any) any {
 	return arg
 }
 
+func echoT(t *T) *T { return t }
+
 func makemap(arg ...string) map[string]string {
 	if len(arg)%2 != 0 {
 		panic("bad makemap")
@@ -494,26 +496,12 @@ func stringer(s fmt.Stringer) string {
 	return s.String()
 }
 
-func mapOfThree() any {
+func mapOfThree() map[string]int { // used in "bug10": change from stdlib type, use static return type instead of any
 	return map[string]int{"three": 3}
 }
 
 func die() bool { panic("die") }
 
-func print(in ...any) string {
-	return fmt.Sprint(in...)
+type Fooer interface {
+	Foo() string
 }
-
-func println(in ...any) string {
-	return fmt.Sprintln(in...)
-}
-
-func printf(f string, in ...any) string {
-	return fmt.Sprintf(f, in...)
-}
-
-func not(in bool) bool { return !in }
-
-func and(...any) bool { return false }
-
-func or(...any) bool { return false }

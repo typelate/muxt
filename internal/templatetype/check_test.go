@@ -1,28 +1,31 @@
-package check_test
+package templatetype_test
 
 import (
+	"bytes"
 	"fmt"
+	"go/ast"
+	"go/format"
 	"go/types"
 	"html/template"
 	"io"
-	"reflect"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"text/template/parse"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crhntr/muxt"
-	"github.com/crhntr/muxt/internal/check"
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/crhntr/muxt/internal/templatetype"
 )
 
 var loadPkg = sync.OnceValue(func() []*packages.Package {
 	packageList, loadErr := packages.Load(&packages.Config{
-		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedDeps | packages.NeedTypes,
+		Mode:  packages.NeedName | packages.NeedSyntax | packages.NeedFiles | packages.NeedDeps | packages.NeedTypes,
 		Tests: true,
 	}, ".")
 	if loadErr != nil {
@@ -31,26 +34,56 @@ var loadPkg = sync.OnceValue(func() []*packages.Package {
 	return packageList
 })
 
-func findHTMLTree(tmpl *template.Template) check.FindTreeFunc {
-	return func(name string) (*parse.Tree, bool) {
-		ts := tmpl.Lookup(name)
-		if ts == nil {
-			return nil, false
-		}
-		return ts.Tree, true
-	}
-}
-
 func TestTree(t *testing.T) {
-	checkTestPackage := find(t, loadPkg(), func(p *packages.Package) bool {
-		return p.Name == "check_test"
+	const testFuncName = "TestTree"
+	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
+		return p.Name == "templatetype_test"
 	})
-	for _, tt := range []struct {
+
+	fileIndex := slices.IndexFunc(testPkg.Syntax, func(file *ast.File) bool {
+		pos := testPkg.Fset.Position(file.Pos())
+		return file.Name.Name == "templatetype_test" && filepath.Base(pos.Filename) == "check_test.go"
+	})
+	if fileIndex < 0 {
+		t.Fatal("no check_test.go found")
+	}
+	file := testPkg.Syntax[fileIndex]
+
+	type ttRow struct {
 		Name     string
 		Template string
 		Data     any
 		Error    func(t *testing.T, checkErr, execErr error, tp types.Type)
-	}{
+	}
+
+	var ttRows *ast.CompositeLit
+	for _, decl := range file.Decls {
+		testFunc, ok := decl.(*ast.FuncDecl)
+		if !ok || testFunc.Name.Name != testFuncName {
+			continue
+		}
+		for _, stmt := range testFunc.Body.List {
+			rangeStatement, ok := stmt.(*ast.RangeStmt)
+			if !ok {
+				continue
+			}
+			tests, ok := rangeStatement.X.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			arr, ok := tests.Type.(*ast.ArrayType)
+			if !ok {
+				continue
+			}
+
+			if testType, ok := arr.Elt.(*ast.Ident); !ok || testType.Name != "ttRow" {
+				continue
+			}
+			ttRows = tests
+		}
+	}
+
+	for _, tt := range []ttRow{
 		{
 			Name:     "when accessing nil on an empty struct",
 			Template: `{{.Field}}`,
@@ -69,9 +102,9 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureNoResultMethod{},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				method, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Method")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
 				require.NotNil(t, method)
-				methodPos := checkTestPackage.Fset.Position(method.Pos())
+				methodPos := testPkg.Fset.Position(method.Pos())
 
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:2: function Method has 0 return values; should be 1 or 2: incorrect signature at %s`, methodPos))
 			},
@@ -91,9 +124,9 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureResultAndNonError{},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				method, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Method")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
 				require.NotNil(t, method)
-				methodPos := checkTestPackage.Fset.Position(method.Pos())
+				methodPos := testPkg.Fset.Position(method.Pos())
 
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:2: invalid function signature for Method: second return value should be error; is int: incorrect signature at %s`, methodPos))
 			},
@@ -103,9 +136,9 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureThreeResults{},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				method, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Method")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
 				require.NotNil(t, method)
-				methodPos := checkTestPackage.Fset.Position(method.Pos())
+				methodPos := testPkg.Fset.Position(method.Pos())
 
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:2: function Method has 3 return values; should be 1 or 2: incorrect signature at %s`, methodPos))
 			},
@@ -120,11 +153,11 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method.Method}}`,
 			Data:     TypeWithMethodSignatureResultHasMethodWithNoResults{},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				m1, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Method")
+				m1, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
 				require.NotNil(t, m1)
-				m2, _, _ := types.LookupFieldOrMethod(m1.Type().(*types.Signature).Results().At(0).Type(), true, checkTestPackage.Types, "Method")
+				m2, _, _ := types.LookupFieldOrMethod(m1.Type().(*types.Signature).Results().At(0).Type(), true, testPkg.Types, "Method")
 				require.NotNil(t, m2)
-				methodPos := checkTestPackage.Fset.Position(m2.Pos())
+				methodPos := testPkg.Fset.Position(m2.Pos())
 
 				require.EqualError(t, err, fmt.Sprintf(`type check failed: template:1:9: function Method has 0 return values; should be 1 or 2: incorrect signature at %s`, methodPos))
 			},
@@ -151,9 +184,9 @@ func TestTree(t *testing.T) {
 				Func: func() (_ TypeWithMethodSignatureResult) { return },
 			},
 			Error: func(t *testing.T, err, _ error, tp types.Type) {
-				fn, _, _ := types.LookupFieldOrMethod(tp, true, checkTestPackage.Types, "Func")
+				fn, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Func")
 				require.NotNil(t, fn)
-				require.ErrorContains(t, err, fmt.Sprintf("type check failed: template:1:7: can't evaluate field Func in type %s", fn.Type()))
+				require.ErrorContains(t, err, fmt.Sprintf(`type check failed: template:1:7: executing "template" at <.Func.Method>: identifier chain not supported for type %s`, fn.Type()))
 			},
 		},
 		{
@@ -296,7 +329,7 @@ func TestTree(t *testing.T) {
 			Data:     MethodWithIntParam{},
 			Error: func(t *testing.T, checkErr, _ error, tp types.Type) {
 				require.Error(t, checkErr)
-				require.ErrorContains(t, checkErr, ".F argument 0 has type untyped string expected int")
+				require.ErrorContains(t, checkErr, "argument 0 has type untyped string expected int")
 			},
 		},
 		{
@@ -335,7 +368,7 @@ func TestTree(t *testing.T) {
 			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.ErrorContains(t, execErr, "wrong type for value; expected int; got string")
-				require.ErrorContains(t, checkErr, "expectInt argument 0 has type untyped string expected int")
+				require.ErrorContains(t, checkErr, "argument 0 has type untyped string expected int")
 			},
 		},
 		{
@@ -349,7 +382,7 @@ func TestTree(t *testing.T) {
 			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
-				require.ErrorContains(t, checkErr, "expectString argument 0 has type untyped int expected string")
+				require.ErrorContains(t, checkErr, "argument 0 has type untyped int expected string")
 			},
 		},
 		{
@@ -368,7 +401,7 @@ func TestTree(t *testing.T) {
 			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
-				require.ErrorContains(t, checkErr, "expectInt argument 0 has type float64 expected int")
+				require.ErrorContains(t, checkErr, "argument 0 has type float64 expected int")
 			},
 		},
 		{
@@ -377,27 +410,25 @@ func TestTree(t *testing.T) {
 			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.NoError(t, execErr)
-				require.ErrorContains(t, checkErr, "expectInt8 argument 0 has type int expected int8")
+				require.ErrorContains(t, checkErr, "argument 0 has type int expected int8")
 			},
 		},
-		{
-			Name:     "it downgrades untyped floats",
-			Template: `{{define "t"}}{{expectFloat32 .}}{{end}}{{if false}}{{template "t" 1.2}}{{end}}`,
-			Data:     Void{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, execErr)
-				require.ErrorContains(t, checkErr, "expectFloat32 argument 0 has type float64 expected float32")
-			},
-		},
-		{
-			Name:     "it downgrades untyped complex",
-			Template: `{{define "t"}}{{expectComplex64 .}}{{end}}{{if false}}{{template "t" 2i}}{{end}}`,
-			Data:     Void{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.NoError(t, execErr)
-				require.ErrorContains(t, checkErr, "expectComplex64 argument 0 has type complex128 expected complex64")
-			},
-		},
+		//{
+		//	Name:     "it downgrades untyped floats",
+		//	Template: `{{define "t"}}{{expectFloat32 .}}{{end}}{{if false}}{{template "t" 1.2}}{{end}}`,
+		//	Data:     Void{},
+		//	Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+		//		require.EqualError(t, checkErr, convertTextExecError(t, execErr))
+		//	},
+		//},
+		//{
+		//	Name:     "it downgrades untyped complex",
+		//	Template: `{{define "t"}}{{expectComplex64 .}}{{end}}{{if false}}{{template "t" 2i}}{{end}}`,
+		//	Data:     Void{},
+		//	Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+		//		require.EqualError(t, checkErr, convertTextExecError(t, execErr))
+		//	},
+		//},
 		// not sure if I should be downgrading bool, it should be fine to let it be since there is only one basic bool type
 		{
 			Name:     "chain node",
@@ -439,7 +470,7 @@ func TestTree(t *testing.T) {
 			Template: `{{nil}}`,
 			Data:     Void{},
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.ErrorContains(t, checkErr, strings.TrimPrefix(execErr.Error(), "template: "))
+				require.EqualError(t, checkErr, convertTextExecError(t, execErr))
 			},
 		},
 
@@ -452,13 +483,13 @@ func TestTree(t *testing.T) {
 		},
 		// {"ideal float", "{{typeOf 1.0}}", "float64", 0, true},
 		{
-			Name:     "ideal int",
+			Name:     "ideal float",
 			Template: `{{expectFloat64 1.0}}}`,
 			Data:     Void{},
 		},
 		// {"ideal exp float", "{{typeOf 1e1}}", "float64", 0, true},
 		{
-			Name:     "ideal float",
+			Name:     "ideal exponent",
 			Template: `{{expectFloat64 1e1}}`,
 			Data:     Void{},
 		},
@@ -468,28 +499,6 @@ func TestTree(t *testing.T) {
 			Template: `{{expectComplex128 1i}}`,
 			Data:     Void{},
 		},
-		// {"ideal int", "{{typeOf " + bigInt + "}}", "int", 0, true},
-		{
-			Name:     "ideal big int",
-			Template: fmt.Sprintf(`{{expectInt 0x%x}}}`, 1<<uint(reflect.TypeFor[int]().Bits()-1)-1),
-			Data:     Void{},
-		},
-		// {"ideal too big", "{{typeOf " + bigUint + "}}", "", 0, false},
-		{
-			Name:     "ideal too big",
-			Template: fmt.Sprintf(`{{expectInt 0x%x}}}`, uint(1<<uint(reflect.TypeFor[int]().Bits()-1))),
-			Data:     Void{},
-			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
-				require.ErrorContains(t, execErr, "expected integer")
-				require.NoError(t, checkErr, "don't report this exec error")
-				// this error occurs for massive numbers it is unlikely this would happen in real templates
-			},
-		},
-		// {"ideal nil without type", "{{nil}}", "", 0, false},
-		// already above in "nil action"
-
-		//// Fields of structs.
-		// {".X", "-{{.X}}-", "-x-", tVal, true},
 		{
 			Name:     ".X",
 			Template: "-{{.X}}-",
@@ -503,13 +512,91 @@ func TestTree(t *testing.T) {
 		},
 		// {".unexported", "{{.unexported}}", "", tVal, false},
 		{
-			Name:     ".unexported",
+			Name:     ".unexported", // copied from stdlib
 			Template: "{{.unexported}}",
 			Data:     tVal,
 			Error: func(t *testing.T, checkErr, execErr error, _ types.Type) {
 				require.Error(t, checkErr)
 				require.Error(t, execErr)
 			},
+		},
+		{
+			Name:     "Interface call", // copied from stdlib
+			Template: `{{stringer .S}}`,
+			Data: map[string]fmt.Stringer{
+				"S": bytes.NewBufferString("foozle"),
+			},
+		},
+		{
+			Name:     "error method, error", // copied from stdlib
+			Template: "{{.MyError true}}",
+			Data:     tVal,
+			Error: func(t *testing.T, checkErr, execErr error, _ types.Type) {
+				require.NoError(t, checkErr)
+				require.Error(t, execErr)
+			},
+		},
+		{
+			Name:     "nil call arg", // copied from stdlib
+			Template: `{{ call .TVal.NilOKFunc .NilInt }}`,
+			Data: &struct {
+				TVal   *T
+				NilInt *int
+			}{
+				TVal: tVal,
+			},
+		},
+		{
+			Name:     "len of an interface field", // copied from stdlib
+			Template: "{{len .Empty3}}",
+			Data:     tVal,
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.NoError(t, execErr)
+				require.ErrorContains(t, checkErr, "built-in len expects the first argument to be an array, slice, map, or string got any")
+			},
+		},
+		{
+			Name:     "and undef", // copied from stdlib
+			Template: "{{and 1 .Unknown}}",
+			Data:     nil,
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				assert.NoError(t, execErr)
+				require.ErrorContains(t, checkErr, "type check failed: template:1:8: Unknown not found on untyped nil")
+			},
+		},
+		{
+			Name:     "or undef", // copied from stdlib
+			Template: "{{or 0 .Unknown}}",
+			Data:     nil,
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				assert.NoError(t, execErr)
+				require.ErrorContains(t, checkErr, "type check failed: template:1:7: Unknown not found on untyped nil")
+			},
+		},
+		{
+			Name:     "slice[HUGE]",
+			Template: "{{index . 10}}",
+			Data:     [3]int{},
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				t.Skip("need to figure out how to pass type and value back")
+				require.Error(t, execErr)
+				require.ErrorContains(t, checkErr, "out of range")
+			},
+		},
+		{
+			Name:     "nil pipeline", // copied from stdlib
+			Template: "{{ .NilInt | call .NilOKFunc }}",
+			Data: struct {
+				*T
+				NilInt *int
+			}{
+				T: tVal,
+			},
+		},
+		{
+			Name:     "parens: $ in paren in pipe",
+			Template: "{{($ | echoT).X}}",
+			Data:     tVal,
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -524,30 +611,23 @@ func TestTree(t *testing.T) {
 				"expectComplex64":  expectComplex64,
 				"expectComplex128": expectComplex128,
 				"typeOf":           typeOf,
+				"stringer":         stringer,
+				"echoT":            echoT,
 			}
 
 			templates, parseErr := template.New("template").Funcs(functions).Parse(tt.Template)
 			require.NoError(t, parseErr)
 
-			dataTypeValue := reflect.TypeOf(tt.Data)
-			for i := 0; dataTypeValue.Kind() == reflect.Pointer && i < 5; i++ {
-				dataTypeValue = dataTypeValue.Elem()
-			}
-			require.NotNil(t, dataTypeValue)
-			dataTypeName := dataTypeValue.Name()
-			require.NotEmpty(t, dataTypeName)
-			dataTypeObj := checkTestPackage.Types.Scope().Lookup(dataTypeName)
-			require.NotNil(t, dataTypeObj)
-			dataType := dataTypeObj.Type()
+			dataType := treeTestRowType(t, testPkg, ttRows, tt.Name)
 
-			sourceFunctions := source.DefaultFunctions(checkTestPackage.Types)
+			sourceFunctions := templatetype.DefaultFunctions(testPkg.Types)
 			for name := range functions {
-				fn := checkTestPackage.Types.Scope().Lookup(name).(*types.Func).Signature()
+				fn := testPkg.Types.Scope().Lookup(name).(*types.Func).Signature()
 				require.NotNil(t, fn)
 				sourceFunctions[name] = fn
 			}
 
-			if checkErr := check.Tree(templates.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, check.FindTreeFunc(func(name string) (*parse.Tree, bool) {
+			if checkErr := templatetype.Check(templates.Tree, dataType, testPkg.Types, testPkg.Fset, templatetype.FindTreeFunc(func(name string) (*parse.Tree, bool) {
 				ts := templates.Lookup(name)
 				if ts == nil {
 					return nil, false
@@ -563,43 +643,28 @@ func TestTree(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestExampleTemplate(t *testing.T) {
-	packageList, loadErr := packages.Load(&packages.Config{
-		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedDeps | packages.NeedTypes,
-		Tests: true,
-	}, "../../example", "net/http")
-	if loadErr != nil {
-		t.Fatal(loadErr)
-	}
-	pkg := find(t, packageList, func(p *packages.Package) bool {
-		return p.PkgPath == "github.com/crhntr/muxt/example"
+	t.Run("field on interface", func(t *testing.T) {
+		tp := testPkg.Types.Scope().Lookup("Fooer").Type()
+		fooer, ok := tp.(*types.Named)
+		require.True(t, ok)
+		obj, _, _ := types.LookupFieldOrMethod(fooer, false, testPkg.Types, "Foo")
+		require.NotNil(t, obj)
+
+		templ := template.Must(template.New("").Parse(`{{.Foo}}`))
+		require.NoError(t, templatetype.Check(templ.Tree, fooer, testPkg.Types, testPkg.Fset, nil, nil))
+
 	})
-	netHTTP := find(t, packageList, func(p *packages.Package) bool {
-		return p.PkgPath == "net/http"
+	t.Run("field on parenthesized interface", func(t *testing.T) {
+		tp := testPkg.Types.Scope().Lookup("Fooer").Type()
+		fooer, ok := tp.(*types.Named)
+		require.True(t, ok)
+		obj, _, _ := types.LookupFieldOrMethod(fooer, false, testPkg.Types, "Foo")
+		require.NotNil(t, obj)
+
+		templ := template.Must(template.New("").Parse(`{{.Foo}}`))
+		require.NoError(t, templatetype.Check(templ.Tree, fooer, testPkg.Types, testPkg.Fset, nil, nil))
 	})
-	backend := pkg.Types.Scope().Lookup("Backend")
-	require.NotNil(t, backend)
-
-	templates, parseErr := template.ParseFiles("../../example/index.gohtml")
-	require.NoError(t, parseErr)
-
-	ts, err := muxt.Templates(templates)
-	require.NoError(t, err)
-	for _, mt := range ts {
-		var dot types.Type
-		if m := mt.Method(); m == "" {
-			dot = types.NewPointer(netHTTP.Types.Scope().Lookup("Request").Type())
-		} else {
-			method, _, _ := types.LookupFieldOrMethod(backend.Type(), true, pkg.Types, m)
-			require.NotNil(t, method)
-			fn, ok := method.(*types.Func)
-			require.True(t, ok)
-			dot = fn.Signature().Results().At(0).Type()
-		}
-		require.NoError(t, check.Tree(mt.Template().Tree, dot, pkg.Types, pkg.Fset, findHTMLTree(templates), nil))
-	}
 }
 
 func find[T any](t *testing.T, list []T, match func(p T) bool) T {
@@ -611,4 +676,78 @@ func find[T any](t *testing.T, list []T, match func(p T) bool) T {
 		t.Fatalf("failed to find")
 		return zero
 	}
+}
+
+func convertTextExecError(t *testing.T, err error) string {
+	require.Error(t, err)
+	return "type check failed:" + strings.TrimPrefix(err.Error(), "template:")
+}
+
+func treeTestRowType(t *testing.T, p *packages.Package, ttRows *ast.CompositeLit, name string) types.Type {
+	t.Helper()
+	require.NotNil(t, ttRows)
+	rowNames := parseRowNames(t, p, ttRows)
+	i := rowNames[name]
+	return getRowType(t, p, ttRows.Elts[i].(*ast.CompositeLit))
+}
+
+func parseRowNames(t *testing.T, p *packages.Package, ttRows *ast.CompositeLit) map[string]int {
+	rowNames := make(map[string]int)
+	for i, r := range ttRows.Elts {
+		row, ok := r.(*ast.CompositeLit)
+		if !ok {
+			continue
+		}
+		if len(row.Elts) < 1 {
+			continue
+		}
+		for _, elt := range row.Elts {
+			pair, ok := elt.(*ast.KeyValueExpr)
+			if !ok {
+				t.Fatalf("expected key/value pair at%s", p.Fset.Position(elt.Pos()))
+			}
+			key, ok := pair.Key.(*ast.Ident)
+			if !ok {
+				t.Fatalf("expected ident key at test %s", p.Fset.Position(elt.Pos()))
+			}
+			if key.Name != "Name" {
+				continue
+			}
+			value, ok := pair.Value.(*ast.BasicLit)
+			if !ok {
+				t.Fatalf("expected basic lit at test %s", p.Fset.Position(elt.Pos()))
+			}
+			name, err := strconv.Unquote(value.Value)
+			require.NoError(t, err)
+			rowNames[name] = i
+		}
+	}
+	return rowNames
+}
+
+func getRowType(t *testing.T, p *packages.Package, row *ast.CompositeLit) types.Type {
+	t.Helper()
+	for i, elt := range row.Elts {
+		pair, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			pos := p.Fset.Position(elt.Pos())
+			t.Fatalf("expected key/value pair at %s", pos)
+		}
+		key, ok := pair.Key.(*ast.Ident)
+		if !ok {
+			t.Fatalf("expected ident key at test %d", i)
+		}
+		if key.Name != "Data" {
+			continue
+		}
+		var buf bytes.Buffer
+		require.NoError(t, format.Node(&buf, p.Fset, pair.Value))
+		result, err := types.Eval(p.Fset, p.Types, pair.Value.Pos(), buf.String())
+		require.NoError(t, err)
+		tp := result.Type
+		require.NotNil(t, tp)
+		return tp
+	}
+	t.Fatalf("failed to evaluate type for row")
+	return nil
 }

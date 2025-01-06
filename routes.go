@@ -23,8 +23,8 @@ import (
 	"golang.org/x/net/html/atom"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crhntr/muxt/internal/check"
 	"github.com/crhntr/muxt/internal/source"
+	"github.com/crhntr/muxt/internal/templatetype"
 )
 
 const (
@@ -214,7 +214,9 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			if types.Identical(dataVar.Type(), types.Universe.Lookup("any").Type()) {
 				continue
 			}
-			if err := check.Tree(t.template.Tree, dataVar.Type(), dataVar.Pkg(), routesPkg.Fset, newForrest(ts), functionMap(fm)); err != nil {
+			fns := templatetype.DefaultFunctions(routesPkg.Types)
+			fns.Add(templatetype.Functions(fm))
+			if err := templatetype.Check(t.template.Tree, dataVar.Type(), dataVar.Pkg(), routesPkg.Fset, newForrest(ts), fns); err != nil {
 				return "", err
 			}
 		}
@@ -1060,15 +1062,4 @@ func (f *forest) FindTree(name string) (*parse.Tree, bool) {
 		return nil, false
 	}
 	return ts.Tree, true
-}
-
-type functionMap map[string]*types.Signature
-
-func (fm functionMap) FindFunction(name string) (*types.Signature, bool) {
-	m := (map[string]*types.Signature)(fm)
-	fn, ok := m[name]
-	if !ok {
-		return nil, false
-	}
-	return fn, true
 }

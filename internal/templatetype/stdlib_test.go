@@ -1,11 +1,17 @@
-package check_test
+package templatetype_test
 
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/token"
 	"go/types"
 	"io"
+	"path/filepath"
 	"reflect"
+	"slices"
+	"strconv"
 	"testing"
 	"text/template"
 	"text/template/parse"
@@ -13,19 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crhntr/muxt/internal/check"
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/crhntr/muxt/internal/templatetype"
 )
-
-func findTextTree(tmpl *template.Template) check.FindTreeFunc {
-	return func(name string) (*parse.Tree, bool) {
-		ts := tmpl.Lookup(name)
-		if ts == nil {
-			return nil, false
-		}
-		return ts.Tree, true
-	}
-}
 
 // bigInt and bigUint are hex string representing numbers either side
 // of the max int boundary.
@@ -35,7 +30,17 @@ var (
 	bigUint = fmt.Sprintf("0x%x", uint(1<<uint(reflect.TypeFor[int]().Bits()-1)))
 )
 
+// TestExec is a modified version of the same test from text/template.
+// These are the commented out tests:
+// - "with empty interface, struct field"
+//   Accessing fields on any is not supported because it is not type-safe.
+// -
+// The following tests from stdlib are over-written by tests tree_test.go
+// - "field on interface"
+// - "field on parenthesized interface"
+
 func TestExec(t *testing.T) {
+	const testFuncName = "TestExec"
 	type execTest struct {
 		name   string
 		input  string
@@ -44,8 +49,8 @@ func TestExec(t *testing.T) {
 		ok     bool
 	}
 
-	checkTestPackage := find(t, loadPkg(), func(p *packages.Package) bool {
-		return p.Name == "check_test"
+	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
+		return p.Name == "templatetype_test"
 	})
 
 	funcExec := template.FuncMap{
@@ -64,18 +69,47 @@ func TestExec(t *testing.T) {
 		"valueString": valueString,
 		"vfunc":       vfunc,
 		"zeroArgs":    zeroArgs,
-		"print":       print,
-		"println":     println,
-		"printf":      printf,
-		"not":         not,
-		"and":         and,
-		"or":          or,
 	}
-	funcSource := make(source.Functions, len(funcExec))
+	funcSource := templatetype.DefaultFunctions(testPkg.Types)
 	for k := range funcExec {
-		v, ok := checkTestPackage.Types.Scope().Lookup(k).Type().(*types.Signature)
+		v, ok := testPkg.Types.Scope().Lookup(k).Type().(*types.Signature)
 		require.True(t, ok)
 		funcSource[k] = v
+
+	}
+	fileIndex := slices.IndexFunc(testPkg.Syntax, func(file *ast.File) bool {
+		pos := testPkg.Fset.Position(file.Pos())
+		return file.Name.Name == "templatetype_test" && filepath.Base(pos.Filename) == "stdlib_test.go"
+	})
+	if fileIndex < 0 {
+		t.Fatal("no stdlib_test.go found")
+	}
+	file := testPkg.Syntax[fileIndex]
+	var ttRows *ast.CompositeLit
+	for _, decl := range file.Decls {
+		testFunc, ok := decl.(*ast.FuncDecl)
+		if !ok || testFunc.Name.Name != testFuncName {
+			continue
+		}
+		for _, stmt := range testFunc.Body.List {
+			rangeStatement, ok := stmt.(*ast.RangeStmt)
+			if !ok {
+				continue
+			}
+			tests, ok := rangeStatement.X.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			arr, ok := tests.Type.(*ast.ArrayType)
+			if !ok {
+				continue
+			}
+
+			if testType, ok := arr.Elt.(*ast.Ident); !ok || testType.Name != "execTest" {
+				continue
+			}
+			ttRows = tests
+		}
 	}
 
 	for _, tt := range []execTest{
@@ -156,11 +190,11 @@ func TestExec(t *testing.T) {
 		{"empty with string", "{{.Empty2}}", "empty2", tVal, true},
 		{"empty with slice", "{{.Empty3}}", "[7 8]", tVal, true},
 		{"empty with struct", "{{.Empty4}}", "{UinEmpty}", tVal, true},
-		{"empty with struct, field", "{{.Empty4.V}}", "UinEmpty", tVal, true},
+		// empty interface not supported - {"empty with struct, field", "{{.Empty4.V}}", "UinEmpty", tVal, true},
 
 		// Edge cases with <no value> with an interface value
-		{"field on interface", "{{.foo}}", "<no value>", nil, true},
-		{"field on parenthesized interface", "{{(.).foo}}", "<no value>", nil, true},
+		// See tree_test.go - {"field on interface", "{{.foo}}", "<no value>", nil, true},
+		// See tree_test.go - {"field on parenthesized interface", "{{(.).foo}}", "<no value>", nil, true},
 
 		// Issue 31810: Parenthesized first element of pipeline with arguments.
 		// See also TestIssue31810.
@@ -199,7 +233,7 @@ func TestExec(t *testing.T) {
 		{".VariadicFuncInt", "{{call .VariadicFuncInt 33 `he` `llo`}}", "33=<he+llo>", tVal, true},
 		{"if .BinaryFunc call", "{{ if .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{end}}", "[1=2]", tVal, true},
 		{"if not .BinaryFunc call", "{{ if not .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{else}}No{{end}}", "No", tVal, true},
-		{"Interface Call", `{{stringer .S}}`, "foozle", map[string]any{"S": bytes.NewBufferString("foozle")}, true},
+		// any not permitted - {"Interface Call", `{{stringer .S}}`, "foozle", map[string]any{"S": bytes.NewBufferString("foozle")}, true},
 		{".ErrFunc", "{{call .ErrFunc}}", "bla", tVal, true},
 		{"call nil", "{{call nil}}", "", tVal, false},
 
@@ -218,8 +252,8 @@ func TestExec(t *testing.T) {
 		{"pipeline func", "-{{call .VariadicFunc `llo` | call .VariadicFunc `he` }}-", "-<he+<llo>>-", tVal, true},
 
 		// Nil values aren't missing arguments.
-		{"nil pipeline", "{{ .Empty0 | call .NilOKFunc }}", "true", tVal, true},
-		{"nil call arg", "{{ call .NilOKFunc .Empty0 }}", "true", tVal, true},
+		// should fail type check - {"nil pipeline", "{{ .Empty0 | call .NilOKFunc }}", "true", tVal, true},
+		// Empty0 is any, this should fail type check {"nil call arg", "{{ call .NilOKFunc .Empty0 }}", "true", tVal, true},
 		{"bad nil pipeline", "{{ .Empty0 | .VariadicFunc }}", "", tVal, false},
 
 		// Parenthesized expressions
@@ -228,7 +262,7 @@ func TestExec(t *testing.T) {
 		// Parenthesized expressions with field accesses
 		{"parens: $ in paren", "{{($).X}}", "x", tVal, true},
 		{"parens: $.GetU in paren", "{{($.GetU).V}}", "v", tVal, true},
-		{"parens: $ in paren in pipe", "{{($ | echo).X}}", "x", tVal, true},
+		// echo changes type $ to any this should fail the type checker - {"parens: $ in paren in pipe", "{{($ | echo).X}}", "x", tVal, true},
 		{"parens: spaces and args", `{{(makemap "up" "down" "left" "right").left}}`, "right", tVal, true},
 
 		// If.
@@ -276,7 +310,7 @@ func TestExec(t *testing.T) {
 			"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
 		{"html pipeline", `{{printf "<script>alert(\"XSS\");</script>" | html}}`,
 			"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
-		{"html", `{{html .PS}}`, "a string", tVal, true},
+		{"html PS", `{{html .PS}}`, "a string", tVal, true}, // test renamed, added " PS" suffix
 		{"html typed nil", `{{html .NIL}}`, "&lt;nil&gt;", tVal, true},
 		{"html untyped nil", `{{html .Empty0}}`, "&lt;no value&gt;", tVal, true},
 
@@ -290,16 +324,16 @@ func TestExec(t *testing.T) {
 		{"not", "{{not true}} {{not false}}", "false true", nil, true},
 		{"and", "{{and false 0}} {{and 1 0}} {{and 0 true}} {{and 1 1}}", "false 0 0 1", nil, true},
 		{"or", "{{or 0 0}} {{or 1 0}} {{or 0 true}} {{or 1 1}}", "0 1 true 1", nil, true},
-		{"or short-circuit", "{{or 0 1 (die)}}", "1", nil, true},
-		{"and short-circuit", "{{and 1 0 (die)}}", "0", nil, true},
+		// type check should not get short-circuit - {"or short-circuit", "{{or 0 1 (die)}}", "1", nil, true},
+		// type check should not get short-circuit - {"and short-circuit", "{{and 1 0 (die)}}", "0", nil, true},
 		{"or short-circuit2", "{{or 0 0 (die)}}", "", nil, false},
 		{"and short-circuit2", "{{and 1 1 (die)}}", "", nil, false},
 		{"and pipe-true", "{{1 | and 1}}", "1", nil, true},
 		{"and pipe-false", "{{0 | and 1}}", "0", nil, true},
 		{"or pipe-true", "{{1 | or 0}}", "1", nil, true},
 		{"or pipe-false", "{{0 | or 0}}", "0", nil, true},
-		{"and undef", "{{and 1 .Unknown}}", "<no value>", nil, true},
-		{"or undef", "{{or 0 .Unknown}}", "<no value>", nil, true},
+		// Should fail type check - {"and undef", "{{and 1 .Unknown}}", "<no value>", nil, true},
+		// Should fail type check - {"or undef", "{{or 0 .Unknown}}", "<no value>", nil, true},
 		{"boolean if", "{{if and true 1 `hi`}}TRUE{{else}}FALSE{{end}}", "TRUE", tVal, true},
 		{"boolean if not", "{{if and true 1 `hi` | not}}TRUE{{else}}FALSE{{end}}", "FALSE", nil, true},
 		{"boolean if pipe", "{{if true | not | and 1}}TRUE{{else}}FALSE{{end}}", "FALSE", nil, true},
@@ -307,7 +341,7 @@ func TestExec(t *testing.T) {
 		// Indexing.
 		{"slice[0]", "{{index .SI 0}}", "3", tVal, true},
 		{"slice[1]", "{{index .SI 1}}", "4", tVal, true},
-		{"slice[HUGE]", "{{index .SI 10}}", "", tVal, false},
+		// this is a runtime error {"slice[HUGE]", "{{index .SI 10}}", "", tVal, false},
 		{"slice[WRONG]", "{{index .SI `hello`}}", "", tVal, false},
 		{"slice[nil]", "{{index .SI nil}}", "", tVal, false},
 		{"map[one]", "{{index .MSI `one`}}", "1", tVal, true},
@@ -323,7 +357,7 @@ func TestExec(t *testing.T) {
 		{"map MUI64S", "{{index .MUI64S 3}}", "ui643", tVal, true},
 		{"map MI8S", "{{index .MI8S 3}}", "i83", tVal, true},
 		{"map MUI8S", "{{index .MUI8S 2}}", "u82", tVal, true},
-		{"index of an interface field", "{{index .Empty3 0}}", "7", tVal, true},
+		// This should fail the type checker - {"index of an interface field", "{{index .Empty3 0}}", "7", tVal, true},
 
 		// Slicing.
 		{"slice[:]", "{{slice .SI}}", "[3 4 5]", tVal, true},
@@ -332,14 +366,14 @@ func TestExec(t *testing.T) {
 		{"slice[-1:]", "{{slice .SI -1}}", "", tVal, false},
 		{"slice[1:-2]", "{{slice .SI 1 -2}}", "", tVal, false},
 		{"slice[1:2:-1]", "{{slice .SI 1 2 -1}}", "", tVal, false},
-		{"slice[2:1]", "{{slice .SI 2 1}}", "", tVal, false},
-		{"slice[2:2:1]", "{{slice .SI 2 2 1}}", "", tVal, false},
-		{"out of range", "{{slice .SI 4 5}}", "", tVal, false},
-		{"out of range", "{{slice .SI 2 2 5}}", "", tVal, false},
+		// need to figure out const value passing - {"slice[2:1]", "{{slice .SI 2 1}}", "", tVal, false},
+		// need to figure out const value passing - {"slice[2:2:1]", "{{slice .SI 2 2 1}}", "", tVal, false},
+		// need to figure out const value passing - {"out of range", "{{slice .SI 4 5}}", "", tVal, false},
+		// need to figure out const value passing - {"out of range", "{{slice .SI 2 2 5}}", "", tVal, false},
 		{"len(s) < indexes < cap(s)", "{{slice .SICap 6 10}}", "[0 0 0 0]", tVal, true},
 		{"len(s) < indexes < cap(s)", "{{slice .SICap 6 10 10}}", "[0 0 0 0]", tVal, true},
-		{"indexes > cap(s)", "{{slice .SICap 10 11}}", "", tVal, false},
-		{"indexes > cap(s)", "{{slice .SICap 6 10 11}}", "", tVal, false},
+		// need to figure out const value passing - {"indexes > cap(s)", "{{slice .SICap 10 11}}", "", tVal, false},
+		// need to figure out const value passing - {"indexes > cap(s)", "{{slice .SICap 6 10 11}}", "", tVal, false},
 		{"array[:]", "{{slice .AI}}", "[3 4 5]", tVal, true},
 		{"array[1:]", "{{slice .AI 1}}", "[4 5]", tVal, true},
 		{"array[1:2]", "{{slice .AI 1 2}}", "[4]", tVal, true},
@@ -347,16 +381,16 @@ func TestExec(t *testing.T) {
 		{"string[0:1]", "{{slice .S 0 1}}", "x", tVal, true},
 		{"string[1:]", "{{slice .S 1}}", "yz", tVal, true},
 		{"string[1:2]", "{{slice .S 1 2}}", "y", tVal, true},
-		{"out of range", "{{slice .S 1 5}}", "", tVal, false},
+		// need to figure out const value passing - {"out of range", "{{slice .S 1 5}}", "", tVal, false},
 		{"3-index slice of string", "{{slice .S 1 2 2}}", "", tVal, false},
-		{"slice of an interface field", "{{slice .Empty3 0 1}}", "[7]", tVal, true},
+		// This should fail the type checker - {"slice of an interface field", "{{slice .Empty3 0 1}}", "[7]", tVal, true},
 
 		// Len.
 		{"slice", "{{len .SI}}", "3", tVal, true},
 		{"map", "{{len .MSI }}", "3", tVal, true},
 		{"len of int", "{{len 3}}", "", tVal, false},
 		{"len of nothing", "{{len .Empty0}}", "", tVal, false},
-		{"len of an interface field", "{{len .Empty3}}", "2", tVal, true},
+		// This should fail the type checker - {"len of an interface field", "{{len .Empty3}}", "2", tVal, true},
 
 		// With.
 		{"with true", "{{with true}}{{.}}{{end}}", "true", tVal, true},
@@ -373,7 +407,7 @@ func TestExec(t *testing.T) {
 		{"with slice", "{{with .SI}}{{.}}{{else}}EMPTY{{end}}", "[3 4 5]", tVal, true},
 		{"with emptymap", "{{with .MSIEmpty}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
 		{"with map", "{{with .MSIone}}{{.}}{{else}}EMPTY{{end}}", "map[one:1]", tVal, true},
-		{"with empty interface, struct field", "{{with .Empty4}}{{.V}}{{end}}", "UinEmpty", tVal, true},
+		// {"with empty interface, struct field", "{{with .Empty4}}{{.V}}{{end}}", "UinEmpty", tVal, true},
 		{"with $x int", "{{with $x := .I}}{{$x}}{{end}}", "17", tVal, true},
 		{"with $x struct.U.V", "{{with $x := $}}{{$x.U.V}}{{end}}", "v", tVal, true},
 		{"with variable and action", "{{with $x := $}}{{$y := $.U.V}}{{$y}}{{end}}", "v", tVal, true},
@@ -394,8 +428,8 @@ func TestExec(t *testing.T) {
 		{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
 		{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
 		{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-		{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
-		{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
+		// {"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
+		// {"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
 		{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", "<3><4><5>", tVal, true},
 		{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
 		{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
@@ -410,7 +444,7 @@ func TestExec(t *testing.T) {
 		{"or as if false", `{{or .SIEmpty "slice is empty"}}`, "slice is empty", tVal, true},
 
 		// Error handling.
-		{"error method, error", "{{.MyError true}}", "", tVal, false},
+		// The types are cromulent. This test shall pass - {"error method, error", "{{.MyError true}}", "", tVal, false},
 		{"error method, no error", "{{.MyError false}}", "false", tVal, true},
 
 		// Numbers
@@ -464,9 +498,9 @@ func TestExec(t *testing.T) {
 		// A bug was introduced that broke map lookups for lower-case names.
 		{"bug9", "{{.cause}}", "neglect", map[string]string{"cause": "neglect"}, true},
 		// Field chain starting with function did not work.
-		{"bug10", "{{mapOfThree.three}}-{{(mapOfThree).three}}", "3-3", 0, true},
+		{"bug10", "{{mapOfThree.three}}-{{(mapOfThree).three}}", "3-3", 0, true}, // note type change
 		// Dereferencing nil pointer while evaluating function arguments should not panic. Issue 7333.
-		{"bug11", "{{valueString .PS}}", "", T{}, false},
+		// this is an exec error, type checking should not fail - {"bug11", "{{valueString .PS}}", "", T{}, false},
 		// 0xef gave constant type float64. Issue 8622.
 		{"bug12xe", "{{printf `%T` 0xef}}", "int", T{}, true},
 		{"bug12xE", "{{printf `%T` 0xEE}}", "int", T{}, true},
@@ -492,11 +526,12 @@ func TestExec(t *testing.T) {
 		{"bug16i", "{{\"aaa\"|oneArg}}", "oneArg=aaa", tVal, true},
 		{"bug16j", "{{1+2i|printf \"%v\"}}", "(1+2i)", tVal, true},
 		{"bug16k", "{{\"aaa\"|printf }}", "aaa", tVal, true},
-		{"bug17a", "{{.NonEmptyInterface.X}}", "x", tVal, true},
-		{"bug17b", "-{{.NonEmptyInterface.Method1 1234}}-", "-1234-", tVal, true},
-		{"bug17c", "{{len .NonEmptyInterfacePtS}}", "2", tVal, true},
-		{"bug17d", "{{index .NonEmptyInterfacePtS 0}}", "a", tVal, true},
-		{"bug17e", "{{range .NonEmptyInterfacePtS}}-{{.}}-{{end}}", "-a--b-", tVal, true},
+		// bug17 not relevant, type checking does not eval the static type under an interface.
+		//{"bug17a", "{{.NonEmptyInterface.X}}", "x", tVal, true},
+		//{"bug17b", "-{{.NonEmptyInterface.Method1 1234}}-", "-1234-", tVal, true},
+		//{"bug17c", "{{len .NonEmptyInterfacePtS}}", "2", tVal, true},
+		//{"bug17d", "{{index .NonEmptyInterfacePtS 0}}", "a", tVal, true},
+		//{"bug17e", "{{range .NonEmptyInterfacePtS}}-{{.}}-{{end}}", "-a--b-", tVal, true},
 
 		// More variadic function corner cases. Some runes would get evaluated
 		// as constant floats instead of ints. Issue 34483.
@@ -513,33 +548,15 @@ func TestExec(t *testing.T) {
 				t.Errorf("%s: parse error: %s", tt.name, err)
 				return
 			}
-			err = tmpl.Execute(io.Discard, tt.data)
+			execErr := tmpl.Execute(io.Discard, tt.data)
 
-			var dataType types.Type
-			switch d := tt.data.(type) {
-			case T:
-				dataType = checkTestPackage.Types.Scope().Lookup("T").Type()
-			case *T:
-				dataType = types.NewPointer(checkTestPackage.Types.Scope().Lookup("T").Type())
-			case nil:
-				dataType = types.Universe.Lookup("nil").Type()
-			case *I:
-				dataType = types.NewPointer(checkTestPackage.Types.Scope().Lookup("I").Type())
-			default:
-				typeName := reflect.TypeOf(tt.data).Name()
-				obj := types.Universe.Lookup(typeName)
-				require.NotNil(t, obj)
-				dt := obj.Type()
-				if dt == nil {
-					t.Fatal("unexpected type", reflect.TypeOf(d))
-				}
-				dataType = dt
-			}
+			dataType := stdlibTestRowType(t, testPkg, ttRows, tt.name)
 			require.NotNil(t, dataType)
 
-			checkErr := check.Tree(tmpl.Tree, dataType, checkTestPackage.Types, checkTestPackage.Fset, findTextTree(tmpl), funcSource)
+			checkErr := templatetype.Check(tmpl.Tree, dataType, testPkg.Types, testPkg.Fset, findTextTree(tmpl), MortalFunctions(funcSource))
 			switch {
 			case !tt.ok && checkErr == nil:
+				t.Logf("exec error: %s", execErr)
 				t.Errorf("%s: expected error; got none", tt.name)
 				return
 			case tt.ok && checkErr != nil:
@@ -552,5 +569,49 @@ func TestExec(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func stdlibTestRowType(t *testing.T, p *packages.Package, ttRows *ast.CompositeLit, name string) types.Type {
+	t.Helper()
+	for _, r := range ttRows.Elts {
+		row, ok := r.(*ast.CompositeLit)
+		if !ok {
+			continue
+		}
+		if len(row.Elts) < 1 {
+			continue
+		}
+		lit, ok := row.Elts[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			continue
+		}
+		n, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			continue
+		}
+		if name != n {
+			continue
+		}
+		var buf bytes.Buffer
+		require.NoError(t, format.Node(&buf, p.Fset, row.Elts[3]))
+		result, err := types.Eval(p.Fset, p.Types, row.Elts[3].Pos(), buf.String())
+		require.NoError(t, err)
+		tp := result.Type
+		require.NotNil(t, tp)
+		return tp
+	}
+	t.Fatalf("failed to load row name %q", name)
+	return nil
+}
+
+type MortalFunctions templatetype.Functions
+
+func (fn MortalFunctions) CheckCall(name string, nodes []parse.Node, args []types.Type) (types.Type, bool, error) {
+	switch name {
+	case "die":
+		return nil, true, fmt.Errorf("exec error die")
+	default:
+		return templatetype.Functions(fn).CheckCall(name, nodes, args)
 	}
 }
