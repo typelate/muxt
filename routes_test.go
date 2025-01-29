@@ -1973,8 +1973,37 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 `,
 		},
+		{
+			Name:        "package function",
+			Templates:   `{{define "GET / function(ctx)" }}{{.}}{{end}}`,
+			PackageName: "main",
+			ReceiverPackage: `
+-- f.go --
+package main
+
+import "context"
+
+func function(ctx context.Context) int { return 32 }
+` + executeGo,
+			ExpectedFile: `package main
+
+import "net/http"
+
+type RoutesReceiver interface {
+}
+
+func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		ctx := request.Context()
+		data := function(ctx)
+		execute(response, request, true, "GET / function(ctx)", http.StatusOK, data)
+	})
+}
+`,
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
+			t.Parallel()
 			archive := txtar.Parse([]byte(tt.ReceiverPackage))
 			archiveDir, err := txtar.FS(archive)
 			require.NoError(t, err)

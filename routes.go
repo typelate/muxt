@@ -178,26 +178,36 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			Type: httpHandlerFuncType(imports),
 			Body: &ast.BlockStmt{},
 		}
-		if err := ensureMethodSignature(imports, t, receiver, receiverInterface, t.call); err != nil {
+		sigs := make(map[string]*types.Signature)
+		if err := ensureMethodSignature(imports, sigs, t, receiver, receiverInterface, t.call, routesPkg.Types); err != nil {
 			return "", err
 		}
-		methodObj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), t.fun.Name)
-		if methodObj == nil {
-			return "", fmt.Errorf("failed to generate method %s", t.fun.Name)
+		sig, ok := sigs[t.fun.Name]
+		if !ok {
+			return "", fmt.Errorf("failed to determine call signature %s", t.fun.Name)
 		}
-		sig := methodObj.Type().(*types.Signature)
 		if sig.Results().Len() == 0 {
 			return "", fmt.Errorf("method for pattern %q has no results it should have one or two", t.name)
 		}
-		if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, imports, nil, receiver, t.call); err != nil {
+		if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, imports, sigs, nil, receiver, t.call); err != nil {
 			return "", err
 		}
 		const dataVarIdent = "data"
-		receiverCallStatements, err := callReceiverMethod(imports, dataVarIdent, sig, &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
+
+		var callFun ast.Expr
+		obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), t.fun.Name)
+		isMethodCall := obj != nil
+		if isMethodCall {
+			callFun = &ast.SelectorExpr{
 				X:   ast.NewIdent(receiverIdent),
 				Sel: t.fun,
-			},
+			}
+		} else {
+			callFun = ast.NewIdent(t.fun.Name)
+		}
+
+		receiverCallStatements, err := callReceiverMethod(imports, dataVarIdent, sig, &ast.CallExpr{
+			Fun:  callFun,
 			Args: slices.Clone(t.call.Args),
 		})
 		if err != nil {
@@ -235,18 +245,14 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	return source.Format(file), nil
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *source.Imports, parsed map[string]struct{}, receiver *types.Named, call *ast.CallExpr) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *source.Imports, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, call *ast.CallExpr) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
 	}
-	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
-	if obj == nil {
-		return nil, fmt.Errorf("method %s not defined on %s", fun.Name, receiver.Obj().Type())
-	}
-	signature, ok := obj.Type().(*types.Signature)
+	signature, ok := sigs[fun.Name]
 	if !ok {
-		return nil, fmt.Errorf("expected method")
+		return nil, fmt.Errorf("failed to get signature for %s", fun.Name)
 	}
 	// const parsedVariableName = "parsed"
 	if exp := signature.Params().Len(); exp != len(call.Args) { // TODO: (signature.Variadic() && exp > len(call.Args))
@@ -264,7 +270,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *s
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
-			parseArgStatements, err := appendParseArgumentStatements(statements, t, imports, parsed, receiver, arg)
+			parseArgStatements, err := appendParseArgumentStatements(statements, t, imports, sigs, parsed, receiver, arg)
 			if err != nil {
 				return nil, err
 			}
@@ -272,19 +278,34 @@ func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *s
 			call.Args[i] = ast.NewIdent(resultVarIdent)
 			resultCount++
 
+			callSig, ok := sigs[arg.Fun.(*ast.Ident).Name]
+			if !ok {
+				return nil, fmt.Errorf("failed to get signature for %s", fun.Name)
+			}
 			obj, _, _ := types.LookupFieldOrMethod(receiver.Obj().Type(), true, receiver.Obj().Pkg(), arg.Fun.(*ast.Ident).Name)
-			methodSignature, err := astTypeExpression(imports, obj.Type())
+			isMethodCall := obj != nil
+
+			if isMethodCall && !types.Identical(callSig, obj.Type()) {
+				log.Panicf("unexpected signature mismatch %s != %s", callSig, obj.Type())
+			}
+
+			callSigExpr, err := astTypeExpression(imports, callSig)
 			if err != nil {
 				return nil, err
 			}
 
-			callMethodStatements, err := t.callReceiverMethod(imports, resultVarIdent, methodSignature.(*ast.FuncType), arg)
+			if isMethodCall {
+				arg.Fun = &ast.SelectorExpr{
+					X:   ast.NewIdent(receiverIdent),
+					Sel: ast.NewIdent(arg.Fun.(*ast.Ident).Name),
+				}
+			} else {
+				arg.Fun = ast.NewIdent(arg.Fun.(*ast.Ident).Name)
+			}
+
+			callMethodStatements, err := t.callReceiverMethod(imports, resultVarIdent, callSigExpr.(*ast.FuncType), arg)
 			if err != nil {
 				return nil, err
-			}
-			arg.Fun = &ast.SelectorExpr{
-				X:   ast.NewIdent(receiverIdent),
-				Sel: ast.NewIdent(arg.Fun.(*ast.Ident).Name),
 			}
 
 			statements = append(parseArgStatements, callMethodStatements...)
@@ -653,7 +674,7 @@ func callReceiverMethod(imports *source.Imports, dataVarIdent string, method *ty
 	const (
 		okIdent = "ok"
 	)
-	if method.Results().Len() == 9 {
+	if method.Results().Len() == 0 {
 		mathodIdent := call.Fun.(*ast.Ident)
 		assert.NotNil(assertion, mathodIdent)
 		return nil, fmt.Errorf("method %s has no results it should have one or two", mathodIdent.Name)
@@ -821,27 +842,52 @@ func defaultTemplateNameScope(imports *source.Imports, template Template, argume
 	}
 }
 
-func ensureMethodSignature(imports *source.Imports, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr) error {
+func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
+	obj := pkg.Scope().Lookup(fun.Name)
+	if obj == nil {
+		return nil, false
+	}
+	sig, ok := obj.Type().(*types.Signature)
+	if !ok {
+		return nil, false
+	}
+	if sig.Recv() != nil {
+		return nil, false
+	}
+	return obj, true
+}
+
+func ensureMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
+		isMethod := true
 		mo, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
 		if mo == nil {
-			ms, err := createMethodSignature(imports, t, receiver, receiverInterface, call)
-			if err != nil {
-				return err
+			if m, ok := packageScopeFunc(templatesPackage, fun); ok {
+				mo = m
+				isMethod = false
+			} else {
+				ms, err := createMethodSignature(imports, signatures, t, receiver, receiverInterface, call, templatesPackage)
+				if err != nil {
+					return err
+				}
+				fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
+				receiver.AddMethod(fn)
+				mo = fn
 			}
-			fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
-			receiver.AddMethod(fn)
-			mo = fn
 		} else {
 			for _, a := range call.Args {
 				switch arg := a.(type) {
 				case *ast.CallExpr:
-					if err := ensureMethodSignature(imports, t, receiver, receiverInterface, arg); err != nil {
+					if err := ensureMethodSignature(imports, signatures, t, receiver, receiverInterface, arg, templatesPackage); err != nil {
 						return err
 					}
 				}
 			}
+		}
+		signatures[fun.Name] = mo.Type().(*types.Signature)
+		if !isMethod {
+			return nil
 		}
 		exp, err := astTypeExpression(imports, mo.Type())
 		if err != nil {
@@ -857,7 +903,7 @@ func ensureMethodSignature(imports *source.Imports, t Template, receiver *types.
 	}
 }
 
-func createMethodSignature(imports *source.Imports, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr) (*types.Signature, error) {
+func createMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
 	for _, a := range call.Args {
 		switch arg := a.(type) {
@@ -868,7 +914,7 @@ func createMethodSignature(imports *source.Imports, t Template, receiver *types.
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
-			if err := ensureMethodSignature(imports, t, receiver, receiverInterface, arg); err != nil {
+			if err := ensureMethodSignature(imports, signatures, t, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
 		}
