@@ -1,9 +1,8 @@
 muxt generate
 
-cat template_routes.go
-stdout '// muxt version: \(devel\)'
-
 exec go test -cover
+
+muxt check --receiver-type=Server
 
 -- template.gohtml --
 {{define "GET / Function(ctx)" }}{{.}}{{end}}
@@ -27,6 +26,9 @@ var formHTML embed.FS
 var templates = template.Must(template.ParseFS(formHTML, "*"))
 
 func Function(ctx context.Context) int { return 32 }
+
+type Server struct{}
+
 -- template_test.go --
 package server
 

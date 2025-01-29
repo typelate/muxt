@@ -89,7 +89,11 @@ func CheckTemplates(wd string, log *log.Logger, config RoutesFileConfiguration) 
 			dataVarPkg = receiver.Obj().Pkg()
 			methodObj, _, _ := types.LookupFieldOrMethod(receiver, true, dataVarPkg, name)
 			if methodObj == nil {
-				return fmt.Errorf("failed to generate method %s", t.fun.Name)
+				o, ok := packageScopeFunc(receiver.Obj().Pkg(), t.fun)
+				if !ok {
+					return fmt.Errorf("failed to generate method %s", t.fun.Name)
+				}
+				methodObj = o
 			}
 			sig := methodObj.Type().(*types.Signature)
 			if sig.Results().Len() == 0 {
