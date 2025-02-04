@@ -4,7 +4,7 @@ exec go test -cover
 
 -- template.gohtml --
 {{define "GET /fruits/{name}/tree ToUpper(name)" }}
-	<h1>Fruit {{.Name}}</h1>
+	<h1>Fruit {{.Data.Name}}</h1>
 {{end}}
 
 -- go.mod --

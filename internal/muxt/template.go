@@ -275,27 +275,6 @@ func patternScope() []string {
 	}
 }
 
-func (t Template) executeCall(status, data ast.Expr, writeHeader bool) *ast.ExprStmt {
-	return &ast.ExprStmt{X: &ast.CallExpr{
-		Fun: ast.NewIdent(executeIdentName),
-		Args: []ast.Expr{
-			ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-			ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-			ast.NewIdent(strconv.FormatBool(writeHeader)),
-			&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)},
-			status,
-			data,
-		},
-	}}
-}
-
-func (t Template) httpRequestReceiverTemplateHandlerFunc(imports *source.Imports, statusCode int) *ast.FuncLit {
-	return &ast.FuncLit{
-		Type: httpHandlerFuncType(imports),
-		Body: &ast.BlockStmt{List: []ast.Stmt{t.executeCall(source.HTTPStatusCode(imports, statusCode), ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), true)}},
-	}
-}
-
 func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
 	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != t.fun.Name ||
 		funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {

@@ -45,21 +45,20 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		execute(response, request, true, "GET /", http.StatusOK, request)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /", struct {
+			Data struct {
+			}
+			Request *http.Request
+		}{Data: struct {
+		}{}, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -80,21 +79,18 @@ type RoutesReceiver interface {
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F()
-		execute(response, request, true, "GET / F()", http.StatusOK, data)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -119,21 +115,16 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		projectID := request.PathValue("projectID")
 		taskID := request.PathValue("taskID")
 		data := receiver.F(ctx, response, request, projectID, taskID)
-		execute(response, request, false, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
 	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
 }
 `,
 		},
@@ -164,21 +155,18 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
 		username := request.PathValue("username")
 		data := receiver.F(username)
-		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -200,21 +188,18 @@ type Server interface {
 func routes(mux *http.ServeMux, receiver Server) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F()
-		execute(response, request, true, "GET / F()", http.StatusOK, data)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -248,21 +233,18 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		if !ok {
 			return
 		}
-		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
+			Data    bool
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -305,81 +287,8 @@ type T struct{}
 
 func (*T) F(username string) int { return 30 }
 
-` + executeGo,
-			Receiver: "T",
-			ExpectedFile: `package main
-
-import "net/http"
-
-type RoutesReceiver interface {
-	F(username string) int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
-		username := request.PathValue("username")
-		data := receiver.F(username)
-		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
-	})
-}
-`,
-		},
-		{
-			Name:      "execute function defined in receiver file",
-			Templates: `{{define "GET /age/{username} F(username)"}}Hello, {{.}}!{{end}}`,
-			ReceiverPackage: `
--- receiver.go --
-package main
-
-type T struct{}
-
-func (*T) F(username string) int { return 30 }
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	response.WriteHeader(code)
-	_ = templates.ExecuteTemplate(response, name, data)
-}
 `,
 			Receiver: "T",
-			ExpectedFile: `package main
-
-import "net/http"
-
-type RoutesReceiver interface {
-	F(username string) int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
-		username := request.PathValue("username")
-		data := receiver.F(username)
-		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
-	})
-}
-`,
-		},
-		{
-			Name:      "execute function already defined in output file",
-			Templates: ``,
-			ReceiverPackage: `
--- receiver.go --
-package main
-
--- template_routes.go --
-package main
-
-import(
-	"html/template"
-	"net/http"
-)
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	response.WriteHeader(code)
-	_ = templates.ExecuteTemplate(response, name, data)
-}
-`,
 			ExpectedFile: `package main
 
 import (
@@ -388,22 +297,25 @@ import (
 )
 
 type RoutesReceiver interface {
+	F(username string) int
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		username := request.PathValue("username")
+		data := receiver.F(username)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }
 `,
 		},
@@ -419,12 +331,14 @@ import "net/http"
 type T struct{}
 
 func (T) F(username string) (int, error) { return 30, error }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(username string) (int, error)
@@ -438,7 +352,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		execute(response, request, true, "GET /age/{username} F(username)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
+			Data    error
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -455,8 +379,7 @@ import "context"
 type T struct{}
 
 func (T) F(ctx context.Context) int { return 30 }
-
-` + executeGo,
+`,
 			Receiver:      "T",
 			ExpectedError: "method expects type context.Context but request is *http.Request",
 		},
@@ -485,12 +408,12 @@ func (T0) F(ctx context.Context) int { return 30 }
 func (T) F1(ctx context.Context, username string) int { return 30 }
 
 func (T) F(ctx context.Context, username string) int { return 30 }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -504,7 +427,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		ctx := request.Context()
 		username := request.PathValue("username")
 		data := receiver.F(ctx, username)
-		execute(response, request, true, "GET /age/{username} F(ctx, username)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(ctx, username)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -554,10 +487,11 @@ func (T) PassUint8(in uint8) uint8    { return in }
 func (T) PassBool(in bool) bool       { return in }
 func (T) PassByte(in byte) byte       { return in }
 func (T) PassRune(in rune) rune       { return in }
-` + executeGo,
+`,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"net/http"
 	"strconv"
 )
@@ -585,7 +519,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := valueParsed
 		data := receiver.PassBool(value)
-		execute(response, request, true, "GET /bool/{value}   PassBool(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /bool/{value}   PassBool(value)", struct {
+			Data    bool
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.Atoi(request.PathValue("value"))
@@ -595,7 +539,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := valueParsed
 		data := receiver.PassInt(value)
-		execute(response, request, true, "GET /int/{value}    PassInt(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /int/{value}    PassInt(value)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int16/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 16)
@@ -605,7 +559,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := int16(valueParsed)
 		data := receiver.PassInt16(value)
-		execute(response, request, true, "GET /int16/{value}  PassInt16(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /int16/{value}  PassInt16(value)", struct {
+			Data    int16
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int32/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 32)
@@ -615,7 +579,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := int32(valueParsed)
 		data := receiver.PassInt32(value)
-		execute(response, request, true, "GET /int32/{value}  PassInt32(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /int32/{value}  PassInt32(value)", struct {
+			Data    int32
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int64/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 64)
@@ -625,7 +599,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := valueParsed
 		data := receiver.PassInt64(value)
-		execute(response, request, true, "GET /int64/{value}  PassInt64(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /int64/{value}  PassInt64(value)", struct {
+			Data    int64
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int8/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 8)
@@ -635,7 +619,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := int8(valueParsed)
 		data := receiver.PassInt8(value)
-		execute(response, request, true, "GET /int8/{value}   PassInt8(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /int8/{value}   PassInt8(value)", struct {
+			Data    int8
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 0)
@@ -645,7 +639,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := uint(valueParsed)
 		data := receiver.PassUint(value)
-		execute(response, request, true, "GET /uint/{value}   PassUint(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /uint/{value}   PassUint(value)", struct {
+			Data    uint
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint16/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 16)
@@ -655,7 +659,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := uint16(valueParsed)
 		data := receiver.PassUint16(value)
-		execute(response, request, true, "GET /uint16/{value} PassUint16(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /uint16/{value} PassUint16(value)", struct {
+			Data    uint16
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint32/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 32)
@@ -665,7 +679,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := uint32(valueParsed)
 		data := receiver.PassUint32(value)
-		execute(response, request, true, "GET /uint32/{value} PassUint32(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /uint32/{value} PassUint32(value)", struct {
+			Data    uint32
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint64/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 64)
@@ -675,7 +699,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := valueParsed
 		data := receiver.PassUint64(value)
-		execute(response, request, true, "GET /uint64/{value} PassUint64(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /uint64/{value} PassUint64(value)", struct {
+			Data    uint64
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint8/{value}", func(response http.ResponseWriter, request *http.Request) {
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 8)
@@ -685,7 +719,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		value := uint8(valueParsed)
 		data := receiver.PassUint8(value)
-		execute(response, request, true, "GET /uint8/{value}  PassUint8(value)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /uint8/{value}  PassUint8(value)", struct {
+			Data    uint8
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -702,12 +746,14 @@ type T struct{}
 type In struct{}
 
 func (T) F(form In) any { return nil }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(form In) any
@@ -718,7 +764,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		request.ParseForm()
 		var form In
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -731,12 +787,12 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 package main
 
 type T struct{}
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"net/http"
 	"net/url"
 )
@@ -750,7 +806,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		request.ParseForm()
 		var form url.Values = request.Form
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -771,11 +837,14 @@ type (
 
 func (T) F(form In) int { return 0 }
 
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -787,7 +856,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		var form In
 		form.field = request.FormValue("field")
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -807,12 +886,12 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"net/http"
 	"strconv"
 )
@@ -838,7 +917,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			form.field = value
 		}
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -858,11 +947,14 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -874,7 +966,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		var form In
 		form.field = request.FormValue("some-field")
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -917,6 +1019,7 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"net/http"
 	"strconv"
 	"time"
@@ -1027,7 +1130,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			form.fieldTime = value
 		}
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1049,13 +1162,14 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -1068,7 +1182,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		form.field1 = request.FormValue("field1")
 		form.field2 = request.FormValue("field2")
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1090,12 +1214,14 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(form In) int
@@ -1109,7 +1235,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			form.field = append(form.field, val)
 		}
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1142,12 +1278,12 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-
-` + executeGo,
+`,
 			Receiver: "T",
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"net/http"
 	"strconv"
 	"time"
@@ -1258,7 +1394,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			form.fieldTime = append(form.fieldTime, value)
 		}
 		data := receiver.F(form)
-		execute(response, request, true, "GET / F(form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1298,12 +1444,13 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 package main
 
 type T struct{}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F() any
@@ -1312,7 +1459,17 @@ type RoutesReceiver interface {
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F()
-		execute(response, request, true, "GET / F()", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1326,19 +1483,32 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 package main
 
 type T struct{}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		execute(response, request, true, "GET /", http.StatusOK, request)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /", struct {
+			Data struct {
+			}
+			Request *http.Request
+		}{Data: struct {
+		}{}, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1352,19 +1522,32 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 package main
 
 type T struct{}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		execute(response, request, true, "GET /", http.StatusOK, request)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /", struct {
+			Data struct {
+			}
+			Request *http.Request
+		}{Data: struct {
+		}{}, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1381,12 +1564,13 @@ import "net/http"
 type T struct{}
 
 func (T) F(response http.ResponseWriter) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(response http.ResponseWriter) any
@@ -1395,7 +1579,15 @@ type RoutesReceiver interface {
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F(response)
-		execute(response, request, false, "GET / F(response)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(response)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1412,12 +1604,11 @@ import "context"
 type T struct{}
 
 func (T) F(ctx context.Context) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1430,7 +1621,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		ctx := request.Context()
 		data := receiver.F(ctx)
-		execute(response, request, true, "GET / F(ctx)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1445,12 +1646,13 @@ package main
 type T struct{}
 
 func (T) F(param string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(param string) any
@@ -1460,7 +1662,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{param}", func(response http.ResponseWriter, request *http.Request) {
 		param := request.PathValue("param")
 		data := receiver.F(param)
-		execute(response, request, true, "GET /{param} F(param)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{param} F(param)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1477,12 +1689,11 @@ import "context"
 type T struct{}
 
 func (T) F(ctx context.Context, userName string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1496,7 +1707,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		ctx := request.Context()
 		userName := request.PathValue("userName")
 		data := receiver.F(ctx, userName)
-		execute(response, request, true, "GET /{userName} F(ctx, userName)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{userName} F(ctx, userName)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1602,7 +1823,7 @@ type T struct{}
 
 func (T) F() {}
 
-` + executeGo,
+`,
 			ExpectedError: `method for pattern "GET / F()" has no results it should have one or two`,
 		},
 		{
@@ -1667,6 +1888,7 @@ func execute(response http.ResponseWriter, request *http.Request, writeHeader bo
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1679,12 +1901,11 @@ type (
 func (T) F(context.Context, S, int) any {return nil}
 
 func (T) Session(http.ResponseWriter, *http.Request) (S, bool) {return Session{}, false}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"strconv"
@@ -1709,7 +1930,15 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		id := idParsed
 		data := receiver.F(ctx, result0, id)
-		execute(response, request, false, "GET /{id} F(ctx, Session(response, request), id)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Session(response, request), id)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1734,12 +1963,11 @@ type (
 func (T) F(context.Context, Session, int) any {return nil}
 
 func (T) Author(int) (Session, error) {return Session{}, nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"strconv"
@@ -1765,7 +1993,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			return
 		}
 		data := receiver.F(ctx, result0, id)
-		execute(response, request, true, "GET /{id} F(ctx, Author(id), id)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Author(id), id)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1778,6 +2016,7 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1790,12 +2029,11 @@ type (
 func (T) F(context.Context, Configuration) any {return nil}
 
 func (T) LoadConfiguration() Configuration { return }
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1810,7 +2048,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		ctx := request.Context()
 		result0 := receiver.LoadConfiguration()
 		data := receiver.F(ctx, result0)
-		execute(response, request, true, "GET / F(ctx, LoadConfiguration())", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, LoadConfiguration())", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1835,12 +2083,11 @@ type (
 func (T) F(context.Context, any) any {return nil}
 
 func (T) Headers(response http.ResponseWriter) any { return }
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedFile: `package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 )
@@ -1855,7 +2102,15 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		ctx := request.Context()
 		result0 := receiver.Headers(response)
 		data := receiver.F(ctx, result0)
-		execute(response, request, false, "GET / F(ctx, Headers(response))", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, Headers(response))", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1875,10 +2130,13 @@ func (T) F() int { return 0 }
 type Server struct {
 	T
 }
-` + executeGo,
+`,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F() int
@@ -1887,7 +2145,17 @@ type RoutesReceiver interface {
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F()
-		execute(response, request, true, "GET / F()", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1912,10 +2180,13 @@ import "example.com/another"
 type Server struct {
 	another.T
 }
-` + executeGo,
+`,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F() int
@@ -1924,7 +2195,17 @@ type RoutesReceiver interface {
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		data := receiver.F()
-		execute(response, request, true, "GET / F()", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1950,10 +2231,13 @@ func (id *ID) UnmarshalText(text []byte) error {
 type Server struct{}
 
 func (Server) F(id ID) int { return int(id) }
-` + executeGo,
+`,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 	F(id ID) int
@@ -1968,7 +2252,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		id := idParsed
 		data := receiver.F(id)
-		execute(response, request, true, "GET /{id} F(id)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(id)", struct {
+			Data    int
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -1984,10 +2278,13 @@ package main
 import "context"
 
 func function(ctx context.Context) int { return 32 }
-` + executeGo,
+`,
 			ExpectedFile: `package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 type RoutesReceiver interface {
 }
@@ -1996,7 +2293,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		ctx := request.Context()
 		data := function(ctx)
-		execute(response, request, true, "GET / function(ctx)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET / function(ctx)", struct {
+			Data    any
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 }
 `,
@@ -2043,11 +2350,3 @@ var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
 		})
 	}
 }
-
-const executeGo = `-- execute.go --
-package main
-
-import "net/http"
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
-`

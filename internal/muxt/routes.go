@@ -169,8 +169,15 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	for _, t := range templates {
 		logger.Printf("routes has route for %s", t.pattern)
 		if t.fun == nil {
-			hf := t.httpRequestReceiverTemplateHandlerFunc(imports, t.statusCode)
-			routesFunc.Body.List = append(routesFunc.Body.List, t.callHandleFunc(hf))
+			handlerFunc := &ast.FuncLit{
+				Type: httpHandlerFuncType(imports),
+				Body: &ast.BlockStmt{},
+			}
+			handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, true, t.statusCode, &ast.CompositeLit{
+				Type: &ast.StructType{Fields: &ast.FieldList{}},
+				Elts: []ast.Expr{},
+			}, &ast.StructType{Fields: &ast.FieldList{}})...)
+			routesFunc.Body.List = append(routesFunc.Body.List, t.callHandleFunc(handlerFunc))
 			continue
 		}
 		writeHeader := !hasHTTPResponseWriterArgument(t.call)
@@ -194,7 +201,10 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}
 		const dataVarIdent = "data"
 
-		var callFun ast.Expr
+		var (
+			callFun  ast.Expr
+			dataType ast.Expr
+		)
 		obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), t.fun.Name)
 		isMethodCall := obj != nil
 		if isMethodCall {
@@ -202,8 +212,15 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 				X:   ast.NewIdent(receiverIdent),
 				Sel: t.fun,
 			}
+			results := obj.Type().(*types.Signature).Results()
+			dt := results.At(results.Len() - 1)
+			dataType, err = astTypeExpression(imports, dt.Type())
+			if err != nil {
+				return "", err
+			}
 		} else {
 			callFun = ast.NewIdent(t.fun.Name)
+			dataType = ast.NewIdent("any")
 		}
 
 		receiverCallStatements, err := callReceiverMethod(imports, dataVarIdent, sig, &ast.CallExpr{
@@ -214,7 +231,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			return "", err
 		}
 		handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
-		handlerFunc.Body.List = append(handlerFunc.Body.List, t.executeCall(source.HTTPStatusCode(imports, t.statusCode), ast.NewIdent(dataVarIdent), writeHeader))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, writeHeader, t.statusCode, ast.NewIdent("data"), dataType)...)
 		routesFunc.Body.List = append(routesFunc.Body.List, t.callHandleFunc(handlerFunc))
 	}
 
@@ -236,10 +253,6 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			// func routes
 			routesFunc,
 		},
-	}
-
-	if config.executeFunc {
-		file.Decls = append(file.Decls, executeFuncDecl(imports, config.TemplatesVariable))
 	}
 
 	return source.FormatFile(filepath.Join(wd, DefaultOutputFileName), file)
@@ -998,86 +1011,85 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 	}
 }
 
-func executeFuncDecl(imports *source.Imports, templatesVariableIdent string) *ast.FuncDecl {
-	const writeHeaderIdent = "writeHeader"
-	return &ast.FuncDecl{
-		Name: ast.NewIdent(executeIdentName),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{
-				List: []*ast.Field{
-					httpResponseField(imports),
-					httpRequestField(imports),
-					{Names: []*ast.Ident{ast.NewIdent(writeHeaderIdent)}, Type: ast.NewIdent("bool")},
-					{Names: []*ast.Ident{ast.NewIdent("name")}, Type: ast.NewIdent("string")},
-					{Names: []*ast.Ident{ast.NewIdent("code")}, Type: ast.NewIdent("int")},
-					{Names: []*ast.Ident{ast.NewIdent(dataVarIdent)}, Type: ast.NewIdent("any")},
+func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIdent string, writeHeader bool, statusCode int, dataValue, dataType ast.Expr) []ast.Stmt {
+	statements := make([]ast.Stmt, 0, 5)
+	statements = append(statements,
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent("buf")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(imports.Add("", "bytes")),
+					Sel: ast.NewIdent("NewBuffer"),
 				},
-			},
+				Args: []ast.Expr{source.Nil()},
+			}},
 		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent("buf")},
-					Tok: token.DEFINE,
-					Rhs: []ast.Expr{&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(imports.Add("", "bytes")),
-							Sel: ast.NewIdent("NewBuffer"),
-						},
-						Args: []ast.Expr{source.Nil()},
-					}},
-				},
-				&ast.IfStmt{
-					Init: &ast.AssignStmt{
-						Lhs: []ast.Expr{ast.NewIdent(errIdent)},
-						Tok: token.DEFINE,
-						Rhs: []ast.Expr{&ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(templatesVariableIdent),
-								Sel: ast.NewIdent("ExecuteTemplate"),
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(errIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   ast.NewIdent(templatesVariableIdent),
+						Sel: ast.NewIdent("ExecuteTemplate"),
+					},
+					Args: []ast.Expr{ast.NewIdent("buf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.CompositeLit{
+						Type: &ast.StructType{
+							Fields: &ast.FieldList{
+								List: []*ast.Field{
+									{Names: []*ast.Ident{ast.NewIdent("Data")}, Type: dataType},
+									{Names: []*ast.Ident{ast.NewIdent("Request")}, Type: imports.HTTPRequestPtr()},
+								},
 							},
-							Args: []ast.Expr{ast.NewIdent("buf"), ast.NewIdent("name"), ast.NewIdent(dataVarIdent)},
-						}},
-					},
-					Cond: &ast.BinaryExpr{
-						X:  ast.NewIdent(errIdent),
-						Op: token.NEQ,
-						Y:  source.Nil(),
-					},
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.ExprStmt{X: imports.HTTPErrorCall(ast.NewIdent(httpResponseField(imports).Names[0].Name), source.CallError(errIdent), http.StatusInternalServerError)},
-							&ast.ReturnStmt{},
 						},
-					},
-				},
-				&ast.IfStmt{
-					Cond: ast.NewIdent(writeHeaderIdent),
-					Body: &ast.BlockStmt{List: []ast.Stmt{
-						&ast.ExprStmt{X: &ast.CallExpr{
-							Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
-							Args: []ast.Expr{source.String("content-type"), source.String("text/html; charset=utf-8")},
-						}},
-						&ast.ExprStmt{X: &ast.CallExpr{
-							Fun:  &ast.SelectorExpr{X: ast.NewIdent(httpResponseField(imports).Names[0].Name), Sel: ast.NewIdent("WriteHeader")},
-							Args: []ast.Expr{ast.NewIdent("code")},
-						}},
-					}},
-				},
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent("_")},
-					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent("buf"),
-							Sel: ast.NewIdent("WriteTo"),
+						Elts: []ast.Expr{
+							&ast.KeyValueExpr{
+								Key:   ast.NewIdent("Data"),
+								Value: dataValue,
+							},
+							&ast.KeyValueExpr{
+								Key:   ast.NewIdent("Request"),
+								Value: ast.NewIdent("request"),
+							},
 						},
-						Args: []ast.Expr{ast.NewIdent(httpResponseField(imports).Names[0].Name)},
 					}},
+				}},
+			},
+			Cond: &ast.BinaryExpr{
+				X:  ast.NewIdent(errIdent),
+				Op: token.NEQ,
+				Y:  source.Nil(),
+			},
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: imports.HTTPErrorCall(ast.NewIdent(httpResponseField(imports).Names[0].Name), source.CallError(errIdent), http.StatusInternalServerError)},
+					&ast.ReturnStmt{},
 				},
 			},
 		},
+	)
+	if writeHeader {
+		statements = append(statements, &ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
+			Args: []ast.Expr{source.String("content-type"), source.String("text/html; charset=utf-8")},
+		}}, &ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(httpResponseField(imports).Names[0].Name), Sel: ast.NewIdent("WriteHeader")},
+			Args: []ast.Expr{source.HTTPStatusCode(imports, statusCode)},
+		}})
 	}
+	statements = append(statements, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent("_")},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{&ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent("buf"),
+				Sel: ast.NewIdent("WriteTo"),
+			},
+			Args: []ast.Expr{ast.NewIdent(httpResponseField(imports).Names[0].Name)},
+		}},
+	})
+	return statements
 }
 
 type forest template.Template

@@ -6,7 +6,7 @@ exec go test
 
 -- index.gohtml --
 {{define "GET / UpdateValue(form)" }}
-	{{block "pat" . -}}
+	{{block "pat" .Data -}}
     <input type="text" name="value" pattern="[0-9]{3}">
   {{- end}}
 {{end}}
@@ -39,6 +39,7 @@ type Form struct {
 package server
 
 import (
+"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,6 +70,8 @@ func Test(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		res := rec.Result()
+		body, _ := io.ReadAll(res.Body)
+		t.Log("body", string(body))
 
 		if got, exp := res.StatusCode, http.StatusOK; got != exp {
 			t.Error("expected", http.StatusText(exp), "got", http.StatusText(got))

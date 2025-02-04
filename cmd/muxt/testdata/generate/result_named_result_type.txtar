@@ -109,7 +109,7 @@ var (
 <details><summary>data</summary><pre>{{printf "%#v" .}}</pre></details>
 
 {{- define "POST /article CreatArticle(ctx, form)" -}}
-	{{- template "form.gohtml" . -}}
+	{{- template "form.gohtml" .Data -}}
 {{- end -}}
 
 {{- define "GET /article/new" -}}

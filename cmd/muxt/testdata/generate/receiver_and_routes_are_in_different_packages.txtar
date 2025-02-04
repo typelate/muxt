@@ -78,5 +78,5 @@ var (
 )
 -- internal/hypertext/form.gohtml --
 {{- define "GET /{$} F()" -}}
-<h1>{{.}}</h1>
+<h1>{{.Data}}</h1>
 {{- end -}}

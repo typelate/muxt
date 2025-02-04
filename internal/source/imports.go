@@ -246,3 +246,12 @@ func (imports *Imports) StrconvParseBoolCall(expr ast.Expr) *ast.CallExpr {
 func (imports *Imports) TimeParseCall(layout string, expr ast.Expr) *ast.CallExpr {
 	return imports.Call("", "time", "Parse", []ast.Expr{String(layout), expr})
 }
+
+func (imports *Imports) HTTPRequestPtr() *ast.StarExpr {
+	return &ast.StarExpr{
+		X: &ast.SelectorExpr{
+			X:   ast.NewIdent(imports.Add("http", "net/http")),
+			Sel: ast.NewIdent("Request"),
+		},
+	}
+}

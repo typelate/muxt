@@ -39,7 +39,17 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			form.Value = value
 		}
 		data := receiver.SubmitFormEditRow(id, form)
-		execute(response, request, true, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", struct {
+			Data    EditRowPage
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /fruits/{id}/edit", func(response http.ResponseWriter, request *http.Request) {
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
@@ -49,27 +59,46 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		id := idParsed
 		data := receiver.GetFormEditRow(id)
-		execute(response, request, true, "GET /fruits/{id}/edit GetFormEditRow(id)", http.StatusOK, data)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", struct {
+			Data    EditRowPage
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
-		execute(response, request, true, "GET /help", http.StatusOK, request)
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /help", struct {
+			Data struct {
+			}
+			Request *http.Request
+		}{Data: struct {
+		}{}, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("content-type", "text/html; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
 		ctx := request.Context()
 		data := receiver.List(ctx)
-		execute(response, request, true, "GET /{$} List(ctx)", http.StatusOK, data)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", struct {
+			Data    []Row
+			Request *http.Request
+		}{Data: data, Request: request}); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+		response.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(response)
+	})
 }

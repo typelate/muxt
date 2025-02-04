@@ -3,7 +3,7 @@ muxt generate
 exec go test -cover
 
 -- template.gohtml --
-{{define "GET /user/{username} Method(username)" }}[{{.}}]{{end}}
+{{define "GET /user/{username} Method(username)" }}[{{.Data}}]{{end}}
 
 -- go.mod --
 module server
