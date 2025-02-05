@@ -16,6 +16,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+const (
+	templateExecuteFunc = "ExecuteTemplate"
+)
+
 func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, Functions, error) {
 	funcTypeMap := DefaultFunctions(pkg.Types)
 	for _, tv := range IterateValueSpecs(pkg.Syntax) {
@@ -397,4 +401,34 @@ func (functions Functions) FindFunction(name string) (*types.Signature, bool) {
 		return nil, false
 	}
 	return fn, true
+}
+
+func ExecuteTemplateArguments(node ast.Node, info *types.Info, templatesVariableName string) (string, types.Type, bool) {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return "", nil, false
+	}
+	if len(call.Args) != 3 {
+		return "", nil, false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return "", nil, false
+	}
+	if sel.Sel.Name != templateExecuteFunc {
+		return "", nil, false
+	}
+	templatesIdent, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return "", nil, false
+	}
+	if templatesIdent.Name != templatesVariableName {
+		return "", nil, false
+	}
+	templateName, ok := basicLiteralString(call.Args[1])
+	if !ok {
+		return "", nil, false
+	}
+	dataVar := info.TypeOf(call.Args[2])
+	return templateName, dataVar, true
 }

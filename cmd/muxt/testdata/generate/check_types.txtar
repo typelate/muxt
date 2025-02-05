@@ -5,7 +5,7 @@ stderr 'checking endpoint GET / Endpoint\(\)'
 stderr 'ERROR argument 0 has type int32 expected int64'
 
 -- template.gohtml --
-{{define "GET / Endpoint()" }}Number {{.Number | .Square}}{{end}}
+{{define "GET / Endpoint()" }}Number {{.Data.Number | .Data.Square}}{{end}}
 
 -- go.mod --
 module server

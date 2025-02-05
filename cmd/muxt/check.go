@@ -15,7 +15,7 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 		return err
 	}
 	if err := muxt.CheckTemplates(workingDirectory, log.New(stderr, "", 0), config); err != nil {
-		return fmt.Errorf("fail")
+		return fmt.Errorf("fail: %s", err)
 	}
 	return nil
 }

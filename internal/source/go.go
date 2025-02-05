@@ -264,3 +264,18 @@ func HasFieldWithName(list *ast.FieldList, name string) bool {
 	_, ok := FindFieldWithName(list, name)
 	return ok
 }
+
+func basicLiteralString(node ast.Node) (string, bool) {
+	name, ok := node.(*ast.BasicLit)
+	if !ok {
+		return "", false
+	}
+	if name.Kind != token.STRING {
+		return "", false
+	}
+	templateName, err := strconv.Unquote(name.Value)
+	if err != nil {
+		return "", false
+	}
+	return templateName, true
+}
