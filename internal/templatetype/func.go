@@ -10,33 +10,30 @@ import (
 type Functions map[string]*types.Signature
 
 func DefaultFunctions(pkg *types.Package) Functions {
-	funcTypeMap := make(map[string]*types.Signature)
-	fmtPkg, ok := findPackage(pkg, "fmt")
-	if !ok || fmtPkg == nil {
-		return funcTypeMap
+	fns := make(map[string]*types.Signature)
+	for pn, idents := range map[string]map[string]string{
+		"fmt": {
+			"Sprint":   "print",
+			"Sprintf":  "printf",
+			"Sprintln": "println",
+		},
+		"html/template": {
+			"URLQueryEscaper": "urlescaper",
+			"HTMLEscaper":     "htmlescaper",
+		},
+		"text/template": {
+			"JSEscaper":       "js",
+			"URLQueryEscaper": "urlquery",
+			"HTMLEscaper":     "html",
+		},
+	} {
+		if p, ok := findPackage(pkg, pn); ok && p != nil {
+			for funcIdent, templateFunc := range idents {
+				fns[templateFunc] = p.Scope().Lookup(funcIdent).Type().(*types.Signature)
+			}
+		}
 	}
-
-	textTemplatesPkg, ok := findPackage(pkg, "text/template")
-	if !ok || textTemplatesPkg == nil {
-		return funcTypeMap
-	}
-
-	htmlTemplatesPkg, ok := findPackage(pkg, "html/template")
-	if !ok {
-		return funcTypeMap
-	}
-
-	funcTypeMap["js"] = textTemplatesPkg.Scope().Lookup("JSEscaper").Type().(*types.Signature)
-	funcTypeMap["urlquery"] = textTemplatesPkg.Scope().Lookup("URLQueryEscaper").Type().(*types.Signature)
-	funcTypeMap["html"] = textTemplatesPkg.Scope().Lookup("HTMLEscaper").Type().(*types.Signature)
-	funcTypeMap["print"] = fmtPkg.Scope().Lookup("Sprint").Type().(*types.Signature)
-	funcTypeMap["printf"] = fmtPkg.Scope().Lookup("Sprintf").Type().(*types.Signature)
-	funcTypeMap["println"] = fmtPkg.Scope().Lookup("Sprintln").Type().(*types.Signature)
-	funcTypeMap["urlescaper"] = htmlTemplatesPkg.Scope().Lookup("URLQueryEscaper").Type().(*types.Signature)
-	funcTypeMap["htmlescaper"] = htmlTemplatesPkg.Scope().Lookup("HTMLEscaper").Type().(*types.Signature)
-	// "attrescaper" checked by builtin
-
-	return funcTypeMap
+	return fns
 }
 
 func (functions Functions) Add(m Functions) Functions {
@@ -48,12 +45,11 @@ func (functions Functions) Add(m Functions) Functions {
 }
 
 func (functions Functions) CheckCall(funcIdent string, argNodes []parse.Node, argTypes []types.Type) (types.Type, bool, error) {
-	m := (map[string]*types.Signature)(functions)
-	fn, ok := m[funcIdent]
+	fn, ok := functions[funcIdent]
 	if !ok {
 		return builtInCheck(funcIdent, argNodes, argTypes)
 	}
-	if resultLen := fn.Results().Len(); resultLen < 1 {
+	if resultLen := fn.Results().Len(); resultLen == 0 {
 		return nil, false, fmt.Errorf("function %s has no results", funcIdent)
 	} else if resultLen > 2 {
 		return nil, false, fmt.Errorf("function %s has too many results", funcIdent)
@@ -116,7 +112,10 @@ func checkCallArguments(fn *types.Signature, args []types.Type) (types.Type, boo
 }
 
 func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
-	if pkg == nil || pkg.Path() == path {
+	if pkg == nil {
+		return nil, false
+	}
+	if pkg.Path() == path {
 		return pkg, true
 	}
 	for _, im := range pkg.Imports() {
