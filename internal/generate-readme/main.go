@@ -42,6 +42,7 @@ func main() {
 		log.Fatal(err)
 	}
 	out.WriteString("#")
+	docsIndex = bytes.ReplaceAll(docsIndex, []byte("](./"), []byte("](./docs/"))
 	out.Write(docsIndex)
 
 	if err := os.WriteFile(filepath.FromSlash("../../README.md"), out.Bytes(), 0o644); err != nil {
