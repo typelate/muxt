@@ -52,6 +52,8 @@ const (
 	receiverParamName = "receiver"
 
 	errIdent = "err"
+
+	resultTypeName = "Result"
 )
 
 type RoutesFileConfiguration struct {
@@ -165,6 +167,28 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		},
 		Body: new(ast.BlockStmt),
 	}
+
+	routesFunc.Body.List = append(routesFunc.Body.List, &ast.DeclStmt{
+		Decl: &ast.GenDecl{
+			Tok: token.TYPE,
+			Specs: []ast.Spec{&ast.TypeSpec{
+				Name: ast.NewIdent(resultTypeName),
+				TypeParams: &ast.FieldList{
+					List: []*ast.Field{
+						{Names: []*ast.Ident{ast.NewIdent("T")}, Type: ast.NewIdent("any")},
+					},
+				},
+				Type: &ast.StructType{
+					Fields: &ast.FieldList{
+						List: []*ast.Field{
+							{Names: []*ast.Ident{ast.NewIdent("Data")}, Type: ast.NewIdent("T")},
+							{Names: []*ast.Ident{ast.NewIdent("Request")}, Type: imports.HTTPRequestPtr()},
+						},
+					},
+				},
+			}},
+		},
+	})
 
 	for _, t := range templates {
 		logger.Printf("routes has route for %s", t.pattern)
@@ -1025,6 +1049,26 @@ func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIde
 				Args: []ast.Expr{source.Nil()},
 			}},
 		},
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent("result")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CompositeLit{
+				Type: &ast.IndexExpr{
+					X:     ast.NewIdent(resultTypeName),
+					Index: dataType,
+				},
+				Elts: []ast.Expr{
+					&ast.KeyValueExpr{
+						Key:   ast.NewIdent("Data"),
+						Value: dataValue,
+					},
+					&ast.KeyValueExpr{
+						Key:   ast.NewIdent("Request"),
+						Value: ast.NewIdent("request"),
+					},
+				},
+			}},
+		},
 		&ast.IfStmt{
 			Init: &ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(errIdent)},
@@ -1034,26 +1078,7 @@ func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIde
 						X:   ast.NewIdent(templatesVariableIdent),
 						Sel: ast.NewIdent("ExecuteTemplate"),
 					},
-					Args: []ast.Expr{ast.NewIdent("buf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.CompositeLit{
-						Type: &ast.StructType{
-							Fields: &ast.FieldList{
-								List: []*ast.Field{
-									{Names: []*ast.Ident{ast.NewIdent("Data")}, Type: dataType},
-									{Names: []*ast.Ident{ast.NewIdent("Request")}, Type: imports.HTTPRequestPtr()},
-								},
-							},
-						},
-						Elts: []ast.Expr{
-							&ast.KeyValueExpr{
-								Key:   ast.NewIdent("Data"),
-								Value: dataValue,
-							},
-							&ast.KeyValueExpr{
-								Key:   ast.NewIdent("Request"),
-								Value: ast.NewIdent("request"),
-							},
-						},
-					}},
+					Args: []ast.Expr{ast.NewIdent("buf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, ast.NewIdent("result")},
 				}},
 			},
 			Cond: &ast.BinaryExpr{

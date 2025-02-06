@@ -17,6 +17,10 @@ type RoutesReceiver interface {
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
+	type Result[T any] struct {
+		Data    T
+		Request *http.Request
+	}
 	mux.HandleFunc("PATCH /fruits/{id}", func(response http.ResponseWriter, request *http.Request) {
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
@@ -40,10 +44,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.SubmitFormEditRow(id, form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", struct {
-			Data    EditRowPage
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		result := Result[EditRowPage]{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", result); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -60,10 +62,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		id := idParsed
 		data := receiver.GetFormEditRow(id)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", struct {
-			Data    EditRowPage
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		result := Result[EditRowPage]{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", result); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -73,12 +73,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	})
 	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /help", struct {
-			Data struct {
-			}
-			Request *http.Request
-		}{Data: struct {
-		}{}, Request: request}); err != nil {
+		result := Result[struct {}]{Data: struct{}{}, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /help", result); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -90,10 +86,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		ctx := request.Context()
 		data := receiver.List(ctx)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", struct {
-			Data    []Row
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		result := Result[[]Row]{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", result); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
