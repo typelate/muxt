@@ -61,7 +61,7 @@ func main() {
 
 type Server struct{}
 
-func (Server) Hello() string {
+func (Server) F() string {
 	return "Hello, world!"
 }
 
@@ -72,7 +72,7 @@ func (Server) Hello() string {
 Create a file with the extention ".gohtml".
 
 ```gotemplate
-{{define "GET / Hello()" -}}
+{{define "GET / F()" -}}
 <!DOCTYPE html>
 <html lang='en'>
 <head>
@@ -106,32 +106,31 @@ Access the server at `http://localhost:8080`.
 package main
 
 import (
-	"bytes"
-	"net/http"
+  "bytes"
+  "net/http"
 )
 
-type RoutesReceiver interface {
-	Hello() string
+type Server interface {
+  F() string
 }
 
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		result0 := receiver.Hello()
-		execute(response, request, true, "GET /", http.StatusOK, result0)
-	})
-}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {
-	buf := bytes.NewBuffer(nil)
-	if err := templates.ExecuteTemplate(buf, name, data); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if writeHeader {
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(code)
-	}
-	_, _ = buf.WriteTo(response)
+func routes(mux *http.ServeMux, receiver Server) {
+  mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+    type ResponseData struct {
+      Data    string
+      Request *http.Request
+    }
+    data := receiver.F()
+    buf := bytes.NewBuffer(nil)
+    rd := ResponseData{Data: data, Request: request}
+    if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
+      http.Error(response, err.Error(), http.StatusInternalServerError)
+      return
+    }
+    response.Header().Set("content-type", "text/html; charset=utf-8")
+    response.WriteHeader(http.StatusOK)
+    _, _ = buf.WriteTo(response)
+  })
 }
 ```
 
@@ -142,7 +141,7 @@ The 2 standard library `import`s here are minimal.
 The generated routes function uses net/http.
 The (optionally) generated execute function uses the byte buffer.
 
-The named empty interface RoutesReceiver has one method `Hello() string`.
+The named empty interface RoutesReceiver has one method `F() string`.
 The method signature was discovered by muxt by iterating over the methods on the named receiver `type Server`.
 
 `func routes` is where generated (inline) http.HandlerFunc closures are mapped to http routes on the multiplexer.
@@ -151,10 +150,5 @@ or after calling `routes`, `mux.HandleFunc` will panic.
 The endpoint string `GET /` is cut out of the template name.
 Inside the http handler func, the named method is called.
 The result is then passed to execute.
-
-`func execute` is a simplistic template renderer.
-You will likely want to replace it with your own implementation to get better buffer utilization or global custom
-headers.
-For simple low traffic sites, this function is a reasonable starting point.
 
 ## Next Steps

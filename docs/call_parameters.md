@@ -12,38 +12,9 @@ There are three parameters you can pass to a method that always generate the sam
   this)
 
 Using these three, the generated code will look something like this.
-
-Given `{{define "GET / F(ctx, response, request)"}}Hello{{end}}`,
-
-You will get a handler generated like this:
-
-```go
-package main
-
-import (
-	"context"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-	F(ctx context.Context, response http.ResponseWriter, request *http.Request) any
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		ctx := request.Context()
-		data := receiver.F(ctx, response, request)
-		execute(response, request, false, "GET / F(ctx, response, request)", http.StatusOK, data)
-	})
-}
-
-func execute(http.ResponseWriter, *http.Request, bool, string, int, any) {}
-
-```
-
 You can also map path values from the path pattern to identifiers and pass them to your handler.
 
-Given `{{define "GET /articles/{id} ReadArticle(ctx, id)"}}{{end}}`,
+Given `{{define "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)"}}Hello, world!{{end}}`,
 
 You will get a handler generated like this:
 
@@ -51,24 +22,34 @@ You will get a handler generated like this:
 package main
 
 import (
-	"context"
-	"net/http"
+  "bytes"
+  "context"
+  "net/http"
 )
 
 type RoutesReceiver interface {
-	ReadArticle(ctx context.Context, id string) any
+  F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID string, taskID string) any
 }
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /articles/{id}", func(response http.ResponseWriter, request *http.Request) {
-		ctx := request.Context()
-		id := request.PathValue("id")
-		data := receiver.ReadArticle(ctx, id)
-		execute(response, request, true, "GET /articles/{id} ReadArticle(ctx, id)", http.StatusOK, data)
-	})
+  mux.HandleFunc("GET /project/{projectID}/task/{taskID}", func(response http.ResponseWriter, request *http.Request) {
+    type ResponseData struct {
+      Data    any
+      Request *http.Request
+    }
+    ctx := request.Context()
+    projectID := request.PathValue("projectID")
+    taskID := request.PathValue("taskID")
+    data := receiver.F(ctx, response, request, projectID, taskID)
+    buf := bytes.NewBuffer(nil)
+    rd := ResponseData{Data: data, Request: request}
+    if err := templates.ExecuteTemplate(buf, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", rd); err != nil {
+      http.Error(response, err.Error(), http.StatusInternalServerError)
+      return
+    }
+    _, _ = buf.WriteTo(response)
+  })
 }
-
-func execute(http.ResponseWriter, *http.Request, bool, string, int, any) {}
 ```
 
 ## Parsing
