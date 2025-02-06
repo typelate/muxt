@@ -45,13 +45,12 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /", struct {
-			Data struct {
-			}
+		type ResponseData struct {
 			Request *http.Request
-		}{Data: struct {
-		}{}, Request: request}); err != nil {
+		}
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -78,12 +77,14 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+		type ResponseData struct {
 			Data    any
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F()
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -111,15 +112,17 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /project/{projectID}/task/{taskID}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		projectID := request.PathValue("projectID")
 		taskID := request.PathValue("taskID")
 		data := receiver.F(ctx, response, request, projectID, taskID)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -153,13 +156,15 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		username := request.PathValue("username")
 		data := receiver.F(username)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -187,12 +192,14 @@ type Server interface {
 
 func routes(mux *http.ServeMux, receiver Server) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+		type ResponseData struct {
 			Data    any
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F()
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -228,16 +235,18 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    bool
+			Request *http.Request
+		}
 		username := request.PathValue("username")
 		data, ok := receiver.F(username)
 		if !ok {
 			return
 		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
-			Data    bool
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -302,13 +311,15 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		username := request.PathValue("username")
 		data := receiver.F(username)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -346,6 +357,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    error
+			Request *http.Request
+		}
 		username := request.PathValue("username")
 		data, err := receiver.F(username)
 		if err != nil {
@@ -353,10 +368,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 			return
 		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", struct {
-			Data    error
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(username)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -424,14 +437,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /age/{username}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		ctx := request.Context()
 		username := request.PathValue("username")
 		data := receiver.F(ctx, username)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(ctx, username)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /age/{username} F(ctx, username)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -512,6 +527,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /bool/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    bool
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseBool(request.PathValue("value"))
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -520,10 +539,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := valueParsed
 		data := receiver.PassBool(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /bool/{value}   PassBool(value)", struct {
-			Data    bool
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /bool/{value}   PassBool(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -532,6 +549,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		valueParsed, err := strconv.Atoi(request.PathValue("value"))
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -540,10 +561,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := valueParsed
 		data := receiver.PassInt(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /int/{value}    PassInt(value)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /int/{value}    PassInt(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -552,6 +571,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int16/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int16
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 16)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -560,10 +583,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := int16(valueParsed)
 		data := receiver.PassInt16(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /int16/{value}  PassInt16(value)", struct {
-			Data    int16
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /int16/{value}  PassInt16(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -572,6 +593,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int32/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int32
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 32)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -580,10 +605,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := int32(valueParsed)
 		data := receiver.PassInt32(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /int32/{value}  PassInt32(value)", struct {
-			Data    int32
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /int32/{value}  PassInt32(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -592,6 +615,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int64/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int64
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 64)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -600,10 +627,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := valueParsed
 		data := receiver.PassInt64(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /int64/{value}  PassInt64(value)", struct {
-			Data    int64
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /int64/{value}  PassInt64(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -612,6 +637,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /int8/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int8
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseInt(request.PathValue("value"), 10, 8)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -620,10 +649,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := int8(valueParsed)
 		data := receiver.PassInt8(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /int8/{value}   PassInt8(value)", struct {
-			Data    int8
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /int8/{value}   PassInt8(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -632,6 +659,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    uint
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 0)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -640,10 +671,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := uint(valueParsed)
 		data := receiver.PassUint(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /uint/{value}   PassUint(value)", struct {
-			Data    uint
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /uint/{value}   PassUint(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -652,6 +681,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint16/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    uint16
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 16)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -660,10 +693,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := uint16(valueParsed)
 		data := receiver.PassUint16(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /uint16/{value} PassUint16(value)", struct {
-			Data    uint16
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /uint16/{value} PassUint16(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -672,6 +703,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint32/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    uint32
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 32)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -680,10 +715,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := uint32(valueParsed)
 		data := receiver.PassUint32(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /uint32/{value} PassUint32(value)", struct {
-			Data    uint32
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /uint32/{value} PassUint32(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -692,6 +725,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint64/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    uint64
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 64)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -700,10 +737,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := valueParsed
 		data := receiver.PassUint64(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /uint64/{value} PassUint64(value)", struct {
-			Data    uint64
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /uint64/{value} PassUint64(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -712,6 +747,10 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /uint8/{value}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    uint8
+			Request *http.Request
+		}
 		valueParsed, err := strconv.ParseUint(request.PathValue("value"), 10, 8)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -720,10 +759,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		value := uint8(valueParsed)
 		data := receiver.PassUint8(value)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /uint8/{value}  PassUint8(value)", struct {
-			Data    uint8
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /uint8/{value}  PassUint8(value)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -761,14 +798,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -803,14 +842,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form url.Values = request.Form
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -852,15 +893,17 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		form.field = request.FormValue("field")
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -902,6 +945,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		{
@@ -918,10 +965,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -962,15 +1007,17 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		form.field = request.FormValue("some-field")
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1031,6 +1078,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		{
@@ -1131,10 +1182,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1177,16 +1226,18 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		form.field1 = request.FormValue("field1")
 		form.field2 = request.FormValue("field2")
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1229,6 +1280,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		for _, val := range request.Form["field"] {
@@ -1236,10 +1291,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1295,6 +1348,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		request.ParseForm()
 		var form In
 		for _, val := range request.Form["fieldInt"] {
@@ -1395,10 +1452,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.F(form)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1458,12 +1513,14 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+		type ResponseData struct {
 			Data    any
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F()
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1496,52 +1553,12 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /", struct {
-			Data struct {
-			}
+		type ResponseData struct {
 			Request *http.Request
-		}{Data: struct {
-		}{}, Request: request}); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
 		}
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(http.StatusOK)
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
-		{
-			Name:        "no handler",
-			Templates:   `{{define "GET /"}}Hello, world!{{end}}`,
-			Receiver:    "T",
-			PackageName: "main",
-			ReceiverPackage: `-- in.go --
-package main
-
-type T struct{}
-`,
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /", struct {
-			Data struct {
-			}
-			Request *http.Request
-		}{Data: struct {
-		}{}, Request: request}); err != nil {
+		rd := ResponseData{Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1578,12 +1595,14 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F(response)
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(response)", struct {
+		type ResponseData struct {
 			Data    any
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F(response)
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(response)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1619,13 +1638,15 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		data := receiver.F(ctx)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(ctx)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1660,13 +1681,15 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{param}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		param := request.PathValue("param")
 		data := receiver.F(param)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{param} F(param)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{param} F(param)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1704,14 +1727,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{userName}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		userName := request.PathValue("userName")
 		data := receiver.F(ctx, userName)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{userName} F(ctx, userName)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{userName} F(ctx, userName)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1918,6 +1943,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{id}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		result0, ok := receiver.Session(response, request)
 		if !ok {
@@ -1931,10 +1960,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		id := idParsed
 		data := receiver.F(ctx, result0, id)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Session(response, request), id)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Session(response, request), id)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1980,6 +2007,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{id}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
@@ -1994,10 +2025,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		}
 		data := receiver.F(ctx, result0, id)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Author(id), id)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(ctx, Author(id), id)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2045,14 +2074,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		result0 := receiver.LoadConfiguration()
 		data := receiver.F(ctx, result0)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, LoadConfiguration())", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, LoadConfiguration())", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2099,14 +2130,16 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		result0 := receiver.Headers(response)
 		data := receiver.F(ctx, result0)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, Headers(response))", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F(ctx, Headers(response))", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2144,12 +2177,14 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+		type ResponseData struct {
 			Data    int
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F()
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2194,12 +2229,14 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / F()", struct {
+		type ResponseData struct {
 			Data    int
 			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		}
+		data := receiver.F()
+		buf := bytes.NewBuffer(nil)
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2245,6 +2282,10 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{id}", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    int
+			Request *http.Request
+		}
 		var idParsed ID
 		if err := idParsed.UnmarshalText([]byte(request.PathValue("id"))); err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -2253,10 +2294,8 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 		id := idParsed
 		data := receiver.F(id)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{id} F(id)", struct {
-			Data    int
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET /{id} F(id)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2291,13 +2330,15 @@ type RoutesReceiver interface {
 
 func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
+		type ResponseData struct {
+			Data    any
+			Request *http.Request
+		}
 		ctx := request.Context()
 		data := function(ctx)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET / function(ctx)", struct {
-			Data    any
-			Request *http.Request
-		}{Data: data, Request: request}); err != nil {
+		rd := ResponseData{Data: data, Request: request}
+		if err := templates.ExecuteTemplate(buf, "GET / function(ctx)", rd); err != nil {
 			http.Error(response, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -2342,7 +2383,7 @@ var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
 				OutputFileName:    "template_routes.go",
 			})
 			if tt.ExpectedError == "" {
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tt.ExpectedFile, out)
 			} else {
 				assert.ErrorContains(t, err, tt.ExpectedError)
