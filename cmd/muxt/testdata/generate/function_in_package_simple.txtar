@@ -28,7 +28,6 @@ var templates = template.Must(template.ParseFS(formHTML, "*"))
 func function(ctx context.Context) int { return 32 }
 
 type Server struct{}
-
 -- template_test.go --
 package server
 

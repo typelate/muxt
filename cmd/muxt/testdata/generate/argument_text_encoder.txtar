@@ -9,7 +9,6 @@ exec go test -cover
 module server
 
 go 1.22
-
 -- template.go --
 package main
 
@@ -22,7 +21,6 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
-
 -- f.go --
 package main
 
@@ -42,7 +40,6 @@ func (id *ID) UnmarshalText(text []byte) error {
 type Server struct{}
 
 func (Server) F(id ID) string { return strconv.Itoa(int(id) * 5) }
-
 -- template_test.go --
 package main
 

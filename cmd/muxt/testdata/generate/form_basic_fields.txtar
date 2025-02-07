@@ -4,7 +4,6 @@ muxt generate --receiver-type=T
 module example.com
 
 go 1.20
-
 -- template.go --
 package main
 
@@ -17,7 +16,6 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
-
 -- template.gohtml --
 {{- define "GET / F(form)" -}}
 FieldInt={{.FieldInt}}
@@ -42,8 +40,8 @@ import (
 )
 
 type (
-	T struct{}
-	In struct{
+	T  struct{}
+	In struct {
 		FieldInt    int
 		FieldInt64  int64
 		FieldInt32  int32
@@ -60,7 +58,6 @@ type (
 )
 
 func (T) F(form In) In { return form }
-
 -- template_test.go --
 package server
 
@@ -92,18 +89,18 @@ func Test(t *testing.T) {
 	routes(mux, service)
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(url.Values{
-		"FieldInt": []string{"1"},
-    "FieldInt64": []string{"2"},
-    "FieldInt32": []string{"3"},
-    "FieldInt16": []string{"4"},
-    "FieldInt8": []string{"5"},
-    "FieldUint": []string{"6"},
-    "FieldUint64": []string{"7"},
-    "FieldUint32": []string{"8"},
-    "FieldUint16": []string{"9"},
-    "FieldUint8": []string{"10"},
-    "FieldBool": []string{"11"},
-    "FieldTime": []string{"12"},
+		"FieldInt":    []string{"1"},
+		"FieldInt64":  []string{"2"},
+		"FieldInt32":  []string{"3"},
+		"FieldInt16":  []string{"4"},
+		"FieldInt8":   []string{"5"},
+		"FieldUint":   []string{"6"},
+		"FieldUint64": []string{"7"},
+		"FieldUint32": []string{"8"},
+		"FieldUint16": []string{"9"},
+		"FieldUint8":  []string{"10"},
+		"FieldBool":   []string{"11"},
+		"FieldTime":   []string{"12"},
 	}.Encode()))
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -122,25 +119,25 @@ func Test(t *testing.T) {
 	}
 
 	for _, line := range []string{
-	"FieldInt=1",
-    "FieldInt64=2",
-    "FieldInt32=3",
-    "FieldInt16=4",
-    "FieldInt8=5",
-    "FieldUint=6",
-    "FieldUint64=7",
-    "FieldUint32=8",
-    "FieldUint16=9",
-    "FieldUint8=10",
-    "FieldBool=11",
-    "FieldTime=12",
-    } {
-      if !strings.Contains(string(body), line) {
-        t.Errorf("%q not found", line)
-      }
-    }
+		"FieldInt=1",
+		"FieldInt64=2",
+		"FieldInt32=3",
+		"FieldInt16=4",
+		"FieldInt8=5",
+		"FieldUint=6",
+		"FieldUint64=7",
+		"FieldUint32=8",
+		"FieldUint16=9",
+		"FieldUint8=10",
+		"FieldBool=11",
+		"FieldTime=12",
+	} {
+		if !strings.Contains(string(body), line) {
+			t.Errorf("%q not found", line)
+		}
+	}
 
-    if t.Failed() {
-    t.Log(string(body))
-    }
+	if t.Failed() {
+		t.Log(string(body))
+	}
 }

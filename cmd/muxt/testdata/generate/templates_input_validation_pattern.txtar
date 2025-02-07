@@ -39,7 +39,7 @@ type Form struct {
 package server
 
 import (
-"io"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"

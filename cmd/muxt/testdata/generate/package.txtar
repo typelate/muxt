@@ -7,7 +7,6 @@ exec go build
 module pack
 
 go 1.18
-
 -- directory/main.go --
 package main
 
@@ -24,6 +23,5 @@ var (
 )
 
 func main() {}
-
 -- directory/index.gohtml --
 <h1>hello</h1>
