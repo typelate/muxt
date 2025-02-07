@@ -1,14 +1,14 @@
-
-cd package
+cd directory
 muxt generate
 
 exec go build
 
--- package/go.mod --
+-- directory/go.mod --
 module pack
 
 go 1.18
--- package/main.go --
+
+-- directory/main.go --
 package main
 
 import (
@@ -24,5 +24,6 @@ var (
 )
 
 func main() {}
--- package/index.gohtml --
+
+-- directory/index.gohtml --
 <h1>hello</h1>
