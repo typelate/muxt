@@ -1,0 +1,81 @@
+muxt generate --receiver-type=Server
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "GET /{id} F(id)"}}{{.Data}}{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+-- f.go --
+package main
+
+import "strconv"
+
+type ID int64
+
+func (id *ID) UnmarshalText(text []byte) error {
+	n, err := strconv.ParseUint(string(text), 2, 64)
+	if err != nil {
+		return err
+	}
+	*id = ID(n)
+	return nil
+}
+
+type Server struct{}
+
+func (Server) F(id ID) string { return strconv.Itoa(int(id) * 5) }
+
+-- template_test.go --
+package main
+
+import (
+	"io"
+	"testing"
+
+	"net/http"
+	"net/http/httptest"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	routes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/111", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected OK got %d", res.StatusCode)
+	}
+
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(buf) != "35" {
+		t.Errorf(`expected "35" got %q`, string(buf))
+	}
+}

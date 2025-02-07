@@ -2247,65 +2247,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 `,
 		},
-		{
-			Name:      "use text encoding",
-			Templates: `{{define "GET /{id} F(id)"}}{{.}}{{end}}`,
-			Receiver:  "Server",
-			ReceiverPackage: `-- f.go --
-package main
-
-type ID int
-
-func (id *ID) UnmarshalText(text []byte) error {
-	n, err := strconv.ParseUint(string(text), 2, 64)
-	if err != nil {
-		return err
-	}
-	*id = n
-	return nil
-}
-
-type Server struct{}
-
-func (Server) F(id ID) int { return int(id) }
-`,
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-	F(id ID) int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /{id}", func(response http.ResponseWriter, request *http.Request) {
-		type ResponseData struct {
-			Data    int
-			Request *http.Request
-		}
-		var idParsed ID
-		if err := idParsed.UnmarshalText([]byte(request.PathValue("id"))); err != nil {
-			http.Error(response, err.Error(), http.StatusBadRequest)
-			return
-		}
-		id := idParsed
-		data := receiver.F(id)
-		buf := bytes.NewBuffer(nil)
-		rd := ResponseData{Data: data, Request: request}
-		if err := templates.ExecuteTemplate(buf, "GET /{id} F(id)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(http.StatusOK)
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			t.Parallel()
