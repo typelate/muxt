@@ -2306,49 +2306,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 `,
 		},
-		{
-			Name:        "package function",
-			Templates:   `{{define "GET / function(ctx)" }}{{.}}{{end}}`,
-			PackageName: "main",
-			ReceiverPackage: `
--- f.go --
-package main
-
-import "context"
-
-func function(ctx context.Context) int { return 32 }
-`,
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		type ResponseData struct {
-			Data    any
-			Request *http.Request
-		}
-		ctx := request.Context()
-		data := function(ctx)
-		buf := bytes.NewBuffer(nil)
-		rd := ResponseData{Data: data, Request: request}
-		if err := templates.ExecuteTemplate(buf, "GET / function(ctx)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(http.StatusOK)
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			t.Parallel()

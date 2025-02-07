@@ -5,7 +5,7 @@ exec go test -cover
 muxt check --receiver-type=Server
 
 -- template.gohtml --
-{{define "GET / Function(ctx)" }}{{.}}{{end}}
+{{define "GET / function(ctx)" }}{{.}}{{end}}
 
 -- go.mod --
 module server
@@ -25,7 +25,7 @@ var formHTML embed.FS
 
 var templates = template.Must(template.ParseFS(formHTML, "*"))
 
-func Function(ctx context.Context) int { return 32 }
+func function(ctx context.Context) int { return 32 }
 
 type Server struct{}
 
