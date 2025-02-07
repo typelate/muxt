@@ -1500,58 +1500,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 `,
 		},
-		{
-			Name:      "use embedded field methods from another package",
-			Templates: `{{define "GET / F()"}}{{end}}`,
-			Receiver:  "Server",
-			ReceiverPackage: `
--- another/t.go --
-package another
-
-type T struct{}
-
-func (T) F() int { return 0 }
-
--- server.go --
-package main
-
-import "example.com/another"
-
-type Server struct {
-	another.T
-}
-`,
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-	F() int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		type ResponseData struct {
-			Data    int
-			Request *http.Request
-		}
-		data := receiver.F()
-		buf := bytes.NewBuffer(nil)
-		rd := ResponseData{Data: data, Request: request}
-		if err := templates.ExecuteTemplate(buf, "GET / F()", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(http.StatusOK)
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			t.Parallel()

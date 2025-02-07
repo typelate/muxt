@@ -1,0 +1,84 @@
+muxt generate --receiver-type=Server
+
+cat template_routes.go
+
+exec go test -v
+
+-- go.mod --
+module example.com
+
+go 1.23
+-- another/t.go --
+package another
+
+type T struct{}
+
+func (T) F() int { return 32 }
+-- server.go --
+package main
+
+import "example.com/another"
+
+type Server struct {
+	another.T
+}
+-- template.gohtml --
+{{- define "GET / F()" -}}
+	{{- .Data -}}
+{{- end -}}
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- template_test.go --
+package main
+
+import (
+	"io"
+	"testing"
+
+	"net/http"
+	"net/http/httptest"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	routes(mux, Server{})
+
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal("failed to create request")
+	}
+	rec := httptest.NewRecorder()
+
+	h, pat := mux.Handler(req)
+	t.Logf("pattern %q", pat)
+	if h == nil {
+		t.Fatal("handler not found is nil")
+	}
+	h.(http.HandlerFunc)(rec, req)
+
+	t.Logf("%T", h)
+
+	res := rec.Result()
+
+	if http.StatusOK != res.StatusCode {
+		t.Errorf("expected %d got %d", http.StatusOK, res.StatusCode)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+
+	if got, exp := string(body), "32"; got != exp {
+		t.Errorf("%q != %q", got, exp)
+	}
+}
