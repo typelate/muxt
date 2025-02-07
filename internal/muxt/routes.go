@@ -27,11 +27,9 @@ import (
 )
 
 const (
-	executeIdentName = "execute"
-	receiverIdent    = "receiver"
+	receiverIdent = "receiver"
 
-	dataVarIdent = "data"
-	muxVarIdent  = "mux"
+	muxVarIdent = "mux"
 
 	requestPathValue         = "PathValue"
 	httpRequestContextMethod = "Context"
