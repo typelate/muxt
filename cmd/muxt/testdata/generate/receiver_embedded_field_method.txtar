@@ -1,0 +1,37 @@
+muxt generate --receiver-type=Server
+
+exec go build
+
+-- template.gohtml --
+{{define "GET / F()"}}{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- server.go --
+package main
+
+type T struct{}
+
+func (T) F() int { return 0 }
+
+type Server struct {
+	T
+}
+
+func main() {}
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
