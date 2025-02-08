@@ -688,8 +688,6 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			Receiver:      "T",
 			ExpectedError: "failed to generate parse statements for form field href: unsupported type: url.URL",
@@ -961,8 +959,6 @@ package main
 type T struct{}
 
 func (T) F(string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 
 			ExpectedError: "handler func F(string) any expects 1 arguments but call F() has 0",
@@ -982,8 +978,6 @@ import (
 type T struct{}
 
 func (T) F(context.Context) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "handler func F(context.Context) any expects 1 arguments but call F(ctx, name) has 2",
 		},
@@ -1002,8 +996,6 @@ import (
 type T struct{}
 
 func (T) F(string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method expects type string but request is *http.Request",
 		},
@@ -1019,8 +1011,6 @@ import "net/http"
 type T struct{}
 
 func (T) F(string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method expects type string but ctx is context.Context",
 		},
@@ -1036,8 +1026,6 @@ import "net/http"
 type T struct{}
 
 func (T) F(string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method expects type string but response is http.ResponseWriter",
 		},
@@ -1067,8 +1055,6 @@ import "net/http"
 type T struct{}
 
 func (T) F(float64) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method param type float64 not supported",
 		},
@@ -1084,8 +1070,6 @@ import "net/http"
 type T struct{}
 
 func (T) F(*T) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method expects type *T but request is *http.Request",
 		},
@@ -1104,8 +1088,6 @@ import (
 type T struct{}
 
 func (T) F(context.Context, string, string) any {return nil}
-
-func execute(response http.ResponseWriter, request *http.Request, writeHeader bool, name string, code int, data any) {}
 `,
 			ExpectedError: "method expects type string but request is *http.Request",
 		},
