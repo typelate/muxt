@@ -31,42 +31,6 @@ func TestGenerate(t *testing.T) {
 		ExpectedFile  string
 	}{
 		{
-			Name:      "multiple arguments no static receiver",
-			Templates: `{{define "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)"}}Hello, world!{{end}}`,
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"context"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-	F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID string, taskID string) any
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /project/{projectID}/task/{taskID}", func(response http.ResponseWriter, request *http.Request) {
-		type ResponseData struct {
-			Data    any
-			Request *http.Request
-		}
-		ctx := request.Context()
-		projectID := request.PathValue("projectID")
-		taskID := request.PathValue("taskID")
-		data := receiver.F(ctx, response, request, projectID, taskID)
-		buf := bytes.NewBuffer(nil)
-		rd := ResponseData{Data: data, Request: request}
-		if err := templates.ExecuteTemplate(buf, "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
-		{
 			Name:      "simple call with static one argument",
 			Templates: `{{define "GET /age/{username} F(username)"}}Hello, {{.}}!{{end}}`,
 			ReceiverPackage: `

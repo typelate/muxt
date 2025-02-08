@@ -1,0 +1,70 @@
+muxt generate
+
+exec go test
+
+-- template.gohtml --
+
+{{- define "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)" -}}
+	{{printf "%v" .Data}}
+{{- end -}}
+
+-- go.mod --
+module server
+
+go 1.23
+-- main.go --
+package main
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+type Server struct{}
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+func (Server) F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID, taskID string) any {
+	return nil
+}
+-- template_test.go --
+package main
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	routes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/project/p1/task/t2", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(buf), "nil") {
+		t.Errorf(`expected "nil" got %q`, string(buf))
+	}
+}

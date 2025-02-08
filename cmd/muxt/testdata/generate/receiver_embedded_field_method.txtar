@@ -9,7 +9,6 @@ exec go build
 module server
 
 go 1.22
-
 -- server.go --
 package main
 
@@ -22,7 +21,6 @@ type Server struct {
 }
 
 func main() {}
-
 -- template.go --
 package main
 
