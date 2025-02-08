@@ -1,0 +1,64 @@
+muxt generate --receiver-type=T
+
+cat template_routes.go
+
+exec go test -v
+
+-- template.gohtml --
+{{define "GET / F(form)"}}{{.Data}}{{end}}
+-- go.mod --
+module server
+
+go 1.23
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"strings"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type (
+	T  struct{}
+	In struct {
+		field string `name:"some-field"`
+	}
+)
+
+func (T) F(form In) string { return strings.ToUpper(form.field + "@") }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	routes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/?some-field=orange", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	if got, exp:=strings.TrimSpace(rec.Body.String()), "ORANGE@"; got != exp {
+		t.Errorf("%q != %q", got, exp)
+	}
+}

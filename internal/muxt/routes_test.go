@@ -563,57 +563,6 @@ func routes(mux *http.ServeMux, receiver RoutesReceiver) {
 `,
 		},
 		{
-			Name:      "F is defined and form field has an input tag",
-			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
-			ReceiverPackage: `
--- in.go --
-package main
-
-type (
-	T struct{}
-	In struct{
-		field string ` + "`name:\"some-field\"`" + `
-	}
-)
-
-func (T) F(form In) int { return 0 }
-`,
-			Receiver: "T",
-			ExpectedFile: `package main
-
-import (
-	"bytes"
-	"net/http"
-)
-
-type RoutesReceiver interface {
-	F(form In) int
-}
-
-func routes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		type ResponseData struct {
-			Data    int
-			Request *http.Request
-		}
-		request.ParseForm()
-		var form In
-		form.field = request.FormValue("some-field")
-		data := receiver.F(form)
-		buf := bytes.NewBuffer(nil)
-		rd := ResponseData{Data: data, Request: request}
-		if err := templates.ExecuteTemplate(buf, "GET / F(form)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		response.Header().Set("content-type", "text/html; charset=utf-8")
-		response.WriteHeader(http.StatusOK)
-		_, _ = buf.WriteTo(response)
-	})
-}
-`,
-		},
-		{
 			Name:      "F is defined and form slice field",
 			Templates: `{{define "GET / F(form)"}}Hello, {{.}}!{{end}}`,
 			ReceiverPackage: `
