@@ -513,6 +513,18 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 			child.variables[n.Pipe.Decl[0].Ident[0]] = types.Typ[types.Int] // TODO: this looks odd, I don't think I should permit an index here
 			child.variables[n.Pipe.Decl[1].Ident[0]] = pt.Elem()
 		}
+	case *types.Basic:
+		switch {
+		case pt.Info()&types.IsInteger != 0:
+			tp := types.Universe.Lookup(strings.TrimPrefix(pipeType.String(), "untyped "))
+			x = tp.Type()
+			if len(n.Pipe.Decl) > 0 {
+				child.variables[n.Pipe.Decl[0].Ident[0]] = x
+			}
+			return nil
+		default:
+			return s.error(tree, n.Pipe, fmt.Errorf("range can't iterate over %s", strings.TrimPrefix(pipeType.String(), "untyped ")))
+		}
 	case *types.Signature:
 		if v1, v2, ok := isIter2(pt); ok {
 			x = v1
@@ -530,13 +542,13 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 				child.variables[n.Pipe.Decl[0].Ident[0]] = val
 			}
 			if len(n.Pipe.Decl) > 1 {
-				return s.error(tree, n, fmt.Errorf("iter.Seq[T] must not iterate over more than one variable"))
+				return s.error(tree, n.Pipe, fmt.Errorf("iter.Seq[T] must not iterate over more than one variable"))
 			}
 			return nil
 		}
-		return s.error(tree, n, fmt.Errorf("failed to range over function %s", pipeType))
+		return s.error(tree, n.Pipe, fmt.Errorf("failed to range over function %s", pipeType))
 	default:
-		return s.error(tree, n, fmt.Errorf("failed to range over %s", pipeType))
+		return s.error(tree, n.Pipe, fmt.Errorf("failed to range over %s", pipeType))
 	}
 	if _, err := child.walk(tree, x, nil, n.List); err != nil {
 		return err

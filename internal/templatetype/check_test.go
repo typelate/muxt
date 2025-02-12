@@ -378,6 +378,84 @@ func TestTree(t *testing.T) {
 			},
 		},
 		{
+			Name:     "range over int literal",
+			Template: `{{range 10}}{{expectInt .}}{{end}}`,
+			Data:     T{},
+		},
+		{
+			Name:     "range over int field",
+			Template: `{{range .I}}{{expectInt .}}{{end}}`,
+			Data:     T{},
+		},
+		{
+			Name:     "range over int data",
+			Template: `{{range .}}{{expectInt .}}{{end}}`,
+			Data:     int(32),
+		},
+		{
+			Name:     "range over int8 data",
+			Template: `{{range .}}{{expectInt8 .}}{{end}}`,
+			Data:     int8(32),
+		},
+		{
+			Name:     "range over int16 data",
+			Template: `{{range .}}{{expectInt16 .}}{{end}}`,
+			Data:     int16(32),
+		},
+		{
+			Name:     "range over int32 data",
+			Template: `{{range .}}{{expectInt32 .}}{{end}}`,
+			Data:     int32(32),
+		},
+		{
+			Name:     "range over int64 data",
+			Template: `{{range .}}{{expectInt64 .}}{{end}}`,
+			Data:     int64(32),
+		},
+		{
+			Name:     "range over uint data",
+			Template: `{{range .}}{{expectUint .}}{{end}}`,
+			Data:     uint(32),
+		},
+		{
+			Name:     "range over uint8 data",
+			Template: `{{range .}}{{expectUint8 .}}{{end}}`,
+			Data:     uint8(32),
+		},
+		{
+			Name:     "range over uint16 data",
+			Template: `{{range .}}{{expectUint16 .}}{{end}}`,
+			Data:     uint16(32),
+		},
+		{
+			Name:     "range over uint32 data",
+			Template: `{{range .}}{{expectUint32 .}}{{end}}`,
+			Data:     uint32(32),
+		},
+		{
+			Name:     "range over uint64 data",
+			Template: `{{range .}}{{expectUint64 .}}{{end}}`,
+			Data:     uint64(32),
+		},
+		{
+			Name:     "range over float64 data",
+			Template: `{{range .}}{{expectUint64 .}}{{end}}`,
+			Data:     float64(32),
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.ErrorContains(t, execErr, "range can't iterate over 32")
+				require.ErrorContains(t, checkErr, "range can't iterate over float64")
+			},
+		},
+		{
+			Name:     "range over string data",
+			Template: `{{range .}}{{end}}`,
+			Data:     "fail",
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.ErrorContains(t, execErr, `range can't iterate over fail`)
+				require.ErrorContains(t, checkErr, "range can't iterate over string")
+			},
+		},
+		{
 			Name:     "when a variable is used",
 			Template: `{{$v := 1}}{{.F $v}}`,
 			Data:     MethodWithIntParam{},
@@ -666,6 +744,14 @@ func TestTree(t *testing.T) {
 				"expectFloat64":    expectFloat64,
 				"expectString":     expectString,
 				"expectInt8":       expectInt8,
+				"expectInt16":      expectInt16,
+				"expectInt32":      expectInt32,
+				"expectInt64":      expectInt64,
+				"expectUint":       expectUint,
+				"expectUint8":      expectUint8,
+				"expectUint16":     expectUint16,
+				"expectUint32":     expectUint32,
+				"expectUint64":     expectUint64,
 				"expectFloat32":    expectFloat32,
 				"expectComplex64":  expectComplex64,
 				"expectComplex128": expectComplex128,

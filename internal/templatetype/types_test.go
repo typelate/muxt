@@ -187,8 +187,15 @@ func expectFloat64(n float64) float64 { return n }
 
 func expectString(s string) string { return s }
 
-func expectInt8(n int8) int8 { return n }
-
+func expectInt8(n int8) int8          { return n }
+func expectInt16(n int16) int16       { return n }
+func expectInt32(n int32) int32       { return n }
+func expectInt64(n int64) int64       { return n }
+func expectUint(n uint) uint          { return n }
+func expectUint8(n uint8) uint8       { return n }
+func expectUint16(n uint16) uint16    { return n }
+func expectUint32(n uint32) uint32    { return n }
+func expectUint64(n uint64) uint64    { return n }
 func expectFloat32(n float32) float32 { return n }
 
 func expectComplex64(n complex64) complex64 { return n }
