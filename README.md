@@ -1,7 +1,5 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/crhntr/muxt.svg)](https://pkg.go.dev/github.com/crhntr/muxt) [![Go](https://github.com/crhntr/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/crhntr/muxt/actions/workflows/go.yml)
 
-> [Range over func (and range over int) support coming soon](https://github.com/crhntr/muxt/pull/26)
-
 **Muxt** is a Go code generator that helps you build server-side rendered web apps with minimal overhead, leveraging Go
 1.22’s improved `http.ServeMux` and standard `html/template` features.
 No extra runtime dependencies are required—just plain Go code.

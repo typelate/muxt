@@ -19,11 +19,12 @@ import (
 
 type Imports struct {
 	*ast.GenDecl
-	fileSet       *token.FileSet
-	types         map[string]*types.Package
-	files         map[string]*ast.File
-	packages      []*packages.Package
-	outputPackage string
+	fileSet           *token.FileSet
+	types             map[string]*types.Package
+	files             map[string]*ast.File
+	packages          []*packages.Package
+	outputPackage     string
+	outputPackagePath string
 }
 
 func NewImports(decl *ast.GenDecl) *Imports {

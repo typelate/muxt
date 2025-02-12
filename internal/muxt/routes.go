@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"html/template"
@@ -811,80 +812,13 @@ func callReceiverMethod(imports *source.Imports, dataVarIdent string, method *ty
 }
 
 func astTypeExpression(imports *source.Imports, tp types.Type) (ast.Expr, error) {
-	switch t := tp.(type) {
-	case *types.Signature:
-		node := &ast.FuncType{
-			Params:  new(ast.FieldList),
-			Results: new(ast.FieldList),
+	s := types.TypeString(tp, func(pkg *types.Package) string {
+		if pkg.Path() == imports.OutputPackage() {
+			return ""
 		}
-
-		for i := 0; i < t.Params().Len(); i++ {
-			param := t.Params().At(i)
-			pt, err := astTypeExpression(imports, param.Type())
-			if err != nil {
-				return nil, err
-			}
-			var names []*ast.Ident
-			if param.Name() != "" {
-				names = []*ast.Ident{ast.NewIdent(param.Name())}
-			}
-			node.Params.List = append(node.Params.List, &ast.Field{
-				Names: names,
-				Type:  pt,
-			})
-		}
-		for i := 0; i < t.Results().Len(); i++ {
-			result := t.Results().At(i)
-			rt, err := astTypeExpression(imports, result.Type())
-			if err != nil {
-				return nil, err
-			}
-			node.Results.List = append(node.Results.List, &ast.Field{
-				Type: rt,
-			})
-		}
-
-		return node, nil
-	case *types.Named:
-		name := t.Obj().Name()
-		pkg := t.Obj().Pkg()
-		if pkg != nil && pkg.Path() != imports.OutputPackage() {
-			return &ast.SelectorExpr{
-				X:   ast.NewIdent(imports.Add(pkg.Name(), pkg.Path())),
-				Sel: ast.NewIdent(name),
-			}, nil
-		}
-		return ast.NewIdent(name), nil
-	case *types.Slice:
-		elt, err := astTypeExpression(imports, t.Elem())
-		if err != nil {
-			return nil, err
-		}
-		return &ast.ArrayType{
-			Elt: elt,
-		}, nil
-	case *types.Pointer:
-		x, err := astTypeExpression(imports, t.Elem())
-		if err != nil {
-			return nil, err
-		}
-		return &ast.StarExpr{X: x}, nil
-	case *types.Alias:
-		name := t.Obj().Name()
-		pkg := t.Obj().Pkg()
-		if pkg != nil && pkg.Path() != imports.OutputPackage() {
-			return &ast.SelectorExpr{
-				X:   ast.NewIdent(imports.Add(pkg.Name(), pkg.Path())),
-				Sel: ast.NewIdent(name),
-			}, nil
-		}
-		return ast.NewIdent(name), nil
-	case *types.Basic:
-		return ast.NewIdent(t.Name()), nil
-	default:
-		assert.Failf(assertion, "", "could not generate type expression for %[1]T %[1]s", tp)
-		return nil, nil
-	}
+		return imports.Add("", pkg.Path())
+	})
+	return parser.ParseExpr(s)
 }
 
 var assertion AssertionFailureReporter
