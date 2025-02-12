@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"iter"
 	"math"
 	"strings"
 	"text/template"
@@ -142,6 +143,35 @@ type MethodWithKeyValForMap struct {
 }
 
 func (MethodWithKeyValForMap) F(int16, float32) (_ Void) { return }
+
+type Iterators struct {
+	Field  iter.Seq[int8]
+	Field2 iter.Seq2[int8, float64]
+}
+
+func NewIterators() Iterators {
+	return Iterators{Field: Iterators{}.Method(), Field2: Iterators{}.Method2()}
+}
+
+func (Iterators) Method() iter.Seq[int8] {
+	return func(yield func(int8) bool) {
+		for i := range 5 {
+			if !yield(int8(i)) {
+				return
+			}
+		}
+	}
+}
+
+func (Iterators) Method2() iter.Seq2[int8, float64] {
+	return func(yield func(int8, float64) bool) {
+		for i := range int8(5) {
+			if !yield(i, float64(i*i)) {
+				return
+			}
+		}
+	}
+}
 
 func square(n int) int {
 	return n * n

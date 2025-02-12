@@ -319,6 +319,65 @@ func TestTree(t *testing.T) {
 			},
 		},
 		{
+			Name:     "when iter1 method",
+			Template: `{{range .Method}}{{expectInt8 .}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named iter1 method",
+			Template: `{{range $v := .Method}}{{expectInt8 $v}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when iter2 method",
+			Template: `{{range .Method2}}{{expectInt8 .}}{{expectInt8 .}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named iter2 method",
+			Template: `{{range $v := .Method2}}{{expectInt8 $v}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when iter1 field",
+			Template: `{{range .Field}}{{expectInt8 .}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named iter1 field",
+			Template: `{{range $v := .Field}}{{expectInt8 $v}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when iter2 field",
+			Template: `{{range .Field2}}{{expectInt8 .}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named iter2 field",
+			Template: `{{range $v := .Field2}}{{expectInt8 $v}}{{expectInt8 .}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named key value iter2 method",
+			Template: `{{range $k := .Method}}{{expectInt8 $k}}{{expectInt8 .}}{expectFloat64 $v}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "when named key value iter2 field",
+			Template: `{{range $k, $v := .Field2}}{{expectInt8 $k}}{{expectInt8 .}}{{expectFloat64 $v}}{{end}}`,
+			Data:     NewIterators(),
+		},
+		{
+			Name:     "range over too many variables",
+			Template: `{{range $k, $v := .Method}}{{expectInt8 $k}}{{expectInt8 .}}{expectFloat64 $v}{{end}}`,
+			Data:     NewIterators(),
+			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
+				require.ErrorContains(t, checkErr, "iterate over more than one variable")
+				require.ErrorContains(t, execErr, "iterate over more than one variable")
+			},
+		},
+		{
 			Name:     "when a variable is used",
 			Template: `{{$v := 1}}{{.F $v}}`,
 			Data:     MethodWithIntParam{},

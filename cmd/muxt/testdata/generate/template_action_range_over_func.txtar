@@ -1,0 +1,43 @@
+muxt generate --receiver-type=T
+
+cat template_routes.go
+
+exec go test
+
+muxt check --receiver-type=T
+
+-- index.gohtml --
+{{define "GET / Iterator()" }}
+	{{range $k, $v := .Method}}
+		- {{$k}}: {{$v}}
+	{{end}}
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Iterator() iter.Seq[int, float64] {
+	return func(yield func(int, float64) bool) {
+		for i := range 5 {
+			if !yield(i+1, float64((i+1)*(i+1))) {
+				return
+			}
+		}
+	}
+}
