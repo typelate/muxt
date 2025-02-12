@@ -486,7 +486,7 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 	if err != nil {
 		return err
 	}
-	pipeType = dereference(pipeType)
+	pipeType = dereference(pipeType).Underlying()
 	var x types.Type
 	switch pt := pipeType.(type) {
 	case *types.Slice:
@@ -510,11 +510,33 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 	case *types.Chan:
 		x = pt.Elem()
 		if len(n.Pipe.Decl) > 1 {
-			child.variables[n.Pipe.Decl[0].Ident[0]] = types.Typ[types.Int]
+			child.variables[n.Pipe.Decl[0].Ident[0]] = types.Typ[types.Int] // TODO: this looks odd, I don't think I should permit an index here
 			child.variables[n.Pipe.Decl[1].Ident[0]] = pt.Elem()
 		}
+	case *types.Signature:
+		if v1, v2, ok := isIter2(pt); ok {
+			x = v1
+			if len(n.Pipe.Decl) > 0 {
+				child.variables[n.Pipe.Decl[0].Ident[0]] = v1
+			}
+			if len(n.Pipe.Decl) > 1 {
+				child.variables[n.Pipe.Decl[1].Ident[0]] = v2
+			}
+			return nil
+		}
+		if val, ok := isIter(pt); ok {
+			x = val
+			if len(n.Pipe.Decl) == 1 {
+				child.variables[n.Pipe.Decl[0].Ident[0]] = val
+			}
+			if len(n.Pipe.Decl) > 1 {
+				return s.error(tree, n, fmt.Errorf("iter.Seq[T] must not iterate over more than one variable"))
+			}
+			return nil
+		}
+		return s.error(tree, n, fmt.Errorf("failed to range over function %s", pipeType))
 	default:
-		return fmt.Errorf("failed to range over %s", pipeType)
+		return s.error(tree, n, fmt.Errorf("failed to range over %s", pipeType))
 	}
 	if _, err := child.walk(tree, x, nil, n.List); err != nil {
 		return err
@@ -525,6 +547,35 @@ func (s *scope) checkRangeNode(tree *parse.Tree, dot types.Type, n *parse.RangeN
 		}
 	}
 	return nil
+}
+
+func isIter(signature *types.Signature) (types.Type, bool) {
+	if signature == nil || signature.Variadic() || signature.Results().Len() != 0 || signature.Params().Len() != 1 {
+		return nil, false
+	}
+	yield, ok := signature.Params().At(0).Type().(*types.Signature)
+	if !ok || yield.Results().Len() != 1 || yield.Params().Len() != 1 {
+		return nil, false
+	}
+	if !types.Identical(yield.Results().At(0).Type(), types.Universe.Lookup("bool").Type()) {
+		return nil, false
+	}
+	return yield.Params().At(0).Type(), true
+}
+
+func isIter2(signature *types.Signature) (types.Type, types.Type, bool) {
+	if signature == nil || signature.Variadic() || signature.Results().Len() != 0 || signature.Params().Len() != 1 {
+		return nil, nil, false
+	}
+	yield, ok := signature.Params().At(0).Type().(*types.Signature)
+	if !ok || yield.Results().Len() != 1 || yield.Params().Len() != 2 {
+		return nil, nil, false
+	}
+	if !types.Identical(yield.Results().At(0).Type(), types.Universe.Lookup("bool").Type()) {
+		return nil, nil, false
+	}
+	yp := yield.Params()
+	return yp.At(0).Type(), yp.At(1).Type(), true
 }
 
 func (s *scope) checkIdentifierNode(n *parse.IdentifierNode) (types.Type, error) {

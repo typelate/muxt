@@ -365,12 +365,12 @@ func TestTree(t *testing.T) {
 		},
 		{
 			Name:     "when named key value iter2 field",
-			Template: `{{range $k, $v := .Field2}}{{expectInt8 $k}}{{expectInt8 .}}{{expectFloat64 $v}}{{end}}`,
+			Template: `{{range $k, $v := .Field2}}{{expectInt8 $k}}{{expectFloat64 .}}{{expectFloat64 $v}}{{end}}`,
 			Data:     NewIterators(),
 		},
 		{
 			Name:     "range over too many variables",
-			Template: `{{range $k, $v := .Method}}{{expectInt8 $k}}{{expectInt8 .}}{expectFloat64 $v}{{end}}`,
+			Template: `{{range $k, $v := .Method}}{{expectInt8 $k}}{{expectFloat64 .}}{expectFloat64 $v}{{end}}`,
 			Data:     NewIterators(),
 			Error: func(t *testing.T, checkErr, execErr error, tp types.Type) {
 				require.ErrorContains(t, checkErr, "iterate over more than one variable")
