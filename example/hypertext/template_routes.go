@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"path"
 	"strconv"
 )
 
@@ -102,8 +103,28 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 type TemplateData[T any] struct {
 	Request *http.Request
 	Result  T
+	Paths   TemplateRoutePaths
 }
 
 func newTemplateData[T any](result T, request *http.Request) TemplateData[T] {
 	return TemplateData[T]{Result: result, Request: request}
+}
+
+type TemplateRoutePaths struct {
+}
+
+func (TemplateRoutePaths) SubmitFormEditRow(id int) string {
+	return "/" + path.Join("fruits", strconv.Itoa(id))
+}
+
+func (TemplateRoutePaths) GetFormEditRow(id int) string {
+	return "/" + path.Join("fruits", strconv.Itoa(id), "edit")
+}
+
+func (TemplateRoutePaths) ReadHelp() string {
+	return "/help"
+}
+
+func (TemplateRoutePaths) List() string {
+	return "/"
 }

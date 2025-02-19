@@ -213,6 +213,7 @@ func (imports *Imports) SortImports() {
 }
 
 func (imports *Imports) AddNetHTTP() string      { return imports.Add("", "net/http") }
+func (imports *Imports) AddPath() string         { return imports.Add("", "path") }
 func (imports *Imports) AddHTMLTemplate() string { return imports.Add("", "html/template") }
 func (imports *Imports) AddContext() string      { return imports.Add("", "context") }
 

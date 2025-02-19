@@ -4,6 +4,7 @@ go 1.24
 
 require (
 	github.com/crhntr/dom v0.3.0
+	github.com/ettle/strcase v0.2.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.35.0
 	golang.org/x/tools v0.30.0

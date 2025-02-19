@@ -42,6 +42,7 @@ const (
 	DefaultRoutesFunctionName    = "TemplateRoutes"
 	DefaultOutputFileName        = "template_routes.go"
 	DefaultReceiverInterfaceName = "RoutesReceiver"
+	urlHelperTypeName            = "TemplateRoutePaths"
 
 	InputAttributeNameStructTag     = "name"
 	InputAttributeTemplateStructTag = "template"
@@ -169,7 +170,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	const newResponseDataFuncIdent = "new" + templateDataTypeName
 
-	for _, t := range templates {
+	for i, t := range templates {
 		const dataVarIdent = "result"
 		logger.Printf("routes has route for %s", t.pattern)
 		if t.fun == nil {
@@ -197,7 +198,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}
 
 		sigs := make(map[string]*types.Signature)
-		if err := ensureMethodSignature(imports, sigs, t, receiver, receiverInterface, t.call, routesPkg.Types); err != nil {
+		if err := ensureMethodSignature(imports, sigs, &templates[i], receiver, receiverInterface, t.call, routesPkg.Types); err != nil {
 			return "", err
 		}
 		sig, ok := sigs[t.fun.Name]
@@ -226,7 +227,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			Body: &ast.BlockStmt{},
 		}
 
-		if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, imports, sigs, nil, receiver, t.call); err != nil {
+		if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, &templates[i], imports, sigs, nil, receiver, t.call); err != nil {
 			return "", err
 		}
 
@@ -298,10 +299,15 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		},
 	}
 
+	routePathDecls, err := routePathTypeAndMethods(imports, templates, receiver)
+	if err != nil {
+		return "", err
+	}
+
 	imports.SortImports()
 	file := &ast.File{
 		Name: ast.NewIdent(config.PackageName),
-		Decls: []ast.Decl{
+		Decls: append([]ast.Decl{
 			// import
 			imports.GenDecl,
 
@@ -329,6 +335,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 								List: []*ast.Field{
 									{Names: []*ast.Ident{ast.NewIdent(httpRequestIdent)}, Type: imports.HTTPRequestPtr()},
 									{Names: []*ast.Ident{ast.NewIdent(templateDataTypeResultFieldName)}, Type: ast.NewIdent("T")},
+									{Names: []*ast.Ident{ast.NewIdent("Paths")}, Type: ast.NewIdent(urlHelperTypeName)},
 								},
 							},
 						},
@@ -338,13 +345,13 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 			// func newResultData
 			newResponseDataFunc,
-		},
+		}, routePathDecls...),
 	}
 
 	return source.FormatFile(filepath.Join(wd, DefaultOutputFileName), file)
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *source.Imports, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, call *ast.CallExpr) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, t *Template, imports *source.Imports, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, call *ast.CallExpr) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -451,6 +458,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *s
 					return nil, err
 				}
 				statements = append(statements, s...)
+				t.pathValueTypes[arg.Name] = param.Type()
 			case arg.Name == TemplateNameScopeIdentifierForm:
 				s, err := appendFormParseStatements(statements, t, imports, arg, param)
 				if err != nil {
@@ -467,7 +475,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t Template, imports *s
 	return statements, nil
 }
 
-func appendFormParseStatements(statements []ast.Stmt, t Template, imports *source.Imports, arg *ast.Ident, param types.Object) ([]ast.Stmt, error) {
+func appendFormParseStatements(statements []ast.Stmt, t *Template, imports *source.Imports, arg *ast.Ident, param types.Object) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
 	statements = append(statements, callParseForm())
 	switch tp := param.Type().(type) {
@@ -833,7 +841,7 @@ func (AssertionFailureReporter) Errorf(format string, args ...interface{}) {
 	log.Fatalf(format, args...)
 }
 
-func defaultTemplateNameScope(imports *source.Imports, template Template, argumentIdentifier string) (types.Type, bool) {
+func defaultTemplateNameScope(imports *source.Imports, template *Template, argumentIdentifier string) (types.Type, bool) {
 	switch argumentIdentifier {
 	case TemplateNameScopeIdentifierHTTPRequest:
 		pkg, ok := imports.Types("net/http")
@@ -886,7 +894,7 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	return obj, true
 }
 
-func ensureMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
+func ensureMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t *Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		isMethod := true
@@ -932,7 +940,7 @@ func ensureMethodSignature(imports *source.Imports, signatures map[string]*types
 	}
 }
 
-func createMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
+func createMethodSignature(imports *source.Imports, signatures map[string]*types.Signature, t *Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
 	for _, a := range call.Args {
 		switch arg := a.(type) {

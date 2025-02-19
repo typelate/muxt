@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"html/template"
 	"net/http"
 	"regexp"
@@ -17,7 +18,7 @@ import (
 )
 
 func Templates(ts *template.Template) ([]Template, error) {
-	var templateNames []Template
+	var templates []Template
 	patterns := make(map[string]struct{})
 	for _, t := range ts.Templates() {
 		mt, err, ok := newTemplate(t.Name())
@@ -25,18 +26,19 @@ func Templates(ts *template.Template) ([]Template, error) {
 			continue
 		}
 		if err != nil {
-			return templateNames, err
+			return templates, err
 		}
 		pattern := strings.Join([]string{mt.method, mt.host, mt.path}, " ")
 		if _, exists := patterns[pattern]; exists {
-			return templateNames, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
+			return templates, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
 		}
 		mt.template = t
 		patterns[pattern] = struct{}{}
-		templateNames = append(templateNames, mt)
+		templates = append(templates, mt)
 	}
-	slices.SortFunc(templateNames, Template.byPathThenMethod)
-	return templateNames, nil
+	slices.SortFunc(templates, Template.byPathThenMethod)
+	calculateIdentifiers(templates)
+	return templates, nil
 }
 
 type Template struct {
@@ -58,6 +60,11 @@ type Template struct {
 	fileSet *token.FileSet
 
 	template *template.Template
+
+	pathValueTypes map[string]types.Type
+	pathValueNames []string
+
+	identifier string
 }
 
 func newTemplate(in string) (Template, error, bool) {
@@ -66,14 +73,15 @@ func newTemplate(in string) (Template, error, bool) {
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
 	p := Template{
-		name:       in,
-		method:     matches[templateNameMux.SubexpIndex("METHOD")],
-		host:       matches[templateNameMux.SubexpIndex("HOST")],
-		path:       matches[templateNameMux.SubexpIndex("PATH")],
-		handler:    strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
-		pattern:    matches[templateNameMux.SubexpIndex("pattern")],
-		fileSet:    token.NewFileSet(),
-		statusCode: http.StatusOK,
+		name:           in,
+		method:         matches[templateNameMux.SubexpIndex("METHOD")],
+		host:           matches[templateNameMux.SubexpIndex("HOST")],
+		path:           matches[templateNameMux.SubexpIndex("PATH")],
+		handler:        strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
+		pattern:        matches[templateNameMux.SubexpIndex("pattern")],
+		fileSet:        token.NewFileSet(),
+		statusCode:     http.StatusOK,
+		pathValueTypes: make(map[string]types.Type),
 	}
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
@@ -98,14 +106,20 @@ func newTemplate(in string) (Template, error, bool) {
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
-	pathParameterNames := p.parsePathValueNames()
-	if err := checkPathValueNames(pathParameterNames); err != nil {
+	pathValueNames := p.parsePathValueNames()
+	if err := checkPathValueNames(pathValueNames); err != nil {
 		return Template{}, err, true
 	}
 
-	err := parseHandler(p.fileSet, &p, pathParameterNames)
+	err := parseHandler(p.fileSet, &p, pathValueNames)
 	if err != nil {
 		return p, err, true
+	}
+
+	if p.fun == nil {
+		for _, name := range pathValueNames {
+			p.pathValueTypes[name] = types.Universe.Lookup("string").Type()
+		}
 	}
 
 	if httpStatusCode != "" && !p.callWriteHeader(nil) {
