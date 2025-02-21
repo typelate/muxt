@@ -36,9 +36,13 @@ func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string 
 	}
 	var pathParams []string
 	if t.path == "/" {
+		if t.host != "" {
+			sb.WriteString(strcase.ToGoPascal(t.host))
+		}
 		sb.WriteString("Index")
 	} else {
-		pathSegments := strings.Split(t.path, "/")
+		pathSegments := []string{t.host}
+		pathSegments = append(pathSegments, strings.Split(t.path, "/")...)
 		for _, pathSegment := range pathSegments {
 			isPathParam := false
 			if len(pathSegment) > 2 && pathSegment[0] == '{' && pathSegment[len(pathSegment)-1] == '}' {

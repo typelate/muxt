@@ -67,6 +67,18 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 			Out: "ReadX",
 			In:  "GET /x Method()",
 		},
+		{
+			Out: "ReadExampleComIndex",
+			In:  "GET example.com/ X()",
+		},
+		{
+			Out: "CreateABCDExampleComIndex",
+			In:  "POST a.b.c.d.example.com/ X()",
+		},
+		{
+			Out: "CreateExampleComPeach",
+			In:  "POST example.com/peach X()",
+		},
 	} {
 		t.Run(tt.Out, func(t *testing.T) {
 			pat, err, match := newTemplate(tt.In)
