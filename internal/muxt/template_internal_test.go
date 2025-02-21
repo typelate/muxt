@@ -446,6 +446,30 @@ func TestNewTemplateName(t *testing.T) {
 				require.ErrorContains(t, err, "you can not use response as an argument and specify an HTTP status code")
 			},
 		},
+		{
+			Name:     "empty middle path segment",
+			In:       "/x//y",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "template has an empty path segment:")
+			},
+		},
+		{
+			Name:     "empty first path segment",
+			In:       "//x/y",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "template has an empty path segment:")
+			},
+		},
+		{
+			Name:     "empty final path segment",
+			In:       "/x//",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "template has an empty path segment:")
+			},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			pat, err, match := newTemplate(tt.In)

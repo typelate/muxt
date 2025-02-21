@@ -100,6 +100,15 @@ func newTemplate(in string) (Template, error, bool) {
 		}
 	}
 
+	if len(p.path) > 1 {
+		segments := strings.Split(p.path[1:], "/")
+		for _, segment := range segments {
+			if segment == "" {
+				return Template{}, fmt.Errorf("template has an empty path segment: %s", p.name), true
+			}
+		}
+	}
+
 	switch p.method {
 	default:
 		return p, fmt.Errorf("%s method not allowed", p.method), true
