@@ -3,13 +3,12 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- in.go --
 package main
 
-import (
-	"context"
-	"net/http"
-)
+import "context"
 
 type (
 	T       struct{}
@@ -19,6 +18,9 @@ type (
 func (T) F(context.Context, Session, int) any { return nil }
 
 func (T) Author(int) (Session, error) { return Session{}, nil }
+
+func main() {}
+
 -- template.go --
 package main
 

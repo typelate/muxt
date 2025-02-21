@@ -5,6 +5,8 @@ stdout 'routes has route for POST /form'
 
 muxt check
 
+exec go build -o build ./cmd
+
 -- index.gohtml --
 {{define "GET /" }}
 	<h1>Hello, world!</h1>
@@ -20,7 +22,7 @@ muxt check
 {{end}}
 
 -- go.mod --
-module server
+module example.com/server
 
 go 1.22
 -- template.go --
@@ -36,3 +38,14 @@ import (
 var formHTML embed.FS
 
 var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+-- cmd/main.go --
+package main
+
+import "example.com/server"
+
+var _ = server.T{}
+
+func main() {}

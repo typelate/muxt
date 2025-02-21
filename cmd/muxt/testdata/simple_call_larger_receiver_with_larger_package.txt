@@ -3,6 +3,8 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- receiver.go --
 package main
 
@@ -11,6 +13,8 @@ type (
 
 	T struct{}
 )
+
+func main() {}
 -- f.go --
 package main
 

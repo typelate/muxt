@@ -3,6 +3,8 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- in.go --
 package main
 
@@ -19,6 +21,8 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+func main() {}
 -- go.mod --
 module example.com
 

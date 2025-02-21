@@ -1,10 +1,14 @@
 muxt generate --receiver-type=T
 muxt check
 
+cat template_routes.go
+
+exec go test
+
 -- go.mod --
 module example.com
 
-go 1.20
+go 1.24
 -- template.go --
 package main
 
@@ -17,8 +21,10 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+func main() {}
 -- template.gohtml --
-{{- define "GET / F(form)" -}}
+{{- define "POST / F(form)" -}}
 FieldInt={{.Result.FieldInt}}
 FieldInt64={{.Result.FieldInt64}}
 FieldInt32={{.Result.FieldInt32}}
@@ -35,13 +41,12 @@ FieldTime={{.Result.FieldTime}}
 -- in.go --
 package main
 
-import (
-	"net/http"
-	"time"
-)
+import "time"
 
 type (
-	T  struct{}
+	T  struct{
+		spy func(form In) In
+	}
 	In struct {
 		FieldInt    int
 		FieldInt64  int64
@@ -60,35 +65,18 @@ type (
 
 func (T) F(form In) In { return form }
 -- template_test.go --
-package server
+package main
 
 import (
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"slices"
 	"strings"
 	"testing"
 )
 
 func Test(t *testing.T) {
-	mux := http.NewServeMux()
-
-	var service T
-
-	service.spy = func(form Form) Form {
-		if exp := []int{7, 14, 21, 29}; !slices.Equal(exp, form.Count) {
-			t.Errorf("exp %v, got %v", exp, form.Count)
-		}
-		if exp := "apple"; form.Str != exp {
-			t.Errorf("exp %v, got %v", exp, form.Str)
-		}
-		return form
-	}
-
-	TemplateRoutes(mux, service)
-
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(url.Values{
 		"FieldInt":    []string{"1"},
 		"FieldInt64":  []string{"2"},
@@ -100,23 +88,31 @@ func Test(t *testing.T) {
 		"FieldUint32": []string{"8"},
 		"FieldUint16": []string{"9"},
 		"FieldUint8":  []string{"10"},
-		"FieldBool":   []string{"11"},
-		"FieldTime":   []string{"12"},
+		"FieldBool":   []string{"true"},
+		"FieldTime":   []string{"2006-01-02T15:04:05Z"},
 	}.Encode()))
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
+	service := T{
+		spy: func(form In) In {
+  		return form
+  	},
+	}
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, service)
 	mux.ServeHTTP(rec, req)
 
 	res := rec.Result()
 
-	if res.StatusCode != http.StatusCreated {
-		t.Error("exp", http.StatusText(http.StatusCreated), "got", http.StatusText(res.StatusCode))
-	}
+		body, err := io.ReadAll(res.Body)
+    if err != nil {
+      t.Error(err)
+    }
+    t.Log(string(body))
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Error(err)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("exp %q got %q", http.StatusText(http.StatusOK), http.StatusText(res.StatusCode))
 	}
 
 	for _, line := range []string{
@@ -130,8 +126,8 @@ func Test(t *testing.T) {
 		"FieldUint32=8",
 		"FieldUint16=9",
 		"FieldUint8=10",
-		"FieldBool=11",
-		"FieldTime=12",
+		"FieldBool=true",
+		"FieldTime=2006-01-02",
 	} {
 		if !strings.Contains(string(body), line) {
 			t.Errorf("%q not found", line)

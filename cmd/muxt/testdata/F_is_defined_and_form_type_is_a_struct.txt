@@ -3,6 +3,8 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- in.go --
 package main
 
@@ -14,6 +16,8 @@ type (
 )
 
 func (T) F(form In) int { return 0 }
+
+func main() {}
 -- template.go --
 package main
 

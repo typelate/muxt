@@ -3,14 +3,16 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- receiver.go --
 package main
 
-import "net/http"
-
 type T struct{}
 
-func (T) F(username string) (int, error) { return 30, error }
+func (T) F(username string) (int, error) { return 30, nil }
+
+func main() {}
 -- template.go --
 package main
 

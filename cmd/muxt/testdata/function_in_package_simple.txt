@@ -4,6 +4,8 @@ exec go test -cover
 
 muxt check
 
+exec go build -o build
+
 -- template.gohtml --
 {{define "GET / function(ctx)" }}{{.}}{{end}}
 
@@ -28,6 +30,8 @@ var templates = template.Must(template.ParseFS(formHTML, "*"))
 func function(ctx context.Context) int { return 32 }
 
 type Server struct{}
+
+func main() {}
 -- template_test.go --
 package server
 

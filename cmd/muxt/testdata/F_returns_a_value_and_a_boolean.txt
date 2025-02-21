@@ -3,12 +3,16 @@
 muxt generate --receiver-type=T
 muxt check
 
+exec go build -o build
+
 -- receiver.go --
 package main
 
 type T struct{}
 
 func (T) F(username string) (int, bool) { return 30, true }
+
+func main() {}
 -- template.go --
 package main
 

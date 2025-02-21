@@ -8,6 +8,8 @@ stderr 'checking endpoint GET /'
 stderr 'checking endpoint GET /form'
 stderr 'checking endpoint POST /form'
 
+exec go build -o build ./cmd
+
 -- index.gohtml --
 {{define "GET /" }}
 	<h1>Hello, world!</h1>
@@ -23,7 +25,7 @@ stderr 'checking endpoint POST /form'
 {{end}}
 
 -- go.mod --
-module server
+module example.com
 
 go 1.22
 -- template.go --
@@ -41,3 +43,12 @@ var indexHTML embed.FS
 var formHTML embed.FS
 
 var templates = template.Must(template.Must(template.ParseFS(formHTML, "*")).ParseFS(indexHTML, "*"))
+
+-- cmd/main.go --
+package main
+
+import server "example.com"
+
+var _ = server.TemplateRoutes
+
+func main() {}
