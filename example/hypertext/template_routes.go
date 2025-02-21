@@ -101,13 +101,24 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 }
 
 type TemplateData[T any] struct {
-	Request *http.Request
-	Result  T
-	Paths   TemplateRoutePaths
+	request *http.Request
+	result  T
+}
+
+func (TemplateData[T]) Path() TemplateRoutePaths {
+	return TemplateRoutePaths{}
+}
+
+func (data TemplateData[T]) Result() T {
+	return data.result
+}
+
+func (data TemplateData[T]) Request() *http.Request {
+	return data.request
 }
 
 func newTemplateData[T any](result T, request *http.Request) TemplateData[T] {
-	return TemplateData[T]{Result: result, Request: request}
+	return TemplateData[T]{result: result, request: request}
 }
 
 type TemplateRoutePaths struct {

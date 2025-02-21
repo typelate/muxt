@@ -284,11 +284,11 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 							},
 							Elts: []ast.Expr{
 								&ast.KeyValueExpr{
-									Key:   ast.NewIdent(templateDataTypeResultFieldName),
+									Key:   ast.NewIdent("result"),
 									Value: ast.NewIdent(resultParamName),
 								},
 								&ast.KeyValueExpr{
-									Key:   ast.NewIdent(httpRequestIdent),
+									Key:   ast.NewIdent("request"),
 									Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
 								},
 							},
@@ -333,11 +333,66 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 						Type: &ast.StructType{
 							Fields: &ast.FieldList{
 								List: []*ast.Field{
-									{Names: []*ast.Ident{ast.NewIdent(httpRequestIdent)}, Type: imports.HTTPRequestPtr()},
-									{Names: []*ast.Ident{ast.NewIdent(templateDataTypeResultFieldName)}, Type: ast.NewIdent("T")},
-									{Names: []*ast.Ident{ast.NewIdent("Paths")}, Type: ast.NewIdent(urlHelperTypeName)},
+									{Names: []*ast.Ident{ast.NewIdent("request")}, Type: imports.HTTPRequestPtr()},
+									{Names: []*ast.Ident{ast.NewIdent("result")}, Type: ast.NewIdent("T")},
 								},
 							},
+						},
+					},
+				},
+			},
+
+			&ast.FuncDecl{
+				Recv: &ast.FieldList{List: []*ast.Field{{Type: &ast.IndexExpr{
+					X:     ast.NewIdent(templateDataTypeName),
+					Index: ast.NewIdent("T"),
+				}}}},
+				Name: ast.NewIdent("Path"),
+				Type: &ast.FuncType{
+					Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent(urlHelperTypeName)}}},
+				},
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ReturnStmt{
+							Results: []ast.Expr{&ast.CompositeLit{Type: ast.NewIdent(urlHelperTypeName)}},
+						},
+					},
+				},
+			},
+
+			&ast.FuncDecl{
+				Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("data")},
+					Type: &ast.IndexExpr{
+						X:     ast.NewIdent(templateDataTypeName),
+						Index: ast.NewIdent("T"),
+					}}}},
+				Name: ast.NewIdent("Result"),
+				Type: &ast.FuncType{
+					Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("T")}}},
+				},
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ReturnStmt{
+							Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("data"), Sel: ast.NewIdent("result")}},
+						},
+					},
+				},
+			},
+
+			&ast.FuncDecl{
+				Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("data")},
+					Type: &ast.IndexExpr{
+						X:     ast.NewIdent(templateDataTypeName),
+						Index: ast.NewIdent("T"),
+					}}}},
+				Name: ast.NewIdent("Request"),
+				Type: &ast.FuncType{
+					Results: &ast.FieldList{List: []*ast.Field{{Type: imports.HTTPRequestPtr()}}},
+				},
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ReturnStmt{
+							Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("data"), Sel: ast.NewIdent("request")}},
 						},
 					},
 				},
