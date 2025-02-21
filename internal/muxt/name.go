@@ -372,6 +372,17 @@ func routePathTypeAndMethods(imports *source.Imports, templates []Template, rece
 				&ast.TypeSpec{Name: ast.NewIdent(urlHelperTypeName), Type: &ast.StructType{Fields: &ast.FieldList{}}},
 			},
 		},
+		&ast.FuncDecl{
+			Name: ast.NewIdent("TemplateRoutePath"),
+			Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent(urlHelperTypeName)}}}},
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ReturnStmt{
+						Results: []ast.Expr{&ast.CompositeLit{Type: ast.NewIdent(urlHelperTypeName)}},
+					},
+				},
+			},
+		},
 	}
 	for _, t := range templates {
 		decl, err := routePathFunc(imports, &t)

@@ -124,6 +124,10 @@ func newTemplateData[T any](result T, request *http.Request) TemplateData[T] {
 type TemplateRoutePaths struct {
 }
 
+func TemplateRoutePath() TemplateRoutePaths {
+	return TemplateRoutePaths{}
+}
+
 func (TemplateRoutePaths) SubmitFormEditRow(id int) string {
 	return "/" + path.Join("fruits", strconv.Itoa(id))
 }
