@@ -18,10 +18,11 @@ type RoutesReceiver interface {
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
-	mux.HandleFunc("PATCH /fruits/{id}", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PATCH /fruits/{id}", func(res http.ResponseWriter, request *http.Request) {
+		var response = &TemplateResponseWriter{underlying: res, statusCode: http.StatusOK}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
-			http.Error(response, err.Error(), http.StatusBadRequest)
+			http.Error(res, err.Error(), http.StatusBadRequest)
 			return
 		}
 		id := idParsed
@@ -30,11 +31,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		{
 			value, err := strconv.Atoi(request.FormValue("count"))
 			if err != nil {
-				http.Error(response, err.Error(), http.StatusBadRequest)
+				http.Error(res, err.Error(), http.StatusBadRequest)
 				return
 			}
 			if value < 0 {
-				http.Error(response, "count must not be less than 0", http.StatusBadRequest)
+				http.Error(res, "count must not be less than 0", http.StatusBadRequest)
 				return
 			}
 			form.Value = value
@@ -43,19 +44,20 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		buf := bytes.NewBuffer(nil)
 		rd := newTemplateData(result, request)
 		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
 		statusCode := http.StatusOK
-		response.WriteHeader(statusCode)
+		res.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	mux.HandleFunc("GET /fruits/{id}/edit", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET /fruits/{id}/edit", func(res http.ResponseWriter, request *http.Request) {
+		var response = &TemplateResponseWriter{underlying: res, statusCode: http.StatusOK}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
-			http.Error(response, err.Error(), http.StatusBadRequest)
+			http.Error(res, err.Error(), http.StatusBadRequest)
 			return
 		}
 		id := idParsed
@@ -63,44 +65,72 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		buf := bytes.NewBuffer(nil)
 		rd := newTemplateData(result, request)
 		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
 		statusCode := http.StatusOK
-		response.WriteHeader(statusCode)
+		res.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
-		result := struct {
-		}{}
+	mux.HandleFunc("GET /help", func(res http.ResponseWriter, request *http.Request) {
+		var (
+			result = struct {
+			}{}
+			response = &TemplateResponseWriter{underlying: res, statusCode: http.StatusOK}
+		)
 		buf := bytes.NewBuffer(nil)
 		rd := newTemplateData(result, request)
 		if err := templates.ExecuteTemplate(buf, "GET /help", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-		response.WriteHeader(http.StatusOK)
+		res.WriteHeader(http.StatusOK)
 		_, _ = buf.WriteTo(response)
 	})
-	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET /{$}", func(res http.ResponseWriter, request *http.Request) {
+		var response = &TemplateResponseWriter{underlying: res, statusCode: http.StatusOK}
 		ctx := request.Context()
 		result := receiver.List(ctx)
 		buf := bytes.NewBuffer(nil)
 		rd := newTemplateData(result, request)
 		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", rd); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
 		statusCode := http.StatusOK
-		response.WriteHeader(statusCode)
+		res.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
+}
+
+type TemplateResponseWriter struct {
+	underlying http.ResponseWriter
+	statusCode int
+}
+
+func (res *TemplateResponseWriter) Header() http.Header {
+	return res.underlying.Header()
+}
+
+func (res *TemplateResponseWriter) Write(in []byte) (int, error) {
+	if res.statusCode != 0 {
+		res.underlying.WriteHeader(res.statusCode)
+	}
+	return res.underlying.Write(in)
+}
+
+func (res *TemplateResponseWriter) WriteHeader(statusCode int) {
+	res.statusCode = statusCode
+}
+
+func (res *TemplateResponseWriter) Unwrap() http.ResponseWriter {
+	return res.underlying
 }
 
 type TemplateData[T any] struct {

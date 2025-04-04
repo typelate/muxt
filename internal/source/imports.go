@@ -307,6 +307,20 @@ func (imports *Imports) HTTPRequestPtr() *ast.StarExpr {
 	}
 }
 
+func (imports *Imports) HTTPResponseWriter() *ast.SelectorExpr {
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(imports.Add("http", "net/http")),
+		Sel: ast.NewIdent("ResponseWriter"),
+	}
+}
+
+func (imports *Imports) HTTPHeader() *ast.SelectorExpr {
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(imports.Add("http", "net/http")),
+		Sel: ast.NewIdent("Header"),
+	}
+}
+
 func (imports *Imports) StrconvParseInt8Call(in ast.Expr) *ast.CallExpr {
 	return imports.StrconvParseIntCall(in, 10, 8)
 }

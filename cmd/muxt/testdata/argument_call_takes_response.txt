@@ -36,7 +36,11 @@ type T struct{}
 
 func (T) F(context.Context, any) any { return nil }
 
-func (T) Headers(response http.ResponseWriter) any { return nil }
+func (T) Headers(response http.ResponseWriter) any {
+	response.Header().Set("x-some-data", "123")
+	response.WriteHeader(http.StatusNotFound)
+	return nil
+}
 -- template_test.go --
 package main
 
@@ -80,10 +84,19 @@ func Test(t *testing.T) {
 
 	mux.ServeHTTP(res, req)
 
-	if res.WriteHeaderCallCount != 0 {
-		t.Error("unexpected WriteHeader call")
+	if res.WriteHeaderCallCount != 1 {
+		t.Errorf("unexpected WriteHeader count: want %d got %d", 1, res.WriteHeaderCallCount)
 	}
-	if res.HeaderCallCount != 0 {
-		t.Error("unexpected HeaderCall call")
+	if res.HeaderCallCount != 3 {
+		t.Errorf("unexpected Header call count: want %d got %d", 3, res.HeaderCallCount)
+	}
+	if val := rec.Result().Header.Get("x-some-data"); val != "123" {
+		t.Errorf("unexpected value for x-some-data: want %q got %q", "123", val)
+	}
+	if rec.Result().Header.Get("content-length") == "" {
+		t.Error("unexpected content-length to be set")
+	}
+	if rec.Result().Header.Get("content-type") == "" {
+		t.Error("unexpected content-type to be set")
 	}
 }
