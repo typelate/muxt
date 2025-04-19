@@ -171,7 +171,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 					},
 				},
 			}
-			handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, true, t.statusCode, &ast.CallExpr{
+			handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, true, t.defaultStatusCode, &ast.CallExpr{
 				Fun: ast.NewIdent(newResponseDataFuncIdent),
 				Args: []ast.Expr{
 					ast.NewIdent(dataVarIdent),
@@ -224,7 +224,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			return "", err
 		}
 		handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
-		handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, writeHeader, t.statusCode, &ast.CallExpr{
+		handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, writeHeader, t.defaultStatusCode, &ast.CallExpr{
 			Fun: ast.NewIdent(newResponseDataFuncIdent),
 			Args: []ast.Expr{
 				ast.NewIdent(dataVarIdent),

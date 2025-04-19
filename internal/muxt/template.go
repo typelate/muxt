@@ -51,8 +51,8 @@ type Template struct {
 	// handler is used to generate the method interface
 	handler string
 
-	// statusCode is the status code to use in the response header
-	statusCode int
+	// defaultStatusCode is the status code to use in the response header for this template endpoint
+	defaultStatusCode int
 
 	fun  *ast.Ident
 	call *ast.CallExpr
@@ -73,15 +73,15 @@ func newTemplate(in string) (Template, error, bool) {
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
 	p := Template{
-		name:           in,
-		method:         matches[templateNameMux.SubexpIndex("METHOD")],
-		host:           matches[templateNameMux.SubexpIndex("HOST")],
-		path:           matches[templateNameMux.SubexpIndex("PATH")],
-		handler:        strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
-		pattern:        matches[templateNameMux.SubexpIndex("pattern")],
-		fileSet:        token.NewFileSet(),
-		statusCode:     http.StatusOK,
-		pathValueTypes: make(map[string]types.Type),
+		name:              in,
+		method:            matches[templateNameMux.SubexpIndex("METHOD")],
+		host:              matches[templateNameMux.SubexpIndex("HOST")],
+		path:              matches[templateNameMux.SubexpIndex("PATH")],
+		handler:           strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
+		pattern:           matches[templateNameMux.SubexpIndex("pattern")],
+		fileSet:           token.NewFileSet(),
+		defaultStatusCode: http.StatusOK,
+		pathValueTypes:    make(map[string]types.Type),
 	}
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
@@ -90,13 +90,13 @@ func newTemplate(in string) (Template, error, bool) {
 			if err != nil {
 				return Template{}, fmt.Errorf("failed to parse status code: %w", err), true
 			}
-			p.statusCode = code
+			p.defaultStatusCode = code
 		} else {
 			code, err := strconv.Atoi(strings.TrimSpace(httpStatusCode))
 			if err != nil {
 				return Template{}, fmt.Errorf("failed to parse status code: %w", err), true
 			}
-			p.statusCode = code
+			p.defaultStatusCode = code
 		}
 	}
 

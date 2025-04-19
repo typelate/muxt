@@ -249,7 +249,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / 202",
 			ExpMatch: true,
 			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusAccepted, pat.statusCode)
+				assert.Equal(t, http.StatusAccepted, pat.defaultStatusCode)
 			},
 		},
 		{
@@ -257,7 +257,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST /",
 			ExpMatch: true,
 			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusOK, pat.statusCode)
+				assert.Equal(t, http.StatusOK, pat.defaultStatusCode)
 			},
 		},
 		{
@@ -265,7 +265,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / 202 F()",
 			ExpMatch: true,
 			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusAccepted, pat.statusCode)
+				assert.Equal(t, http.StatusAccepted, pat.defaultStatusCode)
 			},
 		},
 		{
@@ -273,7 +273,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / http.StatusTeapot F()",
 			ExpMatch: true,
 			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusTeapot, pat.statusCode)
+				assert.Equal(t, http.StatusTeapot, pat.defaultStatusCode)
 			},
 		},
 		{
@@ -348,7 +348,7 @@ func TestNewTemplateName(t *testing.T) {
 				assert.Equal(t, "", pat.host)
 				assert.Equal(t, "/", pat.path)
 				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.statusCode)
+				assert.Equal(t, 418, pat.defaultStatusCode)
 				assert.Equal(t, "", pat.handler)
 			},
 		},
@@ -361,7 +361,7 @@ func TestNewTemplateName(t *testing.T) {
 				assert.Equal(t, "", pat.host)
 				assert.Equal(t, "/", pat.path)
 				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.statusCode)
+				assert.Equal(t, 418, pat.defaultStatusCode)
 				assert.Equal(t, "", pat.handler)
 			},
 		},
@@ -374,7 +374,7 @@ func TestNewTemplateName(t *testing.T) {
 				assert.Equal(t, "", pat.host)
 				assert.Equal(t, "/", pat.path)
 				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.statusCode)
+				assert.Equal(t, 418, pat.defaultStatusCode)
 				assert.Equal(t, "f()", pat.handler)
 			},
 		},
@@ -387,7 +387,7 @@ func TestNewTemplateName(t *testing.T) {
 				assert.Equal(t, "", pat.host)
 				assert.Equal(t, "/", pat.path)
 				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, http.StatusOK, pat.statusCode)
+				assert.Equal(t, http.StatusOK, pat.defaultStatusCode)
 				assert.Equal(t, "f()", pat.handler)
 			},
 		},
