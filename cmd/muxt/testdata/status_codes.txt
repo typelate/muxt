@@ -1,0 +1,185 @@
+muxt generate --receiver-type=T
+
+exec go test
+
+muxt check
+
+-- index.gohtml --
+{{define "GET /" }}
+	200
+{{end}}
+
+{{define "GET /int 401" }}
+	404
+{{end}}
+
+{{define "GET /const http.StatusBadRequest" }}
+	400
+{{end}}
+
+{{define "GET /data/field Field()" }}
+	500
+{{end}}
+
+{{define "GET /data/method/ptr MethodPtr()" }}
+	401
+{{end}}
+
+{{define "GET /response-writer Response(response)" }}
+	201
+{{end}}s
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Hello() struct{} {
+	return struct{}{}
+}
+
+type DataField struct {
+	HTTPStatusCode int
+}
+
+func (T) Field() DataField {
+	return DataField{HTTPStatusCode: http.StatusInternalServerError}
+}
+
+type Data struct {
+	code int
+}
+
+func (d Data) HTTPStatusCode() int {
+	return d.code
+}
+
+type DataPtr struct {
+	code int
+}
+
+func (d *DataPtr) HTTPStatusCode() int {
+	return d.code
+}
+
+func (T) Method() Data {
+	return Data{code: 201}
+}
+
+func (T) MethodPtr() *DataPtr {
+	return &DataPtr{code: 202}
+}
+
+func (T) Response(res http.ResponseWriter) struct{} {
+	res.WriteHeader(203)
+	return struct{}{}
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	t.Run("wrong method", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, http.StatusMethodNotAllowed; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("default", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, http.StatusOK; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("int", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/int", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, http.StatusUnauthorized; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("const", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/const", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, http.StatusBadRequest; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("field", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/field", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, http.StatusInternalServerError; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("method", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/method", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, 201; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+
+	t.Run("method ptr", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, nil)
+		req := httptest.NewRequest(http.MethodGet, "/method/ptr", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if got, exp := res.StatusCode, 202; exp != got {
+			t.Errorf("exp %d, got %d", exp, got)
+		}
+	})
+}
