@@ -15,8 +15,6 @@ muxt check
 
 {{define "GET /data/field Field()" }}{{end}}
 
-{{define "GET /data/field/ptr PtrField()" }}{{end}}
-
 {{define "GET /data/method Method()" }}{{end}}
 
 {{define "GET /data/method/ptr MethodPtr()" }}{{end}}
@@ -53,15 +51,6 @@ type DataField struct {
 
 func (T) Field() DataField {
 	return DataField{StatusCode: http.StatusInternalServerError}
-}
-
-type DataPtrField struct {
-	StatusCode *int
-}
-
-func (T) PtrField() DataPtrField {
-	sc := http.StatusInternalServerError
-	return DataPtrField{StatusCode: &sc}
 }
 
 type Data struct {
