@@ -171,7 +171,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 					},
 				},
 			}
-			handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, true, t.defaultStatusCode, &ast.CallExpr{
+			handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t, nil, config.TemplatesVariable, true, &ast.CallExpr{
 				Fun: ast.NewIdent(newResponseDataFuncIdent),
 				Args: []ast.Expr{
 					ast.NewIdent(dataVarIdent),
@@ -224,7 +224,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			return "", err
 		}
 		handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
-		handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t.name, config.TemplatesVariable, writeHeader, t.defaultStatusCode, &ast.CallExpr{
+		handlerFunc.Body.List = append(handlerFunc.Body.List, executeFuncDecl(imports, t, sig.Results().At(0).Type(), config.TemplatesVariable, writeHeader, &ast.CallExpr{
 			Fun: ast.NewIdent(newResponseDataFuncIdent),
 			Args: []ast.Expr{
 				ast.NewIdent(dataVarIdent),
@@ -1046,7 +1046,7 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 	}
 }
 
-func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIdent string, writeHeader bool, statusCode int, result ast.Expr) []ast.Stmt {
+func executeFuncDecl(imports *source.Imports, t Template, resultType types.Type, templatesVariableIdent string, writeHeader bool, result ast.Expr) []ast.Stmt {
 	statements := make([]ast.Stmt, 0, 5)
 	statements = append(statements,
 		&ast.AssignStmt{
@@ -1068,7 +1068,7 @@ func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIde
 						X:   ast.NewIdent(templatesVariableIdent),
 						Sel: ast.NewIdent("ExecuteTemplate"),
 					},
-					Args: []ast.Expr{ast.NewIdent("buf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, ast.NewIdent("rd")},
+					Args: []ast.Expr{ast.NewIdent("buf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, ast.NewIdent("rd")},
 				}},
 			},
 			Cond: &ast.BinaryExpr{
@@ -1091,9 +1091,60 @@ func executeFuncDecl(imports *source.Imports, templateName, templatesVariableIde
 		}}, &ast.ExprStmt{X: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
 			Args: []ast.Expr{source.String("content-length"), imports.StrconvItoaCall(&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("buf"), Sel: ast.NewIdent("Len")}, Args: []ast.Expr{}})},
-		}}, &ast.ExprStmt{X: &ast.CallExpr{
+		}})
+
+		code := source.HTTPStatusCode(imports, t.defaultStatusCode)
+
+		if resultType != nil {
+			statements = append(statements, &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("statusCode")},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{source.HTTPStatusCode(imports, t.defaultStatusCode)},
+			})
+			statusCoder := statusCoderInterface()
+			if types.Implements(resultType, statusCoder) {
+				statements = append(statements, &ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: ast.NewIdent("sc"), Op: token.NEQ, Y: source.Int(0)},
+					Init: &ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent("sc")},
+						Tok: token.DEFINE,
+						Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("result"), Sel: ast.NewIdent("StatusCode")}}},
+					},
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.AssignStmt{
+								Lhs: []ast.Expr{ast.NewIdent("statusCode")},
+								Tok: token.ASSIGN,
+								Rhs: []ast.Expr{ast.NewIdent("sc")},
+							},
+						},
+					},
+				})
+			} else if obj, _, _ := types.LookupFieldOrMethod(resultType, true, imports.OutputPackageType(), "StatusCode"); obj != nil {
+				statements = append(statements, &ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: ast.NewIdent("sc"), Op: token.NEQ, Y: source.Int(0)},
+					Init: &ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent("sc")},
+						Tok: token.DEFINE,
+						Rhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("result"), Sel: ast.NewIdent("StatusCode")}},
+					},
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.AssignStmt{
+								Lhs: []ast.Expr{ast.NewIdent("statusCode")},
+								Tok: token.ASSIGN,
+								Rhs: []ast.Expr{ast.NewIdent("sc")},
+							},
+						},
+					},
+				})
+			}
+			code = ast.NewIdent("statusCode")
+		}
+
+		statements = append(statements, &ast.ExprStmt{X: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(httpResponseField(imports).Names[0].Name), Sel: ast.NewIdent("WriteHeader")},
-			Args: []ast.Expr{source.HTTPStatusCode(imports, statusCode)},
+			Args: []ast.Expr{code},
 		}})
 	}
 	statements = append(statements, &ast.AssignStmt{
@@ -1122,4 +1173,14 @@ func (f *forest) FindTree(name string) (*parse.Tree, bool) {
 		return nil, false
 	}
 	return ts.Tree, true
+}
+
+func statusCoderInterface() *types.Interface {
+	sig := types.NewSignatureType(nil, nil, nil,
+		types.NewTuple(),
+		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])),
+		false)
+
+	method := types.NewFunc(token.NoPos, nil, "StatusCode", sig)
+	return types.NewInterfaceType([]*types.Func{method}, nil).Complete()
 }

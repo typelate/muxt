@@ -23,6 +23,7 @@ type Imports struct {
 	typesCache        map[string]*types.Package
 	files             map[string]*ast.File
 	packages          []*packages.Package
+	outPkg            *types.Package
 	outputPackage     string
 	outputPackagePath string
 }
@@ -73,11 +74,16 @@ func (imports *Imports) FileSet() *token.FileSet {
 }
 
 func (imports *Imports) SetOutputPackage(pkg *types.Package) {
+	imports.outPkg = pkg
 	imports.outputPackage = pkg.Path()
 }
 
 func (imports *Imports) OutputPackage() string {
 	return cmp.Or(imports.outputPackage, "main")
+}
+
+func (imports *Imports) OutputPackageType() *types.Package {
+	return imports.outPkg
 }
 
 func (imports *Imports) SyntaxFile(pos token.Pos) (*ast.File, *token.FileSet, error) {

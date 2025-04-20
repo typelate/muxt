@@ -1,33 +1,25 @@
 muxt generate --receiver-type=T
 
+cat template_routes.go
+
 exec go test
 
 muxt check
 
 -- index.gohtml --
-{{define "GET /" }}
-	200
-{{end}}
+{{define "GET /{$}" }}{{end}}
 
-{{define "GET /int 401" }}
-	404
-{{end}}
+{{define "GET /int 401" }}{{end}}
 
-{{define "GET /const http.StatusBadRequest" }}
-	400
-{{end}}
+{{define "GET /const http.StatusBadRequest" }}{{end}}
 
-{{define "GET /data/field Field()" }}
-	500
-{{end}}
+{{define "GET /data/field Field()" }}{{end}}
 
-{{define "GET /data/method/ptr MethodPtr()" }}
-	401
-{{end}}
+{{define "GET /data/method Method()" }}{{end}}
 
-{{define "GET /response-writer Response(response)" }}
-	201
-{{end}}s
+{{define "GET /data/method/ptr MethodPtr()" }}{{end}}
+
+{{define "GET /response-writer Response(response)" }}{{end}}
 
 -- go.mod --
 module server
@@ -54,18 +46,18 @@ func (T) Hello() struct{} {
 }
 
 type DataField struct {
-	HTTPStatusCode int
+	StatusCode int
 }
 
 func (T) Field() DataField {
-	return DataField{HTTPStatusCode: http.StatusInternalServerError}
+	return DataField{StatusCode: http.StatusInternalServerError}
 }
 
 type Data struct {
 	code int
 }
 
-func (d Data) HTTPStatusCode() int {
+func (d Data) StatusCode() int {
 	return d.code
 }
 
@@ -73,7 +65,7 @@ type DataPtr struct {
 	code int
 }
 
-func (d *DataPtr) HTTPStatusCode() int {
+func (d *DataPtr) StatusCode() int {
 	return d.code
 }
 
@@ -101,84 +93,84 @@ import (
 func Test(t *testing.T) {
 	t.Run("wrong method", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
+		TemplateRoutes(mux, T{})
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusMethodNotAllowed; exp != got {
+		if got, exp := res.StatusCode, http.StatusMethodNotAllowed; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("default", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
+		TemplateRoutes(mux, T{})
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusOK; exp != got {
+		if got, exp := res.StatusCode, http.StatusOK; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("int", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
+		TemplateRoutes(mux, T{})
 		req := httptest.NewRequest(http.MethodGet, "/int", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusUnauthorized; exp != got {
+		if got, exp := res.StatusCode, http.StatusUnauthorized; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("const", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
+		TemplateRoutes(mux, T{})
 		req := httptest.NewRequest(http.MethodGet, "/const", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusBadRequest; exp != got {
+		if got, exp := res.StatusCode, http.StatusBadRequest; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("field", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
-		req := httptest.NewRequest(http.MethodGet, "/field", nil)
+		TemplateRoutes(mux, T{})
+		req := httptest.NewRequest(http.MethodGet, "/data/field", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusInternalServerError; exp != got {
+		if got, exp := res.StatusCode, http.StatusInternalServerError; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("method", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
-		req := httptest.NewRequest(http.MethodGet, "/method", nil)
+		TemplateRoutes(mux, T{})
+		req := httptest.NewRequest(http.MethodGet, "/data/method", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, 201; exp != got {
+		if got, exp := res.StatusCode, 201; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
 
 	t.Run("method ptr", func(t *testing.T) {
 		mux := http.NewServeMux()
-		TemplateRoutes(mux, nil)
-		req := httptest.NewRequest(http.MethodGet, "/method/ptr", nil)
+		TemplateRoutes(mux, T{})
+		req := httptest.NewRequest(http.MethodGet, "/data/method/ptr", nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, 202; exp != got {
+		if got, exp := res.StatusCode, 202; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})
