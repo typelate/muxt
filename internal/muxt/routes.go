@@ -260,7 +260,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			return "", err
 		}
 
-		receiverCallStatements, err := callReceiverMethod(file, dataVarIdent, sig, &ast.CallExpr{
+		receiverCallStatements, resultOk, resultErr, err := callReceiverMethod(dataVarIdent, sig, &ast.CallExpr{
 			Fun:  callFun,
 			Args: slices.Clone(t.call.Args),
 		})
@@ -274,8 +274,8 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 				ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
 				ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
 				ast.NewIdent(dataVarIdent),
-				ast.NewIdent("true"),
-				ast.NewIdent("nil"),
+				resultOk,
+				resultErr,
 			},
 		})...)
 		routesFunc.Body.List = append(routesFunc.Body.List, t.callHandleFunc(handlerFunc))
@@ -1199,14 +1199,14 @@ func parseBlock(tmpIdent string, parseCall ast.Expr, validations []ast.Stmt, han
 	return block.List
 }
 
-func callReceiverMethod(file *source.File, dataVarIdent string, method *types.Signature, call *ast.CallExpr) ([]ast.Stmt, error) {
+func callReceiverMethod(dataVarIdent string, method *types.Signature, call *ast.CallExpr) ([]ast.Stmt, ast.Expr, ast.Expr, error) {
 	const (
 		okIdent = "ok"
 	)
 	if method.Results().Len() == 0 {
-		mathodIdent := call.Fun.(*ast.Ident)
-		assert.NotNil(assertion, mathodIdent)
-		return nil, fmt.Errorf("method %s has no results it should have one or two", mathodIdent.Name)
+		methodIdent := call.Fun.(*ast.Ident)
+		assert.NotNil(assertion, methodIdent)
+		return nil, nil, nil, fmt.Errorf("method %s has no results it should have one or two", methodIdent.Name)
 	} else if method.Results().Len() > 1 {
 		lastResult := method.Results().At(method.Results().Len() - 1)
 
@@ -1214,37 +1214,32 @@ func callReceiverMethod(file *source.File, dataVarIdent string, method *types.Si
 		assert.NotNil(assertion, errorType)
 
 		if types.Implements(lastResult.Type(), errorType) {
-			return []ast.Stmt{
+			statements := []ast.Stmt{
 				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
-				&ast.IfStmt{
-					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.ExprStmt{X: file.HTTPErrorCall(ast.NewIdent(httpResponseField(file).Names[0].Name), source.CallError(errIdent), http.StatusInternalServerError)},
-							&ast.ReturnStmt{},
-						},
-					},
-				},
-			}, nil
+			}
+			okExpr := &ast.BinaryExpr{
+				X:  ast.NewIdent(errIdent),
+				Op: token.EQL,
+				Y:  source.Nil(),
+			}
+			errExpr := ast.NewIdent(errIdent)
+			return statements, okExpr, errExpr, nil
 		}
 
 		if basic, ok := lastResult.Type().(*types.Basic); ok && basic.Kind() == types.Bool {
-			return []ast.Stmt{
+			statements := []ast.Stmt{
 				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(okIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
-				&ast.IfStmt{
-					Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.ReturnStmt{},
-						},
-					},
-				},
-			}, nil
+			}
+			okExpr := ast.NewIdent(okIdent)
+			errExpr := ast.NewIdent("nil")
+			return statements, okExpr, errExpr, nil
 		}
 
-		return nil, fmt.Errorf("expected last result to be either an error or a bool")
+		return nil, nil, nil, fmt.Errorf("expected last result to be either an error or a bool")
 	} else {
-		return []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}}}, nil
+		okExpr := ast.NewIdent("true")
+		errExpr := ast.NewIdent("nil")
+		return []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}}}, okExpr, errExpr, nil
 	}
 }
 
