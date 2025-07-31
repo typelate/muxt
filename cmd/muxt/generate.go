@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -47,14 +48,33 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if v, ok := cliVersion(); ok {
 		config.MuxtVersion = v
 	}
-	s, err := muxt.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
+	if config.Tests {
+		if buf, err := os.ReadFile(filepath.Join(workingDirectory, config.TestsFileName)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else if err == nil {
+			config.PreviousTests = string(buf)
+		}
+	}
+
+	result, err := muxt.Generate(workingDirectory, log.New(stdout, "", 0), config)
 	if err != nil {
 		return err
 	}
 	var sb bytes.Buffer
 	writeCodeGenerationComment(&sb)
-	sb.WriteString(s)
-	return os.WriteFile(filepath.Join(workingDirectory, config.OutputFileName), sb.Bytes(), 0o644)
+	sb.WriteString(result.TemplateRoutes)
+
+	if err := os.WriteFile(filepath.Join(workingDirectory, config.OutputFileName), sb.Bytes(), 0o644); err != nil {
+		return err
+	}
+
+	if config.Tests {
+		if err := os.WriteFile(filepath.Join(workingDirectory, config.TestsFileName), []byte(result.TemplateRoutesTest), 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func writeCodeGenerationComment(w io.StringWriter) {

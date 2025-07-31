@@ -1,0 +1,39 @@
+muxt generate --tests --template-data-type=Data
+
+cat template_routes.go
+stdout '// muxt version: \(devel\)'
+
+cat template_routes_test.go
+
+exec go test -cover -v
+stdout '--- PASS: TestTemplateRoutes/ReadIndex'
+
+-- template.gohtml --
+{{define "GET /" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Hello</title>
+</head>
+<body>
+	<h1>Hello, world!</h1>
+</body>
+</html>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))

@@ -8,7 +8,6 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"log"
 	"maps"
 	"path"
 	"path/filepath"
@@ -70,13 +69,6 @@ func (file *File) addPackages(packages []*packages.Package) {
 
 func (file *File) OutputPackage() *packages.Package { return file.outPkg }
 
-func (file *File) SyntaxFile(pos token.Pos) (*ast.File, *token.FileSet, error) {
-	position := file.fileSet.Position(pos)
-	fSet := token.NewFileSet()
-	f, err := parser.ParseFile(fSet, position.Filename, nil, parser.AllErrors|parser.ParseComments|parser.SkipObjectResolution)
-	return f, fSet, err
-}
-
 func (file *File) TypeASTExpression(tp types.Type) (ast.Expr, error) {
 	s := types.TypeString(tp, file.pkgQualifier)
 	return parser.ParseExpr(s)
@@ -88,39 +80,6 @@ func (file *File) pkgQualifier(pkg *types.Package) string {
 		return ""
 	}
 	return file.Import(pkg.Name(), pkg.Path())
-}
-
-func (file *File) StructField(pos token.Pos) (*ast.Field, error) {
-	f, fileSet, err := file.SyntaxFile(pos)
-	if err != nil {
-		return nil, err
-	}
-	position := file.fileSet.Position(pos)
-	for _, d := range f.Decls {
-		switch decl := d.(type) {
-		case *ast.GenDecl:
-			for _, s := range decl.Specs {
-				switch spec := s.(type) {
-				case *ast.TypeSpec:
-					tp, ok := spec.Type.(*ast.StructType)
-					if !ok {
-						continue
-					}
-
-					for _, field := range tp.Fields.List {
-						for _, name := range field.Names {
-							p := fileSet.Position(name.Pos())
-							if p != position {
-								continue
-							}
-							return field, nil
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil, fmt.Errorf("failed to find field")
 }
 
 func (file *File) Types(pkgPath string) (*types.Package, bool) {
@@ -144,19 +103,19 @@ func (file *File) Types(pkgPath string) (*types.Package, bool) {
 }
 
 func (file *File) Import(pkgIdent, pkgPath string) string {
-	if pkgPath == file.outPkg.PkgPath {
-		log.Fatal("package path cannot be the same as the output package")
-		return ""
-	}
 	return packageImportName(&file.importSpecs, file.packageIdentifiers, pkgPath, pkgIdent)
+}
+
+func (file *File) SelectIdent(pkgName, pkgPath, ident string) *ast.SelectorExpr {
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(file.Import(pkgName, pkgPath)),
+		Sel: ast.NewIdent(ident),
+	}
 }
 
 func (file *File) Call(pkgName, pkgPath, funcIdent string, args []ast.Expr) *ast.CallExpr {
 	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(file.Import(pkgName, pkgPath)),
-			Sel: ast.NewIdent(funcIdent),
-		},
+		Fun:  file.SelectIdent(pkgName, pkgPath, funcIdent),
 		Args: args,
 	}
 }
@@ -176,7 +135,7 @@ func (file *File) HTTPErrorCall(response, message ast.Expr, code int) *ast.CallE
 	return file.Call("", "net/http", "Error", []ast.Expr{
 		response,
 		message,
-		HTTPStatusCode(file, code),
+		file.HTTPStatusCode(code),
 	})
 }
 

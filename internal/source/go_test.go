@@ -47,7 +47,7 @@ func TestHTTPStatusCode(t *testing.T) {
 	file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
 	require.NoError(t, err)
 
-	exp := source.HTTPStatusCode(file, 600)
+	exp := file.HTTPStatusCode(600)
 	require.NotNil(t, exp)
 	lit, ok := exp.(*ast.BasicLit)
 	require.True(t, ok)

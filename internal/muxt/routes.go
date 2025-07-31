@@ -2,6 +2,7 @@ package muxt
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -9,6 +10,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -73,6 +75,9 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	TemplateRoutePathsTypeName string
 	OutputFileName string
+	TestsFileName  string
+	PreviousTests  string
+	Tests          bool
 }
 
 func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
@@ -85,10 +90,19 @@ func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
 	return config
 }
 
-func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) (string, error) {
+func (config RoutesFileConfiguration) RoutesFuncIsExported() bool {
+	return token.IsExported(config.RoutesFunction) && config.PackageName != "main"
+}
+
+type GenerateResult struct {
+	TemplateRoutes     string
+	TemplateRoutesTest string
+}
+
+func Generate(wd string, logger *log.Logger, config RoutesFileConfiguration) (GenerateResult, error) {
 	config = config.applyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
-		return "", fmt.Errorf("package name %q is not an identifier", config.PackageName)
+		return GenerateResult{}, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
 
 	patterns := []string{
@@ -99,6 +113,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		patterns = append(patterns, config.ReceiverPackage)
 	}
 
+	if config.Tests && config.RoutesFuncIsExported() {
+		if _, err := os.Stat(filepath.Join(wd, config.TestsFileName)); errors.Is(err, os.ErrNotExist) {
+			_ = os.WriteFile(filepath.Join(wd, config.TestsFileName), []byte(fmt.Sprintf("package %s_test", config.PackageName)), 0600)
+		}
+	}
+
 	fileSet := token.NewFileSet()
 	pl, err := packages.Load(&packages.Config{
 		Fset: fileSet,
@@ -106,12 +126,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		Dir:  wd,
 	}, patterns...)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 
 	file, err := source.NewFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 	routesPkg := file.OutputPackage()
 
@@ -119,16 +139,16 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	config.PackageName = routesPkg.Name
 	receiver, err := resolveReceiver(config, file, routesPkg)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 
 	ts, _, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 	templates, err := Templates(ts)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 
 	receiverInterface := &ast.InterfaceType{
@@ -164,7 +184,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}
 		handlerFunc, err := methodHandlerFunc(file, t, sigs, receiver, receiverInterface, routesPkg.Types, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
 		if err != nil {
-			return "", err
+			return GenerateResult{}, err
 		}
 		call := t.callHandleFunc(handlerFunc)
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
@@ -172,7 +192,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	routePathDecls, err := routePathTypeAndMethods(file, templates, config.TemplateRoutePathsTypeName)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 
 	is := file.ImportSpecs()
@@ -217,7 +237,25 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}, routePathDecls...),
 	}
 
-	return source.FormatFile(filepath.Join(wd, config.OutputFileName), outputFile)
+	src, err := source.FormatFile(filepath.Join(wd, config.OutputFileName), outputFile)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+
+	if config.Tests {
+		tests, err := generateTests(wd, config, templates)
+		if err != nil {
+			return GenerateResult{}, err
+		}
+		return GenerateResult{
+			TemplateRoutes:     src,
+			TemplateRoutesTest: tests,
+		}, nil
+	}
+
+	return GenerateResult{
+		TemplateRoutes: src,
+	}, nil
 }
 
 func resolveReceiver(config RoutesFileConfiguration, file *source.File, routesPkg *packages.Package) (*types.Named, error) {
@@ -641,7 +679,7 @@ func templateRedirect(file *source.File, templateDataTypeIdent string) *ast.Func
 						List: []ast.Stmt{
 							&ast.ReturnStmt{Results: []ast.Expr{
 								ast.NewIdent(templateDataReceiverName),
-								file.Call("", "fmt", "Errorf", []ast.Expr{source.String("invalid status code %d for redirect"), ast.NewIdent("code")}),
+								file.Call("fmt", "fmt", "Errorf", []ast.Expr{source.String("invalid status code %d for redirect"), ast.NewIdent("code")}),
 							}},
 						},
 					},
@@ -1544,7 +1582,7 @@ func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type
 	} else if obj, _, _ := types.LookupFieldOrMethod(resultType, true, file.OutputPackage().Types, "StatusCode"); obj != nil {
 		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: ast.NewIdent("result"), Sel: ast.NewIdent("StatusCode")})
 	}
-	statusCodePriorityList = append(statusCodePriorityList, source.HTTPStatusCode(file, fallbackStatusCode))
+	statusCodePriorityList = append(statusCodePriorityList, file.HTTPStatusCode(fallbackStatusCode))
 	list := []ast.Stmt{
 		&ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(statusCode)},

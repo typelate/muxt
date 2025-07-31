@@ -43,8 +43,12 @@ func IterateValueSpecs(files []*ast.File) func(func(*ast.File, *ast.ValueSpec) b
 }
 
 func FormatFile(filePath string, f *ast.File) (string, error) {
+	return FormatFileWithFileset(filePath, f, token.NewFileSet())
+}
+
+func FormatFileWithFileset(filePath string, f *ast.File, fileSet *token.FileSet) (string, error) {
 	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, token.NewFileSet(), f); err != nil {
+	if err := printer.Fprint(&buf, fileSet, f); err != nil {
 		return "", fmt.Errorf("formatting error: %v", err)
 	}
 	out, err := imports.Process(filePath, buf.Bytes(), &imports.Options{
@@ -190,13 +194,24 @@ func HTTPStatusName(name string) (int, error) {
 	return 0, fmt.Errorf("unknown %s", name)
 }
 
-func HTTPStatusCode(imports *File, n int) ast.Expr {
+func (file *File) HTTPStatusCode(n int) ast.Expr {
 	ident, ok := httpCodes[n]
 	if !ok {
 		return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)}
 	}
 	return &ast.SelectorExpr{
-		X:   ast.NewIdent(imports.Import("", "net/http")),
+		X:   ast.NewIdent(file.Import("", "net/http")),
+		Sel: ast.NewIdent(ident),
+	}
+}
+
+func HTTPStatusCode(httpPkgIdent string, n int) ast.Expr {
+	ident, ok := httpCodes[n]
+	if !ok {
+		return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)}
+	}
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(httpPkgIdent),
 		Sel: ast.NewIdent(ident),
 	}
 }
