@@ -62,6 +62,7 @@ func newResponseDataFuncIdent(templateDataTypeName string) string {
 }
 
 type RoutesFileConfiguration struct {
+	MuxtVersion,
 	PackageName,
 	PackagePath,
 	TemplatesVariable,
@@ -200,6 +201,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 			templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
 			newTemplateData(file, ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
+			templateDataMuxtVersionMethod(config),
 			templateDataPathMethod(config.TemplateDataType, config.TemplateRoutePathsTypeName),
 			templateDataResultMethod(config.TemplateDataType),
 			templateDataRequestMethod(file, config.TemplateDataType),
@@ -659,6 +661,32 @@ func templateRedirect(file *source.File, templateDataTypeIdent string) *ast.Func
 					},
 					source.Nil(),
 				}},
+			},
+		},
+	}
+}
+
+func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+	const versionIdent = "muxtVersion"
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Name: ast.NewIdent("MuxtVersion"),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.DeclStmt{
+					Decl: &ast.GenDecl{
+						Tok: token.CONST,
+						Specs: []ast.Spec{
+							&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(versionIdent)}, Values: []ast.Expr{source.String(config.MuxtVersion)}},
+						},
+					},
+				},
+				&ast.ReturnStmt{
+					Results: []ast.Expr{ast.NewIdent(versionIdent)},
+				},
 			},
 		},
 	}

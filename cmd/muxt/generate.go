@@ -44,6 +44,9 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if err != nil {
 		return err
 	}
+	if v, ok := cliVersion(); ok {
+		config.MuxtVersion = v
+	}
 	s, err := muxt.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
 	if err != nil {
 		return err

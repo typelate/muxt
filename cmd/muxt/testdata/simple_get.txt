@@ -7,7 +7,7 @@ exec go test -cover
 
 -- template.gohtml --
 {{define "GET /" }}
-	<h1>Hello, world!</h1>
+	<h1 data-muxt-version="{{.MuxtVersion}}">Hello, world!</h1>
 {{end}}
 
 -- go.mod --
@@ -30,10 +30,11 @@ var templates = template.Must(template.ParseFS(formHTML, "*"))
 package server
 
 import (
-	"testing"
-
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"testing"
 )
 
 func Test(t *testing.T) {
@@ -50,5 +51,12 @@ func Test(t *testing.T) {
 
 	if res.StatusCode != http.StatusOK {
 		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), `data-muxt-version="(devel)"`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected attribute")
 	}
 }

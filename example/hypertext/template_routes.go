@@ -288,6 +288,11 @@ func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWrite
 	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: ""}
 }
 
+func (data *TemplateData[T]) MuxtVersion() string {
+	const muxtVersion = "(devel)"
+	return muxtVersion
+}
+
 func (data *TemplateData[T]) Path() TemplateRoutePaths {
 	return TemplateRoutePaths{}
 }

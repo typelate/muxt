@@ -53,8 +53,7 @@ For a small runnable, see: [./example/hypertext/index.gohtml](./example/hypertex
 The Go package documentation for the example shows what is generated `https://pkg.go.dev/github.com/crhntr/muxt/example/hypertext`.
 
 For larger complete examples, see:
-- [TemplateRoutes helper methods for htmx](./docs/htmx) _**(NEW)**_
-- [muxt-example-htmx-sortable](http://github.com/crhntr/muxt-example-htmx-sortable)
+- [muxt-example-htmx-sortable](http://github.com/crhntr/muxt-example-htmx-sortable) _**(NEW)**_
 - [muxt-template-module-htmx](https://github.com/crhntr/muxt-template-module-htmx)
 
 ## License
