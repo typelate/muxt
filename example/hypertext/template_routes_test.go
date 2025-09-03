@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html/atom"
 
-	"github.com/crhntr/muxt/example/hypertext"
-	"github.com/crhntr/muxt/example/hypertext/internal/fake"
+	"github.com/typelate/muxt/example/hypertext"
+	"github.com/typelate/muxt/example/hypertext/internal/fake"
 )
 
 func TestRoutes(t *testing.T) {

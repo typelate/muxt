@@ -14,7 +14,7 @@ import (
 
 	"github.com/ettle/strcase"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string {

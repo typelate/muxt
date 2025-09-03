@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/crhntr/muxt/internal/configuration"
 	"github.com/crhntr/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/configuration"
 )
 
 const (

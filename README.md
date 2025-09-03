@@ -1,4 +1,4 @@
-# Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/crhntr/muxt.svg)](https://pkg.go.dev/github.com/crhntr/muxt) [![Go](https://github.com/crhntr/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/crhntr/muxt/actions/workflows/go.yml)
+# Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt) [![Go](https://github.com/typelate/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/typelate/muxt/actions/workflows/go.yml)
 
 **Muxt** generates and registers HTTP Handler functions specified in HTML templates.
 It increases locality of behavior when creating server side rendered hypermedia web applications.
@@ -50,7 +50,7 @@ The result of the call is wrapped in a `TemplateData[T]` struct and passed to `E
 ### Bigger Examples
 
 For a small runnable, see: [./example/hypertext/index.gohtml](./example/hypertext/index.gohtml)
-The Go package documentation for the example shows what is generated `https://pkg.go.dev/github.com/crhntr/muxt/example/hypertext`.
+The Go package documentation for the example shows what is generated `https://pkg.go.dev/github.com/typelate/muxt/example/hypertext`.
 
 For larger complete examples, see:
 - [muxt-example-htmx-sortable](http://github.com/crhntr/muxt-example-htmx-sortable) _**(NEW)**_
@@ -90,7 +90,7 @@ The `muxt` author disclaims all liability for any bugs, regressions, or defects 
 - [Manifesto](./docs/manifesto.md)
 - [Motivation](./docs/motivation.md)
 - Goals:
-  [see enhancement issues](https://github.com/crhntr/muxt/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement)
+  [see enhancement issues](https://github.com/typelate/muxt/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement)
 
 
 ## Prompting

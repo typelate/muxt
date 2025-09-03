@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-//go:generate go run github.com/crhntr/muxt/cmd/muxt generate --receiver-type=Server
+//go:generate go run github.com/typelate/muxt/cmd/muxt generate --receiver-type=Server
 
 //go:embed *.gohtml
 var templateSource embed.FS

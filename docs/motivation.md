@@ -12,7 +12,7 @@ I **love** writing Go. It’s a joy to make useful tools in a straightforward la
 I’m wary of overloading projects with dependencies—especially after years of dealing with regulated environments where
 every library bump *could be* a headache.
 
-[Initially `muxt` was written as a function to generate reflection-based handlers](https://github.com/crhntr/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go).
+[Initially `muxt` was written as a function to generate reflection-based handlers](https://github.com/typelate/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go).
 I decided to switch to code generation to make the behavior more readable because [reflection is never clear](https://youtu.be/PAAkCSZUG1c?si=gT_ga16SMOKNshqp&t=922).
 
 Another alternative would be to lean on a large language model (LLM) to generate boilerplate.

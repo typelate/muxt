@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func TestIterateFieldTypes(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 var (

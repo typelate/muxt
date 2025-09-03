@@ -5,8 +5,8 @@ import (
 	"io"
 	"log"
 
-	"github.com/crhntr/muxt/internal/configuration"
-	"github.com/crhntr/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/configuration"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 func checkCommand(workingDirectory string, args []string, stderr io.Writer) error {

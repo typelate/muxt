@@ -7,7 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/crhntr/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 const (

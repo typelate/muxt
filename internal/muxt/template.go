@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func Templates(ts *template.Template) ([]Template, error) {

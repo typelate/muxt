@@ -34,7 +34,7 @@ You will see a warning if your template source is not valid HTML.
 **Not all Go template features are supported.**
 `muxt check` may give false negative type check errors.
 If you find something you think is
-wrong, [please open an issue (or better yet PR a line to the following list)](https://github.com/crhntr/muxt/issues/new).
+wrong, [please open an issue (or better yet PR a line to the following list)](https://github.com/typelate/muxt/issues/new).
 
 - methods or fields of type any may only be the final type in an action
 - gotype comments used in the GoLand IDE from JetBrains products are not consulted

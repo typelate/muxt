@@ -11,7 +11,7 @@ import (
 	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {

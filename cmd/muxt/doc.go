@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/crhntr/muxt/internal/configuration"
+	"github.com/typelate/muxt/internal/configuration"
 )
 
 func writeHelp(stdout io.Writer) {

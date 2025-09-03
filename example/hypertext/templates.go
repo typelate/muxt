@@ -5,7 +5,7 @@ import (
 	"html/template"
 )
 
-//go:generate go run ../../cmd/muxt generate --receiver-type Backend --receiver-type-package github.com/crhntr/muxt/example --routes-func TemplateRoutes
+//go:generate go run ../../cmd/muxt generate --receiver-type Backend --receiver-type-package github.com/typelate/muxt/example --routes-func TemplateRoutes
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 //counterfeiter:generate -o internal/fake/routes_receiver.go -fake-name Backend . RoutesReceiver
 

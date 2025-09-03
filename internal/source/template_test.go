@@ -16,7 +16,7 @@ import (
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/txtar"
 
-	"github.com/crhntr/muxt/internal/source"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func TestTemplates(t *testing.T) {

@@ -24,7 +24,7 @@
 - [Manifesto](./manifesto.md)
 - [Motivation](./motivation.md)
 - Goals:
-  [see enhancement issues](https://github.com/crhntr/muxt/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement)
+  [see enhancement issues](https://github.com/typelate/muxt/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement)
 
 
 ## Prompting

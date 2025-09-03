@@ -3,8 +3,8 @@ package main
 import (
 	"io"
 
-	"github.com/crhntr/muxt/internal/configuration"
-	"github.com/crhntr/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/configuration"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 func documentationCommand(wd string, args []string, stdout, stderr io.Writer) error {

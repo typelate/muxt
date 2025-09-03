@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	hypertext "github.com/crhntr/muxt/docs/htmx"
+	hypertext "github.com/typelate/muxt/docs/htmx"
 )
 
 func main() {

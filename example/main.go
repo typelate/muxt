@@ -10,7 +10,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/crhntr/muxt/example/hypertext"
+	"github.com/typelate/muxt/example/hypertext"
 )
 
 type Backend struct {

@@ -22,7 +22,7 @@ To see the complete code run.
 
 go install golang.org/x/exp/cmd/txtar@latest
 go install github.com/maxbrunsfeld/counterfeiter/v6@latest
-git clone git@github.com:crhntr/muxt.git
+git clone git@github.com:typelate/muxt.git
 cd muxt
 export TEST_TAR="${PWD}/cmd/muxt/testdata/blog.txt"
 mkdir -p /tmp/example.com

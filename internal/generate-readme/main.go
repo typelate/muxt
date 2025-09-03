@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/crhntr/muxt/internal/configuration"
-	"github.com/crhntr/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/configuration"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 //go:generate go run .
