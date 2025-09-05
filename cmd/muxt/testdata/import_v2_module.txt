@@ -1,0 +1,65 @@
+env GOPROXY=off
+
+muxt -C playground generate --receiver-type=Client  --receiver-type-package=example.com/v2
+exec go -C playground build
+# cat template_routes.go
+
+-- example/go.mod --
+module example.com/v2
+
+go 1.25
+-- example/client.go --
+package example
+
+type Element struct {
+	Name string
+}
+
+type Client struct{}
+
+func (*Client) List() ([]Element, error) {
+	return []Element{
+		{Name: "A"},
+		{Name: "B"},
+		{Name: "C"},
+	}, nil
+}
+
+func (*Client) LoadOne(name string) Element {
+	return Element{Name: name}
+}
+-- playground/go.mod --
+module playground
+
+go 1.25
+
+require example.com/v2 v2.0.0
+
+replace example.com/v2 => ../example
+-- playground/main.go --
+package main
+
+import (
+	"html/template"
+	"net/http"
+
+	"example.com/v2"
+)
+
+var templates = template.Must(template.New("GET / List()").Parse(`
+<ul>
+{{range .Result}}
+	<li>{{.Name}}</li>
+{{end}}
+</ul>
+
+{{- define "/{name} LoadOne(name)" -}}
+<h1>{{.Result.Name}}</h1>
+{{- end -}}
+`))
+
+func main() {
+	client := new(example.Client)
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, client)
+}

@@ -87,7 +87,7 @@ func (file *File) pkgQualifier(pkg *types.Package) string {
 	if pkg.Path() == file.outPkg.PkgPath {
 		return ""
 	}
-	return file.Import("", pkg.Path())
+	return file.Import(pkg.Name(), pkg.Path())
 }
 
 func (file *File) StructField(pos token.Pos) (*ast.Field, error) {
