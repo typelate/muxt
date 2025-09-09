@@ -94,7 +94,11 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	}
 	var sb bytes.Buffer
 	writeCodeGenerationComment(&sb)
+	sb.WriteString(fmt.Sprintf("// See the (MIT) license at the end of the %s file\n", config.OutputFileName))
 	sb.WriteString(s)
+	_, _ = sb.WriteString("\n")
+	_, _ = sb.WriteString(fmt.Sprintf(codeGenerationLicense, time.Now().Year(), "Christopher Hunter"))
+	_, _ = sb.WriteString("\n")
 	return os.WriteFile(filepath.Join(workingDirectory, config.OutputFileName), sb.Bytes(), 0o644)
 }
 
@@ -103,9 +107,8 @@ func writeCodeGenerationComment(w io.StringWriter) {
 	if v, ok := cliVersion(); ok {
 		_, _ = w.WriteString("// muxt version: ")
 		_, _ = w.WriteString(v)
-		_, _ = w.WriteString("\n//\n")
+		_, _ = w.WriteString("\n")
 	}
-	_, _ = w.WriteString(fmt.Sprintf(codeGenerationLicense, time.Now().Year(), "Christopher Hunter"))
 }
 
 //go:embed help.txt
