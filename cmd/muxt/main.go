@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/typelate/muxt/internal/configuration"
+	"github.com/typelate/muxt/internal/cli"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -45,7 +45,7 @@ func main() {
 
 func command(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
 	var err error
-	wd, args, err = configuration.Global(wd, args, stderr)
+	wd, args, err = cli.Global(wd, args, stderr)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func handleError(err error) int {
 }
 
 func checkCommand(workingDirectory string, args []string, stderr io.Writer) error {
-	config, err := configuration.NewRoutesFileConfiguration(args, stderr)
+	config, err := cli.NewRoutesFileConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ const (
 )
 
 func generateCommand(workingDirectory string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
-	config, err := configuration.NewRoutesFileConfiguration(args, stderr)
+	config, err := cli.NewRoutesFileConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func writeHelp(stdout io.Writer) error {
 		help.WriteString(txt)
 		help.WriteString("\n")
 	}
-	flagSet := configuration.RoutesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
+	flagSet := cli.RoutesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
 	flagSet.SetOutput(&help)
 	flagSet.PrintDefaults()
 	_, err = fmt.Fprint(stdout, help.String())
@@ -162,7 +162,7 @@ func writeHelp(stdout io.Writer) error {
 }
 
 func documentationCommand(wd string, args []string, stdout, stderr io.Writer) error {
-	config, err := configuration.NewRoutesFileConfiguration(args, stderr)
+	config, err := cli.NewRoutesFileConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
