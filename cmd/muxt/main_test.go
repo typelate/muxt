@@ -17,18 +17,25 @@ import (
 //go:generate go run github.com/crhntr/txtarfmt/cmd/txtarfmt -ext=.txt testdata/*
 
 func Test_example(t *testing.T) {
-	t.Run("generate", func(t *testing.T) {
-		_ = os.Remove(filepath.FromSlash("../../example/hypertext/template_routes.go"))
+	t.Run("generate example", func(t *testing.T) {
 		ctx := t.Context()
 		cmd := exec.CommandContext(ctx, "go", "generate", "./...")
-		cmd.Dir = filepath.FromSlash("../../example")
+		cmd.Dir = filepath.FromSlash("../../docs/example")
 		cmd.Stderr = os.Stdout
 		cmd.Stdout = os.Stdout
 		require.NoError(t, cmd.Run())
 	})
-	t.Run("check", func(t *testing.T) {
+	t.Run("check example", func(t *testing.T) {
 		ctx := t.Context()
-		cmd := exec.CommandContext(ctx, "go", "run", ".", "-C", filepath.FromSlash("../../example/hypertext"), "check", "--receiver-type", "Backend")
+		cmd := exec.CommandContext(ctx, "go", "run", "github.com/typelate/muxt/cmd/muxt", "-C", filepath.FromSlash("../../docs/example/hypertext"), "check", "--receiver-type", "Backend")
+		cmd.Dir = "."
+		cmd.Stderr = os.Stdout
+		cmd.Stdout = os.Stdout
+		require.NoError(t, cmd.Run())
+	})
+	t.Run("check htmx", func(t *testing.T) {
+		ctx := t.Context()
+		cmd := exec.CommandContext(ctx, "go", "run", ".", "-C", filepath.FromSlash("../../docs/htmx"), "check", "--receiver-type", "Backend")
 		cmd.Dir = "."
 		cmd.Stderr = os.Stdout
 		cmd.Stdout = os.Stdout
