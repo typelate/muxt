@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"rsc.io/script"
 	"rsc.io/script/scripttest"
+
+	"github.com/typelate/muxt/internal/cli"
 )
 
 //go:generate go run github.com/crhntr/txtarfmt/cmd/txtarfmt -ext=.txt testdata/*
@@ -50,7 +52,7 @@ func scriptCommand() script.Cmd {
 	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
 		return func(state *script.State) (string, string, error) {
 			var stdout, stderr bytes.Buffer
-			err := command(state.Getwd(), args, func(s string) string {
+			err := cli.Commands(state.Getwd(), append([]string{"muxt"}, args...), func(s string) string {
 				e, _ := state.LookupEnv(s)
 				return e
 			}, &stdout, &stderr)

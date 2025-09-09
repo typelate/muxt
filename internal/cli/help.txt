@@ -1,0 +1,11 @@
+Generate HTTP Endpoints from HTML Templates
+
+`muxt help`: View help documentation for the CLI commands and relevant flags.
+
+`muxt check`: Do some static analysis on the templates.
+
+`muxt documentation`: This work in progress command will display template documentation similar to how Go doc generates helpful documentation.
+
+`muxt version`: Print the version of muxt to standard out.
+
+`muxt generate`: Use this command to generate template_routes.go.
