@@ -112,7 +112,7 @@ var helpText string
 func writeHelp(stdout io.Writer) error {
 	var help strings.Builder
 	help.WriteString(helpText)
-	flagSet := RoutesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
+	flagSet := routesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
 	flagSet.SetOutput(&help)
 	flagSet.PrintDefaults()
 	_, err := fmt.Fprint(stdout, help.String())

@@ -41,7 +41,7 @@ This function also receives an argument with a type matching the name given by r
 
 func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
 	var g muxt.RoutesFileConfiguration
-	flagSet := RoutesFileConfigurationFlagSet(&g)
+	flagSet := routesFileConfigurationFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
@@ -70,7 +70,7 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFil
 	return g, nil
 }
 
-func RoutesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *flag.FlagSet {
+func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *flag.FlagSet {
 	flagSet := flag.NewFlagSet("generate", flag.ContinueOnError)
 	flagSet.StringVar(&g.OutputFileName, outputFlagName, muxt.DefaultOutputFileName, outputFlagNameHelp)
 	flagSet.StringVar(&g.TemplatesVariable, templatesVariable, muxt.DefaultTemplatesVariableName, templatesVariableHelp)
