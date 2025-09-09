@@ -1,37 +1,28 @@
-// package muxt
+// # Generate HTTP Endpoints from HTML Templates
 //
-// Generate HTTP Endpoints from HTML Templates
+// `muxt help`: View help documentation for the CLI commands and relevant flags.
 //
-//	 `muxt check`
+// `muxt check`: Do some static analysis on the templates.
 //
-//		  Do some static analysis on the templates.
+// `muxt documentation`: This work in progress command will display template documentation similar to how Go doc generates helpful documentation.
 //
-//	 `muxt documentation`
+// `muxt version`: Print the version of muxt to standard out.
 //
-//		  This work in progress command will
-//
-//	 `muxt generate`
-//
-//		  Use this command to generate template_routes.go
-//
-//		  Consider using a Go generate comment where your templates variable is declared.
-//
-//		  //go:generate muxt generate --receiver-type=Server
-//	   var templates = templates = template.Must(template.ParseFS(templatesSource, "*.gohtml"))
-//
-//	 `muxt version`
-//
-//		  Print the version of muxt to standard out.
+// `muxt generate`: Use this command to generate template_routes.go.
 package main
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/typelate/muxt/internal/configuration"
@@ -44,7 +35,9 @@ func main() {
 		os.Exit(handleError(err))
 	}
 	if len(os.Args) == 1 {
-		writeHelp(os.Stderr)
+		if err := writeHelp(os.Stderr); err != nil {
+			os.Exit(handleError(err))
+		}
 		return
 	}
 	os.Exit(handleError(command(wd, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)))
@@ -57,6 +50,8 @@ func command(wd string, args []string, getEnv func(string) string, stdout, stder
 		return err
 	}
 	switch cmd, cmdArgs := args[0], args[1:]; cmd {
+	case "help":
+		return writeHelp(stdout)
 	case "generate", "gen", "g":
 		return generateCommand(wd, cmdArgs, getEnv, stdout, stderr)
 	case "version", "v":
@@ -143,31 +138,27 @@ func writeCodeGenerationComment(w io.StringWriter) {
 	_, _ = w.WriteString(fmt.Sprintf(CodeGenerationLicense, time.Now().Year(), "Christopher Hunter"))
 }
 
-func writeHelp(stdout io.Writer) {
-	_, _ = fmt.Fprintf(stdout, `muxt - Generate HTTP Endpoints from HTML Templates
+//go:embed main.go
+var mainGo string
 
-muxt check
-
-	Do some static analysis on the templates. 
-
-muxt documentation
-
-	This work in progress command will 
-
-muxt generate
-
-	Use this command to generate template_routes.go
-	
-	Consider using a Go generate comment where your templates variable is declared.
-
-	  //go:generate muxt generate --%s=Server
-      var templates = templates = template.Must(template.ParseFS(templatesSource, "*.gohtml"))
-
-muxt version
-
-	Print the version of muxt to standard out.
-
-`, configuration.ReceiverStaticType)
+func writeHelp(stdout io.Writer) error {
+	fileSet := token.NewFileSet()
+	f, err := parser.ParseFile(fileSet, "main.go", mainGo, parser.ParseComments)
+	if err != nil {
+		return err
+	}
+	var help strings.Builder
+	for _, doc := range f.Doc.List {
+		txt := strings.TrimPrefix(doc.Text, "//")
+		txt = strings.TrimLeft(txt, "# \t")
+		help.WriteString(txt)
+		help.WriteString("\n")
+	}
+	flagSet := configuration.RoutesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
+	flagSet.SetOutput(&help)
+	flagSet.PrintDefaults()
+	_, err = fmt.Fprint(stdout, help.String())
+	return err
 }
 
 func documentationCommand(wd string, args []string, stdout, stderr io.Writer) error {
