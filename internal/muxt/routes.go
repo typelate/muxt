@@ -151,6 +151,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		Body: &ast.BlockStmt{List: []ast.Stmt{}},
 	}
 
+	sigs := make(map[string]*types.Signature)
 	for i := range templates {
 		t := &templates[i]
 		const dataVarIdent = "result"
@@ -161,7 +162,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, t, receiver, receiverInterface, routesPkg.Types, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
+		handlerFunc, err := methodHandlerFunc(file, t, sigs, receiver, receiverInterface, routesPkg.Types, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
 		if err != nil {
 			return "", err
 		}
@@ -301,13 +302,12 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 	return handlerFunc
 }
 
-func methodHandlerFunc(file *source.File, t *Template, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, templateDataTypeIdent, templatesVariableIdent, dataVarIdent string) (*ast.FuncLit, error) {
+func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, templateDataTypeIdent, templatesVariableIdent, dataVarIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	sigs := make(map[string]*types.Signature)
 	if err := ensureMethodSignature(file, sigs, t, receiver, receiverInterface, t.call, outputPkg); err != nil {
 		return nil, err
 	}
@@ -1438,10 +1438,16 @@ func ensureMethodSignature(file *source.File, signatures map[string]*types.Signa
 				}
 			}
 		}
+		if _, ok := signatures[fun.Name]; ok {
+			fmt.Println("SIGNATURE FOUND", fun.Name)
+			return nil
+		}
+		fmt.Println("SIGNATURE NOT FOUND", fun.Name)
 		signatures[fun.Name] = mo.Type().(*types.Signature)
 		if !isMethod {
 			return nil
 		}
+		fmt.Println("SIGNATURE ADDED", fun.Name)
 		exp, err := file.TypeASTExpression(mo.Type())
 		if err != nil {
 			return err
