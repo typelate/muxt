@@ -1,9 +1,10 @@
 # call expression argument with bool last result
 
 muxt generate --receiver-type=T
+cat template_routes.go
 muxt check
 
-exec go build -o build
+exec go test
 
 -- in.go --
 package main
@@ -14,13 +15,15 @@ import (
 )
 
 type (
-	T struct{}
+	T struct {
+		ReturnOK bool
+	}
 	S struct{}
 )
 
 func (T) F(context.Context, S, int) any { return nil }
 
-func (T) Session(http.ResponseWriter, *http.Request) (S, bool) { return S{}, false }
+func (t T) Session(http.ResponseWriter, *http.Request) (S, bool) { return S{}, t.ReturnOK }
 
 func main() {}
 -- template.go --
@@ -38,7 +41,107 @@ var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
 -- go.mod --
 module example.com
 
-go 1.20
+go 1.25
 -- template.gohtml --
-{{define "GET /{id} F(ctx, Session(response, request), id)"}}{{end}}
+{{define "GET /{id} F(ctx, Session(response, request), id)"}}Ok: {{.Ok}}{{end}}
+{{define "GET /session Session(response, request)"}}Ok: {{.Ok}}{{end}}
 
+-- template_test.go --
+package main
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestMethodArgOk(t *testing.T) {
+	server := T{
+		ReturnOK: true,
+	}
+
+	res := doRequest(t, server, "/123")
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), `Ok: true`; got != exp {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected text")
+	}
+}
+
+func TestMethodArgNotOk(t *testing.T) {
+	server := T{
+		ReturnOK: false,
+	}
+
+	res := doRequest(t, server, "/123")
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), ``; got != exp {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected text")
+	}
+}
+
+func TestOk(t *testing.T) {
+	server := T{
+		ReturnOK: true,
+	}
+
+	res := doRequest(t, server, "/session")
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), `Ok: true`; got != exp {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected text")
+	}
+}
+
+func TestNotOk(t *testing.T) {
+	server := T{
+		ReturnOK: false,
+	}
+
+	res := doRequest(t, server, "/session")
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), ``; got != exp {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected text")
+	}
+}
+
+func doRequest(t *testing.T, server T, path string) *http.Response {
+	t.Helper()
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, server)
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+	return res
+}
