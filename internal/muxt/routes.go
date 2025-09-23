@@ -1439,15 +1439,12 @@ func ensureMethodSignature(file *source.File, signatures map[string]*types.Signa
 			}
 		}
 		if _, ok := signatures[fun.Name]; ok {
-			fmt.Println("SIGNATURE FOUND", fun.Name)
 			return nil
 		}
-		fmt.Println("SIGNATURE NOT FOUND", fun.Name)
 		signatures[fun.Name] = mo.Type().(*types.Signature)
 		if !isMethod {
 			return nil
 		}
-		fmt.Println("SIGNATURE ADDED", fun.Name)
 		exp, err := file.TypeASTExpression(mo.Type())
 		if err != nil {
 			return err
