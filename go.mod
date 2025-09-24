@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/crhntr/txtarfmt v0.0.7 // indirect
+	github.com/crhntr/txtarfmt v0.0.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.12.0 // indirect
