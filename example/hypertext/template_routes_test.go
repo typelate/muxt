@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crhntr/dom/domtest"
-	"github.com/crhntr/dom/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/typelate/dom/domtest"
+	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html/atom"
 
 	"github.com/typelate/muxt/example/hypertext"

@@ -3,7 +3,7 @@
 When building server-side applications with **`muxt`**-generated routes,
 you often want to verify both the **HTTP response** (e.g., status codes, headers)
 and the **HTML/DOM output** (e.g., specific elements, text content, or errors).
-The [`domtest`](https://github.com/crhntr/dom) package offers a way to test hypertext in a way intuitive for web developers. 
+The [`domtest`](https://github.com/typelate/dom) package offers a way to test hypertext in a way intuitive for web developers. 
 
 Below is an example test suite from the `blog_test` package, which illustrates how to integrate `domtest` with a `muxt` route function named `Routes`.
 A typical BDD test pattern emerges. Each test case specifies `Given` (setup, optional), `When` (the request, required), and `Then` (assertions, optional).
@@ -50,8 +50,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html/atom"
 
-	"github.com/crhntr/dom/domtest"
-	"github.com/crhntr/dom/spec"
+	"github.com/typelate/dom/domtest"
+	"github.com/typelate/dom/spec"
 
 	"example.com/blog"
 	"example.com/blog/internal/fake"

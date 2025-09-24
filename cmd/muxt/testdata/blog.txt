@@ -1,4 +1,4 @@
-exec go get github.com/crhntr/dom@v0.2.3
+exec go get github.com/typelate/dom@v0.6.1
 exec go mod tidy
 
 muxt generate --receiver-type=App --routes-func=Routes
@@ -127,84 +127,126 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html/atom"
 
-	"github.com/crhntr/dom/domtest"
-	"github.com/crhntr/dom/spec"
+	"github.com/typelate/dom/domtest"
 
 	"example.com"
 	"example.com/internal/fake"
 )
 
 func TestCase(t *testing.T) {
-	for _, tt := range []domtest.Case[*testing.T, fake.App]{
+	type (
+		Given struct {
+			app *fake.App
+		}
+		When struct {
+			path blog.TemplateRoutePaths
+		}
+		Then struct {
+			app      *fake.App
+			response *http.Response
+		}
+		Case struct {
+			Name  string
+			Given func(*testing.T, Given)
+			When  func(*testing.T, When) *http.Request
+			Then  func(*testing.T, Then)
+		}
+	)
+
+	run := func(t *testing.T, tc Case) {
+		app := new(fake.App)
+
+		if tc.Given != nil {
+			tc.Given(t, Given{
+				app: app,
+			})
+		}
+
+		mux := http.NewServeMux()
+		blog.Routes(mux, app)
+
+		req := tc.When(t, When{})
+
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		tc.Then(t, Then{
+			app:      app,
+			response: rec.Result(),
+		})
+	}
+
+	for _, tc := range []Case{
 		{
 			Name: "viewing the home page",
-			Given: func(t *testing.T, app *fake.App) {
-				app.ArticleReturns(blog.Article{
+			Given: func(t *testing.T, given Given) {
+				given.app.ArticleReturns(blog.Article{
 					Title:   "Greetings!",
 					Content: "Hello, friends!",
 					Error:   nil,
 				})
 			},
-			When: func(t *testing.T) *http.Request {
-				return httptest.NewRequest(http.MethodGet, "/article/1", nil)
+			When: func(t *testing.T, when When) *http.Request {
+				return httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
 			},
-			Then: domtest.Document(func(t *testing.T, document spec.Document, app *fake.App) {
-				require.Equal(t, 1, app.ArticleArgsForCall(0))
+			Then: func(t *testing.T, then Then) {
+				document := domtest.ParseResponseDocument(t, then.response)
+				require.Equal(t, 1, then.app.ArticleArgsForCall(0))
 				if heading := document.QuerySelector("h1"); assert.NotNil(t, heading) {
 					require.Equal(t, "Greetings!", heading.TextContent())
 				}
 				if content := document.QuerySelector("p"); assert.NotNil(t, content) {
 					require.Equal(t, "Hello, friends!", content.TextContent())
 				}
-			}),
+			},
 		},
 		{
 			Name: "the page has an error",
-			Given: func(t *testing.T, app *fake.App) {
-				app.ArticleReturns(blog.Article{
+			Given: func(t *testing.T, given Given) {
+				given.app.ArticleReturns(blog.Article{
 					Error: fmt.Errorf("lemon"),
 				})
 			},
-			When: func(t *testing.T) *http.Request {
-				return httptest.NewRequest(http.MethodGet, "/article/1", nil)
+			When: func(t *testing.T, when When) *http.Request {
+				return httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
 			},
-			Then: domtest.QuerySelector("#error-message", func(t *testing.T, msg spec.Element, app *fake.App) {
-				require.Equal(t, "lemon", msg.TextContent())
-			}),
+			Then: func(t *testing.T, then Then) {
+				if msg := domtest.ParseResponseDocument(t, then.response).QuerySelector("#error-message"); assert.NotNil(t, msg) {
+					require.Equal(t, "lemon", msg.TextContent())
+				}
+			},
 		},
 		{
 			Name: "the page has an error and is requested by HTMX",
-			Given: func(t *testing.T, app *fake.App) {
-				app.ArticleReturns(blog.Article{
+			Given: func(t *testing.T, given Given) {
+				given.app.ArticleReturns(blog.Article{
 					Error: fmt.Errorf("lemon"),
 				})
 			},
-			When: func(t *testing.T) *http.Request {
-				req := httptest.NewRequest(http.MethodGet, "/article/1", nil)
+			When: func(t *testing.T, when When) *http.Request {
+				req := httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
 				req.Header.Set("HX-Request", "true")
 				return req
 			},
-			Then: domtest.Fragment(atom.Body, func(t *testing.T, fragment spec.DocumentFragment, app *fake.App) {
+			Then: func(t *testing.T, then Then) {
+				fragment := domtest.ParseResponseDocumentFragment(t, then.response, atom.Body)
 				el := fragment.FirstElementChild()
 				require.Equal(t, "lemon", el.TextContent())
 				require.Equal(t, "*errors.errorString", el.GetAttribute("data-type"))
-			}),
+			},
 		},
 		{
 			Name: "when the id is not an integer",
-			When: func(t *testing.T) *http.Request {
+			When: func(t *testing.T, _ When) *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/article/banana", nil)
 			},
-			Then: func(t *testing.T, res *http.Response, f *fake.App) {
-				require.Equal(t, http.StatusBadRequest, res.StatusCode)
+			Then: func(t *testing.T, then Then) {
+				require.Equal(t, http.StatusBadRequest, then.response.StatusCode)
 			},
 		},
 	} {
-		t.Run(tt.Name, tt.Run(func(fakes *fake.App) http.Handler {
-			mux := http.NewServeMux()
-			blog.Routes(mux, fakes)
-			return mux
-		}))
+		t.Run(tc.Name, func(t *testing.T) {
+			run(t, tc)
+		})
 	}
 }
 -- internal/fake/app.go --

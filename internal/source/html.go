@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crhntr/dom/spec"
+	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html/atom"
 )
 

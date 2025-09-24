@@ -7,7 +7,7 @@ import (
 	"go/types"
 	"regexp"
 
-	"github.com/crhntr/dom/spec"
+	"github.com/typelate/dom/spec"
 )
 
 func GenerateValidations(imports *File, variable ast.Expr, variableType types.Type, inputQuery, inputName, responseIdent string, fragment spec.DocumentFragment, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error, bool) {

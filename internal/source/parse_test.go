@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/crhntr/dom"
+	"github.com/typelate/dom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
