@@ -67,7 +67,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 				return fmt.Errorf("template %q not found in %q (try running generate again)", templateName, config.TemplatesVariable)
 			}
 			tree := ts2.Tree
-			if err := check.ParseTree(global, tree, dataType); err != nil {
+			if err := check.Execute(global, tree, dataType); err != nil {
 				log.Println("ERROR", err)
 				log.Println()
 				errs = append(errs, err)
