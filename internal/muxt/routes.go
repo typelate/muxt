@@ -54,6 +54,8 @@ const (
 	DefaultTemplateDataTypeName = "TemplateData"
 	templateDataFieldStatusCode = "statusCode"
 
+	pathPrefixPathsStructFieldName = "pathsPrefix"
+
 	executeTemplateErrorMessage = "failed to render page"
 )
 
@@ -78,6 +80,7 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	TemplateRoutePathsTypeName string
 	OutputFileName string
+	PathPrefix     bool
 }
 
 func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
@@ -152,8 +155,24 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 					},
 				},
 			},
+			Results: &ast.FieldList{
+				List: []*ast.Field{
+					{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
+				},
+			},
 		},
 		Body: &ast.BlockStmt{List: []ast.Stmt{}},
+	}
+	if config.PathPrefix {
+		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
+		})
+	} else {
+		routesFunc.Body.List = append(routesFunc.Body.List, &ast.AssignStmt{
+			Tok: token.DEFINE,
+			Lhs: []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName)},
+			Rhs: []ast.Expr{source.String("")},
+		})
 	}
 
 	sigs := make(map[string]*types.Signature)
@@ -163,7 +182,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		logger.Printf("generating handler for pattern %s", t.pattern)
 		if t.fun == nil {
 			handlerFunc := noReceiverMethodCall(file, t, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
-			call := t.callHandleFunc(handlerFunc)
+			call := t.callHandleFunc(file, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
@@ -171,14 +190,24 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		if err != nil {
 			return nil, err
 		}
-		call := t.callHandleFunc(handlerFunc)
+		call := t.callHandleFunc(file, handlerFunc, config)
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
 	}
 
-	routePathDecls, err := routePathTypeAndMethods(file, templates, config.TemplateRoutePathsTypeName)
+	routePathDecls, err := routePathTypeAndMethods(file, config, templates)
 	if err != nil {
 		return nil, err
 	}
+	routesFunc.Body.List = append(routesFunc.Body.List, &ast.ReturnStmt{
+		Results: []ast.Expr{
+			&ast.CompositeLit{
+				Type: ast.NewIdent(config.TemplateRoutePathsTypeName),
+				Elts: []ast.Expr{
+					&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+				},
+			},
+		},
+	})
 
 	is := file.ImportSpecs()
 	importSpecs := make([]ast.Spec, 0, len(is))
@@ -286,6 +315,7 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 			ast.NewIdent(dataVarIdent),
 			ast.NewIdent("true"),
 			ast.NewIdent("nil"),
+			ast.NewIdent(pathPrefixPathsStructFieldName),
 		},
 	}
 	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
@@ -372,19 +402,22 @@ func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Tem
 	}
 	handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
 
+	newTDArgs := []ast.Expr{
+		ast.NewIdent(receiverIdent),
+		ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
+		ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+		ast.NewIdent(dataVarIdent),
+		ast.NewIdent("true"),
+		ast.NewIdent("nil"),
+		ast.NewIdent(pathPrefixPathsStructFieldName),
+	}
+
 	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
 		Lhs: []ast.Expr{ast.NewIdent(resultDataIdent)},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun: ast.NewIdent(newResponseDataFuncIdent(config.TemplateDataType)),
-			Args: []ast.Expr{
-				ast.NewIdent(receiverIdent),
-				ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-				ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-				ast.NewIdent(dataVarIdent),
-				ast.NewIdent("true"),
-				ast.NewIdent("nil"),
-			},
+			Fun:  ast.NewIdent(newResponseDataFuncIdent(config.TemplateDataType)),
+			Args: newTDArgs,
 		}},
 	})
 
@@ -483,6 +516,7 @@ func templateDataType(file *source.File, templateTypeIdent string, receiverType 
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierOkay)}, Type: ast.NewIdent("bool")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: ast.NewIdent("error")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierRedirectURL)}, Type: ast.NewIdent("string")},
+							{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
 						},
 					},
 				},
@@ -512,6 +546,7 @@ func newTemplateData(file *source.File, receiverType ast.Expr, templateDataTypeI
 					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
 					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierOkay)}, Type: ast.NewIdent("bool")},
 					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: ast.NewIdent("error")},
+					{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
 				},
 			},
 			Results: &ast.FieldList{
@@ -540,6 +575,7 @@ func newTemplateData(file *source.File, receiverType ast.Expr, templateDataTypeI
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierOkay), Value: ast.NewIdent(okayIdent)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierError), Value: ast.NewIdent(TemplateDataFieldIdentifierError)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierRedirectURL), Value: source.String("")},
+								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
 							},
 						}},
 					},
@@ -707,12 +743,17 @@ func templateDataPathMethod(templateDataTypeIdent, urlHelperTypeName string) *as
 		Recv: templateDataMethodReceiver(templateDataTypeIdent),
 		Name: ast.NewIdent("Path"),
 		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent(urlHelperTypeName)}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(urlHelperTypeName)}}},
 		},
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
 				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.CompositeLit{Type: ast.NewIdent(urlHelperTypeName)}},
+					Results: []ast.Expr{&ast.CompositeLit{Type: ast.NewIdent(urlHelperTypeName), Elts: []ast.Expr{
+						&ast.KeyValueExpr{
+							Key:   ast.NewIdent(pathPrefixPathsStructFieldName),
+							Value: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(pathPrefixPathsStructFieldName)},
+						},
+					}}},
 				},
 			},
 		},
@@ -1174,6 +1215,7 @@ func errorResultBlock(file *source.File, t *Template, resultType types.Type, fal
 					ast.NewIdent(zeroValueIdent),
 					source.Bool(false),
 					errExp,
+					ast.NewIdent(pathPrefixPathsStructFieldName),
 				},
 			}},
 		},

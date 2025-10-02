@@ -1,0 +1,100 @@
+muxt generate --path-prefix
+
+cat template_routes.go
+stdout '// muxt version: \(devel\)'
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "GET /" }}
+	<nav>
+		<ul>
+			{{- with .Path}}
+			<li><a href="{{.ReadIndex}}">Index</a></li>
+			<li><a href="{{.A}}">A</a></li>
+			<li><a href="{{.B}}">B</a></li>
+			<li><a href="{{.C "32"}}">C</a></li>
+			{{- end}}
+		</ul>
+	</nav>
+{{end}}
+
+{{define "GET /a A(ctx)" }}
+	<span>A</span>
+{{end}}
+
+{{define "GET /x/b B(ctx)" }}
+	<span>B</span>
+{{end}}
+
+{{define "GET /x/y/{id}/c C(ctx, id)" }}
+	<span>C</span>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	paths := TemplateRoutes(mux, nil, "/path/prefix/")
+
+	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex(), nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	got := string(buf)
+
+	if exp := `<a href="/path/prefix">Index</a>`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected value")
+	}
+	if exp := `<a href="/path/prefix/a">A</a>`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected value")
+	}
+	if exp := `<a href="/path/prefix/x/b">B</a>`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected value")
+	}
+	if exp := `<a href="/path/prefix/x/y/32/c">C</a>`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected value")
+	}
+}

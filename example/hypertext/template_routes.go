@@ -42,12 +42,13 @@ type RoutesReceiver interface {
 	List(_ context.Context) []Row
 }
 
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+	pathsPrefix := ""
 	mux.HandleFunc("PATCH /fruits/{id}", func(response http.ResponseWriter, request *http.Request) {
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
 			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err)
+			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
 			buf := bytes.NewBuffer(nil)
 			if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -74,7 +75,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 			value, err := strconv.Atoi(request.FormValue("count"))
 			if err != nil {
 				var zv Row
-				rd := newTemplateData(receiver, response, request, zv, false, err)
+				rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
 				buf := bytes.NewBuffer(nil)
 				if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
 					slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -96,7 +97,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 			}
 			if value < 0 {
 				var zv Row
-				rd := newTemplateData(receiver, response, request, zv, false, errors.New("count must not be less than 0"))
+				rd := newTemplateData(receiver, response, request, zv, false, errors.New("count must not be less than 0"), pathsPrefix)
 				buf := bytes.NewBuffer(nil)
 				if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
 					slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -121,7 +122,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		result, err := receiver.SubmitFormEditRow(id, form)
 		if err != nil {
 			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err)
+			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
 			buf := bytes.NewBuffer(nil)
 			if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -141,7 +142,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 			_, _ = buf.WriteTo(response)
 			return
 		}
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -164,7 +165,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
 			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err)
+			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
 			buf := bytes.NewBuffer(nil)
 			if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", rd); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -188,7 +189,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		result, err := receiver.GetFormEditRow(id)
 		if err != nil {
 			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err)
+			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
 			buf := bytes.NewBuffer(nil)
 			if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", rd); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -208,7 +209,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 			_, _ = buf.WriteTo(response)
 			return
 		}
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -231,7 +232,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		result := struct {
 		}{}
 		buf := bytes.NewBuffer(nil)
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		if err := templates.ExecuteTemplate(buf, "GET /help", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -252,7 +253,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
 		ctx := request.Context()
 		result := receiver.List(ctx)
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -271,6 +272,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[T any] struct {
@@ -282,10 +284,11 @@ type TemplateData[T any] struct {
 	okay        bool
 	err         error
 	redirectURL string
+	pathsPrefix string
 }
 
-func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error) *TemplateData[T] {
-	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: ""}
+func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error, pathsPrefix string) *TemplateData[T] {
+	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: "", pathsPrefix: pathsPrefix}
 }
 
 func (data *TemplateData[T]) MuxtVersion() string {
@@ -294,7 +297,7 @@ func (data *TemplateData[T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[T]) Result() T {
@@ -336,20 +339,21 @@ func (data *TemplateData[T]) Redirect(url string, code int) (*TemplateData[T], e
 }
 
 type TemplateRoutePaths struct {
+	pathsPrefix string
 }
 
-func (TemplateRoutePaths) SubmitFormEditRow(id int) string {
-	return "/" + path.Join("fruits", strconv.Itoa(id))
+func (routePaths TemplateRoutePaths) SubmitFormEditRow(id int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(id))
 }
 
-func (TemplateRoutePaths) GetFormEditRow(id int) string {
-	return "/" + path.Join("fruits", strconv.Itoa(id), "edit")
+func (routePaths TemplateRoutePaths) GetFormEditRow(id int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(id), "edit")
 }
 
-func (TemplateRoutePaths) ReadHelp() string {
-	return "/help"
+func (routePaths TemplateRoutePaths) ReadHelp() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "help")
 }
 
-func (TemplateRoutePaths) List() string {
+func (routePaths TemplateRoutePaths) List() string {
 	return "/"
 }

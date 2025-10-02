@@ -112,8 +112,9 @@ func calculateIdentifiers(in []Template) {
 	}
 }
 
-func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) (*ast.FuncDecl, error) {
-	encodingPkg, ok := imports.Types("encoding")
+func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Template) (*ast.FuncDecl, error) {
+	const methodReceiverName = "routePaths"
+	encodingPkg, ok := file.Types("encoding")
 	if !ok {
 		return nil, fmt.Errorf(`the "encoding" package must be loaded`)
 	}
@@ -127,7 +128,7 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 		Name: ast.NewIdent(t.identifier),
 		Recv: &ast.FieldList{
 			List: []*ast.Field{
-				{Type: ast.NewIdent(urlHelperTypeName)},
+				{Names: []*ast.Ident{ast.NewIdent(methodReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
 			},
 		},
 		Type: &ast.FuncType{
@@ -140,7 +141,21 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 	}
 
 	if t.path == "/" || t.path == "/{$}" {
-		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: `"/"`}}}}
+		if config.PathPrefix {
+			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+				file.Call("path", "path", "Join", []ast.Expr{
+					file.Call("cmp", "cmp", "Or", []ast.Expr{
+						&ast.SelectorExpr{
+							X:   ast.NewIdent(methodReceiverName),
+							Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
+						},
+						source.String("/"),
+					}),
+				}),
+			}}}
+		} else {
+			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{source.String("/")}}}
+		}
 		return method, nil
 	}
 
@@ -150,17 +165,21 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 		fields []*ast.Field
 		last   types.Type
 
-		segmentExpressions []ast.Expr
-		identIndex         = 0
+		identIndex = 0
 
 		segmentIdentifiers = t.parsePathValueNames()
 	)
-	if len(segmentIdentifiers) == 0 {
-		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templatePath)}}}}
-		return method, nil
-	}
 
 	hasErrorResult := false
+	segmentExpressions := []ast.Expr{
+		file.Call("cmp", "cmp", "Or", []ast.Expr{
+			&ast.SelectorExpr{
+				X:   ast.NewIdent(methodReceiverName),
+				Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
+			},
+			source.String("/"),
+		}),
+	}
 	for si, segment := range segmentStrings {
 		if len(segment) < 1 {
 			continue
@@ -187,7 +206,7 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 		if !ok {
 			pathValueType = types.Universe.Lookup("string").Type()
 		}
-		tpNode, err := imports.TypeASTExpression(pathValueType)
+		tpNode, err := file.TypeASTExpression(pathValueType)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +251,7 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 						&ast.ReturnStmt{
 							Results: []ast.Expr{
 								&ast.BasicLit{Kind: token.STRING, Value: `""`},
-								imports.Call("fmt", "fmt", "Errorf", []ast.Expr{
+								file.Call("fmt", "fmt", "Errorf", []ast.Expr{
 									source.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, t.path)),
 									ast.NewIdent("err"),
 								}),
@@ -252,27 +271,20 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 		if !ok {
 			return nil, fmt.Errorf("unsupported type %s for path parameters: %s", source.Format(tpNode), ident)
 		}
-		exp, err := imports.Format(ast.NewIdent(ident), basicType.Kind())
+		exp, err := file.Format(ast.NewIdent(ident), basicType.Kind())
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
 		segmentExpressions = append(segmentExpressions, exp)
 	}
 
-	returnStmt := &ast.BinaryExpr{
-		X: &ast.BasicLit{
-			Kind:  token.STRING,
-			Value: strconv.Quote("/"),
+	returnStmt := ast.Expr(&ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(file.Import("path", "path")),
+			Sel: ast.NewIdent("Join"),
 		},
-		Op: token.ADD,
-		Y: &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent(imports.Import("", "path")),
-				Sel: ast.NewIdent("Join"),
-			},
-			Args: segmentExpressions,
-		},
-	}
+		Args: segmentExpressions,
+	})
 	if hasDollarSuffix {
 		returnStmt = &ast.BinaryExpr{
 			X:  returnStmt,
@@ -295,17 +307,21 @@ func routePathFunc(imports *source.File, t *Template, urlHelperTypeName string) 
 	return method, nil
 }
 
-func routePathTypeAndMethods(imports *source.File, templates []Template, urlHelperTypeName string) ([]ast.Decl, error) {
+func routePathTypeAndMethods(imports *source.File, config RoutesFileConfiguration, templates []Template) ([]ast.Decl, error) {
 	decls := []ast.Decl{
 		&ast.GenDecl{
 			Tok: token.TYPE,
 			Specs: []ast.Spec{
-				&ast.TypeSpec{Name: ast.NewIdent(urlHelperTypeName), Type: &ast.StructType{Fields: &ast.FieldList{}}},
+				&ast.TypeSpec{Name: ast.NewIdent(config.TemplateRoutePathsTypeName), Type: &ast.StructType{Fields: &ast.FieldList{
+					List: []*ast.Field{
+						{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
+					},
+				}}},
 			},
 		},
 	}
 	for _, t := range templates {
-		decl, err := routePathFunc(imports, &t, urlHelperTypeName)
+		decl, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
 		}

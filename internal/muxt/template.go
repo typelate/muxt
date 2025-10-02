@@ -338,12 +338,21 @@ func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string
 	return ok && ident.Name == receiverTypeIdent
 }
 
-func (t Template) callHandleFunc(handlerFuncLit *ast.FuncLit) *ast.ExprStmt {
+func (t Template) callHandleFunc(file *source.File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
+	pattern := ast.Expr(source.String(t.pattern))
+	if config.PathPrefix {
+		i := strings.Index(t.pattern, "/")
+		pattern = &ast.BinaryExpr{
+			X:  source.String(t.pattern[:i]),
+			Op: token.ADD,
+			Y:  file.Call("path", "path", "Join", []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName), source.String(t.pattern[i:])}),
+		}
+	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
 			X:   ast.NewIdent(muxVarIdent),
 			Sel: ast.NewIdent(httpHandleFuncIdent),
 		},
-		Args: []ast.Expr{source.String(t.pattern), handlerFuncLit},
+		Args: []ast.Expr{pattern, handlerFuncLit},
 	}}
 }

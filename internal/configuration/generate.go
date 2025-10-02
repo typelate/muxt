@@ -36,6 +36,9 @@ This function also receives an argument with a type matching the name given by r
 	templateRoutePathsType     = "template-route-paths-type"
 	templateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
+	pathPrefixName     = "path-prefix"
+	pathPrefixNameHelp = `Adds a path-prefix parameter to the TemplateRoutes function and use it in each path generator method.`
+
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
@@ -80,5 +83,6 @@ func RoutesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *flag.FlagS
 	flagSet.StringVar(&g.ReceiverInterface, receiverInterfaceName, muxt.DefaultReceiverInterfaceName, receiverInterfaceNameHelp)
 	flagSet.StringVar(&g.TemplateDataType, templateDataType, muxt.DefaultTemplateDataTypeName, templateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, templateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, templateRoutePathsTypeHelp)
+	flagSet.BoolVar(&g.PathPrefix, pathPrefixName, false, pathPrefixNameHelp)
 	return flagSet
 }

@@ -20,7 +20,7 @@ func TestTemplateData_HTMX(t *testing.T) {
 		t.Helper()
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		data := newTemplateData(nil, rec, req, struct{}{}, true, nil)
+		data := newTemplateData(nil, rec, req, struct{}{}, true, nil, "")
 		if err := ts.ExecuteTemplate(io.Discard, "", data); err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestTemplateData_HTMX(t *testing.T) {
 	checkBody := func(t *testing.T, ts *template.Template, req *http.Request) string {
 		t.Helper()
 		rec := httptest.NewRecorder()
-		data := newTemplateData(nil, rec, req, struct{}{}, true, nil)
+		data := newTemplateData(nil, rec, req, struct{}{}, true, nil, "")
 		var buf bytes.Buffer
 		if err := ts.ExecuteTemplate(&buf, "", data); err != nil {
 			t.Fatal(err)

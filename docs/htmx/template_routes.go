@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
 	"strconv"
 )
 
@@ -39,10 +40,11 @@ type RoutesReceiver interface {
 	Increment() int64
 }
 
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+	pathsPrefix := ""
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
 		result := receiver.Count()
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "/ Count()", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -65,7 +67,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		result := struct {
 		}{}
 		buf := bytes.NewBuffer(nil)
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		if err := templates.ExecuteTemplate(buf, "POST /count", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -85,7 +87,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 	})
 	mux.HandleFunc("/decrement-count", func(response http.ResponseWriter, request *http.Request) {
 		result := receiver.Decrement()
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "/decrement-count Decrement()", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -106,7 +108,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 	})
 	mux.HandleFunc("/increment-count", func(response http.ResponseWriter, request *http.Request) {
 		result := receiver.Increment()
-		td := newTemplateData(receiver, response, request, result, true, nil)
+		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "/increment-count Increment()", td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -125,6 +127,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[T any] struct {
@@ -136,10 +139,11 @@ type TemplateData[T any] struct {
 	okay        bool
 	err         error
 	redirectURL string
+	pathsPrefix string
 }
 
-func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error) *TemplateData[T] {
-	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: ""}
+func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error, pathsPrefix string) *TemplateData[T] {
+	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: "", pathsPrefix: pathsPrefix}
 }
 
 func (data *TemplateData[T]) MuxtVersion() string {
@@ -148,7 +152,7 @@ func (data *TemplateData[T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[T]) Result() T {
@@ -190,20 +194,21 @@ func (data *TemplateData[T]) Redirect(url string, code int) (*TemplateData[T], e
 }
 
 type TemplateRoutePaths struct {
+	pathsPrefix string
 }
 
-func (TemplateRoutePaths) Count() string {
+func (routePaths TemplateRoutePaths) Count() string {
 	return "/"
 }
 
-func (TemplateRoutePaths) CreateCount() string {
-	return "/count"
+func (routePaths TemplateRoutePaths) CreateCount() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
 }
 
-func (TemplateRoutePaths) Decrement() string {
-	return "/decrement-count"
+func (routePaths TemplateRoutePaths) Decrement() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement-count")
 }
 
-func (TemplateRoutePaths) Increment() string {
-	return "/increment-count"
+func (routePaths TemplateRoutePaths) Increment() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment-count")
 }
