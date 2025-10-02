@@ -4,7 +4,7 @@
 
 Generated `TemplateData` methods now include helpers to interact with the Receiver, Request, and Redirect
 from template actions.
-I exclusively use Muxt with HTMX (although it can work well with standard Web 2.0 Hypermedia templates).
+I exclusively use Muxt with HTMX (although it can work well with fixi).
 I am not sure what the method signatures for HTMX should be or what the implication of having those
 methods called in templates is on long term template maintainability.
 

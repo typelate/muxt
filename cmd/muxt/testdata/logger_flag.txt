@@ -1,0 +1,31 @@
+# logger flag
+
+muxt generate --receiver-type=T --logger
+muxt check
+
+exec go build -o build
+
+-- in.go --
+package main
+
+type T struct{}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+func main() {}
+-- go.mod --
+module example.com
+
+go 1.20
+-- template.gohtml --
+{{define "GET / F()"}}Hello, world!{{end}}

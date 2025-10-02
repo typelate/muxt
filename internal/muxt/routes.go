@@ -77,6 +77,7 @@ type RoutesFileConfiguration struct {
 	TemplateRoutePathsTypeName string
 	OutputFileName string
 	PathPrefix     bool
+	Logger         bool
 }
 
 func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
@@ -159,6 +160,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		},
 		Body: &ast.BlockStmt{List: []ast.Stmt{}},
 	}
+	if config.Logger {
+		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent("logger")},
+			Type:  &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent(file.Import("", "log/slog")), Sel: ast.NewIdent("Logger")}},
+		})
+	}
 	if config.PathPrefix {
 		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
 			Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
@@ -177,7 +184,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		const dataVarIdent = "result"
 		logger.Printf("generating handler for pattern %s", t.pattern)
 		if t.fun == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config.TemplateDataType, config.TemplatesVariable)
+			handlerFunc := noReceiverMethodCall(file, t, config)
 			call := t.callHandleFunc(file, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
@@ -277,7 +284,7 @@ func resolveReceiver(config RoutesFileConfiguration, file *source.File, routesPk
 	return named, nil
 }
 
-func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent, templatesVariableIdent string) *ast.FuncLit {
+func noReceiverMethodCall(file *source.File, t *Template, config RoutesFileConfiguration) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
@@ -293,7 +300,7 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 						Specs: []ast.Spec{&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(templateDataVarIdent)},
 							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexExpr{
-								X:     ast.NewIdent(templateDataTypeIdent),
+								X:     ast.NewIdent(config.TemplateDataType),
 								Index: source.EmptyStructType(),
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
@@ -313,14 +320,18 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 		},
 	}
 
-	execTemplates := checkExecuteTemplateError(file)
+	if config.Logger {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", t.pattern))
+	}
+
+	execTemplates := checkExecuteTemplateError(file, config.Logger, t.pattern)
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
 		},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(templatesVariableIdent), Sel: ast.NewIdent("ExecuteTemplate")},
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
 			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
 		}},
 	}
@@ -438,7 +449,11 @@ func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Tem
 		Rhs: []ast.Expr{file.BytesNewBuffer(source.Nil())},
 	})
 
-	execTemplates := checkExecuteTemplateError(file)
+	if config.Logger {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", t.pattern))
+	}
+
+	execTemplates := checkExecuteTemplateError(file, config.Logger, t.pattern)
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -502,15 +517,24 @@ func callWriteHeader(statusCode ast.Expr) *ast.ExprStmt {
 	}}
 }
 
-func checkExecuteTemplateError(file *source.File) *ast.IfStmt {
+func checkExecuteTemplateError(file *source.File, withLogger bool, pattern string) *ast.IfStmt {
+	var logStmts []ast.Stmt
+	if withLogger {
+		logStmts = []ast.Stmt{
+			&ast.ExprStmt{X: loggerErrorCall(file, executeTemplateErrorMessage, pattern, errIdent)},
+		}
+	} else {
+		logStmts = []ast.Stmt{
+			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+		}
+	}
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
 		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+			List: append(logStmts,
 				&ast.ExprStmt{X: file.HTTPErrorCall(ast.NewIdent(httpResponseField(file).Names[0].Name), source.String(executeTemplateErrorMessage), http.StatusInternalServerError)},
 				&ast.ReturnStmt{},
-			},
+			),
 		},
 	}
 }
@@ -1583,6 +1607,42 @@ func executeTemplateFailedLogLine(file *source.File, message, errIdent string) *
 		file.SlogString("error", source.CallError(errIdent)),
 	}
 	return file.Call("", "log/slog", "ErrorContext", args)
+}
+
+func loggerErrorCall(file *source.File, message, pattern, errIdent string) *ast.CallExpr {
+	args := []ast.Expr{
+		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
+		source.String(message),
+		file.SlogString("pattern", source.String(pattern)),
+		file.SlogString("path", &ast.SelectorExpr{
+			X:   &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+			Sel: ast.NewIdent("Path"),
+		}),
+		file.SlogString("error", source.CallError(errIdent)),
+	}
+	return &ast.CallExpr{
+		Fun:  &ast.SelectorExpr{X: ast.NewIdent("logger"), Sel: ast.NewIdent("ErrorContext")},
+		Args: args,
+	}
+}
+
+func logDebugStatement(file *source.File, message, pattern string) *ast.ExprStmt {
+	args := []ast.Expr{
+		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
+		source.String(message),
+		file.SlogString("pattern", source.String(pattern)),
+		file.SlogString("path", &ast.SelectorExpr{
+			X:   &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+			Sel: ast.NewIdent("Path"),
+		}),
+		file.SlogString("method", &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Method")}),
+	}
+	return &ast.ExprStmt{
+		X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent("logger"), Sel: ast.NewIdent("DebugContext")},
+			Args: args,
+		},
+	}
 }
 
 type forest template.Template

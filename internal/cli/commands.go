@@ -175,6 +175,9 @@ This function also receives an argument with a type matching the name given by r
 	pathPrefixName     = "path-prefix"
 	pathPrefixNameHelp = `Adds a path-prefix parameter to the TemplateRoutes function and use it in each path generator method.`
 
+	loggerName     = "logger"
+	loggerNameHelp = `Adds a *slog.Logger parameter to the TemplateRoutes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
+
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
@@ -220,5 +223,6 @@ func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *flag.FlagS
 	flagSet.StringVar(&g.TemplateDataType, templateDataType, muxt.DefaultTemplateDataTypeName, templateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, templateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, templateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.PathPrefix, pathPrefixName, false, pathPrefixNameHelp)
+	flagSet.BoolVar(&g.Logger, loggerName, false, loggerNameHelp)
 	return flagSet
 }

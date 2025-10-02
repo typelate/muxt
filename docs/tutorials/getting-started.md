@@ -6,7 +6,7 @@ By the end, you'll have a working server that displays "Hello, world!" using gen
 
 ## Prerequisites
 
-- Go 1.22 or later
+- Go 1.25 or later
 - You can write basic Go and HTML
 
 ## Step 1: Install Muxt
@@ -14,13 +14,13 @@ By the end, you'll have a working server that displays "Hello, world!" using gen
 Install Muxt globally:
 
 ```bash
-go install github.com/typelate/muxt@latest
+go install github.com/typelate/muxt/cmd/muxt@latest
 ```
 
 Verify the installation:
 
 ```bash
-muxt --help
+muxt version
 ```
 
 ## Step 2: Create a New Project
@@ -77,12 +77,13 @@ import (
 var templateFS embed.FS
 
 //go:generate muxt generate --receiver-type=Server
-var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+var templates = template.Must(template.ParseFS(templateFS, "*."))
 
 func main() {
 	mux := http.NewServeMux()
 	// TemplateRoutes(mux, Server{}) // You'll uncomment this after generating
-	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8080"), mux))
+	addr := cmp.Or(os.Getenv("ADDR"), ":"+cmp.Or(os.Getenv("PORT"), "8080"))
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
 type Server struct{}
@@ -107,10 +108,34 @@ Muxt will create a file named `template_routes.go` containing the generated HTTP
 In `main.go`, uncomment the `TemplateRoutes` line:
 
 ```go
+package main
+
+import (
+	"cmp"
+	"embed"
+	"html/template"
+	"log"
+	"net/http"
+	"os"
+)
+
+//go:embed *.gohtml
+var templateFS embed.FS
+
+//go:generate muxt generate --receiver-type=Server
+var templates = template.Must(template.ParseFS(templateFS, "*."))
+
 func main() {
-	mux := http.NewServeMux()
-	TemplateRoutes(mux, Server{})  // Uncommented!
-	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8080"), mux))
+    mux := http.NewServeMux()
+    // TemplateRoutes(mux, Server{}) // You'll uncomment this after generating
+    addr := cmp.Or(os.Getenv("ADDR"), ":"+cmp.Or(os.Getenv("PORT"), "8080"))
+    log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+type Server struct{}
+
+func (Server) F() string {
+    return "Hello, world!"
 }
 ```
 

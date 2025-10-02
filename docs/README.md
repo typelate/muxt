@@ -16,11 +16,13 @@ Muxt generates type-safe HTTP handlers from Go HTML templates. This documentatio
 - **[Write Receiver Methods](how-to/write-receiver-methods.md)** - Create clean, testable handler methods
 - **[Test Your Handlers](how-to/test-handlers.md)** - Test HTTP handlers with DOM-aware assertions
 - **[Use HTMX with Muxt](how-to/use-htmx.md)** - Build dynamic interfaces with HTMX
+- **[Add Logging to Generated Handlers](how-to/add-logging.md)** - Add structured logging with slog
 
 ## Reference
 
 **Looking for technical details?** These documents provide complete specifications:
 
+- **[CLI Reference](reference/cli.md)** - Complete command-line interface documentation
 - **[Template Name Syntax](reference/template-names.md)** - Complete syntax for naming templates
 - **[Call Parameters](reference/call-parameters.md)** - How Muxt parses method parameters
 - **[Call Results](reference/call-results.md)** - How Muxt handles method return values
@@ -37,6 +39,7 @@ Muxt generates type-safe HTTP handlers from Go HTML templates. This documentatio
 - **[Complexity is the Enemy](explanation/complexity-is-the-enemy.md)** - Why simple is better
 - **[Go Proverbs and Muxt](explanation/go-proverbs-and-muxt.md)** - How Muxt embodies Go's design principles
 - **[Advanced Patterns](explanation/advanced-patterns.md)** - Production patterns from real-world applications
+- **[Package Structure](explanation/package-structure.md)** - Discussion of limitations and emergent patterns of package organization
 - **[Architecture Decisions](explanation/decisions/)** - Records of key technical decisions
 
 ## Examples
@@ -75,6 +78,12 @@ LLM prompts for AI-assisted development:
 
 **Build interactive pages**
 → [How to Use HTMX](how-to/use-htmx.md)
+
+**Add logging to my handlers**
+→ [How to Add Logging](how-to/add-logging.md)
+
+**See all CLI flags**
+→ [CLI Reference](reference/cli.md)
 
 **Understand Muxt's design**
 → [Manifesto](explanation/manifesto.md) & [Motivation](explanation/motivation.md)

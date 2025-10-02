@@ -56,11 +56,11 @@ go install github.com/typelate/muxt@latest
 muxt check
 ```
 
-This validates your templates without generating any code.
+This validates your template actions without generating any code.
 
 ## Option 2: Generate Routes in a Separate Package
 
-For generating HTTP handlers alongside existing routes, create an isolated package for Muxt-managed templates.
+eFor generating HTTP handlers alongside existing routes, create a new package with a `templates.go` file that makes your templates discoverable to Muxt.
 
 ### Step 1: Create a Hypertext Package
 
@@ -88,15 +88,48 @@ import (
 //go:embed *.gohtml
 var templatesDir embed.FS
 
-//go:generate muxt generate --receiver-type=Server --receiver-type-package=example.com/internal/domain --routes-func=Routes
-var templates = template.Must(template.ParseFS(templatesDir, "*"))
+//go:generate muxt generate --receiver-type=Server --receiver-type-package=example.com/internal/domain --routes-func=Routes var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
 ```
+
+**Key requirements:**
+- The `templates` variable must be **package-level** (not inside a function)
+- Use `embed.FS` to make templates discoverable at compile time
+- The `//go:embed` directive can only include files in the same directory or subdirectories (not parent directories)
+
+**For multiple subdirectories:**
+```go
+//go:embed pages/*.gohtml components/*.gohtml layouts/*.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir,
+	"pages/*.gohtml",
+	"components/*.gohtml",
+	"layouts/*.gohtml",
+))
+```
+
+**For custom template functions or delimiters:**
+```go
+var templates = parseTemplates()
+
+func parseTemplates() *template.Template {
+	return template.Must(
+		template.New("").
+			Funcs(template.FuncMap{
+				"formatDate": formatDate,
+			}).
+			ParseFS(templatesDir, "**/*.gohtml"),
+	)
+}
+```
+
+See [Package Structure Explanation](../explanation/package-structure.md) for more details on template organization.
 
 *[(See Muxt CLI Test/receiver_and_routes_are_in_different_packages)](../../cmd/muxt/testdata/receiver_and_routes_are_in_different_packages.txt)*
 
 ### Step 3: Add Your Templates
 
-Create `internal/hypertext/templates/index.gohtml`:
+Create `internal/hypertext/index.gohtml` (or organize in subdirectories):
 
 ```gotemplate
 {{define "GET /dashboard Dashboard(ctx)" -}}

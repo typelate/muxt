@@ -121,3 +121,4 @@ Follow [Diátaxis](http://diataxis.fr/):
 * Encode requested behavior in tests before implementing
 * Take small, incremental steps
 * Use examples to demonstrate progress (failing → passing)
+* `// go:embed` does not support double star glob patterns you must add every level of directory as a separate field `go:embd *.gohtml */*.gohtml */*/*.gohtml`
