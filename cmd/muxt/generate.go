@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/typelate/muxt/internal/configuration"
@@ -47,14 +46,19 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if v, ok := cliVersion(); ok {
 		config.MuxtVersion = v
 	}
-	s, err := muxt.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
+	files, err := muxt.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
 	if err != nil {
 		return err
 	}
-	var sb bytes.Buffer
-	writeCodeGenerationComment(&sb)
-	sb.WriteString(s)
-	return os.WriteFile(filepath.Join(workingDirectory, config.OutputFileName), sb.Bytes(), 0o644)
+	for _, file := range files {
+		var sb bytes.Buffer
+		writeCodeGenerationComment(&sb)
+		sb.WriteString(file.Content)
+		if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeCodeGenerationComment(w io.StringWriter) {

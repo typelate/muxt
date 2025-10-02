@@ -61,6 +61,11 @@ func newResponseDataFuncIdent(templateDataTypeName string) string {
 	return "new" + templateDataTypeName
 }
 
+type GeneratedFile struct {
+	Path    string
+	Content string
+}
+
 type RoutesFileConfiguration struct {
 	MuxtVersion,
 	PackageName,
@@ -85,10 +90,10 @@ func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
 	return config
 }
 
-func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) (string, error) {
+func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) ([]GeneratedFile, error) {
 	config = config.applyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
-		return "", fmt.Errorf("package name %q is not an identifier", config.PackageName)
+		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
 
 	patterns := []string{
@@ -106,12 +111,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		Dir:  wd,
 	}, patterns...)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	file, err := source.NewFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	routesPkg := file.OutputPackage()
 
@@ -119,16 +124,16 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	config.PackageName = routesPkg.Name
 	receiver, err := resolveReceiver(config, file, routesPkg)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	ts, _, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	templates, err := Templates(ts)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	receiverInterface := &ast.InterfaceType{
@@ -164,7 +169,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}
 		handlerFunc, err := methodHandlerFunc(file, t, sigs, receiver, receiverInterface, routesPkg.Types, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		call := t.callHandleFunc(handlerFunc)
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
@@ -172,7 +177,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	routePathDecls, err := routePathTypeAndMethods(file, templates, config.TemplateRoutePathsTypeName)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	is := file.ImportSpecs()
@@ -217,7 +222,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		}, routePathDecls...),
 	}
 
-	return source.FormatFile(filepath.Join(wd, config.OutputFileName), outputFile)
+	filePath := filepath.Join(wd, config.OutputFileName)
+	content, err := source.FormatFile(filePath, outputFile)
+	if err != nil {
+		return nil, err
+	}
+	return []GeneratedFile{{Path: filePath, Content: content}}, nil
 }
 
 func resolveReceiver(config RoutesFileConfiguration, file *source.File, routesPkg *packages.Package) (*types.Named, error) {
