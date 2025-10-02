@@ -7,12 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"text/template"
-
-	"github.com/typelate/muxt/internal/configuration"
-	"github.com/typelate/muxt/internal/muxt"
 )
 
-//go:generate go run .
+//go:generate go run ./
 
 var (
 	//go:embed README.md.template
@@ -22,18 +19,7 @@ var (
 
 func main() {
 	var out bytes.Buffer
-	gf := configuration.RoutesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
-	gf.SetOutput(&out)
-	gf.Usage()
-	generateUsage := out.Bytes()
-	out.Reset()
-
-	err := templates.Execute(&out, struct {
-		GenerateUsage string
-	}{
-		GenerateUsage: string(generateUsage),
-	})
-	if err != nil {
+	if err := templates.Execute(&out, struct{}{}); err != nil {
 		log.Fatal(err)
 	}
 
