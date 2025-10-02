@@ -27,6 +27,8 @@ var goTemplateHypertextFiles embed.FS
 var myTemplates = template.Must(template.ParseFS(goTemplateHypertextFiles, "*"))
 ```
 
+*[(See Muxt CLI Test/templates_and_embed_in_gen_decl)](../../cmd/muxt/testdata/templates_and_embed_in_gen_decl.txt)*
+
 The right-hand side of the assignment expression may include any of the following template function calls:
 
 - [`Must`](https://pkg.go.dev/html/template#Must)
@@ -43,7 +45,9 @@ or methods:
 - [`Template.Option`](https://pkg.go.dev/html/template#Template.Option)
 - [`Template.Funcs`](https://pkg.go.dev/html/template#Template.Option)
 
-You can use a different variable name for the `*template.Template` just invoke `muxt generate` with the
+*[(See Muxt CLI Test/templates_multiple_parsefs)](../../cmd/muxt/testdata/templates_multiple_parsefs.txt)* for using multiple ParseFS calls.
+
+You can use a different variable name for the `*template.Template` by invoking `muxt generate` with the
 `--templates-variable=someOtherName` flag
 and ensure you have a globally scoped variable someOtherName where the right-hand side of the expression is
 `template.Must()` with some parse calls.
