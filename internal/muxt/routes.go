@@ -167,7 +167,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, t, sigs, receiver, receiverInterface, routesPkg.Types, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
+		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent)
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +312,7 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 	return handlerFunc
 }
 
-func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, templateDataTypeIdent, templatesVariableIdent, dataVarIdent string) (*ast.FuncLit, error) {
+func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
@@ -350,8 +350,8 @@ func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Si
 	resultType := sig.Results().At(0).Type()
 
 	var err error
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, file, resultType, sigs, nil, receiver, templateDataTypeIdent, templatesVariableIdent, t.call, func(s string) *ast.BlockStmt {
-		errBlock, err := errorResultBlock(file, t, resultType, http.StatusBadRequest, templateDataTypeIdent, templatesVariableIdent, &ast.CallExpr{
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, file, resultType, sigs, nil, receiver, config.TemplateDataType, config.TemplatesVariable, t.call, func(s string) *ast.BlockStmt {
+		errBlock, err := errorResultBlock(file, t, resultType, http.StatusBadRequest, config.TemplateDataType, config.TemplatesVariable, &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(file.Import("", "errors")), Sel: ast.NewIdent("New")},
 			Args: []ast.Expr{source.String(s)},
 		})
@@ -363,7 +363,7 @@ func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Si
 		return nil, err
 	}
 
-	receiverCallStatements, err := callReceiverMethod(file, t, templateDataTypeIdent, templatesVariableIdent, dataVarIdent, sig, &ast.CallExpr{
+	receiverCallStatements, err := callReceiverMethod(file, t, config.TemplateDataType, config.TemplatesVariable, dataVarIdent, sig, &ast.CallExpr{
 		Fun:  callFun,
 		Args: slices.Clone(t.call.Args),
 	})
@@ -376,7 +376,7 @@ func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Si
 		Lhs: []ast.Expr{ast.NewIdent(resultDataIdent)},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun: ast.NewIdent(newResponseDataFuncIdent(templateDataTypeIdent)),
+			Fun: ast.NewIdent(newResponseDataFuncIdent(config.TemplateDataType)),
 			Args: []ast.Expr{
 				ast.NewIdent(receiverIdent),
 				ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
@@ -401,7 +401,7 @@ func methodHandlerFunc(file *source.File, t *Template, sigs map[string]*types.Si
 		},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(templatesVariableIdent), Sel: ast.NewIdent("ExecuteTemplate")},
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
 			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, ast.NewIdent(resultDataIdent)},
 		}},
 	}
