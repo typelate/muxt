@@ -23,28 +23,11 @@ type RoutesReceiver interface {
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
 	pathsPrefix := ""
 	mux.HandleFunc("PATCH /fruits/{id}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
-			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
-			buf := bytes.NewBuffer(nil)
-			if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
-				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-				http.Error(response, "failed to render page", http.StatusInternalServerError)
-				return
-			}
-			sc := cmp.Or(rd.statusCode, http.StatusBadRequest)
-			if rd.redirectURL != "" {
-				http.Redirect(response, request, rd.redirectURL, sc)
-				return
-			}
-			if contentType := response.Header().Get("content-type"); contentType == "" {
-				response.Header().Set("content-type", "text/html; charset=utf-8")
-			}
-			response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-			response.WriteHeader(sc)
-			_, _ = buf.WriteTo(response)
-			return
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
 		}
 		id := idParsed
 		request.ParseForm()
@@ -52,82 +35,32 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		{
 			value, err := strconv.Atoi(request.FormValue("count"))
 			if err != nil {
-				var zv Row
-				rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
-				buf := bytes.NewBuffer(nil)
-				if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
-					slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-					http.Error(response, "failed to render page", http.StatusInternalServerError)
-					return
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusBadRequest
+			} else {
+				if value < 0 {
+					td.errList = append(td.errList, errors.New("count must not be less than 0"))
+					td.errStatusCode = http.StatusBadRequest
 				}
-				sc := cmp.Or(rd.statusCode, http.StatusBadRequest)
-				if rd.redirectURL != "" {
-					http.Redirect(response, request, rd.redirectURL, sc)
-					return
-				}
-				if contentType := response.Header().Get("content-type"); contentType == "" {
-					response.Header().Set("content-type", "text/html; charset=utf-8")
-				}
-				response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-				response.WriteHeader(sc)
-				_, _ = buf.WriteTo(response)
-				return
-			}
-			if value < 0 {
-				var zv Row
-				rd := newTemplateData(receiver, response, request, zv, false, errors.New("count must not be less than 0"), pathsPrefix)
-				buf := bytes.NewBuffer(nil)
-				if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
-					slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-					http.Error(response, "failed to render page", http.StatusInternalServerError)
-					return
-				}
-				sc := cmp.Or(rd.statusCode, http.StatusBadRequest)
-				if rd.redirectURL != "" {
-					http.Redirect(response, request, rd.redirectURL, sc)
-					return
-				}
-				if contentType := response.Header().Get("content-type"); contentType == "" {
-					response.Header().Set("content-type", "text/html; charset=utf-8")
-				}
-				response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-				response.WriteHeader(sc)
-				_, _ = buf.WriteTo(response)
-				return
 			}
 			form.Value = value
 		}
-		result, err := receiver.SubmitFormEditRow(id, form)
-		if err != nil {
-			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
-			buf := bytes.NewBuffer(nil)
-			if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", rd); err != nil {
-				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-				http.Error(response, "failed to render page", http.StatusInternalServerError)
-				return
+		if len(td.errList) == 0 {
+			var err error
+			td.result, err = receiver.SubmitFormEditRow(id, form)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
 			}
-			sc := cmp.Or(rd.statusCode, http.StatusInternalServerError)
-			if rd.redirectURL != "" {
-				http.Redirect(response, request, rd.redirectURL, sc)
-				return
-			}
-			if contentType := response.Header().Get("content-type"); contentType == "" {
-				response.Header().Set("content-type", "text/html; charset=utf-8")
-			}
-			response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-			response.WriteHeader(sc)
-			_, _ = buf.WriteTo(response)
-			return
+			td.result = td.result
 		}
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -140,61 +73,29 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /fruits/{id}/edit", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
-			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
-			buf := bytes.NewBuffer(nil)
-			if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", rd); err != nil {
-				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-				http.Error(response, "failed to render page", http.StatusInternalServerError)
-				return
-			}
-			sc := cmp.Or(rd.statusCode, http.StatusBadRequest)
-			if rd.redirectURL != "" {
-				http.Redirect(response, request, rd.redirectURL, sc)
-				return
-			}
-			if contentType := response.Header().Get("content-type"); contentType == "" {
-				response.Header().Set("content-type", "text/html; charset=utf-8")
-			}
-			response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-			response.WriteHeader(sc)
-			_, _ = buf.WriteTo(response)
-			return
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
 		}
 		id := idParsed
-		result, err := receiver.GetFormEditRow(id)
-		if err != nil {
-			var zv Row
-			rd := newTemplateData(receiver, response, request, zv, false, err, pathsPrefix)
-			buf := bytes.NewBuffer(nil)
-			if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", rd); err != nil {
-				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-				http.Error(response, "failed to render page", http.StatusInternalServerError)
-				return
+		if len(td.errList) == 0 {
+			var err error
+			td.result, err = receiver.GetFormEditRow(id)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
 			}
-			sc := cmp.Or(rd.statusCode, http.StatusInternalServerError)
-			if rd.redirectURL != "" {
-				http.Redirect(response, request, rd.redirectURL, sc)
-				return
-			}
-			if contentType := response.Header().Get("content-type"); contentType == "" {
-				response.Header().Set("content-type", "text/html; charset=utf-8")
-			}
-			response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-			response.WriteHeader(sc)
-			_, _ = buf.WriteTo(response)
-			return
+			td.result = td.result
 		}
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -207,16 +108,15 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
-		result := struct {
-		}{}
+		var td = TemplateData[struct {
+		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytes.NewBuffer(nil)
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
-		if err := templates.ExecuteTemplate(buf, "GET /help", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "GET /help", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -229,16 +129,19 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[[]Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
-		result := receiver.List(ctx)
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
+		if len(td.errList) == 0 {
+			td.result = receiver.List(ctx)
+			td.okay = true
+		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -254,19 +157,16 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 }
 
 type TemplateData[T any] struct {
-	receiver    RoutesReceiver
-	response    http.ResponseWriter
-	request     *http.Request
-	result      T
-	statusCode  int
-	okay        bool
-	err         error
-	redirectURL string
-	pathsPrefix string
-}
-
-func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error, pathsPrefix string) *TemplateData[T] {
-	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: "", pathsPrefix: pathsPrefix}
+	receiver      RoutesReceiver
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
 }
 
 func (data *TemplateData[T]) MuxtVersion() string {
@@ -301,7 +201,7 @@ func (data *TemplateData[T]) Ok() bool {
 }
 
 func (data *TemplateData[T]) Err() error {
-	return data.err
+	return errors.Join(data.errList...)
 }
 
 func (data *TemplateData[T]) Receiver() RoutesReceiver {

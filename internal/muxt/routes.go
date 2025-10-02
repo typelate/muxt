@@ -59,10 +59,6 @@ const (
 	executeTemplateErrorMessage = "failed to render page"
 )
 
-func newResponseDataFuncIdent(templateDataTypeName string) string {
-	return "new" + templateDataTypeName
-}
-
 type GeneratedFile struct {
 	Path    string
 	Content string
@@ -181,7 +177,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		const dataVarIdent = "result"
 		logger.Printf("generating handler for pattern %s", t.pattern)
 		if t.fun == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config.TemplateDataType, config.TemplatesVariable, dataVarIdent)
+			handlerFunc := noReceiverMethodCall(file, t, config.TemplateDataType, config.TemplatesVariable)
 			call := t.callHandleFunc(file, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
@@ -235,7 +231,6 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			routesFunc,
 
 			templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
-			newTemplateData(file, ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
 			templateDataMuxtVersionMethod(config),
 			templateDataPathMethod(config.TemplateDataType, config.TemplateRoutePathsTypeName),
 			templateDataResultMethod(config.TemplateDataType),
@@ -243,7 +238,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			templateDataStatusCodeMethod(config.TemplateDataType),
 			templateDataHeaderMethod(config.TemplateDataType),
 			templateDataOkay(config.TemplateDataType),
-			templateDataError(config.TemplateDataType),
+			templateDataError(file, config.TemplateDataType),
 			templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
 			templateRedirect(file, config.TemplateDataType),
 
@@ -282,7 +277,7 @@ func resolveReceiver(config RoutesFileConfiguration, file *source.File, routesPk
 	return named, nil
 }
 
-func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent, templatesVariableIdent, dataVarIdent string) *ast.FuncLit {
+func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent, templatesVariableIdent string) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
@@ -292,10 +287,22 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 		Type: httpHandlerFuncType(file),
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)},
-					Tok: token.DEFINE,
-					Rhs: []ast.Expr{&ast.CompositeLit{Type: source.EmptyStructType()}},
+				&ast.DeclStmt{
+					Decl: &ast.GenDecl{
+						Tok: token.VAR,
+						Specs: []ast.Spec{&ast.ValueSpec{
+							Names: []*ast.Ident{ast.NewIdent(templateDataVarIdent)},
+							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexExpr{
+								X:     ast.NewIdent(templateDataTypeIdent),
+								Index: source.EmptyStructType(),
+							}, Elts: []ast.Expr{
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+							}}},
+						}},
+					},
 				},
 				&ast.AssignStmt{
 					Lhs: []ast.Expr{ast.NewIdent(bufIdent)},
@@ -306,24 +313,6 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 		},
 	}
 
-	callNewTemplateData := &ast.CallExpr{
-		Fun: ast.NewIdent(newResponseDataFuncIdent(templateDataTypeIdent)),
-		Args: []ast.Expr{
-			ast.NewIdent(receiverIdent),
-			ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-			ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-			ast.NewIdent(dataVarIdent),
-			ast.NewIdent("true"),
-			ast.NewIdent("nil"),
-			ast.NewIdent(pathPrefixPathsStructFieldName),
-		},
-	}
-	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
-		Lhs: []ast.Expr{ast.NewIdent(templateDataVarIdent)},
-		Tok: token.DEFINE,
-		Rhs: []ast.Expr{callNewTemplateData},
-	})
-
 	execTemplates := checkExecuteTemplateError(file)
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
@@ -332,13 +321,15 @@ func noReceiverMethodCall(file *source.File, t *Template, templateDataTypeIdent,
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(templatesVariableIdent), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, ast.NewIdent(templateDataVarIdent)},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
-	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, types.NewStruct(nil, nil), t.defaultStatusCode, statusCodeIdent, bufIdent, templateDataVarIdent)...)
+	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, types.NewStruct(nil, nil), t.defaultStatusCode, statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
+		panic("when no receiver method is called, then the result variable should not be needed")
+	})...)
 	return handlerFunc
 }
 
@@ -370,55 +361,75 @@ func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Tem
 		callFun = ast.NewIdent(t.fun.Name)
 	}
 
+	resultType := sig.Results().At(0).Type()
+	typeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
+	}
+
 	handlerFunc := &ast.FuncLit{
 		Type: httpHandlerFuncType(file),
 		Body: &ast.BlockStmt{
-			List: []ast.Stmt{},
+			List: []ast.Stmt{
+				&ast.DeclStmt{
+					Decl: &ast.GenDecl{
+						Tok: token.VAR,
+						Specs: []ast.Spec{&ast.ValueSpec{
+							Names: []*ast.Ident{ast.NewIdent(resultDataIdent)},
+							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexExpr{
+								X:     ast.NewIdent(config.TemplateDataType),
+								Index: typeExpr,
+							}, Elts: []ast.Expr{
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+							}}},
+						}},
+					},
+				},
+			},
 		},
 	}
 
-	resultType := sig.Results().At(0).Type()
-
-	var err error
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, file, resultType, sigs, nil, receiver, config.TemplateDataType, config.TemplatesVariable, t.call, func(s string) *ast.BlockStmt {
-		errBlock, err := errorResultBlock(file, t, resultType, http.StatusBadRequest, config.TemplateDataType, config.TemplatesVariable, &ast.CallExpr{
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, file, resultType, sigs, nil, receiver, resultDataIdent, config, t.call, func(s string) *ast.BlockStmt {
+		errBlock := appendTemplateDataError(file, resultDataIdent, &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(file.Import("", "errors")), Sel: ast.NewIdent("New")},
 			Args: []ast.Expr{source.String(s)},
 		})
-		if err != nil {
-			panic(err)
-		}
+		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
 	}); err != nil {
 		return nil, err
 	}
 
-	receiverCallStatements, err := callReceiverMethod(file, t, config.TemplateDataType, config.TemplatesVariable, dataVarIdent, sig, &ast.CallExpr{
+	receiverCallStatements, err := callReceiverMethod(file, resultDataIdent, &ast.SelectorExpr{
+		X:   ast.NewIdent(resultDataIdent),
+		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
+	}, sig, &ast.CallExpr{
 		Fun:  callFun,
 		Args: slices.Clone(t.call.Args),
 	})
 	if err != nil {
 		return nil, err
 	}
-	handlerFunc.Body.List = append(handlerFunc.Body.List, receiverCallStatements...)
-
-	newTDArgs := []ast.Expr{
-		ast.NewIdent(receiverIdent),
-		ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-		ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-		ast.NewIdent(dataVarIdent),
-		ast.NewIdent("true"),
-		ast.NewIdent("nil"),
-		ast.NewIdent(pathPrefixPathsStructFieldName),
-	}
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
-		Lhs: []ast.Expr{ast.NewIdent(resultDataIdent)},
-		Tok: token.DEFINE,
-		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  ast.NewIdent(newResponseDataFuncIdent(config.TemplateDataType)),
-			Args: newTDArgs,
-		}},
+	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X: &ast.CallExpr{
+				Fun: ast.NewIdent("len"),
+				Args: []ast.Expr{
+					&ast.SelectorExpr{
+						X:   ast.NewIdent(resultDataIdent),
+						Sel: ast.NewIdent(TemplateDataFieldIdentifierError),
+					},
+				},
+			},
+			Op: token.EQL,
+			Y:  source.Int(0),
+		},
+		Body: &ast.BlockStmt{
+			List: receiverCallStatements,
+		},
 	})
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
@@ -435,19 +446,41 @@ func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Tem
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, ast.NewIdent(resultDataIdent)},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
 	if !t.hasResponseWriterArg {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, resultType, t.defaultStatusCode, statusCodeIdent, bufIdent, resultDataIdent)...)
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, resultType, t.defaultStatusCode, statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
+		})...)
 	} else {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
 	}
 
 	return handlerFunc, nil
+}
+
+func appendTemplateDataError(_ *source.File, tdIdent string, err ast.Expr) *ast.BlockStmt {
+	return &ast.BlockStmt{
+		List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{
+					&ast.CallExpr{
+						Fun: ast.NewIdent("append"),
+						Args: []ast.Expr{
+							&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)},
+							err,
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func writeBodyAndWriteHeadersFunc(file *source.File, bufIdent, statusCodeIdent string) []ast.Stmt {
@@ -513,71 +546,12 @@ func templateDataType(file *source.File, templateTypeIdent string, receiverType 
 							{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)}, Type: file.HTTPRequestPtr()},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierStatusCode)}, Type: ast.NewIdent("int")},
+							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)}, Type: ast.NewIdent("int")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierOkay)}, Type: ast.NewIdent("bool")},
-							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: ast.NewIdent("error")},
+							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: &ast.ArrayType{Elt: ast.NewIdent("error")}},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierRedirectURL)}, Type: ast.NewIdent("string")},
 							{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
 						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func newTemplateData(file *source.File, receiverType ast.Expr, templateDataTypeIdent string) *ast.FuncDecl {
-	const (
-		okayIdent       = "okay"
-		resultParamName = "result"
-	)
-	return &ast.FuncDecl{
-		Name: ast.NewIdent(newResponseDataFuncIdent(templateDataTypeIdent)),
-		Type: &ast.FuncType{
-			TypeParams: &ast.FieldList{
-				List: []*ast.Field{
-					{Names: []*ast.Ident{ast.NewIdent("T")}, Type: ast.NewIdent("any")},
-				},
-			},
-			Params: &ast.FieldList{
-				List: []*ast.Field{
-					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: receiverType},
-					{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)}, Type: file.HTTPResponseWriter()},
-					{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)}, Type: file.HTTPRequestPtr()},
-					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
-					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierOkay)}, Type: ast.NewIdent("bool")},
-					{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: ast.NewIdent("error")},
-					{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
-				},
-			},
-			Results: &ast.FieldList{
-				List: []*ast.Field{
-					{Type: &ast.StarExpr{X: &ast.IndexExpr{
-						X:     ast.NewIdent(templateDataTypeIdent),
-						Index: ast.NewIdent("T"),
-					}}},
-				},
-			},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{
-						&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
-							Type: &ast.IndexExpr{
-								X:     ast.NewIdent(templateDataTypeIdent),
-								Index: ast.NewIdent("T"),
-							},
-							Elts: []ast.Expr{
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierResult), Value: ast.NewIdent(resultParamName)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierOkay), Value: ast.NewIdent(okayIdent)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierError), Value: ast.NewIdent(TemplateDataFieldIdentifierError)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierRedirectURL), Value: source.String("")},
-								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
-							},
-						}},
 					},
 				},
 			},
@@ -613,7 +587,11 @@ func templateDataOkay(templateDataTypeIdent string) *ast.FuncDecl {
 	}
 }
 
-func templateDataError(templateDataTypeIdent string) *ast.FuncDecl {
+func templateDataError(file *source.File, templateDataTypeIdent string) *ast.FuncDecl {
+	join := file.Call("errors", "errors", "Join", []ast.Expr{
+		&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)},
+	})
+	join.Ellipsis = 1
 	return &ast.FuncDecl{
 		Recv: templateDataMethodReceiver(templateDataTypeIdent),
 		Name: ast.NewIdent("Err"),
@@ -623,7 +601,7 @@ func templateDataError(templateDataTypeIdent string) *ast.FuncDecl {
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
 				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}},
+					Results: []ast.Expr{join},
 				},
 			},
 		},
@@ -903,7 +881,7 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *source.File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, templateDataTypeIdent, templatesVariableIdent string, call *ast.CallExpr, validationFailureBlock source.ValidationErrorBlock) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *source.File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock source.ValidationErrorBlock) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -928,7 +906,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *sou
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
-			parseArgStatements, err := appendParseArgumentStatements(statements, t, file, resultType, sigs, parsed, receiver, templateDataTypeIdent, templatesVariableIdent, arg, validationFailureBlock)
+			parseArgStatements, err := appendParseArgumentStatements(statements, t, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -956,9 +934,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *sou
 				arg.Fun = ast.NewIdent(arg.Fun.(*ast.Ident).Name)
 			}
 
-			callMethodStatements, err := callReceiverMethod(file, t, templateDataTypeIdent, templatesVariableIdent, resultVarIdent, callSig, arg)
+			callMethodStatements, err := callReceiverMethod(file, rdIdent, ast.NewIdent(resultVarIdent), callSig, arg)
 			if err != nil {
 				return nil, err
+			}
+			if len(callMethodStatements) > 2 {
+				callMethodStatements = callMethodStatements[1 : len(callMethodStatements)-1]
+			}
+			if assign, ok := callMethodStatements[0].(*ast.AssignStmt); ok {
+				assign.Tok = token.DEFINE
+				callMethodStatements[0] = assign
 			}
 
 			statements = append(parseArgStatements, callMethodStatements...)
@@ -1000,14 +985,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *sou
 			switch {
 			case slices.Contains(t.parsePathValueNames(), arg.Name):
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, t, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), templateDataTypeIdent, templatesVariableIdent)
+				s, err := generateParseValueFromStringStatements(file, t, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
 				t.pathValueTypes[arg.Name] = param.Type()
 			case arg.Name == TemplateNameScopeIdentifierForm:
-				s, err := appendParseFormToStructStatements(statements, t, file, resultType, arg, param, validationFailureBlock, templateDataTypeIdent, templatesVariableIdent)
+				s, err := appendParseFormToStructStatements(statements, t, file, resultType, arg, param, validationFailureBlock, rdIdent)
 				if err != nil {
 					return nil, err
 				}
@@ -1022,7 +1007,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *sou
 	return statements, nil
 }
 
-func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file *source.File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock source.ValidationErrorBlock, templateDataTypeIdent, templatesVariableIdent string) ([]ast.Stmt, error) {
+func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file *source.File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock source.ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
 	statements = append(statements, callParseForm())
 
@@ -1078,7 +1063,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file 
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataTypeIdent, templatesVariableIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
 			}
@@ -1103,7 +1088,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file 
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataTypeIdent, templatesVariableIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
 			}
@@ -1169,75 +1154,9 @@ func httpServeMuxField(file *source.File) *ast.Field {
 	}
 }
 
-func errorResultBlock(file *source.File, t *Template, resultType types.Type, fallbackStatusCode int, templateDataTypeIdent, templatesVariableIdent string, errExp ast.Expr) (*ast.BlockStmt, error) {
-	const (
-		statusCodeIdent = "sc"
-		errIdent        = "err"
-		resultDataIdent = "rd"
-		zeroValueIdent  = "zv"
-		bufIdent        = "buf"
-	)
-
-	typeExpr, err := file.TypeASTExpression(resultType)
-	if err != nil {
-		return nil, err
-	}
-
-	execTemplate := checkExecuteTemplateError(file)
-	execTemplate.Init = &ast.AssignStmt{
-		Lhs: []ast.Expr{ast.NewIdent(errIdent)},
-		Tok: token.DEFINE,
-		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(templatesVariableIdent), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, ast.NewIdent(resultDataIdent)},
-		}},
-	}
-
-	list := []ast.Stmt{
-		&ast.DeclStmt{Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names: []*ast.Ident{ast.NewIdent(zeroValueIdent)},
-					Type:  typeExpr,
-				},
-			},
-		}},
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(resultDataIdent)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.CallExpr{
-				Fun: ast.NewIdent(newResponseDataFuncIdent(templateDataTypeIdent)),
-				Args: []ast.Expr{
-					ast.NewIdent(receiverIdent),
-					ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-					ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
-					ast.NewIdent(zeroValueIdent),
-					source.Bool(false),
-					errExp,
-					ast.NewIdent(pathPrefixPathsStructFieldName),
-				},
-			}},
-		},
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(bufIdent)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{file.BytesNewBuffer(source.Nil())},
-		},
-		execTemplate,
-	}
-
-	list = append(list, writeStatusAndHeaders(file, t, resultType, fallbackStatusCode, statusCodeIdent, bufIdent, resultDataIdent)...)
-
-	block := &ast.BlockStmt{List: append(list, &ast.ReturnStmt{})}
-	return block, nil
-}
-
-func generateParseValueFromStringStatements(file *source.File, t *Template, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, templateDataTypeIdent, templatesVariableIdent string) ([]ast.Stmt, error) {
-	errBlock, err := errorResultBlock(file, t, resultType, http.StatusBadRequest, templateDataTypeIdent, templatesVariableIdent, ast.NewIdent(errIdent))
-	if err != nil {
-		return nil, err
-	}
+func generateParseValueFromStringStatements(file *source.File, t *Template, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
+	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
 	switch tp := valueType.(type) {
 	case *types.Basic:
 		convert := func(exp ast.Expr) ast.Stmt {
@@ -1344,13 +1263,15 @@ func parseBlock(tmpIdent string, parseCall ast.Expr, validations []ast.Stmt, err
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
 		Body: errBlock,
 	}
+	if len(validations) > 0 {
+		errCheckStmt.Else = &ast.BlockStmt{List: validations}
+	}
 	block := &ast.BlockStmt{List: []ast.Stmt{callParse, errCheckStmt}}
-	block.List = append(block.List, validations...)
 	block.List = append(block.List, handleResult(ast.NewIdent(tmpIdent)))
 	return block.List
 }
 
-func callReceiverMethod(file *source.File, t *Template, templateDataTypeIdent, templatesVariableIdent, dataVarIdent string, method *types.Signature, call *ast.CallExpr) ([]ast.Stmt, error) {
+func callReceiverMethod(file *source.File, rdIdent string, dataVar ast.Expr, method *types.Signature, call *ast.CallExpr) ([]ast.Stmt, error) {
 	const (
 		okIdent = "ok"
 	)
@@ -1360,32 +1281,40 @@ func callReceiverMethod(file *source.File, t *Template, templateDataTypeIdent, t
 		assert.NotNil(assertion, methodIdent)
 		return nil, fmt.Errorf("method %s has no results it should have one or two", methodIdent.Name)
 	case 1:
-		return []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}}}, nil
+		return []ast.Stmt{
+			&ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+			&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+				X:   ast.NewIdent(rdIdent),
+				Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
+			}}, Tok: token.ASSIGN, Rhs: []ast.Expr{source.Bool(true)}},
+		}, nil
 	case 2:
-		firstResult := method.Results().At(0).Type()
 		lastResult := method.Results().At(method.Results().Len() - 1).Type()
 
 		errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 		assert.NotNil(assertion, errorType)
 
+		errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
 		if types.Implements(lastResult, errorType) {
-			errBlock, err := errorResultBlock(file, t, firstResult, http.StatusInternalServerError, templateDataTypeIdent, templatesVariableIdent, ast.NewIdent(errIdent))
-			if err != nil {
-				return nil, err
-			}
-
 			return []ast.Stmt{
-				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
+				&ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
 				&ast.IfStmt{
 					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
 					Body: errBlock,
 				},
+				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+					X:   ast.NewIdent(rdIdent),
+					Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
+				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{dataVar}},
 			}, nil
 		}
 
 		if basic, ok := lastResult.(*types.Basic); ok && basic.Kind() == types.Bool {
 			return []ast.Stmt{
-				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent), ast.NewIdent(okIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("ok")}, Type: ast.NewIdent("bool")}}}},
+				&ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(okIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
 				&ast.IfStmt{
 					Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
 					Body: &ast.BlockStmt{
@@ -1394,6 +1323,14 @@ func callReceiverMethod(file *source.File, t *Template, templateDataTypeIdent, t
 						},
 					},
 				},
+				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+					X:   ast.NewIdent(rdIdent),
+					Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
+				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{dataVar}},
+				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+					X:   ast.NewIdent(rdIdent),
+					Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
+				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{source.Bool(true)}},
 			}, nil
 		}
 
@@ -1584,14 +1521,15 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 
 var statusCoder = statusCoderInterface()
 
-func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string) []ast.Stmt {
+func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
 	statusCodePriorityList := []ast.Expr{
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
+		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
 	}
 	if types.Implements(resultType, statusCoder) {
-		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("result"), Sel: ast.NewIdent("StatusCode")}})
+		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}})
 	} else if obj, _, _ := types.LookupFieldOrMethod(resultType, true, file.OutputPackage().Types, "StatusCode"); obj != nil {
-		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: ast.NewIdent("result"), Sel: ast.NewIdent("StatusCode")})
+		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
 	}
 	statusCodePriorityList = append(statusCodePriorityList, source.HTTPStatusCode(file, fallbackStatusCode))
 	list := []ast.Stmt{
@@ -1669,4 +1607,17 @@ func statusCoderInterface() *types.Interface {
 
 	method := types.NewFunc(token.NoPos, nil, "StatusCode", sig)
 	return types.NewInterfaceType([]*types.Func{method}, nil).Complete()
+}
+
+func assignTemplateDataErrStatusCode(file *source.File, rdIdent string, code int) *ast.AssignStmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.SelectorExpr{
+			X:   ast.NewIdent(rdIdent),
+			Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode),
+		}},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{
+			source.HTTPStatusCode(file, code),
+		},
+	}
 }

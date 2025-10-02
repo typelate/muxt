@@ -5,6 +5,7 @@ package hypertext
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,15 +22,18 @@ type RoutesReceiver interface {
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
 	pathsPrefix := ""
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
-		result := receiver.Count()
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
+		var td = TemplateData[int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Count()
+			td.okay = true
+		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "/ Count()", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "/ Count()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -42,16 +46,15 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("POST /count", func(response http.ResponseWriter, request *http.Request) {
-		result := struct {
-		}{}
+		var td = TemplateData[struct {
+		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytes.NewBuffer(nil)
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
-		if err := templates.ExecuteTemplate(buf, "POST /count", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "POST /count", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -64,15 +67,18 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("/decrement-count", func(response http.ResponseWriter, request *http.Request) {
-		result := receiver.Decrement()
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
+		var td = TemplateData[int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Decrement()
+			td.okay = true
+		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "/decrement-count Decrement()", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "/decrement-count Decrement()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -85,15 +91,18 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("/increment-count", func(response http.ResponseWriter, request *http.Request) {
-		result := receiver.Increment()
-		td := newTemplateData(receiver, response, request, result, true, nil, pathsPrefix)
+		var td = TemplateData[int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Increment()
+			td.okay = true
+		}
 		buf := bytes.NewBuffer(nil)
-		if err := templates.ExecuteTemplate(buf, "/increment-count Increment()", td); err != nil {
+		if err := templates.ExecuteTemplate(buf, "/increment-count Increment()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, http.StatusOK)
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -109,19 +118,16 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 }
 
 type TemplateData[T any] struct {
-	receiver    RoutesReceiver
-	response    http.ResponseWriter
-	request     *http.Request
-	result      T
-	statusCode  int
-	okay        bool
-	err         error
-	redirectURL string
-	pathsPrefix string
-}
-
-func newTemplateData[T any](receiver RoutesReceiver, response http.ResponseWriter, request *http.Request, result T, okay bool, err error, pathsPrefix string) *TemplateData[T] {
-	return &TemplateData[T]{receiver: receiver, response: response, request: request, result: result, okay: okay, err: err, redirectURL: "", pathsPrefix: pathsPrefix}
+	receiver      RoutesReceiver
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
 }
 
 func (data *TemplateData[T]) MuxtVersion() string {
@@ -156,7 +162,7 @@ func (data *TemplateData[T]) Ok() bool {
 }
 
 func (data *TemplateData[T]) Err() error {
-	return data.err
+	return errors.Join(data.errList...)
 }
 
 func (data *TemplateData[T]) Receiver() RoutesReceiver {
