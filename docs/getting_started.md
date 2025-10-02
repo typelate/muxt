@@ -21,7 +21,7 @@ You do not need to import `muxt` into your module unless you want it as a [dev t
 For a global-install run:
 
 ```bash
-go install github.com/typelate/muxt/cmd/muxt@latest
+go install github.com/typelate/muxt@latest
 ```
 
 ## 3. Generating Your First Routes

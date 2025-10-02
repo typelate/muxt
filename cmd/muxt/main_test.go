@@ -14,9 +14,12 @@ import (
 	"github.com/typelate/muxt/internal/cli"
 )
 
+//go:generate cp main.go ../../
 //go:generate go run github.com/crhntr/txtarfmt/cmd/txtarfmt -ext=.txt testdata/*
 
-func Test_example(t *testing.T) {
+func TestDocumentation(t *testing.T) {
+	const mainPackage = "github.com/typelate/muxt/cmd/muxt"
+
 	t.Run("generate example", func(t *testing.T) {
 		ctx := t.Context()
 		cmd := exec.CommandContext(ctx, "go", "generate", "./...")
@@ -27,20 +30,20 @@ func Test_example(t *testing.T) {
 	})
 	t.Run("check example", func(t *testing.T) {
 		ctx := t.Context()
-		cmd := exec.CommandContext(ctx, "go", "run", "github.com/typelate/muxt/cmd/muxt", "-C", filepath.FromSlash("../../docs/example/hypertext"), "check", "--receiver-type", "Backend")
+		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/example/hypertext"), "check", "--receiver-type", "Backend")
 		cmd.Dir = "."
 		cmd.Stderr = os.Stdout
 		cmd.Stdout = os.Stdout
 		require.NoError(t, cmd.Run())
 	})
-	t.Run("check htmx", func(t *testing.T) {
-		ctx := t.Context()
-		cmd := exec.CommandContext(ctx, "go", "run", ".", "-C", filepath.FromSlash("../../docs/htmx"), "check", "--receiver-type", "Backend")
-		cmd.Dir = "."
-		cmd.Stderr = os.Stdout
-		cmd.Stdout = os.Stdout
-		require.NoError(t, cmd.Run())
-	})
+}
+
+func TestEntrypoint(t *testing.T) {
+	cmdMainGo, err := os.ReadFile("main.go")
+	require.NoError(t, err)
+	mainGo, err := os.ReadFile(filepath.FromSlash("../../main.go"))
+	require.NoError(t, err)
+	require.Equal(t, string(cmdMainGo), string(mainGo))
 }
 
 func Test(t *testing.T) {
