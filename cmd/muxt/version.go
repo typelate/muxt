@@ -1,13 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"runtime/debug"
 )
 
 func versionCommand(stdout io.Writer) error {
-	v, _ := cliVersion()
-	_, err := io.WriteString(stdout, v)
+	v, ok := cliVersion()
+	if !ok {
+		return fmt.Errorf("missing CLI version")
+	}
+	_, err := fmt.Fprintln(stdout, v)
 	return err
 }
 
