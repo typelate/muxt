@@ -9,9 +9,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"time"
 
 	"github.com/typelate/muxt/internal/muxt"
 )
@@ -91,6 +91,7 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if err != nil {
 		return err
 	}
+
 	for _, file := range files {
 		var sb bytes.Buffer
 		writeCodeGenerationComment(&sb)
@@ -107,9 +108,8 @@ func writeCodeGenerationComment(w io.StringWriter) {
 	if v, ok := cliVersion(); ok {
 		_, _ = w.WriteString("// muxt version: ")
 		_, _ = w.WriteString(v)
-		_, _ = w.WriteString("\n//\n")
+		_, _ = w.WriteString("\n")
 	}
-	_, _ = w.WriteString(fmt.Sprintf(codeGenerationLicense, time.Now().Year(), "Christopher Hunter"))
 }
 
 //go:embed help.txt
