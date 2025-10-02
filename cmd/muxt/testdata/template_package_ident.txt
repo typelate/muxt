@@ -1,0 +1,58 @@
+muxt generate --template-data-type=Data
+cat template_routes.go
+exec go test -cover
+-- template.gohtml --
+{{define "GET /" }}
+	<h1 data-muxt-version="{{.MuxtVersion}}">Hello, world!</h1>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	ht "html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = ht.Must(ht.ParseFS(formHTML, "*"))
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+	if got, exp := string(buf), `data-muxt-version="(devel)"`; !strings.Contains(got, exp) {
+		t.Log("got:", got)
+		t.Log("expected:", exp)
+		t.Error("html did not contain expected attribute")
+	}
+}

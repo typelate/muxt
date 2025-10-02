@@ -2,6 +2,7 @@ package source
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -10,6 +11,7 @@ import (
 	"html/template"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -22,7 +24,7 @@ const (
 
 func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, Functions, error) {
 	funcTypeMap := DefaultFunctions(pkg.Types)
-	for _, tv := range IterateValueSpecs(pkg.Syntax) {
+	for file, tv := range IterateValueSpecs(pkg.Syntax) {
 		i := slices.IndexFunc(tv.Names, func(e *ast.Ident) bool {
 			return e.Name == templatesVariable
 		})
@@ -33,7 +35,17 @@ func Templates(workingDirectory, templatesVariable string, pkg *packages.Package
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate relative path for embedded files: %w", err)
 		}
-		const templatePackageIdent = "template"
+		var templatePackageIdent = "template"
+		for _, im := range file.Imports {
+			path, _ := strconv.Unquote(im.Path.Value)
+			switch path {
+			case "html/template", "text/template":
+				if im.Name != nil {
+					templatePackageIdent = cmp.Or(im.Name.Name, templatePackageIdent)
+				}
+				break
+			}
+		}
 		ts, err := evaluateTemplateSelector(nil, pkg.Types, tv.Values[i], workingDirectory, templatesVariable, templatePackageIdent, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, funcTypeMap, make(template.FuncMap))
 		if err != nil {
 			return nil, nil, fmt.Errorf("run template %s failed at %w", templatesVariable, err)
