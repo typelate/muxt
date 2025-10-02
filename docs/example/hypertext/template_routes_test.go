@@ -13,8 +13,8 @@ import (
 	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html/atom"
 
-	"github.com/typelate/muxt/example/hypertext"
-	"github.com/typelate/muxt/example/hypertext/internal/fake"
+	"github.com/typelate/muxt/docs/example/hypertext"
+	"github.com/typelate/muxt/docs/example/hypertext/internal/fake"
 )
 
 func TestRoutes(t *testing.T) {
