@@ -54,7 +54,7 @@ The Go package documentation for the example shows what is generated `https://pk
 
 For larger complete examples, see:
 - [Sortable Example](http://github.com/typelate/sortable-example)
-- [HTMX Template](https://github.com/typelate/htmx-template)
+- [HTMX Template](https://github.com/typelate/html-template)
 
 ## License
 
