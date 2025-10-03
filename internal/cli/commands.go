@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	_ "embed"
-	"flag"
 	"fmt"
 	"go/token"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+
+	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/muxt"
 )
@@ -130,9 +131,10 @@ func cliVersion() (string, bool) {
 
 func global(wd string, args []string, stdout io.Writer) (string, []string, error) {
 	var changeDir string
-	flagSet := flag.NewFlagSet("muxt global", flag.ExitOnError)
+	flagSet := pflag.NewFlagSet("muxt global", pflag.ExitOnError)
 	flagSet.SetOutput(stdout)
-	flagSet.StringVar(&changeDir, "C", "", "change root directory")
+	flagSet.SetInterspersed(false)
+	flagSet.StringVarP(&changeDir, "C", "C", "", "change root directory")
 	if err := flagSet.Parse(args); err != nil {
 		return "", nil, err
 	}
@@ -212,8 +214,8 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFil
 	return g, nil
 }
 
-func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *flag.FlagSet {
-	flagSet := flag.NewFlagSet("generate", flag.ContinueOnError)
+func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
 	flagSet.StringVar(&g.OutputFileName, outputFlagName, muxt.DefaultOutputFileName, outputFlagNameHelp)
 	flagSet.StringVar(&g.TemplatesVariable, templatesVariable, muxt.DefaultTemplatesVariableName, templatesVariableHelp)
 	flagSet.StringVar(&g.RoutesFunction, routesFunc, muxt.DefaultRoutesFunctionName, routesFuncHelp)
