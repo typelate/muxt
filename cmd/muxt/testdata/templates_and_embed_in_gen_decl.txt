@@ -1,4 +1,4 @@
-muxt generate
+muxt generate -v
 stdout 'generating handler for pattern GET /'
 
 -- index.gohtml --

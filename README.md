@@ -54,7 +54,7 @@ The Go package documentation for the example shows what is generated `https://pk
 
 For larger complete examples, see:
 - [Sortable Example](http://github.com/typelate/sortable-example)
-- [HTMX Template](https://github.com/typelate/html-template)
+- [HTMX Template](https://github.com/typelate/htmx-template)
 
 ## License
 
@@ -115,11 +115,32 @@ Complete working examples:
 - **[Hypertext Example](example/hypertext/)** - Full example application with tests
 - **[HTMX Helpers](htmx/)** - Helper code for HTMX integration
 
-## Prompts
+## AI Assistant Prompts
 
-LLM prompts for AI-assisted development:
+Teaching materials for AI assistants and LLMs to help you build with Muxt:
 
-- **[Prompts Directory](prompts/)** - Claude Code and other LLM prompts
+- **[Quick Reference (muxt-quick.md)](prompts/muxt-quick.md)** - Essential syntax and patterns (~10KB)
+  - Use when: You need a quick reminder or the LLM has limited context
+  - Contains: Template syntax, TemplateData, basic patterns, minimal examples
+
+- **[Practical Guide (muxt-guide.md)](prompts/muxt-guide.md)** - Comprehensive usage guide (~25KB)
+  - Use when: Building features with moderate complexity
+  - Contains: All HTTP methods, form handling, status codes, type parsing, CLI usage
+
+- **[Complete Reference (muxt-complete.md)](prompts/muxt-complete.md)** - Full documentation (~50KB)
+  - Use when: You need advanced features or comprehensive understanding
+  - Contains: Design principles, testing patterns, HTMX integration, real examples, troubleshooting
+
+**How to use these prompts:**
+
+1. **For chat sessions**: Copy and paste the appropriate prompt at the start of your conversation
+2. **For Claude Code**: Add as a project instruction or reference in your CLAUDE.md
+3. **For other AI tools**: Include in context files
+
+**Choosing the right prompt:**
+- Small projects or quick questions → Quick Reference
+- Most development work → Practical Guide
+- Complex features or debugging → Complete Reference
 
 ---
 

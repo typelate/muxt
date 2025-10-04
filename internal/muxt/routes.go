@@ -183,7 +183,9 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	for i := range templates {
 		t := &templates[i]
 		const dataVarIdent = "result"
-		logger.Printf("generating handler for pattern %s", t.pattern)
+		if config.Verbose {
+			logger.Printf("generating handler for pattern %s", t.pattern)
+		}
 		if t.fun == nil {
 			handlerFunc := noReceiverMethodCall(file, t, config)
 			call := t.callHandleFunc(file, handlerFunc, config)

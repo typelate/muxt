@@ -1,4 +1,4 @@
-muxt generate
+muxt generate -v
 stdout 'generating handler for pattern GET /'
 stdout 'generating handler for pattern GET /form'
 stdout 'generating handler for pattern POST /form'
