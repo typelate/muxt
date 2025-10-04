@@ -78,6 +78,7 @@ type RoutesFileConfiguration struct {
 	OutputFileName string
 	PathPrefix     bool
 	Logger         bool
+	Verbose        bool
 }
 
 func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {

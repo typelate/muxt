@@ -3,6 +3,14 @@
 muxt generate --receiver-type=T
 muxt check
 
+muxt check --verbose
+stderr 'checking endpoint'
+stderr 'OK'
+
+muxt check -v
+stderr 'checking endpoint'
+stderr 'OK'
+
 exec go build -o build
 
 -- in.go --

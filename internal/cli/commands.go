@@ -226,5 +226,6 @@ func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.Flag
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, templateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, templateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.PathPrefix, pathPrefixName, false, pathPrefixNameHelp)
 	flagSet.BoolVar(&g.Logger, loggerName, false, loggerNameHelp)
+	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
 	return flagSet
 }

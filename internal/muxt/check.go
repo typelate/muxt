@@ -61,7 +61,9 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 			if !ok {
 				continue
 			}
-			log.Println("checking endpoint", templateName)
+			if config.Verbose {
+				log.Println("checking endpoint", templateName)
+			}
 			ts2 := ts.Lookup(templateName)
 			if ts2 == nil {
 				return fmt.Errorf("template %q not found in %q (try running generate again)", templateName, config.TemplatesVariable)
@@ -85,6 +87,8 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 		return errors.Join(errs...)
 	}
 
-	log.Println("OK")
+	if config.Verbose {
+		log.Println("OK")
+	}
 	return nil
 }

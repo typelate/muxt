@@ -2,7 +2,7 @@ muxt generate
 
 cat template_routes.go
 
-! muxt check
+! muxt check  -v
 stderr 'checking endpoint GET /fruits/\{name\}/tree ToUpper\(name\)'
 stderr 'ERROR type check failed: template.gohtml:2:20: Name not found on any'
 
