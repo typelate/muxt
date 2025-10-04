@@ -436,3 +436,16 @@ go run .
 ```
 
 Visit `http://localhost:8080` to see "Hello, world!"
+
+## Navigating Generated Code
+
+The generated `template_routes.go` file contains (in order):
+1. `RoutesReceiver` interface
+2. `TemplateRoutes()` function (bulk of file)
+3. `TemplateData[T]` type and methods
+4. `TemplateRoutePaths` type and path methods (at the end)
+
+**Finding types:**
+- Search: `type TemplateRoutePaths` or `type TemplateData`
+- Pattern: `func (routePaths TemplateRoutePaths)` for path methods
+- MCP: Use `go_search "TemplateRoutePaths"` or `go_symbol_references`

@@ -972,6 +972,75 @@ Always check `.Err` in templates and provide user-friendly messages:
 - Form field missing or invalid type
 - Check method signature accepts the correct types
 
+## Working with Generated Code
+
+### File Structure
+
+The generated `template_routes.go` contains (in order):
+
+1. **`RoutesReceiver` interface** - Interface with all receiver methods
+2. **`TemplateRoutes()` function** - Route registration (bulk of file, contains all HTTP handlers)
+3. **`TemplateData[T]` type** - Template data structure
+4. **`TemplateData` methods** - Methods like `Result()`, `Err()`, `Request()`, `Path()`
+5. **`TemplateRoutePaths` type** - Path helper struct (near end of file)
+6. **`TemplateRoutePaths` methods** - Path generation methods (at end of file)
+
+### Finding Types and Methods
+
+**Using grep/search:**
+```bash
+# Find TemplateRoutePaths type definition
+grep "type TemplateRoutePaths struct" template_routes.go
+
+# Find all path helper methods
+grep "^func (routePaths TemplateRoutePaths)" template_routes.go
+
+# Find all TemplateData methods
+grep "^func (data \*TemplateData" template_routes.go
+
+# Find RoutesReceiver interface
+grep "type RoutesReceiver interface" template_routes.go
+```
+
+**Using MCP (for LLM agents):**
+```
+# Search for types across workspace
+go_search "TemplateRoutePaths"
+
+# Find where a method is used
+go_symbol_references file:"template_routes.go" symbol:"GetUser"
+
+# Understand file structure
+go_file_context file:"template_routes.go"
+```
+
+**Common patterns:**
+- Path methods always return `string`: `func (routePaths TemplateRoutePaths) MethodName(...) string`
+- TemplateData methods use pointer receiver: `func (data *TemplateData[T])`
+- Receiver methods are in the interface: `type RoutesReceiver interface { ... }`
+
+### What's Useful in Each Section
+
+**RoutesReceiver interface:**
+- Shows all methods your receiver type must implement
+- Method signatures must match template calls exactly
+
+**TemplateRoutes() function:**
+- Contains all HTTP handler implementations
+- Shows how parameters are parsed and validated
+- Useful for debugging handler behavior
+
+**TemplateData type and methods:**
+- `.Result()` - Access method return value
+- `.Err()` - Check for errors
+- `.Request()` - Access HTTP request
+- `.Path()` - Get path helper for URL generation
+
+**TemplateRoutePaths type and methods:**
+- One method per route for type-safe URL generation
+- Example: `paths.GetUser(42)` → `"/user/42"`
+- Located at the end of the file
+
 ## Summary
 
 Muxt turns templates into HTTP handlers:

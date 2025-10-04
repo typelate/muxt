@@ -1406,6 +1406,178 @@ var templates = template.Must(template.ParseFS(...))
 
 ---
 
+## Generated File Reference
+
+### File Structure
+
+The `template_routes.go` file is organized in this order:
+
+```go
+// 1. Package and imports
+package yourpackage
+import (...)
+
+// 2. RoutesReceiver interface
+type RoutesReceiver interface {
+    Method1(...) ...
+    Method2(...) ...
+}
+
+// 3. TemplateRoutes function (BULK OF FILE)
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+    // All HTTP handler registrations
+    mux.HandleFunc("GET /path1", func(...) { ... })
+    mux.HandleFunc("POST /path2", func(...) { ... })
+    // ... many more handlers ...
+    return TemplateRoutePaths{...}
+}
+
+// 4. TemplateData type
+type TemplateData[T any] struct {
+    receiver      RoutesReceiver
+    response      http.ResponseWriter
+    request       *http.Request
+    result        T
+    // ... other fields
+}
+
+// 5. TemplateData methods
+func (data *TemplateData[T]) MuxtVersion() string { ... }
+func (data *TemplateData[T]) Path() TemplateRoutePaths { ... }
+func (data *TemplateData[T]) Result() T { ... }
+func (data *TemplateData[T]) Request() *http.Request { ... }
+func (data *TemplateData[T]) StatusCode(int) *TemplateData[T] { ... }
+func (data *TemplateData[T]) Header(key, value string) *TemplateData[T] { ... }
+func (data *TemplateData[T]) Ok() bool { ... }
+func (data *TemplateData[T]) Err() error { ... }
+func (data *TemplateData[T]) Receiver() RoutesReceiver { ... }
+func (data *TemplateData[T]) Redirect(url string, code int) (*TemplateData[T], error) { ... }
+
+// 6. TemplateRoutePaths type (NEAR END)
+type TemplateRoutePaths struct {
+    pathsPrefix string
+}
+
+// 7. TemplateRoutePaths methods (AT END)
+func (routePaths TemplateRoutePaths) GetUser(id int) string { ... }
+func (routePaths TemplateRoutePaths) CreateUser() string { ... }
+// ... one method per route
+```
+
+### Finding Specific Parts
+
+**Location strategies (no line numbers - they vary):**
+
+| What to Find | Search Pattern | Notes |
+|--------------|----------------|-------|
+| TemplateRoutePaths type | `type TemplateRoutePaths struct` | Near end of file |
+| Path helper methods | `func (routePaths TemplateRoutePaths)` | After TemplateRoutePaths type |
+| TemplateData type | `type TemplateData\[T any\] struct` | After TemplateRoutes function |
+| TemplateData methods | `func (data \*TemplateData\[T\])` | After TemplateData type |
+| RoutesReceiver interface | `type RoutesReceiver interface` | Near top, after imports |
+| TemplateRoutes function | `func TemplateRoutes\(` | After RoutesReceiver |
+| Specific handler | `mux.HandleFunc\("GET /user"` | Inside TemplateRoutes |
+
+**Using grep:**
+```bash
+# Find TemplateRoutePaths type (near end)
+grep -n "type TemplateRoutePaths struct" template_routes.go
+
+# List all path methods (at end)
+grep -n "^func (routePaths TemplateRoutePaths)" template_routes.go
+
+# List all TemplateData methods
+grep -n "^func (data \*TemplateData" template_routes.go
+
+# Find receiver interface methods
+sed -n '/type RoutesReceiver interface/,/^}/p' template_routes.go
+
+# Find a specific route handler
+grep -A 20 'mux.HandleFunc("GET /user/{id}"' template_routes.go
+```
+
+**Using MCP tools (for LLM agents):**
+```
+# Search for any symbol
+go_search "TemplateRoutePaths"
+
+# Find references to a method
+go_symbol_references file:"template_routes.go" symbol:"GetUser"
+
+# Get file context (may be large)
+go_file_context file:"template_routes.go"
+```
+
+**Why line numbers are unreliable:**
+- Number of routes affects file length
+- Handler complexity varies (simple vs. form parsing)
+- Configuration options (logger, path prefix) add code
+- Each template adds ~15-50 lines to TemplateRoutes function
+
+### What's in Each Section
+
+**1. RoutesReceiver interface** - Shows required receiver methods
+- Use this to verify your receiver type implements all methods
+- Method signatures must match template calls exactly
+- Example: `GetUser(ctx context.Context, id int) (User, error)`
+
+**2. TemplateRoutes() function** - Route registration
+- Contains all HTTP handler implementations
+- Shows parameter parsing and validation logic
+- Useful for debugging handler behavior
+- Can be very long (bulk of file)
+
+**3. TemplateData type** - Template data container
+- Generic type: `TemplateData[T any]`
+- Holds result, request, response, errors
+- All fields are private (accessed via methods)
+
+**4. TemplateData methods** - Template data accessors
+- `.Result()` - Get method return value
+- `.Err()` - Get error (if any)
+- `.Request()` - Get HTTP request
+- `.Path()` - Get path helper for URLs
+- `.StatusCode(int)` - Set status code
+- `.Header(k, v)` - Set response header
+- `.Ok()` - Check if template should execute
+- `.Receiver()` - Get receiver instance
+- `.Redirect(url, code)` - Set redirect
+
+**5. TemplateRoutePaths type** - Path helper container
+- Simple struct with `pathsPrefix string` field
+- Located near end of file
+- Returned by TemplateRoutes()
+
+**6. TemplateRoutePaths methods** - URL generators
+- One method per route template
+- All return `string` (the URL path)
+- Take path parameters as arguments
+- Example: `GetUser(id int) string` returns `"/user/42"`
+- Located at very end of file
+- Use these for type-safe URL generation in code
+
+### Navigation Tips for LLM Agents
+
+**When working with generated files:**
+
+1. **Don't rely on line numbers** - File length varies with template count
+2. **Use search patterns** - `grep` or `go_search` are more reliable
+3. **Know the order** - Types appear in predictable sequence
+4. **Path methods are last** - Always at end of file
+5. **Use go_symbol_references** - Find where methods are called
+6. **Method signatures matter** - Path methods always return `string`
+
+**Common patterns:**
+- Path method: `func (routePaths TemplateRoutePaths) MethodName(params...) string`
+- TemplateData method: `func (data *TemplateData[T]) MethodName(...) ...`
+- Handler registration: `mux.HandleFunc("METHOD /path", func(response, request) { ... })`
+
+**Finding what you need:**
+- **Need path URLs?** → Search for `TemplateRoutePaths)` at end of file
+- **Need to understand handler?** → Search for `mux.HandleFunc` with route
+- **Need receiver methods?** → Check `RoutesReceiver interface` at top
+- **Need template data access?** → All TemplateData methods between TemplateRoutes and TemplateRoutePaths
+
 ## Summary
 
 Muxt generates type-safe HTTP handlers from Go HTML templates:
