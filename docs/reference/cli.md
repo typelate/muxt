@@ -151,12 +151,34 @@ Runs type checking on templates without generating code.
 muxt check [flags]
 ```
 
-**Example**:
+**Examples**:
 ```bash
 muxt check --receiver-type=App
+muxt check --verbose
+muxt check -v
 ```
 
-**Flags**: Same as `muxt generate` (except `--output-file`)
+#### Flags
+
+##### `--verbose` / `-v`
+**Type**: `bool`
+**Default**: `false`
+
+Enable verbose output showing each endpoint being checked and a success message when complete.
+
+```bash
+muxt check --verbose
+muxt check -v
+```
+
+**Output**:
+```
+checking endpoint GET /users/{id}
+checking endpoint POST /users
+OK
+```
+
+**Other flags**: Same as `muxt generate` (except `--output-file`)
 
 ---
 
