@@ -206,7 +206,7 @@ Here is an excerpt from [the standard library documentation](https://pkg.go.dev/
 ```bnf
 <route> ::= [ <method> <space> ] [ <host> ] <path> [ <space> <http_status> ] [ <space> <call_expr> ]
 
-<method> ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
+<method> ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 <host> ::= <hostname> | <ip_address>
 

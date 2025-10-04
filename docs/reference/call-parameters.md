@@ -86,19 +86,20 @@ Notice `projectID` is now `uint32` and `taskID` is `int8`, matching your receive
 
 ## Automatic Type Parsing
 
-Muxt generates parsers for these types:
+Muxt generates parsers for these types using Go's `strconv` package:
 
 ### Numeric Types
 
-- `int`, `int8`, `int16`, `int32`, `int64`
-- `uint`, `uint8`, `uint16`, `uint32`, `uint64`
-- `float32`, `float64`
+- `int`, `int8`, `int16`, `int32`, `int64` (using `strconv.Atoi` or `strconv.ParseInt`)
+- `uint`, `uint8`, `uint16`, `uint32`, `uint64` (using `strconv.ParseUint`)
 
 *[(See Muxt CLI Test/path_param_typed)](../../cmd/muxt/testdata/path_param_typed.txt)*
 
 ### Boolean
 
-- `bool` - Parses "true"/"false", "1"/"0", "yes"/"no"
+- `bool` - Uses `strconv.ParseBool` which accepts:
+  - True: `1`, `t`, `T`, `TRUE`, `true`, `True`
+  - False: `0`, `f`, `F`, `FALSE`, `false`, `False`
 
 ### String
 
