@@ -480,10 +480,13 @@ var templates = template.Must(
 ```
 myapp/
 ├── main.go
-├── templates.gohtml       # Templates
-├── template_routes.go     # Generated
-├── handlers.go            # Receiver methods
-└── handlers_test.go       # Tests
+├── index.gohtml                    # Template file
+├── index_template_routes_gen.go    # Generated routes for index.gohtml
+├── users.gohtml                    # Template file
+├── users_template_routes_gen.go    # Generated routes for users.gohtml
+├── template_routes.go              # Main generated file with shared types
+├── handlers.go                     # Receiver methods
+└── handlers_test.go                # Tests
 ```
 
 **Or with subdirectory:**
@@ -492,7 +495,10 @@ myapp/
 ├── main.go
 └── internal/
     └── hypertext/
-        ├── templates.gohtml
+        ├── index.gohtml
+        ├── index_template_routes_gen.go
+        ├── admin.gohtml
+        ├── admin_template_routes_gen.go
         ├── template_routes.go
         ├── handlers.go
         └── handlers_test.go
@@ -1410,29 +1416,63 @@ var templates = template.Must(template.ParseFS(...))
 
 ### File Structure
 
-The `template_routes.go` file is organized in this order:
+Muxt generates multiple files to organize route handlers by source file:
+
+#### Per-File Routes (`*_template_routes_gen.go`)
+
+For each `.gohtml` file, a corresponding route file is generated. For example, `index.gohtml` generates `index_template_routes_gen.go`:
 
 ```go
-// 1. Package and imports
+// index_template_routes_gen.go
 package yourpackage
 import (...)
 
-// 2. RoutesReceiver interface
-type RoutesReceiver interface {
+// File-scoped receiver interface
+type IndexRoutesReceiver interface {
     Method1(...) ...
     Method2(...) ...
 }
 
-// 3. TemplateRoutes function (BULK OF FILE)
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
-    // All HTTP handler registrations
-    mux.HandleFunc("GET /path1", func(...) { ... })
-    mux.HandleFunc("POST /path2", func(...) { ... })
-    // ... many more handlers ...
-    return TemplateRoutePaths{...}
+// File-scoped routes function
+func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, pathsPrefix string) {
+    // HTTP handler registrations for templates in index.gohtml
+    mux.HandleFunc("GET /", func(...) { ... })
+    mux.HandleFunc("POST /login", func(...) { ... })
+}
+```
+
+#### Main Routes File (`template_routes.go`)
+
+The main file contains shared types and orchestrates all per-file route functions:
+
+```go
+// template_routes.go
+package yourpackage
+import (...)
+
+// 1. Unified RoutesReceiver interface (embeds per-file interfaces)
+type RoutesReceiver interface {
+    IndexRoutesReceiver
+    UsersRoutesReceiver
+    AdminRoutesReceiver
 }
 
-// 4. TemplateData type
+// 2. Main TemplateRoutes function
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+    pathsPrefix := ""
+
+    // Call per-file route functions
+    IndexTemplateRoutes(mux, receiver, pathsPrefix)
+    UsersTemplateRoutes(mux, receiver, pathsPrefix)
+    AdminTemplateRoutes(mux, receiver, pathsPrefix)
+
+    // Handle templates defined via Parse() (not from files)
+    mux.HandleFunc("GET /dynamic", func(...) { ... })
+
+    return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+}
+
+// 3. TemplateData type (shared by all routes)
 type TemplateData[T any] struct {
     receiver      RoutesReceiver
     response      http.ResponseWriter
@@ -1441,7 +1481,7 @@ type TemplateData[T any] struct {
     // ... other fields
 }
 
-// 5. TemplateData methods
+// 4. TemplateData methods
 func (data *TemplateData[T]) MuxtVersion() string { ... }
 func (data *TemplateData[T]) Path() TemplateRoutePaths { ... }
 func (data *TemplateData[T]) Result() T { ... }
@@ -1453,15 +1493,16 @@ func (data *TemplateData[T]) Err() error { ... }
 func (data *TemplateData[T]) Receiver() RoutesReceiver { ... }
 func (data *TemplateData[T]) Redirect(url string, code int) (*TemplateData[T], error) { ... }
 
-// 6. TemplateRoutePaths type (NEAR END)
+// 5. TemplateRoutePaths type
 type TemplateRoutePaths struct {
     pathsPrefix string
 }
 
-// 7. TemplateRoutePaths methods (AT END)
+// 6. TemplateRoutePaths methods (ALL path helpers)
 func (routePaths TemplateRoutePaths) GetUser(id int) string { ... }
 func (routePaths TemplateRoutePaths) CreateUser() string { ... }
-// ... one method per route
+func (routePaths TemplateRoutePaths) ListPosts() string { ... }
+// ... one method per route from ALL files
 ```
 
 ### Finding Specific Parts
@@ -1478,22 +1519,25 @@ func (routePaths TemplateRoutePaths) CreateUser() string { ... }
 | TemplateRoutes function | `func TemplateRoutes\(` | After RoutesReceiver |
 | Specific handler | `mux.HandleFunc\("GET /user"` | Inside TemplateRoutes |
 
-**Using grep:**
+**Using grep across generated files:**
 ```bash
-# Find TemplateRoutePaths type (near end)
+# Find all generated route files
+ls *_template_routes*.go
+
+# Find TemplateRoutePaths type (in main file)
 grep -n "type TemplateRoutePaths struct" template_routes.go
 
-# List all path methods (at end)
+# List all path methods (in main file)
 grep -n "^func (routePaths TemplateRoutePaths)" template_routes.go
 
-# List all TemplateData methods
-grep -n "^func (data \*TemplateData" template_routes.go
+# Find receiver interfaces across all files
+grep "type.*RoutesReceiver interface" *_template_routes*.go
 
-# Find receiver interface methods
-sed -n '/type RoutesReceiver interface/,/^}/p' template_routes.go
+# Find a specific route handler (search all route files)
+grep -r 'mux.HandleFunc("GET /user/{id}"' *_template_routes*.go
 
-# Find a specific route handler
-grep -A 20 'mux.HandleFunc("GET /user/{id}"' template_routes.go
+# List all per-file route functions
+grep "func.*TemplateRoutes(" *_template_routes_gen.go
 ```
 
 **Using MCP tools (for LLM agents):**

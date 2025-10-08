@@ -26,7 +26,7 @@ muxt generate --receiver-type=App --logger --output-file=routes.go
 **Type**: `string`
 **Default**: `template_routes.go`
 
-The generated file name containing the routes function and receiver interface.
+The main generated file name. When templates are defined in `.gohtml` files, additional per-file route files are generated (e.g., `index.gohtml` generates `index_template_routes_gen.go`).
 
 ```bash
 muxt generate --output-file=routes.go
@@ -243,10 +243,11 @@ muxt -C ./myapp generate --receiver-type=App
 muxt generate
 ```
 
-Generates `template_routes.go` with:
-- Routes function: `TemplateRoutes`
+Generates route files:
+- Main file: `template_routes.go` with shared types and `TemplateRoutes` function
+- Per-file routes: `*_template_routes_gen.go` for each `.gohtml` file (e.g., `index_template_routes_gen.go`)
 - Templates variable: `templates`
-- Receiver interface: `RoutesReceiver`
+- Receiver interfaces: Main `RoutesReceiver` and file-scoped interfaces (e.g., `IndexRoutesReceiver`)
 
 ### With Receiver Type
 

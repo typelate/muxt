@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -328,4 +329,20 @@ func routePathTypeAndMethods(imports *source.File, config RoutesFileConfiguratio
 		decls = append(decls, decl)
 	}
 	return decls, nil
+}
+
+// fileNameToIdentifier converts a template source filename to a Go identifier prefix.
+// For example: "index.gohtml" -> "Index", "user-profile.gohtml" -> "UserProfile"
+// Returns empty string for empty filenames.
+func fileNameToIdentifier(filename string) string {
+	if filename == "" {
+		return ""
+	}
+	// Strip the extension
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	if base == "" {
+		return ""
+	}
+	// Convert to PascalCase using strcase
+	return strcase.ToGoPascal(base)
 }
