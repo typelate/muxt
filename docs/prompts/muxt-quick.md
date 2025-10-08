@@ -271,7 +271,9 @@ func (s Server) Home() string {
 go generate
 ```
 
-This creates `template_routes.go` with the `TemplateRoutes` function.
+This creates multiple files:
+- `template_routes.go` - Main file with shared types and orchestration
+- `*_template_routes_gen.go` - One file per `.gohtml` template file
 
 ### 4. Wire Up Routes
 
@@ -439,13 +441,21 @@ Visit `http://localhost:8080` to see "Hello, world!"
 
 ## Navigating Generated Code
 
-The generated `template_routes.go` file contains (in order):
-1. `RoutesReceiver` interface
-2. `TemplateRoutes()` function (bulk of file)
+Muxt generates multiple files:
+
+### Main `template_routes.go` contains:
+1. `RoutesReceiver` interface (embeds per-file interfaces)
+2. `TemplateRoutes()` function (orchestrates per-file functions)
 3. `TemplateData[T]` type and methods
-4. `TemplateRoutePaths` type and path methods (at the end)
+4. `TemplateRoutePaths` type and path methods
+
+### Per-file `*_template_routes_gen.go` contains:
+1. File-specific receiver interface (e.g., `IndexRoutesReceiver`)
+2. File-specific route function (e.g., `IndexTemplateRoutes()`)
+3. HTTP handlers for templates in that file
 
 **Finding types:**
-- Search: `type TemplateRoutePaths` or `type TemplateData`
+- Search: `type TemplateRoutePaths` or `type TemplateData` in `template_routes.go`
 - Pattern: `func (routePaths TemplateRoutePaths)` for path methods
+- Per-file handlers: Look in `*_template_routes_gen.go` files
 - MCP: Use `go_search "TemplateRoutePaths"` or `go_symbol_references`

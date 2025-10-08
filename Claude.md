@@ -81,6 +81,25 @@ Upload(response http.ResponseWriter, request *http.Request) error
 
 ---
 
+## Generated File Structure
+
+Muxt generates multiple files based on template source files:
+
+* **`template_routes.go`** — Main file containing:
+  - `RoutesReceiver` interface (embeds per-file interfaces)
+  - `TemplateRoutes()` function (orchestrates per-file functions)
+  - `TemplateData[T]` type and methods
+  - `TemplateRoutePaths` type with path helper methods
+
+* **`*_template_routes_gen.go`** — One file per `.gohtml` source file:
+  - File-scoped receiver interface (e.g., `IndexRoutesReceiver`)
+  - File-specific route function (e.g., `IndexTemplateRoutes()`)
+  - HTTP handlers for templates in that file
+
+Templates from `template.Parse()` calls (no source file) remain in main `template_routes.go`.
+
+---
+
 ## Documentation Approach
 
 Follow [Diátaxis](http://diataxis.fr/):

@@ -33,6 +33,14 @@ func Templates(ts *template.Template) ([]Template, error) {
 			return templates, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
 		}
 		mt.template = t
+
+		// Extract source file from ParseName if available
+		if t.Tree != nil && t.Tree.ParseName != "" {
+			// ParseName contains the filename used when parsing
+			mt.sourceFile = t.Tree.ParseName
+		}
+		// else sourceFile remains empty string for Parse() defined templates
+
 		patterns[pattern] = struct{}{}
 		templates = append(templates, mt)
 	}
@@ -67,6 +75,10 @@ type Template struct {
 	identifier string
 
 	hasResponseWriterArg bool
+
+	// sourceFile is the base filename (e.g., "index.gohtml") from which this template was parsed.
+	// Empty string means the template was defined via Parse() calls rather than from a file.
+	sourceFile string
 }
 
 func newTemplate(in string) (Template, error, bool) {

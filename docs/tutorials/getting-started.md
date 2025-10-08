@@ -101,7 +101,9 @@ Run code generation:
 go generate
 ```
 
-Muxt will create a file named `template_routes.go` containing the generated HTTP handlers.
+Muxt will create files containing the generated HTTP handlers:
+- `template_routes.go` - Main file with shared types and the `TemplateRoutes` function
+- `index_template_routes_gen.go` - Route handlers for templates in `index.gohtml`
 
 ## Step 6: Wire Up the Generated Routes
 

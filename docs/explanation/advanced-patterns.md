@@ -361,7 +361,8 @@ internal/hypertext/
 ├── portfolio.go             # Portfolio-related receivers
 ├── security.go              # Security-related receivers
 ├── user.go                  # User-related receivers
-├── template_routes.go       # Muxt-Generated Handlers
+├── template_routes.go       # Muxt-Generated main file (shared types, orchestration)
+├── *_template_routes_gen.go # Muxt-Generated per-file handlers
 ├── template_routes_test.go  # Tests
 └── fake/                    # Generated test doubles
     ├── database.go
@@ -401,7 +402,7 @@ func (s *Server) GetSecurity(ctx context.Context, id string) (Security, error) {
 
 **Version your APIs** - If you need versioning, put it in the path: `/v1/users`. Simple.
 
-**Monitor generated code** - Occasionally read `template_routes.go`. It's your code. You should know what it does.
+**Monitor generated code** - Occasionally read `template_routes.go` and the per-file `*_template_routes_gen.go` files. It's your code. You should know what it does.
 
 **Test edge cases** - Happy path is easy. Test the weird stuff. The nil pointers. The empty strings. The negative numbers.
 

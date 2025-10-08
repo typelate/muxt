@@ -150,7 +150,9 @@ cd internal/hypertext
 go generate
 ```
 
-This creates `template_routes.go` with a `Routes` function.
+This creates multiple files:
+- `template_routes.go` - Main file with shared types and the `Routes` function
+- `*_template_routes_gen.go` - One file per `.gohtml` template file with its handlers
 
 ### Step 5: Register Routes in Main
 

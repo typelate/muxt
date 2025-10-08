@@ -656,13 +656,13 @@ Muxt reads these attributes and generates validation for:
 ### Generate Handlers
 
 ```bash
-# Basic generation
+# Basic generation (creates multiple files)
 muxt generate
 
 # With receiver type
 muxt generate --receiver-type=Server
 
-# With custom output file
+# With custom output file prefix
 muxt generate --receiver-type=Server --output-file=routes.go
 
 # With custom function name
@@ -976,18 +976,28 @@ Always check `.Err` in templates and provide user-friendly messages:
 
 ### File Structure
 
-The generated `template_routes.go` contains (in order):
+Muxt generates multiple files based on your template structure:
 
-1. **`RoutesReceiver` interface** - Interface with all receiver methods
-2. **`TemplateRoutes()` function** - Route registration (bulk of file, contains all HTTP handlers)
+#### Main `template_routes.go` contains:
+
+1. **`RoutesReceiver` interface** - Interface that embeds per-file interfaces
+2. **`TemplateRoutes()` function** - Main orchestration function (calls per-file functions)
 3. **`TemplateData[T]` type** - Template data structure
 4. **`TemplateData` methods** - Methods like `Result()`, `Err()`, `Request()`, `Path()`
 5. **`TemplateRoutePaths` type** - Path helper struct (near end of file)
 6. **`TemplateRoutePaths` methods** - Path generation methods (at end of file)
 
+#### Per-file `*_template_routes_gen.go` contains:
+
+Each `.gohtml` file gets its own generated file (e.g., `index_template_routes_gen.go` for `index.gohtml`):
+
+1. **File-specific interface** - e.g., `IndexRoutesReceiver` for methods used in that file
+2. **File-specific function** - e.g., `IndexTemplateRoutes()` that registers routes from that file
+3. **HTTP handlers** - All handlers for templates defined in that `.gohtml` file
+
 ### Finding Types and Methods
 
-**Using grep/search:**
+**Using grep/search (across multiple files):**
 ```bash
 # Find TemplateRoutePaths type definition
 grep "type TemplateRoutePaths struct" template_routes.go
@@ -998,8 +1008,14 @@ grep "^func (routePaths TemplateRoutePaths)" template_routes.go
 # Find all TemplateData methods
 grep "^func (data \*TemplateData" template_routes.go
 
-# Find RoutesReceiver interface
+# Find RoutesReceiver interface (main)
 grep "type RoutesReceiver interface" template_routes.go
+
+# Find file-specific interfaces
+grep "type .*RoutesReceiver interface" *_template_routes_gen.go
+
+# Find all HTTP handlers across files
+grep "mux.HandleFunc" *_template_routes_gen.go
 ```
 
 **Using MCP (for LLM agents):**
