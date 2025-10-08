@@ -1441,6 +1441,12 @@ func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, paths
 }
 ```
 
+**Note on Multiple Extensions:** Template files with multiple extensions (e.g., `index.html.gohtml`) will have all extensions stripped to form the base name.
+This may lead to non-standard Go identifiers that require adjustment by `strcase.ToGoPascal()`. For example:
+- `index.html.gohtml` → `IndexHtml` (not `Index`)
+- `admin.tmpl.gohtml` → `AdminTmpl`
+- `user.partial.gohtml` → `UserPartial`
+
 #### Main Routes File (`template_routes.go`)
 
 The main file contains shared types and orchestrates all per-file route functions:
