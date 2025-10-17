@@ -1,3 +1,5 @@
+# Tests error when flag value is not a valid Go identifier
+
 ! muxt generate --output-routes-func="not-an-identifier"
 
 stderr 'value must be a well-formed Go identifier'

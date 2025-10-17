@@ -1,3 +1,5 @@
+# Tests generation with multiple template source files
+
 muxt generate
 
 grep 'IndexTemplateRoutes' template_routes.go

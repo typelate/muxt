@@ -1,3 +1,5 @@
+# Tests error when templates variable is not found
+
 ! muxt generate --use-templates-variable=nonexistent
 
 stderr 'nonexistent'

@@ -1,3 +1,5 @@
+# Tests error when output filename does not have .go extension
+
 ! muxt generate --output-file=routes.txt
 
 stderr 'must use .go extension'

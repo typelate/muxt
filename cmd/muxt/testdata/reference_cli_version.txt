@@ -1,3 +1,4 @@
+# Tests version command output and -v/--verbose flag
 muxt version
 stdout '^\(devel\)|v[0-9]+\.[0-9]+\.[0-9]+.*$'
 ! stderr .

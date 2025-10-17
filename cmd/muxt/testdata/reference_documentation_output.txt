@@ -1,3 +1,5 @@
+# Tests documentation command output format
+
 muxt documentation
 
 stdout 'functions:'
