@@ -34,7 +34,7 @@ func handleGetArticle(w http.ResponseWriter, r *http.Request) {
 
 Multiply this by 50 routes and you're drowning in nearly identical functions.
 
-**sqlc** showed me the pattern: declare what you want (SQL queries), generate the boring (easy to read) code. SQLC-generated Go code is quite readable.
+**sqlc** showed me the pattern: declare what you want (SQL queries), generate the boring (easy to read) Go code. SQLC-generated Go code is quite readable.
 
 Why not the same for HTTP handlers? Declare what you want (routes in templates), generate the boring code (handlers).
 
@@ -96,4 +96,4 @@ I can hand this to a junior Go developer, and they'll understand it quickly. Try
 
 I use `muxt` because it lets me write and understand code quickly, which means I spend less time debugging framework magic and more time building features.
 
-Or touching grass. 
+Or eating wild blackberries. 

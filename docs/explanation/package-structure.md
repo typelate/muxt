@@ -85,65 +85,6 @@ var templatesDir embed.FS
 var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml", "*.gohtml"))
 ```
 
-## Separating Parsing Logic from Configuration
-
-You can parse templates in a separate function while keeping the package-level variable for Muxt discovery.
-
-### Pattern: Parser Function with Package-Level Variable
-
-```go
-package hypertext
-
-import (
-    "embed"
-    "html/template"
-)
-
-//go:embed */*.gohtml *.gohtml
-var templatesDir embed.FS
-
-//go:generate muxt generate --receiver-type=App --routes-func=Routes
-var templates = parseTemplates()
-
-// parseTemplates configures template parsing with custom settings
-func parseTemplates() *template.Template {
-    tmpl := template.New("").Funcs(template.FuncMap{
-        "formatDate": formatDate,
-        "markdown":   renderMarkdown,
-    })
-
-    // Custom delimiters if needed
-    tmpl.Delims("[[", "]]")
-
-    return template.Must(tmpl.ParseFS(templatesDir, "**/*.gohtml", "*.gohtml"))
-}
-
-func formatDate(t time.Time) string {
-    return t.Format("2006-01-02")
-}
-
-func renderMarkdown(s string) template.HTML {
-    // ... markdown rendering logic consider https://github.com/microcosm-cc/bluemonday and https://github.com/russross/blackfriday
-	return ""
-}
-```
-
-**Why this works:**
-- The package-level `templates` variable is visible to Muxt
-- Muxt can trace the initialization to `parseTemplates()`
-- Muxt discovers the `embed.FS` variable and `ParseFS` patterns
-- Your parsing logic stays clean and testable
-
-### What Muxt Needs to Discover
-
-Muxt performs static analysis to find:
-
-1. **The embed directive and variable** - to know which files are templates
-2. **The ParseFS call** - to understand which patterns load which templates
-3. **Template configuration** - custom delimiters, function maps (for advanced type checking)
-
-The package-level variable is the entry point for this discovery. As long as Muxt can trace from the variable to the `embed.FS` and `ParseFS` call, your setup will work.
-
 ## Common Patterns
 
 ### Pattern 1: Inline Templates

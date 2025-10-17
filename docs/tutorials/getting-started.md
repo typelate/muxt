@@ -1,41 +1,26 @@
 # Tutorial: Your First Muxt Application
 
-Build a "Hello, world!" web app with Muxt. Should take about 10 minutes.
+Build "Hello, world!" with Muxt in 10 minutes.
 
-By the end, you'll have a working server that displays "Hello, world!" using generated HTTP handlers.
+**Prerequisites:** Go 1.25+, basic Go and HTML knowledge
 
-## Prerequisites
-
-- Go 1.25 or later
-- You can write basic Go and HTML
-
-## Step 1: Install Muxt
-
-Install Muxt globally:
+## Step 1: Install
 
 ```bash
 go install github.com/typelate/muxt/cmd/muxt@latest
+muxt version  # Verify
 ```
 
-Verify the installation:
+## Step 2: Create Project
 
 ```bash
-muxt version
-```
-
-## Step 2: Create a New Project
-
-Create a new directory for your project:
-
-```bash
-mkdir hello-muxt
-cd hello-muxt
+mkdir hello-muxt && cd hello-muxt
 go mod init example.com/hello
 ```
 
-## Step 3: Write Your First Template
+## Step 3: Write Template
 
-Create a file named `index.gohtml`:
+Create `index.gohtml`:
 
 ```gotemplate
 {{define "GET / F()" -}}
@@ -52,14 +37,11 @@ Create a file named `index.gohtml`:
 {{- end}}
 ```
 
-**What's happening here:**
-- `GET /` tells Muxt this template handles GET requests to the root path
-- `F()` specifies which method provides the data for this template
-- `{{.}}` will be replaced with the result from the `F()` method
+The template name `"GET / F()"` means: Handle GET requests to `/`, call method `F()`, pass result to template.
 
-## Step 4: Create the Go Entry Point
+## Step 4: Create Main File
 
-Create a file named `main.go`:
+Create `main.go`:
 
 ```go
 package main
@@ -77,11 +59,11 @@ import (
 var templateFS embed.FS
 
 //go:generate muxt generate --receiver-type=Server
-var templates = template.Must(template.ParseFS(templateFS, "*."))
+var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 func main() {
 	mux := http.NewServeMux()
-	// TemplateRoutes(mux, Server{}) // You'll uncomment this after generating
+	// TemplateRoutes(mux, Server{})  // Uncomment after step 5
 	addr := cmp.Or(os.Getenv("ADDR"), ":"+cmp.Or(os.Getenv("PORT"), "8080"))
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
@@ -93,82 +75,43 @@ func (Server) F() string {
 }
 ```
 
-## Step 5: Generate the Handler Code
-
-Run code generation:
+## Step 5: Generate Handlers
 
 ```bash
 go generate
 ```
 
-Muxt will create files containing the generated HTTP handlers:
-- `template_routes.go` - Main file with shared types and the `TemplateRoutes` function
-- `index_template_routes_gen.go` - Route handlers for templates in `index.gohtml`
+This creates `template_routes.go` and `index_template_routes_gen.go`.
 
-## Step 6: Wire Up the Generated Routes
+## Step 6: Wire Routes
 
-In `main.go`, uncomment the `TemplateRoutes` line:
+Uncomment the `TemplateRoutes` line in `main.go`:
 
 ```go
-package main
-
-import (
-	"cmp"
-	"embed"
-	"html/template"
-	"log"
-	"net/http"
-	"os"
-)
-
-//go:embed *.gohtml
-var templateFS embed.FS
-
-//go:generate muxt generate --receiver-type=Server
-var templates = template.Must(template.ParseFS(templateFS, "*."))
-
 func main() {
-    mux := http.NewServeMux()
-    // TemplateRoutes(mux, Server{}) // You'll uncomment this after generating
-    addr := cmp.Or(os.Getenv("ADDR"), ":"+cmp.Or(os.Getenv("PORT"), "8080"))
-    log.Fatal(http.ListenAndServe(addr, mux))
-}
-
-type Server struct{}
-
-func (Server) F() string {
-    return "Hello, world!"
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})  // Uncommented
+	addr := cmp.Or(os.Getenv("ADDR"), ":"+cmp.Or(os.Getenv("PORT"), "8080"))
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
 ```
 
-## Step 7: Run Your Application
-
-Start the server:
+## Step 7: Run
 
 ```bash
 go run .
 ```
 
-Open your browser to `http://localhost:8080`. You should see an H1 heading displaying "Hello, world!".
+Visit `http://localhost:8080` to see "Hello, world!"
 
-## What Just Happened
+## What Happened
 
-You wrote a template. Muxt generated the HTTP handler. You shipped a working server.
+Template name → Muxt generates handler → Ship working server.
 
-No framework. No boilerplate. No magic.
+No framework. No boilerplate. Just Go and HTML.
 
-The template name `"GET / F()"` told Muxt:
-- Handle GET requests to `/`
-- Call the `F()` method
-- Pass the result to the template
+## Next
 
-Everything else is just normal Go and normal HTML.
-
-## Next Steps
-
-Now that you've got the basics, you can:
-- [Integrate Muxt into an existing project](../how-to/integrate-existing-project.md)
-- Learn the [template name syntax](../reference/template-names.md) to handle paths, parameters, and status codes
-- Read about [writing receiver methods](../how-to/write-receiver-methods.md) for real-world data
-
-Or just start building. The best way to learn is to ship something.
+- [Integrate into existing project](../how-to/integrate-existing-project.md)
+- [Template name syntax](../reference/template-names.md) - paths, parameters, status codes
+- [Write receiver methods](../how-to/write-receiver-methods.md) - real-world data

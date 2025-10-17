@@ -1,236 +1,157 @@
 # How to Use HTMX with Muxt
 
-Build dynamic web pages without writing JavaScript.
+Build interactive UIs with server-rendered HTML. No JavaScript compilation, no client-side state management, no complexity.
 
-## Goal
+## Why HTMX + Muxt
 
-Use HTMX to make your pages interactive:
-- Update parts of the page without full reloads
-- Handle forms without leaving the page
-- Build modern UIs with just HTML
+**HTMX** sends HTML over the wire instead of JSON. Your server returns fragments. Browser swaps them in. Simple.
 
-## Prerequisites
+**Muxt** generates type-safe handlers. Your methods return structs. Templates render HTML. No manual marshaling.
 
-- Basic understanding of [HTMX](https://htmx.org/)
-- A working Muxt setup
-- Familiarity with Go templates
+**Together:** Type-safe end-to-end. Domain logic in Go, presentation in templates, interactivity from HTML attributes.
 
-## Include HTMX in Your Template
+## Basic Pattern
 
-Add the HTMX script to your base template:
-
+**Full page with HTMX:**
 ```gotemplate
 {{define "GET / Home(ctx)"}}
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>My App</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
-    <div id="content">
-        <h1>Welcome</h1>
-        <button hx-get="/greet" hx-target="#content">Click me</button>
-    </div>
+    <button hx-get="/greet" hx-target="#content">Click</button>
+    <div id="content"></div>
 </body>
 </html>
 {{end}}
 ```
 
-## Handle HTMX Requests
-
-Create a route that returns partial HTML for HTMX requests:
-
+**Partial response:**
 ```gotemplate
 {{define "GET /greet Greet(ctx)"}}
-<div id="content">
-    <h2>Hello from HTMX!</h2>
-    <p>This content was loaded dynamically.</p>
-    <button hx-get="/" hx-target="#content">Go back</button>
-</div>
+<div id="content">{{.Result.Message}}</div>
 {{end}}
 ```
 
 ```go
 func (s Server) Greet(ctx context.Context) Greeting {
-    return Greeting{Message: "Hello from HTMX!"}
+    return Greeting{Message: "Hello from server"}
 }
 ```
 
-## Detect HTMX Requests in Templates
+**Result:** Button click fetches `/greet`, swaps HTML into `#content`. Zero JavaScript written.
 
-Use the `Request` field to check if the request came from HTMX:
+## Progressive Enhancement: Full Pages + Partials
+
+One route, two responses. HTMX requests get fragments, direct navigation gets full pages.
 
 ```gotemplate
+{{define "article-content"}}
+  <h2>{{.Result.Title}}</h2>
+  <p>{{.Result.Content}}</p>
+{{end}}
+
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
-{{- if .Request.Header.Get "HX-Request"}}
-  <!-- Return partial HTML for HTMX -->
-  <div class="article">
-    <h2>{{.Result.Title}}</h2>
-    <p>{{.Result.Content}}</p>
-  </div>
-{{- else}}
-  <!-- Return full page for direct navigation -->
-  <!DOCTYPE html>
-  <html>
-  <head>
-      <title>{{.Result.Title}}</title>
-      <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  </head>
-  <body>
-    <div class="article">
-      <h2>{{.Result.Title}}</h2>
-      <p>{{.Result.Content}}</p>
-    </div>
-  </body>
-  </html>
-{{- end}}
-{{end}}
-```
-
-## Set HTMX Response Headers
-
-Use template helpers to set HTMX-specific response headers.
-
-### Copy HTMX Helper Code
-
-The `docs/htmx` directory contains helper code for working with HTMX response headers. Copy `htmx.go` into your package:
-
-```bash
-cp docs/htmx/htmx.go internal/hypertext/
-```
-
-This provides template methods like:
-- `.Header(key, value)` - Set response headers
-- `.StatusCode(code)` - Set status code
-- `.HXRetarget(selector)` - Set `HX-Retarget` header (add it yourself, copy from ../htmx/)
-- `.HXReswap(strategy)` - Set `HX-Reswap` header (add it yourself, copy from ../htmx/)
-
-### Use HTMX Headers in Templates
-
-```gotemplate
-{{define "POST /task/{id}/complete CompleteTask(ctx, id)"}}
-{{- if .Err}}
-  {{- with and (.StatusCode 400) (.Header "HX-Retarget" "#error") (.Header "HX-Reswap" "innerHTML")}}
-    <div class="error">{{.Err.Error}}</div>
-  {{- end}}
-{{- else}}
-  {{- with .Header "HX-Trigger" "taskCompleted"}}
-    <div class="task completed">
-      <span>✓ Task completed</span>
-    </div>
-  {{- end}}
-{{- end}}
-{{end}}
-```
-
-This template:
-- Returns error HTML with retargeting on failure
-- Returns success HTML with a trigger event on success
-- Uses template helpers to set HTMX headers
-
-## Build a Form with HTMX
-
-Create an interactive form that updates without page reload:
-
-### Template with Form
-
-```gotemplate
-{{define "GET /users ListUsers(ctx)"}}
+{{if .Request.Header.Get "HX-Request"}}
+  {{template "article-content" .}}
+{{else}}
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Users</title>
+    <title>{{.Result.Title}}</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
-    <h1>Users</h1>
-
-    <form hx-post="/users" hx-target="#user-list" hx-swap="beforeend">
-        <input type="text" name="username" placeholder="Username" required>
-        <input type="email" name="email" placeholder="Email" required>
-        <button type="submit">Add User</button>
-    </form>
-
-    <div id="user-list">
-        {{range .Result.Users}}
-        <div class="user">{{.Username}} ({{.Email}})</div>
-        {{end}}
-    </div>
+  {{template "article-content" .}}
 </body>
 </html>
 {{end}}
-
-{{define "POST /users 201 CreateUser(ctx, username, email)"}}
-<div class="user">{{.Result.Username}} ({{.Result.Email}})</div>
 {{end}}
 ```
 
-### Receiver Methods
+**Why this matters:** URLs work with curl, search engines, browser history. HTMX is enhancement, not requirement.
 
+## HTMX Response Headers
+
+Control client behavior from templates using `.Header` and `.StatusCode`:
+
+```gotemplate
+{{define "POST /task/{id}/complete CompleteTask(ctx, id)"}}
+{{if .Err}}
+  {{with and (.StatusCode 400) (.Header "HX-Retarget" "#error")}}
+    <div class="error">{{.Err.Error}}</div>
+  {{end}}
+{{else}}
+  {{with .Header "HX-Trigger" "taskCompleted"}}
+    <div class="task completed">✓ Done</div>
+  {{end}}
+{{end}}
+{{end}}
+```
+
+**Common headers:**
+- `HX-Redirect` - Client-side redirect
+- `HX-Retarget` - Change target element
+- `HX-Reswap` - Change swap strategy
+- `HX-Trigger` - Trigger client-side events
+
+See [HTMX response headers docs](https://htmx.org/reference/#response_headers) for complete list.
+
+## Forms with Validation
+
+**Templates:**
+```gotemplate
+{{define "GET /users ListUsers(ctx)"}}
+<form hx-post="/users" hx-target="#user-list" hx-swap="beforeend">
+    <input name="username" required>
+    <input name="email" type="email" required>
+    <button type="submit">Add</button>
+</form>
+<div id="user-list">
+    {{range .Result.Users}}<div>{{.Username}}</div>{{end}}
+</div>
+{{end}}
+
+{{define "POST /users 201 CreateUser(ctx, username, email)"}}
+<div>{{.Result.Username}}</div>
+{{end}}
+```
+
+**Domain methods:**
 ```go
-type Server struct {
-    users []User
-}
-
-func (s Server) ListUsers(ctx context.Context) UserList {
-    return UserList{Users: s.users}
-}
-
 func (s *Server) CreateUser(ctx context.Context, username, email string) (User, error) {
-    user := User{
-        ID:       len(s.users) + 1,
-        Username: username,
-        Email:    email,
+    if !isValidEmail(email) {
+        return User{}, errors.New("invalid email")
     }
+    user := User{Username: username, Email: email}
     s.users = append(s.users, user)
     return user, nil
 }
 ```
 
-## Handle Form Validation Errors
-
-Return validation errors as HTML fragments:
-
+**Validation errors:**
 ```gotemplate
 {{define "POST /signup Signup(ctx, email, password)"}}
-{{- if .Err}}
-  {{- with and (.StatusCode 422) (.Header "HX-Retarget" "#errors")}}
-    <div id="errors" class="error">
-      {{.Err.Error}}
-    </div>
-  {{- end}}
-{{- else}}
-  {{- with .Header "HX-Redirect" "/"}}
-    <div>Account created! Redirecting...</div>
-  {{- end}}
-{{- end}}
+{{if .Err}}
+  {{with and (.StatusCode 422) (.Header "HX-Retarget" "#errors")}}
+    <div id="errors">{{.Err.Error}}</div>
+  {{end}}
+{{else}}
+  {{with .Header "HX-Redirect" "/"}}Redirecting...{{end}}
+{{end}}
 {{end}}
 ```
 
-```go
-func (s Server) Signup(ctx context.Context, email, password string) (User, error) {
-    if !isValidEmail(email) {
-        return User{}, errors.New("Invalid email address")
-    }
-    if len(password) < 8 {
-        return User{}, errors.New("Password must be at least 8 characters")
-    }
-    return s.createUser(email, password)
-}
-```
+## Production Patterns
 
-## Common HTMX Patterns
-
-### Inline Editing
-
+**Inline editing:**
 ```gotemplate
 {{define "GET /task/{id}/edit EditTask(ctx, id)"}}
 <form hx-put="/task/{{.Result.ID}}" hx-target="closest div">
     <input name="title" value="{{.Result.Title}}">
     <button type="submit">Save</button>
-    <button hx-get="/task/{{.Result.ID}}" hx-target="closest div">Cancel</button>
 </form>
 {{end}}
 
@@ -242,63 +163,81 @@ func (s Server) Signup(ctx context.Context, email, password string) (User, error
 {{end}}
 ```
 
-### Delete with Confirmation
-
+**Delete with confirmation:**
 ```gotemplate
-{{define "DELETE /task/{id} DeleteTask(ctx, id)"}}
-<!-- Returns empty, element is removed from DOM -->
-{{end}}
+{{define "DELETE /task/{id} DeleteTask(ctx, id)"}}{{end}}
 ```
-
 ```html
-<div id="task-{{.ID}}">
-    <span>{{.Title}}</span>
-    <button
-        hx-delete="/task/{{.ID}}"
-        hx-confirm="Are you sure?"
-        hx-target="#task-{{.ID}}"
-        hx-swap="outerHTML">
-        Delete
-    </button>
-</div>
+<button hx-delete="/task/{{.ID}}" hx-confirm="Delete?" hx-target="closest div" hx-swap="outerHTML">
+    Delete
+</button>
 ```
 
-### Infinite Scroll
-
+**Infinite scroll:**
 ```gotemplate
 {{define "GET /articles ListArticles(ctx, page)"}}
-{{- range .Result.Articles}}
-<article>
-    <h2>{{.Title}}</h2>
-    <p>{{.Content}}</p>
-</article>
-{{- end}}
-
-{{- if .Result.HasMore}}
-<div hx-get="/articles?page={{.Result.NextPage}}"
-     hx-trigger="revealed"
-     hx-swap="outerHTML">
-    Loading more...
+{{range .Result.Articles}}<article>{{.Title}}</article>{{end}}
+{{if .Result.HasMore}}
+<div hx-get="/articles?page={{.Result.NextPage}}" hx-trigger="revealed" hx-swap="outerHTML">
+    Loading...
 </div>
-{{- end}}
+{{end}}
 {{end}}
 ```
 
-## Tips for HTMX with Muxt
+## Architecture Guidelines
 
-**Design URLs for both HTMX and direct access** - Your routes should work whether someone clicks a link or visits directly. Check `HX-Request` header and return full pages or fragments accordingly.
+**URLs work everywhere** - HTMX requests and direct navigation both work. Check `HX-Request` header, return fragments or full pages.
 
-**Use semantic HTML** - HTMX enhances HTML. If your HTML is bad, HTMX can't fix it.
+**HTTP semantics matter** - Use correct status codes (200, 201, 400, 422). HTMX respects HTTP.
 
-**Set appropriate status codes** - Errors should return error codes. HTMX respects HTTP.
+**Server-side validation** - Return errors as HTML. Client gets styled error messages, not JSON.
 
-**Leverage HTMX headers** - `HX-Retarget`, `HX-Trigger`, `HX-Redirect` let you control the browser from the server. Use them.
+**Semantic HTML** - HTMX enhances HTML. Bad HTML = bad UX regardless of HTMX.
 
-**Keep templates simple** - Complex logic goes in Go. Templates render data. That's it.
+**Domain logic stays pure** - Methods return structs. Templates render HTML. Clean separation.
 
-## Next Steps
+## Performance Characteristics
 
-- Explore the [HTMX documentation](https://htmx.org/) for more patterns
-- Review [HTMX examples](https://htmx.org/examples/) for inspiration
-- Learn about [testing HTMX responses](test-handlers.md#testing-htmx-partial-responses) with domtest
-- Check the [`docs/htmx` directory](../htmx/) for reference implementation
+**Bandwidth:** HTML fragments typically smaller than JSON + client-side rendering framework. No framework.js to download.
+
+**Latency:** One round trip per interaction (same as SPA). No hydration delay.
+
+**CPU:** Server renders HTML (cheap), client swaps DOM (cheaper than React). Lower battery drain on mobile.
+
+**Caching:** Standard HTTP caching works. No cache invalidation complexity.
+
+## When Not to Use HTMX
+
+**Rich client interactions** - Canvas drawing, complex drag-drop, real-time games → Use JavaScript.
+
+**Offline-first apps** - Service workers + IndexedDB → Use SPA.
+
+**Mobile apps** - Native UI → Use native frameworks.
+
+HTMX excels at CRUD apps, admin panels, dashboards, content sites. Know your use case.
+
+## Testing HTMX Routes
+
+```go
+func TestInlineEdit(t *testing.T) {
+    req := httptest.NewRequest("GET", "/task/1/edit", nil)
+    req.Header.Set("HX-Request", "true")
+    rec := httptest.NewRecorder()
+
+    mux.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusOK, rec.Code)
+    frag := domtest.ParseResponseDocumentFragment(t, rec.Result(), atom.Form)
+    input := frag.QuerySelector("input[name=title]")
+    assert.NotNil(t, input)
+}
+```
+
+See [test-handlers.md](test-handlers.md) for complete testing patterns.
+
+## Next
+
+- [HTMX docs](https://htmx.org/docs/) - Complete reference
+- [HTMX examples](https://htmx.org/examples/) - Common patterns
+- [Test handlers](test-handlers.md) - Testing with domtest

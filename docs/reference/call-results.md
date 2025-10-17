@@ -1,221 +1,207 @@
-# Call Results
+# Call Results Reference
 
-How Muxt handles what your receiver methods return.
+Receiver method return values control template data and HTTP status.
+Use this reference when designing method signatures with team members.
 
-## Return Signatures
+## Return Patterns Quick Reference
 
-Muxt supports these return patterns:
+| Pattern | `.Result` Type | `.Err` Type | Use When |
+|---------|----------------|-------------|----------|
+| `T` | `T` | Always `nil` | Infallible operations (static pages) |
+| `(T, error)` | `T` (zero if error) | `error` or `nil` | Most endpoints (can fail) |
+| `(T, bool)` | `T` | Always `nil` | Early exit/redirect (bool=true skips template) |
+| `error` | `struct{}` | `error` or `nil` | No data needed (health checks) |
+
+Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
+
+[call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt)
+
+## Pattern 1: Single Value (Infallible)
+
+**Use:** Static pages, configuration, data that can't fail
 
 ```go
-func (s Server) Method() T                  // Single value
-func (s Server) Method() (T, error)         // Value and error
-func (s Server) Method() (T, bool)          // Value and boolean
-func (s Server) Method() error              // Error only
-```
-
-The first return value becomes `.Result` in your template. The error (if any) becomes `.Err`.
-
-*[(See Muxt CLI Test/call_method_with_two_returns)](../../cmd/muxt/testdata/call_method_with_two_returns.txt)*
-
-## Single Return Value
-
-```go
-func (s Server) GetUser(ctx context.Context, id int) User {
-	return s.db.FindUser(id)
+func (s Server) About() AboutPage {
+    return AboutPage{Version: s.version}
 }
 ```
-
-Template:
 ```gotemplate
-{{define "GET /user/{id} GetUser(ctx, id)"}}
-<h1>{{.Result.Name}}</h1>
-<p>{{.Result.Email}}</p>
+{{define "GET /about About()"}}
+<h1>{{.Result.Version}}</h1>
 {{end}}
 ```
 
-`.Result` contains the User. `.Err` is always nil.
+**Behavior:** `.Result` = value, `.Err` = nil (always)
 
-## Value and Error
+## Pattern 2: Value and Error (Standard)
+
+**Use:** Most endpoints (database queries, API calls, anything fallible)
 
 ```go
 func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-	user, err := s.db.FindUser(id)
-	if err != nil {
-		return User{}, fmt.Errorf("user not found: %w", err)
-	}
-	return user, nil
+    user, err := s.db.FindUser(ctx, id)
+    if err != nil {
+        return User{}, fmt.Errorf("user not found: %w", err)
+    }
+    return user, nil
 }
 ```
-
-Template:
 ```gotemplate
 {{define "GET /user/{id} GetUser(ctx, id)"}}
-{{if .Err}}
-  <div class="error">{{.Err.Error}}</div>
+{{with $err := .Err}}
+  <div class="error">{{$err.Error}}</div>
 {{else}}
   <h1>{{.Result.Name}}</h1>
-  <p>{{.Result.Email}}</p>
 {{end}}
 {{end}}
 ```
 
-`.Result` contains the User (zero value if error). `.Err` contains the error (nil if success).
+**Behavior:** `.Result` = value (zero value if error), `.Err` = error (nil if success)
 
-*[(See Muxt CLI Test/call_expression_argument_with_error_last_result)](../../cmd/muxt/testdata/call_expression_argument_with_error_last_result.txt)*
+Always check `{{if .Err}}` or `{{with .Err}}` in templates when method returns error. Template executes even on error.
 
-## Value and Boolean
+[call_expression_argument_with_error_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_error_last_result.txt)
+
+## Pattern 3: Value and Boolean (Early Exit)
+
+**Use:** Custom response already written (redirects, cache hits, streaming)
 
 ```go
-func (s Server) GetUser(ctx context.Context, id int) (User, bool) {
-	user, ok := s.cache.Get(id)
-	return user, ok
+func (s Server) Download(response http.ResponseWriter, request *http.Request, id int) (File, bool) {
+    file, ok := s.cache.Get(id)
+    if ok {
+        http.ServeContent(response, request, file.Name, file.ModTime, file.Reader)
+        return file, true  // Skip template execution
+    }
+    return file, false  // Execute template
 }
 ```
 
-If the boolean is `true`, the handler returns early without executing the template.
+**Behavior:** If bool = `true`, handler returns immediately (skip template). If bool = `false`, execute template normally.
 
-Use this for cache hits, redirects, or cases where you've already written the response.
+[call_expression_argument_with_bool_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_bool_last_result.txt)
 
-*[(See Muxt CLI Test/call_expression_argument_with_bool_last_result)](../../cmd/muxt/testdata/call_expression_argument_with_bool_last_result.txt)*
+## Pattern 4: Error Only (No Data)
 
-## Error Only
+**Use:** Health checks, webhooks, operations that return no data
 
 ```go
 func (s Server) Healthcheck() error {
-	if err := s.db.Ping(); err != nil {
-		return err
-	}
-	return nil
+    if err := s.db.Ping(); err != nil {
+        return err
+    }
+    return nil
 }
 ```
-
-Template:
 ```gotemplate
 {{define "GET /health Healthcheck()"}}
-{{if .Err}}
-  <div>Unhealthy: {{.Err.Error}}</div>
-{{else}}
-  <div>OK</div>
-{{end}}
+{{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK{{end}}
 {{end}}
 ```
 
-`.Result` is `struct{}` (empty). `.Err` contains the error (nil if healthy).
+**Behavior:** `.Result` = `struct{}` (empty), `.Err` = error (nil if healthy)
 
-## TemplateData Structure
+## TemplateData[T] API
 
-Your template receives a `TemplateData[T]` where `T` is the first return value:
+Templates receive `TemplateData[T]` where `T` is the method's first return value:
 
-```go
-type TemplateData[T any] struct {
-	// Accessible fields
-	Result  T
-	Err     error
-	request *http.Request
-	// ... other internal fields
-}
+| Method/Field | Type | Description |
+|--------------|------|-------------|
+| `.Result` | `T` | Returned value (zero value if error) |
+| `.Err` | `error` | Returned error (nil if success) |
+| `.Request()` | `*http.Request` | HTTP request |
+| `.Path(name)` | `string` | Path parameter value |
+| `.StatusCode(code)` | `int` | Set HTTP status (returns code for chaining) |
+| `.Header(key, val)` | `string` | Set response header (returns val for chaining) |
 
-func (d TemplateData[T]) Request() *http.Request {
-	return d.request
-}
+**Chaining examples:**
+```gotemplate
+{{with and (.StatusCode 404) (.Header "X-Error" "not-found")}}
+  <div>User not found</div>
+{{end}}
 ```
 
-In templates:
-- `.Result` - The returned value
-- `.Err` - The returned error
-- `.Request` - The HTTP request
+`.Result` and `.Err` are fields (no parens). `.Request()`, `.Path()`, `.StatusCode()`, `.Header()` are methods (need parens).
 
-## Custom Error Types with Status Codes
+## Status Code Control
 
-Implement `StatusCode() int` on your error types to control HTTP status:
+**Precedence (highest to lowest):**
+1. Template name: `{{define "POST /user 201 ..."}}`
+2. Result type `StatusCode()` method
+3. Result type `StatusCode` field
+4. Error type `StatusCode()` method
+5. Template `.StatusCode(int)` call
+6. Default (200 success, 500 error)
 
+**Error with StatusCode() method:**
 ```go
-type NotFoundError struct {
-	Message string
-}
+type NotFoundError struct{ Message string }
 
-func (e NotFoundError) Error() string {
-	return e.Message
-}
-
-func (e NotFoundError) StatusCode() int {
-	return http.StatusNotFound
-}
+func (e NotFoundError) Error() string { return e.Message }
+func (e NotFoundError) StatusCode() int { return 404 }
 
 func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-	user, err := s.db.FindUser(id)
-	if err != nil {
-		return User{}, NotFoundError{Message: "user not found"}
-	}
-	return user, nil
+    user, err := s.db.FindUser(ctx, id)
+    if err != nil {
+        return User{}, NotFoundError{Message: "user not found"}
+    }
+    return user, nil
 }
 ```
 
-The handler automatically uses `404 Not Found` when the error is returned.
-
-## Custom Result Types with Status Codes
-
-Implement `StatusCode() int` on result types:
-
+**Result with StatusCode() method:**
 ```go
 type UserResult struct {
-	User User
-	code int
+    User User
+    code int
 }
 
-func (r UserResult) StatusCode() int {
-	return r.code
-}
-
-func (s Server) GetUser(ctx context.Context, id int) (UserResult, error) {
-	user, err := s.db.FindUser(id)
-	if err != nil {
-		return UserResult{code: 404}, err
-	}
-	return UserResult{User: user, code: 200}, nil
-}
+func (r UserResult) StatusCode() int { return r.code }
 ```
 
-Or use a `StatusCode` field:
-
+**Result with StatusCode field:**
 ```go
 type UserResult struct {
-	User       User
-	StatusCode int
-}
-
-func (s Server) GetUser(ctx context.Context, id int) (UserResult, error) {
-	user, err := s.db.FindUser(id)
-	if err != nil {
-		return UserResult{StatusCode: 404}, err
-	}
-	return UserResult{User: user, StatusCode: 200}, nil
+    User       User
+    StatusCode int
 }
 ```
 
-## Accessing the Request
+**Template status override:**
+```gotemplate
+{{if .Err}}
+  {{with .StatusCode 404}}
+    <div>Not found</div>
+  {{end}}
+{{end}}
+```
 
-Use `.Request` to access HTTP request data in templates:
+Prefer template name for static codes (201 for POST). Use error/result types for dynamic codes (404 when not found, 422 for validation).
 
+## Request Access in Templates
+
+**Access headers, URL, cookies:**
 ```gotemplate
 {{define "GET /profile Profile(ctx)"}}
-<p>Request path: {{.Request.URL.Path}}</p>
-<p>User agent: {{.Request.Header.Get "User-Agent"}}</p>
-
 {{if .Request.Header.Get "HX-Request"}}
-  <!-- Partial response for HTMX -->
-  <div>{{.Result.Name}}</div>
+  <div>{{.Result.Name}}</div>  <!-- HTMX partial -->
 {{else}}
-  <!-- Full page -->
-  <!DOCTYPE html>
-  <html>...</html>
+  <!DOCTYPE html><html>...</html>  <!-- Full page -->
 {{end}}
 {{end}}
 ```
 
-## Result Type Requirements
+**Path parameters:**
+```gotemplate
+{{define "GET /user/{id} GetUser(ctx, id)"}}
+<p>User ID from path: {{.Path "id"}}</p>
+<h1>{{.Result.Name}}</h1>
+{{end}}
+```
 
-For `muxt check` to work, your result types should be concrete:
+## Type Safety Requirements
+
+**Use concrete types for compile-time checking:**
 
 **Good:**
 ```go
@@ -226,35 +212,45 @@ func (s Server) GetStats(ctx context.Context) (map[string]int, error)
 
 **Avoid:**
 ```go
-func (s Server) GetUser(ctx context.Context) (any, error)          // type checker can't help
-func (s Server) GetUser(ctx context.Context) (interface{}, error)  // type checker can't help
+func (s Server) GetUser(ctx context.Context) (any, error)          // No type checking
+func (s Server) GetUser(ctx context.Context) (interface{}, error)  // No type checking
 ```
 
-Return static types. Let the type checker verify your templates.
+Concrete types enable `muxt check` to catch template errors at build time. Always return specific types.
 
-## Unsupported Return Types
+## Constraints
 
-Muxt rejects certain composite return types in the second position:
-
-**Not allowed:**
-```go
-func (s Server) Method() (T, chan error)   // channels not supported
-func (s Server) Method() (T, []error)      // slices not supported
-func (s Server) Method() (T, map[string]error) // maps not supported
-```
+**Second return value must be `error` or `bool`:**
 
 **Allowed:**
 ```go
-func (s Server) Method() (T, error)  // error
-func (s Server) Method() (T, bool)   // bool
+func (s Server) Method() (T, error)
+func (s Server) Method() (T, bool)
 ```
 
-*[(See Muxt CLI Test/F_returns_a_value_and_an_unsupported_type)](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_type.txt)*
-*[(See Muxt CLI Test/F_returns_a_value_and_an_unsupported_composite_type)](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_composite_type.txt)*
+**Not allowed:**
+```go
+func (s Server) Method() (T, chan error)         // Channels unsupported
+func (s Server) Method() (T, []error)            // Slices unsupported
+func (s Server) Method() (T, map[string]error)   // Maps unsupported
+```
 
-## More Examples
+[F_returns_a_value_and_an_unsupported_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_type.txt) · [F_returns_a_value_and_an_unsupported_composite_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_composite_type.txt)
 
-- [Boolean returns](../../cmd/muxt/testdata/F_returns_a_value_and_a_boolean.txt)
-- [Import result types](../../cmd/muxt/testdata/result_import_result_type.txt)
-- [Named result types](../../cmd/muxt/testdata/result_named_result_type.txt)
-- [All CLI tests](../../cmd/muxt/testdata/)
+## Test Files by Category
+
+**Return patterns:**
+- [call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt) — `(T, error)` pattern
+- [call_expression_argument_with_error_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_error_last_result.txt) — Error handling
+- [call_expression_argument_with_bool_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_bool_last_result.txt) — Early exit with bool
+- [F_returns_a_value_and_a_boolean.txt](../../cmd/muxt/testdata/F_returns_a_value_and_a_boolean.txt) — Boolean returns
+
+**Result types:**
+- [result_import_result_type.txt](../../cmd/muxt/testdata/result_import_result_type.txt) — Imported result types
+- [result_named_result_type.txt](../../cmd/muxt/testdata/result_named_result_type.txt) — Named return values
+
+**Unsupported patterns:**
+- [F_returns_a_value_and_an_unsupported_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_type.txt) — Unsupported second return
+- [F_returns_a_value_and_an_unsupported_composite_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_composite_type.txt) — Composite types
+
+**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

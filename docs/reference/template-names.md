@@ -1,242 +1,246 @@
-# Naming Templates
+# Template Name Syntax Reference
 
-`muxt generate` will read your HTML templates and generate/register an [`http.HandlerFunc`](https://pkg.go.dev/net/http#HandlerFunc) for each template with a name that matches an expected pattern.
+Complete specification for Muxt template naming. Use when pair programming to validate route definitions.
 
-If a template name does not match an expected pattern, the template is ignored by `muxt`.
+## Syntax
 
-Since Go 1.22, the standard library route **mu**ltiple**x**er can parse path parameters.
-
-It expects strings like this:
-
-`[METHOD ][HOST]/[PATH]`
-
-Muxt extends this by adding optional fields for the status code and a method call:
-
-`[METHOD ][HOST]/[PATH ][HTTP_STATUS ][CALL]`
-
-A template name pattern that `muxt` understands looks like this:
-
-```gotemplate
-{{define "GET /greet/{language} 200 Greeting(ctx, language)" }}
-<h1>{{.Hello}}</h1>
-{{end}}
+```
+[METHOD ][HOST]/PATH[ HTTP_STATUS][ CALL]
 ```
 
-## Basic Examples
-
-### Simple GET Request
-
+**All components:**
 ```gotemplate
-{{define "GET /"}}
-<h1>Hello, world!</h1>
-{{end}}
+{{define "GET example.com/greet/{language} 200 Greeting(ctx, language)"}}{{end}}
 ```
 
-*[(See Muxt CLI Test/simple_get)](../../cmd/muxt/testdata/simple_get.txt)*
-
-### Path Parameters
-
+**Minimal (path only):**
 ```gotemplate
-{{define "GET /user/{id}"}}
-<h1>User ID: {{.Result.ID}}</h1>
-{{end}}
+{{define "/"}}{{end}}
 ```
 
-*[(See Muxt CLI Test/path_param)](../../cmd/muxt/testdata/path_param.txt)*
+**Key rules:**
+- Templates without matching names are ignored (not an error)
+- Path is required, all other components optional
+- Space-separated components, order matters
+- Uses Go 1.22+ `http.ServeMux` pattern matching
 
-### Typed Path Parameters
+## Quick Reference Table
 
-When using `--receiver-type`, path parameters are automatically parsed to match method signatures:
+| Component | Format | Example | Required |
+|-----------|--------|---------|----------|
+| METHOD | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `GET` | No |
+| HOST | `example.com` | `api.example.com` | No |
+| PATH | `/path/{param}` | `/user/{id}` | **Yes** |
+| STATUS | `200` or `http.StatusOK` | `201` | No |
+| CALL | `Method(args...)` | `GetUser(ctx, id)` | No |
+
+## Path Patterns
+
+### Basic Paths
 
 ```gotemplate
-{{define "GET /article/{id} GetArticle(ctx, id)"}}
-<h1>{{.Result.Title}}</h1>
-{{end}}
+{{define "GET /"}}{{end}}              <!-- Root -->
+{{define "GET /about"}}{{end}}         <!-- Static path -->
+{{define "GET /user/{id}"}}{{end}}     <!-- Path parameter -->
+{{define "GET /user/{id}/post/{postID}"}}{{end}}  <!-- Multiple parameters -->
+```
+
+[simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) · [path_param.txt](../../cmd/muxt/testdata/path_param.txt)
+
+### Path Matching Modes
+
+```gotemplate
+{{define "GET /{$}"}}{{end}}           <!-- Exact: "/" only, not "/foo" -->
+{{define "GET /static/"}}{{end}}       <!-- Prefix: "/static/", "/static/foo", "/static/foo/bar" -->
+{{define "GET /files/{path...}"}}{{end}}  <!-- Wildcard: captures "/files/a/b/c" as path="a/b/c" -->
+```
+
+**Note:** `/{$}` vs `/` behavior differs. Former is exact match, latter matches prefix.
+
+[path_end.txt](../../cmd/muxt/testdata/path_end.txt) · [path_prefix.txt](../../cmd/muxt/testdata/path_prefix.txt)
+
+### Path Parameters Are Type-Safe
+
+```gotemplate
+{{define "GET /article/{id} GetArticle(ctx, id)"}}{{end}}
 ```
 
 ```go
 func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
-	// id is automatically parsed from string to int
+    // id auto-parsed from string → int
+    // Parse failure → 400 Bad Request (automatic)
 }
 ```
 
-*[(See Muxt CLI Test/path_param_typed)](../../cmd/muxt/testdata/path_param_typed.txt)*
+**Note:** Path param names must match method param names exactly. Type conversion is automatic based on method signature.
 
-### HTTP Methods
+[argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt)
 
-```gotemplate
-{{define "GET /posts"}}...{{end}}
-{{define "POST /posts"}}...{{end}}
-{{define "PATCH /posts/{id}"}}...{{end}}
-{{define "DELETE /posts/{id}"}}...{{end}}
-```
-
-*[(See Muxt CLI Test/simple_patch)](../../cmd/muxt/testdata/simple_patch.txt)*
-
-### Path Endings
-
-Use `{$}` to match exact paths:
+## HTTP Methods
 
 ```gotemplate
-{{define "GET /{$}"}}
-<!-- Matches only "/" exactly -->
-{{end}}
+{{define "GET /posts"}}{{end}}          <!-- Read -->
+{{define "POST /posts"}}{{end}}         <!-- Create -->
+{{define "PUT /posts/{id}"}}{{end}}     <!-- Replace -->
+{{define "PATCH /posts/{id}"}}{{end}}   <!-- Update -->
+{{define "DELETE /posts/{id}"}}{{end}}  <!-- Delete -->
 ```
 
-*[(See Muxt CLI Test/path_end)](../../cmd/muxt/testdata/path_end.txt)*
+**Without method prefix:** Matches all methods (GET, POST, PUT, PATCH, DELETE, etc.)
 
-Use trailing slash for prefix matching:
-
-```gotemplate
-{{define "GET /static/"}}
-<!-- Matches "/static/" and all sub-paths -->
-{{end}}
-```
-
-*[(See Muxt CLI Test/path_prefix)](../../cmd/muxt/testdata/path_prefix.txt)*
+[simple_patch.txt](../../cmd/muxt/testdata/simple_patch.txt)
 
 ## Status Codes
 
-### Integer Status Codes
+**Three formats:**
 
 ```gotemplate
-{{define "POST /user 201 CreateUser(ctx, form)"}}
-<!-- Returns 201 Created on success -->
-{{end}}
-
-{{define "GET /admin 401"}}
-<!-- Returns 401 Unauthorized -->
-{{end}}
+{{define "POST /user 201 CreateUser(ctx, form)"}}{{end}}      <!-- Integer with method -->
+{{define "GET /admin http.StatusUnauthorized"}}{{end}}        <!-- Constant -->
+{{define "GET /error 400"}}{{end}}                             <!-- Integer -->
 ```
 
-### Constant Status Codes
+**Status code precedence:**
+1. Template name (shown above)
+2. Result type with `StatusCode()` method
+3. Result type with `StatusCode` field
+4. Error with `StatusCode()` method
+5. Template `.StatusCode(int)` call
+6. Default (200 for success, 500 for errors)
 
-```gotemplate
-{{define "GET /error http.StatusBadRequest"}}
-<!-- Returns 400 Bad Request -->
-{{end}}
-```
+Use template name for static codes (201 for POST), methods for dynamic codes (404 from errors).
 
-*[(See Muxt CLI Test/status_codes)](../../cmd/muxt/testdata/status_codes.txt)*
+[status_codes.txt](../../cmd/muxt/testdata/status_codes.txt)
 
 ## Call Expressions
 
-### Basic Call
+### Syntax
+
+```
+MethodName(arg1, arg2, ...)
+```
+
+**No spaces allowed** between method name and parentheses. Arguments are comma-separated identifiers.
+
+### Parameter Sources
+
+| Parameter Name | Type | Source | Auto-parsed |
+|----------------|------|--------|-------------|
+| `ctx` | `context.Context` | `request.Context()` | N/A |
+| `request` | `*http.Request` | Direct | N/A |
+| `response` | `http.ResponseWriter` | Direct | N/A |
+| `form` | struct or `url.Values` | `request.Form` | Yes |
+| Path param | Any parseable | `request.PathValue(name)` | Yes |
+| Form field | Any parseable | `request.Form.Get(name)` | Yes |
+
+**Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
+
+### Examples
 
 ```gotemplate
-{{define "GET /profile Profile(ctx)"}}
-<h1>{{.Result.Name}}</h1>
-{{end}}
+{{define "GET /profile Profile(ctx)"}}{{end}}
+{{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form fields -->
+{{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
+{{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
+{{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
 ```
 
-```go
-func (s Server) Profile(ctx context.Context) (UserProfile, error) {
-	// ...
-}
-```
+Parameter names in template must match method signature exactly. Case-sensitive.
 
-*[(See Muxt CLI Test/call_F)](../../cmd/muxt/testdata/call_F.txt)*
+[call_F.txt](../../cmd/muxt/testdata/call_F.txt) · [call_F_with_multiple_arguments.txt](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt) · [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt)
 
-### Multiple Arguments
+## Host Matching
 
 ```gotemplate
-{{define "POST /login Login(ctx, username, password)"}}
-<!-- ... -->
-{{end}}
+{{define "api.example.com/v1/users ListUsers(ctx)"}}{{end}} <!-- Specific host -->
+{{define "admin.example.com/ AdminHome(ctx)"}}{{end}}       <!-- Admin subdomain -->
+{{define "example.com/{$} Home(ctx)"}}{{end}}               <!-- Exact host + path -->
 ```
 
-```go
-func (s Server) Login(ctx context.Context, username, password string) (Session, error) {
-	// username and password parsed from form fields
-}
-```
+Host patterns enable multi-tenant apps or API versioning by subdomain. Omit host to match all.
 
-*[(See Muxt CLI Test/call_F_with_multiple_arguments)](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt)*
+## Common Patterns
 
-### Path Parameters in Calls
-
+**REST resources:**
 ```gotemplate
-{{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}
+{{define "GET /posts ListPosts(ctx)"}}{{end}}
+{{define "POST /posts 201 CreatePost(ctx, form)"}}{{end}}
+{{define "GET /posts/{id} GetPost(ctx, id)"}}{{end}}
+{{define "PUT /posts/{id} UpdatePost(ctx, id, form)"}}{{end}}
+{{define "DELETE /posts/{id} 204 DeletePost(ctx, id)"}}{{end}}
 ```
 
-```go
-func (s Server) GetPost(ctx context.Context, userID, postID int) (Post, error) {
-	// userID and postID parsed from URL path
-}
-```
-
-*[(See Muxt CLI Test/call_F_with_argument_path_param)](../../cmd/muxt/testdata/call_F_with_argument_path_param.txt)*
-
-### Special Arguments
-
-Muxt recognizes special argument names:
-
-- `ctx` → `context.Context` from `request.Context()`
-- `request` → `*http.Request`
-- `response` → `http.ResponseWriter`
-- `form` → `url.Values` from `request.Form`
-
+**Nested resources:**
 ```gotemplate
-{{define "POST /upload Upload(ctx, response, request)"}}
+{{define "GET /users/{userID}/posts/{postID} GetUserPost(ctx, userID, postID)"}}{{end}}
 ```
 
-```go
-func (s Server) Upload(ctx context.Context, response http.ResponseWriter, request *http.Request) error {
-	// Full access to HTTP primitives when needed
-}
+**File serving:**
+```gotemplate
+{{define "GET /static/ ServeStatic(response, request)"}}{{end}}
 ```
 
-*[(See Muxt CLI Test/argument_context)](../../cmd/muxt/testdata/argument_context.txt)*
-*[(See Muxt CLI Test/argument_request)](../../cmd/muxt/testdata/argument_request.txt)*
-*[(See Muxt CLI Test/argument_response)](../../cmd/muxt/testdata/argument_response.txt)*
+**Wildcards for paths:**
+```gotemplate
+{{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}  <!-- path captures "a/b/c.txt" -->
+```
 
-## [`*http.ServeMux`](https://pkg.go.dev/net/http#ServeMux) Patterns
+[path_wildcard.txt](../../cmd/muxt/testdata/path_wildcard.txt)
 
-Here is an excerpt from [the standard library documentation](https://pkg.go.dev/net/http#hdr-Patterns-ServeMux):
+## Go 1.22+ ServeMux Behavior
 
-> Patterns can match the method, host and path of a request. Some examples:
-> - "/index.html" matches the path "/index.html" for any host and method.
-> - "GET /static/" matches a GET request whose path begins with "/static/".
-> - "example.com/" matches any request to the host "example.com".
-> - "example.com/{$}" matches requests with host "example.com" and path "/".
-> - "/b/{bucket}/o/{objectname...}" matches paths whose first segment is "b" and whose third segment is "o". The name "bucket" denotes the second segment and "objectname" denotes the remainder of the path.
+Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#hdr-Patterns-ServeMux)):
 
-## Template Name Specification
+- `"/index.html"` — path only, any host/method
+- `"GET /static/"` — method + path prefix
+- `"example.com/"` — host + any path
+- `"example.com/{$}"` — host + exact path "/"
+- `"/b/{bucket}/o/{name...}"` — segments + wildcard
+
+**Precedence:** Most specific pattern wins. `GET /posts/{id}` beats `/posts/{id}` beats `/{path...}`.
+
+## Formal Grammar (BNF)
 
 ```bnf
-<route> ::= [ <method> <space> ] [ <host> ] <path> [ <space> <http_status> ] [ <space> <call_expr> ]
-
-<method> ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
-
-<host> ::= <hostname> | <ip_address>
-
-<hostname> ::= <label> { "." <label> }
-<label> ::= <letter> { <letter> | <digit> | "-" }
-<ip_address> ::= <digit>+ "." <digit>+ "." <digit>+ "." <digit>+
-
-<path> ::= "/" [ <path_segment> { "/" <path_segment> } [ "/" ] ]
-<path_segment> ::= <unreserved_characters>+
-
-<http_status> ::= <integer> | <qualified_identifier>
-<integer> ::= <digit> { <digit> }
-<qualified_identifier> ::= <identifier> "." <identifier>
-
-<call_expr> ::= <identifier> "(" [ <identifier> { "," <identifier> } ] ")"
-
-<identifier> ::= <letter> { <letter> | <digit> | "_" }
-
-<space> ::= " "
-
-<letter> ::= "a" | ... | "z" | "A" | ... | "Z"
-<digit> ::= "0" | ... | "9"
-<unreserved_characters> ::= <letter> | <digit> | "-" | "_" | "." | "~"
+<route>        ::= [<method> " "] [<host>] <path> [" " <status>] [" " <call>]
+<method>       ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+<host>         ::= <hostname> | <ipv4>
+<path>         ::= "/" [<segment> [<path>] ["/"]]
+<status>       ::= <integer> | <identifier> "." <identifier>
+<call>         ::= <identifier> "(" [<identifier> {"," <identifier>}] ")"
+<identifier>   ::= <letter> {<letter> | <digit> | "_"}
 ```
 
-## More Examples
+**Notes:** Path segments may include `{param}` or `{param...}`. Unreserved chars: `[a-zA-Z0-9-_.~]`.
 
-Browse the complete test suite for more examples:
+## Test Files by Category
 
-- [All CLI tests](../../cmd/muxt/testdata/)
-- [Blog example](../../cmd/muxt/testdata/blog.txt) - Complete application
-- [Form handling](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt)
-- [Error handling](../../cmd/muxt/testdata/error_wrong_argument_type.txt)
+**Basics:**
+- [simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) — GET with no params
+- [path_param.txt](../../cmd/muxt/testdata/path_param.txt) — Path parameters
+- [simple_patch.txt](../../cmd/muxt/testdata/simple_patch.txt) — PATCH method
+
+**Path patterns:**
+- [path_end.txt](../../cmd/muxt/testdata/path_end.txt) — `/{$}` exact match
+- [path_prefix.txt](../../cmd/muxt/testdata/path_prefix.txt) — Prefix matching
+- [path_wildcard.txt](../../cmd/muxt/testdata/path_wildcard.txt) — Wildcard `{...}`
+
+**Call expressions:**
+- [call_F.txt](../../cmd/muxt/testdata/call_F.txt) — Basic call
+- [call_F_with_multiple_arguments.txt](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt) — Multiple args
+- [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt) — `ctx` parameter
+- [argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt) — Path param parsing
+
+**Status codes:**
+- [status_codes.txt](../../cmd/muxt/testdata/status_codes.txt) — Various status patterns
+
+**Forms:**
+- [F_is_defined_and_form_type_is_a_struct.txt](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt) — Struct form binding
+
+**Complete apps:**
+- [blog.txt](../../cmd/muxt/testdata/blog.txt) — Full blog application
+
+**Error cases:**
+- [error_wrong_argument_type.txt](../../cmd/muxt/testdata/error_wrong_argument_type.txt) — Type mismatch
+
+**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

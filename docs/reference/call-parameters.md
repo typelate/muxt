@@ -1,269 +1,206 @@
-# Call Parameters
+# Call Parameters Reference
 
-In template names, you add a call expression to specify which method handles the request and what parameters it receives.
+Parameters in call expressions determine how Muxt generates handlers and parses request data. Use this reference when reviewing parameter bindings with team members.
 
-The parameter names and types determine how Muxt generates the handler.
+## Parameter Binding Quick Reference
 
-## Special Parameter Names
+| Parameter Name | Type | Source | Parsed | Use When |
+|----------------|------|--------|--------|----------|
+| `ctx` | `context.Context` | `request.Context()` | N/A | Need request context (always recommended first param) |
+| `request` | `*http.Request` | Direct | N/A | Need headers, cookies, or full request |
+| `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
+| `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once |
+| Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
+| Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
 
-Muxt recognizes these special parameter names:
+Parameter names in template call must match method signature exactly.
 
-- `ctx` → `context.Context` from `request.Context()`
-- `request` → `*http.Request`
-- `response` → `http.ResponseWriter`
-- `form` → `url.Values` from `request.Form`
+[argument_context.txt](../../cmd/muxt/testdata/argument_context.txt) · [argument_request.txt](../../cmd/muxt/testdata/argument_request.txt) · [argument_response.txt](../../cmd/muxt/testdata/argument_response.txt)
 
-Path parameters (like `{userID}` in the route) default to `string` but can be typed when using `--receiver-type`.
+## Type Resolution
 
-*[(See Muxt CLI Test/argument_context)](../../cmd/muxt/testdata/argument_context.txt)*
-*[(See Muxt CLI Test/argument_request)](../../cmd/muxt/testdata/argument_request.txt)*
-*[(See Muxt CLI Test/argument_response)](../../cmd/muxt/testdata/argument_response.txt)*
+**Without `--receiver-type`:** Path params are `string`, return types are `any`
 
-## Without Receiver Type
-
-Without `--receiver-type`, Muxt generates an interface with `any` as the return type:
-
-Template:
 ```gotemplate
-{{define "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)"}}
-Hello, world!
-{{end}}
+{{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}
 ```
-
-Generated interface:
 ```go
 type RoutesReceiver interface {
-  F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID string, taskID string) any
+    GetUser(ctx context.Context, id string) any  // id: string, return: any
 }
 ```
 
-Path parameters are `string` by default.
+This allows you to stub out Go code while iterating in template source.
 
-*[(See Muxt CLI Test/argument_no_receiver)](../../cmd/muxt/testdata/argument_no_receiver.txt)*
+[argument_no_receiver.txt](../../cmd/muxt/testdata/argument_no_receiver.txt)
 
-## With Receiver Type
+**With `--receiver-type=Server`:** Muxt looks up method signature, uses actual types
 
-When you provide `--receiver-type=Server`, Muxt:
-1. Looks up the method signature on `Server`
-2. Generates parsers for typed path parameters
-3. Uses the actual return type in the interface
-
-Your receiver:
 ```go
-package server
-
-import (
-  "context"
-  "net/http"
-)
-
-type Server struct{}
-
-type Data struct{}
-
-func (Server) F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID uint32, taskID int8) Data {
-	return Data{}
-}
+func (s Server) GetUser(ctx context.Context, id int) (_ User, _ error) { return  }
 ```
-
-Template (same as before):
-```gotemplate
-{{define "GET /project/{projectID}/task/{taskID} F(ctx, response, request, projectID, taskID)"}}
-Hello, world!
-{{end}}
-```
-
-Generated interface:
 ```go
 type RoutesReceiver interface {
-    F(ctx context.Context, response http.ResponseWriter, request *http.Request, projectID uint32, taskID int8) Data
+    GetUser(ctx context.Context, id int) (User, error)  // id: int, return: (User, error)
 }
 ```
 
-Notice `projectID` is now `uint32` and `taskID` is `int8`, matching your receiver method.
+Generated handler parses `id` from string to `int` automatically. Parse failures return 400 Bad Request.
 
-*[(See Muxt CLI Test/call_F_with_argument_path_param)](../../cmd/muxt/testdata/call_F_with_argument_path_param.txt)*
+Always use `--receiver-type` for production. Type safety prevents runtime errors.
 
-## Automatic Type Parsing
+[call_F_with_argument_path_param.txt](../../cmd/muxt/testdata/call_F_with_argument_path_param.txt)
 
-Muxt generates parsers for these types using Go's `strconv` package:
+## Parseable Types
 
-### Numeric Types
+Muxt auto-parses path and form parameters to these types:
 
-- `int`, `int8`, `int16`, `int32`, `int64` (using `strconv.Atoi` or `strconv.ParseInt`)
-- `uint`, `uint8`, `uint16`, `uint32`, `uint64` (using `strconv.ParseUint`)
+| Type Category | Types | Parser | Notes |
+|---------------|-------|--------|-------|
+| **Integers** | `int`, `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt` | Base 10 |
+| **Unsigned** | `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint` | Base 10 |
+| **Boolean** | `bool` | `strconv.ParseBool` | Accepts: `1`/`t`/`true`, `0`/`f`/`false` (case-insensitive) |
+| **String** | `string` | None | Passed through |
+| **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing |
 
-*[(See Muxt CLI Test/path_param_typed)](../../cmd/muxt/testdata/path_param_typed.txt)*
+**Parse failures:** Return 400 Bad Request automatically.
 
-### Boolean
+[path_param_typed.txt](../../cmd/muxt/testdata/path_param_typed.txt)
 
-- `bool` - Uses `strconv.ParseBool` which accepts:
-  - True: `1`, `t`, `T`, `TRUE`, `true`, `True`
-  - False: `0`, `f`, `F`, `FALSE`, `false`, `False`
-
-### String
-
-- `string` - Passed through with no parsing
-
-### Custom Types
-
-If a type implements [`encoding.TextUnmarshaler`](https://pkg.go.dev/encoding#TextUnmarshaler), Muxt will use `UnmarshalText`:
-
+**Custom parsing example:**
 ```go
 type UserID string
 
 func (id *UserID) UnmarshalText(text []byte) error {
-	// Custom parsing logic
-	*id = UserID(strings.ToLower(string(text)))
-	return nil
+    *id = UserID(strings.ToLower(string(text)))
+    return nil
 }
 ```
 
-*[(See Muxt CLI Test/argument_text_encoder)](../../cmd/muxt/testdata/argument_text_encoder.txt)*
+[argument_text_encoder.txt](../../cmd/muxt/testdata/argument_text_encoder.txt)
 
 ## Form Parameters
 
-Parameters that aren't path variables or special names are parsed from form data:
-
-Template:
+**Generic url.Values for fields:**
 ```gotemplate
-{{define "POST /login Login(ctx, username, password)"}}
+{{define "POST /login Login(ctx, form)"}}{{end}}
 ```
-
-Receiver:
 ```go
-func (s Server) Login(ctx context.Context, username, password string) (Session, error) {
-	// username and password come from form fields
+func (s Server) Login(ctx context.Context, form url.Values) (Session, error) {
+    // username, password from request.Form.Get("username"), request.Form.Get("password")
 }
 ```
 
-Muxt calls `request.ParseForm()` and extracts values by parameter name.
-
-*[(See Muxt CLI Test/F_is_defined_and_form_type_is_a_struct)](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt)*
-
-## Form Structs
-
-You can use a struct type for form parameters. Muxt will generate code to populate the struct fields from form values:
-
+**Struct binding:**
+```gotemplate
+{{define "POST /login Login(ctx, form)"}}{{end}}
+```
 ```go
 type LoginForm struct {
-	Username string
-	Password string
-	Remember bool
+    Username string
+    Password string
+    Remember bool
 }
 
 func (s Server) Login(ctx context.Context, form LoginForm) (Session, error) {
-	// form fields automatically populated
+    // All fields populated from request.Form
 }
 ```
 
-Template:
-```gotemplate
-{{define "POST /login Login(ctx, form)"}}
-```
-
-Field names in the struct must match form field names (case-sensitive by default).
-
-### Struct Tags for Form Fields
-
-Use the `name` struct tag to map form fields with different names:
-
+**Struct tags for field mapping:**
 ```go
 type LoginForm struct {
-	Username string `name:"user-name"`
-	Password string `name:"user-pass"`
+    Username string `name:"user-name"`  // Maps to form field "user-name"
+    Password string `name:"user-pass"`  // Maps to form field "user-pass"
 }
 ```
 
-This allows form fields like `user-name` and `user-pass` to map to struct fields with Go-idiomatic names.
+Struct field names must match form field names exactly (case-sensitive) unless using `name` tag.
 
-*[(See Muxt CLI Test/form_field_tag)](../../cmd/muxt/testdata/form_field_tag.txt)*
-*[(See Muxt CLI Test/F_is_defined_and_form_type_is_a_struct)](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt)*
+[F_is_defined_and_form_type_is_a_struct.txt](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt) · [form_field_tag.txt](../../cmd/muxt/testdata/form_field_tag.txt)
 
-## Pointer Receivers
+## Advanced Patterns
 
-Muxt works with both value and pointer receivers:
-
+**Mixing path, form, and special parameters:**
+```gotemplate
+{{define "POST /user/{id}/update UpdateUser(ctx, id, form)"}}{{end}}
+```
 ```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error)   // Value receiver
-func (s *Server) GetUser(ctx context.Context, id int) (User, error)  // Pointer receiver
+func (s Server) UpdateUser(ctx context.Context, id int, form UpdateUserForm) error {
+    // id from path, form fields from request body, ctx from request context
+}
 ```
 
-*[(See Muxt CLI Test/method_receiver_is_a_pointer)](../../cmd/muxt/testdata/method_receiver_is_a_pointer.txt)*
+**Pointer receivers (both work):**
+```go
+func (s Server) GetUser(ctx context.Context, id int) (User, error)   // Value
+func (s *Server) GetUser(ctx context.Context, id int) (User, error)  // Pointer
+```
 
-## Embedded Methods
+[method_receiver_is_a_pointer.txt](../../cmd/muxt/testdata/method_receiver_is_a_pointer.txt)
 
-Methods from embedded fields are automatically discovered:
-
+**Embedded fields (method promotion):**
 ```go
 type Auth struct{}
 func (Auth) Login(ctx context.Context, username, password string) (Session, error)
 
 type Server struct {
-	Auth  // Embedded field
+    Auth  // Login promoted to Server
 }
 ```
 
-Templates can call `Login` on `Server` because it's promoted from the embedded `Auth` field.
+[receiver_embedded_field_method.txt](../../cmd/muxt/testdata/receiver_embedded_field_method.txt)
 
-*[(See Muxt CLI Test/receiver_embedded_field_method)](../../cmd/muxt/testdata/receiver_embedded_field_method.txt)*
+## Validation and Error Handling
 
-## Mixing Parameter Types
-
-You can mix path parameters, form parameters, and special parameters:
-
-```gotemplate
-{{define "POST /user/{id}/update UpdateUser(ctx, id, form)"}}
-```
-
-```go
-type UpdateUserForm struct {
-	Name  string
-	Email string
-}
-
-func (s Server) UpdateUser(ctx context.Context, id int, form UpdateUserForm) error {
-	// id from path, form fields from request body
-}
-```
-
-## Parameter Validation
-
-Muxt doesn't do validation. That's your receiver method's job:
+**Muxt handles type parsing. Your methods handle validation:**
 
 ```go
 func (s Server) CreateUser(ctx context.Context, email, password string) (User, error) {
-	if !isValidEmail(email) {
-		return User{}, errors.New("invalid email")
-	}
-	if len(password) < 8 {
-		return User{}, errors.New("password too short")
-	}
-	// ...
+    if !isValidEmail(email) {
+        return User{}, errors.New("invalid email")
+    }
+    if len(password) < 8 {
+        return User{}, errors.New("password too short")
+    }
+    // ...
 }
 ```
 
-Return errors. Let templates decide how to display them.
+**Parse errors return 400 automatically:**
+- Request to `/user/abc` with `GetUser(ctx, id int)` → 400 Bad Request
+- Form field "age=xyz" with `age int` param → 400 Bad Request
 
-## Type Errors
+Validation errors should return from your method. Display them in templates with `{{if .Err}}`.
 
-If a parameter can't be parsed, Muxt returns `400 Bad Request`:
+[error_wrong_argument_type.txt](../../cmd/muxt/testdata/error_wrong_argument_type.txt)
 
-```gotemplate
-{{define "GET /user/{id} GetUser(ctx, id)"}}
-```
+## Test Files by Category
 
-```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error)
-```
+**Parameter sources:**
+- [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt) — `ctx` parameter
+- [argument_request.txt](../../cmd/muxt/testdata/argument_request.txt) — `request` parameter
+- [argument_response.txt](../../cmd/muxt/testdata/argument_response.txt) — `response` parameter
+- [argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt) — Path param extraction
 
-Request to `/user/abc` returns 400 because "abc" can't parse to `int`.
+**Type parsing:**
+- [path_param_typed.txt](../../cmd/muxt/testdata/path_param_typed.txt) — Typed path params
+- [argument_text_encoder.txt](../../cmd/muxt/testdata/argument_text_encoder.txt) — Custom `TextUnmarshaler`
 
-*[(See Muxt CLI Test/error_wrong_argument_type)](../../cmd/muxt/testdata/error_wrong_argument_type.txt)*
+**Forms:**
+- [F_is_defined_and_form_type_is_a_struct.txt](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt) — Struct form binding
+- [form_field_tag.txt](../../cmd/muxt/testdata/form_field_tag.txt) — `name` tag mapping
+- [F_is_defined_and_form_slice_field.txt](../../cmd/muxt/testdata/F_is_defined_and_form_slice_field.txt) — Form slices
+- [F_is_defined_and_form_has_unsupported_field_type.txt](../../cmd/muxt/testdata/F_is_defined_and_form_has_unsupported_field_type.txt) — Unsupported types
 
-## More Examples
+**Multiple arguments:**
+- [call_F_with_multiple_arguments.txt](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt) — Multiple params
 
-- [Multiple arguments](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt)
-- [Form slices](../../cmd/muxt/testdata/F_is_defined_and_form_slice_field.txt)
-- [Unsupported types](../../cmd/muxt/testdata/F_is_defined_and_form_has_unsupported_field_type.txt)
-- [All CLI tests](../../cmd/muxt/testdata/)
+**Receiver types:**
+- [method_receiver_is_a_pointer.txt](../../cmd/muxt/testdata/method_receiver_is_a_pointer.txt) — Pointer receivers
+- [receiver_embedded_field_method.txt](../../cmd/muxt/testdata/receiver_embedded_field_method.txt) — Embedded methods
+
+**Errors:**
+- [error_wrong_argument_type.txt](../../cmd/muxt/testdata/error_wrong_argument_type.txt) — Parse errors
+
+**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

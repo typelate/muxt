@@ -29,6 +29,8 @@ Put your templates, generated routes, and custom helpers in the same package. It
 
 Generated code isn't second-class. It's just code.
 
+When there are package level naming conflicts. Let the user rename their non-generated code.
+
 ## Collaboration, not isolation
 
 The simpler the tool, the fewer technical barriers stand between you and your collaborators.
