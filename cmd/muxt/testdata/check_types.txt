@@ -1,4 +1,4 @@
-muxt generate --find-receiver-type=T
+muxt generate --use-receiver-type=T
 
 ! muxt check  -v
 stderr 'checking endpoint GET / Endpoint\(\)'

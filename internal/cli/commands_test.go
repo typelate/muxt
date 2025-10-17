@@ -16,9 +16,9 @@ func TestNewGenerate(t *testing.T) {
 	})
 
 	// Tests for new flag names
-	t.Run(findReceiverType+" flag value is an invalid identifier", func(t *testing.T) {
+	t.Run(useReceiverType+" flag value is an invalid identifier", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + findReceiverType, "123",
+			"--" + useReceiverType, "123",
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})
@@ -28,9 +28,9 @@ func TestNewGenerate(t *testing.T) {
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})
-	t.Run(findTemplatesVariable+" flag value is an invalid identifier", func(t *testing.T) {
+	t.Run(useTemplatesVariable+" flag value is an invalid identifier", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + findTemplatesVariable, "123",
+			"--" + useTemplatesVariable, "123",
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})

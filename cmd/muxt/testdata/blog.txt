@@ -1,7 +1,7 @@
 exec go get github.com/typelate/dom@v0.6.1
 exec go mod tidy
 
-muxt generate --find-receiver-type=App --output-routes-func=Routes
+muxt generate --use-receiver-type=App --output-routes-func=Routes
 muxt check
 
 exec go test -v

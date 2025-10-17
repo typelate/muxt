@@ -1,6 +1,6 @@
 # error wrong argument type
 
-! muxt generate --find-receiver-type=T
+! muxt generate --use-receiver-type=T
 stderr 'method expects type context.Context but request is \*http.Request'
 
 -- receiver.go --

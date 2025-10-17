@@ -1,7 +1,7 @@
 
 cd internal/hypertext
 
-muxt generate --find-receiver-type=Handler --find-receiver-type-package=crhntr.com/muxt-test/internal/endpoints --output-routes-func=Routes
+muxt generate --use-receiver-type=Handler --use-receiver-type-package=crhntr.com/muxt-test/internal/endpoints --output-routes-func=Routes
 muxt check
 
 cd ../../

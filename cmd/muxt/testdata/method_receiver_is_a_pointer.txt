@@ -1,6 +1,6 @@
 # method receiver is a pointer
 
-muxt generate --find-receiver-type=T
+muxt generate --use-receiver-type=T
 muxt check
 
 -- receiver.go --
