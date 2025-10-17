@@ -208,7 +208,7 @@ func TestGetPortfolio(t *testing.T) {
 }
 ```
 
-**Why this works:** Mocking service interfaces (Database, SecuritiesProvider) instead of RoutesReceiver creates a thicker testable application layer. Tests exercise receiver methods, TemplateData[T] extensions, and error handling logic—more business logic per test. Mocking RoutesReceiver creates a thin boundary that only tests generated handler code (routing, parameter parsing), which is already has some coverage from Muxt's own tests.
+**Why this works:** Mocking service interfaces (Database, SecuritiesProvider) instead of RoutesReceiver creates a thicker testable application layer. Tests exercise receiver methods, TemplateData[T] extensions, and error handling logic—more business logic per test. Mocking RoutesReceiver creates a thin boundary that only tests generated handler code (routing, parameter parsing), which already has some coverage from Muxt's own tests.
 
 **Test layer thickness tradeoffs:**
 

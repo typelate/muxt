@@ -29,7 +29,7 @@ Put your templates, generated routes, and custom helpers in the same package. It
 
 Generated code isn't second-class. It's just code.
 
-When there are package level naming conflicts. Let the user rename their non-generated code.
+When there are package-level naming conflicts, let the user rename their non-generated code.
 
 ## Collaboration, not isolation
 
@@ -79,9 +79,9 @@ HTMX proved this. HTML can do more than we thought.
 
 You don't need to send JSON to a client-side framework that renders HTML from the JSON. Just send the HTML.
 
-You don't need client-side routing. Server-side routing works (especially with islands of client side scripting). It worked for years before SPAs.
+You don't need client-side routing. Server-side routing works (especially with islands of client-side scripting). It worked for years before SPAs.
 
-I would consider it a compliment if someone said using muxt made them feel like they were writing PHP again.
+It would be a compliment if someone said using Muxt made them feel like they were writing PHP again.
 
 You don't need to synchronize state between client and server. The server has the state. Send HTML that represents the state.
 

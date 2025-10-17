@@ -54,10 +54,10 @@ Call parameters map to:
 ## Return Types
 
 ```go
-func (Reciever) Value() T                  // .Result=T, .Err=nil
-func (Reciever) ValueErr() (T, error)         // .Result=T, .Err=error
-func (Reciever) ValueOk() (T, bool)          // .Result=T, bool=true skips template
-func (Reciever) JustErr() error              // .Result=zero, .Err=error
+func (Receiver) Value() T                  // .Result=T, .Err=nil
+func (Receiver) ValueErr() (T, error)         // .Result=T, .Err=error
+func (Receiver) ValueOk() (T, bool)          // .Result=T, bool=true skips template
+func (Receiver) JustErr() error              // .Result=zero, .Err=error
 ```
 
 ## Complete Example
