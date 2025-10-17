@@ -158,7 +158,7 @@ func main() {
 
 **When to use:** Public vs admin interfaces, API versioning (v1 vs v2 receivers), multi-tenant apps (different template sets per tenant), different authentication realms, staged rollouts (experimental routes in separate receiver).
 
-[multiple_generated_routes_in_the_same_package.txt](../../cmd/muxt/testdata/multiple_generated_routes_in_the_same_package.txt)
+[explanation_multiple_generated_routes.txt](../../cmd/muxt/testdata/explanation_multiple_generated_routes.txt)
 
 ## Interface Segregation: Composable Dependencies
 

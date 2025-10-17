@@ -45,7 +45,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 {{define "GET /user/{id}/post/{postID}"}}{{end}}  <!-- Multiple parameters -->
 ```
 
-[simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) · [path_param.txt](../../cmd/muxt/testdata/path_param.txt)
+[tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt)
 
 ### Path Matching Modes
 
@@ -57,7 +57,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 
 **Note:** `/{$}` vs `/` behavior differs. Former is exact match, latter matches prefix.
 
-[path_end.txt](../../cmd/muxt/testdata/path_end.txt) · [path_prefix.txt](../../cmd/muxt/testdata/path_prefix.txt)
+[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt)
 
 ### Path Parameters Are Type-Safe
 
@@ -74,7 +74,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 **Note:** Path param names must match method param names exactly. Type conversion is automatic based on method signature.
 
-[argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt)
+[argument_howto_path_param.txt](../../cmd/muxt/testdata/argument_howto_path_param.txt)
 
 ## HTTP Methods
 
@@ -88,7 +88,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 **Without method prefix:** Matches all methods (GET, POST, PUT, PATCH, DELETE, etc.)
 
-[simple_patch.txt](../../cmd/muxt/testdata/simple_patch.txt)
+[howto_patch_method.txt](../../cmd/muxt/testdata/howto_patch_method.txt)
 
 ## Status Codes
 
@@ -110,7 +110,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 Use template name for static codes (201 for POST), methods for dynamic codes (404 from errors).
 
-[status_codes.txt](../../cmd/muxt/testdata/status_codes.txt)
+[reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
 ## Call Expressions
 
@@ -147,7 +147,7 @@ MethodName(arg1, arg2, ...)
 
 Parameter names in template must match method signature exactly. Case-sensitive.
 
-[call_F.txt](../../cmd/muxt/testdata/call_F.txt) · [call_F_with_multiple_arguments.txt](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt) · [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt)
+[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_multiple_args.txt](../../cmd/muxt/testdata/howto_call_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)
 
 ## Host Matching
 
@@ -216,31 +216,31 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 ## Test Files by Category
 
 **Basics:**
-- [simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) — GET with no params
-- [path_param.txt](../../cmd/muxt/testdata/path_param.txt) — Path parameters
-- [simple_patch.txt](../../cmd/muxt/testdata/simple_patch.txt) — PATCH method
+- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) — GET with no params
+- [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) — Path parameters
+- [howto_patch_method.txt](../../cmd/muxt/testdata/howto_patch_method.txt) — PATCH method
 
 **Path patterns:**
-- [path_end.txt](../../cmd/muxt/testdata/path_end.txt) — `/{$}` exact match
-- [path_prefix.txt](../../cmd/muxt/testdata/path_prefix.txt) — Prefix matching
+- [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — `/{$}` exact match
+- [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt) — Prefix matching
 - [path_wildcard.txt](../../cmd/muxt/testdata/path_wildcard.txt) — Wildcard `{...}`
 
 **Call expressions:**
-- [call_F.txt](../../cmd/muxt/testdata/call_F.txt) — Basic call
-- [call_F_with_multiple_arguments.txt](../../cmd/muxt/testdata/call_F_with_multiple_arguments.txt) — Multiple args
-- [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt) — `ctx` parameter
-- [argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt) — Path param parsing
+- [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) — Basic call
+- [howto_call_multiple_args.txt](../../cmd/muxt/testdata/howto_call_multiple_args.txt) — Multiple args
+- [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) — `ctx` parameter
+- [argument_howto_path_param.txt](../../cmd/muxt/testdata/argument_howto_path_param.txt) — Path param parsing
 
 **Status codes:**
-- [status_codes.txt](../../cmd/muxt/testdata/status_codes.txt) — Various status patterns
+- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) — Various status patterns
 
 **Forms:**
-- [F_is_defined_and_form_type_is_a_struct.txt](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt) — Struct form binding
+- [explanation_form_struct_binding.txt](../../cmd/muxt/testdata/explanation_form_struct_binding.txt) — Struct form binding
 
 **Complete apps:**
-- [blog.txt](../../cmd/muxt/testdata/blog.txt) — Full blog application
+- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Full blog application
 
 **Error cases:**
-- [error_wrong_argument_type.txt](../../cmd/muxt/testdata/error_wrong_argument_type.txt) — Type mismatch
+- [err_arg_type_mismatch.txt](../../cmd/muxt/testdata/err_arg_type_mismatch.txt) — Type mismatch
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

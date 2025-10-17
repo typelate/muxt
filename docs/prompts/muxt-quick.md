@@ -182,10 +182,10 @@ muxt version                            # Show version
 ## More Examples
 
 See test cases: [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
-- [simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) - Basic GET
-- [path_param.txt](../../cmd/muxt/testdata/path_param.txt) - Path parameters
-- [form.txt](../../cmd/muxt/testdata/form.txt) - Form parsing
-- [status_codes.txt](../../cmd/muxt/testdata/status_codes.txt) - Status codes
-- [blog.txt](../../cmd/muxt/testdata/blog.txt) - Complete app
+- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) - Basic GET
+- [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) - Path parameters
+- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) - Form parsing
+- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) - Status codes
+- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) - Complete app
 
 Browse all: `ls cmd/muxt/testdata/*.txt`
