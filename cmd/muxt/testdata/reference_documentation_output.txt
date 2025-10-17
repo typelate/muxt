@@ -3,7 +3,7 @@ muxt documentation
 stdout 'functions:'
 stdout 'Template Routes:'
 stdout 'GET /'
-stdout 'Reciever Type:'
+stdout 'Receiver Type:'
 
 -- go.mod --
 module example.com
