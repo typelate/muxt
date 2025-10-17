@@ -6,10 +6,10 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 
 | Command | Purpose | Common Flags |
 |---------|---------|--------------|
-| `generate` | Generate HTTP handlers from templates | `--find-receiver-type`, `--logger`, `--output-file` |
-| `check` | Type-check templates without generating | `--find-receiver-type`, `--verbose` |
+| `generate` | Generate HTTP handlers from templates | `--use-receiver-type`, `--output-routes-func-with-logger-param`, `--output-file` |
+| `check` | Type-check templates without generating | `--use-receiver-type`, `--verbose` |
 | `documentation` | Generate markdown docs from templates | Same as `generate` |
-| `version` | Print muxt version | None |
+| `version` | Print muxt version | `-v, --verbose` |
 
 ## Commands
 
@@ -24,21 +24,21 @@ Generates type-safe HTTP handlers from HTML templates.
 - `*_template_routes_gen.go` — Per-file handlers for each `.gohtml` source
 
 ```bash
-muxt generate --find-receiver-type=App --logger
+muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
 ```
 
 #### Core Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--find-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
-| `--find-receiver-type-package` | string | _(current pkg)_ | Package path for `--find-receiver-type`. Only needed if receiver is in different package. |
+| `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
+| `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
 | `--output-file` | string | `template_routes.go` | Main generated file name. Per-file route files use pattern `*_template_routes_gen.go`. |
-| `--find-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
 
 **Type resolution:**
-- **Without** `--find-receiver-type`: Parameters are `string`, return types are `any`
-- **With** `--find-receiver-type`: Muxt looks up actual method signatures, generates type parsers
+- **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`
+- **With** `--use-receiver-type`: Muxt looks up actual method signatures, generates type parsers
 
 [templates-variable.md](templates-variable.md) — Template variable requirements
 
@@ -55,15 +55,17 @@ muxt generate --find-receiver-type=App --logger
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--logger` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
-| `--path-prefix` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
+| `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
+| `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
+| ~~`--logger`~~ | bool | `false` | **Deprecated.** Use `--output-routes-func-with-logger-param` instead. |
+| ~~`--path-prefix`~~ | bool | `false` | **Deprecated.** Use `--output-routes-func-with-path-prefix-param` instead. |
 
-**With `--logger`:**
+**With `--output-routes-func-with-logger-param`:**
 ```go
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger) TemplateRoutePaths
 ```
 
-**With `--path-prefix`:**
+**With `--output-routes-func-with-path-prefix-param`:**
 ```go
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix string) TemplateRoutePaths
 ```
@@ -82,7 +84,7 @@ Type-check templates without generating code. Use in CI or during development.
 **Aliases:** `c`, `typelate`
 
 ```bash
-muxt check --find-receiver-type=App --verbose
+muxt check --use-receiver-type=App --verbose
 ```
 
 #### Flags
@@ -111,7 +113,7 @@ Generate markdown API documentation from templates.
 **Aliases:** `docs`, `d`
 
 ```bash
-muxt documentation --find-receiver-type=App
+muxt documentation --use-receiver-type=App
 ```
 
 **Flags:** Same as `muxt generate`
@@ -120,13 +122,20 @@ muxt documentation --find-receiver-type=App
 
 ### `muxt version`
 
-Print muxt version.
+Print muxt version. Use `-v` for verbose output including Go version.
 
 **Alias:** `v`
 
 ```bash
 muxt version
+muxt version -v  # Shows Go version used to compile muxt
 ```
+
+#### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-v, --verbose` | bool | `false` | Show Go version used to compile muxt. |
 
 ---
 
@@ -137,7 +146,7 @@ muxt version
 | `-C` | string | _(current dir)_ | Change directory before running command. |
 
 ```bash
-muxt -C ./web generate --find-receiver-type=Server
+muxt -C ./web generate --use-receiver-type=Server
 ```
 
 ---
@@ -149,7 +158,7 @@ muxt -C ./web generate --find-receiver-type=Server
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --find-receiver-type=Server --logger
+//go:generate muxt generate --use-receiver-type=Server --output-routes-func-with-logger-param
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 ```
 
@@ -160,13 +169,13 @@ go generate ./...
 
 **CI type checking:**
 ```bash
-muxt check --find-receiver-type=App --verbose
+muxt check --use-receiver-type=App --verbose
 ```
 
 **Custom naming:**
 ```bash
 muxt generate \
-  --find-receiver-type=App \
+  --use-receiver-type=App \
   --output-routes-func=RegisterRoutes \
   --output-receiver-interface=Handler \
   --output-file=routes.go
@@ -174,7 +183,7 @@ muxt generate \
 
 **Mount under subpath:**
 ```bash
-muxt generate --find-receiver-type=App --path-prefix
+muxt generate --use-receiver-type=App --output-routes-func-with-path-prefix-param
 ```
 
 Then use:
@@ -198,4 +207,4 @@ Routes(mux, app, "/api/v1")
 - [templates-variable.md](templates-variable.md) — Template variable setup requirements
 - [template-names.md](template-names.md) — Template naming syntax
 - [type-checking.md](type-checking.md) — Type checking behavior
-- [How to Add Logging](../how-to/add-logging.md) — Using `--logger` flag
+- [How to Add Logging](../how-to/add-logging.md) — Using `--output-routes-func-with-logger-param` flag
