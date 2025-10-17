@@ -325,9 +325,9 @@ See test files in [cmd/muxt/testdata/](../../cmd/muxt/testdata/) for working exa
 
 **Advanced patterns:**
 - [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) - Complete blog application
-- [explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt) - Embedded methods
-- [explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt) - Pointer receivers
-- [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt) - Error handling
+- [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) - Embedded methods
+- [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt) - Pointer receivers
+- [reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt) - Error handling
 
 Browse all: `ls cmd/muxt/testdata/*.txt`
 

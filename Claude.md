@@ -141,3 +141,58 @@ Follow [Diátaxis](http://diataxis.fr/):
 * Take small, incremental steps
 * Use examples to demonstrate progress (failing → passing)
 * `// go:embed` does not support double star glob patterns you must add every level of directory as a separate field `go:embd *.gohtml */*.gohtml */*/*.gohtml`
+
+---
+
+## Test File Naming Convention
+
+Tests in `cmd/muxt/testdata/` follow Diátaxis-inspired naming:
+
+**Format:** `[category]_[feature]_with_[details].txt`
+
+**Categories:**
+
+* **`tutorial_*`** — Learning-oriented examples (3 tests)
+  - Complete, working examples that teach concepts
+  - Examples: `tutorial_blog_example.txt`, `tutorial_basic_route.txt`
+
+* **`howto_*`** — Task-oriented guides (15 tests)
+  - Show how to accomplish specific tasks
+  - Examples: `howto_arg_context.txt`, `howto_form_basic.txt`, `howto_call_with_multiple_args.txt`
+
+* **`reference_*`** — Feature documentation (40+ tests)
+  - Document what features exist and their syntax (happy path)
+  - Examples: `reference_status_codes.txt`, `reference_form_field_types.txt`, `reference_call_with_two_returns.txt`
+
+* **`err_*`** — Error condition reference (19 tests)
+  - Reference documentation for error cases (non-zero exit, stderr output)
+  - Show what error messages developers get for various mistakes
+  - Examples: `err_duplicate_pattern.txt`, `err_form_with_undefined_method.txt`, `err_arg_context_type.txt`
+
+**Naming patterns:**
+
+* Use `with` to improve readability: `reference_call_with_bool_return.txt`
+* Use underscores consistently: `reference_receiver_with_embedded_method.txt`
+* Be descriptive: `reference_form_with_slice_field.txt` (not `reference_form_slice.txt`)
+
+**Finding tests:**
+
+```bash
+# List by category
+ls cmd/muxt/testdata/tutorial_*.txt
+ls cmd/muxt/testdata/howto_*.txt
+ls cmd/muxt/testdata/reference_*.txt
+ls cmd/muxt/testdata/err_*.txt
+
+# Find specific features
+ls cmd/muxt/testdata/*form*.txt        # All form-related tests
+ls cmd/muxt/testdata/*call*.txt        # All call-related tests
+ls cmd/muxt/testdata/reference_*arg*.txt  # Reference for arguments
+```
+
+**When adding new tests:**
+
+1. **Tutorial** - Is this a complete, working example teaching a concept? Probably not needed.
+2. **How-to** - Does this show how to accomplish a specific task? → `howto_[task].txt`
+3. **Reference (happy path)** - Does this document a feature that works? → `reference_[feature]_with_[detail].txt`
+4. **Reference (error path)** - Does this document an error condition? → `err_[condition].txt`

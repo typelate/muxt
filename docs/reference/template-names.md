@@ -74,7 +74,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 **Note:** Path param names must match method param names exactly. Type conversion is automatic based on method signature.
 
-[argument_howto_path_param.txt](../../cmd/muxt/testdata/argument_howto_path_param.txt)
+[howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)
 
 ## HTTP Methods
 
@@ -147,7 +147,7 @@ MethodName(arg1, arg2, ...)
 
 Parameter names in template must match method signature exactly. Case-sensitive.
 
-[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_multiple_args.txt](../../cmd/muxt/testdata/howto_call_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)
+[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)
 
 ## Host Matching
 
@@ -185,7 +185,7 @@ Host patterns enable multi-tenant apps or API versioning by subdomain. Omit host
 {{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}  <!-- path captures "a/b/c.txt" -->
 ```
 
-[path_wildcard.txt](../../cmd/muxt/testdata/path_wildcard.txt)
+[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt)
 
 ## Go 1.22+ ServeMux Behavior
 
@@ -223,19 +223,19 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 **Path patterns:**
 - [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — `/{$}` exact match
 - [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt) — Prefix matching
-- [path_wildcard.txt](../../cmd/muxt/testdata/path_wildcard.txt) — Wildcard `{...}`
+- [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — Wildcard `{...}`
 
 **Call expressions:**
 - [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) — Basic call
-- [howto_call_multiple_args.txt](../../cmd/muxt/testdata/howto_call_multiple_args.txt) — Multiple args
+- [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple args
 - [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) — `ctx` parameter
-- [argument_howto_path_param.txt](../../cmd/muxt/testdata/argument_howto_path_param.txt) — Path param parsing
+- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) — Path param parsing
 
 **Status codes:**
 - [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) — Various status patterns
 
 **Forms:**
-- [explanation_form_struct_binding.txt](../../cmd/muxt/testdata/explanation_form_struct_binding.txt) — Struct form binding
+- [reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) — Struct form binding
 
 **Complete apps:**
 - [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Full blog application

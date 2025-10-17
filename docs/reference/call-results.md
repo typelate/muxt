@@ -14,7 +14,7 @@ Use this reference when designing method signatures with team members.
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
 
-[explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt)
+[reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt)
 
 ## Pattern 1: Single Value (Infallible)
 
@@ -60,7 +60,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error) {
 
 Always check `{{if .Err}}` or `{{with .Err}}` in templates when method returns error. Template executes even on error.
 
-[explanation_call_error_return.txt](../../cmd/muxt/testdata/explanation_call_error_return.txt)
+[reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt)
 
 ## Pattern 3: Value and Boolean (Early Exit)
 
@@ -79,7 +79,7 @@ func (s Server) Download(response http.ResponseWriter, request *http.Request, id
 
 **Behavior:** If bool = `true`, handler returns immediately (skip template). If bool = `false`, execute template normally.
 
-[explanation_call_bool_return.txt](../../cmd/muxt/testdata/explanation_call_bool_return.txt)
+[reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)
 
 ## Pattern 4: Error Only (No Data)
 
@@ -240,14 +240,14 @@ func (s Server) Method() (T, map[string]error)   // Maps unsupported
 ## Test Files by Category
 
 **Return patterns:**
-- [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt) — `(T, error)` pattern
-- [explanation_call_error_return.txt](../../cmd/muxt/testdata/explanation_call_error_return.txt) — Error handling
-- [explanation_call_bool_return.txt](../../cmd/muxt/testdata/explanation_call_bool_return.txt) — Early exit with bool
+- [reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt) — `(T, error)` pattern
+- [reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt) — Error handling
+- [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt) — Early exit with bool
 - [err_form_bool_return.txt](../../cmd/muxt/testdata/err_form_bool_return.txt) — Boolean returns
 
 **Result types:**
-- [explanation_result_import_type.txt](../../cmd/muxt/testdata/explanation_result_import_type.txt) — Imported result types
-- [explanation_result_named_type.txt](../../cmd/muxt/testdata/explanation_result_named_type.txt) — Named return values
+- [reference_result_with_import_type.txt](../../cmd/muxt/testdata/reference_result_with_import_type.txt) — Imported result types
+- [reference_result_with_named_type.txt](../../cmd/muxt/testdata/reference_result_with_named_type.txt) — Named return values
 
 **Unsupported patterns:**
 - [err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) — Unsupported second return

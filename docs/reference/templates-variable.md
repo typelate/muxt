@@ -63,7 +63,7 @@ var fs embed.FS
 var templates = template.Must(template.ParseFS(fs, "*.gohtml", "pages/*.gohtml", "components/*.gohtml"))
 ```
 
-[reference_template_multiple_parsefs.txt](../../cmd/muxt/testdata/reference_template_multiple_parsefs.txt)
+[reference_template_with_multiple_parsefs.txt](../../cmd/muxt/testdata/reference_template_with_multiple_parsefs.txt)
 
 **With custom functions:**
 ```go

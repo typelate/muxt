@@ -127,6 +127,6 @@ Error: template action references undefined field: PublishedAt
 
 ## Related
 
-- [explanation_check_types.txt](../../cmd/muxt/testdata/explanation_check_types.txt) — Type checking test cases
+- [reference_check_types.txt](../../cmd/muxt/testdata/reference_check_types.txt) — Type checking test cases
 - [github.com/typelate/check](https://pkg.go.dev/github.com/typelate/check) — Type checker implementation
 - [known-issues.md](known-issues.md) — Known type checking limitations
