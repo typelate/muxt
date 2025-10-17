@@ -65,6 +65,25 @@ These flags control the names of generated types and functions:
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
 
+#### Deprecated Flags
+
+These flags still work but are deprecated. Use the new names above:
+
+| Old Flag | New Flag |
+|----------|----------|
+| `--templates-variable` | `--use-templates-variable` |
+| `--receiver-type` | `--use-receiver-type` |
+| `--receiver-type-package` | `--use-receiver-type-package` |
+| `--receiver-interface` | `--output-receiver-interface` |
+| `--routes-func` | `--output-routes-func` |
+| `--template-data-type` | `--output-template-data-type` |
+| `--template-route-paths-type` | `--output-template-route-paths-type` |
+| `--logger` | `--output-routes-func-with-logger-param` |
+| `--path-prefix` | `--output-routes-func-with-path-prefix-param` |
+| `--find-templates-variable` | `--use-templates-variable` |
+| `--find-receiver-type` | `--use-receiver-type` |
+| `--find-receiver-type-package` | `--use-receiver-type-package` |
+
 **With `--output-routes-func-with-logger-param`:**
 ```go
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger) TemplateRoutePaths
@@ -96,6 +115,9 @@ muxt check --use-receiver-type=App --verbose
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Same as in `generate`. |
+| `--use-receiver-type-package` | string | _(current pkg)_ | Package path for receiver type. Same as in `generate`. |
+| `--use-templates-variable` | string | `templates` | Template variable name. Same as in `generate`. |
 | `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
 **Verbose output:**
@@ -104,8 +126,6 @@ checking endpoint GET /users/{id}
 checking endpoint POST /users
 OK
 ```
-
-**Other flags:** Same as `muxt generate` except `--output-file` (no code generated)
 
 [type-checking.md](type-checking.md) — How type checking works
 
@@ -121,7 +141,16 @@ Generate markdown API documentation from templates.
 muxt documentation --use-receiver-type=App
 ```
 
-**Flags:** Same as `muxt generate`
+#### Flags
+
+Supports the same **Use Flags** as `muxt generate`:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--use-receiver-type` | string | _(none)_ | Type name for method lookup. |
+| `--use-receiver-type-package` | string | _(current pkg)_ | Package path for receiver type. |
+| `--use-templates-variable` | string | `templates` | Template variable name. |
+| `--verbose`, `-v` | bool | `false` | Enable verbose output. |
 
 ---
 
