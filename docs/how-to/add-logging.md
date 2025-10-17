@@ -1,6 +1,6 @@
 # How to Add Logging to Generated Handlers
 
-Learn how to add structured logging to your Muxt-generated HTTP handlers using the `--logger` flag.
+Learn how to add structured logging to your Muxt-generated HTTP handlers using the `--output-routes-func-with-logger-param` flag.
 
 ## Goal
 
@@ -15,17 +15,19 @@ Add observability to your handlers by logging request details and errors using G
 
 ### 1. Generate with the Logger Flag
 
-Add `--logger` to your `muxt generate` command:
+Add `--output-routes-func-with-logger-param` to your `muxt generate` command:
 
 ```bash
-muxt generate --find-receiver-type=App --logger
+muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
 ```
 
 Or in your `go:generate` directive:
 
 ```go
-//go:generate muxt generate --find-receiver-type=App --logger
+//go:generate muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
 ```
+
+> **Note:** The `--logger` flag is deprecated. Use `--output-routes-func-with-logger-param` instead.
 
 ### 2. Update Your Routes Function Call
 
@@ -181,10 +183,10 @@ func main() {
 
 ## Without the Logger Flag
 
-If you don't use `--logger`, the generated code uses the global `slog` default logger:
+If you don't use `--output-routes-func-with-logger-param`, the generated code uses the global `slog` default logger:
 
 ```go
-// Generated without --logger
+// Generated without --output-routes-func-with-logger-param
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
     // ...
     if err := templates.ExecuteTemplate(buf, "GET /", &td); err != nil {

@@ -19,7 +19,7 @@ Parameter names in template call must match method signature exactly.
 
 ## Type Resolution
 
-**Without `--find-receiver-type`:** Path params are `string`, return types are `any`
+**Without `--use-receiver-type`:** Path params are `string`, return types are `any`
 
 ```gotemplate
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}
@@ -34,7 +34,7 @@ This allows you to stub out Go code while iterating in template source.
 
 [argument_no_receiver.txt](../../cmd/muxt/testdata/argument_no_receiver.txt)
 
-**With `--find-receiver-type=Server`:** Muxt looks up method signature, uses actual types
+**With `--use-receiver-type=Server`:** Muxt looks up method signature, uses actual types
 
 ```go
 func (s Server) GetUser(ctx context.Context, id int) (_ User, _ error) { return  }
@@ -47,7 +47,7 @@ type RoutesReceiver interface {
 
 Generated handler parses `id` from string to `int` automatically. Parse failures return 400 Bad Request.
 
-Always use `--find-receiver-type` for production. Type safety prevents runtime errors.
+Always use `--use-receiver-type` for production. Type safety prevents runtime errors.
 
 [call_F_with_argument_path_param.txt](../../cmd/muxt/testdata/call_F_with_argument_path_param.txt)
 

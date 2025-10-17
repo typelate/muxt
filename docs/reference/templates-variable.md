@@ -76,7 +76,7 @@ var templates = template.Must(
 
 **Different variable name:**
 ```bash
-muxt generate --find-templates-variable=myTemplates
+muxt generate --use-templates-variable=myTemplates
 ```
 ```go
 var myTemplates = template.Must(template.ParseFS(fs, "*.gohtml"))
@@ -90,7 +90,7 @@ var myTemplates = template.Must(template.ParseFS(fs, "*.gohtml"))
 - Works without finding template variable
 
 **`muxt generate`:**
-- Finds template variable by name (`--find-templates-variable` flag)
+- Finds template variable by name (`--use-templates-variable` flag)
 - Parses embedded files to find route templates
 - Generates handlers for templates matching route pattern
 
@@ -98,7 +98,7 @@ var myTemplates = template.Must(template.ParseFS(fs, "*.gohtml"))
 
 **Variable not found:**
 - Ensure variable is package-level (not in function)
-- Verify variable name matches `--find-templates-variable` flag
+- Verify variable name matches `--use-templates-variable` flag
 - Check variable type is `*template.Template`
 
 **Templates not discovered:**
