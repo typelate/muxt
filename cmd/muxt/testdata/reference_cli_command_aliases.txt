@@ -1,0 +1,33 @@
+# Test that command aliases work correctly
+
+muxt gen
+exists template_routes.go
+
+rm template_routes.go
+
+muxt g
+exists template_routes.go
+
+rm template_routes.go
+
+muxt generate
+exists template_routes.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}Hello{{end}}

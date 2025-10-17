@@ -1,0 +1,28 @@
+# This shows how to use the -C flag to run muxt in a different directory
+
+muxt -C subdir generate
+
+exists subdir/template_routes.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- subdir/template.go --
+package subdir
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- subdir/template.gohtml --
+{{define "GET /"}}Hello from subdir{{end}}
+-- subdir/go.mod --
+module example.com/subdir
+
+go 1.24

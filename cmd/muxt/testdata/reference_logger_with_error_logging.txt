@@ -1,0 +1,66 @@
+muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
+
+grep 'logger \*slog.Logger' template_routes.go
+
+muxt check
+
+exec go test -v
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- app.go --
+package main
+
+import "context"
+
+type App struct{}
+
+func (*App) Hello(ctx context.Context) (string, error) {
+	return "Hello", nil
+}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET / Hello(ctx)"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>{{.Result}}</h1>
+</body>
+</html>
+{{end}}
+-- main_test.go --
+package main
+
+import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	logger := slog.Default()
+	TemplateRoutes(mux, new(App), logger)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}

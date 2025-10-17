@@ -1,0 +1,12 @@
+muxt version
+stdout '^\(devel\)|v[0-9]+\.[0-9]+\.[0-9]+.*$'
+! stderr .
+
+muxt version --verbose
+stdout '^\(devel\)|v[0-9]+\.[0-9]+\.[0-9]+.*$'
+stdout 'go version: go[0-9]+\.[0-9]+'
+! stderr .
+
+muxt v
+stdout '^\(devel\)|v[0-9]+\.[0-9]+\.[0-9]+.*$'
+! stderr .

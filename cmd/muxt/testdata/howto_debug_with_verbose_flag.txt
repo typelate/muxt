@@ -1,0 +1,34 @@
+# This shows how to use the --verbose flag to see what muxt is doing during generation.
+
+muxt generate --verbose --output-routes-func=Routes
+
+stdout 'generating handler for'
+stdout 'GET /'
+
+exists template_routes.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Debug Example</h1>
+</body>
+</html>
+{{end}}
