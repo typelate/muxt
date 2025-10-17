@@ -1,11 +1,45 @@
 Generate HTTP Endpoints from HTML Templates
 
-`muxt help`: View help documentation for the CLI commands and relevant flags.
+USAGE:
+  muxt [command] [flags]
 
-`muxt check`: Do some static analysis on the templates.
+COMMANDS:
+  help            View this help documentation and available flags
+  generate        Generate HTTP handlers from templates
+  check           Type-check templates without generating code
+  documentation   Display template documentation (work in progress)
+  version         Print the muxt version
 
-`muxt documentation`: This work in progress command will display template documentation similar to how Go doc generates helpful documentation.
+COMMON FLAGS FOR generate AND check:
 
-`muxt version`: Print the version of muxt to standard out.
+  Use Flags (specify what to use from your code):
+    --use-templates-variable     Name of the *template.Template variable (default: "templates")
+    --use-receiver-type          Type name for method signature lookup (enables type-safe parsing)
+    --use-receiver-type-package  Package path for receiver type (default: current package)
 
-`muxt generate`: Use this command to generate template_routes.go.
+  Output Flags (control generated code names and signatures):
+    --output-file                               Generated filename (default: "template_routes.go")
+    --output-receiver-interface                 Generated receiver interface name (default: "RoutesReceiver")
+    --output-routes-func                        Generated routes function name (default: "TemplateRoutes")
+    --output-routes-func-with-logger-param      Add *slog.Logger parameter to routes function
+    --output-routes-func-with-path-prefix-param Add pathPrefix string parameter to routes function
+    --output-template-data-type                 Generated template data type name (default: "TemplateData")
+    --output-template-route-paths-type          Generated path helpers type name (default: "TemplateRoutePaths")
+
+  Other Flags:
+    -v, --verbose  Enable verbose output
+
+EXAMPLES:
+  # Basic generation with type checking
+  muxt generate --use-receiver-type=Server
+
+  # Generate with custom names
+  muxt generate --use-receiver-type=App --output-routes-func=SetupRoutes
+
+  # Check templates without generating
+  muxt check --use-receiver-type=Server --verbose
+
+  # Use templates from a different variable
+  muxt generate --use-templates-variable=myTemplates --use-receiver-type=Handler
+
+For detailed flag information, run: muxt generate --help
