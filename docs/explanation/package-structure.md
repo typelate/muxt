@@ -111,7 +111,7 @@ var templates = template.Must(template.New("GET / List()").Parse(`
 
 **Note:** The first template name must be provided to `template.New()`. Additional templates are defined using `{{define "name"}}...{{end}}` within the string.
 
-*[(See Muxt CLI Test/import_v2_module)](../../cmd/muxt/testdata/explanation_import_v2_module.txt)*
+*[(See Muxt CLI Test/import_v2_module)](../../cmd/muxt/testdata/reference_import_with_v2_module.txt)*
 
 ### Pattern 2: Simple Single Directory
 

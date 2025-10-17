@@ -49,7 +49,7 @@ Generated handler parses `id` from string to `int` automatically. Parse failures
 
 Always use `--use-receiver-type` for production. Type safety prevents runtime errors.
 
-[howto_call_with_howto_path_param.txt](../../cmd/muxt/testdata/howto_call_with_howto_path_param.txt)
+[howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)
 
 ## Parseable Types
 
@@ -65,7 +65,7 @@ Muxt auto-parses path and form parameters to these types:
 
 **Parse failures:** Return 400 Bad Request automatically.
 
-[reference_path_param_typed.txt](../../cmd/muxt/testdata/reference_path_param_typed.txt)
+[reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
 
 **Custom parsing example:**
 ```go
@@ -117,7 +117,7 @@ type LoginForm struct {
 
 Struct field names must match form field names exactly (case-sensitive) unless using the `name` tag.
 
-[explanation_form_struct_binding.txt](../../cmd/muxt/testdata/explanation_form_struct_binding.txt) · [reference_form_field_tag.txt](../../cmd/muxt/testdata/reference_form_field_tag.txt)
+[reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) · [reference_form_field_tag.txt](../../cmd/muxt/testdata/reference_form_field_tag.txt)
 
 ## Advanced Patterns
 
@@ -137,7 +137,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error)   // Value
 func (s *Server) GetUser(ctx context.Context, id int) (User, error)  // Pointer
 ```
 
-[explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt)
+[reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt)
 
 **Embedded fields (method promotion):**
 ```go
@@ -149,7 +149,7 @@ type Server struct {
 }
 ```
 
-[explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt)
+[reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt)
 
 ## Validation and Error Handling
 
@@ -181,24 +181,24 @@ Validation errors should return from your method. Display them in templates with
 - [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) — `ctx` parameter
 - [howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt) — `request` parameter
 - [howto_arg_response.txt](../../cmd/muxt/testdata/howto_arg_response.txt) — `response` parameter
-- [argument_howto_path_param.txt](../../cmd/muxt/testdata/argument_howto_path_param.txt) — Path param extraction
+- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) — Path param extraction
 
 **Type parsing:**
-- [reference_path_param_typed.txt](../../cmd/muxt/testdata/reference_path_param_typed.txt) — Typed path params
+- [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt) — Typed path params
 - [reference_arg_text_unmarshaler.txt](../../cmd/muxt/testdata/reference_arg_text_unmarshaler.txt) — Custom `TextUnmarshaler`
 
 **Forms:**
-- [explanation_form_struct_binding.txt](../../cmd/muxt/testdata/explanation_form_struct_binding.txt) — Struct form binding
+- [reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) — Struct form binding
 - [reference_form_field_tag.txt](../../cmd/muxt/testdata/reference_form_field_tag.txt) — `name` tag mapping
-- [err_form_slice_field.txt](../../cmd/muxt/testdata/err_form_slice_field.txt) — Form slices
+- [reference_form_with_slice_field.txt](../../cmd/muxt/testdata/reference_form_with_slice_field.txt) — Form slices
 - [err_form_unsupported_field_type.txt](../../cmd/muxt/testdata/err_form_unsupported_field_type.txt) — Unsupported types
 
 **Multiple arguments:**
-- [howto_call_multiple_args.txt](../../cmd/muxt/testdata/howto_call_multiple_args.txt) — Multiple params
+- [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple params
 
 **Receiver types:**
-- [explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt) — Pointer receivers
-- [explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt) — Embedded methods
+- [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt) — Pointer receivers
+- [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) — Embedded methods
 
 **Errors:**
 - [err_arg_type_mismatch.txt](../../cmd/muxt/testdata/err_arg_type_mismatch.txt) — Parse errors

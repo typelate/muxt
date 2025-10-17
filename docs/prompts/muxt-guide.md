@@ -143,7 +143,7 @@ func () error              // .Result=zero, .Err=error
 
 Always check `.Err` in templates.
 
-See [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt), [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt)
+See [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt), [reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt)
 
 ## Status Codes
 
@@ -204,7 +204,7 @@ See muxt-quick.md for complete example.
 - Both value and pointer receivers supported
 - Form slices: `type Form struct { Tags []string }` parses multiple values
 
-See [explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt), [explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt)
+See [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt), [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt)
 
 ## Best Practices
 
