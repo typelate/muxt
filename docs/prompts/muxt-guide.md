@@ -34,7 +34,7 @@ Path patterns:
 - `GET /static/` - Prefix match `/static/*`
 - `GET /files/{path...}` - Wildcard captures rest of path
 
-See [path_end.txt](../../cmd/muxt/testdata/path_end.txt), [path_prefix.txt](../../cmd/muxt/testdata/path_prefix.txt)
+See [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt), [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt)
 
 ## TemplateData Access
 
@@ -80,7 +80,7 @@ Examples:
 {{end}}
 ```
 
-See [simple_get.txt](../../cmd/muxt/testdata/simple_get.txt), [simple_patch.txt](../../cmd/muxt/testdata/simple_patch.txt)
+See [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt), [howto_patch_method.txt](../../cmd/muxt/testdata/howto_patch_method.txt)
 
 ## Call Parameters
 
@@ -113,7 +113,7 @@ func (s Server) Login(ctx context.Context, form LoginForm) (Session, error) {
 }
 ```
 
-See [argument_context.txt](../../cmd/muxt/testdata/argument_context.txt), [form.txt](../../cmd/muxt/testdata/form.txt), [argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt)
+See [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt), [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt), [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)
 
 ## Type Parsing
 
@@ -143,7 +143,7 @@ func () error              // .Result=zero, .Err=error
 
 Always check `.Err` in templates.
 
-See [call_F.txt](../../cmd/muxt/testdata/call_F.txt), [call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt)
+See [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt), [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt)
 
 ## Status Codes
 
@@ -169,13 +169,13 @@ type Result struct { StatusCode int }
 func (e NotFoundError) StatusCode() int { return 404 }
 ```
 
-See [status_codes.txt](../../cmd/muxt/testdata/status_codes.txt)
+See [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
 ## Form Validation
 
 Muxt reads HTML validation attributes: `minlength`, `maxlength`, `min`, `max`, `pattern`
 
-See [templates_input_validation_min_max.txt](../../cmd/muxt/testdata/templates_input_validation_min_max.txt)
+See [reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt)
 
 ## CLI Commands
 
@@ -204,7 +204,7 @@ See muxt-quick.md for complete example.
 - Both value and pointer receivers supported
 - Form slices: `type Form struct { Tags []string }` parses multiple values
 
-See [receiver_embedded_field_method.txt](../../cmd/muxt/testdata/receiver_embedded_field_method.txt), [method_receiver_is_a_pointer.txt](../../cmd/muxt/testdata/method_receiver_is_a_pointer.txt)
+See [explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt), [explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt)
 
 ## Best Practices
 

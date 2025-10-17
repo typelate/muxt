@@ -14,7 +14,7 @@ Use this reference when designing method signatures with team members.
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
 
-[call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt)
+[explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt)
 
 ## Pattern 1: Single Value (Infallible)
 
@@ -60,7 +60,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error) {
 
 Always check `{{if .Err}}` or `{{with .Err}}` in templates when method returns error. Template executes even on error.
 
-[call_expression_argument_with_error_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_error_last_result.txt)
+[explanation_call_error_return.txt](../../cmd/muxt/testdata/explanation_call_error_return.txt)
 
 ## Pattern 3: Value and Boolean (Early Exit)
 
@@ -79,7 +79,7 @@ func (s Server) Download(response http.ResponseWriter, request *http.Request, id
 
 **Behavior:** If bool = `true`, handler returns immediately (skip template). If bool = `false`, execute template normally.
 
-[call_expression_argument_with_bool_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_bool_last_result.txt)
+[explanation_call_bool_return.txt](../../cmd/muxt/testdata/explanation_call_bool_return.txt)
 
 ## Pattern 4: Error Only (No Data)
 
@@ -235,22 +235,22 @@ func (s Server) Method() (T, []error)            // Slices unsupported
 func (s Server) Method() (T, map[string]error)   // Maps unsupported
 ```
 
-[F_returns_a_value_and_an_unsupported_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_type.txt) · [F_returns_a_value_and_an_unsupported_composite_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_composite_type.txt)
+[err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) · [err_form_unsupported_composite.txt](../../cmd/muxt/testdata/err_form_unsupported_composite.txt)
 
 ## Test Files by Category
 
 **Return patterns:**
-- [call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt) — `(T, error)` pattern
-- [call_expression_argument_with_error_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_error_last_result.txt) — Error handling
-- [call_expression_argument_with_bool_last_result.txt](../../cmd/muxt/testdata/call_expression_argument_with_bool_last_result.txt) — Early exit with bool
-- [F_returns_a_value_and_a_boolean.txt](../../cmd/muxt/testdata/F_returns_a_value_and_a_boolean.txt) — Boolean returns
+- [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt) — `(T, error)` pattern
+- [explanation_call_error_return.txt](../../cmd/muxt/testdata/explanation_call_error_return.txt) — Error handling
+- [explanation_call_bool_return.txt](../../cmd/muxt/testdata/explanation_call_bool_return.txt) — Early exit with bool
+- [err_form_bool_return.txt](../../cmd/muxt/testdata/err_form_bool_return.txt) — Boolean returns
 
 **Result types:**
-- [result_import_result_type.txt](../../cmd/muxt/testdata/result_import_result_type.txt) — Imported result types
-- [result_named_result_type.txt](../../cmd/muxt/testdata/result_named_result_type.txt) — Named return values
+- [explanation_result_import_type.txt](../../cmd/muxt/testdata/explanation_result_import_type.txt) — Imported result types
+- [explanation_result_named_type.txt](../../cmd/muxt/testdata/explanation_result_named_type.txt) — Named return values
 
 **Unsupported patterns:**
-- [F_returns_a_value_and_an_unsupported_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_type.txt) — Unsupported second return
-- [F_returns_a_value_and_an_unsupported_composite_type.txt](../../cmd/muxt/testdata/F_returns_a_value_and_an_unsupported_composite_type.txt) — Composite types
+- [err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) — Unsupported second return
+- [err_form_unsupported_composite.txt](../../cmd/muxt/testdata/err_form_unsupported_composite.txt) — Composite types
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

@@ -287,7 +287,7 @@ muxt generate --find-receiver-type=Server --find-receiver-type-package=github.co
 
 **HTML5 validation attributes:**
 Input attributes `minlength`, `maxlength`, `min`, `max`, `pattern` generate validation code.
-See [templates_input_validation_min_max.txt](../../cmd/muxt/testdata/templates_input_validation_min_max.txt)
+See [reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt)
 
 **Custom template functions:**
 ```go
@@ -318,16 +318,16 @@ Logs debug (each request) and error (template failures).
 See test files in [cmd/muxt/testdata/](../../cmd/muxt/testdata/) for working examples:
 
 **Basic patterns:**
-- [simple_get.txt](../../cmd/muxt/testdata/simple_get.txt) - Basic GET handler
-- [argument_path_param.txt](../../cmd/muxt/testdata/argument_path_param.txt) - Path parameters with type parsing
-- [form.txt](../../cmd/muxt/testdata/form.txt) - Form handling with structs
-- [status_codes.txt](../../cmd/muxt/testdata/status_codes.txt) - All status code methods
+- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) - Basic GET handler
+- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) - Path parameters with type parsing
+- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) - Form handling with structs
+- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) - All status code methods
 
 **Advanced patterns:**
-- [blog.txt](../../cmd/muxt/testdata/blog.txt) - Complete blog application
-- [receiver_embedded_field_method.txt](../../cmd/muxt/testdata/receiver_embedded_field_method.txt) - Embedded methods
-- [method_receiver_is_a_pointer.txt](../../cmd/muxt/testdata/method_receiver_is_a_pointer.txt) - Pointer receivers
-- [call_method_with_two_returns.txt](../../cmd/muxt/testdata/call_method_with_two_returns.txt) - Error handling
+- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) - Complete blog application
+- [explanation_receiver_embedded_method.txt](../../cmd/muxt/testdata/explanation_receiver_embedded_method.txt) - Embedded methods
+- [explanation_receiver_pointer.txt](../../cmd/muxt/testdata/explanation_receiver_pointer.txt) - Pointer receivers
+- [explanation_call_two_returns.txt](../../cmd/muxt/testdata/explanation_call_two_returns.txt) - Error handling
 
 Browse all: `ls cmd/muxt/testdata/*.txt`
 
