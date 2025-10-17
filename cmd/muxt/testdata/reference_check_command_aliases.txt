@@ -1,0 +1,35 @@
+# Test that check command aliases work
+
+muxt generate
+
+muxt check
+! stderr .
+
+muxt c
+! stderr .
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET /"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Test</h1>
+</body>
+</html>
+{{end}}

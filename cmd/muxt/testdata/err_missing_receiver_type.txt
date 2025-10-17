@@ -1,0 +1,22 @@
+! muxt generate --use-receiver-type=NonExistentType
+
+stderr 'could not find receiver type'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET / Method()"}}Hello{{end}}

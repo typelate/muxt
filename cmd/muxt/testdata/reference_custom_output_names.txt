@@ -1,0 +1,47 @@
+muxt generate --output-file=custom.go --output-routes-func=Setup --output-receiver-interface=Handler
+
+exists custom.go
+grep 'type Handler interface' custom.go
+grep 'func Setup' custom.go
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}OK{{end}}
+-- main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestCustomNames(t *testing.T) {
+	mux := http.NewServeMux()
+	Setup(mux, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}

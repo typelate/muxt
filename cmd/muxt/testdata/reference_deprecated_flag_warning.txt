@@ -1,0 +1,29 @@
+muxt generate --receiver-type=App
+
+stderr 'has been deprecated'
+stderr 'use --use-receiver-type instead'
+
+exists template_routes.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- app.go --
+package main
+
+type App struct{}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}Hello{{end}}

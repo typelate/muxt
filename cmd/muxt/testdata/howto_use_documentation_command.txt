@@ -1,0 +1,33 @@
+# This shows how to use the documentation command to see available routes and template functions.
+
+muxt documentation
+
+stdout 'functions:'
+stdout 'Template Routes:'
+stdout 'Reciever Type:'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET /"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Hello</h1>
+</body>
+</html>
+{{end}}
