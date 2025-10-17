@@ -104,6 +104,6 @@ func writeOutput(w io.Writer, functions source.Functions, templates []Template, 
 	}
 	for i := 0; i < receiver.NumMethods(); i++ {
 		m := receiver.Method(i)
-		_, _ = fmt.Fprintf(w, "  - func (%s) %s%s\n", m.Name(), receiver.String(), strings.TrimPrefix(m.Signature().String(), "func"))
+		_, _ = fmt.Fprintf(w, "  - func (%s) %s%s\n", receiver.String(), m.Name(), strings.TrimPrefix(m.Signature().String(), "func"))
 	}
 }
