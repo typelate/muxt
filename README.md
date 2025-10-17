@@ -2,7 +2,7 @@
 
 **Type-safe HTTP handlers generated from Go HTML templates.**
 
-Muxt generates HTTP handlers by analyzing template names and method signatures. Template names declare routes using extended `http.ServeMux` syntax. The generator produces compile-time type-checked handlers with automatic parameter parsing—no reflection at runtime.
+Muxt generates HTTP handlers by analyzing template names and method signatures. Template names declare routes using extended `http.ServeMux` syntax. The generator produces compile-time type-checked handlers with automatic parameter parsing—fewer runtime errors means safer refactoring.
 
 ## Syntax
 
