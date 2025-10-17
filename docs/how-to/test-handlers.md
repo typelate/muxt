@@ -122,6 +122,13 @@ go generate ./...  # Creates fake/fake_article_getter.go
 - **Consistent** - All tests follow same structure
 - **Composable** - Share setup in `runCase`, specifics in cases
 
+## Example Tests
+
+See complete working examples in the test suite:
+
+- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Complete blog application with tests
+- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) — Simple GET handler test
+
 ## Next
 
 - [Write receiver methods](write-receiver-methods.md)

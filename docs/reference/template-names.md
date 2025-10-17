@@ -223,7 +223,6 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 **Path patterns:**
 - [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — `/{$}` exact match
 - [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt) — Prefix matching
-- [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — Wildcard `{...}`
 
 **Call expressions:**
 - [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) — Basic call
