@@ -1,6 +1,6 @@
 cat f.go template.go
 
-muxt generate --find-receiver-type=Server
+muxt generate --use-receiver-type=Server
 
 cat f.go template_routes.go
 

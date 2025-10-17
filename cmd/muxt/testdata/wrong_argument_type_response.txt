@@ -1,6 +1,6 @@
 # wrong argument type response
 
-! muxt generate --find-receiver-type=T
+! muxt generate --use-receiver-type=T
 stderr 'method expects type string but response is http\.ResponseWriter'
 
 -- in.go --

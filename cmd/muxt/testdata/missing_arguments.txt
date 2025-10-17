@@ -1,6 +1,6 @@
 # missing arguments
 
-! muxt generate --find-receiver-type=T
+! muxt generate --use-receiver-type=T
 stderr 'handler func F\(string\) any expects 1 arguments but call F\(\) has 0'
 
 -- in.go --

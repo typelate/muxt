@@ -1,8 +1,8 @@
-muxt generate --output-template-data-type=D1 --output-receiver-interface=R1 --find-templates-variable=t1 --output-file=tr1.go --output-routes-func=Routes1 --output-template-route-paths-type=P1
-muxt generate --output-template-data-type=D2 --output-receiver-interface=R2 --find-templates-variable=t2 --output-file=tr2.go --output-routes-func=Routes2 --output-template-route-paths-type=P2
+muxt generate --output-template-data-type=D1 --output-receiver-interface=R1 --use-templates-variable=t1 --output-file=tr1.go --output-routes-func=Routes1 --output-template-route-paths-type=P1
+muxt generate --output-template-data-type=D2 --output-receiver-interface=R2 --use-templates-variable=t2 --output-file=tr2.go --output-routes-func=Routes2 --output-template-route-paths-type=P2
 
-muxt check --find-templates-variable=t1
-muxt check --find-templates-variable=t2
+muxt check --use-templates-variable=t1
+muxt check --use-templates-variable=t2
 
 cat tr1.go tr2.go
 

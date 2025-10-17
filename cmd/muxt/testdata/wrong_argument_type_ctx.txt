@@ -1,6 +1,6 @@
 # wrong argument type ctx
 
-! muxt generate --find-receiver-type=T
+! muxt generate --use-receiver-type=T
 stderr 'method expects type string but ctx is context.Context'
 
 -- in.go --

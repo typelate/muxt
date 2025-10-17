@@ -1,6 +1,6 @@
 # wrong argument type path value
 
-! muxt generate --find-receiver-type=T
+! muxt generate --use-receiver-type=T
 stderr 'method param type float64 not supported'
 
 -- in.go --

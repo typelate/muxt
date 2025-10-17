@@ -1,13 +1,13 @@
 # Comprehensive test for new flag names
 
-# Test 1: Using find-* flags
-muxt generate --find-receiver-type=Server --find-templates-variable=appTemplates
+# Test 1: Using use-* flags
+muxt generate --use-receiver-type=Server --use-templates-variable=appTemplates
 
 # Test 2: Using output-* flags for generated names
-muxt generate --find-templates-variable=customTpl --find-receiver-type=Handler --output-file=custom_routes.go --output-receiver-interface=HandlerReceiver --output-routes-func=CustomRoutes --output-template-data-type=CustomData --output-template-route-paths-type=CustomPaths
+muxt generate --use-templates-variable=customTpl --use-receiver-type=Handler --output-file=custom_routes.go --output-receiver-interface=HandlerReceiver --output-routes-func=CustomRoutes --output-template-data-type=CustomData --output-template-route-paths-type=CustomPaths
 
-muxt check --find-templates-variable=appTemplates
-muxt check --find-templates-variable=customTpl
+muxt check --use-templates-variable=appTemplates
+muxt check --use-templates-variable=customTpl
 
 cat template_routes.go custom_routes.go
 

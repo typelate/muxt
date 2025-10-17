@@ -1,6 +1,6 @@
 env GOPROXY=off
 
-muxt -C playground generate --find-receiver-type=Client  --find-receiver-type-package=example.com/v2
+muxt -C playground generate --use-receiver-type=Client  --use-receiver-type-package=example.com/v2
 exec go -C playground build
 # cat template_routes.go
 
