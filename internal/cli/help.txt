@@ -26,7 +26,7 @@ COMMAND-SPECIFIC FLAGS:
       --output-receiver-interface                 Generated receiver interface name (default: "RoutesReceiver")
       --output-routes-func                        Generated routes function name (default: "TemplateRoutes")
       --output-routes-func-with-logger-param      Add *slog.Logger parameter to routes function
-      --output-routes-func-with-path-prefix-param Add pathPrefix string parameter to routes function
+      --output-routes-func-with-path-prefix-param Add pathPrefix parameter to routes function
       --output-template-data-type                 Generated template data type name (default: "TemplateData")
       --output-template-route-paths-type          Generated path helpers type name (default: "TemplateRoutePaths")
 
