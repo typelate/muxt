@@ -14,7 +14,7 @@ Use this reference when designing method signatures with team members.
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
 
-[reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt)
+[howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
 
 ## Pattern 1: Single Value (Infallible)
 
@@ -240,7 +240,7 @@ func (s Server) Method() (T, map[string]error)   // Maps unsupported
 ## Test Files by Category
 
 **Return patterns:**
-- [reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt) — `(T, error)` pattern
+- [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt) — `(T, error)` pattern
 - [reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt) — Error handling
 - [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt) — Early exit with bool
 - [err_form_bool_return.txt](../../cmd/muxt/testdata/err_form_bool_return.txt) — Boolean returns
