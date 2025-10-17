@@ -6,8 +6,8 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 
 | Command | Purpose | Common Flags |
 |---------|---------|--------------|
-| `generate` | Generate HTTP handlers from templates | `--receiver-type`, `--logger`, `--output-file` |
-| `check` | Type-check templates without generating | `--receiver-type`, `--verbose` |
+| `generate` | Generate HTTP handlers from templates | `--find-receiver-type`, `--logger`, `--output-file` |
+| `check` | Type-check templates without generating | `--find-receiver-type`, `--verbose` |
 | `documentation` | Generate markdown docs from templates | Same as `generate` |
 | `version` | Print muxt version | None |
 
@@ -24,21 +24,21 @@ Generates type-safe HTTP handlers from HTML templates.
 - `*_template_routes_gen.go` — Per-file handlers for each `.gohtml` source
 
 ```bash
-muxt generate --receiver-type=App --logger
+muxt generate --find-receiver-type=App --logger
 ```
 
 #### Core Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
-| `--receiver-type-package` | string | _(current pkg)_ | Package path for `--receiver-type`. Only needed if receiver is in different package. |
+| `--find-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
+| `--find-receiver-type-package` | string | _(current pkg)_ | Package path for `--find-receiver-type`. Only needed if receiver is in different package. |
 | `--output-file` | string | `template_routes.go` | Main generated file name. Per-file route files use pattern `*_template_routes_gen.go`. |
-| `--templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--find-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
 
 **Type resolution:**
-- **Without** `--receiver-type`: Parameters are `string`, return types are `any`
-- **With** `--receiver-type`: Muxt looks up actual method signatures, generates type parsers
+- **Without** `--find-receiver-type`: Parameters are `string`, return types are `any`
+- **With** `--find-receiver-type`: Muxt looks up actual method signatures, generates type parsers
 
 [templates-variable.md](templates-variable.md) — Template variable requirements
 
@@ -46,10 +46,10 @@ muxt generate --receiver-type=App --logger
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
-| `--receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
-| `--template-data-type` | string | `TemplateData` | Template context type name (generic). |
-| `--template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
+| `--output-routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
+| `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
+| `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
+| `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 
 #### Feature Flags
 
@@ -82,7 +82,7 @@ Type-check templates without generating code. Use in CI or during development.
 **Aliases:** `c`, `typelate`
 
 ```bash
-muxt check --receiver-type=App --verbose
+muxt check --find-receiver-type=App --verbose
 ```
 
 #### Flags
@@ -111,7 +111,7 @@ Generate markdown API documentation from templates.
 **Aliases:** `docs`, `d`
 
 ```bash
-muxt documentation --receiver-type=App
+muxt documentation --find-receiver-type=App
 ```
 
 **Flags:** Same as `muxt generate`
@@ -137,7 +137,7 @@ muxt version
 | `-C` | string | _(current dir)_ | Change directory before running command. |
 
 ```bash
-muxt -C ./web generate --receiver-type=Server
+muxt -C ./web generate --find-receiver-type=Server
 ```
 
 ---
@@ -149,7 +149,7 @@ muxt -C ./web generate --receiver-type=Server
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --receiver-type=Server --logger
+//go:generate muxt generate --find-receiver-type=Server --logger
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 ```
 
@@ -160,21 +160,21 @@ go generate ./...
 
 **CI type checking:**
 ```bash
-muxt check --receiver-type=App --verbose
+muxt check --find-receiver-type=App --verbose
 ```
 
 **Custom naming:**
 ```bash
 muxt generate \
-  --receiver-type=App \
-  --routes-func=RegisterRoutes \
-  --receiver-interface=Handler \
+  --find-receiver-type=App \
+  --output-routes-func=RegisterRoutes \
+  --output-receiver-interface=Handler \
   --output-file=routes.go
 ```
 
 **Mount under subpath:**
 ```bash
-muxt generate --receiver-type=App --path-prefix
+muxt generate --find-receiver-type=App --path-prefix
 ```
 
 Then use:

@@ -14,28 +14,50 @@ func TestNewGenerate(t *testing.T) {
 		}, io.Discard)
 		assert.ErrorContains(t, err, "unknown flag")
 	})
-	t.Run(receiverStaticType+" flag value is an invalid identifier", func(t *testing.T) {
+
+	// Tests for new flag names
+	t.Run(findReceiverType+" flag value is an invalid identifier", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + receiverStaticType, "123",
+			"--" + findReceiverType, "123",
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})
-	t.Run(routesFunc+" flag value is an invalid identifier", func(t *testing.T) {
+	t.Run(outputRoutesFunc+" flag value is an invalid identifier", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + routesFunc, "123",
+			"--" + outputRoutesFunc, "123",
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})
-	t.Run(templatesVariable+" flag value is an invalid identifier", func(t *testing.T) {
+	t.Run(findTemplatesVariable+" flag value is an invalid identifier", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + templatesVariable, "123",
+			"--" + findTemplatesVariable, "123",
 		}, io.Discard)
 		assert.ErrorContains(t, err, errIdentSuffix)
 	})
-	t.Run(outputFlagName+" flag value is not a go file", func(t *testing.T) {
+	t.Run(outputFile+" flag value is not a go file", func(t *testing.T) {
 		_, err := newRoutesFileConfiguration([]string{
-			"--" + outputFlagName, "output.txt",
+			"--" + outputFile, "output.txt",
 		}, io.Discard)
 		assert.ErrorContains(t, err, "filename must use .go extension")
+	})
+
+	// Tests for deprecated flags (backward compatibility)
+	t.Run("deprecated "+deprecatedReceiverType+" flag still works", func(t *testing.T) {
+		_, err := newRoutesFileConfiguration([]string{
+			"--" + deprecatedReceiverType, "123",
+		}, io.Discard)
+		assert.ErrorContains(t, err, errIdentSuffix)
+	})
+	t.Run("deprecated "+deprecatedRoutesFunc+" flag still works", func(t *testing.T) {
+		_, err := newRoutesFileConfiguration([]string{
+			"--" + deprecatedRoutesFunc, "123",
+		}, io.Discard)
+		assert.ErrorContains(t, err, errIdentSuffix)
+	})
+	t.Run("deprecated "+deprecatedTemplatesVariable+" flag still works", func(t *testing.T) {
+		_, err := newRoutesFileConfiguration([]string{
+			"--" + deprecatedTemplatesVariable, "123",
+		}, io.Discard)
+		assert.ErrorContains(t, err, errIdentSuffix)
 	})
 }

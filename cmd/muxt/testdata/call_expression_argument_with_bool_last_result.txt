@@ -1,6 +1,6 @@
 # call expression argument with bool last result
 
-muxt generate --receiver-type=T
+muxt generate --find-receiver-type=T
 cat template_routes.go
 muxt check
 

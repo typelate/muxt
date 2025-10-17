@@ -115,7 +115,7 @@ type MyForm struct {
 
 **Type checking:**
 ```bash
-muxt check --receiver-type=Server  # Validates templates match Go types
+muxt check --find-receiver-type=Server  # Validates templates match Go types
 ```
 
 ---
@@ -160,25 +160,25 @@ var templates = template.Must(
 - `muxt version` (alias: `v`) - Print version
 
 **Key flags:**
-- `--receiver-type=Server` - Type for method lookup (required)
+- `--find-receiver-type=Server` - Type for method lookup (required)
 - `--output-file=routes.go` - Generated file name
-- `--routes-func=TemplateRoutes` - Route function name
-- `--receiver-interface=RoutesReceiver` - Interface name
+- `--output-routes-func=TemplateRoutes` - Route function name
+- `--output-receiver-interface=RoutesReceiver` - Interface name
 - `--path-prefix` - Add path prefix parameter
 - `--logger` - Add `*slog.Logger` parameter
 - `-C ./web` - Change directory before running
 
 **Examples:**
 ```bash
-muxt generate --receiver-type=Server
-muxt check --receiver-type=Server
-muxt generate --receiver-type=Server --logger --path-prefix
-muxt -C ./web generate --receiver-type=App --routes-func=RegisterRoutes
+muxt generate --find-receiver-type=Server
+muxt check --find-receiver-type=Server
+muxt generate --find-receiver-type=Server --logger --path-prefix
+muxt -C ./web generate --find-receiver-type=App --output-routes-func=RegisterRoutes
 ```
 
 **From go:generate:**
 ```go
-//go:generate muxt generate --receiver-type=Server
+//go:generate muxt generate --find-receiver-type=Server
 ```
 
 ---
@@ -282,7 +282,7 @@ func (s *Server) GetUser(...) (User, error)  // Pointer receiver (for mutation/l
 
 **Cross-package receiver:**
 ```bash
-muxt generate --receiver-type=Server --receiver-type-package=github.com/myapp/internal/server
+muxt generate --find-receiver-type=Server --find-receiver-type-package=github.com/myapp/internal/server
 ```
 
 **HTML5 validation attributes:**
@@ -300,13 +300,13 @@ var templates = template.Must(
 
 **Path prefix flag:**
 ```bash
-muxt generate --receiver-type=Server --path-prefix
+muxt generate --find-receiver-type=Server --path-prefix
 ```
 Generated signature: `func TemplateRoutes(mux, receiver, pathPrefix string) TemplateRoutePaths`
 
 **Logger flag:**
 ```bash
-muxt generate --receiver-type=Server --logger
+muxt generate --find-receiver-type=Server --logger
 ```
 Generated signature: `func TemplateRoutes(mux, receiver, logger *slog.Logger) TemplateRoutePaths`
 Logs debug (each request) and error (template failures).
@@ -337,11 +337,11 @@ Browse all: `ls cmd/muxt/testdata/*.txt`
 
 **Generation errors:**
 - "No templates found" → `templates` variable must be package-level (not in function)
-- "Method not found" → Verify `--receiver-type=YourType` matches, method is exported
+- "Method not found" → Verify `--find-receiver-type=YourType` matches, method is exported
 - "Template name invalid" → Must follow `[METHOD ][HOST]/PATH[ STATUS][ CALL]`
 
 **Type errors:**
-- Run `muxt check --receiver-type=Server` for details
+- Run `muxt check --find-receiver-type=Server` for details
 - Template actions must reference fields that exist on Result type
 - Path/form parameter names must match method signature
 
@@ -425,7 +425,7 @@ Templates define routes → Methods implement behavior → `muxt generate` creat
 ```bash
 # 1. Write templates: {{define "GET /user/{id} GetUser(ctx, id)"}}...{{end}}
 # 2. Implement methods: func (s Server) GetUser(ctx context.Context, id int) (User, error)
-# 3. Generate: muxt generate --receiver-type=Server
+# 3. Generate: muxt generate --find-receiver-type=Server
 # 4. Run: TemplateRoutes(mux, server)
 ```
 

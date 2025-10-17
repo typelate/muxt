@@ -180,19 +180,19 @@ See [templates_input_validation_min_max.txt](../../cmd/muxt/testdata/templates_i
 ## CLI Commands
 
 ```bash
-muxt generate --receiver-type=Server           # Generate handlers
-muxt check --receiver-type=Server              # Type check only
+muxt generate --find-receiver-type=Server           # Generate handlers
+muxt check --find-receiver-type=Server              # Type check only
 muxt version                                   # Show version
 muxt help                                      # Show help
-muxt -C ./web generate --receiver-type=Server  # Generate from dir
+muxt -C ./web generate --find-receiver-type=Server  # Generate from dir
 ```
 
-Key flags: `--receiver-type`, `--output-file`, `--routes-func`, `--receiver-interface`
+Key flags: `--find-receiver-type`, `--output-file`, `--output-routes-func`, `--output-receiver-interface`
 
 ## Setup Workflow
 
 1. Create `.gohtml` files with templates
-2. Add `//go:embed` and `//go:generate muxt generate --receiver-type=Server`
+2. Add `//go:embed` and `//go:generate muxt generate --find-receiver-type=Server`
 3. Define receiver type with methods
 4. Run `go generate` then `go run .`
 
@@ -219,7 +219,7 @@ See [use-htmx.md](../how-to/use-htmx.md) for HTMX patterns.
 ## Troubleshooting
 
 - **"No templates found"** - Check `//go:embed` directive, verify templates variable is package-level
-- **"Method not found"** - Use `--receiver-type`, verify method is exported and signature matches
+- **"Method not found"** - Use `--find-receiver-type`, verify method is exported and signature matches
 - **"Type mismatch"** - Run `muxt check` for details
 - **"400 Bad Request"** - Path param parse failure (e.g., "abc" → int)
 

@@ -94,7 +94,7 @@ import (
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --receiver-type=Server
+//go:generate muxt generate --find-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 type Server struct {
@@ -169,8 +169,8 @@ func (r Result) StatusCode() int { return r.code }
 ## Commands
 
 ```bash
-muxt generate --receiver-type=Server    # Generate handlers
-muxt check --receiver-type=Server       # Type check only
+muxt generate --find-receiver-type=Server    # Generate handlers
+muxt check --find-receiver-type=Server       # Type check only
 muxt version                            # Show version
 ```
 

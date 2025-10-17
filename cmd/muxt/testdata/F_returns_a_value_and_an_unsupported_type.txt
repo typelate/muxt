@@ -1,6 +1,6 @@
 # F returns a value and an unsupported type
 
-! muxt generate --receiver-type=T
+! muxt generate --find-receiver-type=T
 stderr 'expected last result to be either an error or a bool'
 
 -- receiver.go --

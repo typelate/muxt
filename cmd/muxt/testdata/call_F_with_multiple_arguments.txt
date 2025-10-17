@@ -1,6 +1,6 @@
 # call F with multiple arguments
 
-muxt generate --receiver-type=T
+muxt generate --find-receiver-type=T
 muxt check
 
 -- in.go --

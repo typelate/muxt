@@ -3,7 +3,7 @@ cd internal/hypertext
 
 env GOPACKAGE=hypertext
 
-muxt generate --receiver-type=Endpoints --routes-func=Routes
+muxt generate --find-receiver-type=Endpoints --output-routes-func=Routes
 muxt check
 
 cd ../../

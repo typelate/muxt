@@ -1,0 +1,99 @@
+# Comprehensive test for new flag names
+
+# Test 1: Using find-* flags
+muxt generate --find-receiver-type=Server --find-templates-variable=appTemplates
+
+# Test 2: Using output-* flags for generated names
+muxt generate --find-templates-variable=customTpl --find-receiver-type=Handler --output-file=custom_routes.go --output-receiver-interface=HandlerReceiver --output-routes-func=CustomRoutes --output-template-data-type=CustomData --output-template-route-paths-type=CustomPaths
+
+muxt check --find-templates-variable=appTemplates
+muxt check --find-templates-variable=customTpl
+
+cat template_routes.go custom_routes.go
+
+exec go test -cover
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- server.go --
+package main
+
+import "context"
+
+type Server struct{}
+
+func (s Server) Index(ctx context.Context) error {
+	return nil
+}
+
+type Handler struct{}
+
+func (h Handler) Admin(ctx context.Context) error {
+	return nil
+}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed index.gohtml
+var templatesDir1 embed.FS
+
+//go:embed admin.gohtml
+var templatesDir2 embed.FS
+
+var appTemplates = template.Must(template.ParseFS(templatesDir1, "*.gohtml"))
+var customTpl = template.Must(template.ParseFS(templatesDir2, "*.gohtml"))
+-- index.gohtml --
+{{define "GET / Index(ctx)"}}
+<h1>Server Index</h1>
+{{end}}
+
+-- admin.gohtml --
+{{define "GET /admin Admin(ctx)"}}
+<h1>Handler Admin</h1>
+{{end}}
+
+-- main.go --
+package main
+
+func main() {}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestDefaultRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+}
+
+func TestCustomRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	CustomRoutes(mux, Handler{})
+
+	req := httptest.NewRequest(http.MethodGet, CustomPaths{}.Admin(), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+}

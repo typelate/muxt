@@ -18,13 +18,13 @@ Add observability to your handlers by logging request details and errors using G
 Add `--logger` to your `muxt generate` command:
 
 ```bash
-muxt generate --receiver-type=App --logger
+muxt generate --find-receiver-type=App --logger
 ```
 
 Or in your `go:generate` directive:
 
 ```go
-//go:generate muxt generate --receiver-type=App --logger
+//go:generate muxt generate --find-receiver-type=App --logger
 ```
 
 ### 2. Update Your Routes Function Call
