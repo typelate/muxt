@@ -33,7 +33,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	case "generate", "gen", "g":
 		return generateCommand(wd, cmdArgs, getEnv, stdout, stderr)
 	case "version", "v":
-		return versionCommand(stdout)
+		return versionCommand(cmdArgs, stdout, stderr)
 	case "check", "c", "typelate":
 		return checkCommand(wd, cmdArgs, stderr)
 	case "documentation", "docs", "d":
@@ -112,13 +112,33 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	return muxt.Documentation(stdout, wd, config)
 }
 
-func versionCommand(stdout io.Writer) error {
+func versionCommand(args []string, stdout, stderr io.Writer) error {
+	var verbose bool
+	flagSet := pflag.NewFlagSet("version", pflag.ContinueOnError)
+	flagSet.SetOutput(stderr)
+	flagSet.BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+	if err := flagSet.Parse(args); err != nil {
+		return err
+	}
+
 	v, ok := cliVersion()
 	if !ok {
 		return fmt.Errorf("missing CLI version")
 	}
-	_, err := fmt.Fprintln(stdout, v)
-	return err
+	if _, err := fmt.Fprintln(stdout, v); err != nil {
+		return err
+	}
+
+	if verbose {
+		bi, ok := debug.ReadBuildInfo()
+		if ok {
+			if _, err := fmt.Fprintf(stdout, "go version: %s\n", bi.GoVersion); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func cliVersion() (string, bool) {
