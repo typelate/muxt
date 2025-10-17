@@ -14,7 +14,7 @@ Use this reference when designing method signatures with team members.
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
 
-[howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
+[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
 
 ## Pattern 1: Single Value (Infallible)
 
@@ -248,6 +248,8 @@ func (s Server) Method() (T, map[string]error)   // Maps unsupported
 **Result types:**
 - [reference_result_with_import_type.txt](../../cmd/muxt/testdata/reference_result_with_import_type.txt) — Imported result types
 - [reference_result_with_named_type.txt](../../cmd/muxt/testdata/reference_result_with_named_type.txt) — Named return values
+- [reference_result_with_name_collision.txt](../../cmd/muxt/testdata/reference_result_with_name_collision.txt) — Handling name collisions
+- [reference_call_with_complex_package.txt](../../cmd/muxt/testdata/reference_call_with_complex_package.txt) — Complex package paths
 
 **Unsupported patterns:**
 - [err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) — Unsupported second return

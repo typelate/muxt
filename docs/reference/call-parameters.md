@@ -91,6 +91,8 @@ func (s Server) Login(ctx context.Context, form url.Values) (Session, error) {
 }
 ```
 
+[howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt)
+
 **Struct binding:**
 ```gotemplate
 {{define "POST /login Login(ctx, form)"}}{{end}}
@@ -188,9 +190,12 @@ Validation errors should return from your method. Display them in templates with
 - [howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt) — Custom `TextUnmarshaler`
 
 **Forms:**
+- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) — Basic form with url.Values
 - [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) — Struct form binding
 - [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt) — `name` tag mapping
 - [howto_form_with_slice.txt](../../cmd/muxt/testdata/howto_form_with_slice.txt) — Form slices
+- [reference_form_field_types.txt](../../cmd/muxt/testdata/reference_form_field_types.txt) — All supported field types
+- [reference_form_with_empty_struct.txt](../../cmd/muxt/testdata/reference_form_with_empty_struct.txt) — Empty struct edge case
 - [err_form_unsupported_field_type.txt](../../cmd/muxt/testdata/err_form_unsupported_field_type.txt) — Unsupported types
 
 **Multiple arguments:**
