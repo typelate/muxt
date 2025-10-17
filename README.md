@@ -95,7 +95,7 @@ go generate && go run .
 
 ## Examples
 
-- **[Local example](./example/hypertext/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/example/hypertext))
+- **[Local example](./docs/example/hypertext/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/example/hypertext))
 - **[Sortable Example](http://github.com/typelate/sortable-example)** - Interactive HTMX-enabled table row sorting
 - **[HTMX Template](https://github.com/typelate/htmx-template)** - Full HTMX integration patterns
 
