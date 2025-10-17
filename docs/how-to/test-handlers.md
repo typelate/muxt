@@ -5,7 +5,7 @@ Test HTTP responses and HTML structure with table-driven tests.
 ## Install Dependencies
 
 ```bash
-go get github.com/crhntr/dom/domtest
+go get github.com/typelate/dom/domtest
 go get github.com/stretchr/testify/{assert,require}
 go install github.com/maxbrunsfeld/counterfeiter/v6@latest
 ```
@@ -132,5 +132,5 @@ See complete working examples in the test suite:
 ## Next
 
 - [Write receiver methods](write-receiver-methods.md)
-- [domtest docs](https://github.com/crhntr/dom)
+- [domtest docs](https://github.com/typelate/dom)
 - [Type checking](../reference/type-checking.md)
