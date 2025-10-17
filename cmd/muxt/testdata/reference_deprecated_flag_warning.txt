@@ -1,3 +1,5 @@
+# Tests that deprecated flags show warning messages
+
 muxt generate --receiver-type=App
 
 stderr 'has been deprecated'

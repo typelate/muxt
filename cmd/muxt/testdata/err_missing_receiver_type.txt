@@ -1,3 +1,5 @@
+# Tests error when receiver type is not found
+
 ! muxt generate --use-receiver-type=NonExistentType
 
 stderr 'could not find receiver type'

@@ -1,3 +1,5 @@
+# Tests custom names for generated types and functions
+
 muxt generate --output-file=custom.go --output-routes-func=Setup --output-receiver-interface=Handler
 
 exists custom.go

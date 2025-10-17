@@ -1,3 +1,5 @@
+# Tests type checking with muxt check command
+
 muxt generate --use-receiver-type=T
 
 ! muxt check  -v

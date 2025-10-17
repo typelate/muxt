@@ -1,3 +1,4 @@
+# Tests -C flag to change working directory before running commands
 
 muxt -C a/b/c generate
 muxt -C a/b/c check

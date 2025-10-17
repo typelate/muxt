@@ -1,3 +1,5 @@
+# Tests handling of duplicate filenames
+
 muxt generate
 
 exec go test

@@ -1,1 +1,2 @@
+# Tests help command output
 muxt help
