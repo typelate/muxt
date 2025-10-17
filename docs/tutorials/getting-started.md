@@ -58,7 +58,7 @@ import (
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --find-receiver-type=Server
+//go:generate muxt generate --use-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 func main() {
