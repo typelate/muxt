@@ -98,7 +98,6 @@ But during request handling? Panics are rare. Mostly you'll just get errors. Err
 ## Make the zero value useful
 
 The generated code initializes cleanly. You can start small and add fields as needed.
-I need to add a `muxt init` or `muxt new` command.
 
 ## Accept interfaces, return structs
 

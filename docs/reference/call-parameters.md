@@ -115,7 +115,7 @@ type LoginForm struct {
 }
 ```
 
-Struct field names must match form field names exactly (case-sensitive) unless using `name` tag.
+Struct field names must match form field names exactly (case-sensitive) unless using the `name` tag.
 
 [F_is_defined_and_form_type_is_a_struct.txt](../../cmd/muxt/testdata/F_is_defined_and_form_type_is_a_struct.txt) · [form_field_tag.txt](../../cmd/muxt/testdata/form_field_tag.txt)
 
