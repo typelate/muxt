@@ -1,6 +1,6 @@
 # no handler
 
-muxt generate --receiver-type=T
+muxt generate --find-receiver-type=T
 muxt check
 
 exec go build -o build

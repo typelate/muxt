@@ -1,6 +1,6 @@
 # form has no fields
 
-muxt generate --receiver-type=T
+muxt generate --find-receiver-type=T
 muxt check
 
 -- in.go --

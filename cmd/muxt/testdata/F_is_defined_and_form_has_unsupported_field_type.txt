@@ -1,6 +1,6 @@
 # F is defined and form has unsupported field type
 
-! muxt generate --receiver-type=T
+! muxt generate --find-receiver-type=T
 stderr 'failed to generate parse statements for form field href: unsupported type: url.URL'
 
 -- in.go --

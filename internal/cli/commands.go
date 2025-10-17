@@ -149,36 +149,41 @@ func global(wd string, args []string, stdout io.Writer) (string, []string, error
 }
 
 const (
-	outputFlagNameHelp = `The generated file name containing the routes function and receiver interface.`
-	outputFlagName     = "output-file"
+	// New flag names with clear prefixes/suffixes
+	findTemplatesVariable        = "find-templates-variable"
+	findReceiverType             = "find-receiver-type"
+	findReceiverTypePackage      = "find-receiver-type-package"
+	outputFile                   = "output-file"
+	outputReceiverInterface      = "output-receiver-interface"
+	outputRoutesFunc             = "output-routes-func"
+	outputTemplateDataType       = "output-template-data-type"
+	outputTemplateRoutePathsType = "output-template-route-paths-type"
+	pathPrefixName               = "path-prefix"
+	loggerName                   = "logger"
 
-	templatesVariableHelp = `the name of the global variable with type *"html/template".Template in the working directory package.`
-	templatesVariable     = "templates-variable"
+	// Deprecated flag names (for backward compatibility)
+	deprecatedTemplatesVariable      = "templates-variable"
+	deprecatedReceiverType           = "receiver-type"
+	deprecatedReceiverTypePackage    = "receiver-type-package"
+	deprecatedReceiverInterface      = "receiver-interface"
+	deprecatedRoutesFunc             = "routes-func"
+	deprecatedTemplateDataType       = "template-data-type"
+	deprecatedTemplateRoutePathsType = "template-route-paths-type"
 
-	templateDataType     = "template-data-type"
-	templateDataTypeHelp = `The type name for the template data passed to root route templates.`
+	// Help text
+	findTemplatesVariableHelp   = `the name of the global variable with type *"html/template".Template in the working directory package.`
+	findReceiverTypeHelp        = `The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any.`
+	findReceiverTypePackageHelp = `The package path to use when looking for find-receiver-type. If not set, the package in the current directory is used.`
 
-	routesFuncHelp = `The function name for the package registering handler functions on an *"net/http".ServeMux.
-This function also receives an argument with a type matching the name given by receiver-interface.`
-	routesFunc = "routes-func"
+	outputFileHelp              = `The generated file name containing the routes function and receiver interface.`
+	outputReceiverInterfaceHelp = `The interface name in the generated output file listing the methods used by the handler routes in the routes function.`
+	outputRoutesFuncHelp        = `The function name for the package registering handler functions on an *"net/http".ServeMux.
+This function also receives an argument with a type matching the name given by output-receiver-interface.`
+	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
+	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
-	receiverStaticTypeHelp = `The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any.`
-	receiverStaticType     = "receiver-type"
-
-	receiverStaticTypePackageHelp = `The package path to use when looking for receiver-type. If not set, the package in the current directory is used.`
-	receiverStaticTypePackage     = "receiver-type-package"
-
-	receiverInterfaceNameHelp = `The interface name in the generated output-file listing the methods used by the handler routes in routes-func.`
-	receiverInterfaceName     = "receiver-interface"
-
-	templateRoutePathsType     = "template-route-paths-type"
-	templateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
-
-	pathPrefixName     = "path-prefix"
 	pathPrefixNameHelp = `Adds a path-prefix parameter to the TemplateRoutes function and use it in each path generator method.`
-
-	loggerName     = "logger"
-	loggerNameHelp = `Adds a *slog.Logger parameter to the TemplateRoutes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
+	loggerNameHelp     = `Adds a *slog.Logger parameter to the TemplateRoutes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -191,22 +196,22 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFil
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(templatesVariable + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(findTemplatesVariable + errIdentSuffix)
 	}
 	if g.RoutesFunction != "" && !token.IsIdentifier(g.RoutesFunction) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(routesFunc + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputRoutesFunc + errIdentSuffix)
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(receiverStaticType + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(findReceiverType + errIdentSuffix)
 	}
 	if g.ReceiverInterface != "" && !token.IsIdentifier(g.ReceiverInterface) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(receiverInterfaceName + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputReceiverInterface + errIdentSuffix)
 	}
 	if g.TemplateDataType != "" && !token.IsIdentifier(g.TemplateDataType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(templateDataType + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateDataType + errIdentSuffix)
 	}
 	if g.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(g.TemplateRoutePathsTypeName) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(templateRoutePathsType + errIdentSuffix)
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 	}
 	if g.OutputFileName != "" && filepath.Ext(g.OutputFileName) != ".go" {
 		return muxt.RoutesFileConfiguration{}, fmt.Errorf("output filename must use .go extension")
@@ -216,16 +221,53 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFil
 
 func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
-	flagSet.StringVar(&g.OutputFileName, outputFlagName, muxt.DefaultOutputFileName, outputFlagNameHelp)
-	flagSet.StringVar(&g.TemplatesVariable, templatesVariable, muxt.DefaultTemplatesVariableName, templatesVariableHelp)
-	flagSet.StringVar(&g.RoutesFunction, routesFunc, muxt.DefaultRoutesFunctionName, routesFuncHelp)
-	flagSet.StringVar(&g.ReceiverType, receiverStaticType, "", receiverStaticTypeHelp)
-	flagSet.StringVar(&g.ReceiverPackage, receiverStaticTypePackage, "", receiverStaticTypePackageHelp)
-	flagSet.StringVar(&g.ReceiverInterface, receiverInterfaceName, muxt.DefaultReceiverInterfaceName, receiverInterfaceNameHelp)
-	flagSet.StringVar(&g.TemplateDataType, templateDataType, muxt.DefaultTemplateDataTypeName, templateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, templateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, templateRoutePathsTypeHelp)
+
+	// New flag names with clear prefixes/suffixes
+	flagSet.StringVar(&g.TemplatesVariable, findTemplatesVariable, muxt.DefaultTemplatesVariableName, findTemplatesVariableHelp)
+	flagSet.StringVar(&g.ReceiverType, findReceiverType, "", findReceiverTypeHelp)
+	flagSet.StringVar(&g.ReceiverPackage, findReceiverTypePackage, "", findReceiverTypePackageHelp)
+
+	flagSet.StringVar(&g.OutputFileName, outputFile, muxt.DefaultOutputFileName, outputFileHelp)
+	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, muxt.DefaultReceiverInterfaceName, outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, muxt.DefaultRoutesFunctionName, outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, muxt.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
+
 	flagSet.BoolVar(&g.PathPrefix, pathPrefixName, false, pathPrefixNameHelp)
 	flagSet.BoolVar(&g.Logger, loggerName, false, loggerNameHelp)
 	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
+
+	// Deprecated flags for backward compatibility
+	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+findTemplatesVariable+" instead. "+findTemplatesVariableHelp)
+	flagSet.StringVar(&g.ReceiverType, deprecatedReceiverType, "", "DEPRECATED: use --"+findReceiverType+" instead. "+findReceiverTypeHelp)
+	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+findReceiverTypePackage+" instead. "+findReceiverTypePackageHelp)
+	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, muxt.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, muxt.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, muxt.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
+
+	// Mark deprecated flags as deprecated
+	if err := flagSet.MarkDeprecated(deprecatedTemplatesVariable, "use --"+findTemplatesVariable+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedReceiverType, "use --"+findReceiverType+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedReceiverTypePackage, "use --"+findReceiverTypePackage+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedReceiverInterface, "use --"+outputReceiverInterface+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedRoutesFunc, "use --"+outputRoutesFunc+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedTemplateDataType, "use --"+outputTemplateDataType+" instead"); err != nil {
+		panic(err)
+	}
+	if err := flagSet.MarkDeprecated(deprecatedTemplateRoutePathsType, "use --"+outputTemplateRoutePathsType+" instead"); err != nil {
+		panic(err)
+	}
+
 	return flagSet
 }

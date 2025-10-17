@@ -1,6 +1,6 @@
 # logger flag
 
-muxt generate --receiver-type=T --logger
+muxt generate --find-receiver-type=T --logger
 muxt check
 
 exec go build -o build

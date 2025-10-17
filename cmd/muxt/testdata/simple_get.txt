@@ -1,4 +1,4 @@
-muxt generate --template-data-type=Data
+muxt generate --output-template-data-type=Data
 
 cat template_routes.go
 stdout '// muxt version: \(devel\)'

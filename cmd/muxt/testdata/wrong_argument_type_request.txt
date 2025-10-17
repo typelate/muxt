@@ -1,6 +1,6 @@
 # wrong argument type request
 
-! muxt generate --receiver-type=T
+! muxt generate --find-receiver-type=T
 stderr 'method expects type string but request is \*http.Request'
 
 -- in.go --

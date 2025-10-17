@@ -1,4 +1,4 @@
-muxt generate --receiver-type=Server
+muxt generate --find-receiver-type=Server
 muxt check
 
 cat template_routes.go

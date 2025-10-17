@@ -1,4 +1,4 @@
-muxt generate --receiver-interface=Endpoints
+muxt generate --output-receiver-interface=Endpoints
 muxt check
 
 exec go test -cover

@@ -1,6 +1,6 @@
 # extra arguments
 
-! muxt generate --receiver-type=T
+! muxt generate --find-receiver-type=T
 stderr 'handler func F\(context.Context\) any expects 1 arguments but call F\(ctx, name\) has 2'
 
 -- in.go --

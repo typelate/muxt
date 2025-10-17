@@ -35,7 +35,7 @@ func (s *Server) UserProfile(w http.ResponseWriter, r *http.Request) {
 **Validate:**
 ```bash
 go install github.com/typelate/muxt/cmd/muxt@latest
-muxt check --receiver-type=Server
+muxt check --find-receiver-type=Server
 ```
 
 **Value:** Catch template errors at build time. Team learns Muxt semantics before changing architecture.
@@ -62,14 +62,14 @@ import ("embed"; "html/template")
 //go:embed *.gohtml */*.gohtml
 var fs embed.FS
 
-//go:generate muxt generate --receiver-type=Server --receiver-type-package=github.com/yourorg/yourapp/internal/domain --routes-func=Routes
+//go:generate muxt generate --find-receiver-type=Server --find-receiver-type-package=github.com/yourorg/yourapp/internal/domain --output-routes-func=Routes
 var templates = template.Must(template.ParseFS(fs, "*.gohtml", "*/*.gohtml"))
 ```
 
 **Critical:**
 - `templates` must be package-level (Muxt finds via static analysis)
-- `--receiver-type-package` points to your domain package
-- `--routes-func` names the registration function (default: `TemplateRoutes`)
+- `--find-receiver-type-package` points to your domain package
+- `--output-routes-func` names the registration function (default: `TemplateRoutes`)
 
 **For complex layouts:**
 ```go

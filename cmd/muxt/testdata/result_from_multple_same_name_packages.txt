@@ -1,4 +1,4 @@
-muxt -C internal/hypertext generate --receiver-type=Endpoints --routes-func=Routes
+muxt -C internal/hypertext generate --find-receiver-type=Endpoints --output-routes-func=Routes
 muxt -C internal/hypertext check
 
 exec go test ./...

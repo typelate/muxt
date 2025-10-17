@@ -1,4 +1,4 @@
-muxt generate --receiver-type=T
+muxt generate --find-receiver-type=T
 
 
 

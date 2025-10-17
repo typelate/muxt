@@ -1,6 +1,6 @@
 # method missing a result
 
-! muxt generate --receiver-type=T
+! muxt generate --find-receiver-type=T
 stderr 'method for pattern "GET / F\(\)" has no results it should have one or two'
 
 -- t.go --

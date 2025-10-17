@@ -1,0 +1,99 @@
+# Test that deprecated flags still work for backward compatibility
+
+# Test 1: Old --receiver-type flag still works
+muxt generate --receiver-type=Server
+
+# Test 2: Old --templates-variable flag still works
+muxt generate --templates-variable=customTemplates --receiver-type=Server
+
+# Test 3: All old flags together
+muxt generate --receiver-type=Handler --receiver-type-package=example.com --templates-variable=handlerTemplates --receiver-interface=HandlerReceiver --routes-func=HandlerRoutes --template-data-type=HandlerData --template-route-paths-type=HandlerPaths --output-file=handler_routes.go
+
+muxt check --templates-variable=customTemplates
+
+cat template_routes.go handler_routes.go
+
+exec go test -cover
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- server.go --
+package main
+
+import "context"
+
+type Server struct{}
+
+func (s Server) Index(ctx context.Context) error {
+	return nil
+}
+
+type Handler struct{}
+
+func (h Handler) Admin(ctx context.Context) error {
+	return nil
+}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "index.gohtml"))
+var customTemplates = template.Must(template.ParseFS(templatesDir, "index.gohtml"))
+var handlerTemplates = template.Must(template.ParseFS(templatesDir, "admin.gohtml"))
+-- index.gohtml --
+{{define "GET / Index(ctx)"}}
+<h1>Index Page</h1>
+{{end}}
+
+-- admin.gohtml --
+{{define "GET /admin Admin(ctx)"}}
+<h1>Admin Page</h1>
+{{end}}
+
+-- main.go --
+package main
+
+func main() {}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestDeprecatedFlags(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+}
+
+func TestHandlerRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	HandlerRoutes(mux, Handler{})
+
+	req := httptest.NewRequest(http.MethodGet, HandlerPaths{}.Admin(), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+}
