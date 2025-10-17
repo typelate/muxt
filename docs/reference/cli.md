@@ -11,6 +11,14 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 | `documentation` | Generate markdown docs from templates | Same as `generate` |
 | `version` | Print muxt version | `-v, --verbose` |
 
+## Flag Categories
+
+Muxt flags are organized into three clear categories:
+
+- **Use Flags** (`--use-*`) — Specify what to use from your existing code
+- **Output Flags** (`--output-*`) — Control names in generated code
+- **Feature Flags** — Enable optional features
+
 ## Commands
 
 ### `muxt generate`
@@ -27,13 +35,14 @@ Generates type-safe HTTP handlers from HTML templates.
 muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
 ```
 
-#### Core Flags
+#### Use Flags (What to Use from Your Code)
+
+These flags tell muxt what existing code to look for and use:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
-| `--output-file` | string | `template_routes.go` | Main generated file name. Per-file route files use pattern `*_template_routes_gen.go`. |
 | `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
 
 **Type resolution:**
@@ -42,23 +51,19 @@ muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
 
 [templates-variable.md](templates-variable.md) — Template variable requirements
 
-#### Naming Flags
+#### Output Flags (Generated Code Names)
+
+These flags control the names of generated types and functions:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--output-file` | string | `template_routes.go` | Main generated file name. Per-file route files use pattern `*_template_routes_gen.go`. |
 | `--output-routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
-
-#### Feature Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
-| ~~`--logger`~~ | bool | `false` | **Deprecated.** Use `--output-routes-func-with-logger-param` instead. |
-| ~~`--path-prefix`~~ | bool | `false` | **Deprecated.** Use `--output-routes-func-with-path-prefix-param` instead. |
 
 **With `--output-routes-func-with-logger-param`:**
 ```go

@@ -173,13 +173,17 @@ const (
 	useTemplatesVariable       = "use-templates-variable"
 	useReceiverType            = "use-receiver-type"
 	useReceiverTypePackage     = "use-receiver-type-package"
-	outputFile                 = "output-file"
-	outputReceiverInterface    = "output-receiver-interface"
-	outputRoutesFunc           = "output-routes-func"
-	outputTemplateDataType     = "output-template-data-type"
-	outputTemplateRoutePathsType = "output-template-route-paths-type"
-	pathPrefixName             = "path-prefix"
-	loggerName                 = "logger"
+	outputFile                       = "output-file"
+	outputReceiverInterface          = "output-receiver-interface"
+	outputRoutesFunc                 = "output-routes-func"
+	outputTemplateDataType           = "output-template-data-type"
+	outputTemplateRoutePathsType     = "output-template-route-paths-type"
+	outputRoutesFuncWithLoggerParam  = "output-routes-func-with-logger-param"
+	outputRoutesFuncWithPathPrefix   = "output-routes-func-with-path-prefix-param"
+
+	// Deprecated feature flag names
+	deprecatedPathPrefix = "path-prefix"
+	deprecatedLogger     = "logger"
 
 	// Deprecated flag names (for backward compatibility)
 	deprecatedTemplatesVariable      = "templates-variable"
@@ -205,8 +209,8 @@ This function also receives an argument with a type matching the name given by o
 	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
 	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
-	pathPrefixNameHelp = `Adds a path-prefix parameter to the TemplateRoutes function and use it in each path generator method.`
-	loggerNameHelp     = `Adds a *slog.Logger parameter to the TemplateRoutes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
+	outputRoutesFuncWithLoggerParamHelp = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
+	outputRoutesFuncWithPathPrefixHelp  = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -256,9 +260,13 @@ func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.Flag
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, muxt.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 
-	flagSet.BoolVar(&g.PathPrefix, pathPrefixName, false, pathPrefixNameHelp)
-	flagSet.BoolVar(&g.Logger, loggerName, false, loggerNameHelp)
+	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
+	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
+
+	// Deprecated feature flags
+	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
+	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
 
 	// Deprecated flags for backward compatibility (original names)
 	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
@@ -292,6 +300,9 @@ func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.Flag
 	markDeprecated(deprecatedFindTemplatesVariable, useTemplatesVariable)
 	markDeprecated(deprecatedFindReceiverType, useReceiverType)
 	markDeprecated(deprecatedFindReceiverTypePackage, useReceiverTypePackage)
+
+	markDeprecated(deprecatedLogger, outputRoutesFuncWithLoggerParam)
+	markDeprecated(deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
 
 	return flagSet
 }

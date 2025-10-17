@@ -1,4 +1,4 @@
-muxt generate --path-prefix
+muxt generate --output-routes-func-with-path-prefix-param
 
 cat template_routes.go
 stdout '// muxt version: \(devel\)'
