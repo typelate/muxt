@@ -1,0 +1,208 @@
+muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
+
+grep 'logger \*slog.Logger' template_routes.go
+
+muxt check
+
+exec go test -v
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- app.go --
+package main
+
+import "context"
+
+type App struct{}
+
+func (*App) Hello(ctx context.Context) (string, error) {
+	return "Hello", nil
+}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "template.gohtml"))
+
+func init() {
+	// Ensure templates is a package variable that can be replaced in tests
+	_ = templates
+}
+-- template.gohtml --
+{{define "GET / Hello(ctx)"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>{{.Result}}</h1>
+</body>
+</html>
+{{end}}
+-- main_test.go --
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"html/template"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestRoutes_SuccessNoLogging(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, new(App), logger)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	// Success case should not log anything at INFO level
+	if logBuf.Len() > 0 {
+		t.Errorf("expected no logs on success at INFO level, got: %s", logBuf.String())
+	}
+}
+
+func TestRoutes_TemplateRenderErrorLogging(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	mux := http.NewServeMux()
+	// Use a broken template that will fail to execute
+	brokenTemplates := template.Must(template.New("broken").Parse(`{{define "GET / Hello(ctx)"}}{{.InvalidField}}{{end}}`))
+	// Replace the global templates temporarily
+	oldTemplates := templates
+	templates = brokenTemplates
+	defer func() { templates = oldTemplates }()
+
+	TemplateRoutes(mux, new(App), logger)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+
+	// Check the log output contains expected strings for template render errors
+	logOutput := logBuf.String()
+	if logOutput == "" {
+		t.Fatal("expected error log output, got empty string")
+	}
+
+	// Verify log contains ERROR level
+	if !strings.Contains(logOutput, "ERROR") {
+		t.Errorf("expected log to contain 'ERROR', got: %s", logOutput)
+	}
+
+	// Verify log message for render failure
+	if !strings.Contains(logOutput, "failed to render page") {
+		t.Errorf("expected log to contain 'failed to render page', got: %s", logOutput)
+	}
+
+	// Verify template name field (pattern)
+	if !strings.Contains(logOutput, "GET /") {
+		t.Errorf("expected log to contain pattern 'GET /', got: %s", logOutput)
+	}
+
+	// Verify error field
+	if !strings.Contains(logOutput, "error") {
+		t.Errorf("expected log to contain 'error' field, got: %s", logOutput)
+	}
+}
+
+func TestRoutes_ReceiverErrorReturned(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	failingApp := &FailingApp{err: errors.New("database connection failed")}
+
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, failingApp, logger)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+
+	// Receiver errors are stored in TemplateData and returned via status code
+	// They do NOT generate error logs - templates should handle them
+	// This test documents that behavior
+	t.Logf("Log output for receiver error: %s", logBuf.String())
+}
+
+func TestRoutes_DebugLogging(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, new(App), logger)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	logOutput := logBuf.String()
+
+	// At DEBUG level, we should see debug logs for request handling
+	if !strings.Contains(logOutput, "DEBUG") {
+		t.Errorf("expected DEBUG level log, got: %s", logOutput)
+	}
+
+	if !strings.Contains(logOutput, "handling request") {
+		t.Errorf("expected 'handling request' message, got: %s", logOutput)
+	}
+
+	// Verify structured logging fields in debug output
+	if !strings.Contains(logOutput, "pattern") {
+		t.Errorf("expected 'pattern' field, got: %s", logOutput)
+	}
+
+	if !strings.Contains(logOutput, "GET /") {
+		t.Errorf("expected pattern 'GET /', got: %s", logOutput)
+	}
+
+	if !strings.Contains(logOutput, "path") {
+		t.Errorf("expected 'path' field, got: %s", logOutput)
+	}
+
+	if !strings.Contains(logOutput, "method") {
+		t.Errorf("expected 'method' field, got: %s", logOutput)
+	}
+}
+
+// FailingApp is a test implementation that returns errors
+type FailingApp struct {
+	err error
+}
+
+func (a *FailingApp) Hello(ctx context.Context) (string, error) {
+	return "", a.err
+}
