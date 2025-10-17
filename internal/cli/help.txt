@@ -10,24 +10,25 @@ COMMANDS:
   documentation   Display template documentation (work in progress)
   version         Print the muxt version
 
-COMMON FLAGS FOR generate AND check:
+COMMAND-SPECIFIC FLAGS:
 
-  Use Flags (specify what to use from your code):
-    --use-templates-variable     Name of the *template.Template variable (default: "templates")
-    --use-receiver-type          Type name for method signature lookup (enables type-safe parsing)
-    --use-receiver-type-package  Package path for receiver type (default: current package)
-
-  Output Flags (control generated code names and signatures):
-    --output-file                               Generated filename (default: "template_routes.go")
-    --output-receiver-interface                 Generated receiver interface name (default: "RoutesReceiver")
-    --output-routes-func                        Generated routes function name (default: "TemplateRoutes")
-    --output-routes-func-with-logger-param      Add *slog.Logger parameter to routes function
-    --output-routes-func-with-path-prefix-param Add pathPrefix string parameter to routes function
-    --output-template-data-type                 Generated template data type name (default: "TemplateData")
-    --output-template-route-paths-type          Generated path helpers type name (default: "TemplateRoutePaths")
-
-  Other Flags:
+  All commands support:
     -v, --verbose  Enable verbose output
+
+  generate command flags:
+    Use Flags (specify what to use from your code):
+      --use-templates-variable     Name of the *template.Template variable (default: "templates")
+      --use-receiver-type          Type name for method signature lookup (enables type-safe parsing)
+      --use-receiver-type-package  Package path for receiver type (default: current package)
+
+    Output Flags (control generated code names and signatures):
+      --output-file                               Generated filename (default: "template_routes.go")
+      --output-receiver-interface                 Generated receiver interface name (default: "RoutesReceiver")
+      --output-routes-func                        Generated routes function name (default: "TemplateRoutes")
+      --output-routes-func-with-logger-param      Add *slog.Logger parameter to routes function
+      --output-routes-func-with-path-prefix-param Add pathPrefix string parameter to routes function
+      --output-template-data-type                 Generated template data type name (default: "TemplateData")
+      --output-template-route-paths-type          Generated path helpers type name (default: "TemplateRoutePaths")
 
 EXAMPLES:
   # Basic generation with type checking

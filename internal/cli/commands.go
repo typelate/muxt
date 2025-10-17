@@ -44,7 +44,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 }
 
 func checkCommand(workingDirectory string, args []string, stderr io.Writer) error {
-	config, err := newRoutesFileConfiguration(args, stderr)
+	config, err := newCheckConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func writeHelp(stdout io.Writer) error {
 }
 
 func documentationCommand(wd string, args []string, stdout, stderr io.Writer) error {
-	config, err := newRoutesFileConfiguration(args, stderr)
+	config, err := newDocumentationConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
@@ -170,31 +170,31 @@ func global(wd string, args []string, stdout io.Writer) (string, []string, error
 
 const (
 	// New flag names with clear prefixes
-	useTemplatesVariable       = "use-templates-variable"
-	useReceiverType            = "use-receiver-type"
-	useReceiverTypePackage     = "use-receiver-type-package"
-	outputFile                       = "output-file"
-	outputReceiverInterface          = "output-receiver-interface"
-	outputRoutesFunc                 = "output-routes-func"
-	outputTemplateDataType           = "output-template-data-type"
-	outputTemplateRoutePathsType     = "output-template-route-paths-type"
-	outputRoutesFuncWithLoggerParam  = "output-routes-func-with-logger-param"
-	outputRoutesFuncWithPathPrefix   = "output-routes-func-with-path-prefix-param"
+	useTemplatesVariable            = "use-templates-variable"
+	useReceiverType                 = "use-receiver-type"
+	useReceiverTypePackage          = "use-receiver-type-package"
+	outputFile                      = "output-file"
+	outputReceiverInterface         = "output-receiver-interface"
+	outputRoutesFunc                = "output-routes-func"
+	outputTemplateDataType          = "output-template-data-type"
+	outputTemplateRoutePathsType    = "output-template-route-paths-type"
+	outputRoutesFuncWithLoggerParam = "output-routes-func-with-logger-param"
+	outputRoutesFuncWithPathPrefix  = "output-routes-func-with-path-prefix-param"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
 	deprecatedLogger     = "logger"
 
 	// Deprecated flag names (for backward compatibility)
-	deprecatedTemplatesVariable      = "templates-variable"
-	deprecatedReceiverType           = "receiver-type"
-	deprecatedReceiverTypePackage    = "receiver-type-package"
-	deprecatedReceiverInterface      = "receiver-interface"
-	deprecatedRoutesFunc             = "routes-func"
-	deprecatedTemplateDataType       = "template-data-type"
-	deprecatedTemplateRoutePathsType = "template-route-paths-type"
-	deprecatedFindTemplatesVariable  = "find-templates-variable"
-	deprecatedFindReceiverType       = "find-receiver-type"
+	deprecatedTemplatesVariable       = "templates-variable"
+	deprecatedReceiverType            = "receiver-type"
+	deprecatedReceiverTypePackage     = "receiver-type-package"
+	deprecatedReceiverInterface       = "receiver-interface"
+	deprecatedRoutesFunc              = "routes-func"
+	deprecatedTemplateDataType        = "template-data-type"
+	deprecatedTemplateRoutePathsType  = "template-route-paths-type"
+	deprecatedFindTemplatesVariable   = "find-templates-variable"
+	deprecatedFindReceiverType        = "find-receiver-type"
 	deprecatedFindReceiverTypePackage = "find-receiver-type-package"
 
 	// Help text
@@ -246,63 +246,124 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFil
 	return g, nil
 }
 
-func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
-	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
+func newCheckConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
+	var g muxt.RoutesFileConfiguration
+	flagSet := checkFlagSet(&g)
+	flagSet.SetOutput(stderr)
+	if err := flagSet.Parse(args); err != nil {
+		return g, err
+	}
+	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+	}
+	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+	}
+	return g, nil
+}
 
-	// New flag names with clear prefixes
+func newDocumentationConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
+	var g muxt.RoutesFileConfiguration
+	flagSet := documentationFlagSet(&g)
+	flagSet.SetOutput(stderr)
+	if err := flagSet.Parse(args); err != nil {
+		return g, err
+	}
+	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+	}
+	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
+		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+	}
+	return g, nil
+}
+
+// Helper functions for flag groups
+func addUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
 	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, muxt.DefaultTemplatesVariableName, useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, useReceiverType, "", useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, useReceiverTypePackage, "", useReceiverTypePackageHelp)
+}
 
+func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
 	flagSet.StringVar(&g.OutputFileName, outputFile, muxt.DefaultOutputFileName, outputFileHelp)
 	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, muxt.DefaultReceiverInterfaceName, outputReceiverInterfaceHelp)
 	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, muxt.DefaultRoutesFunctionName, outputRoutesFuncHelp)
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, muxt.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
-
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
+}
+
+func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
 	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
+}
 
-	// Deprecated feature flags
-	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
-	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
-
-	// Deprecated flags for backward compatibility (original names)
+func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
 	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
-	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, muxt.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
-	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, muxt.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
-	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, muxt.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
-
-	// Deprecated find-* flags (from previous iteration)
 	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedFindReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedFindReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 
-	// Mark all deprecated flags
-	markDeprecated := func(name, replacement string) {
-		if err := flagSet.MarkDeprecated(name, "use --"+replacement+" instead"); err != nil {
-			panic(err)
-		}
+	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
+	markDeprecated(flagSet, deprecatedReceiverType, useReceiverType)
+	markDeprecated(flagSet, deprecatedReceiverTypePackage, useReceiverTypePackage)
+	markDeprecated(flagSet, deprecatedFindTemplatesVariable, useTemplatesVariable)
+	markDeprecated(flagSet, deprecatedFindReceiverType, useReceiverType)
+	markDeprecated(flagSet, deprecatedFindReceiverTypePackage, useReceiverTypePackage)
+}
+
+func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
+	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, muxt.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, muxt.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, muxt.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
+	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
+	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
+
+	markDeprecated(flagSet, deprecatedReceiverInterface, outputReceiverInterface)
+	markDeprecated(flagSet, deprecatedRoutesFunc, outputRoutesFunc)
+	markDeprecated(flagSet, deprecatedTemplateDataType, outputTemplateDataType)
+	markDeprecated(flagSet, deprecatedTemplateRoutePathsType, outputTemplateRoutePathsType)
+	markDeprecated(flagSet, deprecatedLogger, outputRoutesFuncWithLoggerParam)
+	markDeprecated(flagSet, deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
+}
+
+func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
+	if err := flagSet.MarkDeprecated(name, "use --"+replacement+" instead"); err != nil {
+		panic(err)
 	}
+}
+func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
 
-	markDeprecated(deprecatedTemplatesVariable, useTemplatesVariable)
-	markDeprecated(deprecatedReceiverType, useReceiverType)
-	markDeprecated(deprecatedReceiverTypePackage, useReceiverTypePackage)
-	markDeprecated(deprecatedReceiverInterface, outputReceiverInterface)
-	markDeprecated(deprecatedRoutesFunc, outputRoutesFunc)
-	markDeprecated(deprecatedTemplateDataType, outputTemplateDataType)
-	markDeprecated(deprecatedTemplateRoutePathsType, outputTemplateRoutePathsType)
+	addUseFlagsToFlagSet(flagSet, g)
+	addOutputFlagsToFlagSet(flagSet, g)
+	addVerboseFlagToFlagSet(flagSet, g)
+	addDeprecatedUseFlagsToFlagSet(flagSet, g)
+	addDeprecatedOutputFlagsToFlagSet(flagSet, g)
 
-	markDeprecated(deprecatedFindTemplatesVariable, useTemplatesVariable)
-	markDeprecated(deprecatedFindReceiverType, useReceiverType)
-	markDeprecated(deprecatedFindReceiverTypePackage, useReceiverTypePackage)
+	return flagSet
+}
 
-	markDeprecated(deprecatedLogger, outputRoutesFuncWithLoggerParam)
-	markDeprecated(deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
+func checkFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("check", pflag.ContinueOnError)
+
+	addUseFlagsToFlagSet(flagSet, g)
+	addVerboseFlagToFlagSet(flagSet, g)
+	addDeprecatedUseFlagsToFlagSet(flagSet, g)
+
+	return flagSet
+}
+
+func documentationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("documentation", pflag.ContinueOnError)
+
+	addUseFlagsToFlagSet(flagSet, g)
+	addVerboseFlagToFlagSet(flagSet, g)
+	addDeprecatedUseFlagsToFlagSet(flagSet, g)
 
 	return flagSet
 }
