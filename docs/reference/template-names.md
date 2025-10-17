@@ -235,7 +235,7 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 - [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) — Various status patterns
 
 **Forms:**
-- [reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) — Struct form binding
+- [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) — Struct form binding
 
 **Complete apps:**
 - [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Full blog application

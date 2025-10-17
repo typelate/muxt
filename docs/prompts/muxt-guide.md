@@ -143,7 +143,7 @@ func () error              // .Result=zero, .Err=error
 
 Always check `.Err` in templates.
 
-See [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt), [reference_call_with_two_returns.txt](../../cmd/muxt/testdata/reference_call_with_two_returns.txt)
+See [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt), [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
 
 ## Status Codes
 

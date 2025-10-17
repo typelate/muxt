@@ -77,7 +77,7 @@ func (id *UserID) UnmarshalText(text []byte) error {
 }
 ```
 
-[reference_arg_text_unmarshaler.txt](../../cmd/muxt/testdata/reference_arg_text_unmarshaler.txt)
+[howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt)
 
 ## Form Parameters
 
@@ -117,7 +117,7 @@ type LoginForm struct {
 
 Struct field names must match form field names exactly (case-sensitive) unless using the `name` tag.
 
-[reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) · [reference_form_field_tag.txt](../../cmd/muxt/testdata/reference_form_field_tag.txt)
+[howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) · [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt)
 
 ## Advanced Patterns
 
@@ -185,12 +185,12 @@ Validation errors should return from your method. Display them in templates with
 
 **Type parsing:**
 - [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt) — Typed path params
-- [reference_arg_text_unmarshaler.txt](../../cmd/muxt/testdata/reference_arg_text_unmarshaler.txt) — Custom `TextUnmarshaler`
+- [howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt) — Custom `TextUnmarshaler`
 
 **Forms:**
-- [reference_form_with_struct_binding.txt](../../cmd/muxt/testdata/reference_form_with_struct_binding.txt) — Struct form binding
-- [reference_form_field_tag.txt](../../cmd/muxt/testdata/reference_form_field_tag.txt) — `name` tag mapping
-- [reference_form_with_slice_field.txt](../../cmd/muxt/testdata/reference_form_with_slice_field.txt) — Form slices
+- [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) — Struct form binding
+- [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt) — `name` tag mapping
+- [howto_form_with_slice.txt](../../cmd/muxt/testdata/howto_form_with_slice.txt) — Form slices
 - [err_form_unsupported_field_type.txt](../../cmd/muxt/testdata/err_form_unsupported_field_type.txt) — Unsupported types
 
 **Multiple arguments:**
