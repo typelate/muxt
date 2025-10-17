@@ -98,9 +98,9 @@ func writeOutput(w io.Writer, functions source.Functions, templates []Template, 
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "\nReciever Type: %s\n", receiver.String())
+	_, _ = fmt.Fprintf(w, "\nReceiver Type: %s\n", receiver.String())
 	if receiver.NumMethods() > 0 {
-		_, _ = fmt.Fprintf(w, "\nReciever Methods:\n")
+		_, _ = fmt.Fprintf(w, "\nReceiver Methods:\n")
 	}
 	for i := 0; i < receiver.NumMethods(); i++ {
 		m := receiver.Method(i)
