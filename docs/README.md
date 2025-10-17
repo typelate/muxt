@@ -43,9 +43,9 @@ Type-safe HTTP handlers from Go HTML templates.
 
 For AI assistants (Claude, ChatGPT, etc.):
 
-- **[muxt-quick.md](prompts/muxt-quick.md)** - Quick reference (~10KB)
-- **[muxt-guide.md](prompts/muxt-guide.md)** - Practical guide (~15KB)
-- **[muxt-complete.md](prompts/muxt-complete.md)** - Complete reference (~25KB)
+- **[muxt-quick.md](prompts/muxt-quick.md)** - Quick reference (~4KB)
+- **[muxt-guide.md](prompts/muxt-guide.md)** - Practical guide (~8KB)
+- **[muxt-complete.md](prompts/muxt-complete.md)** - Complete reference (~14KB)
 
 Choose by complexity: quick → guide → complete
 
