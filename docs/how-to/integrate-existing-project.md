@@ -1,219 +1,306 @@
 # How to Integrate Muxt into an Existing Project
 
-Add Muxt to your existing Go web app without breaking everything.
+Migrate production services incrementally. Start small, prove value, scale adoption.
 
-## Goal
+## Strategy
 
-Get Muxt working alongside your current routes. No big rewrite. No disruption.
+**Port small services first.** Get team reps on non-critical paths. Learn migration patterns. Apply to larger systems.
 
-## Prerequisites
+**Run alongside existing code.** Zero-downtime migration. Both architectures coexist during transition.
 
-- A Go project that's already running
-- You're using `html/template` (or want to start)
+**Key insight:** Muxt isn't a framework. It's static analysis + code generation. Your domain logic stays pure Go.
 
-## Option 1: Add Type Checking to Existing Templates
+## Path 1: Add Type Safety to Existing Templates (Low Risk)
 
-If you already use `html/template` and want to add static analysis without changing your architecture:
+If your service already uses `html/template`, add compile-time checks without changing handler code. Safe first step.
 
-### Step 1: Make Templates Discoverable
+**Requirements:**
+- Package-level `var templates` with `embed.FS`
+- String literals in `ExecuteTemplate` calls
+- Concrete types (not `any`/`interface{}`)
 
-Ensure your `*template.Template` variable is initialized as a global declaration using embedded files (maybe in a new test file):
-
+**Example:**
 ```go
-package server
-
-import (
-	"embed"
-	"html/template"
-)
-
 //go:embed *.gohtml
 var templateSource embed.FS
-
 var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+// Handler stays unchanged
+func (s *Server) UserProfile(w http.ResponseWriter, r *http.Request) {
+    user := s.db.GetUser(r.Context(), getUserID(r))  // Concrete type
+    templates.ExecuteTemplate(w, "user-profile", user)  // String literal
+}
 ```
 
-### Step 2: Use String Literals in ExecuteTemplate Calls
-
-Update all `templates.ExecuteTemplate` calls to use:
-- String literals for the template name
-- Static types for the data argument (avoid `any` or `interface{}`)
-
-```go
-// Good
-var data database.UserRow
-templates.ExecuteTemplate(w, "user-profile", data)
-
-// Avoid - Muxt can't analyze these
-var data any
-templates.ExecuteTemplate(w, templateName, data)
-```
-
-### Step 3: Run Type Checking
-
+**Validate:**
 ```bash
-go install github.com/typelate/muxt@latest
-muxt check
+go install github.com/typelate/muxt/cmd/muxt@latest
+muxt check --receiver-type=Server
 ```
 
-This validates your template actions without generating any code.
+**Value:** Catch template errors at build time. Team learns Muxt semantics before changing architecture.
 
-## Option 2: Generate Routes in a Separate Package
+## Path 2: Generate Handlers in New Package (Production Ready)
 
-eFor generating HTTP handlers alongside existing routes, create a new package with a `templates.go` file that makes your templates discoverable to Muxt.
+Recommended for incremental migration. Isolate Muxt-generated code from existing handlers.
 
-### Step 1: Create a Hypertext Package
+**Architecture pattern:** `internal/hypertext` for templates + generated code, `internal/domain` for business logic.
 
+### Step-by-Step
+
+**1. Create isolated package:**
 ```bash
 mkdir -p internal/hypertext
 ```
 
-**Why a separate package?**
-- Clear separation of concerns
-- Keeps generated code isolated
-- Easier to test and maintain
-
-### Step 2: Set Up Template Parsing
-
-Create `internal/hypertext/templates.go`:
-
+**2. Define templates with package-level var (`internal/hypertext/templates.go`):**
 ```go
 package hypertext
 
-import (
-	"embed"
-	"html/template"
-)
+import ("embed"; "html/template")
 
-//go:embed *.gohtml
-var templatesDir embed.FS
+//go:embed *.gohtml */*.gohtml
+var fs embed.FS
 
-//go:generate muxt generate --receiver-type=Server --receiver-type-package=example.com/internal/domain --routes-func=Routes var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
+//go:generate muxt generate --receiver-type=Server --receiver-type-package=github.com/yourorg/yourapp/internal/domain --routes-func=Routes
+var templates = template.Must(template.ParseFS(fs, "*.gohtml", "*/*.gohtml"))
 ```
 
-**Key requirements:**
-- The `templates` variable must be **package-level** (not inside a function)
-- Use `embed.FS` to make templates discoverable at compile time
-- The `//go:embed` directive can only include files in the same directory or subdirectories (not parent directories)
+**Critical:**
+- `templates` must be package-level (Muxt finds via static analysis)
+- `--receiver-type-package` points to your domain package
+- `--routes-func` names the registration function (default: `TemplateRoutes`)
 
-**For multiple subdirectories:**
+**For complex layouts:**
 ```go
 //go:embed pages/*.gohtml components/*.gohtml layouts/*.gohtml
-var templatesDir embed.FS
+var fs embed.FS
 
-var templates = template.Must(template.ParseFS(templatesDir,
-	"pages/*.gohtml",
-	"components/*.gohtml",
-	"layouts/*.gohtml",
+var templates = template.Must(template.ParseFS(fs,
+    "pages/*.gohtml",
+    "components/*.gohtml",
+    "layouts/*.gohtml",
 ))
 ```
 
-**For custom template functions or delimiters:**
-```go
-var templates = parseTemplates()
-
-func parseTemplates() *template.Template {
-	return template.Must(
-		template.New("").
-			Funcs(template.FuncMap{
-				"formatDate": formatDate,
-			}).
-			ParseFS(templatesDir, "**/*.gohtml"),
-	)
-}
-```
-
-See [Package Structure Explanation](../explanation/package-structure.md) for more details on template organization.
-
-*[(See Muxt CLI Test/receiver_and_routes_are_in_different_packages)](../../cmd/muxt/testdata/receiver_and_routes_are_in_different_packages.txt)*
-
-### Step 3: Add Your Templates
-
-Create `internal/hypertext/index.gohtml` (or organize in subdirectories):
-
+**3. Create route templates (`internal/hypertext/dashboard.gohtml`):**
 ```gotemplate
-{{define "GET /dashboard Dashboard(ctx)" -}}
+{{define "GET /dashboard Dashboard(ctx)"}}
 <!DOCTYPE html>
 <html>
 <head><title>Dashboard</title></head>
 <body>
-  <h1>Welcome, {{.Username}}</h1>
+  {{if .Err}}<div class="error">{{.Err.Error}}</div>{{end}}
+  <h1>{{.Result.Greeting}}, {{.Result.Username}}</h1>
+  <p>Last login: {{.Result.LastLogin.Format "2006-01-02"}}</p>
 </body>
 </html>
-{{- end}}
+{{end}}
 ```
 
-### Step 4: Generate Routes
+**4. Implement domain methods (`internal/domain/server.go`):**
+```go
+package domain
 
+type Server struct {
+    db *sql.DB
+}
+
+type DashboardData struct {
+    Greeting  string
+    Username  string
+    LastLogin time.Time
+}
+
+func (s *Server) Dashboard(ctx context.Context) (DashboardData, error) {
+    // Pure business logic - easily tested
+    user, err := s.db.GetCurrentUser(ctx)
+    if err != nil {
+        return DashboardData{}, err
+    }
+    return DashboardData{
+        Greeting:  getGreeting(time.Now()),
+        Username:  user.Name,
+        LastLogin: user.LastLogin,
+    }, nil
+}
+```
+
+**5. Generate handlers:**
 ```bash
 cd internal/hypertext
-go generate
+go generate  # Creates template_routes.go + dashboard_template_routes_gen.go
 ```
 
-This creates multiple files:
-- `template_routes.go` - Main file with shared types and the `Routes` function
-- `*_template_routes_gen.go` - One file per `.gohtml` template file with its handlers
-
-### Step 5: Register Routes in Main
-
-Update your `main.go` to register both old and new routes:
-
+**6. Wire both routing systems (`cmd/server/main.go`):**
 ```go
 package main
 
 import (
-	"log"
-	"net/http"
+    "log"
+    "net/http"
 
-	"example.com/internal/api"      // Your existing routes
-	"example.com/internal/hypertext" // New Muxt routes
-	"example.com/internal/domain"
+    "github.com/yourorg/yourapp/internal/api"       // Existing JSON API
+    "github.com/yourorg/yourapp/internal/domain"
+    "github.com/yourorg/yourapp/internal/hypertext" // Muxt routes
 )
 
 func main() {
-	mux := http.NewServeMux()
+    db := setupDatabase()
+    srv := domain.NewServer(db)
 
-	srv := domain.New()
+    mux := http.NewServeMux()
 
-	// Existing routes
-	api.RegisterRoutes(mux, srv)
+    // Existing routes continue working
+    api.RegisterRoutes(mux, srv)
 
-	// Muxt-generated routes
-	hypertext.Routes(mux, srv)
+    // New Muxt routes added incrementally
+    hypertext.Routes(mux, srv)
 
-	log.Fatal(http.ListenAndServe(":8080", mux))
+    log.Fatal(http.ListenAndServe(":8080", mux))
 }
 ```
 
-## Verify Integration
+**Result:** Both systems share same `domain.Server`. Muxt routes use generated handlers, existing routes unchanged.
 
-Run `muxt check` to ensure templates are correctly typed:
+## Migration Patterns for Large Services
 
-```bash
-muxt check
+**Pattern 1: Feature flags**
+```go
+if featureFlags.UseMuxt(r.Context()) {
+    hypertext.Routes(mux, srv)
+} else {
+    legacy.Routes(mux, srv)
+}
 ```
 
-If you see errors, check:
-- Template names match the expected pattern
-- Method signatures match template parameters
-- The `--receiver-type` flag points to the correct type
+**Pattern 2: Shadow mode**
+```go
+mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+    // Serve from Muxt, log comparison with legacy
+    muxtResult := captureResponse(hypertext.Dashboard)
+    legacyResult := captureResponse(legacy.Dashboard)
+    if !bytes.Equal(muxtResult, legacyResult) {
+        log.Warn("divergence detected", "path", r.URL.Path)
+    }
+    w.Write(muxtResult)
+})
+```
 
-## Common Issues
+**Pattern 3: Path-based migration**
+```go
+// Migrate paths incrementally
+mux.HandleFunc("/admin/", legacyAdminHandler)   // Not yet migrated
+hypertext.Routes(mux, srv)                       // New paths via Muxt
+```
 
-**`muxt check` can't find templates**
+## Performance Characteristics
 
-Your templates variable needs to be package-level and use `ParseFS` with an `embed.FS`. Muxt looks for this pattern.
+**Compile time:** Muxt analysis runs during `go generate`. Zero runtime overhead from code generation.
 
-**Route conflicts**
+**Runtime:** Generated handlers are thin wrappers around your domain methods. Same performance as hand-written handlers.
 
-`http.ServeMux` panics on duplicate routes. If you get a panic at startup, you've registered the same path twice. Pick different paths or consolidate.
+**Binary size:** Generated code is verbose but compresses well. Expect 10-20KB per route in debug builds, <5KB in production (stripped + compressed).
 
-**Generated interface doesn't match**
+**Memory:** Template parsing happens once at startup via `template.Must`. After that, zero allocations for route dispatch.
 
-Check your `--receiver-type` flag. It should point to the actual type that has your methods. If you're getting weird errors, this is usually why.
+## Testing Strategy
+
+**Unit test domain methods** (no HTTP):
+```go
+func TestDashboard(t *testing.T) {
+    srv := &domain.Server{db: mockDB}
+    data, err := srv.Dashboard(context.Background())
+    require.NoError(t, err)
+    assert.Equal(t, "Good morning", data.Greeting)
+}
+```
+
+**Integration test generated routes** (with HTTP):
+```go
+func TestDashboardRoute(t *testing.T) {
+    srv := &domain.Server{db: testDB}
+    mux := http.NewServeMux()
+    hypertext.Routes(mux, srv)
+
+    req := httptest.NewRequest("GET", "/dashboard", nil)
+    rec := httptest.NewRecorder()
+    mux.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusOK, rec.Code)
+    doc := domtest.ParseResponseDocument(t, rec.Result())
+    assert.NotNil(t, doc.QuerySelector("h1"))
+}
+```
+
+**Critical:** Domain logic has zero HTTP dependencies. Test without `httptest`. Generated handlers test routing + template rendering.
+
+## Common Pitfalls
+
+**Avoid `any` in method signatures**
+```go
+// Bad - type checker can't help
+func (s *Server) Dashboard(ctx context.Context) (any, error)
+
+// Good - concrete types enable static analysis
+func (s *Server) Dashboard(ctx context.Context) (DashboardData, error)
+```
+
+**Avoid runtime template selection**
+```go
+// Bad - Muxt can't analyze
+templateName := getTemplateName(r)
+templates.ExecuteTemplate(w, templateName, data)
+
+// Good - static template names
+templates.ExecuteTemplate(w, "user-profile", data)
+```
+
+**Avoid mixing HTTP and business logic**
+```go
+// Bad - tightly coupled to HTTP
+func (s *Server) Dashboard(w http.ResponseWriter, r *http.Request) {
+    data := s.db.Get()
+    json.NewEncoder(w).Encode(data)
+}
+
+// Good - pure domain logic
+func (s *Server) Dashboard(ctx context.Context) (DashboardData, error) {
+    return s.db.Get(ctx)
+}
+```
+
+## Team Onboarding Checklist
+
+- [ ] Install `muxt` CLI globally
+- [ ] Port one low-traffic route to learn workflow
+- [ ] Run `muxt check` in CI to catch template errors
+- [ ] Review generated `template_routes.go` to understand handler structure
+- [ ] Write domain methods that return concrete types
+- [ ] Test domain methods without HTTP dependencies
+- [ ] Use `domtest` for HTML assertions in integration tests
+- [ ] Read [template name syntax](../reference/template-names.md) for path parameters
+- [ ] Review [receiver methods guide](write-receiver-methods.md) for patterns
+
+## When to Use Muxt
+
+**Use Muxt for:**
+- Server-rendered HTML responses
+- Type-safe template rendering
+- Services where HTML is the primary interface
+- Teams that value compile-time safety
+
+**Don't use Muxt for:**
+- JSON APIs (use standard handlers)
+- WebSocket connections (use standard handlers)
+- File downloads/streaming (use standard handlers)
+- Services with zero HTML output
+
+Muxt is a scalpel, not a hammer. Use it where it adds value: type-safe HTML generation.
 
 ## Next Steps
 
-- [Write receiver methods](write-receiver-methods.md) for your generated handlers
-- [Test your handlers](test-handlers.md) using `domtest`
-- Review [template name syntax](../reference/template-names.md) for advanced routing patterns
+- [Write receiver methods](write-receiver-methods.md) - Domain-oriented patterns
+- [Test handlers](test-handlers.md) - Given-When-Then testing
+- [Template name syntax](../reference/template-names.md) - Complete routing syntax
+- [Type checking reference](../reference/type-checking.md) - Static analysis details

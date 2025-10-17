@@ -19,7 +19,7 @@ You want to show some data in HTML? Here's your stack:
 
 All to render `<div>Hello, {{name}}</div>`.
 
-This is insane.
+This is too much.
 
 ## HTML is Good, Actually
 
@@ -47,6 +47,15 @@ Everything you need is right there. In the template name.
 
 ```gotemplate
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
+<article>
+    <header>
+        <h1>Argument</h1>
+    </header>
+    <div>
+        <p>Clear and to the point!</p>
+    </div>
+</article>
+{{end}}
 ```
 
 You know exactly what this does. No documentation needed. No clicking through six files.

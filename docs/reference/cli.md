@@ -1,325 +1,201 @@
 # CLI Reference
 
-Complete reference for the `muxt` command-line interface.
+Complete specification for `muxt` command-line interface. Use during setup and CI configuration.
+
+## Quick Reference
+
+| Command | Purpose | Common Flags |
+|---------|---------|--------------|
+| `generate` | Generate HTTP handlers from templates | `--receiver-type`, `--logger`, `--output-file` |
+| `check` | Type-check templates without generating | `--receiver-type`, `--verbose` |
+| `documentation` | Generate markdown docs from templates | Same as `generate` |
+| `version` | Print muxt version | None |
 
 ## Commands
 
 ### `muxt generate`
 
-Generates Go code from HTML templates.
+Generates type-safe HTTP handlers from HTML templates.
 
-**Aliases**: `gen`, `g`
+**Aliases:** `gen`, `g`
 
-**Usage**:
-```bash
-muxt generate [flags]
-```
-
-**Example**:
-```bash
-muxt generate --receiver-type=App --logger --output-file=routes.go
-```
-
-#### Flags
-
-##### `--output-file`
-**Type**: `string`
-**Default**: `template_routes.go`
-
-The main generated file name. When templates are defined in `.gohtml` files, additional per-file route files are generated (e.g., `index.gohtml` generates `index_template_routes_gen.go`).
+**Output:**
+- `template_routes.go` — Main file with shared types and route registration function
+- `*_template_routes_gen.go` — Per-file handlers for each `.gohtml` source
 
 ```bash
-muxt generate --output-file=routes.go
+muxt generate --receiver-type=App --logger
 ```
 
-##### `--templates-variable`
-**Type**: `string`
-**Default**: `templates`
+#### Core Flags
 
-The name of the global variable with type `*html/template.Template` in the working directory package.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
+| `--receiver-type-package` | string | _(current pkg)_ | Package path for `--receiver-type`. Only needed if receiver is in different package. |
+| `--output-file` | string | `template_routes.go` | Main generated file name. Per-file route files use pattern `*_template_routes_gen.go`. |
+| `--templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
 
-```bash
-muxt generate --templates-variable=myTemplates
-```
+**Type resolution:**
+- **Without** `--receiver-type`: Parameters are `string`, return types are `any`
+- **With** `--receiver-type`: Muxt looks up actual method signatures, generates type parsers
 
-##### `--routes-func`
-**Type**: `string`
-**Default**: `TemplateRoutes`
+[templates-variable.md](templates-variable.md) — Template variable requirements
 
-The function name for the package registering handler functions on an `*http.ServeMux`.
+#### Naming Flags
 
-```bash
-muxt generate --routes-func=RegisterRoutes
-```
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
+| `--receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
+| `--template-data-type` | string | `TemplateData` | Template context type name (generic). |
+| `--template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 
-##### `--receiver-type`
-**Type**: `string`
-**Default**: _(none)_
+#### Feature Flags
 
-The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--logger` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
+| `--path-prefix` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
 
-```bash
-muxt generate --receiver-type=App
-```
-
-##### `--receiver-type-package`
-**Type**: `string`
-**Default**: _(current directory package)_
-
-The package path to use when looking for `receiver-type`. If not set, the package in the current directory is used.
-
-```bash
-muxt generate --receiver-type=App --receiver-type-package=github.com/user/app/internal
-```
-
-##### `--receiver-interface`
-**Type**: `string`
-**Default**: `RoutesReceiver`
-
-The interface name in the generated output file listing the methods used by the handler routes in routes-func.
-
-```bash
-muxt generate --receiver-interface=Handler
-```
-
-##### `--template-data-type`
-**Type**: `string`
-**Default**: `TemplateData`
-
-The type name for the template data passed to root route templates.
-
-```bash
-muxt generate --template-data-type=PageData
-```
-
-##### `--template-route-paths-type`
-**Type**: `string`
-**Default**: `TemplateRoutePaths`
-
-The type name for the type with path constructor helper methods.
-
-```bash
-muxt generate --template-route-paths-type=Paths
-```
-
-##### `--path-prefix`
-**Type**: `bool`
-**Default**: `false`
-
-Adds a `path-prefix` parameter to the TemplateRoutes function and uses it in each path generator method.
-
-```bash
-muxt generate --path-prefix
-```
-
-**Generated signature**:
-```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathsPrefix string) TemplateRoutePaths
-```
-
-##### `--logger`
-**Type**: `bool`
-**Default**: `false`
-
-Adds a `*slog.Logger` parameter to the TemplateRoutes function and uses it to log ExecuteTemplate errors and debug information in handlers.
-
-```bash
-muxt generate --logger
-```
-
-**Generated signature**:
+**With `--logger`:**
 ```go
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger) TemplateRoutePaths
 ```
 
-**Logging behavior**:
-- **Debug level**: Logs each request with pattern, path, and method
-- **Error level**: Logs template execution failures with error details
+**With `--path-prefix`:**
+```go
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix string) TemplateRoutePaths
+```
 
-See [How to Add Logging](../how-to/add-logging.md) for usage examples.
+**With both:**
+```go
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathPrefix string) TemplateRoutePaths
+```
 
----
+[How to Add Logging](../how-to/add-logging.md)
 
 ### `muxt check`
 
-Runs type checking on templates without generating code.
+Type-check templates without generating code. Use in CI or during development.
 
-**Aliases**: `c`, `typelate`
+**Aliases:** `c`, `typelate`
 
-**Usage**:
 ```bash
-muxt check [flags]
-```
-
-**Examples**:
-```bash
-muxt check --receiver-type=App
-muxt check --verbose
-muxt check -v
+muxt check --receiver-type=App --verbose
 ```
 
 #### Flags
 
-##### `--verbose` / `-v`
-**Type**: `bool`
-**Default**: `false`
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
-Enable verbose output showing each endpoint being checked and a success message when complete.
-
-```bash
-muxt check --verbose
-muxt check -v
-```
-
-**Output**:
+**Verbose output:**
 ```
 checking endpoint GET /users/{id}
 checking endpoint POST /users
 OK
 ```
 
-**Other flags**: Same as `muxt generate` (except `--output-file`)
+**Other flags:** Same as `muxt generate` except `--output-file` (no code generated)
+
+[type-checking.md](type-checking.md) — How type checking works
 
 ---
 
 ### `muxt documentation`
 
-Generates markdown documentation from templates.
+Generate markdown API documentation from templates.
 
-**Aliases**: `docs`, `d`
+**Aliases:** `docs`, `d`
 
-**Usage**:
 ```bash
-muxt documentation [flags]
+muxt documentation --receiver-type=App
 ```
 
-**Flags**: Same as `muxt generate`
+**Flags:** Same as `muxt generate`
 
 ---
 
 ### `muxt version`
 
-Prints the muxt version.
+Print muxt version.
 
-**Alias**: `v`
+**Alias:** `v`
 
-**Usage**:
 ```bash
 muxt version
 ```
 
 ---
 
-### `muxt help`
-
-Displays help information.
-
-**Usage**:
-```bash
-muxt help
-```
-
----
-
 ## Global Flags
 
-### `-C`
-**Type**: `string`
-**Default**: _(current directory)_
-
-Change root directory before running the command.
-
-```bash
-muxt -C ./myapp generate --receiver-type=App
-```
-
----
-
-## Examples
-
-### Basic Generation
-
-```bash
-muxt generate
-```
-
-Generates route files:
-- Main file: `template_routes.go` with shared types and `TemplateRoutes` function
-- Per-file routes: `*_template_routes_gen.go` for each `.gohtml` file (e.g., `index_template_routes_gen.go`)
-- Templates variable: `templates`
-- Receiver interfaces: Main `RoutesReceiver` and file-scoped interfaces (e.g., `IndexRoutesReceiver`)
-
-### With Receiver Type
-
-```bash
-muxt generate --receiver-type=App
-```
-
-Looks up method signatures on the `App` type.
-
-### With Logging
-
-```bash
-muxt generate --receiver-type=App --logger
-```
-
-Adds structured logging to generated handlers.
-
-### Custom Names
-
-```bash
-muxt generate \
-  --routes-func=RegisterRoutes \
-  --receiver-interface=Handler \
-  --template-data-type=PageData \
-  --output-file=routes.go
-```
-
-### From Different Directory
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-C` | string | _(current dir)_ | Change directory before running command. |
 
 ```bash
 muxt -C ./web generate --receiver-type=Server
 ```
 
-Runs generation in the `./web` directory.
+---
 
-### Multiple Flags
+## Common Patterns
 
+**Production setup:**
+```go
+//go:embed *.gohtml
+var templateFS embed.FS
+
+//go:generate muxt generate --receiver-type=Server --logger
+var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+```
+
+**Run generation:**
+```bash
+go generate ./...
+```
+
+**CI type checking:**
+```bash
+muxt check --receiver-type=App --verbose
+```
+
+**Custom naming:**
 ```bash
 muxt generate \
   --receiver-type=App \
-  --logger \
-  --path-prefix \
+  --routes-func=RegisterRoutes \
+  --receiver-interface=Handler \
   --output-file=routes.go
 ```
 
----
-
-## Using with `go:generate`
-
-Add a directive to your Go file:
-
-```go
-//go:generate muxt generate --receiver-type=App --logger
+**Mount under subpath:**
+```bash
+muxt generate --receiver-type=App --path-prefix
 ```
 
-Run generation:
-
-```bash
-go generate ./...
+Then use:
+```go
+Routes(mux, app, "/api/v1")
 ```
 
 ---
 
 ## Exit Codes
 
-- `0` - Success
-- Non-zero - Error (message written to stderr)
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| Non-zero | Error (message on stderr) |
 
 ---
 
 ## Related
 
-- [Template Name Syntax](template-names.md) - Template naming conventions
-- [How to Add Logging](../how-to/add-logging.md) - Using the `--logger` flag
-- [How to Integrate Muxt](../how-to/integrate-existing-project.md) - Setting up generation
+- [templates-variable.md](templates-variable.md) — Template variable setup requirements
+- [template-names.md](template-names.md) — Template naming syntax
+- [type-checking.md](type-checking.md) — Type checking behavior
+- [How to Add Logging](../how-to/add-logging.md) — Using `--logger` flag

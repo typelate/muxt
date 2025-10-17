@@ -1,18 +1,11 @@
-# Making Template Source Files Discoverable
+# Template Variable Requirements
 
-`muxt check` finds function calls and evaluates the template name and parameter type to do static analysis of your template actions.
-Generate HTTP handler functions comply with this expectation by using string literals in `ExecuteTemplate` calls.
-This heuristic to map template names to their data parameter only works for checking.
+Requirements for the global `*template.Template` variable that Muxt uses to find route templates.
 
-To map template names to expected handler behavior, `muxt generate` needs to find an assignment expression where the templates are parsed.
-This configuration is much more brittle than the scanning heuristic used by `muxt check` so you may encounter problems when you deviate from the given example.
-Please file a GitHub issue if you encounter problems with your configuration.
+## Required Pattern
 
-`muxt generate` expects you to use a global variable with type `*template.Template` initialized by an assignment expression.
-The assignment expression must call ParseFS with a variable of type `embed.FS` as the first argument.
-`muxt generate` will then parse the embedded files and find the templates that match the expected template name pattern.
+Muxt requires a **package-level variable** with type `*template.Template`:
 
-Here is a minimal example of a Go source file that `muxt generate` can use to find templates:
 ```go
 package server
 
@@ -22,32 +15,95 @@ import (
 )
 
 //go:embed *.gohtml
-var goTemplateHypertextFiles embed.FS
+var templateFS embed.FS
 
-var myTemplates = template.Must(template.ParseFS(goTemplateHypertextFiles, "*"))
+var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 ```
 
-*[(See Muxt CLI Test/templates_and_embed_in_gen_decl)](../../cmd/muxt/testdata/templates_and_embed_in_gen_decl.txt)*
+[templates_and_embed_in_gen_decl.txt](../../cmd/muxt/testdata/templates_and_embed_in_gen_decl.txt)
 
-The right-hand side of the assignment expression may include any of the following template function calls:
+## Requirements
 
-- [`Must`](https://pkg.go.dev/html/template#Must)
-- [`Parse`](https://pkg.go.dev/html/template#Parse)
-- [`New`](https://pkg.go.dev/html/template#New)
-- [`ParseFS`](https://pkg.go.dev/html/template#ParseFS)
+| Requirement | Details |
+|-------------|---------|
+| **Scope** | Package-level (not function-level) |
+| **Type** | `*template.Template` |
+| **Initialization** | Assignment expression (not const) |
+| **First argument** | `embed.FS` variable when using `ParseFS` |
 
-or methods:
+## Supported Functions
 
+**Package functions:**
+- [`template.Must`](https://pkg.go.dev/html/template#Must)
+- [`template.New`](https://pkg.go.dev/html/template#New)
+- [`template.ParseFS`](https://pkg.go.dev/html/template#ParseFS)
+- [`template.Parse`](https://pkg.go.dev/html/template#Parse)
+
+**Template methods:**
+- [`Template.ParseFS`](https://pkg.go.dev/html/template#Template.ParseFS)
 - [`Template.Parse`](https://pkg.go.dev/html/template#Template.Parse)
 - [`Template.New`](https://pkg.go.dev/html/template#Template.New)
-- [`Template.ParseFS`](https://pkg.go.dev/html/template#Template.ParseFS)
+- [`Template.Funcs`](https://pkg.go.dev/html/template#Template.Funcs)
 - [`Template.Delims`](https://pkg.go.dev/html/template#Template.Delims)
 - [`Template.Option`](https://pkg.go.dev/html/template#Template.Option)
-- [`Template.Funcs`](https://pkg.go.dev/html/template#Template.Option)
 
-*[(See Muxt CLI Test/templates_multiple_parsefs)](../../cmd/muxt/testdata/templates_multiple_parsefs.txt)* for using multiple ParseFS calls.
+## Common Patterns
 
-You can use a different variable name for the `*template.Template` by invoking `muxt generate` with the
-`--templates-variable=someOtherName` flag
-and ensure you have a globally scoped variable someOtherName where the right-hand side of the expression is
-`template.Must()` with some parse calls.
+**Single directory:**
+```go
+//go:embed *.gohtml
+var fs embed.FS
+var templates = template.Must(template.ParseFS(fs, "*.gohtml"))
+```
+
+**Nested directories:**
+```go
+//go:embed *.gohtml pages/*.gohtml components/*.gohtml
+var fs embed.FS
+var templates = template.Must(template.ParseFS(fs, "*.gohtml", "pages/*.gohtml", "components/*.gohtml"))
+```
+
+[templates_multiple_parsefs.txt](../../cmd/muxt/testdata/templates_multiple_parsefs.txt)
+
+**With custom functions:**
+```go
+var templates = template.Must(
+	template.New("").
+		Funcs(template.FuncMap{"add": func(a, b int) int { return a + b }}).
+		ParseFS(fs, "*.gohtml"),
+)
+```
+
+**Different variable name:**
+```bash
+muxt generate --templates-variable=myTemplates
+```
+```go
+var myTemplates = template.Must(template.ParseFS(fs, "*.gohtml"))
+```
+
+## How Muxt Uses This
+
+**`muxt check`:**
+- Scans for `ExecuteTemplate` calls with string literals
+- Maps template names to data types
+- Works without finding template variable
+
+**`muxt generate`:**
+- Finds template variable by name (`--templates-variable` flag)
+- Parses embedded files to find route templates
+- Generates handlers for templates matching route pattern
+
+## Troubleshooting
+
+**Variable not found:**
+- Ensure variable is package-level (not in function)
+- Verify variable name matches `--templates-variable` flag
+- Check variable type is `*template.Template`
+
+**Templates not discovered:**
+- Verify `embed.FS` variable has correct `//go:embed` directive
+- Ensure glob patterns in `ParseFS` match your files
+- Check template names follow route syntax (see [template-names.md](template-names.md))
+
+If your configuration differs from these patterns, [open an issue](https://github.com/typelate/muxt/issues/new) with your setup.
