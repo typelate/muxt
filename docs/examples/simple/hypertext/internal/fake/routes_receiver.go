@@ -5,53 +5,53 @@ import (
 	"context"
 	"sync"
 
-	"github.com/typelate/muxt/docs/example/hypertext"
+	hypertext2 "github.com/typelate/muxt/docs/examples/simple/hypertext"
 )
 
 type Backend struct {
-	GetFormEditRowStub        func(int) (hypertext.Row, error)
+	GetFormEditRowStub        func(int) (hypertext2.Row, error)
 	getFormEditRowMutex       sync.RWMutex
 	getFormEditRowArgsForCall []struct {
 		arg1 int
 	}
 	getFormEditRowReturns struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}
 	getFormEditRowReturnsOnCall map[int]struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}
-	ListStub        func(context.Context) []hypertext.Row
+	ListStub        func(context.Context) []hypertext2.Row
 	listMutex       sync.RWMutex
 	listArgsForCall []struct {
 		arg1 context.Context
 	}
 	listReturns struct {
-		result1 []hypertext.Row
+		result1 []hypertext2.Row
 	}
 	listReturnsOnCall map[int]struct {
-		result1 []hypertext.Row
+		result1 []hypertext2.Row
 	}
-	SubmitFormEditRowStub        func(int, hypertext.EditRow) (hypertext.Row, error)
+	SubmitFormEditRowStub        func(int, hypertext2.EditRow) (hypertext2.Row, error)
 	submitFormEditRowMutex       sync.RWMutex
 	submitFormEditRowArgsForCall []struct {
 		arg1 int
-		arg2 hypertext.EditRow
+		arg2 hypertext2.EditRow
 	}
 	submitFormEditRowReturns struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}
 	submitFormEditRowReturnsOnCall map[int]struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *Backend) GetFormEditRow(arg1 int) (hypertext.Row, error) {
+func (fake *Backend) GetFormEditRow(arg1 int) (hypertext2.Row, error) {
 	fake.getFormEditRowMutex.Lock()
 	ret, specificReturn := fake.getFormEditRowReturnsOnCall[len(fake.getFormEditRowArgsForCall)]
 	fake.getFormEditRowArgsForCall = append(fake.getFormEditRowArgsForCall, struct {
@@ -76,7 +76,7 @@ func (fake *Backend) GetFormEditRowCallCount() int {
 	return len(fake.getFormEditRowArgsForCall)
 }
 
-func (fake *Backend) GetFormEditRowCalls(stub func(int) (hypertext.Row, error)) {
+func (fake *Backend) GetFormEditRowCalls(stub func(int) (hypertext2.Row, error)) {
 	fake.getFormEditRowMutex.Lock()
 	defer fake.getFormEditRowMutex.Unlock()
 	fake.GetFormEditRowStub = stub
@@ -89,33 +89,33 @@ func (fake *Backend) GetFormEditRowArgsForCall(i int) int {
 	return argsForCall.arg1
 }
 
-func (fake *Backend) GetFormEditRowReturns(result1 hypertext.Row, result2 error) {
+func (fake *Backend) GetFormEditRowReturns(result1 hypertext2.Row, result2 error) {
 	fake.getFormEditRowMutex.Lock()
 	defer fake.getFormEditRowMutex.Unlock()
 	fake.GetFormEditRowStub = nil
 	fake.getFormEditRowReturns = struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *Backend) GetFormEditRowReturnsOnCall(i int, result1 hypertext.Row, result2 error) {
+func (fake *Backend) GetFormEditRowReturnsOnCall(i int, result1 hypertext2.Row, result2 error) {
 	fake.getFormEditRowMutex.Lock()
 	defer fake.getFormEditRowMutex.Unlock()
 	fake.GetFormEditRowStub = nil
 	if fake.getFormEditRowReturnsOnCall == nil {
 		fake.getFormEditRowReturnsOnCall = make(map[int]struct {
-			result1 hypertext.Row
+			result1 hypertext2.Row
 			result2 error
 		})
 	}
 	fake.getFormEditRowReturnsOnCall[i] = struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *Backend) List(arg1 context.Context) []hypertext.Row {
+func (fake *Backend) List(arg1 context.Context) []hypertext2.Row {
 	fake.listMutex.Lock()
 	ret, specificReturn := fake.listReturnsOnCall[len(fake.listArgsForCall)]
 	fake.listArgsForCall = append(fake.listArgsForCall, struct {
@@ -140,7 +140,7 @@ func (fake *Backend) ListCallCount() int {
 	return len(fake.listArgsForCall)
 }
 
-func (fake *Backend) ListCalls(stub func(context.Context) []hypertext.Row) {
+func (fake *Backend) ListCalls(stub func(context.Context) []hypertext2.Row) {
 	fake.listMutex.Lock()
 	defer fake.listMutex.Unlock()
 	fake.ListStub = stub
@@ -153,35 +153,35 @@ func (fake *Backend) ListArgsForCall(i int) context.Context {
 	return argsForCall.arg1
 }
 
-func (fake *Backend) ListReturns(result1 []hypertext.Row) {
+func (fake *Backend) ListReturns(result1 []hypertext2.Row) {
 	fake.listMutex.Lock()
 	defer fake.listMutex.Unlock()
 	fake.ListStub = nil
 	fake.listReturns = struct {
-		result1 []hypertext.Row
+		result1 []hypertext2.Row
 	}{result1}
 }
 
-func (fake *Backend) ListReturnsOnCall(i int, result1 []hypertext.Row) {
+func (fake *Backend) ListReturnsOnCall(i int, result1 []hypertext2.Row) {
 	fake.listMutex.Lock()
 	defer fake.listMutex.Unlock()
 	fake.ListStub = nil
 	if fake.listReturnsOnCall == nil {
 		fake.listReturnsOnCall = make(map[int]struct {
-			result1 []hypertext.Row
+			result1 []hypertext2.Row
 		})
 	}
 	fake.listReturnsOnCall[i] = struct {
-		result1 []hypertext.Row
+		result1 []hypertext2.Row
 	}{result1}
 }
 
-func (fake *Backend) SubmitFormEditRow(arg1 int, arg2 hypertext.EditRow) (hypertext.Row, error) {
+func (fake *Backend) SubmitFormEditRow(arg1 int, arg2 hypertext2.EditRow) (hypertext2.Row, error) {
 	fake.submitFormEditRowMutex.Lock()
 	ret, specificReturn := fake.submitFormEditRowReturnsOnCall[len(fake.submitFormEditRowArgsForCall)]
 	fake.submitFormEditRowArgsForCall = append(fake.submitFormEditRowArgsForCall, struct {
 		arg1 int
-		arg2 hypertext.EditRow
+		arg2 hypertext2.EditRow
 	}{arg1, arg2})
 	stub := fake.SubmitFormEditRowStub
 	fakeReturns := fake.submitFormEditRowReturns
@@ -202,41 +202,41 @@ func (fake *Backend) SubmitFormEditRowCallCount() int {
 	return len(fake.submitFormEditRowArgsForCall)
 }
 
-func (fake *Backend) SubmitFormEditRowCalls(stub func(int, hypertext.EditRow) (hypertext.Row, error)) {
+func (fake *Backend) SubmitFormEditRowCalls(stub func(int, hypertext2.EditRow) (hypertext2.Row, error)) {
 	fake.submitFormEditRowMutex.Lock()
 	defer fake.submitFormEditRowMutex.Unlock()
 	fake.SubmitFormEditRowStub = stub
 }
 
-func (fake *Backend) SubmitFormEditRowArgsForCall(i int) (int, hypertext.EditRow) {
+func (fake *Backend) SubmitFormEditRowArgsForCall(i int) (int, hypertext2.EditRow) {
 	fake.submitFormEditRowMutex.RLock()
 	defer fake.submitFormEditRowMutex.RUnlock()
 	argsForCall := fake.submitFormEditRowArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *Backend) SubmitFormEditRowReturns(result1 hypertext.Row, result2 error) {
+func (fake *Backend) SubmitFormEditRowReturns(result1 hypertext2.Row, result2 error) {
 	fake.submitFormEditRowMutex.Lock()
 	defer fake.submitFormEditRowMutex.Unlock()
 	fake.SubmitFormEditRowStub = nil
 	fake.submitFormEditRowReturns = struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *Backend) SubmitFormEditRowReturnsOnCall(i int, result1 hypertext.Row, result2 error) {
+func (fake *Backend) SubmitFormEditRowReturnsOnCall(i int, result1 hypertext2.Row, result2 error) {
 	fake.submitFormEditRowMutex.Lock()
 	defer fake.submitFormEditRowMutex.Unlock()
 	fake.SubmitFormEditRowStub = nil
 	if fake.submitFormEditRowReturnsOnCall == nil {
 		fake.submitFormEditRowReturnsOnCall = make(map[int]struct {
-			result1 hypertext.Row
+			result1 hypertext2.Row
 			result2 error
 		})
 	}
 	fake.submitFormEditRowReturnsOnCall[i] = struct {
-		result1 hypertext.Row
+		result1 hypertext2.Row
 		result2 error
 	}{result1, result2}
 }
@@ -263,4 +263,4 @@ func (fake *Backend) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ hypertext.RoutesReceiver = new(Backend)
+var _ hypertext2.RoutesReceiver = new(Backend)

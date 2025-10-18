@@ -13,8 +13,8 @@ import (
 	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html/atom"
 
-	"github.com/typelate/muxt/docs/example/hypertext"
-	"github.com/typelate/muxt/docs/example/hypertext/internal/fake"
+	hypertext2 "github.com/typelate/muxt/docs/examples/simple/hypertext"
+	"github.com/typelate/muxt/docs/examples/simple/hypertext/internal/fake"
 )
 
 func TestRoutes(t *testing.T) {
@@ -22,10 +22,10 @@ func TestRoutes(t *testing.T) {
 		{
 			Name: "when the row edit form is submitted",
 			Given: domtest.GivenPtr(func(t *testing.T, f *fake.Backend) {
-				f.SubmitFormEditRowReturns(hypertext.Row{ID: 1, Name: "a", Value: 97}, nil)
+				f.SubmitFormEditRowReturns(hypertext2.Row{ID: 1, Name: "a", Value: 97}, nil)
 			}),
 			When: func(t *testing.T) *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, hypertext.TemplateRoutePaths{}.SubmitFormEditRow(1), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
+				req := httptest.NewRequest(http.MethodPatch, hypertext2.TemplateRoutePaths{}.SubmitFormEditRow(1), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				return req
 			},
@@ -43,17 +43,17 @@ func TestRoutes(t *testing.T) {
 				if assert.Equal(t, 1, f.SubmitFormEditRowCallCount()) {
 					id, form := f.SubmitFormEditRowArgsForCall(0)
 					require.EqualValues(t, 1, id)
-					require.Equal(t, hypertext.EditRow{Value: 5}, form)
+					require.Equal(t, hypertext2.EditRow{Value: 5}, form)
 				}
 			},
 		},
 		{
 			Name: "when the row edit form is requested",
 			Given: domtest.GivenPtr(func(t *testing.T, f *fake.Backend) {
-				f.GetFormEditRowReturns(hypertext.Row{ID: 1, Name: "a", Value: 97}, nil)
+				f.GetFormEditRowReturns(hypertext2.Row{ID: 1, Name: "a", Value: 97}, nil)
 			}),
 			When: func(t *testing.T) *http.Request {
-				return httptest.NewRequest(http.MethodGet, hypertext.TemplateRoutePaths{}.GetFormEditRow(1), nil)
+				return httptest.NewRequest(http.MethodGet, hypertext2.TemplateRoutePaths{}.GetFormEditRow(1), nil)
 			},
 			Then: func(t *testing.T, res *http.Response, f *fake.Backend) {
 				assert.Equal(t, http.StatusOK, res.StatusCode)
@@ -73,7 +73,7 @@ func TestRoutes(t *testing.T) {
 	} {
 		t.Run(tt.Name, tt.Run(func(f *fake.Backend) http.Handler {
 			mux := http.NewServeMux()
-			hypertext.TemplateRoutes(mux, f)
+			hypertext2.TemplateRoutes(mux, f)
 			return mux
 		}))
 	}
