@@ -336,6 +336,7 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 		panic(err)
 	}
 }
+
 func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
 

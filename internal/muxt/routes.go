@@ -283,12 +283,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 			logger.Printf("generating handler for pattern %s", t.pattern)
 		}
 		if t.fun == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config)
+			handlerFunc := noReceiverMethodCall(file, t, config, config.ReceiverInterface)
 			call := t.callHandleFunc(file, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent)
+		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
 		if err != nil {
 			return nil, err
 		}
@@ -449,12 +449,12 @@ func generatePerFileRouteFunction(
 			logger.Printf("generating handler for pattern %s in %s", t.pattern, sourceFile)
 		}
 		if t.fun == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config)
+			handlerFunc := noReceiverMethodCall(file, t, config, receiverInterfaceName)
 			call := t.callHandleFunc(file, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent)
+		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, receiverInterfaceName)
 		if err != nil {
 			return nil, err
 		}
@@ -541,7 +541,7 @@ func generatePerFileAST(
 	return outputFile, nil
 }
 
-func noReceiverMethodCall(file *source.File, t *Template, config RoutesFileConfiguration) *ast.FuncLit {
+func noReceiverMethodCall(file *source.File, t *Template, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
@@ -556,9 +556,9 @@ func noReceiverMethodCall(file *source.File, t *Template, config RoutesFileConfi
 						Tok: token.VAR,
 						Specs: []ast.Spec{&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(templateDataVarIdent)},
-							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexExpr{
-								X:     ast.NewIdent(config.TemplateDataType),
-								Index: source.EmptyStructType(),
+							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexListExpr{
+								X:       ast.NewIdent(config.TemplateDataType),
+								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), source.EmptyStructType()},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
@@ -601,7 +601,7 @@ func noReceiverMethodCall(file *source.File, t *Template, config RoutesFileConfi
 	return handlerFunc
 }
 
-func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string) (*ast.FuncLit, error) {
+func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
@@ -644,9 +644,9 @@ func methodHandlerFunc(file *source.File, config RoutesFileConfiguration, t *Tem
 						Tok: token.VAR,
 						Specs: []ast.Spec{&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(resultDataIdent)},
-							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexExpr{
-								X:     ast.NewIdent(config.TemplateDataType),
-								Index: typeExpr,
+							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexListExpr{
+								X:       ast.NewIdent(config.TemplateDataType),
+								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), typeExpr},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
@@ -817,12 +817,15 @@ func templateDataType(file *source.File, templateTypeIdent string, receiverType 
 			&ast.TypeSpec{
 				Name: ast.NewIdent(templateTypeIdent),
 				TypeParams: &ast.FieldList{
-					List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("T")}, Type: ast.NewIdent("any")}},
+					List: []*ast.Field{
+						{Names: []*ast.Ident{ast.NewIdent("R")}, Type: ast.NewIdent("any")},
+						{Names: []*ast.Ident{ast.NewIdent("T")}, Type: ast.NewIdent("any")},
+					},
 				},
 				Type: &ast.StructType{
 					Fields: &ast.FieldList{
 						List: []*ast.Field{
-							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: receiverType},
+							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: ast.NewIdent("R")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)}, Type: file.HTTPResponseWriter()},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)}, Type: file.HTTPRequestPtr()},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
@@ -845,9 +848,9 @@ const (
 )
 
 func templateDataMethodReceiver(templateDataTypeIdent string) *ast.FieldList {
-	return &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(templateDataReceiverName)}, Type: &ast.StarExpr{X: &ast.IndexExpr{
-		X:     ast.NewIdent(templateDataTypeIdent),
-		Index: ast.NewIdent("T"),
+	return &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(templateDataReceiverName)}, Type: &ast.StarExpr{X: &ast.IndexListExpr{
+		X:       ast.NewIdent(templateDataTypeIdent),
+		Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
 	}}}}}
 }
 
@@ -894,7 +897,7 @@ func templateDataReceiver(receiverType ast.Expr, templateDataTypeIdent string) *
 		Recv: templateDataMethodReceiver(templateDataTypeIdent),
 		Name: ast.NewIdent("Receiver"),
 		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: receiverType}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("R")}}},
 		},
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
@@ -921,7 +924,7 @@ func templateRedirect(file *source.File, templateDataTypeIdent string) *ast.Func
 			}},
 			Results: &ast.FieldList{
 				List: []*ast.Field{
-					{Type: &ast.StarExpr{X: &ast.IndexExpr{X: ast.NewIdent(templateDataTypeIdent), Index: ast.NewIdent("T")}}},
+					{Type: &ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(templateDataTypeIdent), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}},
 					{Type: ast.NewIdent("error")},
 				},
 			},
@@ -1066,9 +1069,9 @@ func templateDataStatusCodeMethod(templateDataTypeIdent string) *ast.FuncDecl {
 				Type:  ast.NewIdent("int"),
 			}}},
 			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexExpr{
-					X:     ast.NewIdent(templateDataTypeIdent),
-					Index: ast.NewIdent("T"),
+				Type: &ast.StarExpr{X: &ast.IndexListExpr{
+					X:       ast.NewIdent(templateDataTypeIdent),
+					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
 				}},
 			}}},
 		},
@@ -1102,9 +1105,9 @@ func templateDataHeaderMethod(templateDataTypeIdent string) *ast.FuncDecl {
 				Type:  ast.NewIdent("string"),
 			}}},
 			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexExpr{
-					X:     ast.NewIdent(templateDataTypeIdent),
-					Index: ast.NewIdent("T"),
+				Type: &ast.StarExpr{X: &ast.IndexListExpr{
+					X:       ast.NewIdent(templateDataTypeIdent),
+					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
 				}},
 			}}},
 		},

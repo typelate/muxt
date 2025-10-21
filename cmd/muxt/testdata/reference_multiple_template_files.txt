@@ -1,12 +1,13 @@
 # Tests generation with multiple template source files
 
-muxt generate
+muxt generate --use-receiver-type=Server
 
 grep 'IndexTemplateRoutes' template_routes.go
 grep 'AboutTemplateRoutes' template_routes.go
 
 exists index_template_routes_gen.go
 exists about_template_routes_gen.go
+cat index_template_routes_gen.go about_template_routes_gen.go template_routes.go
 
 exec go test
 
@@ -27,7 +28,7 @@ var source embed.FS
 
 var templates = template.Must(template.ParseFS(source, "*.gohtml"))
 -- index.gohtml --
-{{define "GET /"}}
+{{define "GET / Home(ctx)"}}
 <!DOCTYPE html>
 <html>
 <body>
@@ -36,7 +37,7 @@ var templates = template.Must(template.ParseFS(source, "*.gohtml"))
 </html>
 {{end}}
 -- about.gohtml --
-{{define "GET /about"}}
+{{define "GET /about AboutUs(ctx)"}}
 <!DOCTYPE html>
 <html>
 <body>
@@ -44,6 +45,22 @@ var templates = template.Must(template.ParseFS(source, "*.gohtml"))
 </body>
 </html>
 {{end}}
+-- main.go --
+package main
+
+import "context"
+
+func main() {}
+
+type Server struct{}
+
+func (s *Server) Home(ctx context.Context) any {
+	return nil
+}
+
+func (s *Server) AboutUs(ctx context.Context) any {
+	return nil
+}
 -- main_test.go --
 package main
 
@@ -55,7 +72,8 @@ import (
 
 func TestRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	TemplateRoutes(mux, nil)
+	s := new(Server)
+	TemplateRoutes(mux, s)
 
 	tests := []string{"/", "/about"}
 	for _, path := range tests {

@@ -35,7 +35,7 @@ func Templates(workingDirectory, templatesVariable string, pkg *packages.Package
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate relative path for embedded files: %w", err)
 		}
-		var templatePackageIdent = "template"
+		templatePackageIdent := "template"
 		for _, im := range file.Imports {
 			path, _ := strconv.Unquote(im.Path.Value)
 			switch path {
