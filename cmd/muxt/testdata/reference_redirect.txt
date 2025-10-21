@@ -1,0 +1,125 @@
+# Redirect method sets Location header and status code
+
+muxt generate
+cat template_template_routes_gen.go
+
+exec go test -v
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- go.mod --
+module example.com
+
+go 1.25
+-- template.gohtml --
+{{define "GET /redirect-302 200"}}{{.Redirect "/login" 302}}{{end}}
+{{define "GET /redirect-307 200"}}{{.Redirect "/dashboard" 307}}{{end}}
+{{define "GET /redirect-twice 200"}}{{.Redirect "/first" 302}}{{.Redirect "/second" 307}}{{end}}
+{{define "GET /redirect-chain 200"}}{{(.Redirect "/target" 303).Header "X-Custom" "value"}}{{end}}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRedirect302(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/redirect-302", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusFound {
+		t.Errorf("expected status %d (Found), got %d", http.StatusFound, res.StatusCode)
+	}
+
+	if location := res.Header.Get("Location"); location != "/login" {
+		t.Errorf("expected Location '/login', got '%s'", location)
+	}
+}
+
+func TestRedirect307(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/redirect-307", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusTemporaryRedirect {
+		t.Errorf("expected status %d, got %d", http.StatusTemporaryRedirect, res.StatusCode)
+	}
+
+	if location := res.Header.Get("Location"); location != "/dashboard" {
+		t.Errorf("expected Location '/dashboard', got '%s'", location)
+	}
+}
+
+func TestRedirectTwice(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/redirect-twice", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	// Last call wins
+	if res.StatusCode != http.StatusTemporaryRedirect {
+		t.Errorf("expected status %d, got %d", http.StatusTemporaryRedirect, res.StatusCode)
+	}
+
+	if location := res.Header.Get("Location"); location != "/second" {
+		t.Errorf("expected Location '/second', got '%s'", location)
+	}
+}
+
+func TestRedirectChain(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/redirect-chain", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected status %d, got %d", http.StatusSeeOther, res.StatusCode)
+	}
+
+	if location := res.Header.Get("Location"); location != "/target" {
+		t.Errorf("expected Location '/target', got '%s'", location)
+	}
+
+	if custom := res.Header.Get("X-Custom"); custom != "value" {
+		t.Errorf("expected X-Custom 'value', got '%s'", custom)
+	}
+}

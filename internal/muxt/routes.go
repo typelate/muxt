@@ -1805,7 +1805,7 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 
 var statusCoder = statusCoderInterface()
 
-func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
+func writeStatusAndHeaders(file *source.File, t *Template, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
 	statusCodePriorityList := []ast.Expr{
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
@@ -1824,7 +1824,11 @@ func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type
 				file.Call("", "cmp", "Or", statusCodePriorityList),
 			},
 		},
-		&ast.IfStmt{ // TODO: make this conditional on a redirect call in the template actions
+	}
+
+	// Only add redirect block if the template can call Redirect
+	if t.canRedirect {
+		list = append(list, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
 				X: &ast.SelectorExpr{
 					X:   ast.NewIdent(resultDataIdent),
@@ -1849,8 +1853,9 @@ func writeStatusAndHeaders(file *source.File, _ *Template, resultType types.Type
 					&ast.ReturnStmt{},
 				},
 			},
-		},
+		})
 	}
+
 	return append(list, writeBodyAndWriteHeadersFunc(file, bufIdent, statusCode)...)
 }
 

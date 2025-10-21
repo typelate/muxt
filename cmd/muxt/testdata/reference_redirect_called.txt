@@ -1,0 +1,77 @@
+# verify redirect block is generated when template calls Redirect
+
+muxt generate
+
+cat direct_template_routes_gen.go
+grep 'redirectURL != ""' direct_template_routes_gen.go
+
+cat chained_template_routes_gen.go
+grep 'redirectURL != ""' chained_template_routes_gen.go
+
+cat conditional_template_routes_gen.go
+grep 'redirectURL != ""' conditional_template_routes_gen.go
+
+cat multiple_template_routes_gen.go
+grep 'redirectURL != ""' multiple_template_routes_gen.go
+
+cat nested_template_routes_gen.go
+
+# Verify the file contains redirect blocks (for nested1, nested2)
+grep 'redirectURL != ""' nested_template_routes_gen.go
+
+# Verify all three handlers exist in the file
+grep 'GET /nested1' nested_template_routes_gen.go
+grep 'GET /nested2' nested_template_routes_gen.go
+grep 'GET /nested-no-redirect' nested_template_routes_gen.go
+
+count-matches 'redirectURL != ""' nested_template_routes_gen.go 2
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
+-- go.mod --
+module example.com
+
+go 1.25
+-- direct.gohtml --
+{{/* Direct Redirect calls */}}
+{{define "GET /direct1"}}{{.Redirect "/login" 302}}{{end}}
+{{define "GET /direct2"}}{{.Redirect "/dashboard" 307}}{{end}}
+{{define "GET /direct3"}}Redirecting... {{.Redirect "/home" 303}}{{end}}
+
+-- chained.gohtml --
+{{/* Redirect chained with other methods */}}
+{{define "GET /chained1"}}{{(.Redirect "/target" 302).Header "X-Custom" "value"}}{{end}}
+{{define "GET /chained2"}}{{(.StatusCode 303).Redirect "/other" 303}}{{end}}
+{{define "GET /chained3"}}{{(.Redirect "/go" 307).Header "X-Foo" "bar" | printf "%T"}}{{end}}
+
+-- conditional.gohtml --
+{{/* Redirect in conditionals */}}
+{{define "GET /cond1"}}{{if .Ok}}{{.Redirect "/success" 302}}{{end}}{{end}}
+{{define "GET /cond2"}}{{if .Err}}{{.Redirect "/error" 303}}{{else}}OK{{end}}{{end}}
+{{define "GET /cond3"}}{{if .Result}}{{.Redirect "/result" 307}}{{else}}{{.Redirect "/no-result" 302}}{{end}}{{end}}
+
+-- multiple.gohtml --
+{{/* Multiple Redirect calls in one template */}}
+{{define "GET /multi1"}}{{.Redirect "/first" 302}}{{.Redirect "/second" 307}}{{end}}
+{{define "GET /multi2"}}{{if .Ok}}{{.Redirect "/ok" 302}}{{else}}{{.Redirect "/not-ok" 303}}{{end}}{{end}}
+
+-- nested.gohtml --
+{{/* Redirect via template calls */}}
+{{define "GET /nested1"}}{{template "redirect-helper" .}}{{end}}
+{{define "GET /nested2"}}Before {{template "redirect-helper"}} After{{end}}
+{{define "GET /nested-no-redirect"}}{{.Result}} {{.Ok}} {{.Request.Method}}{{end}}
+{{define "redirect-helper"}}{{.Redirect "/helper-target" 302}}{{end}}
