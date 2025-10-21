@@ -1,0 +1,40 @@
+# verify circular template references don't cause infinite recursion
+
+muxt generate
+
+cat circular_template_routes_gen.go
+! grep 'redirectURL != ""' circular_template_routes_gen.go
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- circular.gohtml --
+{{/* Circular template references without redirects */}}
+{{define "GET /circular1"}}{{template "circular2" .}}{{end}}
+{{define "circular2"}}{{template "circular3" .}}{{end}}
+{{define "circular3"}}{{template "circular1" .}}Result: {{.Result}}{{end}}
+
+{{/* Self-referencing template */}}
+{{define "GET /self"}}{{if .Ok}}{{template "self" .}}{{end}}Done{{end}}
+
+{{/* Mutual recursion without redirects */}}
+{{define "GET /mutual-a"}}{{template "mutual-b" .}}{{end}}
+{{define "mutual-b"}}{{if .Ok}}{{template "mutual-a" .}}{{else}}{{.Result}}{{end}}{{end}}

@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -51,6 +54,7 @@ func Test(t *testing.T) {
 	e.Quiet = true
 	e.Cmds = scripttest.DefaultCmds()
 	e.Cmds["muxt"] = scriptCommand()
+	e.Cmds["count-matches"] = countRedirectBlocksCommand()
 	ctx := t.Context()
 	scripttest.Test(t, ctx, e, nil, filepath.FromSlash("testdata/*.txt"))
 }
@@ -70,6 +74,43 @@ func scriptCommand() script.Cmd {
 				stderr.WriteString(err.Error())
 			}
 			return stdout.String(), stderr.String(), err
+		}, nil
+	})
+}
+
+func countRedirectBlocksCommand() script.Cmd {
+	return script.Command(script.CmdUsage{
+		Summary: "count-matches <pattern> <filename> <expected-count>",
+		Args:    "pattern filename expected-count",
+	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
+		if len(args) != 3 {
+			return nil, script.ErrUsage
+		}
+		pattern := args[0]
+		filename := args[1]
+		expectedCount := args[2]
+
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(state *script.State) (string, string, error) {
+			filePath := filepath.Join(state.Getwd(), filename)
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				return "", err.Error(), err
+			}
+			matches := re.FindAll(content, -1)
+			count := len(matches)
+			expectedNum, err := strconv.Atoi(expectedCount)
+			if err != nil {
+				return "", "expected-count must be a number", script.ErrUsage
+			}
+			if count != expectedNum {
+				return "", fmt.Sprintf("expected %d redirect blocks, found %d", expectedNum, count), script.ErrUsage
+			}
+			return fmt.Sprintf("found %d redirect blocks in %s", count, filename), "", nil
 		}, nil
 	})
 }

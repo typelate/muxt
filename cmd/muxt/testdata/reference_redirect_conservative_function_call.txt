@@ -1,0 +1,36 @@
+# verify redirect block is generated when TemplateData is passed to a function (conservative)
+
+muxt generate
+cat template_template_routes_gen.go
+grep 'redirectURL != ""' template_template_routes_gen.go
+
+-- in.go --
+package main
+
+import "html/template"
+
+func main() {}
+
+func someFunc(data any) string {
+	return "hello"
+}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.New("").Funcs(template.FuncMap{
+	"someFunc": someFunc,
+}).ParseFS(templatesDir, "template.gohtml"))
+-- go.mod --
+module example.com
+
+go 1.25
+-- template.gohtml --
+{{define "GET / 200"}}{{someFunc .}}{{end}}

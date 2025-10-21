@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"text/template/parse"
 
 	"github.com/typelate/muxt/internal/source"
 )
@@ -46,6 +47,10 @@ func Templates(ts *template.Template) ([]Template, error) {
 	}
 	slices.SortFunc(templates, Template.byPathThenMethod)
 	calculateIdentifiers(templates)
+
+	// Analyze templates to determine which ones can call Redirect
+	analyzeRedirectCalls(ts, templates)
+
 	return templates, nil
 }
 
@@ -79,6 +84,10 @@ type Template struct {
 	// sourceFile is the base filename (e.g., "index.gohtml") from which this template was parsed.
 	// Empty string means the template was defined via Parse() calls rather than from a file.
 	sourceFile string
+
+	// canRedirect indicates whether this template (or any template it calls) can call the Redirect method.
+	// This is determined by static analysis of the template's action nodes.
+	canRedirect bool
 }
 
 func newTemplate(in string) (Template, error, bool) {
@@ -368,4 +377,240 @@ func (t Template) callHandleFunc(file *source.File, handlerFuncLit *ast.FuncLit,
 		},
 		Args: []ast.Expr{pattern, handlerFuncLit},
 	}}
+}
+
+// analyzeRedirectCalls performs static analysis on all templates to determine
+// which ones can call the Redirect method. It updates the canRedirect field
+// on each Template in the templates slice.
+func analyzeRedirectCalls(ts *template.Template, templates []Template) {
+	// Build a map from template name to template index for quick lookup
+	templateMap := make(map[string]int)
+	for i := range templates {
+		templateMap[templates[i].name] = i
+	}
+
+	// For each template, check if it can redirect
+	for i := range templates {
+		t := ts.Lookup(templates[i].name)
+		if t == nil || t.Tree == nil {
+			continue
+		}
+		visited := make(map[string]bool)
+		templates[i].canRedirect = canTemplateRedirect(t.Tree.Root, ts, templateMap, templates, visited)
+	}
+}
+
+// canTemplateRedirect recursively checks if a template tree can call Redirect.
+// It returns true if:
+// 1. The template directly calls .Redirect
+// 2. The template calls another template that can redirect
+// 3. The template passes TemplateData to a function (conservatively assume it might redirect)
+// 4. The template calls a non-default method on TemplateData (conservatively assume it might redirect)
+// The visited map tracks templates currently being analyzed to prevent infinite recursion on circular references.
+func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map[string]int, templates []Template, visited map[string]bool) bool {
+	if node == nil {
+		return false
+	}
+
+	switch n := node.(type) {
+	case *parse.ListNode:
+		if n == nil {
+			return false
+		}
+		for _, child := range n.Nodes {
+			if canTemplateRedirect(child, ts, templateMap, templates, visited) {
+				return true
+			}
+		}
+
+	case *parse.ActionNode:
+		if n.Pipe != nil {
+			for _, cmd := range n.Pipe.Cmds {
+				if containsRedirectCall(cmd) {
+					return true
+				}
+				// Check if TemplateData is passed as argument to a function
+				if callsMethodOnTemplateData(cmd) {
+					return true
+				}
+			}
+		}
+
+	case *parse.IfNode:
+		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+			return true
+		}
+
+	case *parse.RangeNode:
+		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+			return true
+		}
+
+	case *parse.WithNode:
+		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+			return true
+		}
+		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+			return true
+		}
+
+	case *parse.TemplateNode:
+		// Check if the called template can redirect
+		// Prevent infinite recursion on circular template references
+		if visited[n.Name] {
+			return false
+		}
+		visited[n.Name] = true
+		defer delete(visited, n.Name)
+
+		// Look up the template in the full template set (not just routes)
+		calledTemplate := ts.Lookup(n.Name)
+		if calledTemplate != nil && calledTemplate.Tree != nil {
+			if canTemplateRedirect(calledTemplate.Tree.Root, ts, templateMap, templates, visited) {
+				return true
+			}
+		}
+
+	case *parse.PipeNode:
+		if n != nil {
+			for _, cmd := range n.Cmds {
+				if containsRedirectCall(cmd) {
+					return true
+				}
+				if callsMethodOnTemplateData(cmd) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// containsRedirectCall checks if a command node contains a call to .Redirect
+func containsRedirectCall(cmd *parse.CommandNode) bool {
+	if cmd == nil || len(cmd.Args) == 0 {
+		return false
+	}
+
+	for _, arg := range cmd.Args {
+		if field, ok := arg.(*parse.FieldNode); ok {
+			// Check if this is a .Redirect call
+			if len(field.Ident) > 0 && field.Ident[len(field.Ident)-1] == "Redirect" {
+				return true
+			}
+			// Also check if any part of the chain is Redirect
+			for _, ident := range field.Ident {
+				if ident == "Redirect" {
+					return true
+				}
+			}
+		}
+		// Check for chain nodes like .field.Redirect or (.Redirect ...).Header
+		if chain, ok := arg.(*parse.ChainNode); ok {
+			// Check if any field in the chain is Redirect
+			for _, field := range chain.Field {
+				if field == "Redirect" {
+					return true
+				}
+			}
+			// Also recursively check the Node that the chain starts from
+			if chainNode, ok := chain.Node.(*parse.PipeNode); ok {
+				for _, chainCmd := range chainNode.Cmds {
+					if containsRedirectCall(chainCmd) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
+	if cmd == nil || len(cmd.Args) == 0 {
+		return false
+	}
+	firstArg := cmd.Args[0]
+	if _, ok := firstArg.(*parse.IdentifierNode); ok {
+		if len(cmd.Args) > 1 {
+			// This is a function call with arguments
+			// Check if any argument is bare TemplateData (.) or calls unsafe methods
+			for i := 1; i < len(cmd.Args); i++ {
+				switch arg := cmd.Args[i].(type) {
+				case *parse.DotNode:
+					// Bare . is being passed - this is the full TemplateData
+					// Be conservative: function might call methods on it
+					return true
+				case *parse.FieldNode:
+					// Check if it's a safe method call
+					if !isAllSafeMethods(arg.Ident) {
+						return true
+					}
+				case *parse.ChainNode:
+					// A chain is being passed, be conservative
+					return true
+				}
+			}
+		}
+	}
+
+	// Check for direct method calls on TemplateData (not passed to a function)
+	for _, arg := range cmd.Args {
+		if field, ok := arg.(*parse.FieldNode); ok {
+			// Check if all methods in the chain are safe
+			if !isAllSafeMethods(field.Ident) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isAllSafeMethods checks if all identifiers in a field chain are safe methods
+func isAllSafeMethods(idents []string) bool {
+	if len(idents) == 0 {
+		return true
+	}
+	// First identifier must be a safe TemplateData method
+	if !isSafeTemplateDataMethod(idents[0]) {
+		return false
+	}
+	// If there are more identifiers, we're chaining off the result
+	// e.g., .Request.Method - this is safe if Request is safe
+	// (subsequent fields/methods are on the returned type, not TemplateData)
+	return true
+}
+
+// isSafeTemplateDataMethod returns true for TemplateData methods that definitely
+// don't set redirectURL (i.e., don't call Redirect internally)
+func isSafeTemplateDataMethod(methodName string) bool {
+	safeMethodsSet := map[string]bool{
+		"Path":        true, // returns TemplateRoutePaths
+		"Result":      true, // returns T (the result type)
+		"Request":     true, // returns *http.Request
+		"Receiver":    true, // returns R (the receiver type)
+		"Ok":          true, // returns bool
+		"Err":         true, // returns error
+		"MuxtVersion": true, // returns string
+		"StatusCode":  true, // sets statusCode field, returns *TemplateData but doesn't set redirectURL
+		"Header":      true, // sets response headers, returns *TemplateData but doesn't set redirectURL
+	}
+	return safeMethodsSet[methodName]
 }

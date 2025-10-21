@@ -1,0 +1,40 @@
+# verify circular template references with redirects are detected
+
+muxt generate
+
+cat circular_template_routes_gen.go
+count-matches 'redirectURL != ""' circular_template_routes_gen.go 3
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- circular.gohtml --
+{{/* Circular templates where one has a redirect */}}
+{{define "GET /circ1"}}{{template "circ2" .}}{{end}}
+{{define "circ2"}}{{template "circ3" .}}{{end}}
+{{define "circ3"}}{{if .Ok}}{{.Redirect "/login" 302}}{{else}}{{template "circ1" .}}{{end}}{{end}}
+
+{{/* Self-referencing template with redirect */}}
+{{define "GET /self-redirect"}}{{if .Ok}}{{.Redirect "/target" 302}}{{else}}{{template "self-redirect" .}}{{end}}{{end}}
+
+{{/* Mutual recursion with redirect in one branch */}}
+{{define "GET /mutual-redirect"}}{{template "mutual-helper" .}}{{end}}
+{{define "mutual-helper"}}{{if .Ok}}{{.Redirect "/done" 303}}{{else}}{{template "mutual-redirect" .}}{{end}}{{end}}

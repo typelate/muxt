@@ -114,10 +114,6 @@ func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, paths
 			return
 		}
 		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
-		if td.redirectURL != "" {
-			http.Redirect(response, request, td.redirectURL, statusCode)
-			return
-		}
 		if contentType := response.Header().Get("content-type"); contentType == "" {
 			response.Header().Set("content-type", "text/html; charset=utf-8")
 		}
