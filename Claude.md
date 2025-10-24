@@ -29,6 +29,17 @@ Make server-rendered HTML the primary, strongly-typed surface for HTTP handlers 
     4. Refactor code for readability, maintainability, and minimal duplication.
     5. Add AST helpers in `internal/source` if needed.
 
+### Iterating on cmd/muxt/testdata tests
+
+The `*.txt` files in `./cmd/muxt/testdata` are txtar files.
+
+To iterate on something like `./cmd/muxt/testdata/some-test.txt`,
+ 
+- Create a working directory `mkdir -p ./cmd/muxt/testdata/some-test`
+- Extract the files `cd ./cmd/muxt/testdata/some-test && txtar -extract ../some-text.txt`
+- Run go commands in the working directory `go -C ./cmd/muxt/testdata/some-test test -run Test/banana`
+- Clean up the working directory `./cmd/muxt/testdata/some-test` (note, these should already be ignored in the gitignore file)
+
 ---
 
 ## Template Name Syntax

@@ -1,0 +1,159 @@
+muxt generate
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- templates.go --
+package hypertext
+
+import (
+	"embed"
+	"text/template"
+)
+
+//go:embed *.gohtml apples/*.gohtml apples/*/*.gohtml shared/*.gohtml peach/*.gohtml pear/*.gohtml pineapple/*.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*", "*/*", "*/*/*"))
+-- index.gohtml --
+{{define "GET /{$}" -}}
+<!DOCTYPE html>
+<html lang='us-en'>
+<head>
+    {{template "shared_head"}}
+	<title>Fruit</title>
+</head>
+<body>
+{{template "fruit_nav"}}
+</body>
+</html>
+{{end}}
+
+{{define "fruit_nav"}}
+<nav>
+	<ul>
+      {{template "link_list_items"}}
+		<li>
+			<ul>
+          {{template "apple_nav.gohtml"}}
+			</ul>
+		</li>
+	</ul>
+</nav>
+{{end}}
+-- apples/apple_nav.gohtml --
+<li><a href="/apples/red">Red</a></li>
+<li><a href="/apples/green">Green</a></li>
+-- apples/index.gohtml --
+{{define "GET /apples" -}}
+	<!DOCTYPE html>
+	<html lang='us-en'>
+	<head>
+      {{template "shared_head"}}
+		<title>Apples</title>
+	</head>
+	<body>
+	<nav>
+		<ul>
+			<li><a href='/'>Fruits</a></li>
+      {{template "apple_nav.gohtml"}}
+		</ul>
+	</nav>
+	</body>
+	</html>
+{{end}}
+-- apples/green/page.gohtml --
+{{define "GET /apple/green" -}}
+<!DOCTYPE html>
+<html lang='us-en'>
+<head>
+	{{template "shared_head"}}
+	<title>{{.}}</title>
+</head>
+<body>
+{{template "apple_green"}}
+</body>
+</html>
+{{end}}
+
+{{define "apple_green" -}}🍏{{end -}}
+-- apples/red/page.gohtml --
+{{define "GET /apple/red" -}}
+	<!DOCTYPE html>
+	<html lang='us-en'>
+	<head>
+      {{template "shared_head"}}
+		<title>{{.}}</title>
+	</head>
+	<body>
+	<nav>
+
+	</nav>
+  {{template "apple_red"}}
+	</body>
+	</html>
+{{end}}
+
+{{define "apple_red" -}}🍎{{end -}}
+-- shared/header.gohtml --
+{{define "shared_head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{end}}
+
+{{define "link_list_items"}}
+<li><a href="/">Home</a></li>
+<li><a href="/peach">Peach</a></li>
+<li><a href="/pear">Pear</a></li>
+<li><a href="/plum">Plum</a></li>
+<li><a href="/apples">Apples</a></li>
+{{end}}
+-- peach/page.gohtml --
+{{define "GET /peach" -}}
+<!DOCTYPE html>
+<html lang='us-en'>
+<head>
+	{{template "shared_head"}}
+	<title>Peach</title>
+</head>
+<body>
+{{template "fruit_nav"}}
+{{template "peach"}}
+</body>
+</html>
+{{end}}
+
+{{define "peach" -}}🍑{{end -}}
+-- pear/page.gohtml --
+{{define "GET /pear" -}}
+	<!DOCTYPE html>
+	<html lang='us-en'>
+	<head>
+      {{template "shared_head"}}
+		<title>Pear</title>
+	</head>
+	<body>
+  {{template "fruit_nav"}}
+  {{template "pear"}}
+	</body>
+	</html>
+{{end}}
+
+{{define "pear" -}}🍐{{end -}}
+-- pineapple/page.gohtml --
+{{define "GET /pineapple" -}}
+	<!DOCTYPE html>
+	<html lang='us-en'>
+	<head>
+      {{template "shared_head"}}
+		<title>Pineapple</title>
+	</head>
+	<body>
+  {{template "fruit_nav"}}
+  {{template "pineapple"}}
+	</body>
+	</html>
+{{end}}
+
+{{define "pineapple" -}}🍍{{end -}}
