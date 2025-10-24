@@ -1,8 +1,8 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt) [![Go](https://github.com/typelate/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/typelate/muxt/actions/workflows/go.yml)
 
-**Type-safe HTTP handlers generated from Go HTML templates.**
+**Generate type-safe HTTP handlers from html/template definitions.**
 
-Muxt generates HTTP handlers by analyzing template names and method signatures. Template names declare routes using extended `http.ServeMux` syntax. The generator produces compile-time type-checked handlers with automatic parameter parsing—fewer runtime errors means safer refactoring.
+Declare routes in template names using `http.ServeMux` patterns. Muxt analyzes receiver methods and generates handlers that parse parameters to match method signatures.
 
 ## Syntax
 
@@ -39,7 +39,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error) {
 }
 ```
 
-Run `muxt generate --receiver-type=Server` to generate type-safe handlers.
+Run `muxt generate --receiver-type=Server` to generate HTTP handlers.
 
 ## How It Works
 
