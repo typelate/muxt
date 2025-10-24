@@ -25,7 +25,7 @@ const (
 	templateExecuteFunc = "ExecuteTemplate"
 )
 
-func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, Functions, error) {
+func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, TemplateFunctions, error) {
 	funcTypeMap := DefaultFunctions(pkg.Types)
 	for file, tv := range astgen.IterateValueSpecs(pkg.Syntax) {
 		i := slices.IndexFunc(tv.Names, func(e *ast.Ident) bool {
@@ -70,7 +70,7 @@ func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
 	return nil, false
 }
 
-func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps Functions, fm template.FuncMap) (*template.Template, error) {
+func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, expression ast.Expr, workingDirectory, templatesVariable, templatePackageIdent, rDelim, lDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps TemplateFunctions, fm template.FuncMap) (*template.Template, error) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok {
 		return nil, asterr.WrapWithFilename(workingDirectory, fileSet, expression.Pos(), fmt.Errorf("expected call expression"))
@@ -166,7 +166,7 @@ func evaluateTemplateSelector(ts *template.Template, pkg *types.Package, express
 	}
 }
 
-func evaluateFuncMap(workingDirectory, templatePackageIdent string, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm template.FuncMap, funcTypesMap Functions) error {
+func evaluateFuncMap(workingDirectory, templatePackageIdent string, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm template.FuncMap, funcTypesMap TemplateFunctions) error {
 	const funcMapTypeIdent = "FuncMap"
 	if len(call.Args) != 1 {
 		return asterr.WrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly 1 template.FuncMap composite literal argument"))
@@ -385,10 +385,10 @@ func relativeFilePaths(wd string, abs ...string) ([]string, error) {
 	return result, nil
 }
 
-type Functions map[string]*types.Signature
+type TemplateFunctions map[string]*types.Signature
 
-func DefaultFunctions(pkg *types.Package) Functions {
-	funcTypeMap := make(Functions)
+func DefaultFunctions(pkg *types.Package) TemplateFunctions {
+	funcTypeMap := make(TemplateFunctions)
 	fmtPkg, ok := findPackage(pkg, "fmt")
 	if !ok || fmtPkg == nil {
 		return funcTypeMap
@@ -399,7 +399,7 @@ func DefaultFunctions(pkg *types.Package) Functions {
 	return funcTypeMap
 }
 
-func (functions Functions) FindFunction(name string) (*types.Signature, bool) {
+func (functions TemplateFunctions) FindFunction(name string) (*types.Signature, bool) {
 	m := (map[string]*types.Signature)(functions)
 	fn, ok := m[name]
 	if !ok {

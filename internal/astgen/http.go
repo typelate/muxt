@@ -125,3 +125,15 @@ func HTTPHeader(im ImportManager) *ast.SelectorExpr {
 func AddNetHTTP(im ImportManager) string {
 	return im.Import("", "net/http")
 }
+
+func HTTPResponseField(im ImportManager, ident string) *ast.Field {
+	return &ast.Field{Names: []*ast.Ident{ast.NewIdent(ident)}, Type: HTTPResponseWriter(im)}
+}
+
+func HTTPRequestField(im ImportManager, ident string) *ast.Field {
+	return &ast.Field{Names: []*ast.Ident{ast.NewIdent(ident)}, Type: HTTPRequestPtr(im)}
+}
+
+func HTTPHandlerFuncType(file ImportManager, res, req string) *ast.FuncType {
+	return &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{HTTPResponseField(file, res), HTTPRequestField(file, req)}}}
+}
