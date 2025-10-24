@@ -101,11 +101,7 @@ func HTTPStatusCode(im ImportManager, n int) ast.Expr {
 
 // HTTPErrorCall creates an http.Error call expression
 func HTTPErrorCall(im ImportManager, response, message ast.Expr, code int) *ast.CallExpr {
-	return Call(im, "", "net/http", "Error", []ast.Expr{
-		response,
-		message,
-		HTTPStatusCode(im, code),
-	})
+	return Call(im, "", "net/http", "Error", response, message, HTTPStatusCode(im, code))
 }
 
 // HTTPRequestPtr creates a *http.Request type expression

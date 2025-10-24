@@ -873,9 +873,7 @@ func templateDataOkay(templateDataTypeIdent string) *ast.FuncDecl {
 }
 
 func templateDataError(file *File, templateDataTypeIdent string) *ast.FuncDecl {
-	join := astgen.Call(file, "errors", "errors", "Join", []ast.Expr{
-		&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)},
-	})
+	join := astgen.Call(file, "errors", "errors", "Join", &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)})
 	join.Ellipsis = 1
 	return &ast.FuncDecl{
 		Recv: templateDataMethodReceiver(templateDataTypeIdent),
@@ -950,7 +948,7 @@ func templateRedirect(file *File, templateDataTypeIdent string) *ast.FuncDecl {
 						List: []ast.Stmt{
 							&ast.ReturnStmt{Results: []ast.Expr{
 								ast.NewIdent(templateDataReceiverName),
-								astgen.Call(file, "", "fmt", "Errorf", []ast.Expr{astgen.String("invalid status code %d for redirect"), ast.NewIdent("code")}),
+								astgen.Call(file, "", "fmt", "Errorf", astgen.String("invalid status code %d for redirect"), ast.NewIdent("code")),
 							}},
 						},
 					},
@@ -1822,7 +1820,7 @@ func writeStatusAndHeaders(file *File, t *Template, resultType types.Type, fallb
 			Lhs: []ast.Expr{ast.NewIdent(statusCode)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{
-				astgen.Call(file, "", "cmp", "Or", statusCodePriorityList),
+				astgen.Call(file, "", "cmp", "Or", statusCodePriorityList...),
 			},
 		},
 	}
@@ -1841,7 +1839,7 @@ func writeStatusAndHeaders(file *File, t *Template, resultType types.Type, fallb
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{
-						X: astgen.Call(file, "", "net/http", "Redirect", []ast.Expr{
+						X: astgen.Call(file, "", "net/http", "Redirect",
 							ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
 							ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
 							&ast.SelectorExpr{
@@ -1849,7 +1847,7 @@ func writeStatusAndHeaders(file *File, t *Template, resultType types.Type, fallb
 								Sel: ast.NewIdent(TemplateDataFieldIdentifierRedirectURL),
 							},
 							ast.NewIdent(statusCode),
-						}),
+						),
 					},
 					&ast.ReturnStmt{},
 				},
@@ -1872,7 +1870,7 @@ func executeTemplateFailedLogLine(file *File, message, errIdent string) *ast.Cal
 		astgen.SlogString(file, "pattern", &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Pattern")}),
 		astgen.SlogString(file, "error", astgen.CallError(errIdent)),
 	}
-	return astgen.Call(file, "", "log/slog", "ErrorContext", args)
+	return astgen.Call(file, "", "log/slog", "ErrorContext", args...)
 }
 
 func loggerErrorCall(file *File, message, pattern, errIdent string) *ast.CallExpr {

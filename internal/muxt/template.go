@@ -367,7 +367,7 @@ func (t Template) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config
 		pattern = &ast.BinaryExpr{
 			X:  astgen.String(t.pattern[:i]),
 			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(t.pattern[i:])}),
+			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(t.pattern[i:])),
 		}
 	}
 	return &ast.ExprStmt{X: &ast.CallExpr{

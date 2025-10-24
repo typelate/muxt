@@ -144,15 +144,15 @@ func routePathFunc(file *File, config RoutesFileConfiguration, t *Template) (*as
 	if t.path == "/" || t.path == "/{$}" {
 		if config.PathPrefix {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-				astgen.Call(file, "path", "path", "Join", []ast.Expr{
-					astgen.Call(file, "cmp", "cmp", "Or", []ast.Expr{
+				astgen.Call(file, "path", "path", "Join",
+					astgen.Call(file, "cmp", "cmp", "Or",
 						&ast.SelectorExpr{
 							X:   ast.NewIdent(methodReceiverName),
 							Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
 						},
 						astgen.String("/"),
-					}),
-				}),
+					),
+				),
 			}}}
 		} else {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
@@ -173,13 +173,13 @@ func routePathFunc(file *File, config RoutesFileConfiguration, t *Template) (*as
 
 	hasErrorResult := false
 	segmentExpressions := []ast.Expr{
-		astgen.Call(file, "cmp", "cmp", "Or", []ast.Expr{
+		astgen.Call(file, "cmp", "cmp", "Or",
 			&ast.SelectorExpr{
 				X:   ast.NewIdent(methodReceiverName),
 				Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
 			},
 			astgen.String("/"),
-		}),
+		),
 	}
 	for si, segment := range segmentStrings {
 		if len(segment) < 1 {
@@ -252,10 +252,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, t *Template) (*as
 						&ast.ReturnStmt{
 							Results: []ast.Expr{
 								&ast.BasicLit{Kind: token.STRING, Value: `""`},
-								astgen.Call(file, "fmt", "fmt", "Errorf", []ast.Expr{
+								astgen.Call(file, "fmt", "fmt", "Errorf",
 									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, t.path)),
 									ast.NewIdent("err"),
-								}),
+								),
 							},
 						},
 					},

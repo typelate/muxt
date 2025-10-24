@@ -40,32 +40,32 @@ func ConvertToString(im ImportManager, variable ast.Expr, kind types.BasicKind) 
 
 // StrconvAtoiCall creates a strconv.Atoi call expression
 func StrconvAtoiCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "Atoi", []ast.Expr{expr})
+	return Call(im, "", "strconv", "Atoi", expr)
 }
 
 // StrconvItoaCall creates a strconv.Itoa call expression
 func StrconvItoaCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "Itoa", []ast.Expr{expr})
+	return Call(im, "", "strconv", "Itoa", expr)
 }
 
 // StrconvParseIntCall creates a strconv.ParseInt call expression
 func StrconvParseIntCall(im ImportManager, expr ast.Expr, base, size int) *ast.CallExpr {
-	return Call(im, "", "strconv", "ParseInt", []ast.Expr{expr, Int(base), Int(size)})
+	return Call(im, "", "strconv", "ParseInt", expr, Int(base), Int(size))
 }
 
 // StrconvParseUintCall creates a strconv.ParseUint call expression
 func StrconvParseUintCall(im ImportManager, expr ast.Expr, base, size int) *ast.CallExpr {
-	return Call(im, "", "strconv", "ParseUint", []ast.Expr{expr, Int(base), Int(size)})
+	return Call(im, "", "strconv", "ParseUint", expr, Int(base), Int(size))
 }
 
 // StrconvParseFloatCall creates a strconv.ParseFloat call expression
 func StrconvParseFloatCall(im ImportManager, expr ast.Expr, size int) *ast.CallExpr {
-	return Call(im, "", "strconv", "ParseFloat", []ast.Expr{expr, Int(size)})
+	return Call(im, "", "strconv", "ParseFloat", expr, Int(size))
 }
 
 // StrconvParseBoolCall creates a strconv.ParseBool call expression
 func StrconvParseBoolCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "ParseBool", []ast.Expr{expr})
+	return Call(im, "", "strconv", "ParseBool", expr)
 }
 
 // StrconvParseInt8Call creates a strconv.ParseInt call for int8
@@ -115,88 +115,55 @@ func StrconvParseUint64Call(im ImportManager, in ast.Expr) *ast.CallExpr {
 
 // FormatInt creates a strconv.Itoa call expression
 func FormatInt(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "Itoa"),
-		Args: []ast.Expr{in},
-	}
+	return Call(im, "", "strconv", "Itoa", in)
 }
 
 // FormatInt8 creates a strconv.FormatInt call for int8
 func FormatInt8(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatInt"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
 }
 
 // FormatInt16 creates a strconv.FormatInt call for int16
 func FormatInt16(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatInt"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
 }
 
 // FormatInt32 creates a strconv.FormatInt call for int32
 func FormatInt32(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatInt"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
 }
 
 // FormatInt64 creates a strconv.FormatInt call for int64
 func FormatInt64(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatInt"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
 }
 
 // FormatUint creates a strconv.FormatUint call for uint
 func FormatUint(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatUint"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("uint64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
 }
 
 // FormatUint8 creates a strconv.FormatUint call for uint8
 func FormatUint8(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatUint"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("uint64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
 }
 
 // FormatUint16 creates a strconv.FormatUint call for uint16
 func FormatUint16(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatUint"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("uint64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
 }
 
 // FormatUint32 creates a strconv.FormatUint call for uint32
 func FormatUint32(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatUint"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("uint64"), Args: []ast.Expr{in}}, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
 }
 
 // FormatUint64 creates a strconv.FormatUint call for uint64
 func FormatUint64(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatUint"),
-		Args: []ast.Expr{in, Int(10)},
-	}
+	return Call(im, "", "strconv", "FormatUint", in, Int(10))
 }
 
 // FormatBool creates a strconv.FormatBool call expression
 func FormatBool(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, "", "strconv", "FormatBool"),
-		Args: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("bool"), Args: []ast.Expr{in}}},
-	}
+	return Call(im, "", "strconv", "FormatBool", ConvertIdent("bool", in))
 }
