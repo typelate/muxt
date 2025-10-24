@@ -8,6 +8,8 @@ import (
 // ImportManager interface abstracts the import management functionality
 // needed for AST generation. This allows AST generation functions to work
 // with source.File without creating a circular dependency.
+//
+// It generally is a *muxt.File
 type ImportManager interface {
 	// Import registers an import and returns the package identifier to use
 	Import(pkgIdent, pkgPath string) string
@@ -29,20 +31,4 @@ func ExportedIdentifier(im ImportManager, pkgName, pkgPath, ident string) *ast.S
 		X:   ast.NewIdent(im.Import(pkgName, pkgPath)),
 		Sel: ast.NewIdent(ident),
 	}
-}
-
-// Call creates a function call expression for a package function
-func Call(im ImportManager, pkgName, pkgPath, funcIdent string, args ...ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun:  ExportedIdentifier(im, pkgName, pkgPath, funcIdent),
-		Args: args,
-	}
-}
-
-func Convert(tp ast.Expr, expr ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{Fun: tp, Args: []ast.Expr{expr}}
-}
-
-func ConvertIdent(tp string, expr ast.Expr) *ast.CallExpr {
-	return Convert(ast.NewIdent(tp), expr)
 }

@@ -78,7 +78,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	return nil
 }
 
-func writeOutput(w io.Writer, functions asteval.Functions, templates []Template, receiver *types.Named) {
+func writeOutput(w io.Writer, functions asteval.TemplateFunctions, templates []Template, receiver *types.Named) {
 	_, _ = fmt.Fprintf(w, "functions:\n")
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {
