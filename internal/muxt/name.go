@@ -15,7 +15,7 @@ import (
 
 	"github.com/ettle/strcase"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string {
@@ -113,7 +113,7 @@ func calculateIdentifiers(in []Template) {
 	}
 }
 
-func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Template) (*ast.FuncDecl, error) {
+func routePathFunc(file *File, config RoutesFileConfiguration, t *Template) (*ast.FuncDecl, error) {
 	const methodReceiverName = "routePaths"
 	encodingPkg, ok := file.Types("encoding")
 	if !ok {
@@ -144,18 +144,18 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 	if t.path == "/" || t.path == "/{$}" {
 		if config.PathPrefix {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-				file.Call("path", "path", "Join", []ast.Expr{
-					file.Call("cmp", "cmp", "Or", []ast.Expr{
+				astgen.Call(file, "path", "path", "Join", []ast.Expr{
+					astgen.Call(file, "cmp", "cmp", "Or", []ast.Expr{
 						&ast.SelectorExpr{
 							X:   ast.NewIdent(methodReceiverName),
 							Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
 						},
-						source.String("/"),
+						astgen.String("/"),
 					}),
 				}),
 			}}}
 		} else {
-			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{source.String("/")}}}
+			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
 		}
 		return method, nil
 	}
@@ -173,12 +173,12 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 
 	hasErrorResult := false
 	segmentExpressions := []ast.Expr{
-		file.Call("cmp", "cmp", "Or", []ast.Expr{
+		astgen.Call(file, "cmp", "cmp", "Or", []ast.Expr{
 			&ast.SelectorExpr{
 				X:   ast.NewIdent(methodReceiverName),
 				Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
 			},
-			source.String("/"),
+			astgen.String("/"),
 		}),
 	}
 	for si, segment := range segmentStrings {
@@ -246,14 +246,14 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 					ast.NewIdent("err"),
 				},
 			}, &ast.IfStmt{
-				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: source.Nil()},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 				Body: &ast.BlockStmt{
 					List: []ast.Stmt{
 						&ast.ReturnStmt{
 							Results: []ast.Expr{
 								&ast.BasicLit{Kind: token.STRING, Value: `""`},
-								file.Call("fmt", "fmt", "Errorf", []ast.Expr{
-									source.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, t.path)),
+								astgen.Call(file, "fmt", "fmt", "Errorf", []ast.Expr{
+									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, t.path)),
 									ast.NewIdent("err"),
 								}),
 							},
@@ -270,9 +270,9 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 
 		basicType, ok := pathValueType.Underlying().(*types.Basic)
 		if !ok {
-			return nil, fmt.Errorf("unsupported type %s for path parameters: %s", source.Format(tpNode), ident)
+			return nil, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
 		}
-		exp, err := file.Format(ast.NewIdent(ident), basicType.Kind())
+		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), basicType.Kind())
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
@@ -298,7 +298,7 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 	}
 
 	if hasErrorResult {
-		method.Body.List = append(method.Body.List, &ast.ReturnStmt{Results: []ast.Expr{returnStmt, source.Nil()}})
+		method.Body.List = append(method.Body.List, &ast.ReturnStmt{Results: []ast.Expr{returnStmt, astgen.Nil()}})
 	} else {
 		method.Body.List = append(method.Body.List, &ast.ReturnStmt{Results: []ast.Expr{returnStmt}})
 	}
@@ -308,7 +308,7 @@ func routePathFunc(file *source.File, config RoutesFileConfiguration, t *Templat
 	return method, nil
 }
 
-func routePathTypeAndMethods(imports *source.File, config RoutesFileConfiguration, templates []Template) ([]ast.Decl, error) {
+func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, templates []Template) ([]ast.Decl, error) {
 	decls := []ast.Decl{
 		&ast.GenDecl{
 			Tok: token.TYPE,

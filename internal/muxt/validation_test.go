@@ -1,4 +1,4 @@
-package source_test
+package muxt
 
 import (
 	"fmt"
@@ -11,12 +11,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/typelate/dom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 func Test_inputValidations(t *testing.T) {
@@ -306,16 +305,16 @@ func Test_inputValidations(t *testing.T) {
 			wd, err := workingDir()
 			require.NoError(t, err)
 
-			file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+			file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 			require.NoError(t, err)
 
-			statements, err, ok := source.GenerateValidations(file, v, tt.Type, `[name="field"]`, "field", "response", fragment, func(s string) *ast.BlockStmt {
+			statements, err, ok := GenerateValidations(file, v, tt.Type, `[name="field"]`, "field", "response", fragment, func(s string) *ast.BlockStmt {
 				return &ast.BlockStmt{List: []ast.Stmt{
 					&ast.ExprStmt{X: &ast.CallExpr{
 						Fun: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Error")},
 						Args: []ast.Expr{
 							ast.NewIdent("response"),
-							source.String(s),
+							astgen.String(s),
 							&ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("StatusBadRequest")},
 						},
 					}},
@@ -328,7 +327,7 @@ func Test_inputValidations(t *testing.T) {
 				assert.Equal(t, tt.Error, err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.Result, source.Format(&ast.BlockStmt{List: statements}))
+				require.Equal(t, tt.Result, astgen.Format(&ast.BlockStmt{List: statements}))
 			}
 		})
 	}

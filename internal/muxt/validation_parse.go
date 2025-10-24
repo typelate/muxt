@@ -1,4 +1,4 @@
-package source
+package muxt
 
 import (
 	"fmt"
@@ -8,9 +8,18 @@ import (
 	"regexp"
 
 	"github.com/typelate/dom/spec"
+
+	"github.com/typelate/muxt/internal/astgen"
 )
 
-func GenerateValidations(imports *File, variable ast.Expr, variableType types.Type, inputQuery, inputName, responseIdent string, fragment spec.DocumentFragment, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error, bool) {
+type (
+	ValidationErrorBlock func(string) *ast.BlockStmt
+	ValidationGenerator  interface {
+		GenerateValidation(im astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt
+	}
+)
+
+func GenerateValidations(im astgen.ImportManager, variable ast.Expr, variableType types.Type, inputQuery, inputName, responseIdent string, fragment spec.DocumentFragment, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error, bool) {
 	input := fragment.QuerySelector(inputQuery)
 	if input == nil {
 		return nil, nil, false
@@ -23,7 +32,7 @@ func GenerateValidations(imports *File, variable ast.Expr, variableType types.Ty
 
 	var statements []ast.Stmt
 	for _, validation := range validations {
-		statements = append(statements, validation.GenerateValidation(imports, variable, validationFailureBlock))
+		statements = append(statements, validation.GenerateValidation(im, variable, validationFailureBlock))
 	}
 	return statements, nil, true
 }
@@ -33,14 +42,14 @@ type MinValidation struct {
 	MinExp ast.Expr
 }
 
-func (val MinValidation) GenerateValidation(_ *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
+func (val MinValidation) GenerateValidation(_ astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{
 			X:  variable,
 			Op: token.LSS, // value < 13
 			Y:  val.MinExp,
 		},
-		Body: handleError(fmt.Sprintf("%s must not be less than %s", val.Name, Format(val.MinExp))),
+		Body: handleError(fmt.Sprintf("%s must not be less than %s", val.Name, astgen.Format(val.MinExp))),
 	}
 }
 
@@ -49,14 +58,14 @@ type MaxValidation struct {
 	MinExp ast.Expr
 }
 
-func (val MaxValidation) GenerateValidation(_ *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
+func (val MaxValidation) GenerateValidation(_ astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{
 			X:  variable,
 			Op: token.GTR, // value > 13
 			Y:  val.MinExp,
 		},
-		Body: handleError(fmt.Sprintf("%s must not be more than %s", val.Name, Format(val.MinExp))),
+		Body: handleError(fmt.Sprintf("%s must not be more than %s", val.Name, astgen.Format(val.MinExp))),
 	}
 }
 
@@ -65,13 +74,13 @@ type PatternValidation struct {
 	Exp  *regexp.Regexp
 }
 
-func (val PatternValidation) GenerateValidation(imports *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
+func (val PatternValidation) GenerateValidation(im astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
 	return &ast.IfStmt{
 		Cond: &ast.UnaryExpr{
 			Op: token.NOT,
 			X: &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
-					X:   imports.Call("", "regexp", "MustCompile", []ast.Expr{String(val.Exp.String())}),
+					X:   astgen.Call(im, "", "regexp", "MustCompile", []ast.Expr{astgen.String(val.Exp.String())}),
 					Sel: ast.NewIdent("MatchString"),
 				},
 				Args: []ast.Expr{variable},
@@ -86,12 +95,12 @@ type MaxLengthValidation struct {
 	MaxLength int
 }
 
-func (val MaxLengthValidation) GenerateValidation(_ *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
+func (val MaxLengthValidation) GenerateValidation(_ astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{
 			X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{variable}},
 			Op: token.GTR,
-			Y:  Int(val.MaxLength),
+			Y:  astgen.Int(val.MaxLength),
 		},
 		Body: handleError(fmt.Sprintf("%s is too long (the max length is %d)", val.Name, val.MaxLength)),
 	}
@@ -102,12 +111,12 @@ type MinLengthValidation struct {
 	MinLength int
 }
 
-func (val MinLengthValidation) GenerateValidation(_ *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
+func (val MinLengthValidation) GenerateValidation(_ astgen.ImportManager, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt {
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{
 			X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{variable}},
 			Op: token.LSS,
-			Y:  Int(val.MinLength),
+			Y:  astgen.Int(val.MinLength),
 		},
 		Body: handleError(fmt.Sprintf("%s is too short (the min length is %d)", val.Name, val.MinLength)),
 	}

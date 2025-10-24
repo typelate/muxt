@@ -1,4 +1,4 @@
-package source_test
+package muxt
 
 import (
 	"go/ast"
@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 var (
@@ -40,12 +40,12 @@ func loadPackages(wd string, patterns []string) ([]*packages.Package, error) {
 }
 
 func TestImports(t *testing.T) {
-	genDecl := func(file *source.File) string {
+	genDecl := func(file *File) string {
 		decl := &ast.GenDecl{Tok: token.IMPORT}
 		for _, spec := range file.ImportSpecs() {
 			decl.Specs = append(decl.Specs, spec)
 		}
-		return source.Format(decl)
+		return astgen.Format(decl)
 	}
 	t.Run("initial add", func(t *testing.T) {
 		pl, err := loadPkg()
@@ -55,7 +55,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		assert.Equal(t, "http", file.Import("http", "net/http"))
 		assert.Equal(t, genDecl(file), `import "net/http"`)
@@ -68,7 +68,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		assert.Equal(t, "p", file.Import("p", "net/http"))
 		assert.Equal(t, genDecl(file), `import p "net/http"`)
@@ -81,7 +81,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		assert.Equal(t, "http", file.Import("", "net/http"))
 		assert.Equal(t, genDecl(file), `import "net/http"`)
@@ -94,7 +94,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		_ = file.Import("", "net/http")
 		_ = file.Import("", "html/template")
@@ -111,7 +111,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		_ = file.Import("", "html/template")
 		_ = file.Import("", "net/http")
@@ -128,7 +128,7 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		_ = file.Import("t", "html/template")
 		assert.Equal(t, "t", file.Import("", "html/template"))
@@ -141,9 +141,27 @@ func TestImports(t *testing.T) {
 		wd, err := workingDir()
 		require.NoError(t, err)
 
-		file, err := source.NewFile(filepath.Join(wd, "tr.go"), fSet, pl)
+		file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 		require.NoError(t, err)
 		_ = file.Import("", "html/template")
 		assert.Equal(t, "template", file.Import("", "html/template"))
 	})
+}
+
+func TestHTTPStatusCode(t *testing.T) {
+	fSet := fileSet()
+	wd, err := workingDir()
+	require.NoError(t, err)
+	pl, err := loadPackages(wd, []string{wd})
+
+	file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
+	require.NoError(t, err)
+
+	exp := astgen.HTTPStatusCode(file, 600)
+	require.NotNil(t, exp)
+	lit, ok := exp.(*ast.BasicLit)
+	require.True(t, ok)
+	require.Equal(t, token.INT, lit.Kind)
+	require.Equal(t, "600", lit.Value)
+	require.Empty(t, file.ImportSpecs(), "it should not add the import if it is not needed")
 }

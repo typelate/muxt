@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error {
@@ -36,7 +36,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	if err != nil {
 		return err
 	}
-	file, err := source.NewFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
+	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 		receiver = types.NewNamed(types.NewTypeName(0, routesPkg.Types, "Receiver", nil), types.NewStruct(nil, nil), nil)
 	}
 
-	ts, functions, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
+	ts, functions, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	return nil
 }
 
-func writeOutput(w io.Writer, functions source.Functions, templates []Template, receiver *types.Named) {
+func writeOutput(w io.Writer, functions asteval.Functions, templates []Template, receiver *types.Named) {
 	_, _ = fmt.Fprintf(w, "functions:\n")
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {

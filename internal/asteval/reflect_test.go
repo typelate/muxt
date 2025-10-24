@@ -1,4 +1,4 @@
-package source
+package asteval
 
 import (
 	"go/types"
@@ -28,7 +28,7 @@ func TestParseStringWithType(t *testing.T) {
 		{Name: "valid uint64", Value: "32", Type: types.Universe.Lookup("uint64").Type()},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			_, err := ParseStringWithType(tt.Value, tt.Type)
+			_, err := ParseWithType(tt.Value, tt.Type)
 			if tt.ErrorContains != "" {
 				assert.Contains(t, err.Error(), tt.ErrorContains)
 			} else if err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
@@ -39,13 +39,13 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 		return err
 	}
 
-	file, err := source.NewFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
+	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
 		return err
 	}
 	routesPkg := file.OutputPackage()
 
-	ts, fm, err := source.Templates(wd, config.TemplatesVariable, routesPkg)
+	ts, fm, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	var errs []error
 	for _, file := range routesPkg.Syntax {
 		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := source.ExecuteTemplateArguments(node, routesPkg.TypesInfo, config.TemplatesVariable)
+			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, routesPkg.TypesInfo, config.TemplatesVariable)
 			if !ok {
 				continue
 			}
