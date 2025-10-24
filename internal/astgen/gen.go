@@ -32,9 +32,17 @@ func ExportedIdentifier(im ImportManager, pkgName, pkgPath, ident string) *ast.S
 }
 
 // Call creates a function call expression for a package function
-func Call(im ImportManager, pkgName, pkgPath, funcIdent string, args []ast.Expr) *ast.CallExpr {
+func Call(im ImportManager, pkgName, pkgPath, funcIdent string, args ...ast.Expr) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun:  ExportedIdentifier(im, pkgName, pkgPath, funcIdent),
 		Args: args,
 	}
+}
+
+func Convert(tp ast.Expr, expr ast.Expr) *ast.CallExpr {
+	return &ast.CallExpr{Fun: tp, Args: []ast.Expr{expr}}
+}
+
+func ConvertIdent(tp string, expr ast.Expr) *ast.CallExpr {
+	return Convert(ast.NewIdent(tp), expr)
 }

@@ -80,7 +80,7 @@ func (val PatternValidation) GenerateValidation(im astgen.ImportManager, variabl
 			Op: token.NOT,
 			X: &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
-					X:   astgen.Call(im, "", "regexp", "MustCompile", []ast.Expr{astgen.String(val.Exp.String())}),
+					X:   astgen.Call(im, "", "regexp", "MustCompile", astgen.String(val.Exp.String())),
 					Sel: ast.NewIdent("MatchString"),
 				},
 				Args: []ast.Expr{variable},
