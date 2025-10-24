@@ -1,115 +1,13 @@
-package source
+package astgen
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
-	"go/printer"
 	"go/token"
 	"net/http"
 	"strconv"
 	"strings"
-
-	"golang.org/x/tools/imports"
 )
-
-func IterateGenDecl(files []*ast.File, tok token.Token) func(func(*ast.File, *ast.GenDecl) bool) {
-	return func(yield func(*ast.File, *ast.GenDecl) bool) {
-		for _, file := range files {
-			for _, decl := range file.Decls {
-				d, ok := decl.(*ast.GenDecl)
-				if !ok || d.Tok != tok {
-					continue
-				}
-				if !yield(file, d) {
-					return
-				}
-			}
-		}
-	}
-}
-
-func IterateValueSpecs(files []*ast.File) func(func(*ast.File, *ast.ValueSpec) bool) {
-	return func(yield func(*ast.File, *ast.ValueSpec) bool) {
-		for file, decl := range IterateGenDecl(files, token.VAR) {
-			for _, s := range decl.Specs {
-				if !yield(file, s.(*ast.ValueSpec)) {
-					return
-				}
-			}
-		}
-	}
-}
-
-func FormatFile(filePath string, f *ast.File) (string, error) {
-	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, token.NewFileSet(), f); err != nil {
-		return "", fmt.Errorf("formatting error: %v", err)
-	}
-	out, err := imports.Process(filePath, buf.Bytes(), &imports.Options{
-		Fragment:  true,
-		AllErrors: true,
-		Comments:  true,
-	})
-	if err != nil {
-		return "", fmt.Errorf("formatting error: %v", err)
-	}
-	return string(bytes.ReplaceAll(out, []byte("\n}\nfunc "), []byte("\n}\n\nfunc "))), nil
-}
-
-func Format(node ast.Node) string {
-	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, token.NewFileSet(), node); err != nil {
-		return fmt.Sprintf("formatting error: %v", err)
-	}
-	out, err := format.Source(buf.Bytes())
-	if err != nil {
-		return fmt.Sprintf("formatting error: %v", err)
-	}
-	return string(bytes.ReplaceAll(out, []byte("\n}\nfunc "), []byte("\n}\n\nfunc ")))
-}
-
-func evaluateStringLiteralExpressionList(wd string, set *token.FileSet, list []ast.Expr) ([]string, error) {
-	result := make([]string, 0, len(list))
-	for _, a := range list {
-		s, err := evaluateStringLiteralExpression(wd, set, a)
-		if err != nil {
-			return result, err
-		}
-		result = append(result, s)
-	}
-	return result, nil
-}
-
-func evaluateStringLiteralExpression(wd string, set *token.FileSet, exp ast.Expr) (string, error) {
-	arg, ok := exp.(*ast.BasicLit)
-	if !ok || arg.Kind != token.STRING {
-		return "", contextError(wd, set, exp.Pos(), fmt.Errorf("expected string literal got %s", Format(exp)))
-	}
-	return strconv.Unquote(arg.Value)
-}
-
-func IterateFieldTypes(list []*ast.Field) func(func(int, ast.Expr) bool) {
-	return func(yield func(int, ast.Expr) bool) {
-		i := 0
-		for _, field := range list {
-			if len(field.Names) == 0 {
-				if !yield(i, field.Type) {
-					return
-				}
-				i++
-			} else {
-				for range field.Names {
-					if !yield(i, field.Type) {
-						return
-					}
-					i++
-				}
-			}
-		}
-	}
-}
 
 var httpCodes = map[int]string{
 	http.StatusContinue:           "StatusContinue",
@@ -180,6 +78,7 @@ var httpCodes = map[int]string{
 	http.StatusNetworkAuthenticationRequired: "StatusNetworkAuthenticationRequired",
 }
 
+// HTTPStatusName converts an http.Status constant name to its integer value
 func HTTPStatusName(name string) (int, error) {
 	n := strings.TrimPrefix(name, "http.")
 	for code, constName := range httpCodes {
@@ -190,89 +89,43 @@ func HTTPStatusName(name string) (int, error) {
 	return 0, fmt.Errorf("unknown %s", name)
 }
 
-func HTTPStatusCode(imports *File, n int) ast.Expr {
+// HTTPStatusCode creates an AST expression for an HTTP status code.
+// Returns http.StatusXXX constant if available, otherwise a literal int.
+func HTTPStatusCode(im ImportManager, n int) ast.Expr {
 	ident, ok := httpCodes[n]
 	if !ok {
 		return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)}
 	}
-	return &ast.SelectorExpr{
-		X:   ast.NewIdent(imports.Import("", "net/http")),
-		Sel: ast.NewIdent(ident),
+	return ExportedIdentifier(im, "", "net/http", ident)
+}
+
+// HTTPErrorCall creates an http.Error call expression
+func HTTPErrorCall(im ImportManager, response, message ast.Expr, code int) *ast.CallExpr {
+	return Call(im, "", "net/http", "Error", []ast.Expr{
+		response,
+		message,
+		HTTPStatusCode(im, code),
+	})
+}
+
+// HTTPRequestPtr creates a *http.Request type expression
+func HTTPRequestPtr(im ImportManager) *ast.StarExpr {
+	return &ast.StarExpr{
+		X: ExportedIdentifier(im, "http", "net/http", "Request"),
 	}
 }
 
-func Int(n int) *ast.BasicLit { return &ast.BasicLit{Value: strconv.Itoa(n), Kind: token.INT} }
-
-func String(s string) *ast.BasicLit {
-	return &ast.BasicLit{Value: strconv.Quote(s), Kind: token.STRING}
+// HTTPResponseWriter creates an http.ResponseWriter type expression
+func HTTPResponseWriter(im ImportManager) *ast.SelectorExpr {
+	return ExportedIdentifier(im, "http", "net/http", "ResponseWriter")
 }
 
-func Bool(b bool) *ast.Ident {
-	if b {
-		return ast.NewIdent("true")
-	}
-	return ast.NewIdent("false")
+// HTTPHeader creates an http.Header type expression
+func HTTPHeader(im ImportManager) *ast.SelectorExpr {
+	return ExportedIdentifier(im, "http", "net/http", "Header")
 }
 
-func Nil() *ast.Ident { return ast.NewIdent("nil") }
-
-func FieldIndex(fields []*ast.Field, i int) (*ast.Ident, ast.Expr, bool) {
-	n := 0
-	for _, field := range fields {
-		if len(field.Names) == 0 {
-			if n != i {
-				n++
-				continue
-			}
-			return nil, field.Type, true
-		}
-		for _, name := range field.Names {
-			if n != i {
-				n++
-				continue
-			}
-			return name, field.Type, true
-		}
-	}
-	return nil, nil, false
-}
-
-func CallError(errIdent string) *ast.CallExpr {
-	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(errIdent),
-			Sel: ast.NewIdent("Error"),
-		},
-		Args: []ast.Expr{},
-	}
-}
-
-func FindFieldWithName(list *ast.FieldList, name string) (*ast.Field, bool) {
-	for _, field := range list.List {
-		for _, ident := range field.Names {
-			if ident.Name == name {
-				return field, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func basicLiteralString(node ast.Node) (string, bool) {
-	name, ok := node.(*ast.BasicLit)
-	if !ok {
-		return "", false
-	}
-	if name.Kind != token.STRING {
-		return "", false
-	}
-	templateName, err := strconv.Unquote(name.Value)
-	if err != nil {
-		return "", false
-	}
-	return templateName, true
-}
-
-func EmptyStructType() *ast.StructType {
-	return &ast.StructType{Fields: &ast.FieldList{}}
+// AddNetHTTP registers the net/http import and returns its identifier
+func AddNetHTTP(im ImportManager) string {
+	return im.Import("", "net/http")
 }

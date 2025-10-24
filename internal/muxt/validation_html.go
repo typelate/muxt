@@ -1,4 +1,4 @@
-package source
+package muxt
 
 import (
 	"cmp"
@@ -13,13 +13,8 @@ import (
 
 	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html/atom"
-)
 
-type (
-	ValidationErrorBlock func(string) *ast.BlockStmt
-	ValidationGenerator  interface {
-		GenerateValidation(imports *File, variable ast.Expr, handleError ValidationErrorBlock) ast.Stmt
-	}
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]ValidationGenerator, error) {
@@ -33,7 +28,7 @@ func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]Va
 	}, typeAttr) {
 		if input.HasAttribute("min") {
 			val := input.GetAttribute("min")
-			_, err := ParseStringWithType(val, tp)
+			_, err := asteval.ParseWithType(val, tp)
 			if err != nil {
 				return nil, err
 			}
@@ -44,7 +39,7 @@ func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]Va
 		}
 		if input.HasAttribute("max") {
 			val := input.GetAttribute("max")
-			_, err := ParseStringWithType(val, tp)
+			_, err := asteval.ParseWithType(val, tp)
 			if err != nil {
 				return nil, err
 			}

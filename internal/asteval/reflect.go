@@ -1,4 +1,4 @@
-package source
+package asteval
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 
 const IntBitLength = 32 << (^uint(0) >> 63)
 
-func ParseStringWithType(val string, tp types.Type) (reflect.Value, error) {
+func ParseWithType(val string, tp types.Type) (reflect.Value, error) {
 	switch tp.Underlying().String() {
 	case reflect.Int.String():
 		n, err := strconv.ParseInt(val, 10, IntBitLength)

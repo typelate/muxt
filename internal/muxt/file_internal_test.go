@@ -1,4 +1,4 @@
-package source
+package muxt
 
 import (
 	"go/ast"

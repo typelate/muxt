@@ -15,7 +15,7 @@ import (
 	"strings"
 	"text/template/parse"
 
-	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 func Templates(ts *template.Template) ([]Template, error) {
@@ -109,7 +109,7 @@ func newTemplate(in string) (Template, error, bool) {
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
 		if strings.HasPrefix(httpStatusCode, "http.Status") {
-			code, err := source.HTTPStatusName(httpStatusCode)
+			code, err := astgen.HTTPStatusName(httpStatusCode)
 			if err != nil {
 				return Template{}, fmt.Errorf("failed to parse status code: %w", err), true
 			}
@@ -244,11 +244,11 @@ func parseHandler(fileSet *token.FileSet, def *Template, pathParameterNames []st
 	}
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
-		return fmt.Errorf("expected call expression, got: %s", source.Format(e))
+		return fmt.Errorf("expected call expression, got: %s", astgen.Format(e))
 	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return fmt.Errorf("expected function identifier, got got: %s", source.Format(call.Fun))
+		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
 	}
 	if call.Ellipsis != token.NoPos {
 		return fmt.Errorf("unexpected ellipsis")
@@ -288,7 +288,7 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 		case *ast.CallExpr:
 			methodIdent, ok := exp.Fun.(*ast.Ident)
 			if ok && receiverInterfaceType != nil {
-				field, ok := source.FindFieldWithName(receiverInterfaceType.Methods, methodIdent.Name)
+				field, ok := astgen.FindFieldWithName(receiverInterfaceType.Methods, methodIdent.Name)
 				if ok {
 					funcType, ok := field.Type.(*ast.FuncType)
 					if ok {
@@ -314,10 +314,10 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 			}
 		case *ast.CallExpr:
 			if err := checkArguments(identifiers, exp); err != nil {
-				return fmt.Errorf("call %s argument error: %w", source.Format(call.Fun), err)
+				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
 		default:
-			return fmt.Errorf("expected only identifier or call expressions as arguments, argument at index %d is: %s", i, source.Format(a))
+			return fmt.Errorf("expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
 		}
 	}
 	return nil
@@ -360,14 +360,14 @@ func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string
 	return ok && ident.Name == receiverTypeIdent
 }
 
-func (t Template) callHandleFunc(file *source.File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
-	pattern := ast.Expr(source.String(t.pattern))
+func (t Template) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
+	pattern := ast.Expr(astgen.String(t.pattern))
 	if config.PathPrefix {
 		i := strings.Index(t.pattern, "/")
 		pattern = &ast.BinaryExpr{
-			X:  source.String(t.pattern[:i]),
+			X:  astgen.String(t.pattern[:i]),
 			Op: token.ADD,
-			Y:  file.Call("path", "path", "Join", []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName), source.String(t.pattern[i:])}),
+			Y:  astgen.Call(file, "path", "path", "Join", []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(t.pattern[i:])}),
 		}
 	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
@@ -593,7 +593,7 @@ func isAllSafeMethods(idents []string) bool {
 		return false
 	}
 	// If there are more identifiers, we're chaining off the result
-	// e.g., .Request.Method - this is safe if Request is safe
+	// e.g. `.Request.Method` - this is safe if Request is safe
 	// (subsequent fields/methods are on the returned type, not TemplateData)
 	return true
 }
