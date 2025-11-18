@@ -1,0 +1,40 @@
+# Tests that muxt check ignores template files with only comments and whitespace
+# Such files are not flagged as unused
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go build
+
+-- template.gohtml --
+{{/*
+  This file only contains define blocks.
+  The file template itself has only comments and whitespace.
+*/}}
+
+{{define "GET / Index()"}}
+<h1>Hello</h1>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Index() string {
+	return "index"
+}

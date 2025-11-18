@@ -1,6 +1,6 @@
 # Tests -C flag to change working directory before running commands
 
-muxt -C a/b/c generate
+muxt -C a/b/c generate --use-receiver-type=T
 muxt -C a/b/c check
 
 exec go -C a/b/c build
@@ -26,4 +26,12 @@ var (
 
 func main() {}
 -- a/b/c/index.gohtml --
+{{define "GET / Index()"}}
 <h1>hello</h1>
+{{end}}
+-- a/b/c/routes.go --
+package main
+
+type T struct{}
+
+func (T) Index() string { return "hello" }

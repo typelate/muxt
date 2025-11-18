@@ -25,4 +25,6 @@ var (
 
 func main() {}
 -- directory/index.gohtml --
+{{define "GET /"}}
 <h1>hello</h1>
+{{end}}

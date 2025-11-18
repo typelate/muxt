@@ -1,0 +1,38 @@
+# Tests that muxt check detects dead code outside define blocks
+# Content in a template file that's not inside a define block is dead code
+
+muxt generate --use-receiver-type=T
+
+! muxt check
+stderr 'unused template'
+stderr '"template.gohtml"'
+
+-- template.gohtml --
+{{/* This comment is fine */}}
+
+This text is dead code - it's outside any define block
+
+{{define "GET / Endpoint()" }}Hello{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	_ "embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Endpoint() string {
+	return "hello"
+}

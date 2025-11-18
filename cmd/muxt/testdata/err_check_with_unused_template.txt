@@ -1,0 +1,89 @@
+# Tests that muxt check detects unused templates
+# Tests transitive template references through if, range, and with nodes
+
+muxt generate --use-receiver-type=T
+
+! muxt check
+stderr 'unused template'
+stderr 'unused-partial'
+stderr 'orphan-partial'
+! stderr '"used-partial"'
+! stderr '"nested-partial"'
+! stderr '"if-partial"'
+! stderr '"range-partial"'
+! stderr '"with-partial"'
+
+-- template.gohtml --
+{{define "GET / Endpoint()" }}
+Hello
+{{template "used-partial" .}}
+{{end}}
+
+{{define "used-partial"}}
+Used Partial Content
+{{template "nested-partial" .}}
+{{end}}
+
+{{define "nested-partial"}}
+Nested content
+{{if .Result}}
+{{template "if-partial" .}}
+{{end}}
+{{end}}
+
+{{define "if-partial"}}
+If partial content
+{{range .Result}}
+{{template "range-partial" .}}
+{{end}}
+{{end}}
+
+{{define "range-partial"}}
+Range partial
+{{with .}}
+{{template "with-partial" .}}
+{{end}}
+{{end}}
+
+{{define "with-partial"}}
+With partial content
+{{end}}
+
+{{define "unused-partial"}}Unused Partial Content{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	_ "embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Endpoint() []string {
+	return []string{"hello"}
+}
+-- index.gohtml --
+{{define "GET /index Index()"}}
+Index page
+{{end}}
+
+{{define "orphan-partial"}}
+This is orphan - not referenced from any route
+{{end}}
+-- receiver.go --
+package server
+
+func (T) Index() string {
+	return "index"
+}

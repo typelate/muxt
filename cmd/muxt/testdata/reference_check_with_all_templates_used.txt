@@ -1,0 +1,48 @@
+# Tests that muxt check passes when all templates are used
+# Templates are used if executed or referenced transitively
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go build
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<html>
+{{template "header" .}}
+<body>
+{{template "content" .}}
+</body>
+</html>
+{{end}}
+
+{{define "header"}}
+<head><title>Test</title></head>
+{{end}}
+
+{{define "content"}}
+<main>Hello World</main>
+{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Index() string {
+	return "index"
+}
