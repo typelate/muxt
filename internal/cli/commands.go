@@ -83,11 +83,11 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 }
 
 func writeCodeGenerationComment(w io.StringWriter, args []string) {
-	_, _ = w.WriteString(fmt.Sprintf(codeGenerationComment, strings.Join(args, " ")))
+	_, _ = w.WriteString(fmt.Sprintf(codeGenerationComment, strings.TrimSpace(strings.Join(args, " "))))
 	if v, ok := cliVersion(); ok {
 		_, _ = w.WriteString("// muxt version: ")
 		_, _ = w.WriteString(v)
-		_, _ = w.WriteString("\n")
+		_, _ = w.WriteString("\n\n")
 	}
 }
 
