@@ -12,12 +12,12 @@ import (
 )
 
 type RoutesReceiver interface {
-	IndexRoutesReceiver
+	indexRoutesReceiver
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
 	pathsPrefix := ""
-	IndexTemplateRoutes(mux, receiver, pathsPrefix)
+	indexTemplateRoutes(mux, receiver, pathsPrefix)
 	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 

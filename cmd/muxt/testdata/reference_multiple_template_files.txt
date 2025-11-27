@@ -2,12 +2,21 @@
 
 muxt generate --use-receiver-type=Server
 
-grep 'IndexTemplateRoutes' template_routes.go
-grep 'AboutTemplateRoutes' template_routes.go
+grep 'indexTemplateRoutes' template_routes.go
+grep 'aboutTemplateRoutes' template_routes.go
 
 exists index_template_routes_gen.go
 exists about_template_routes_gen.go
 cat index_template_routes_gen.go about_template_routes_gen.go template_routes.go
+
+# Verify that per-file functions and interfaces are private (not in public API)
+exec go doc -all .
+! stdout 'indexTemplateRoutes'
+! stdout 'aboutTemplateRoutes'
+! stdout 'indexRoutesReceiver'
+! stdout 'aboutRoutesReceiver'
+stdout 'TemplateRoutes'
+stdout 'RoutesReceiver'
 
 exec go test
 

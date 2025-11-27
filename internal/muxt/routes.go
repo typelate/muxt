@@ -203,7 +203,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	// Embed all file-scoped receiver interfaces
 	for _, sourceFile := range sourceFiles {
-		fileIdentifier := fileNameToIdentifier(sourceFile)
+		fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
 		receiverInterfaceName := fileIdentifier + "RoutesReceiver"
 		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
 			Type: ast.NewIdent(receiverInterfaceName),
@@ -251,7 +251,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	// Call per-file route functions
 	for _, sourceFile := range sourceFiles {
-		fileIdentifier := fileNameToIdentifier(sourceFile)
+		fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
 		funcName := fileIdentifier + config.RoutesFunction
 
 		callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
@@ -398,7 +398,7 @@ func generatePerFileRouteFunction(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := fileNameToIdentifier(sourceFile)
+	fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}
@@ -472,7 +472,7 @@ func generatePerFileAST(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := fileNameToIdentifier(sourceFile)
+	fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}

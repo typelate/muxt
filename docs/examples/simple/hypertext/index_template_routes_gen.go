@@ -12,15 +12,15 @@ import (
 	"strconv"
 )
 
-type IndexRoutesReceiver interface {
+type indexRoutesReceiver interface {
 	SubmitFormEditRow(fruitID int, form EditRow) (Row, error)
 	GetFormEditRow(fruitID int) (Row, error)
 	List(_ context.Context) []Row
 }
 
-func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, pathsPrefix string) {
+func indexTemplateRoutes(mux *http.ServeMux, receiver indexRoutesReceiver, pathsPrefix string) {
 	mux.HandleFunc("PATCH /fruits/{id}", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[IndexRoutesReceiver, Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[indexRoutesReceiver, Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
 			td.errList = append(td.errList, err)
@@ -70,7 +70,7 @@ func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, paths
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /fruits/{id}/edit", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[IndexRoutesReceiver, Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[indexRoutesReceiver, Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
 			td.errList = append(td.errList, err)
@@ -105,7 +105,7 @@ func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, paths
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /help", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[IndexRoutesReceiver, struct {
+		var td = TemplateData[indexRoutesReceiver, struct {
 		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "GET /help", &td); err != nil {
@@ -122,7 +122,7 @@ func IndexTemplateRoutes(mux *http.ServeMux, receiver IndexRoutesReceiver, paths
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[IndexRoutesReceiver, []Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[indexRoutesReceiver, []Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
 		if len(td.errList) == 0 {
 			td.result = receiver.List(ctx)
