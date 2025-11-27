@@ -2,190 +2,84 @@
 
 Generate type-safe HTTP handlers from Go HTML template names.
 
-## Template Name Syntax
+## Syntax
 
 ```
-[METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
+[METHOD ][HOST]/PATH[ HTTP_STATUS][ CALL]
 ```
 
-Examples:
 ```gotemplate
 {{define "GET /"}}...{{end}}
-{{define "GET /user/{id}"}}...{{end}}
+{{define "GET /user/{id} GetUser(ctx, id)"}}...{{end}}
 {{define "POST /user 201 CreateUser(ctx, form)"}}...{{end}}
-{{define "GET /article/{id} GetArticle(ctx, id)"}}...{{end}}
+{{define "DELETE /user/{id} 204 DeleteUser(ctx, id)"}}...{{end}}
 ```
 
-Components:
-- **METHOD** (optional): GET, POST, PATCH, DELETE, PUT
-- **PATH** (required): `/path`, `/path/{param}`
-- **HTTP_STATUS** (optional): 200, 201, 404 or http.StatusOK
-- **CALL** (optional): MethodName(param1, param2)
+## Call Parameters
 
-## Template Data Access
+| Name | Type | Source |
+|------|------|--------|
+| `ctx` | `context.Context` | `request.Context()` |
+| `request` | `*http.Request` | Request object |
+| `response` | `http.ResponseWriter` | Response writer |
+| `form` | struct | `request.Form` parsed to struct |
+| `{param}` | string/int/etc | `request.PathValue()` |
 
-Templates receive `TemplateData[T]`. Access via methods (Go calls them automatically):
+## Template Data
 
 ```gotemplate
-{{.Result}}         {{/* Method return value */}}
-{{.Result.Field}}   {{/* Access field on result */}}
-{{.Err}}           {{/* Method error */}}
-{{.Request}}       {{/* *http.Request */}}
+{{.Result}}              {{/* Method return value */}}
+{{.Err}}                 {{/* Error if any */}}
+{{.Request}}             {{/* *http.Request */}}
+{{.Path.GetUser 42}}     {{/* Type-safe URL: /user/42 */}}
 ```
-
-Always check `.Err`:
-```gotemplate
-{{if .Err}}
-  <div class="error">{{.Err.Error}}</div>
-{{else}}
-  <h1>{{.Result.Name}}</h1>
-{{end}}
-```
-
-## Special Parameters
-
-Call parameters map to:
-- `ctx` → `context.Context`
-- `request` → `*http.Request`
-- `response` → `http.ResponseWriter`
-- `form` → struct parsed from request.Form
-- `{pathParam}` → parsed from URL to method parameter type
 
 ## Return Types
 
 ```go
-func (Receiver) Value() T                  // .Result=T, .Err=nil
-func (Receiver) ValueErr() (T, error)         // .Result=T, .Err=error
-func (Receiver) ValueOk() (T, bool)          // .Result=T, bool=true skips template
-func (Receiver) JustErr() error              // .Result=zero, .Err=error
+func (s Server) M() T              // .Result=T
+func (s Server) M() (T, error)     // .Result=T, .Err=error
+func (s Server) M() error          // .Err=error
 ```
 
-## Complete Example
+## Example
 
 **template.gohtml:**
 ```gotemplate
 {{define "GET /user/{id} GetUser(ctx, id)"}}
-<!DOCTYPE html>
-<html>
-<body>
-{{if .Err}}
-  <div>Error: {{.Err.Error}}</div>
-{{else}}
-  <h1>{{.Result.Name}}</h1>
-  <p>{{.Result.Email}}</p>
-{{end}}
-</body>
-</html>
+{{if .Err}}<div>Error: {{.Err.Error}}</div>
+{{else}}<h1>{{.Result.Name}}</h1>{{end}}
 {{end}}
 ```
 
 **main.go:**
 ```go
-package main
-
-import (
-	"context"
-	"embed"
-	"html/template"
-	"log"
-	"net/http"
-)
-
 //go:embed *.gohtml
 var templateFS embed.FS
 
 //go:generate muxt generate --find-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
-type Server struct {
+type Server struct{
 	db Database
 }
 
-type User struct {
-	Name  string
-	Email string
-}
-
 func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-	return s.db.GetUser(ctx, id) // id parsed from path string
+    return s.db.GetUser(ctx, id)
 }
 
 func main() {
-	mux := http.NewServeMux()
-	srv := Server{db: NewDatabase()}
-	TemplateRoutes(mux, srv)
-	log.Fatal(http.ListenAndServe(":8080", mux))
+    mux := http.NewServeMux()
+    TemplateRoutes(mux, Server{db: NewDB()})
+    http.ListenAndServe(":8080", mux)
 }
-```
-
-Run: `go generate && go run .`
-
-
-## Form Handling
-
-**template.gohtml:**
-```gotemplate
-{{define "POST /user 201 CreateUser(ctx, form)"}}
-<div>Created: {{.Result.Username}}</div>
-{{end}}
-```
-
-**main.go:**
-```go
-type UserForm struct {
-	Username string
-	Email    string
-}
-
-func (s Server) CreateUser(ctx context.Context, form UserForm) (User, error) {
-	return s.db.CreateUser(ctx, form.Username, form.Email)
-}
-```
-
-Form fields map to struct fields. Supports: `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`.
-
-## Status Codes
-
-**1. Template name:**
-```gotemplate
-{{define "POST /user 201 CreateUser(ctx, form)"}}
-  <!-- Returns 201 -->
-{{end}}
-```
-
-**2. StatusCode field:**
-```go
-type Result struct {
-	Data       User
-	StatusCode int
-}
-```
-
-**3. StatusCode() method:**
-```go
-func (r Result) StatusCode() int { return r.code }
 ```
 
 ## Commands
 
 ```bash
-muxt generate --find-receiver-type=Server    # Generate handlers
-muxt check --find-receiver-type=Server       # Type check only
-muxt version                            # Show version
+muxt generate --find-receiver-type=Server  # Generate handlers
+muxt check --find-receiver-type=Server     # Type check only
 ```
 
-## Generated Files
-
-- `template_routes.go` - Main file with `TemplateRoutes()` function
-- `*_template_routes_gen.go` - Per-source-file handlers
-
-## More Examples
-
-See test cases: [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
-- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) - Basic GET
-- [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) - Path parameters
-- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) - Form parsing
-- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) - Status codes
-- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) - Complete app
-
-Browse all: `ls cmd/muxt/testdata/*.txt`
+See [muxt-guide.md](muxt-guide.md) for complete documentation.

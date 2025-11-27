@@ -107,9 +107,20 @@ Comprehensive documentation organized by task:
 - **[How-To Guides](docs/how-to/)** - Integrate, test, use HTMX, add logging
 - **[Reference](docs/reference/)** - CLI, syntax, parameters, type checking
 - **[Explanation](docs/explanation/)** - Design philosophy, patterns, decisions
-- **[AI Assistant Prompts](docs/prompts/)** - Quick reference, practical guide, complete reference
 
 See the [full documentation index](docs/) for all available resources.
+
+## Using with AI Assistants
+
+Paste these prompts into Claude Code or other AI assistants when building hypermedia apps:
+
+| Prompt | Use Case |
+|--------|----------|
+| [muxt-quick.md](docs/prompts/muxt-quick.md) | Syntax lookup, minimal context |
+| [muxt-guide.md](docs/prompts/muxt-guide.md) | Comprehensive guide for building apps |
+| [muxt-complete.md](docs/prompts/muxt-complete.md) | Edge cases, testing patterns, advanced usage |
+
+Start with `muxt-guide.md` for most sessions. Use `muxt-quick.md` when context is limited.
 
 ## License
 

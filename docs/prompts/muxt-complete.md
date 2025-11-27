@@ -1,434 +1,225 @@
-# Muxt Complete Reference
+# Muxt Advanced Reference
 
-Comprehensive reference for production-ready web applications with Muxt. Includes all features, testing patterns, and advanced usage.
+Supplements [muxt-guide.md](muxt-guide.md) with edge cases and detailed patterns.
 
-**For quick reference:** See [muxt-quick.md](muxt-quick.md)
-**For practical usage:** See [muxt-guide.md](muxt-guide.md)
+## Template Name BNF
 
----
-
-## Template Name Syntax
-
-```
-[METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
-```
-
-**BNF:** `<route> ::= [ <method> <space> ] [ <host> ] <path> [ <space> <http_status> ] [ <space> <call_expr> ]`
-
-See [template-names.md](../reference/template-names.md) for complete BNF and examples.
-
-Common patterns:
-```gotemplate
-{{define "GET /"}}...{{end}}
-{{define "GET /user/{id}"}}...{{end}}
-{{define "POST /user 201 CreateUser(ctx, form)"}}...{{end}}
-{{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}...{{end}}
-{{define "GET /{$}"}}...{{end}}                  {{/* Exact match */}}
-{{define "GET /static/"}}...{{end}}              {{/* Prefix match */}}
-{{define "GET /files/{path...}"}}...{{end}}      {{/* Wildcard */}}
+```bnf
+<route>  ::= [ <method> " " ] [ <host> ] <path> [ " " <status> ] [ " " <call> ]
+<method> ::= "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
+<path>   ::= "/" { <segment> "/" } [ <segment> ]
+<segment>::= <literal> | "{" <param> "}" | "{" <param> "...}"
+<status> ::= <number> | "http.Status" <ident>
+<call>   ::= <ident> "(" [ <args> ] ")"
 ```
 
----
+**Path patterns:**
+- `/{$}` — Exact match only `/`
+- `/static/` — Prefix match `/static/*`
+- `/files/{path...}` — Wildcard captures rest
 
-## Template Data Structure
+## All TemplateData Methods
 
-Templates receive `TemplateData[T]`. All fields private, accessed via methods:
-
-```gotemplate
-{{.Result}}                         {{/* Method return value */}}
-{{.Err}}                            {{/* Error (if any) */}}
-{{.Request.URL.Path}}               {{/* *http.Request */}}
-{{.Request.PathValue "id"}}         {{/* Path parameters */}}
-{{.Request.Header.Get "HX-Request"}} {{/* Headers */}}
-{{.Path.GetUser 123}}               {{/* Type-safe URL generation */}}
-{{with .StatusCode 404}}...{{end}}  {{/* Set status code */}}
-{{with .Header "X-Custom" "val"}}...{{end}} {{/* Set headers */}}
-{{.Ok}}                             {{/* true if template executes */}}
-```
-
-**Key methods:**
-- `.Result()` → method return value (type T)
-- `.Err()` → error joined from error list
-- `.Request()` → `*http.Request`
-- `.Path()` → `TemplateRoutePaths` for URL generation
-- `.StatusCode(int)` → set HTTP status, returns self for chaining
-- `.Header(k, v)` → set response header, returns self
-- `.Ok()` → `false` when method returns `(T, bool)` with `bool=false`
-
-Always check `.Err`:
-```gotemplate
-{{if .Err}}<div>Error: {{.Err.Error}}</div>{{else}}<h1>{{.Result.Name}}</h1>{{end}}
-```
-
----
-
-## Receiver Methods
-
-**Return types:**
 ```go
-func (s Server) M() T                   // .Result=T, .Err=nil
-func (s Server) M() (T, error)          // .Result=T, .Err=error
-func (s Server) M() (T, bool)           // .Result=T, bool=false skips template
-func (s Server) M() error               // .Result=zero, .Err=error
+func (d TemplateData[T]) Result() T              // Method return value
+func (d TemplateData[T]) Err() error             // Joined errors
+func (d TemplateData[T]) Request() *http.Request // Original request
+func (d TemplateData[T]) Path() TemplateRoutePaths // URL generators
+func (d TemplateData[T]) Ok() bool               // False skips template
+func (d TemplateData[T]) StatusCode(int) TemplateData[T] // Set status
+func (d TemplateData[T]) Header(k, v string) TemplateData[T] // Set header
 ```
 
-**Parameter names:**
-- `ctx` → `context.Context` (from `request.Context()`)
-- `request` → `*http.Request`
-- `response` → `http.ResponseWriter`
-- `form` → struct parsed from `request.Form`
-- `{pathParam}` → parsed from `request.PathValue(name)`
+## All CLI Flags
 
-**Status codes (5 methods):**
-1. Template name: `{{define "POST /user 201 CreateUser(ctx, form)"}}`
-2. Result method: `func (r Result) StatusCode() int { return r.code }`
-3. Result field: `type Result struct { StatusCode int }`
-4. Error method: `func (e HTTPError) StatusCode() int { return 404 }`
-5. Template: `{{with .StatusCode 404}}<h1>Not Found</h1>{{end}}`
-
----
-
-## Type System
-
-**Parsed types:** `string`, `bool`, `int*`, `uint*`, `encoding.TextUnmarshaler`
-
-**Special types:** `context.Context`, `*http.Request`, `http.ResponseWriter`, `url.Values`
-
-**Custom parsing via TextUnmarshaler:**
-```go
-type UserID string
-func (id *UserID) UnmarshalText(text []byte) error {
-    *id = UserID(strings.ToLower(string(text)))
-    return nil
-}
-```
-
-**Form struct fields:**
-```go
-type MyForm struct {
-    Name     string   `name:"user_name"`  // Field tag maps form field name
-    Age      int
-    Tags     []string                      // Multiple values
-    Subscribe bool
-}
-```
-
-**Type checking:**
 ```bash
-muxt check --find-receiver-type=Server  # Validates templates match Go types
+muxt generate \
+  --find-receiver-type=Server \
+  --find-receiver-type-package=github.com/app/server \
+  --output-file=routes.go \
+  --output-routes-func=TemplateRoutes \
+  --output-receiver-interface=RoutesReceiver \
+  --logger \
+  --path-prefix
 ```
 
----
+With `--logger`: `func TemplateRoutes(mux, receiver, logger *slog.Logger)`
+With `--path-prefix`: `func TemplateRoutes(mux, receiver, prefix string)`
 
-## Package Structure
+## Generated File Structure
 
-**Package-level template variable required:**
-```go
-//go:embed *.gohtml
-var templateFS embed.FS
-var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+**`template_routes.go`:**
+```
+1. RoutesReceiver interface (embeds per-file interfaces)
+2. TemplateRoutes() function
+3. TemplateData[T] type and methods
+4. TemplateRoutePaths type (near end)
+5. Path helper methods (at end)
 ```
 
-**Multiple directories (enumerate each level):**
-```go
-//go:embed *.gohtml */*.gohtml */*/*.gohtml
-var templateFS embed.FS
-var templates = template.Must(template.ParseFS(templateFS, "**/*.gohtml"))
-```
+**`*_template_routes_gen.go`** (one per .gohtml):
+- File-scoped interface (e.g., `IndexRoutesReceiver`)
+- File-scoped route function
+- HTTP handlers
 
-**Custom functions:**
-```go
-var templates = template.Must(
-    template.New("").
-        Funcs(template.FuncMap{"upper": strings.ToUpper}).
-        ParseFS(templateFS, "*.gohtml"),
-)
-```
-
-**Generated files:**
-- `template_routes.go` - Main file with `TemplateRoutes()`, `TemplateData[T]`, `TemplateRoutePaths`
-- `*_template_routes_gen.go` - Per-source-file handlers and interfaces
-
----
-
-## CLI Reference
-
-**Commands:**
-- `muxt generate` (aliases: `gen`, `g`) - Generate handlers
-- `muxt check` (aliases: `c`, `typelate`) - Type-check only
-- `muxt documentation` (aliases: `docs`, `d`) - Generate markdown docs
-- `muxt version` (alias: `v`) - Print version
-
-**Key flags:**
-- `--find-receiver-type=Server` - Type for method lookup (required)
-- `--output-file=routes.go` - Generated file name
-- `--output-routes-func=TemplateRoutes` - Route function name
-- `--output-receiver-interface=RoutesReceiver` - Interface name
-- `--path-prefix` - Add path prefix parameter
-- `--logger` - Add `*slog.Logger` parameter
-- `-C ./web` - Change directory before running
-
-**Examples:**
+**Find code:**
 ```bash
-muxt generate --find-receiver-type=Server
-muxt check --find-receiver-type=Server
-muxt generate --find-receiver-type=Server --logger --path-prefix
-muxt -C ./web generate --find-receiver-type=App --output-routes-func=RegisterRoutes
+grep "type TemplateRoutePaths" template_routes.go
+grep "type .*RoutesReceiver interface" *_template_routes_gen.go
 ```
 
-**From go:generate:**
-```go
-//go:generate muxt generate --find-receiver-type=Server
-```
+## Testing Patterns
 
----
-
-## Testing
-
-**Generate fakes with counterfeiter:**
+**Generate fakes:**
 ```go
 //go:generate counterfeiter -generate
 //counterfeiter:generate -o internal/fake/server.go --fake-name Server . RoutesReceiver
 ```
 
-**Table-driven tests (Given-When-Then):**
+**Full test pattern:**
 ```go
-func TestUserHandlers(t *testing.T) {
+func TestHandler(t *testing.T) {
+    // Setup
     server := new(fake.Server)
     server.GetUserReturns(User{Name: "Alice"}, nil)
-
     mux := http.NewServeMux()
     paths := TemplateRoutes(mux, server)
 
+    // Execute
     req := httptest.NewRequest(http.MethodGet, paths.GetUser(42), nil)
     rec := httptest.NewRecorder()
     mux.ServeHTTP(rec, req)
 
-    assert.Equal(t, 1, server.GetUserCallCount())
-    assert.Equal(t, 42, server.GetUserArgsForCall(0))
-    assert.Equal(t, http.StatusOK, rec.Result().StatusCode)
+    // Verify call
+    require.Equal(t, 1, server.GetUserCallCount())
+    ctx, id := server.GetUserArgsForCall(0)
+    assert.Equal(t, 42, id)
+
+    // Verify response
+    assert.Equal(t, http.StatusOK, rec.Code)
+
+    // Verify DOM
+    doc := domtest.ParseResponseDocument(t, rec.Result())
+    assert.Equal(t, "Alice", doc.QuerySelector("h1").TextContent())
 }
 ```
 
-**DOM testing with domtest:**
+**HTMX partial test:**
 ```go
-import "github.com/typelate/dom/domtest"
-
-doc := domtest.ParseResponseDocument(t, rec.Result())
-h1 := doc.QuerySelector("h1")
-assert.Equal(t, "Alice", h1.TextContent())
-
-// For HTMX partials
+req.Header.Set("HX-Request", "true")
 fragment := domtest.ParseResponseDocumentFragment(t, rec.Result(), atom.Body)
 ```
 
-**Path helpers are type-safe:**
+## Form Parsing Details
+
+**Field tags:**
 ```go
-paths.GetUser(42)             // "/user/42"
-paths.GetPost(42, 100)        // "/user/42/post/100"
+type Form struct {
+    Name string `name:"user-name"` // Maps to form field "user-name"
+}
 ```
 
-See [test-handlers.md](../how-to/test-handlers.md) for complete patterns.
+**HTML validation attributes generate checks:**
+- `minlength`, `maxlength` — String length
+- `min`, `max` — Numeric bounds
+- `pattern` — Regex match
 
----
+## Error Handling
 
-## HTMX Integration
+**Custom error with status:**
+```go
+type NotFoundError struct{ ID int }
+func (e NotFoundError) Error() string { return fmt.Sprintf("not found: %d", e.ID) }
+func (e NotFoundError) StatusCode() int { return 404 }
+```
 
-**Detect HTMX requests:**
+**Multiple errors:**
+```go
+func (s Server) Validate(ctx context.Context, form Form) (Result, error) {
+    var errs []error
+    if form.Name == "" { errs = append(errs, errors.New("name required")) }
+    if form.Age < 0 { errs = append(errs, errors.New("age invalid")) }
+    return Result{}, errors.Join(errs...)
+}
+```
+
+## HTMX Patterns
+
+**Conditional rendering:**
 ```gotemplate
 {{if .Request.Header.Get "HX-Request"}}
-  <div id="results">{{range .Result}}<div>{{.Title}}</div>{{end}}</div>
+  {{/* Partial */}}
 {{else}}
-  <!DOCTYPE html><html>...full page...</html>
+  {{/* Full page */}}
 {{end}}
 ```
 
-**Set response headers:**
+**Response headers:**
 ```gotemplate
-{{with .Header "HX-Redirect" "/"}}{{end}}  {{/* Redirect */}}
+{{with .Header "HX-Redirect" "/"}}{{end}}
+{{with .Header "HX-Trigger" "userCreated"}}{{end}}
+{{with .Header "HX-Reswap" "outerHTML"}}{{end}}
 ```
 
-Or from Go:
+**From Go:**
 ```go
-func (s Server) CreateUser(ctx context.Context, response http.ResponseWriter, form UserForm) (User, error) {
+func (s Server) Create(ctx context.Context, response http.ResponseWriter, form Form) (User, error) {
     response.Header().Set("HX-Redirect", "/users")
-    return s.db.CreateUser(ctx, form)
+    return s.db.Create(ctx, form)
 }
 ```
 
-**Common patterns:**
-- Infinite scroll: `hx-get="/posts?page={{add .Page 1}}" hx-trigger="revealed"`
-- Form validation: `hx-post="/validate" hx-trigger="keyup changed delay:500ms"`
-- Partial rendering: Check `HX-Request` header, return fragment vs full page
+## Edge Cases
 
-See [use-htmx.md](../how-to/use-htmx.md) for complete examples.
+**Pointer receiver:**
+```go
+func (s *Server) Mutate(...) error { s.count++; return nil }
+```
 
----
-
-## Advanced Patterns
-
-**Embedded methods promoted:**
+**Embedded methods:**
 ```go
 type Server struct {
-    Auth  // Login() promoted to Server
+    Auth      // Auth.Login() promoted to Server
+    *Database // Database.Query() promoted
 }
-```
-
-**Pointer and value receivers both work:**
-```go
-func (s Server) GetUser(...) (User, error)   // Value receiver
-func (s *Server) GetUser(...) (User, error)  // Pointer receiver (for mutation/large structs)
 ```
 
 **Cross-package receiver:**
 ```bash
-muxt generate --find-receiver-type=Server --find-receiver-type-package=github.com/myapp/internal/server
+muxt generate \
+  --find-receiver-type=Server \
+  --find-receiver-type-package=github.com/app/internal/server
 ```
 
-**HTML5 validation attributes:**
-Input attributes `minlength`, `maxlength`, `min`, `max`, `pattern` generate validation code.
-See [reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt)
-
-**Custom template functions:**
+**url.Values parameter:**
 ```go
-var templates = template.Must(
-    template.New("").
-        Funcs(template.FuncMap{"formatDate": formatDate, "add": add}).
-        ParseFS(templateFS, "*.gohtml"),
-)
+func (s Server) Search(ctx context.Context, query url.Values) ([]Result, error)
 ```
 
-**Path prefix flag:**
-```bash
-muxt generate --find-receiver-type=Server --path-prefix
-```
-Generated signature: `func TemplateRoutes(mux, receiver, pathPrefix string) TemplateRoutePaths`
+## Common Mistakes
 
-**Logger flag:**
-```bash
-muxt generate --find-receiver-type=Server --logger
-```
-Generated signature: `func TemplateRoutes(mux, receiver, logger *slog.Logger) TemplateRoutePaths`
-Logs debug (each request) and error (template failures).
-
----
-
-## Examples
-
-See test files in [cmd/muxt/testdata/](../../cmd/muxt/testdata/) for working examples:
-
-**Basic patterns:**
-- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) - Basic GET handler
-- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) - Path parameters with type parsing
-- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) - Form handling with structs
-- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) - All status code methods
-
-**Advanced patterns:**
-- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) - Complete blog application
-- [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) - Embedded methods
-- [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt) - Pointer receivers
-- [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt) - Error handling
-
-Browse all: `ls cmd/muxt/testdata/*.txt`
-
----
-
-## Troubleshooting
-
-**Generation errors:**
-- "No templates found" → `templates` variable must be package-level (not in function)
-- "Method not found" → Verify `--find-receiver-type=YourType` matches, method is exported
-- "Template name invalid" → Must follow `[METHOD ][HOST]/PATH[ STATUS][ CALL]`
-
-**Type errors:**
-- Run `muxt check --find-receiver-type=Server` for details
-- Template actions must reference fields that exist on Result type
-- Path/form parameter names must match method signature
-
-**Runtime errors:**
-- 400 Bad Request → Path parameter parse failure (e.g., "abc" → int)
-- Template execution error → Missing field on Result or unhandled `.Err`
-- Panic → Always check `.Err` before accessing `.Result` fields
-
-**Common mistakes:**
 ```go
-// Bad - use concrete types
-func (s Server) GetUser(...) (any, error)
+// Bad: any loses type safety
+func (s Server) Get(...) (any, error)
 
-// Good
-func (s Server) GetUser(...) (User, error)
+// Good: concrete types
+func (s Server) Get(...) (User, error)
 ```
 
 ```gotemplate
-{{/* Bad - will panic if error */}}
+{{/* Bad: panics if error */}}
 <h1>{{.Result.Name}}</h1>
 
-{{/* Good - check error */}}
+{{/* Good: check error */}}
 {{if .Err}}<div>{{.Err.Error}}</div>{{else}}<h1>{{.Result.Name}}</h1>{{end}}
 ```
 
----
+```go
+// Bad: templates inside function
+func main() {
+    var templates = template.Must(...)  // Won't be found
+}
 
-## Generated File Reference
-
-**File structure:**
-- `template_routes.go` - Main file with:
-  - `RoutesReceiver` interface (embeds per-file interfaces)
-  - `TemplateRoutes()` function
-  - `TemplateData[T]` type and methods
-  - `TemplateRoutePaths` type and methods (at end)
-- `*_template_routes_gen.go` - Per-source-file:
-  - File-scoped interface (e.g., `IndexRoutesReceiver`)
-  - File-scoped route function (e.g., `IndexTemplateRoutes()`)
-  - HTTP handlers for that file's templates
-
-**Finding code in generated files:**
-
-```bash
-# List generated files
-ls *_template_routes*.go
-
-# Find TemplateRoutePaths type (near end of template_routes.go)
-grep "type TemplateRoutePaths struct" template_routes.go
-
-# Find path helper methods (at end of template_routes.go)
-grep "^func (routePaths TemplateRoutePaths)" template_routes.go
-
-# Find RoutesReceiver interface (near top of template_routes.go)
-grep "type RoutesReceiver interface" template_routes.go
-
-# Find specific route handler
-grep 'mux.HandleFunc("GET /user/{id}"' *_template_routes*.go
+// Good: package-level
+var templates = template.Must(...)
 ```
-
-**Using MCP tools:**
-```
-go_search "TemplateRoutePaths"
-go_symbol_references file:"template_routes.go" symbol:"GetUser"
-```
-
-**Key sections:**
-1. `RoutesReceiver` interface - Required methods for receiver type
-2. `TemplateRoutes()` function - Route registration and handlers (bulk of file)
-3. `TemplateData[T]` type - Template context container
-4. `TemplateData` methods - `.Result()`, `.Err()`, `.Request()`, `.Path()`, etc.
-5. `TemplateRoutePaths` type - Simple struct with `pathsPrefix` field (near end)
-6. `TemplateRoutePaths` methods - Type-safe URL generators (at end)
-
-**Note:** Line numbers vary with route count. Use search patterns, not line numbers.
-
-## Summary
-
-Templates define routes → Methods implement behavior → `muxt generate` creates handlers
-
-**Workflow:**
-```bash
-# 1. Write templates: {{define "GET /user/{id} GetUser(ctx, id)"}}...{{end}}
-# 2. Implement methods: func (s Server) GetUser(ctx context.Context, id int) (User, error)
-# 3. Generate: muxt generate --find-receiver-type=Server
-# 4. Run: TemplateRoutes(mux, server)
-```
-
-**Key features:** Type-safe parsing, error handling, HTMX support, status codes, validation, domtest, zero runtime deps
-
-**Philosophy:** Templates are contracts. Methods implement behavior. Generation ensures type safety. HTML is a fine interface.
