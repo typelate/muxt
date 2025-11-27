@@ -21,7 +21,6 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
-
 -- go.mod --
 module example.com
 

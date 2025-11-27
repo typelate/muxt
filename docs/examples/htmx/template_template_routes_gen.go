@@ -10,15 +10,15 @@ import (
 	"strconv"
 )
 
-type TemplateRoutesReceiver interface {
+type templateRoutesReceiver interface {
 	Count() int64
 	Decrement() int64
 	Increment() int64
 }
 
-func TemplateTemplateRoutes(mux *http.ServeMux, receiver TemplateRoutesReceiver, pathsPrefix string) {
+func templateTemplateRoutes(mux *http.ServeMux, receiver templateRoutesReceiver, pathsPrefix string) {
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[TemplateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[templateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		if len(td.errList) == 0 {
 			td.result = receiver.Count()
 			td.okay = true
@@ -30,10 +30,6 @@ func TemplateTemplateRoutes(mux *http.ServeMux, receiver TemplateRoutesReceiver,
 			return
 		}
 		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
-		if td.redirectURL != "" {
-			http.Redirect(response, request, td.redirectURL, statusCode)
-			return
-		}
 		if contentType := response.Header().Get("content-type"); contentType == "" {
 			response.Header().Set("content-type", "text/html; charset=utf-8")
 		}
@@ -42,7 +38,7 @@ func TemplateTemplateRoutes(mux *http.ServeMux, receiver TemplateRoutesReceiver,
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("POST /count", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[TemplateRoutesReceiver, struct {
+		var td = TemplateData[templateRoutesReceiver, struct {
 		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "POST /count", &td); err != nil {
@@ -63,7 +59,7 @@ func TemplateTemplateRoutes(mux *http.ServeMux, receiver TemplateRoutesReceiver,
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("/decrement-count", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[TemplateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[templateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		if len(td.errList) == 0 {
 			td.result = receiver.Decrement()
 			td.okay = true
@@ -87,7 +83,7 @@ func TemplateTemplateRoutes(mux *http.ServeMux, receiver TemplateRoutesReceiver,
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("/increment-count", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[TemplateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[templateRoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		if len(td.errList) == 0 {
 			td.result = receiver.Increment()
 			td.okay = true
