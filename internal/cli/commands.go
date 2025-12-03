@@ -37,9 +37,9 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 		return generateCommand(wd, cmdArgs, getEnv, stdout, stderr)
 	case "version", "v":
 		return versionCommand(cmdArgs, stdout, stderr)
-	case "check", "c", "typelate":
+	case "check", "chk", "c":
 		return checkCommand(wd, cmdArgs, stderr)
-	case "documentation", "docs", "d":
+	case "documentation", "docs", "doc", "d":
 		return documentationCommand(wd, cmdArgs, stdout, stderr)
 	default:
 		return fmt.Errorf("unknown command")
