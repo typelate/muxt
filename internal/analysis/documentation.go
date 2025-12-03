@@ -13,11 +13,19 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
-	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-func Documentation(w io.Writer, wd string, config generate.RoutesFileConfiguration, _ *token.FileSet, pl []*packages.Package) error {
+type DocumentationConfiguration struct {
+	Verbose           bool
+	ReceiverPackage   string
+	PackageName       string
+	PackagePath       string
+	ReceiverType      string
+	TemplatesVariable string
+}
+
+func Documentation(config DocumentationConfiguration, w io.Writer, wd string, _ *token.FileSet, pl []*packages.Package) error {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package %q not found", config.ReceiverPackage)

@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -17,10 +16,14 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
-	"github.com/typelate/muxt/internal/generate"
 )
 
-func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package) error {
+type CheckConfiguration struct {
+	Verbose           bool
+	TemplatesVariable string
+}
+
+func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) error {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package not found at %s", wd)
@@ -55,6 +58,12 @@ func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration, 
 			}
 		}
 	}
+	unusedTemplates := findUnusedTemplates(ts, executedTemplates)
+	if len(unusedTemplates) > 0 {
+		for _, name := range unusedTemplates {
+			errs = append(errs, fmt.Errorf("unused template %q", name))
+		}
+	}
 	if len(errs) == 1 {
 		log.Printf("1 error")
 		return errs[0]
@@ -65,23 +74,8 @@ func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration, 
 		}
 		return errors.Join(errs...)
 	}
-
-	// Check for unused templates
-	unusedTemplates := findUnusedTemplates(ts, executedTemplates)
-	if len(unusedTemplates) > 0 {
-		for _, name := range unusedTemplates {
-			log.Printf("unused template: %q", name)
-		}
-		return fmt.Errorf("found %d unused template(s)", len(unusedTemplates))
-	}
-
 	if config.Verbose {
-		buf, err := json.MarshalIndent(executedTemplates, "", "\t")
-		if err != nil {
-			return err
-		}
-		log.Println(string(buf))
-		log.Println(`{"result": "OK"}`)
+		log.Println(`OK`)
 	}
 	return nil
 }
