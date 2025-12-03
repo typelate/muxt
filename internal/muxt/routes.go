@@ -92,10 +92,10 @@ func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
 // Returns a map where keys are source filenames and values are template slices.
 // Templates with empty sourceFile (Parse-based) are grouped under "".
-func groupTemplatesBySourceFile(templates []Template) map[string][]Template {
-	groups := make(map[string][]Template)
-	for _, t := range templates {
-		groups[t.sourceFile] = append(groups[t.sourceFile], t)
+func groupTemplatesBySourceFile(defs []Definition) map[string][]Definition {
+	groups := make(map[string][]Definition)
+	for _, d := range defs {
+		groups[d.sourceFile] = append(groups[d.sourceFile], d)
 	}
 	return groups
 }
@@ -141,26 +141,26 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	if err != nil {
 		return nil, err
 	}
-	templates, err := Templates(ts)
+	templates, err := Definitions(ts)
 	if err != nil {
 		return nil, err
 	}
 
 	// Group templates by source file
-	templateGroups := groupTemplatesBySourceFile(templates)
-	parseBasedTemplates := templateGroups[""]
-	delete(templateGroups, "") // Remove parse-based templates from groups
+	definitionGroups := groupTemplatesBySourceFile(templates)
+	parseBasedDefinitions := definitionGroups[""]
+	delete(definitionGroups, "") // Remove parse-based templates from groups
 
 	// Separate valid file paths from non-file-path source names
 	// Non-file-path sources (containing spaces, slashes, etc.) should be treated like Parse-based templates
 	var sourceFiles []string
-	for sourceFile := range templateGroups {
+	for sourceFile := range definitionGroups {
 		// Check if sourceFile is a valid file path (no spaces, path separators in basename)
 		baseName := filepath.Base(sourceFile)
 		if strings.ContainsAny(baseName, " /\\()") {
-			// Not a valid file path - move templates to parseBasedTemplates
-			parseBasedTemplates = append(parseBasedTemplates, templateGroups[sourceFile]...)
-			delete(templateGroups, sourceFile)
+			// Not a valid file path - move definitions to parseBasedDefinitions
+			parseBasedDefinitions = append(parseBasedDefinitions, definitionGroups[sourceFile]...)
+			delete(definitionGroups, sourceFile)
 		} else {
 			sourceFiles = append(sourceFiles, sourceFile)
 		}
@@ -170,12 +170,12 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	// Generate per-file route files
 	var generatedFiles []GeneratedFile
 	for _, sourceFile := range sourceFiles {
-		fileTemplates := templateGroups[sourceFile]
+		definitions := definitionGroups[sourceFile]
 		if config.Verbose {
-			logger.Printf("generating routes for %s (%d templates)", sourceFile, len(fileTemplates))
+			logger.Printf("generating routes for %s (%d templates)", sourceFile, len(definitions))
 		}
 
-		perFileAST, err := generatePerFileAST(sourceFile, fileTemplates, file, logger, config, receiver, routesPkg)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, file, logger, config, receiver, routesPkg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
@@ -271,8 +271,8 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	// Generate handlers for parse-based templates (empty sourceFile)
 	sigs := make(map[string]*types.Signature)
-	for i := range parseBasedTemplates {
-		t := &parseBasedTemplates[i]
+	for i := range parseBasedDefinitions {
+		t := &parseBasedDefinitions[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s", t.pattern)
@@ -386,7 +386,7 @@ func resolveReceiver(config RoutesFileConfiguration, file *File, routesPkg *pack
 // For example, for "index.gohtml", it generates IndexTemplateRoutes(mux, receiver, ...).
 func generatePerFileRouteFunction(
 	sourceFile string,
-	templates []Template,
+	defs []Definition,
 	file *File,
 	logger *log.Logger,
 	config RoutesFileConfiguration,
@@ -434,8 +434,8 @@ func generatePerFileRouteFunction(
 
 	// Generate handlers for each template
 	sigs := make(map[string]*types.Signature)
-	for i := range templates {
-		t := &templates[i]
+	for i := range defs {
+		t := &defs[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s in %s", t.pattern, sourceFile)
@@ -461,7 +461,7 @@ func generatePerFileRouteFunction(
 // Returns an *ast.File ready to be formatted and written.
 func generatePerFileAST(
 	sourceFile string,
-	templates []Template,
+	defs []Definition,
 	file *File,
 	logger *log.Logger,
 	config RoutesFileConfiguration,
@@ -487,7 +487,7 @@ func generatePerFileAST(
 	// Generate the route function
 	routesFunc, err := generatePerFileRouteFunction(
 		sourceFile,
-		templates,
+		defs,
 		file,
 		logger,
 		config,
@@ -533,7 +533,7 @@ func generatePerFileAST(
 	return outputFile, nil
 }
 
-func noReceiverMethodCall(file *File, t *Template, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
+func noReceiverMethodCall(file *File, def *Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
@@ -570,10 +570,10 @@ func noReceiverMethodCall(file *File, t *Template, config RoutesFileConfiguratio
 	}
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", t.pattern))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.pattern))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, t.pattern)
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.pattern)
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -581,44 +581,44 @@ func noReceiverMethodCall(file *File, t *Template, config RoutesFileConfiguratio
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
-	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, types.NewStruct(nil, nil), t.defaultStatusCode, statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
+	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, types.NewStruct(nil, nil), def.defaultStatusCode, statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
 		panic("when no receiver method is called, then the result variable should not be needed")
 	})...)
 	return handlerFunc
 }
 
-func methodHandlerFunc(file *File, config RoutesFileConfiguration, t *Template, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
+func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	if err := ensureMethodSignature(file, sigs, t, receiver, receiverInterface, t.call, outputPkg); err != nil {
+	if err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.call, outputPkg); err != nil {
 		return nil, err
 	}
-	sig, ok := sigs[t.fun.Name]
+	sig, ok := sigs[def.fun.Name]
 	if !ok {
-		return nil, fmt.Errorf("failed to determine call signature %s", t.fun.Name)
+		return nil, fmt.Errorf("failed to determine call signature %s", def.fun.Name)
 	}
 	if sig.Results().Len() == 0 {
-		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", t.name)
+		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.name)
 	}
 	var callFun ast.Expr
-	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), t.fun.Name)
+	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.fun.Name)
 	isMethodCall := obj != nil
 	if isMethodCall {
 		callFun = &ast.SelectorExpr{
 			X:   ast.NewIdent(receiverIdent),
-			Sel: t.fun,
+			Sel: def.fun,
 		}
 	} else {
-		callFun = ast.NewIdent(t.fun.Name)
+		callFun = ast.NewIdent(def.fun.Name)
 	}
 
 	resultType := sig.Results().At(0).Type()
@@ -652,7 +652,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, t *Template, 
 		},
 	}
 
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, t, file, resultType, sigs, nil, receiver, resultDataIdent, config, t.call, func(s string) *ast.BlockStmt {
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sigs, nil, receiver, resultDataIdent, config, def.call, func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
@@ -665,7 +665,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, t *Template, 
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
 	}, sig, &ast.CallExpr{
 		Fun:  callFun,
-		Args: slices.Clone(t.call.Args),
+		Args: slices.Clone(def.call.Args),
 	})
 	if err != nil {
 		return nil, err
@@ -691,10 +691,10 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, t *Template, 
 	})
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", t.pattern))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.pattern))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, t.pattern)
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.pattern)
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -702,14 +702,14 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, t *Template, 
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(t.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
-	if !t.hasResponseWriterArg {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, t, resultType, t.defaultStatusCode, statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+	if !def.hasResponseWriterArg {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.defaultStatusCode, statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
 			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
 		})...)
 	} else {
@@ -786,7 +786,7 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -811,7 +811,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *Fil
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
-			parseArgStatements, err := appendParseArgumentStatements(statements, t, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock)
+			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -853,7 +853,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *Fil
 
 			statements = append(parseArgStatements, callMethodStatements...)
 		case *ast.Ident:
-			argType, ok := defaultTemplateNameScope(file, t, arg.Name)
+			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("failed to determine type for %s", arg.Name)
 			}
@@ -877,7 +877,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *Fil
 					case TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(TemplateNameScopeIdentifierContext))
 					default:
-						if slices.Contains(t.parsePathValueNames(), arg.Name) {
+						if slices.Contains(def.parsePathValueNames(), arg.Name) {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 						}
 					}
@@ -888,16 +888,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *Fil
 				continue
 			}
 			switch {
-			case slices.Contains(t.parsePathValueNames(), arg.Name):
+			case slices.Contains(def.parsePathValueNames(), arg.Name):
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, t, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
-				t.pathValueTypes[arg.Name] = param.Type()
+				def.pathValueTypes[arg.Name] = param.Type()
 			case arg.Name == TemplateNameScopeIdentifierForm:
-				s, err := appendParseFormToStructStatements(statements, t, file, resultType, arg, param, validationFailureBlock, rdIdent)
+				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, param, validationFailureBlock, rdIdent)
 				if err != nil {
 					return nil, err
 				}
@@ -912,7 +912,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, t *Template, file *Fil
 	return statements, nil
 }
 
-func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
+func appendParseFormToStructStatements(statements []ast.Stmt, def *Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
 	statements = append(statements, callParseForm())
 
@@ -935,7 +935,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file 
 		}
 		var fieldTemplate *template.Template
 		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
-			fieldTemplate = t.template.Lookup(name)
+			fieldTemplate = def.template.Lookup(name)
 		}
 		var templateNodes []*html.Node
 		if fieldTemplate != nil {
@@ -965,7 +965,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file 
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
 			}
@@ -990,7 +990,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, t *Template, file 
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, t, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
 			}
@@ -1056,7 +1056,7 @@ func httpServeMuxField(file *File) *ast.Field {
 	}
 }
 
-func generateParseValueFromStringStatements(file *File, t *Template, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
+func generateParseValueFromStringStatements(file *File, _ *Definition, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
 	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
 	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
 	switch tp := valueType.(type) {
@@ -1248,7 +1248,7 @@ func (AssertionFailureReporter) Errorf(format string, args ...interface{}) {
 	log.Fatalf(format, args...)
 }
 
-func defaultTemplateNameScope(file *File, template *Template, argumentIdentifier string) (types.Type, bool) {
+func defaultTemplateNameScope(file *File, def *Definition, argumentIdentifier string) (types.Type, bool) {
 	switch argumentIdentifier {
 	case TemplateNameScopeIdentifierHTTPRequest:
 		pkg, ok := file.Types("net/http")
@@ -1279,7 +1279,7 @@ func defaultTemplateNameScope(file *File, template *Template, argumentIdentifier
 		t := pkg.Scope().Lookup("Values").Type()
 		return t, true
 	default:
-		if slices.Contains(template.parsePathValueNames(), argumentIdentifier) {
+		if slices.Contains(def.parsePathValueNames(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
@@ -1301,7 +1301,7 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	return obj, true
 }
 
-func ensureMethodSignature(file *File, signatures map[string]*types.Signature, t *Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
+func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def *Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		isMethod := true
@@ -1311,7 +1311,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, t
 				mo = m
 				isMethod = false
 			} else {
-				ms, err := createMethodSignature(file, signatures, t, receiver, receiverInterface, call, templatesPackage)
+				ms, err := createMethodSignature(file, signatures, def, receiver, receiverInterface, call, templatesPackage)
 				if err != nil {
 					return err
 				}
@@ -1323,7 +1323,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, t
 			for _, a := range call.Args {
 				switch arg := a.(type) {
 				case *ast.CallExpr:
-					if err := ensureMethodSignature(file, signatures, t, receiver, receiverInterface, arg, templatesPackage); err != nil {
+					if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 						return err
 					}
 				}
@@ -1350,18 +1350,18 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, t
 	}
 }
 
-func createMethodSignature(file *File, signatures map[string]*types.Signature, t *Template, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
+func createMethodSignature(file *File, signatures map[string]*types.Signature, def *Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
 	for _, a := range call.Args {
 		switch arg := a.(type) {
 		case *ast.Ident:
-			tp, ok := defaultTemplateNameScope(file, t, arg.Name)
+			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("could not determine a type for %s", arg.Name)
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
-			if err := ensureMethodSignature(file, signatures, t, receiver, receiverInterface, arg, templatesPackage); err != nil {
+			if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
 		}
@@ -1405,7 +1405,7 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 
 var statusCoder = statusCoderInterface()
 
-func writeStatusAndHeaders(file *File, t *Template, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
+func writeStatusAndHeaders(file *File, def *Definition, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
 	statusCodePriorityList := []ast.Expr{
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
@@ -1425,7 +1425,7 @@ func writeStatusAndHeaders(file *File, t *Template, resultType types.Type, fallb
 	}
 
 	// Only add redirect block if the template can call Redirect
-	if t.canRedirect {
+	if def.canRedirect {
 		list = append(list, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
 				X: &ast.SelectorExpr{

@@ -9,12 +9,12 @@ import (
 	"github.com/ettle/strcase"
 )
 
-func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string {
+func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) string {
 	if sb == nil {
 		sb = new(strings.Builder)
 	}
 	sb.Reset()
-	switch t.method {
+	switch def.method {
 	case http.MethodPost:
 		sb.WriteString("Create")
 	case http.MethodGet:
@@ -26,17 +26,17 @@ func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string 
 	case http.MethodDelete:
 		sb.WriteString("Delete")
 	default:
-		sb.WriteString(strcase.ToGoPascal(t.method))
+		sb.WriteString(strcase.ToGoPascal(def.method))
 	}
 	var pathParams []string
-	if t.path == "/" {
-		if t.host != "" {
-			sb.WriteString(strcase.ToGoPascal(t.host))
+	if def.path == "/" {
+		if def.host != "" {
+			sb.WriteString(strcase.ToGoPascal(def.host))
 		}
 		sb.WriteString("Index")
 	} else {
-		pathSegments := []string{t.host}
-		pathSegments = append(pathSegments, strings.Split(t.path, "/")...)
+		pathSegments := []string{def.host}
+		pathSegments = append(pathSegments, strings.Split(def.path, "/")...)
 		for _, pathSegment := range pathSegments {
 			isPathParam := false
 			if len(pathSegment) > 2 && pathSegment[0] == '{' && pathSegment[len(pathSegment)-1] == '}' {
@@ -71,7 +71,7 @@ func (t Template) generateEndpointPatternIdentifier(sb *strings.Builder) string 
 	return sb.String()
 }
 
-func calculateIdentifiers(in []Template) {
+func calculateIdentifiers(in []Definition) {
 	var (
 		sb     strings.Builder
 		idents = make([]string, 0, len(in))
