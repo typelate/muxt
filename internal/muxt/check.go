@@ -8,7 +8,6 @@ import (
 	"go/types"
 	"html/template"
 	"log"
-	"path/filepath"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -49,11 +48,10 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 		return err
 	}
 
-	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
-	if err != nil {
-		return err
+	routesPkg, ok := packageAtFilepath(pl, wd)
+	if !ok {
+		return fmt.Errorf("package not found at %s", wd)
 	}
-	routesPkg := file.OutputPackage()
 
 	ts, fm, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
 	if err != nil {
