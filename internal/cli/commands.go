@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	_ "embed"
 	"fmt"
 	"go/token"
@@ -49,6 +50,7 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 	if err != nil {
 		return err
 	}
+	applyDefaults(&config)
 	if err := analysis.Check(workingDirectory, log.New(stderr, "", 0), config); err != nil {
 		return fmt.Errorf("fail: %s", err)
 	}
@@ -67,6 +69,7 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if v, ok := cliVersion(); ok {
 		config.MuxtVersion = v
 	}
+	applyDefaults(&config)
 	files, err := generate.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
 	if err != nil {
 		return err
@@ -110,6 +113,7 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
+	applyDefaults(&config)
 	return analysis.Documentation(stdout, wd, config)
 }
 
@@ -216,6 +220,25 @@ This function also receives an argument with a type matching the name given by o
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
+const (
+	defaultTemplatesVariableName      = "templates"
+	defaultRoutesFunctionName         = "TemplateRoutes"
+	defaultOutputFileName             = "template_routes.go"
+	defaultReceiverInterfaceName      = "RoutesReceiver"
+	defaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
+	defaultTemplateDataTypeName       = "TemplateData"
+	defaultPackageName                = "main"
+)
+
+func applyDefaults(config *generate.RoutesFileConfiguration) {
+	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
+	config.TemplatesVariable = cmp.Or(config.TemplatesVariable, defaultTemplatesVariableName)
+	config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
+	config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
+	config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
+	config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+}
+
 func newRoutesFileConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
 	var g generate.RoutesFileConfiguration
 	flagSet := routesFileConfigurationFlagSet(&g)
@@ -281,17 +304,17 @@ func newDocumentationConfiguration(args []string, stderr io.Writer) (generate.Ro
 
 // Helper functions for flag groups
 func addUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, generate.DefaultTemplatesVariableName, useTemplatesVariableHelp)
+	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, defaultTemplatesVariableName, useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, useReceiverType, "", useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, useReceiverTypePackage, "", useReceiverTypePackageHelp)
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.OutputFileName, outputFile, generate.DefaultOutputFileName, outputFileHelp)
-	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, generate.DefaultReceiverInterfaceName, outputReceiverInterfaceHelp)
-	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, generate.DefaultRoutesFunctionName, outputRoutesFuncHelp)
-	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, generate.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, generate.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
+	flagSet.StringVar(&g.OutputFileName, outputFile, defaultOutputFileName, outputFileHelp)
+	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, defaultReceiverInterfaceName, outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, defaultRoutesFunctionName, outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 }
@@ -301,10 +324,10 @@ func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 }
 
 func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, generate.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
+	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
-	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, generate.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
+	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedFindReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedFindReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 
@@ -317,10 +340,10 @@ func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFi
 }
 
 func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, generate.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
-	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, generate.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
-	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, generate.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, generate.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
+	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, defaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, defaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, defaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
 

@@ -21,7 +21,6 @@ import (
 )
 
 func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration) error {
-	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
