@@ -1,0 +1,98 @@
+# Test that switching from multiple files to single file cleans up old files
+
+# First generate with multiple files
+muxt generate --output-multiple-files
+
+exists index_template_routes_gen.go
+exists about_template_routes_gen.go
+exists template_routes.go
+
+# Switch to single file mode
+muxt generate
+
+# Per-file generated files should be deleted
+! exists index_template_routes_gen.go
+! exists about_template_routes_gen.go
+exists template_routes.go
+
+# Single file should contain all routes
+grep 'GET /' template_routes.go
+grep 'GET /about' template_routes.go
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET / Home(ctx)"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Index</h1>
+</body>
+</html>
+{{end}}
+-- about.gohtml --
+{{define "GET /about AboutUs(ctx)"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>About</h1>
+</body>
+</html>
+{{end}}
+-- main.go --
+package main
+
+import "context"
+
+func main() {}
+
+type Server struct{}
+
+func (s *Server) Home(ctx context.Context) any {
+	return nil
+}
+
+func (s *Server) AboutUs(ctx context.Context) any {
+	return nil
+}
+-- main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	s := new(Server)
+	TemplateRoutes(mux, s)
+
+	tests := []string{"/", "/about"}
+	for _, path := range tests {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", path, nil)
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("path %s: expected 200, got %d", path, rec.Code)
+		}
+	}
+}

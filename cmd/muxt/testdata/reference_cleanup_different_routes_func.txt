@@ -1,0 +1,52 @@
+# Test that the main output file respects different routes functions
+
+# Generate with default routes function
+muxt generate --output-multiple-files
+
+exists index_template_routes_gen.go
+exists template_routes.go
+grep 'func TemplateRoutes' template_routes.go
+
+# Regenerate with same routes function - should update files, not create new ones
+muxt generate --output-multiple-files
+
+exists index_template_routes_gen.go
+exists template_routes.go
+exists template.go
+exists main.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET / Home()"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Index</h1>
+</body>
+</html>
+{{end}}
+-- main.go --
+package main
+
+func main() {}
+
+type Server struct{}
+
+func (s *Server) Home() any {
+	return nil
+}
