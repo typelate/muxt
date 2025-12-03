@@ -1,4 +1,4 @@
-package muxt
+package generate
 
 import (
 	"crypto/sha1"
@@ -11,9 +11,10 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
-func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []Definition) ([]ast.Decl, error) {
+func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
 	decls := []ast.Decl{
 		&ast.GenDecl{
 			Tok: token.TYPE,
@@ -36,7 +37,7 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 	return decls, nil
 }
 
-func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) (*ast.FuncDecl, error) {
+func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (*ast.FuncDecl, error) {
 	const methodReceiverName = "routePaths"
 	encodingPkg, ok := file.Types("encoding")
 	if !ok {
@@ -49,7 +50,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 	textMarshalerInterface := textMarshalerUnderlying.(*types.Interface)
 
 	method := &ast.FuncDecl{
-		Name: ast.NewIdent(def.identifier),
+		Name: ast.NewIdent(def.Identifier()),
 		Recv: &ast.FieldList{
 			List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent(methodReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
@@ -64,7 +65,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 		},
 	}
 
-	if def.path == "/" || def.path == "/{$}" {
+	if def.Path() == "/" || def.Path() == "/{$}" {
 		if config.PathPrefix {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
 				astgen.Call(file, "path", "path", "Join",
@@ -83,7 +84,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 		return method, nil
 	}
 
-	templatePath, hasDollarSuffix := strings.CutSuffix(def.path, "{$}")
+	templatePath, hasDollarSuffix := strings.CutSuffix(def.Path(), "{$}")
 	segmentStrings := strings.Split(templatePath, "/")
 	var (
 		fields []*ast.Field
@@ -91,7 +92,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 
 		identIndex = 0
 
-		segmentIdentifiers = def.parsePathValueNames()
+		segmentIdentifiers = def.PathValueIdentifiers()
 	)
 
 	hasErrorResult := false
@@ -125,7 +126,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 		}
 
 		ident := segmentIdentifiers[identIndex]
-		pathValueType, ok := def.pathValueTypes[ident]
+		pathValueType, ok := def.ArgumentType(ident)
 		identIndex++
 		if !ok {
 			pathValueType = types.Universe.Lookup("string").Type()
@@ -145,7 +146,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 		}
 
 		summer := sha1.New()
-		summer.Write([]byte(def.name))
+		summer.Write([]byte(def.Name()))
 		pathHash := hex.EncodeToString(summer.Sum(nil))
 
 		if types.Implements(pathValueType, textMarshalerInterface) {
@@ -176,7 +177,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *Definition) 
 							Results: []ast.Expr{
 								&ast.BasicLit{Kind: token.STRING, Value: `""`},
 								astgen.Call(file, "fmt", "fmt", "Errorf",
-									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, def.path)),
+									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, def.Path())),
 									ast.NewIdent("err"),
 								),
 							},

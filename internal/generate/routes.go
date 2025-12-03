@@ -1,4 +1,4 @@
-package muxt
+package generate
 
 import (
 	"cmp"
@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/template/parse"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/typelate/dom"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 const (
@@ -79,7 +79,7 @@ type RoutesFileConfiguration struct {
 	Verbose        bool
 }
 
-func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
+func (config RoutesFileConfiguration) ApplyDefaults() RoutesFileConfiguration {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 	config.TemplatesVariable = cmp.Or(config.TemplatesVariable, DefaultTemplatesVariableName)
 	config.RoutesFunction = cmp.Or(config.RoutesFunction, DefaultRoutesFunctionName)
@@ -92,16 +92,17 @@ func (config RoutesFileConfiguration) applyDefaults() RoutesFileConfiguration {
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
 // Returns a map where keys are source filenames and values are template slices.
 // Templates with empty sourceFile (Parse-based) are grouped under "".
-func groupTemplatesBySourceFile(defs []Definition) map[string][]Definition {
-	groups := make(map[string][]Definition)
+func groupTemplatesBySourceFile(defs []muxt.Definition) map[string][]muxt.Definition {
+	groups := make(map[string][]muxt.Definition)
 	for _, d := range defs {
-		groups[d.sourceFile] = append(groups[d.sourceFile], d)
+		key := d.SourceFile()
+		groups[key] = append(groups[key], d)
 	}
 	return groups
 }
 
 func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) ([]GeneratedFile, error) {
-	config = config.applyDefaults()
+	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
@@ -141,7 +142,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	if err != nil {
 		return nil, err
 	}
-	templates, err := Definitions(ts)
+	templates, err := muxt.Definitions(ts)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +159,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 		// Check if sourceFile is a valid file path (no spaces, path separators in basename)
 		baseName := filepath.Base(sourceFile)
 		if strings.ContainsAny(baseName, " /\\()") {
-			// Not a valid file path - move definitions to parseBasedDefinitions
+			// Not a valid file path - move definitions to parseBasedmuxt.Definitions
 			parseBasedDefinitions = append(parseBasedDefinitions, definitionGroups[sourceFile]...)
 			delete(definitionGroups, sourceFile)
 		} else {
@@ -203,7 +204,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	// Embed all file-scoped receiver interfaces
 	for _, sourceFile := range sourceFiles {
-		fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
+		fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
 		receiverInterfaceName := fileIdentifier + "RoutesReceiver"
 		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
 			Type: ast.NewIdent(receiverInterfaceName),
@@ -251,7 +252,7 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 
 	// Call per-file route functions
 	for _, sourceFile := range sourceFiles {
-		fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
+		fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
 		funcName := fileIdentifier + config.RoutesFunction
 
 		callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
@@ -272,22 +273,22 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	// Generate handlers for parse-based templates (empty sourceFile)
 	sigs := make(map[string]*types.Signature)
 	for i := range parseBasedDefinitions {
-		t := &parseBasedDefinitions[i]
+		def := parseBasedDefinitions[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s", t.pattern)
+			logger.Printf("generating handler for pattern %s", def.Pattern())
 		}
-		if t.fun == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config, config.ReceiverInterface)
-			call := t.callHandleFunc(file, handlerFunc, config)
+		if def.FunctionIdentifier() == nil {
+			handlerFunc := noReceiverMethodCall(file, def, config, config.ReceiverInterface)
+			call := callHandleFunc(file, def, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
+		handlerFunc, err := methodHandlerFunc(file, config, def, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
 		if err != nil {
 			return nil, err
 		}
-		call := t.callHandleFunc(file, handlerFunc, config)
+		call := callHandleFunc(file, def, handlerFunc, config)
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
 	}
 
@@ -359,6 +360,25 @@ func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfigur
 	return generatedFiles, nil
 }
 
+func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
+	pattern := ast.Expr(astgen.String(def.Pattern()))
+	if config.PathPrefix {
+		i := strings.Index(def.Pattern(), "/")
+		pattern = &ast.BinaryExpr{
+			X:  astgen.String(def.Pattern()[:i]),
+			Op: token.ADD,
+			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.Pattern()[i:])),
+		}
+	}
+	return &ast.ExprStmt{X: &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(muxVarIdent),
+			Sel: ast.NewIdent(httpHandleFuncIdent),
+		},
+		Args: []ast.Expr{pattern, handlerFuncLit},
+	}}
+}
+
 func resolveReceiver(config RoutesFileConfiguration, file *File, routesPkg *packages.Package) (*types.Named, error) {
 	if config.ReceiverType == "" {
 		receiver := types.NewNamed(types.NewTypeName(0, routesPkg.Types, "Receiver", nil), types.NewStruct(nil, nil), nil)
@@ -386,7 +406,7 @@ func resolveReceiver(config RoutesFileConfiguration, file *File, routesPkg *pack
 // For example, for "index.gohtml", it generates IndexTemplateRoutes(mux, receiver, ...).
 func generatePerFileRouteFunction(
 	sourceFile string,
-	defs []Definition,
+	defs []muxt.Definition,
 	file *File,
 	logger *log.Logger,
 	config RoutesFileConfiguration,
@@ -398,7 +418,7 @@ func generatePerFileRouteFunction(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
+	fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}
@@ -435,14 +455,14 @@ func generatePerFileRouteFunction(
 	// Generate handlers for each template
 	sigs := make(map[string]*types.Signature)
 	for i := range defs {
-		t := &defs[i]
+		t := defs[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s in %s", t.pattern, sourceFile)
+			logger.Printf("generating handler for pattern %s in %s", t.Pattern(), sourceFile)
 		}
-		if t.fun == nil {
+		if t.FunctionIdentifier() == nil {
 			handlerFunc := noReceiverMethodCall(file, t, config, receiverInterfaceName)
-			call := t.callHandleFunc(file, handlerFunc, config)
+			call := callHandleFunc(file, t, handlerFunc, config)
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
@@ -450,7 +470,7 @@ func generatePerFileRouteFunction(
 		if err != nil {
 			return nil, err
 		}
-		call := t.callHandleFunc(file, handlerFunc, config)
+		call := callHandleFunc(file, t, handlerFunc, config)
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
 	}
 
@@ -461,7 +481,7 @@ func generatePerFileRouteFunction(
 // Returns an *ast.File ready to be formatted and written.
 func generatePerFileAST(
 	sourceFile string,
-	defs []Definition,
+	defs []muxt.Definition,
 	file *File,
 	logger *log.Logger,
 	config RoutesFileConfiguration,
@@ -472,7 +492,7 @@ func generatePerFileAST(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := fileNameToPrivateIdentifier(sourceFile)
+	fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}
@@ -533,14 +553,14 @@ func generatePerFileAST(
 	return outputFile, nil
 }
 
-func noReceiverMethodCall(file *File, def *Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
+func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
 		templateDataVarIdent = "td"
 	)
 	handlerFunc := &ast.FuncLit{
-		Type: astgen.HTTPHandlerFuncType(file, TemplateNameScopeIdentifierHTTPResponse, TemplateNameScopeIdentifierHTTPRequest),
+		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
 				&ast.DeclStmt{
@@ -553,8 +573,8 @@ func noReceiverMethodCall(file *File, def *Definition, config RoutesFileConfigur
 								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), astgen.EmptyStructType()},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
 							}}},
 						}},
@@ -570,10 +590,10 @@ func noReceiverMethodCall(file *File, def *Definition, config RoutesFileConfigur
 	}
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.pattern))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.pattern)
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -581,44 +601,44 @@ func noReceiverMethodCall(file *File, def *Definition, config RoutesFileConfigur
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
-	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, types.NewStruct(nil, nil), def.defaultStatusCode, statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
+	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, types.NewStruct(nil, nil), def.DefaultStatusCode(), statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
 		panic("when no receiver method is called, then the result variable should not be needed")
 	})...)
 	return handlerFunc
 }
 
-func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
+func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	if err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.call, outputPkg); err != nil {
+	if err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg); err != nil {
 		return nil, err
 	}
-	sig, ok := sigs[def.fun.Name]
+	sig, ok := sigs[def.FunctionIdentifier().Name]
 	if !ok {
-		return nil, fmt.Errorf("failed to determine call signature %s", def.fun.Name)
+		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
 	}
 	if sig.Results().Len() == 0 {
-		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.name)
+		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
 	}
 	var callFun ast.Expr
-	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.fun.Name)
+	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name)
 	isMethodCall := obj != nil
 	if isMethodCall {
 		callFun = &ast.SelectorExpr{
 			X:   ast.NewIdent(receiverIdent),
-			Sel: def.fun,
+			Sel: ast.NewIdent(def.FunctionIdentifier().Name),
 		}
 	} else {
-		callFun = ast.NewIdent(def.fun.Name)
+		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
 	}
 
 	resultType := sig.Results().At(0).Type()
@@ -628,7 +648,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 	}
 
 	handlerFunc := &ast.FuncLit{
-		Type: astgen.HTTPHandlerFuncType(file, TemplateNameScopeIdentifierHTTPResponse, TemplateNameScopeIdentifierHTTPRequest),
+		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
 				&ast.DeclStmt{
@@ -641,8 +661,8 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), typeExpr},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
-								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Value: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse)},
+								&ast.KeyValueExpr{Key: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Value: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)},
 								&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
 							}}},
 						}},
@@ -652,7 +672,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 		},
 	}
 
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sigs, nil, receiver, resultDataIdent, config, def.call, func(s string) *ast.BlockStmt {
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sigs, nil, receiver, resultDataIdent, config, def.CallExpression(), func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
@@ -665,7 +685,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
 	}, sig, &ast.CallExpr{
 		Fun:  callFun,
-		Args: slices.Clone(def.call.Args),
+		Args: slices.Clone(def.CallExpression().Args),
 	})
 	if err != nil {
 		return nil, err
@@ -691,10 +711,10 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 	})
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.pattern))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.pattern)
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -702,14 +722,14 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def *Definiti
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.name)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
 		}},
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 
-	if !def.hasResponseWriterArg {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.defaultStatusCode, statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+	if !def.HasResponseWriterArg() {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
 			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
 		})...)
 	} else {
@@ -735,7 +755,7 @@ func writeBodyAndWriteHeadersFunc(file *File, bufIdent, statusCodeIdent string) 
 	return []ast.Stmt{
 		setContentTypeHeaderSetOnTemplateData(),
 		&ast.ExprStmt{X: &ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
+			Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
 			Args: []ast.Expr{astgen.String("content-length"), astgen.StrconvItoaCall(file, &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Len")}, Args: []ast.Expr{}})},
 		}},
 		callWriteHeader(ast.NewIdent(statusCodeIdent)),
@@ -745,7 +765,7 @@ func writeBodyAndWriteHeadersFunc(file *File, bufIdent, statusCodeIdent string) 
 
 func callWriteHeader(statusCode ast.Expr) *ast.ExprStmt {
 	return &ast.ExprStmt{X: &ast.CallExpr{
-		Fun:  &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("WriteHeader")},
+		Fun:  &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("WriteHeader")},
 		Args: []ast.Expr{statusCode},
 	}}
 }
@@ -765,7 +785,7 @@ func checkExecuteTemplateError(file *File, withLogger bool, pattern string) *ast
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{
 			List: append(logStmts,
-				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), astgen.String(executeTemplateErrorMessage), http.StatusInternalServerError)},
+				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), astgen.String(executeTemplateErrorMessage), http.StatusInternalServerError)},
 				&ast.ReturnStmt{},
 			),
 		},
@@ -781,12 +801,12 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 				X:   ast.NewIdent(bufferIdent),
 				Sel: ast.NewIdent("WriteTo"),
 			},
-			Args: []ast.Expr{ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)},
+			Args: []ast.Expr{ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse)},
 		}},
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -859,7 +879,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file 
 			}
 			src := &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
-					X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 					Sel: ast.NewIdent(requestPathValue),
 				},
 				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
@@ -868,16 +888,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file 
 				if _, ok := parsed[arg.Name]; !ok {
 					parsed[arg.Name] = struct{}{}
 					switch arg.Name {
-					case TemplateNameScopeIdentifierForm:
+					case muxt.TemplateNameScopeIdentifierForm:
 						declareFormVar, err := formVariableAssignment(file, arg, param.Type())
 						if err != nil {
 							return nil, err
 						}
 						statements = append(statements, callParseForm(), declareFormVar)
-					case TemplateNameScopeIdentifierContext:
-						statements = append(statements, contextAssignment(TemplateNameScopeIdentifierContext))
+					case muxt.TemplateNameScopeIdentifierContext:
+						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
 					default:
-						if slices.Contains(def.parsePathValueNames(), arg.Name) {
+						if slices.Contains(def.PathValueIdentifiers(), arg.Name) {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 						}
 					}
@@ -888,15 +908,15 @@ func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file 
 				continue
 			}
 			switch {
-			case slices.Contains(def.parsePathValueNames(), arg.Name):
+			case slices.Contains(def.PathValueIdentifiers(), arg.Name):
 				parsed[arg.Name] = struct{}{}
 				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
-				def.pathValueTypes[arg.Name] = param.Type()
-			case arg.Name == TemplateNameScopeIdentifierForm:
+				def.SetArgumentType(arg.Name, param.Type())
+			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
 				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, param, validationFailureBlock, rdIdent)
 				if err != nil {
 					return nil, err
@@ -912,7 +932,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def *Definition, file 
 	return statements, nil
 }
 
-func appendParseFormToStructStatements(statements []ast.Stmt, def *Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
+func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
 	statements = append(statements, callParseForm())
 
@@ -935,7 +955,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def *Definition, f
 		}
 		var fieldTemplate *template.Template
 		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
-			fieldTemplate = def.template.Lookup(name)
+			fieldTemplate = def.Template().Lookup(name)
 		}
 		var templateNodes []*html.Node
 		if fieldTemplate != nil {
@@ -954,14 +974,14 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def *Definition, f
 		case *types.Slice:
 			parseResult = func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
 					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}, expr)},
+					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}, expr)},
 				}
 			}
 			str = ast.NewIdent("val")
 			elemType = ft.Elem()
-			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
+			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
 			if ok && err != nil {
 				return nil, err
 			}
@@ -973,20 +993,20 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def *Definition, f
 				Key:   ast.NewIdent("_"),
 				Value: ast.NewIdent("val"),
 				Tok:   token.DEFINE,
-				X:     &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Form")}, Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}},
+				X:     &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Form")}, Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}},
 				Body:  &ast.BlockStmt{List: parseStatements},
 			})
 		default:
 			parseResult = func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
 					Tok: token.ASSIGN,
 					Rhs: []ast.Expr{expr},
 				}
 			}
-			str = &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}}}
+			str = &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}}}
 			elemType = field.Type()
-			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
+			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
 			if ok && err != nil {
 				return nil, err
 			}
@@ -1039,7 +1059,7 @@ func formVariableAssignment(file *File, arg *ast.Ident, tp types.Type) (*ast.Dec
 					Type:  typeExp,
 					Values: []ast.Expr{
 						&ast.SelectorExpr{
-							X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 							Sel: ast.NewIdent("Form"),
 						},
 					},
@@ -1056,7 +1076,7 @@ func httpServeMuxField(file *File) *ast.Field {
 	}
 }
 
-func generateParseValueFromStringStatements(file *File, _ *Definition, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
+func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
 	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
 	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
 	switch tp := valueType.(type) {
@@ -1248,30 +1268,30 @@ func (AssertionFailureReporter) Errorf(format string, args ...interface{}) {
 	log.Fatalf(format, args...)
 }
 
-func defaultTemplateNameScope(file *File, def *Definition, argumentIdentifier string) (types.Type, bool) {
+func defaultTemplateNameScope(file *File, def muxt.Definition, argumentIdentifier string) (types.Type, bool) {
 	switch argumentIdentifier {
-	case TemplateNameScopeIdentifierHTTPRequest:
+	case muxt.TemplateNameScopeIdentifierHTTPRequest:
 		pkg, ok := file.Types("net/http")
 		if !ok {
 			return nil, false
 		}
 		t := types.NewPointer(pkg.Scope().Lookup("Request").Type())
 		return t, true
-	case TemplateNameScopeIdentifierHTTPResponse:
+	case muxt.TemplateNameScopeIdentifierHTTPResponse:
 		pkg, ok := file.Types("net/http")
 		if !ok {
 			return nil, false
 		}
 		t := pkg.Scope().Lookup("ResponseWriter").Type()
 		return t, true
-	case TemplateNameScopeIdentifierContext:
+	case muxt.TemplateNameScopeIdentifierContext:
 		pkg, ok := file.Types("context")
 		if !ok {
 			return nil, false
 		}
 		t := pkg.Scope().Lookup("Context").Type()
 		return t, true
-	case TemplateNameScopeIdentifierForm:
+	case muxt.TemplateNameScopeIdentifierForm:
 		pkg, ok := file.Types("net/url")
 		if !ok {
 			return nil, false
@@ -1279,7 +1299,7 @@ func defaultTemplateNameScope(file *File, def *Definition, argumentIdentifier st
 		t := pkg.Scope().Lookup("Values").Type()
 		return t, true
 	default:
-		if slices.Contains(def.parsePathValueNames(), argumentIdentifier) {
+		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
@@ -1301,7 +1321,7 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	return obj, true
 }
 
-func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def *Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
+func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		isMethod := true
@@ -1350,7 +1370,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 	}
 }
 
-func createMethodSignature(file *File, signatures map[string]*types.Signature, def *Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
+func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
 	for _, a := range call.Args {
 		switch arg := a.(type) {
@@ -1373,7 +1393,7 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 func callParseForm() *ast.ExprStmt {
 	return &ast.ExprStmt{X: &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 			Sel: ast.NewIdent("ParseForm"),
 		},
 		Args: []ast.Expr{},
@@ -1386,7 +1406,7 @@ func contextAssignment(ident string) *ast.AssignStmt {
 		Lhs: []ast.Expr{ast.NewIdent(ident)},
 		Rhs: []ast.Expr{&ast.CallExpr{
 			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+				X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 				Sel: ast.NewIdent(httpRequestContextMethod),
 			},
 		}},
@@ -1405,7 +1425,7 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 
 var statusCoder = statusCoderInterface()
 
-func writeStatusAndHeaders(file *File, def *Definition, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
+func writeStatusAndHeaders(file *File, def muxt.Definition, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
 	statusCodePriorityList := []ast.Expr{
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
@@ -1425,7 +1445,7 @@ func writeStatusAndHeaders(file *File, def *Definition, resultType types.Type, f
 	}
 
 	// Only add redirect block if the template can call Redirect
-	if def.canRedirect {
+	if def.MayRedirect() {
 		list = append(list, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
 				X: &ast.SelectorExpr{
@@ -1439,8 +1459,8 @@ func writeStatusAndHeaders(file *File, def *Definition, resultType types.Type, f
 				List: []ast.Stmt{
 					&ast.ExprStmt{
 						X: astgen.Call(file, "", "net/http", "Redirect",
-							ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
-							ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest),
+							ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse),
+							ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(resultDataIdent),
 								Sel: ast.NewIdent(TemplateDataFieldIdentifierRedirectURL),
@@ -1459,14 +1479,14 @@ func writeStatusAndHeaders(file *File, def *Definition, resultType types.Type, f
 
 func executeTemplateFailedLogLine(file *File, message, errIdent string) *ast.CallExpr {
 	args := []ast.Expr{
-		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
+		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
 		astgen.String(message),
 
 		astgen.SlogString(file, "path", &ast.SelectorExpr{
-			X:   &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+			X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
 			Sel: ast.NewIdent("Path"),
 		}),
-		astgen.SlogString(file, "pattern", &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Pattern")}),
+		astgen.SlogString(file, "pattern", &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Pattern")}),
 		astgen.SlogString(file, "error", astgen.CallError(errIdent)),
 	}
 	return astgen.Call(file, "", "log/slog", "ErrorContext", args...)
@@ -1474,11 +1494,11 @@ func executeTemplateFailedLogLine(file *File, message, errIdent string) *ast.Cal
 
 func loggerErrorCall(file *File, message, pattern, errIdent string) *ast.CallExpr {
 	args := []ast.Expr{
-		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
+		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
 		astgen.String(message),
 		astgen.SlogString(file, "pattern", astgen.String(pattern)),
 		astgen.SlogString(file, "path", &ast.SelectorExpr{
-			X:   &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+			X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
 			Sel: ast.NewIdent("Path"),
 		}),
 		astgen.SlogString(file, "error", astgen.CallError(errIdent)),
@@ -1491,14 +1511,14 @@ func loggerErrorCall(file *File, message, pattern, errIdent string) *ast.CallExp
 
 func logDebugStatement(file *File, message, pattern string) *ast.ExprStmt {
 	args := []ast.Expr{
-		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
+		&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Context")}},
 		astgen.String(message),
 		astgen.SlogString(file, "pattern", astgen.String(pattern)),
 		astgen.SlogString(file, "path", &ast.SelectorExpr{
-			X:   &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+			X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
 			Sel: ast.NewIdent("Path"),
 		}),
-		astgen.SlogString(file, "method", &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Method")}),
+		astgen.SlogString(file, "method", &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Method")}),
 	}
 	return &ast.ExprStmt{
 		X: &ast.CallExpr{
@@ -1506,20 +1526,6 @@ func logDebugStatement(file *File, message, pattern string) *ast.ExprStmt {
 			Args: args,
 		},
 	}
-}
-
-type forest template.Template
-
-func newForrest(templates *template.Template) *forest {
-	return (*forest)(templates)
-}
-
-func (f *forest) FindTree(name string) (*parse.Tree, bool) {
-	ts := (*template.Template)(f).Lookup(name)
-	if ts == nil {
-		return nil, false
-	}
-	return ts.Tree, true
 }
 
 func statusCoderInterface() *types.Interface {

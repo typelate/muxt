@@ -1,14 +1,23 @@
-package muxt
+package generate
 
 import (
 	"go/ast"
 	"go/token"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 const (
 	templateDataReceiverName = "data"
+
+	TemplateDataFieldIdentifierResult        = "result"
+	TemplateDataFieldIdentifierOkay          = "okay"
+	TemplateDataFieldIdentifierRedirectURL   = "redirectURL"
+	TemplateDataFieldIdentifierError         = "errList"
+	TemplateDataFieldIdentifierReceiver      = "receiver"
+	TemplateDataFieldIdentifierStatusCode    = "statusCode"
+	TemplateDataFieldIdentifierErrStatusCode = "errStatusCode"
 )
 
 func templateDataType(file *File, templateTypeIdent string, receiverType ast.Expr) *ast.GenDecl {
@@ -27,8 +36,8 @@ func templateDataType(file *File, templateTypeIdent string, receiverType ast.Exp
 					Fields: &ast.FieldList{
 						List: []*ast.Field{
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: ast.NewIdent("R")},
-							{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse)}, Type: astgen.HTTPResponseWriter(file)},
-							{Names: []*ast.Ident{ast.NewIdent(TemplateNameScopeIdentifierHTTPRequest)}, Type: astgen.HTTPRequestPtr(file)},
+							{Names: []*ast.Ident{ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse)}, Type: astgen.HTTPResponseWriter(file)},
+							{Names: []*ast.Ident{ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)}, Type: astgen.HTTPRequestPtr(file)},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierStatusCode)}, Type: ast.NewIdent("int")},
 							{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)}, Type: ast.NewIdent("int")},
@@ -336,7 +345,7 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 				Fun: &ast.SelectorExpr{
 					X: &ast.CallExpr{
 						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse),
+							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse),
 							Sel: ast.NewIdent("Header"),
 						},
 					},
@@ -348,7 +357,7 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(ctIdent), Op: token.EQL, Y: astgen.String("")},
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
-				Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
+				Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
 				Args: []ast.Expr{astgen.String(ctHeader), astgen.String("text/html; charset=utf-8")},
 			}}},
 		},

@@ -120,10 +120,10 @@ func fileNameToIdentifier(filename string) string {
 	return strcase.ToGoPascal(base)
 }
 
-// fileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.
+// FileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.
 // For example: "index.gohtml" -> "index", "user-profile.gohtml" -> "userProfile"
 // Returns empty string for empty filenames.
-func fileNameToPrivateIdentifier(filename string) string {
+func FileNameToPrivateIdentifier(filename string) string {
 	if filename == "" {
 		return ""
 	}

@@ -14,7 +14,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/generate"
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
@@ -48,7 +49,7 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 	if err != nil {
 		return err
 	}
-	if err := muxt.Check(workingDirectory, log.New(stderr, "", 0), config); err != nil {
+	if err := analysis.Check(workingDirectory, log.New(stderr, "", 0), config); err != nil {
 		return fmt.Errorf("fail: %s", err)
 	}
 	return nil
@@ -66,7 +67,7 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 	if v, ok := cliVersion(); ok {
 		config.MuxtVersion = v
 	}
-	files, err := muxt.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
+	files, err := generate.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ var helpText string
 func writeHelp(stdout io.Writer) error {
 	var help strings.Builder
 	help.WriteString(helpText)
-	flagSet := routesFileConfigurationFlagSet(new(muxt.RoutesFileConfiguration))
+	flagSet := routesFileConfigurationFlagSet(new(generate.RoutesFileConfiguration))
 	flagSet.SetOutput(&help)
 	flagSet.PrintDefaults()
 	_, err := fmt.Fprint(stdout, help.String())
@@ -109,7 +110,7 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	return muxt.Documentation(stdout, wd, config)
+	return analysis.Documentation(stdout, wd, config)
 }
 
 func versionCommand(args []string, stdout, stderr io.Writer) error {
@@ -215,95 +216,95 @@ This function also receives an argument with a type matching the name given by o
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
-func newRoutesFileConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
-	var g muxt.RoutesFileConfiguration
+func newRoutesFileConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
+	var g generate.RoutesFileConfiguration
 	flagSet := routesFileConfigurationFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 	}
 	if g.RoutesFunction != "" && !token.IsIdentifier(g.RoutesFunction) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputRoutesFunc + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(outputRoutesFunc + errIdentSuffix)
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
 	}
 	if g.ReceiverInterface != "" && !token.IsIdentifier(g.ReceiverInterface) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputReceiverInterface + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(outputReceiverInterface + errIdentSuffix)
 	}
 	if g.TemplateDataType != "" && !token.IsIdentifier(g.TemplateDataType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateDataType + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateDataType + errIdentSuffix)
 	}
 	if g.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(g.TemplateRoutePathsTypeName) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 	}
 	if g.OutputFileName != "" && filepath.Ext(g.OutputFileName) != ".go" {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf("output filename must use .go extension")
+		return generate.RoutesFileConfiguration{}, fmt.Errorf("output filename must use .go extension")
 	}
 	return g, nil
 }
 
-func newCheckConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
-	var g muxt.RoutesFileConfiguration
+func newCheckConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
+	var g generate.RoutesFileConfiguration
 	flagSet := checkFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
 	}
 	return g, nil
 }
 
-func newDocumentationConfiguration(args []string, stderr io.Writer) (muxt.RoutesFileConfiguration, error) {
-	var g muxt.RoutesFileConfiguration
+func newDocumentationConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
+	var g generate.RoutesFileConfiguration
 	flagSet := documentationFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return muxt.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return generate.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
 	}
 	return g, nil
 }
 
 // Helper functions for flag groups
-func addUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, muxt.DefaultTemplatesVariableName, useTemplatesVariableHelp)
+func addUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
+	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, generate.DefaultTemplatesVariableName, useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, useReceiverType, "", useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, useReceiverTypePackage, "", useReceiverTypePackageHelp)
 }
 
-func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.OutputFileName, outputFile, muxt.DefaultOutputFileName, outputFileHelp)
-	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, muxt.DefaultReceiverInterfaceName, outputReceiverInterfaceHelp)
-	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, muxt.DefaultRoutesFunctionName, outputRoutesFuncHelp)
-	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, muxt.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
+func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
+	flagSet.StringVar(&g.OutputFileName, outputFile, generate.DefaultOutputFileName, outputFileHelp)
+	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, generate.DefaultReceiverInterfaceName, outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, generate.DefaultRoutesFunctionName, outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, generate.DefaultTemplateDataTypeName, outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, generate.DefaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 }
 
-func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
+func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
 	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
 }
 
-func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
+func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
+	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, generate.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
-	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, muxt.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
+	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, generate.DefaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedFindReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedFindReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 
@@ -315,11 +316,11 @@ func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileCo
 	markDeprecated(flagSet, deprecatedFindReceiverTypePackage, useReceiverTypePackage)
 }
 
-func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *muxt.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, muxt.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
-	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, muxt.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
-	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, muxt.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
-	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, muxt.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
+func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
+	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, generate.DefaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
+	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, generate.DefaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
+	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, generate.DefaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
+	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, generate.DefaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
 
@@ -337,7 +338,7 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	}
 }
 
-func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+func routesFileConfigurationFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
 
 	addUseFlagsToFlagSet(flagSet, g)
@@ -349,7 +350,7 @@ func routesFileConfigurationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.Flag
 	return flagSet
 }
 
-func checkFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+func checkFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("check", pflag.ContinueOnError)
 
 	addUseFlagsToFlagSet(flagSet, g)
@@ -359,7 +360,7 @@ func checkFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
 	return flagSet
 }
 
-func documentationFlagSet(g *muxt.RoutesFileConfiguration) *pflag.FlagSet {
+func documentationFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("documentation", pflag.ContinueOnError)
 
 	addUseFlagsToFlagSet(flagSet, g)

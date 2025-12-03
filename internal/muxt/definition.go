@@ -89,6 +89,33 @@ type Definition struct {
 	canRedirect bool
 }
 
+func (def Definition) SourceFile() string             { return def.sourceFile }
+func (def Definition) Pattern() string                { return def.pattern }
+func (def Definition) Name() string                   { return def.name }
+func (def Definition) Path() string                   { return def.path }
+func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
+func (def Definition) MayRedirect() bool              { return def.canRedirect }
+func (def Definition) Template() *template.Template   { return def.template }
+func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
+func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
+func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
+func (def Definition) Identifier() string             { return def.identifier }
+
+func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
+func (def Definition) ArgumentType(name string) (types.Type, bool) {
+	tp, ok := def.pathValueTypes[name]
+	return tp, ok
+}
+
+func (def Definition) String() string { return def.name }
+
+func (def Definition) Method() string {
+	if def.fun == nil {
+		return ""
+	}
+	return def.fun.Name
+}
+
 func newDefinition(t *template.Template) (Definition, error, bool) {
 	in := t.Name()
 	if !templateNameMux.MatchString(in) {
@@ -139,7 +166,7 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
-	pathValueNames := def.parsePathValueNames()
+	pathValueNames := def.PathValueIdentifiers()
 	if err := checkPathValueNames(pathValueNames); err != nil {
 		return Definition{}, err, true
 	}
@@ -168,7 +195,7 @@ var (
 	templateNameMux    = regexp.MustCompile(`^(?P<pattern>(((?P<METHOD>[A-Z]+)\s+)?)(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
 )
 
-func (def Definition) parsePathValueNames() []string {
+func (def Definition) PathValueIdentifiers() []string {
 	var result []string
 	for _, match := range pathSegmentPattern.FindAllStringSubmatch(def.path, strings.Count(def.path, "/")) {
 		n := match[1]
@@ -212,19 +239,6 @@ func checkPathValueNames(in []string) error {
 	return nil
 }
 
-func (def Definition) String() string { return def.name }
-
-func (def Definition) Method() string {
-	if def.fun == nil {
-		return ""
-	}
-	return def.fun.Name
-}
-
-func (def Definition) Template() *template.Template {
-	return def.template
-}
-
 func (def Definition) byPathThenMethod(d Definition) int {
 	if n := cmp.Compare(def.path, d.path); n != 0 {
 		return n
@@ -241,6 +255,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
 	if err != nil {
+		//msg := err.Error()
+		//regexp.MustCompile(`template_name\.go:\d*:\d*: (.*)`)
 		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
 		return fmt.Errorf("failed to parse handler expression %s: %v", loc, err)
 	}
@@ -326,18 +342,10 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 }
 
 const (
-	TemplateNameScopeIdentifierHTTPRequest  = "request"
-	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierContext      = "ctx"
 	TemplateNameScopeIdentifierForm         = "form"
-
-	TemplateDataFieldIdentifierResult        = "result"
-	TemplateDataFieldIdentifierOkay          = "okay"
-	TemplateDataFieldIdentifierRedirectURL   = "redirectURL"
-	TemplateDataFieldIdentifierError         = "errList"
-	TemplateDataFieldIdentifierReceiver      = "receiver"
-	TemplateDataFieldIdentifierStatusCode    = "statusCode"
-	TemplateDataFieldIdentifierErrStatusCode = "errStatusCode"
+	TemplateNameScopeIdentifierHTTPRequest  = "request"
+	TemplateNameScopeIdentifierHTTPResponse = "response"
 )
 
 func patternScope() []string {
@@ -360,25 +368,6 @@ func (def Definition) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent st
 	}
 	ident, ok := exp.(*ast.Ident)
 	return ok && ident.Name == receiverTypeIdent
-}
-
-func (def Definition) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
-	pattern := ast.Expr(astgen.String(def.pattern))
-	if config.PathPrefix {
-		i := strings.Index(def.pattern, "/")
-		pattern = &ast.BinaryExpr{
-			X:  astgen.String(def.pattern[:i]),
-			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.pattern[i:])),
-		}
-	}
-	return &ast.ExprStmt{X: &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(muxVarIdent),
-			Sel: ast.NewIdent(httpHandleFuncIdent),
-		},
-		Args: []ast.Expr{pattern, handlerFuncLit},
-	}}
 }
 
 // analyzeRedirectCalls performs static analysis on all templates to determine
