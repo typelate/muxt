@@ -1,4 +1,4 @@
-package muxt
+package generate
 
 import (
 	"crypto/sha1"
@@ -11,12 +11,13 @@ import (
 	"log"
 	"maps"
 	"path"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 type File struct {
@@ -41,7 +42,7 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 		packageIdentifiers: make(map[string]string),
 	}
 	file.addPackages(list)
-	pkg, found := packageAtFilepath(list, filePath)
+	pkg, found := asteval.PackageAtFilepath(list, filePath)
 	if !found {
 		return nil, fmt.Errorf("package not found for filepath %s", filePath)
 	}
@@ -50,12 +51,7 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 }
 
 func (file *File) Package(path string) (*packages.Package, bool) {
-	for _, pkg := range file.packages {
-		if pkg.PkgPath == path {
-			return pkg, true
-		}
-	}
-	return nil, false
+	return asteval.PackageWithPath(file.packages, path)
 }
 
 func (file *File) addPackages(packages []*packages.Package) {
@@ -159,19 +155,6 @@ func (file *File) ImportSpecs() []*ast.ImportSpec {
 	}
 	slices.SortFunc(result, func(a, b *ast.ImportSpec) int { return strings.Compare(a.Path.Value, b.Path.Value) })
 	return slices.CompactFunc(result, func(a, b *ast.ImportSpec) bool { return a.Path.Value == b.Path.Value })
-}
-
-func packageAtFilepath(list []*packages.Package, dir string) (*packages.Package, bool) {
-	d := dir
-	if filepath.Ext(d) == ".go" {
-		d = filepath.Dir(dir)
-	}
-	for _, pkg := range list {
-		if len(pkg.GoFiles) > 0 && filepath.Dir(pkg.GoFiles[0]) == d {
-			return pkg, true
-		}
-	}
-	return nil, false
 }
 
 func recursivelySearchImports(pt *types.Package, pkgPath string) (*types.Package, bool) {

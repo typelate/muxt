@@ -1,4 +1,4 @@
-package muxt
+package analysis
 
 import (
 	"cmp"
@@ -7,17 +7,18 @@ import (
 	"go/types"
 	"io"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
-func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error {
-	config = config.applyDefaults()
+func Documentation(w io.Writer, wd string, config generate.RoutesFileConfiguration) error {
+	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
@@ -36,20 +37,20 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	if err != nil {
 		return err
 	}
-	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
-	if err != nil {
-		return err
+
+	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
+	if !ok {
+		return fmt.Errorf("package %q not found", config.ReceiverPackage)
 	}
-	routesPkg := file.OutputPackage()
 
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
 	var receiver *types.Named
 	if config.ReceiverType != "" {
 		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-		receiverPkg, ok := file.Package(receiverPkgPath)
+		receiverPkg, ok := asteval.PackageWithPath(pl, receiverPkgPath)
 		if !ok {
-			return fmt.Errorf("could not determine receiver package %s", receiverPkgPath)
+			return fmt.Errorf("could not find receiver package %s", receiverPkgPath)
 		}
 		obj := receiverPkg.Types.Scope().Lookup(config.ReceiverType)
 		if config.ReceiverType != "" && obj == nil {
@@ -68,7 +69,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	if err != nil {
 		return err
 	}
-	templates, err := Definitions(ts)
+	templates, err := muxt.Definitions(ts)
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	return nil
 }
 
-func writeOutput(w io.Writer, functions asteval.TemplateFunctions, defs []Definition, receiver *types.Named) {
+func writeOutput(w io.Writer, functions asteval.TemplateFunctions, defs []muxt.Definition, receiver *types.Named) {
 	_, _ = fmt.Fprintf(w, "functions:\n")
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {
@@ -87,11 +88,11 @@ func writeOutput(w io.Writer, functions asteval.TemplateFunctions, defs []Defini
 	}
 
 	_, _ = fmt.Fprintf(w, "\nTemplate Routes:\n\n")
-	for _, t := range defs {
-		_, _ = fmt.Fprintf(w, "%s\n", t.String())
+	for _, def := range defs {
+		_, _ = fmt.Fprintf(w, "%s\n", def.String())
 
 		const prefix = "<!DOCTYPE"
-		if src := t.template.Tree.Root.String(); len(src) >= len(prefix) && strings.EqualFold(src[:len(prefix)], "<!DOCTYPE") {
+		if src := def.Template().Tree.Root.String(); len(src) >= len(prefix) && strings.EqualFold(src[:len(prefix)], "<!DOCTYPE") {
 			_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n\n\n", strings.Repeat("=", 40), src, strings.Repeat("-", 40))
 		} else {
 			_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n\n\n", strings.Repeat("=", 40), src, strings.Repeat("-", 40))

@@ -1,4 +1,4 @@
-package muxt
+package analysis
 
 import (
 	"encoding/json"
@@ -17,10 +17,11 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/generate"
 )
 
-func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
-	config = config.applyDefaults()
+func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration) error {
+	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
@@ -44,7 +45,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 		return err
 	}
 
-	routesPkg, ok := packageAtFilepath(pl, wd)
+	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package not found at %s", wd)
 	}
@@ -56,7 +57,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	fns := check.DefaultFunctions(routesPkg.Types)
 	fns = fns.Add(check.Functions(fm))
 
-	global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, newForrest(ts), fns)
+	global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, asteval.NewForrest(ts), fns)
 
 	// Track which templates are executed via ExecuteTemplate calls
 	executedTemplates := make(map[string][]TemplateExecution)
@@ -104,6 +105,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 			return err
 		}
 		log.Println(string(buf))
+		log.Println(`{"result": "OK"}`)
 	}
 	return nil
 }
