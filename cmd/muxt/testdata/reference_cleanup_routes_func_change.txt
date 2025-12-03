@@ -1,0 +1,63 @@
+# Test that changing routes function name leaves old files (to allow coexistence)
+
+# Generate with first routes function
+muxt generate --output-routes-func=TemplateRoutes --output-multiple-files
+
+exists index_template_routes_gen.go
+exists template_routes.go
+grep 'func TemplateRoutes' template_routes.go
+
+# Change routes function name - old files should remain
+muxt generate --output-routes-func=AdminRoutes --output-file=admin_routes.go --output-multiple-files
+
+# Both sets of files should exist
+exists index_template_routes_gen.go
+exists template_routes.go
+exists admin_routes.go
+
+grep 'func TemplateRoutes' template_routes.go
+grep 'func AdminRoutes' admin_routes.go
+
+# Clean up old files by regenerating with old routes function name
+muxt generate --output-routes-func=TemplateRoutes --output-multiple-files
+
+# Old files should be updated, new routes function files should remain
+exists index_template_routes_gen.go
+exists template_routes.go
+exists admin_routes.go
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET / Home()"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Index</h1>
+</body>
+</html>
+{{end}}
+-- main.go --
+package main
+
+func main() {}
+
+type Server struct{}
+
+func (s *Server) Home() any {
+	return nil
+}
