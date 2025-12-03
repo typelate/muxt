@@ -33,11 +33,12 @@ func TestDocumentation(t *testing.T) {
 	})
 	t.Run("check example", func(t *testing.T) {
 		ctx := t.Context()
-		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/htmx"), "check", "--use-receiver-type", "Backend")
+		buf := bytes.NewBuffer(nil)
+		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/htmx"), "check")
 		cmd.Dir = "."
-		cmd.Stderr = os.Stdout
-		cmd.Stdout = os.Stdout
-		require.NoError(t, cmd.Run())
+		cmd.Stderr = buf
+		cmd.Stdout = buf
+		require.NoError(t, cmd.Run(), buf.String())
 	})
 }
 

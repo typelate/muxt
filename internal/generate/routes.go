@@ -83,6 +83,10 @@ func groupTemplatesBySourceFile(defs []muxt.Definition) map[string][]muxt.Defini
 }
 
 func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
+	if !token.IsIdentifier(config.PackageName) {
+		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
+	}
+
 	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
 		return nil, err

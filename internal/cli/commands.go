@@ -51,12 +51,12 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 	if err != nil {
 		return err
 	}
-	applyDefaults(&config)
-	fileSet, pl, err := loadPackages(workingDirectory, config)
+	fileSet, pl, err := loadPackages(workingDirectory)
 	if err != nil {
 		return err
 	}
-	if err := analysis.Check(workingDirectory, log.New(stderr, "", 0), config, fileSet, pl); err != nil {
+	logger := log.New(stderr, "", 0)
+	if err := analysis.Check(config, workingDirectory, logger, fileSet, pl); err != nil {
 		return fmt.Errorf("fail: %s", err)
 	}
 	return nil
@@ -75,7 +75,7 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 		config.MuxtVersion = v
 	}
 	applyDefaults(&config)
-	fileSet, pl, err := loadPackages(workingDirectory, config)
+	fileSet, pl, err := loadPackages(workingDirectory, config.ReceiverPackage)
 	if err != nil {
 		return err
 	}
@@ -122,12 +122,11 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	applyDefaults(&config)
-	fileSet, pl, err := loadPackages(wd, config)
+	fileSet, pl, err := loadPackages(wd, config.ReceiverPackage)
 	if err != nil {
 		return err
 	}
-	return analysis.Documentation(stdout, wd, config, fileSet, pl)
+	return analysis.Documentation(config, stdout, wd, fileSet, pl)
 }
 
 func versionCommand(args []string, stdout, stderr io.Writer) error {
@@ -283,43 +282,51 @@ func newRoutesFileConfiguration(args []string, stderr io.Writer) (generate.Route
 	return g, nil
 }
 
-func newCheckConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
-	var g generate.RoutesFileConfiguration
+func newCheckConfiguration(args []string, stderr io.Writer) (analysis.CheckConfiguration, error) {
+	var g analysis.CheckConfiguration
 	flagSet := checkFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return generate.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
-	}
-	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return generate.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return analysis.CheckConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 	}
 	return g, nil
 }
 
-func newDocumentationConfiguration(args []string, stderr io.Writer) (generate.RoutesFileConfiguration, error) {
-	var g generate.RoutesFileConfiguration
+func newDocumentationConfiguration(args []string, stderr io.Writer) (analysis.DocumentationConfiguration, error) {
+	var g analysis.DocumentationConfiguration
 	flagSet := documentationFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return generate.RoutesFileConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+		return analysis.DocumentationConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+	}
+	if g.TemplatesVariable == "" {
+		return analysis.DocumentationConfiguration{}, fmt.Errorf("no template variable specified")
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return generate.RoutesFileConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return analysis.DocumentationConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
 	}
 	return g, nil
 }
 
-// Helper functions for flag groups
-func addUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, useTemplatesVariable, defaultTemplatesVariableName, useTemplatesVariableHelp)
-	flagSet.StringVar(&g.ReceiverType, useReceiverType, "", useReceiverTypeHelp)
-	flagSet.StringVar(&g.ReceiverPackage, useReceiverTypePackage, "", useReceiverTypePackageHelp)
+// addUseTemplatesVarToFlagSet was split out because it is used for a few different commands
+func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
+	flagSet.StringVar(out, useTemplatesVariable, defaultTemplatesVariableName, useTemplatesVariableHelp)
+	flagSet.StringVar(out, deprecatedTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
+	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
+}
+
+func addUseReceiverTypeVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
+	flagSet.StringVar(out, useReceiverType, "", useReceiverTypeHelp)
+}
+
+func adUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
+	flagSet.StringVar(out, useReceiverTypePackage, "", useReceiverTypePackageHelp)
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
@@ -332,19 +339,17 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 }
 
-func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.BoolVarP(&g.Verbose, "verbose", "v", false, "verbose log output")
+func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
+	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")
 }
 
 func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplatesVariable, deprecatedTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedFindReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedFindReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 
-	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
 	markDeprecated(flagSet, deprecatedReceiverType, useReceiverType)
 	markDeprecated(flagSet, deprecatedReceiverTypePackage, useReceiverTypePackage)
 	markDeprecated(flagSet, deprecatedFindTemplatesVariable, useTemplatesVariable)
@@ -377,48 +382,46 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 func routesFileConfigurationFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
 
-	addUseFlagsToFlagSet(flagSet, g)
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+	addUseReceiverTypeVarToFlagSet(flagSet, &g.ReceiverType)
+	adUseReceiverTypePackageVarToFlagSet(flagSet, &g.ReceiverPackage)
+	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
+
 	addOutputFlagsToFlagSet(flagSet, g)
-	addVerboseFlagToFlagSet(flagSet, g)
 	addDeprecatedUseFlagsToFlagSet(flagSet, g)
 	addDeprecatedOutputFlagsToFlagSet(flagSet, g)
 
 	return flagSet
 }
 
-func checkFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
+func checkFlagSet(g *analysis.CheckConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("check", pflag.ContinueOnError)
-
-	addUseFlagsToFlagSet(flagSet, g)
-	addVerboseFlagToFlagSet(flagSet, g)
-	addDeprecatedUseFlagsToFlagSet(flagSet, g)
-
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
 	return flagSet
 }
 
-func documentationFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
+func documentationFlagSet(g *analysis.DocumentationConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("documentation", pflag.ContinueOnError)
 
-	addUseFlagsToFlagSet(flagSet, g)
-	addVerboseFlagToFlagSet(flagSet, g)
-	addDeprecatedUseFlagsToFlagSet(flagSet, g)
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+	addUseReceiverTypeVarToFlagSet(flagSet, &g.ReceiverType)
+	adUseReceiverTypePackageVarToFlagSet(flagSet, &g.ReceiverPackage)
+
+	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
 
 	return flagSet
 }
 
-func loadPackages(wd string, config generate.RoutesFileConfiguration) (*token.FileSet, []*packages.Package, error) {
-	if !token.IsIdentifier(config.PackageName) {
-		return nil, nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
-	}
-
+func loadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
 	patterns := []string{
 		wd, "encoding", "fmt", "net/http",
 	}
-
-	if config.ReceiverPackage != "" {
-		patterns = append(patterns, config.ReceiverPackage)
+	for _, pat := range morePatterns {
+		if pat != "" {
+			patterns = append(patterns, pat)
+		}
 	}
-
 	fileSet := token.NewFileSet()
 	pl, err := packages.Load(&packages.Config{
 		Fset: fileSet,
@@ -428,6 +431,5 @@ func loadPackages(wd string, config generate.RoutesFileConfiguration) (*token.Fi
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return fileSet, pl, err
 }
