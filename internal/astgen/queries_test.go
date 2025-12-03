@@ -7,8 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/typelate/muxt/internal/astgen"
 )
 
 func TestIterateFieldTypes(t *testing.T) {
@@ -16,7 +14,7 @@ func TestIterateFieldTypes(t *testing.T) {
 		exp, err := parser.ParseExpr(`func (a, b, c int, x, y, z float64) {}`)
 		require.NoError(t, err)
 		expIndex := 0
-		for gotIndex, tp := range astgen.IterateFieldTypes(exp.(*ast.FuncLit).Type.Params.List) {
+		for gotIndex, tp := range IterateFieldTypes(exp.(*ast.FuncLit).Type.Params.List) {
 			assert.NotNil(t, tp)
 			assert.Equal(t, expIndex, gotIndex)
 			expIndex++
@@ -27,7 +25,7 @@ func TestIterateFieldTypes(t *testing.T) {
 		exp, err := parser.ParseExpr(`func (int, float64) {}`)
 		require.NoError(t, err)
 		expIndex := 0
-		for gotIndex, tp := range astgen.IterateFieldTypes(exp.(*ast.FuncLit).Type.Params.List) {
+		for gotIndex, tp := range IterateFieldTypes(exp.(*ast.FuncLit).Type.Params.List) {
 			assert.NotNil(t, tp)
 			assert.Equal(t, expIndex, gotIndex)
 			expIndex++

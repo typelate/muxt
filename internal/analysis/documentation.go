@@ -18,7 +18,6 @@ import (
 )
 
 func Documentation(w io.Writer, wd string, config generate.RoutesFileConfiguration) error {
-	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}

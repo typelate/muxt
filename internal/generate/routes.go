@@ -35,21 +35,12 @@ const (
 	httpRequestContextMethod = "Context"
 	httpHandleFuncIdent      = "HandleFunc"
 
-	defaultPackageName                = "main"
-	DefaultTemplatesVariableName      = "templates"
-	DefaultRoutesFunctionName         = "TemplateRoutes"
-	DefaultOutputFileName             = "template_routes.go"
-	DefaultReceiverInterfaceName      = "RoutesReceiver"
-	DefaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
-
 	InputAttributeNameStructTag     = "name"
 	InputAttributeTemplateStructTag = "template"
 
 	muxParamName = "mux"
 
-	errIdent = "err"
-
-	DefaultTemplateDataTypeName = "TemplateData"
+	errIdent                    = "err"
 	templateDataFieldStatusCode = "statusCode"
 
 	pathPrefixPathsStructFieldName = "pathsPrefix"
@@ -79,16 +70,6 @@ type RoutesFileConfiguration struct {
 	Verbose        bool
 }
 
-func (config RoutesFileConfiguration) ApplyDefaults() RoutesFileConfiguration {
-	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
-	config.TemplatesVariable = cmp.Or(config.TemplatesVariable, DefaultTemplatesVariableName)
-	config.RoutesFunction = cmp.Or(config.RoutesFunction, DefaultRoutesFunctionName)
-	config.ReceiverInterface = cmp.Or(config.ReceiverInterface, DefaultReceiverInterfaceName)
-	config.TemplateDataType = cmp.Or(config.TemplateDataType, DefaultTemplateDataTypeName)
-	config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, DefaultTemplateRoutePathsTypeName)
-	return config
-}
-
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
 // Returns a map where keys are source filenames and values are template slices.
 // Templates with empty sourceFile (Parse-based) are grouped under "".
@@ -102,7 +83,6 @@ func groupTemplatesBySourceFile(defs []muxt.Definition) map[string][]muxt.Defini
 }
 
 func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) ([]GeneratedFile, error) {
-	config = config.ApplyDefaults()
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
