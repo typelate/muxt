@@ -82,7 +82,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Out, func(t *testing.T) {
-			pat, err, match := newTemplate(template.New(tt.In))
+			pat, err, match := newDefinition(template.Must(template.New(tt.In).Parse(``)))
 			require.True(t, match)
 			require.NoError(t, err)
 			require.Equal(t, tt.Out, pat.generateEndpointPatternIdentifier(nil))
@@ -90,10 +90,10 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 	}
 
 	t.Run("non standard http method", func(t *testing.T) {
-		e := Template{
+		def := Definition{
 			method: "CONNECT",
 			path:   "/",
 		}
-		require.Equal(t, "ConnectIndex", e.generateEndpointPatternIdentifier(nil))
+		require.Equal(t, "ConnectIndex", def.generateEndpointPatternIdentifier(nil))
 	})
 }

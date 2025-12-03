@@ -14,7 +14,7 @@ import (
 func TestTemplateName_ByPathThenMethod(t *testing.T) {
 	for _, tt := range []struct {
 		Name    string
-		In, Exp []Template
+		In, Exp []Definition
 	}{
 		{
 			Name: "sort by path then method",
@@ -89,7 +89,7 @@ func TestTemplateName_ByPathThenMethod(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			slices.SortFunc(tt.In, Template.byPathThenMethod)
+			slices.SortFunc(tt.In, Definition.byPathThenMethod)
 			assert.Equal(t, stringList(tt.Exp), stringList(tt.In))
 		})
 	}
@@ -103,10 +103,10 @@ func stringList[T fmt.Stringer](in []T) []string {
 	return out
 }
 
-func mustNewTemplateName(in ...string) []Template {
-	var result []Template
+func mustNewTemplateName(in ...string) []Definition {
+	var result []Definition
 	for _, n := range in {
-		p, err, _ := newTemplate(template.New(n))
+		p, err, _ := newDefinition(template.New(n))
 		if err != nil {
 			panic(err)
 		}
@@ -120,91 +120,91 @@ func TestNewTemplateName(t *testing.T) {
 		Name         string
 		In           string
 		ExpMatch     bool
-		TemplateName func(t *testing.T, pat Template)
+		TemplateName func(t *testing.T, def Definition)
 		Error        func(t *testing.T, err error)
 	}{
 		{
 			Name:     "get root",
 			In:       "GET /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodGet, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "GET /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodGet, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "GET /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "multiple spaces after method",
 			In:       "GET  /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodGet, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "GET  /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodGet, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "GET  /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "post root",
 			In:       "POST /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodPost, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "POST /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodPost, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "POST /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "patch root",
 			In:       "PATCH /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodPatch, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "PATCH /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodPatch, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "PATCH /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "delete root",
 			In:       "DELETE /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodDelete, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "DELETE /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodDelete, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "DELETE /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "put root",
 			In:       "PUT /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodPut, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "PUT /", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodPut, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "PUT /", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "with end of path wildcard",
 			In:       "PUT /ping/pong/{$}",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.MethodPut, pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/ping/pong/{$}", pat.path)
-				assert.Equal(t, "PUT /ping/pong/{$}", pat.pattern)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.MethodPut, def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/ping/pong/{$}", def.path)
+				assert.Equal(t, "PUT /ping/pong/{$}", def.pattern)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
@@ -235,7 +235,7 @@ func TestNewTemplateName(t *testing.T) {
 			Name:         "path end sentential in the middle is not permitted",
 			In:           "GET /x/{$} F()",
 			ExpMatch:     true,
-			TemplateName: func(t *testing.T, pat Template) {},
+			TemplateName: func(t *testing.T, def Definition) {},
 		},
 		{
 			Name:     "duplicate path parameter name",
@@ -249,32 +249,32 @@ func TestNewTemplateName(t *testing.T) {
 			Name:     "with status code",
 			In:       "POST / 202",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusAccepted, pat.defaultStatusCode)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.StatusAccepted, def.defaultStatusCode)
 			},
 		},
 		{
 			Name:     "without status code",
 			In:       "POST /",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusOK, pat.defaultStatusCode)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.StatusOK, def.defaultStatusCode)
 			},
 		},
 		{
 			Name:     "with status code and handler",
 			In:       "POST / 202 F()",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusAccepted, pat.defaultStatusCode)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.StatusAccepted, def.defaultStatusCode)
 			},
 		},
 		{
 			Name:     "with status code constant",
 			In:       "POST / http.StatusTeapot F()",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, http.StatusTeapot, pat.defaultStatusCode)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, http.StatusTeapot, def.defaultStatusCode)
 			},
 		},
 		{
@@ -344,52 +344,52 @@ func TestNewTemplateName(t *testing.T) {
 			Name:     "status identifier",
 			In:       "/ http.StatusTeapot",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, "", pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.defaultStatusCode)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, "", def.method)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.pattern)
+				assert.Equal(t, 418, def.defaultStatusCode)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "path and status",
 			In:       "/ 418",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, "", pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.defaultStatusCode)
-				assert.Equal(t, "", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, "", def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "/", def.pattern)
+				assert.Equal(t, 418, def.defaultStatusCode)
+				assert.Equal(t, "", def.handler)
 			},
 		},
 		{
 			Name:     "path status and call",
 			In:       "/ 418 f()",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, "", pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, 418, pat.defaultStatusCode)
-				assert.Equal(t, "f()", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, "", def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "/", def.pattern)
+				assert.Equal(t, 418, def.defaultStatusCode)
+				assert.Equal(t, "f()", def.handler)
 			},
 		},
 		{
 			Name:     "path and call",
 			In:       "/ f()",
 			ExpMatch: true,
-			TemplateName: func(t *testing.T, pat Template) {
-				assert.Equal(t, "", pat.method)
-				assert.Equal(t, "", pat.host)
-				assert.Equal(t, "/", pat.path)
-				assert.Equal(t, "/", pat.pattern)
-				assert.Equal(t, http.StatusOK, pat.defaultStatusCode)
-				assert.Equal(t, "f()", pat.handler)
+			TemplateName: func(t *testing.T, def Definition) {
+				assert.Equal(t, "", def.method)
+				assert.Equal(t, "", def.host)
+				assert.Equal(t, "/", def.path)
+				assert.Equal(t, "/", def.pattern)
+				assert.Equal(t, http.StatusOK, def.defaultStatusCode)
+				assert.Equal(t, "f()", def.handler)
 			},
 		},
 		{
@@ -417,7 +417,7 @@ func TestNewTemplateName(t *testing.T) {
 		},
 		{
 			Name:     "not an expression",
-			In:       "GET / package main",
+			In:       "GET / func main()",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
 				require.ErrorContains(t, err, "failed to parse handler expression: ")
@@ -473,14 +473,14 @@ func TestNewTemplateName(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			pat, err, match := newTemplate(template.New(tt.In))
+			def, err, match := newDefinition(template.Must(template.New("TestNewTemplateName").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.In))))
 			require.Equal(t, tt.ExpMatch, match)
 			if tt.Error != nil {
 				tt.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				if tt.TemplateName != nil {
-					tt.TemplateName(t, pat)
+					tt.TemplateName(t, def)
 				}
 			}
 		})

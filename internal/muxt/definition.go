@@ -18,20 +18,20 @@ import (
 	"github.com/typelate/muxt/internal/astgen"
 )
 
-func Templates(ts *template.Template) ([]Template, error) {
-	var templates []Template
+func Definitions(ts *template.Template) ([]Definition, error) {
+	var defs []Definition
 	patterns := make(map[string]struct{})
 	for _, t := range ts.Templates() {
-		mt, err, ok := newTemplate(t)
+		mt, err, ok := newDefinition(t)
 		if !ok {
 			continue
 		}
 		if err != nil {
-			return templates, err
+			return defs, err
 		}
 		pattern := strings.Join([]string{mt.method, mt.host, mt.path}, " ")
 		if _, exists := patterns[pattern]; exists {
-			return templates, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
+			return defs, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
 		}
 
 		// Extract source file from ParseName if available
@@ -42,18 +42,18 @@ func Templates(ts *template.Template) ([]Template, error) {
 		// else sourceFile remains empty string for Parse() defined templates
 
 		patterns[pattern] = struct{}{}
-		templates = append(templates, mt)
+		defs = append(defs, mt)
 	}
-	slices.SortFunc(templates, Template.byPathThenMethod)
-	calculateIdentifiers(templates)
+	slices.SortFunc(defs, Definition.byPathThenMethod)
+	calculateIdentifiers(defs)
 
 	// Analyze templates to determine which ones can call Redirect
-	analyzeRedirectCalls(ts, templates)
+	analyzeRedirectCalls(ts, defs)
 
-	return templates, nil
+	return defs, nil
 }
 
-type Template struct {
+type Definition struct {
 	// name has the full unaltered template name
 	name string
 
@@ -89,13 +89,13 @@ type Template struct {
 	canRedirect bool
 }
 
-func newTemplate(t *template.Template) (Template, error, bool) {
+func newDefinition(t *template.Template) (Definition, error, bool) {
 	in := t.Name()
 	if !templateNameMux.MatchString(in) {
-		return Template{}, nil, false
+		return Definition{}, nil, false
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
-	p := Template{
+	def := Definition{
 		name:              in,
 		method:            matches[templateNameMux.SubexpIndex("METHOD")],
 		host:              matches[templateNameMux.SubexpIndex("HOST")],
@@ -112,55 +112,55 @@ func newTemplate(t *template.Template) (Template, error, bool) {
 		if strings.HasPrefix(httpStatusCode, "http.Status") {
 			code, err := astgen.HTTPStatusName(httpStatusCode)
 			if err != nil {
-				return Template{}, fmt.Errorf("failed to parse status code: %w", err), true
+				return Definition{}, fmt.Errorf("failed to parse status code: %w", err), true
 			}
-			p.defaultStatusCode = code
+			def.defaultStatusCode = code
 		} else {
 			code, err := strconv.Atoi(strings.TrimSpace(httpStatusCode))
 			if err != nil {
-				return Template{}, fmt.Errorf("failed to parse status code: %w", err), true
+				return Definition{}, fmt.Errorf("failed to parse status code: %w", err), true
 			}
-			p.defaultStatusCode = code
+			def.defaultStatusCode = code
 		}
 	}
 
-	if len(p.path) > 1 {
-		segments := strings.Split(p.path[1:], "/")
+	if len(def.path) > 1 {
+		segments := strings.Split(def.path[1:], "/")
 		for _, segment := range segments {
 			if segment == "" {
-				return Template{}, fmt.Errorf("template has an empty path segment: %s", p.name), true
+				return Definition{}, fmt.Errorf("template has an empty path segment: %s", def.name), true
 			}
 		}
 	}
 
-	switch p.method {
+	switch def.method {
 	default:
-		return p, fmt.Errorf("%s method not allowed", p.method), true
+		return def, fmt.Errorf("%s method not allowed", def.method), true
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
-	pathValueNames := p.parsePathValueNames()
+	pathValueNames := def.parsePathValueNames()
 	if err := checkPathValueNames(pathValueNames); err != nil {
-		return Template{}, err, true
+		return Definition{}, err, true
 	}
-	p.pathValueNames = pathValueNames
+	def.pathValueNames = pathValueNames
 
-	err := parseHandler(p.fileSet, &p, p.pathValueNames)
+	err := parseHandler(def.fileSet, &def, def.pathValueNames)
 	if err != nil {
-		return p, err, true
+		return def, err, true
 	}
 
-	if p.fun == nil {
-		for _, name := range p.pathValueNames {
-			p.pathValueTypes[name] = types.Universe.Lookup("string").Type()
+	if def.fun == nil {
+		for _, name := range def.pathValueNames {
+			def.pathValueTypes[name] = types.Universe.Lookup("string").Type()
 		}
 	}
 
-	if httpStatusCode != "" && !p.callWriteHeader(nil) {
-		return p, fmt.Errorf("you can not use %s as an argument and specify an HTTP status code", TemplateNameScopeIdentifierHTTPResponse), true
+	if httpStatusCode != "" && !def.callWriteHeader(nil) {
+		return def, fmt.Errorf("you can not use %s as an argument and specify an HTTP status code", TemplateNameScopeIdentifierHTTPResponse), true
 	}
 
-	return p, nil, true
+	return def, nil, true
 }
 
 var (
@@ -168,11 +168,11 @@ var (
 	templateNameMux    = regexp.MustCompile(`^(?P<pattern>(((?P<METHOD>[A-Z]+)\s+)?)(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
 )
 
-func (t Template) parsePathValueNames() []string {
+func (def Definition) parsePathValueNames() []string {
 	var result []string
-	for _, match := range pathSegmentPattern.FindAllStringSubmatch(t.path, strings.Count(t.path, "/")) {
+	for _, match := range pathSegmentPattern.FindAllStringSubmatch(def.path, strings.Count(def.path, "/")) {
 		n := match[1]
-		if n == "$" && strings.Count(t.path, "$") == 1 && strings.HasSuffix(t.path, "{$}") {
+		if n == "$" && strings.Count(def.path, "$") == 1 && strings.HasSuffix(def.path, "{$}") {
 			continue
 		}
 		n = strings.TrimSuffix(n, "...")
@@ -212,30 +212,30 @@ func checkPathValueNames(in []string) error {
 	return nil
 }
 
-func (t Template) String() string { return t.name }
+func (def Definition) String() string { return def.name }
 
-func (t Template) Method() string {
-	if t.fun == nil {
+func (def Definition) Method() string {
+	if def.fun == nil {
 		return ""
 	}
-	return t.fun.Name
+	return def.fun.Name
 }
 
-func (t Template) Template() *template.Template {
-	return t.template
+func (def Definition) Template() *template.Template {
+	return def.template
 }
 
-func (t Template) byPathThenMethod(d Template) int {
-	if n := cmp.Compare(t.path, d.path); n != 0 {
+func (def Definition) byPathThenMethod(d Definition) int {
+	if n := cmp.Compare(def.path, d.path); n != 0 {
 		return n
 	}
-	if m := cmp.Compare(t.method, d.method); m != 0 {
+	if m := cmp.Compare(def.method, d.method); m != 0 {
 		return m
 	}
-	return cmp.Compare(t.handler, d.handler)
+	return cmp.Compare(def.handler, d.handler)
 }
 
-func parseHandler(fileSet *token.FileSet, def *Template, pathParameterNames []string) error {
+func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []string) error {
 	if def.handler == "" {
 		return nil
 	}
@@ -270,11 +270,11 @@ func parseHandler(fileSet *token.FileSet, def *Template, pathParameterNames []st
 	return nil
 }
 
-func (t Template) callWriteHeader(receiverInterfaceType *ast.InterfaceType) bool {
-	if t.call == nil {
+func (def Definition) callWriteHeader(receiverInterfaceType *ast.InterfaceType) bool {
+	if def.call == nil {
 		return true
 	}
-	return !hasIdentArgument(t.call.Args, TemplateNameScopeIdentifierHTTPResponse, receiverInterfaceType, 1, 1)
+	return !hasIdentArgument(def.call.Args, TemplateNameScopeIdentifierHTTPResponse, receiverInterfaceType, 1, 1)
 }
 
 func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.InterfaceType, depth, maxDepth int) bool {
@@ -349,8 +349,8 @@ func patternScope() []string {
 	}
 }
 
-func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
-	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != t.fun.Name ||
+func (def Definition) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
+	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != def.fun.Name ||
 		funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {
 		return false
 	}
@@ -362,14 +362,14 @@ func (t Template) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string
 	return ok && ident.Name == receiverTypeIdent
 }
 
-func (t Template) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
-	pattern := ast.Expr(astgen.String(t.pattern))
+func (def Definition) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
+	pattern := ast.Expr(astgen.String(def.pattern))
 	if config.PathPrefix {
-		i := strings.Index(t.pattern, "/")
+		i := strings.Index(def.pattern, "/")
 		pattern = &ast.BinaryExpr{
-			X:  astgen.String(t.pattern[:i]),
+			X:  astgen.String(def.pattern[:i]),
 			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(t.pattern[i:])),
+			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.pattern[i:])),
 		}
 	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
@@ -383,22 +383,22 @@ func (t Template) callHandleFunc(file *File, handlerFuncLit *ast.FuncLit, config
 
 // analyzeRedirectCalls performs static analysis on all templates to determine
 // which ones can call the Redirect method. It updates the canRedirect field
-// on each Template in the templates slice.
-func analyzeRedirectCalls(ts *template.Template, templates []Template) {
+// on each Definition in the templates slice.
+func analyzeRedirectCalls(ts *template.Template, defs []Definition) {
 	// Build a map from template name to template index for quick lookup
 	templateMap := make(map[string]int)
-	for i := range templates {
-		templateMap[templates[i].name] = i
+	for i := range defs {
+		templateMap[defs[i].name] = i
 	}
 
 	// For each template, check if it can redirect
-	for i := range templates {
-		t := ts.Lookup(templates[i].name)
+	for i := range defs {
+		t := ts.Lookup(defs[i].name)
 		if t == nil || t.Tree == nil {
 			continue
 		}
 		visited := make(map[string]bool)
-		templates[i].canRedirect = canTemplateRedirect(t.Tree.Root, ts, templateMap, templates, visited)
+		defs[i].canRedirect = canTemplateRedirect(t.Tree.Root, ts, templateMap, defs, visited)
 	}
 }
 
@@ -409,7 +409,7 @@ func analyzeRedirectCalls(ts *template.Template, templates []Template) {
 // 3. The template passes TemplateData to a function (conservatively assume it might redirect)
 // 4. The template calls a non-default method on TemplateData (conservatively assume it might redirect)
 // The visited map tracks templates currently being analyzed to prevent infinite recursion on circular references.
-func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map[string]int, templates []Template, visited map[string]bool) bool {
+func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map[string]int, defs []Definition, visited map[string]bool) bool {
 	if node == nil {
 		return false
 	}
@@ -420,7 +420,7 @@ func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map
 			return false
 		}
 		for _, child := range n.Nodes {
-			if canTemplateRedirect(child, ts, templateMap, templates, visited) {
+			if canTemplateRedirect(child, ts, templateMap, defs, visited) {
 				return true
 			}
 		}
@@ -439,35 +439,35 @@ func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map
 		}
 
 	case *parse.IfNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
 			return true
 		}
 
 	case *parse.RangeNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
 			return true
 		}
 
 	case *parse.WithNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.List, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
 			return true
 		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, templates, visited) {
+		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
 			return true
 		}
 
@@ -483,7 +483,7 @@ func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map
 		// Look up the template in the full template set (not just routes)
 		calledTemplate := ts.Lookup(n.Name)
 		if calledTemplate != nil && calledTemplate.Tree != nil {
-			if canTemplateRedirect(calledTemplate.Tree.Root, ts, templateMap, templates, visited) {
+			if canTemplateRedirect(calledTemplate.Tree.Root, ts, templateMap, defs, visited) {
 				return true
 			}
 		}

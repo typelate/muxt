@@ -200,7 +200,18 @@ type TemplateExecution struct {
 	Column int
 }
 
-func newParseNodeTemplateExecution(tree *parse.Tree, n *parse.TemplateNode, dataType types.Type) TemplateExecution {
+type parseNodePosition token.Position
+
+func (pos parseNodePosition) String() string {
+	zero := parseNodePosition{}
+	if pos == zero {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d:%d", pos.Filename, pos.Line, pos.Column)
+}
+
+// newParseNodePosition uses reflection to access private field "text"
+func newParseNodePosition(tree *parse.Tree, n parse.Node) parseNodePosition {
 	pos := int(n.Position())
 	tr := reflect.ValueOf(tree)
 	fullText := tr.Elem().FieldByName("text").String()
@@ -213,12 +224,22 @@ func newParseNodeTemplateExecution(tree *parse.Tree, n *parse.TemplateNode, data
 		byteNum = pos - byteNum
 	}
 	lineNum := 1 + strings.Count(text, "\n")
+	return parseNodePosition{
+		Filename: tree.ParseName,
+		Column:   byteNum,
+		Line:     lineNum,
+		Offset:   pos,
+	}
+}
+
+func newParseNodeTemplateExecution(tree *parse.Tree, n *parse.TemplateNode, dataType types.Type) TemplateExecution {
+	pos := newParseNodePosition(tree, n)
 	return TemplateExecution{
 		tp:     dataType,
 		nd:     n,
-		Column: byteNum,
-		Line:   lineNum,
-		Offset: pos,
+		Column: pos.Column,
+		Line:   pos.Line,
+		Offset: pos.Offset,
 		Name:   n.Name,
 		Type:   dataType.String(),
 		File:   tree.ParseName,

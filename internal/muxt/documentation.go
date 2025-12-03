@@ -68,7 +68,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	if err != nil {
 		return err
 	}
-	templates, err := Templates(ts)
+	templates, err := Definitions(ts)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func Documentation(w io.Writer, wd string, config RoutesFileConfiguration) error
 	return nil
 }
 
-func writeOutput(w io.Writer, functions asteval.TemplateFunctions, templates []Template, receiver *types.Named) {
+func writeOutput(w io.Writer, functions asteval.TemplateFunctions, defs []Definition, receiver *types.Named) {
 	_, _ = fmt.Fprintf(w, "functions:\n")
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {
@@ -87,7 +87,7 @@ func writeOutput(w io.Writer, functions asteval.TemplateFunctions, templates []T
 	}
 
 	_, _ = fmt.Fprintf(w, "\nTemplate Routes:\n\n")
-	for _, t := range templates {
+	for _, t := range defs {
 		_, _ = fmt.Fprintf(w, "%s\n", t.String())
 
 		const prefix = "<!DOCTYPE"
