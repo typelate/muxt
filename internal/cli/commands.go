@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -51,7 +51,7 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 	if err != nil {
 		return err
 	}
-	fileSet, pl, err := loadPackages(workingDirectory)
+	fileSet, pl, err := asteval.LoadPackages(workingDirectory)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 		config.MuxtVersion = v
 	}
 	applyDefaults(&config)
-	fileSet, pl, err := loadPackages(workingDirectory, config.ReceiverPackage)
+	fileSet, pl, err := asteval.LoadPackages(workingDirectory, config.ReceiverPackage)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	fileSet, pl, err := loadPackages(wd, config.ReceiverPackage)
+	fileSet, pl, err := asteval.LoadPackages(wd, config.ReceiverPackage)
 	if err != nil {
 		return err
 	}
@@ -411,25 +411,4 @@ func documentationFlagSet(g *analysis.DocumentationConfiguration) *pflag.FlagSet
 	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
 
 	return flagSet
-}
-
-func loadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
-	patterns := []string{
-		wd, "encoding", "fmt", "net/http",
-	}
-	for _, pat := range morePatterns {
-		if pat != "" {
-			patterns = append(patterns, pat)
-		}
-	}
-	fileSet := token.NewFileSet()
-	pl, err := packages.Load(&packages.Config{
-		Fset: fileSet,
-		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
-		Dir:  wd,
-	}, patterns...)
-	if err != nil {
-		return nil, nil, err
-	}
-	return fileSet, pl, err
 }

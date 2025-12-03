@@ -1,10 +1,32 @@
 package asteval
 
 import (
+	"go/token"
 	"path/filepath"
 
 	"golang.org/x/tools/go/packages"
 )
+
+func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	patterns := []string{
+		wd, "encoding", "fmt", "net/http",
+	}
+	for _, pat := range morePatterns {
+		if pat != "" {
+			patterns = append(patterns, pat)
+		}
+	}
+	fileSet := token.NewFileSet()
+	pl, err := packages.Load(&packages.Config{
+		Fset: fileSet,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
+		Dir:  wd,
+	}, patterns...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return fileSet, pl, err
+}
 
 func PackageAtFilepath(list []*packages.Package, dir string) (*packages.Package, bool) {
 	d := dir
