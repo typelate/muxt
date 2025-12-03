@@ -9,7 +9,6 @@ import (
 	"go/types"
 	"html/template"
 	"log"
-	"reflect"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -190,85 +189,32 @@ func isEmptyTemplate(node parse.Node) bool {
 }
 
 type TemplateExecution struct {
-	nd     any
-	tp     types.Type
-	Name   string
-	Type   string
-	File   string
-	Offset int
-	Line   int
-	Column int
+	token.Position
+	nd   any
+	tp   types.Type
+	Name string
+	Type string
 }
 
-type parseNodePosition token.Position
-
-func (pos parseNodePosition) String() string {
-	zero := parseNodePosition{}
-	if pos == zero {
-		return ""
-	}
-	return fmt.Sprintf("%s:%d:%d", pos.Filename, pos.Line, pos.Column)
-}
-
-// newParseNodePosition uses reflection to access private field "text"
-func newParseNodePosition(tree *parse.Tree, n parse.Node) parseNodePosition {
-	pos := int(n.Position())
-	tr := reflect.ValueOf(tree)
-	fullText := tr.Elem().FieldByName("text").String()
-	text := fullText[:pos]
-	byteNum := strings.LastIndex(text, "\n")
-	if byteNum == -1 {
-		byteNum = pos // On first line.
-	} else {
-		byteNum++ // After the newline.
-		byteNum = pos - byteNum
-	}
-	lineNum := 1 + strings.Count(text, "\n")
-	return parseNodePosition{
-		Filename: tree.ParseName,
-		Column:   byteNum,
-		Line:     lineNum,
-		Offset:   pos,
-	}
-}
-
-func newParseNodeTemplateExecution(tree *parse.Tree, n *parse.TemplateNode, dataType types.Type) TemplateExecution {
-	pos := newParseNodePosition(tree, n)
+func newTemplateExecution(pos token.Position, n any, templateName string, dataType types.Type) TemplateExecution {
 	return TemplateExecution{
-		tp:     dataType,
-		nd:     n,
-		Column: pos.Column,
-		Line:   pos.Line,
-		Offset: pos.Offset,
-		Name:   n.Name,
-		Type:   dataType.String(),
-		File:   tree.ParseName,
-	}
-}
-
-func newASTNodeTemplateExecution(fs *token.FileSet, n ast.Node, templateName string, dataType types.Type) TemplateExecution {
-	pos := fs.Position(n.Pos())
-	return TemplateExecution{
-		tp:     dataType,
-		nd:     n,
-		Name:   templateName,
-		Type:   dataType.String(),
-		Offset: pos.Offset,
-		File:   pos.Filename,
-		Line:   pos.Line,
-		Column: pos.Column,
+		tp:       dataType,
+		nd:       n,
+		Name:     templateName,
+		Type:     dataType.String(),
+		Position: pos,
 	}
 }
 
 func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
-	executedTemplates[templateName] = append(executedTemplates[templateName], newASTNodeTemplateExecution(fileSet, node, templateName, dataType))
+	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(fileSet.Position(node.Pos()), node, templateName, dataType))
 	ts2 := ts.Lookup(templateName)
 	if ts2 == nil {
 		return fmt.Errorf("template %q not found", templateName)
 	}
 	tree := ts2.Tree
 	global.TemplateNodeType = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
-		executedTemplates[node.Name] = append(executedTemplates[node.Name], newParseNodeTemplateExecution(tree, node, tp))
+		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(asteval.NewParseNodePosition(tree, node), node, node.Name, dataType))
 	}
 	if err := check.Execute(global, tree, dataType); err != nil {
 		return err
