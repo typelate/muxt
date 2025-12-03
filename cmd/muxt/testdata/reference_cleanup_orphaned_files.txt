@@ -1,0 +1,77 @@
+# Test that orphaned files are deleted when template files are renamed
+
+# First generate with old template file name
+muxt generate --output-multiple-files
+
+exists old_template_routes_gen.go
+exists template_routes.go
+
+# Rename template file and regenerate
+mv old.gohtml new.gohtml
+
+muxt generate --output-multiple-files
+
+# Old file should be deleted, new file should exist
+! exists old_template_routes_gen.go
+exists new_template_routes_gen.go
+exists template_routes.go
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+-- old.gohtml --
+{{define "GET / Home()"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Old Template</h1>
+</body>
+</html>
+{{end}}
+-- main.go --
+package main
+
+func main() {}
+
+type Server struct{}
+
+func (s *Server) Home() any {
+	return nil
+}
+-- main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	s := new(Server)
+	TemplateRoutes(mux, s)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
