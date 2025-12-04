@@ -1,6 +1,6 @@
 # Tests generation with multiple template source files
 
-muxt generate --use-receiver-type=Server
+muxt generate --use-receiver-type=Server --output-multiple-files
 
 grep 'indexTemplateRoutes' template_routes.go
 grep 'aboutTemplateRoutes' template_routes.go

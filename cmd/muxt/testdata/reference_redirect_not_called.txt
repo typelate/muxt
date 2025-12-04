@@ -4,11 +4,8 @@ muxt generate
 
 exec ls
 
-cat empty_template_routes_gen.go
-! grep 'redirectURL != ""' empty_template_routes_gen.go
-
-cat methods_template_routes_gen.go
-! grep 'redirectURL != ""' methods_template_routes_gen.go
+cat template_routes.go
+! grep 'redirectURL != ""' template_routes.go
 
 -- in.go --
 package main

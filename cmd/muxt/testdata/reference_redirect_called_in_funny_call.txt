@@ -1,8 +1,8 @@
 # verify redirect block is generated when template calls Redirect
 
 muxt generate
-cat template_template_routes_gen.go
-grep 'redirectURL != ""' template_template_routes_gen.go
+cat template_routes.go
+grep 'redirectURL != ""' template_routes.go
 
 -- in.go --
 package main

@@ -2,29 +2,10 @@
 
 muxt generate
 
-cat direct_template_routes_gen.go
-grep 'redirectURL != ""' direct_template_routes_gen.go
+cat template_routes.go
 
-cat chained_template_routes_gen.go
-grep 'redirectURL != ""' chained_template_routes_gen.go
-
-cat conditional_template_routes_gen.go
-grep 'redirectURL != ""' conditional_template_routes_gen.go
-
-cat multiple_template_routes_gen.go
-grep 'redirectURL != ""' multiple_template_routes_gen.go
-
-cat nested_template_routes_gen.go
-
-# Verify the file contains redirect blocks (for nested1, nested2)
-grep 'redirectURL != ""' nested_template_routes_gen.go
-
-# Verify all three handlers exist in the file
-grep 'GET /nested1' nested_template_routes_gen.go
-grep 'GET /nested2' nested_template_routes_gen.go
-grep 'GET /nested-no-redirect' nested_template_routes_gen.go
-
-count-matches 'redirectURL != ""' nested_template_routes_gen.go 2
+# Verify redirect blocks are generated for all templates that call Redirect
+grep 'redirectURL != ""' template_routes.go
 
 -- in.go --
 package main

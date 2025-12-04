@@ -1,7 +1,7 @@
 # Redirect method sets Location header and status code
 
 muxt generate
-cat template_template_routes_gen.go
+cat template_routes.go
 
 exec go test -v
 

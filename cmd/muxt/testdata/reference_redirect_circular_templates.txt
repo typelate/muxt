@@ -2,8 +2,8 @@
 
 muxt generate
 
-cat circular_template_routes_gen.go
-! grep 'redirectURL != ""' circular_template_routes_gen.go
+cat template_routes.go
+! grep 'redirectURL != ""' template_routes.go
 
 -- in.go --
 package main
