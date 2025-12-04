@@ -102,18 +102,6 @@ func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]T
 		usedTemplates[name] = true
 	}
 
-	// Find all templates referenced from used templates (transitive closure)
-	changed := true
-	for changed {
-		changed = false
-		for name := range usedTemplates {
-			t := ts.Lookup(name)
-			if t == nil || t.Tree == nil {
-				continue
-			}
-		}
-	}
-
 	// Find unused templates (skip templates that are empty after define blocks are stripped)
 	var unused []string
 	for name := range allNames {

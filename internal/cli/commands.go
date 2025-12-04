@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	_ "embed"
+	"errors"
 	"fmt"
 	"go/token"
 	"io"
@@ -111,11 +112,16 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 
 	// Write new files
 	newGeneratedFiles := make(map[string]bool)
-	for _, file := range files {
+	for i, file := range files {
 		var sb bytes.Buffer
 		writeCodeGenerationComment(&sb, configToArgs(config))
 		sb.WriteString(file.Content)
 		if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
+			for _, f := range files[:i] {
+				if rmErr := os.Remove(f.Path); rmErr != nil {
+					err = errors.Join(err, rmErr)
+				}
+			}
 			return err
 		}
 		newGeneratedFiles[file.Path] = true
@@ -161,7 +167,7 @@ func findGeneratedFiles(workingDirectory, routesFunction string) (map[string]boo
 		filePath := filepath.Join(workingDirectory, entry.Name())
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to read %s: %w", filePath, err)
 		}
 
 		// Check if file has muxt generation comment
@@ -178,6 +184,10 @@ func findGeneratedFiles(workingDirectory, routesFunction string) (map[string]boo
 		// Parse the routes function name from the generation comment
 		// Only include files that match the current routes function name
 		generatedRoutesFunc := parseRoutesFunctionFromComment(firstLine)
+		if generatedRoutesFunc == "" {
+			log.Println("WARNING: ignored generated file with empty TemplateRoutes identifier", filePath)
+			continue
+		}
 		if generatedRoutesFunc == routesFunction {
 			generatedFiles[filePath] = true
 		}
