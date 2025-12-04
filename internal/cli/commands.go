@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
@@ -51,7 +52,11 @@ func checkCommand(workingDirectory string, args []string, stderr io.Writer) erro
 		return err
 	}
 	applyDefaults(&config)
-	if err := analysis.Check(workingDirectory, log.New(stderr, "", 0), config); err != nil {
+	fileSet, pl, err := loadPackages(workingDirectory, config)
+	if err != nil {
+		return err
+	}
+	if err := analysis.Check(workingDirectory, log.New(stderr, "", 0), config, fileSet, pl); err != nil {
 		return fmt.Errorf("fail: %s", err)
 	}
 	return nil
@@ -70,7 +75,11 @@ func generateCommand(workingDirectory string, args []string, getEnv func(string)
 		config.MuxtVersion = v
 	}
 	applyDefaults(&config)
-	files, err := generate.TemplateRoutesFile(workingDirectory, log.New(stdout, "", 0), config)
+	fileSet, pl, err := loadPackages(workingDirectory, config)
+	if err != nil {
+		return err
+	}
+	files, err := generate.TemplateRoutesFile(workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 	if err != nil {
 		return err
 	}
@@ -114,7 +123,11 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 		return err
 	}
 	applyDefaults(&config)
-	return analysis.Documentation(stdout, wd, config)
+	fileSet, pl, err := loadPackages(wd, config)
+	if err != nil {
+		return err
+	}
+	return analysis.Documentation(stdout, wd, config, fileSet, pl)
 }
 
 func versionCommand(args []string, stdout, stderr io.Writer) error {
@@ -391,4 +404,30 @@ func documentationFlagSet(g *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	addDeprecatedUseFlagsToFlagSet(flagSet, g)
 
 	return flagSet
+}
+
+func loadPackages(wd string, config generate.RoutesFileConfiguration) (*token.FileSet, []*packages.Package, error) {
+	if !token.IsIdentifier(config.PackageName) {
+		return nil, nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
+	}
+
+	patterns := []string{
+		wd, "encoding", "fmt", "net/http",
+	}
+
+	if config.ReceiverPackage != "" {
+		patterns = append(patterns, config.ReceiverPackage)
+	}
+
+	fileSet := token.NewFileSet()
+	pl, err := packages.Load(&packages.Config{
+		Fset: fileSet,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
+		Dir:  wd,
+	}, patterns...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return fileSet, pl, err
 }

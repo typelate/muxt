@@ -82,29 +82,7 @@ func groupTemplatesBySourceFile(defs []muxt.Definition) map[string][]muxt.Defini
 	return groups
 }
 
-func TemplateRoutesFile(wd string, logger *log.Logger, config RoutesFileConfiguration) ([]GeneratedFile, error) {
-	if !token.IsIdentifier(config.PackageName) {
-		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
-	}
-
-	patterns := []string{
-		wd, "encoding", "fmt", "net/http",
-	}
-
-	if config.ReceiverPackage != "" {
-		patterns = append(patterns, config.ReceiverPackage)
-	}
-
-	fileSet := token.NewFileSet()
-	pl, err := packages.Load(&packages.Config{
-		Fset: fileSet,
-		Mode: packages.NeedModule | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
-		Dir:  wd,
-	}, patterns...)
-	if err != nil {
-		return nil, err
-	}
-
+func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
 	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
 	if err != nil {
 		return nil, err

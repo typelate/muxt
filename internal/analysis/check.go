@@ -20,30 +20,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration) error {
-	if !token.IsIdentifier(config.PackageName) {
-		return fmt.Errorf("package name %q is not an identifier", config.PackageName)
-	}
-
-	patterns := []string{
-		wd, "encoding", "fmt", "net/http",
-	}
-
-	if config.ReceiverPackage != "" {
-		patterns = append(patterns, config.ReceiverPackage)
-	}
-
-	fileSet := token.NewFileSet()
-
-	pl, err := packages.Load(&packages.Config{
-		Fset: fileSet,
-		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
-		Dir:  wd,
-	}, patterns...)
-	if err != nil {
-		return err
-	}
-
+func Check(wd string, log *log.Logger, config generate.RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package) error {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package not found at %s", wd)
