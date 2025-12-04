@@ -197,6 +197,7 @@ const (
 	outputTemplateRoutePathsType    = "output-template-route-paths-type"
 	outputRoutesFuncWithLoggerParam = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix  = "output-routes-func-with-path-prefix-param"
+	outputMultipleFiles             = "output-multiple-files"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -228,6 +229,7 @@ This function also receives an argument with a type matching the name given by o
 
 	outputRoutesFuncWithLoggerParamHelp = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp  = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
+	outputMultipleFilesHelp             = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -337,6 +339,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
+	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
