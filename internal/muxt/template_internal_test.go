@@ -2,6 +2,7 @@ package muxt
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"slices"
 	"testing"
@@ -105,7 +106,7 @@ func stringList[T fmt.Stringer](in []T) []string {
 func mustNewTemplateName(in ...string) []Template {
 	var result []Template
 	for _, n := range in {
-		p, err, _ := newTemplate(n)
+		p, err, _ := newTemplate(template.New(n))
 		if err != nil {
 			panic(err)
 		}
@@ -472,7 +473,7 @@ func TestNewTemplateName(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			pat, err, match := newTemplate(tt.In)
+			pat, err, match := newTemplate(template.New(tt.In))
 			require.Equal(t, tt.ExpMatch, match)
 			if tt.Error != nil {
 				tt.Error(t, err)
