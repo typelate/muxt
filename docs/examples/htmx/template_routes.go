@@ -4,20 +4,113 @@
 package hypertext
 
 import (
+	"bytes"
 	"cmp"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path"
+	"strconv"
 )
 
 type RoutesReceiver interface {
-	templateRoutesReceiver
+	Count() int64
+	Decrement() int64
+	Increment() int64
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
 	pathsPrefix := ""
-	templateTemplateRoutes(mux, receiver, pathsPrefix)
+	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Count()
+			td.okay = true
+		}
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "/ Count()", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("POST /count", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, struct {
+		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "POST /count", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		if td.redirectURL != "" {
+			http.Redirect(response, request, td.redirectURL, statusCode)
+			return
+		}
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("/decrement-count", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Decrement()
+			td.okay = true
+		}
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "/decrement-count Decrement()", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		if td.redirectURL != "" {
+			http.Redirect(response, request, td.redirectURL, statusCode)
+			return
+		}
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("/increment-count", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if len(td.errList) == 0 {
+			td.result = receiver.Increment()
+			td.okay = true
+		}
+		buf := bytes.NewBuffer(nil)
+		if err := templates.ExecuteTemplate(buf, "/increment-count Increment()", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		if td.redirectURL != "" {
+			http.Redirect(response, request, td.redirectURL, statusCode)
+			return
+		}
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
 	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
