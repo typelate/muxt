@@ -1,6 +1,7 @@
 package muxt
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -8,6 +9,7 @@ import (
 	"go/types"
 	"html/template"
 	"log"
+	"reflect"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -17,11 +19,6 @@ import (
 
 	"github.com/typelate/muxt/internal/asteval"
 )
-
-type TemplateExecution struct {
-	CallNode any
-	Type     types.Type
-}
 
 func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	config = config.applyDefaults()
@@ -72,25 +69,10 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 			if !ok {
 				continue
 			}
-			executedTemplates[templateName] = append(executedTemplates[templateName], TemplateExecution{
-				CallNode: node,
-				Type:     dataType,
-			})
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
-			ts2 := ts.Lookup(templateName)
-			if ts2 == nil {
-				return fmt.Errorf("template %q not found in %q (try running generate again)", templateName, config.TemplatesVariable)
-			}
-			tree := ts2.Tree
-			global.TemplateNodeType = func(_ *parse.Tree, node *parse.TemplateNode, tp types.Type) {
-				executedTemplates[node.Name] = append(executedTemplates[node.Name], TemplateExecution{
-					CallNode: node,
-					Type:     tp,
-				})
-			}
-			if err := check.Execute(global, tree, dataType); err != nil {
+			if err := findTemplateExecution(executedTemplates, global, fileSet, ts, node, templateName, dataType); err != nil {
 				log.Println("ERROR", err)
 				log.Println()
 				errs = append(errs, err)
@@ -118,7 +100,11 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	}
 
 	if config.Verbose {
-		log.Println("OK")
+		buf, err := json.MarshalIndent(executedTemplates, "", "\t")
+		if err != nil {
+			return err
+		}
+		log.Println(string(buf))
 	}
 	return nil
 }
@@ -201,4 +187,70 @@ func isEmptyTemplate(node parse.Node) bool {
 		// Any other node type (actions, if, range, etc.) is non-empty
 		return false
 	}
+}
+
+type TemplateExecution struct {
+	nd     any
+	tp     types.Type
+	Name   string
+	Type   string
+	File   string
+	Offset int
+	Line   int
+	Column int
+}
+
+func newParseNodeTemplateExecution(tree *parse.Tree, n *parse.TemplateNode, dataType types.Type) TemplateExecution {
+	pos := int(n.Position())
+	tr := reflect.ValueOf(tree)
+	fullText := tr.Elem().FieldByName("text").String()
+	text := fullText[:pos]
+	byteNum := strings.LastIndex(text, "\n")
+	if byteNum == -1 {
+		byteNum = pos // On first line.
+	} else {
+		byteNum++ // After the newline.
+		byteNum = pos - byteNum
+	}
+	lineNum := 1 + strings.Count(text, "\n")
+	return TemplateExecution{
+		tp:     dataType,
+		nd:     n,
+		Column: byteNum,
+		Line:   lineNum,
+		Offset: pos,
+		Name:   n.Name,
+		Type:   dataType.String(),
+		File:   tree.ParseName,
+	}
+}
+
+func newASTNodeTemplateExecution(fs *token.FileSet, n ast.Node, templateName string, dataType types.Type) TemplateExecution {
+	pos := fs.Position(n.Pos())
+	return TemplateExecution{
+		tp:     dataType,
+		nd:     n,
+		Name:   templateName,
+		Type:   dataType.String(),
+		Offset: pos.Offset,
+		File:   pos.Filename,
+		Line:   pos.Line,
+		Column: pos.Column,
+	}
+}
+
+func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
+	executedTemplates[templateName] = append(executedTemplates[templateName], newASTNodeTemplateExecution(fileSet, node, templateName, dataType))
+	ts2 := ts.Lookup(templateName)
+	if ts2 == nil {
+		return fmt.Errorf("template %q not found", templateName)
+	}
+	tree := ts2.Tree
+	global.TemplateNodeType = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
+		executedTemplates[node.Name] = append(executedTemplates[node.Name], newParseNodeTemplateExecution(tree, node, tp))
+	}
+	if err := check.Execute(global, tree, dataType); err != nil {
+		return err
+	}
+	return nil
 }
