@@ -22,7 +22,7 @@ func Templates(ts *template.Template) ([]Template, error) {
 	var templates []Template
 	patterns := make(map[string]struct{})
 	for _, t := range ts.Templates() {
-		mt, err, ok := newTemplate(t.Name())
+		mt, err, ok := newTemplate(t)
 		if !ok {
 			continue
 		}
@@ -33,7 +33,6 @@ func Templates(ts *template.Template) ([]Template, error) {
 		if _, exists := patterns[pattern]; exists {
 			return templates, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
 		}
-		mt.template = t
 
 		// Extract source file from ParseName if available
 		if t.Tree != nil && t.Tree.ParseName != "" {
@@ -90,7 +89,8 @@ type Template struct {
 	canRedirect bool
 }
 
-func newTemplate(in string) (Template, error, bool) {
+func newTemplate(t *template.Template) (Template, error, bool) {
+	in := t.Name()
 	if !templateNameMux.MatchString(in) {
 		return Template{}, nil, false
 	}
@@ -105,6 +105,7 @@ func newTemplate(in string) (Template, error, bool) {
 		fileSet:           token.NewFileSet(),
 		defaultStatusCode: http.StatusOK,
 		pathValueTypes:    make(map[string]types.Type),
+		template:          t,
 	}
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
@@ -240,7 +241,8 @@ func parseHandler(fileSet *token.FileSet, def *Template, pathParameterNames []st
 	}
 	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
 	if err != nil {
-		return fmt.Errorf("failed to parse handler expression: %v", err)
+		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
+		return fmt.Errorf("failed to parse handler expression %s: %v", loc, err)
 	}
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
