@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"html/template"
 	"log"
 	"path/filepath"
@@ -17,6 +18,11 @@ import (
 
 	"github.com/typelate/muxt/internal/asteval"
 )
+
+type TemplateExecution struct {
+	CallNode any
+	Type     types.Type
+}
 
 func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	config = config.applyDefaults()
@@ -59,7 +65,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 	global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, newForrest(ts), fns)
 
 	// Track which templates are executed via ExecuteTemplate calls
-	executedTemplates := make(map[string]bool)
+	executedTemplates := make(map[string][]TemplateExecution)
 
 	var errs []error
 	for _, file := range routesPkg.Syntax {
@@ -68,7 +74,10 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 			if !ok {
 				continue
 			}
-			executedTemplates[templateName] = true
+			executedTemplates[templateName] = append(executedTemplates[templateName], TemplateExecution{
+				CallNode: node,
+				Type:     dataType,
+			})
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
@@ -77,6 +86,12 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 				return fmt.Errorf("template %q not found in %q (try running generate again)", templateName, config.TemplatesVariable)
 			}
 			tree := ts2.Tree
+			global.TemplateNodeType = func(_ *parse.Tree, node *parse.TemplateNode, tp types.Type) {
+				executedTemplates[node.Name] = append(executedTemplates[node.Name], TemplateExecution{
+					CallNode: node,
+					Type:     tp,
+				})
+			}
 			if err := check.Execute(global, tree, dataType); err != nil {
 				log.Println("ERROR", err)
 				log.Println()
@@ -114,7 +129,7 @@ func Check(wd string, log *log.Logger, config RoutesFileConfiguration) error {
 // A template is considered "used" if it:
 // 1. Is executed via ExecuteTemplate calls in the code
 // 2. Is referenced via {{template "name"}} from a used template
-func findUnusedTemplates(ts *template.Template, executedTemplates map[string]bool) []string {
+func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]TemplateExecution) []string {
 	allTemplates := ts.Templates()
 	if len(allTemplates) == 0 {
 		return nil
@@ -140,13 +155,6 @@ func findUnusedTemplates(ts *template.Template, executedTemplates map[string]boo
 			t := ts.Lookup(name)
 			if t == nil || t.Tree == nil {
 				continue
-			}
-			refs := collectTemplateReferences(t.Tree.Root)
-			for _, ref := range refs {
-				if allNames[ref] && !usedTemplates[ref] {
-					usedTemplates[ref] = true
-					changed = true
-				}
 			}
 		}
 	}
@@ -195,39 +203,4 @@ func isEmptyTemplate(node parse.Node) bool {
 		// Any other node type (actions, if, range, etc.) is non-empty
 		return false
 	}
-}
-
-// collectTemplateReferences returns all template names referenced via {{template "name"}} in a node tree
-func collectTemplateReferences(node parse.Node) []string {
-	var refs []string
-	if node == nil {
-		return refs
-	}
-
-	switch n := node.(type) {
-	case *parse.ListNode:
-		if n == nil {
-			return refs
-		}
-		for _, child := range n.Nodes {
-			refs = append(refs, collectTemplateReferences(child)...)
-		}
-
-	case *parse.TemplateNode:
-		refs = append(refs, n.Name)
-
-	case *parse.IfNode:
-		refs = append(refs, collectTemplateReferences(n.List)...)
-		refs = append(refs, collectTemplateReferences(n.ElseList)...)
-
-	case *parse.RangeNode:
-		refs = append(refs, collectTemplateReferences(n.List)...)
-		refs = append(refs, collectTemplateReferences(n.ElseList)...)
-
-	case *parse.WithNode:
-		refs = append(refs, collectTemplateReferences(n.List)...)
-		refs = append(refs, collectTemplateReferences(n.ElseList)...)
-	}
-
-	return refs
 }

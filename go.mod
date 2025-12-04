@@ -6,7 +6,7 @@ require (
 	github.com/ettle/strcase v0.2.0
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	github.com/typelate/check v0.0.3
+	github.com/typelate/check v0.0.4
 	github.com/typelate/dom v0.6.1
 	golang.org/x/net v0.47.0
 	golang.org/x/tools v0.39.0
