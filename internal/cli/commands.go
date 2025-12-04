@@ -521,7 +521,7 @@ func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 }
 
 func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	addDeprecatedReceiverType(flagSet, &g.ReceiverInterface)
+	addDeprecatedReceiverType(flagSet, &g.ReceiverType)
 	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
 	flagSet.StringVar(&g.TemplatesVariable, deprecatedFindTemplatesVariable, defaultTemplatesVariableName, "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	flagSet.StringVar(&g.ReceiverType, deprecatedFindReceiverType, "", "DEPRECATED: use --"+useReceiverType+" instead. "+useReceiverTypeHelp)

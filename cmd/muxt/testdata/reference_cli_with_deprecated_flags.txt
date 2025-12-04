@@ -1,9 +1,9 @@
 # Test that deprecated flags still work for backward compatibility
 
 # All old flags together
-muxt generate --receiver-type=Server --receiver-type-package=example.com --templates-variable=customTemplates --receiver-interface=HandlerReceiver --routes-func=ServerRoutes --template-data-type=HandlerData --template-route-paths-type=HandlerPaths --output-file=handler_routes.go
+muxt generate --receiver-type=Server --receiver-type-package=example.com --templates-variable=ts --receiver-interface=Interface --routes-func=Routes --template-data-type=Data --template-route-paths-type=Paths --output-file=handler_routes.go
 
-muxt check --templates-variable=customTemplates
+muxt check --templates-variable=ts
 
 exec go test -cover
 
@@ -34,9 +34,9 @@ import (
 )
 
 //go:embed *.gohtml
-var templatesDir embed.FS
+var src embed.FS
 
-var customTemplates = template.Must(template.ParseFS(templatesDir, "*"))
+var ts = template.Must(template.ParseFS(src, "*"))
 -- index.gohtml --
 {{define "GET / Index(ctx)"}}
 <h1>Index Page</h1>
@@ -62,7 +62,7 @@ import (
 
 func TestDeprecatedFlags(t *testing.T) {
 	mux := http.NewServeMux()
-	ServerRoutes(mux, Server{})
+	Routes(mux, Server{})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
