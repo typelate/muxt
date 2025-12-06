@@ -16,7 +16,7 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-type DocumentationConfiguration struct {
+type DefinitionsConfiguration struct {
 	Verbose           bool
 	ReceiverPackage   string
 	PackageName       string
@@ -25,7 +25,29 @@ type DocumentationConfiguration struct {
 	TemplatesVariable string
 }
 
-func Documentation(config DocumentationConfiguration, w io.Writer, wd string, _ *token.FileSet, pl []*packages.Package) error {
+type Function struct {
+	Name      string
+	Signature string
+}
+type Definition struct {
+	String    string
+	Separator string
+	Source    string
+}
+
+type ReceiverMethod struct {
+	Name      string
+	Signature string
+}
+
+type Definitions struct {
+	Functions       []Function
+	Definitions     []Definition
+	Receiver        string
+	ReceiverMethods []ReceiverMethod
+}
+
+func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token.FileSet, pl []*packages.Package) error {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package %q not found", config.ReceiverPackage)
@@ -57,42 +79,44 @@ func Documentation(config DocumentationConfiguration, w io.Writer, wd string, _ 
 	if err != nil {
 		return err
 	}
-	templates, err := muxt.Definitions(ts)
+	definitions, err := muxt.Definitions(ts)
 	if err != nil {
 		return err
 	}
-
-	writeOutput(w, functions, templates, receiver)
-
-	return nil
+	return writeRoutesList(w, functions, definitions, receiver)
 }
 
-func writeOutput(w io.Writer, functions asteval.TemplateFunctions, defs []muxt.Definition, receiver *types.Named) {
-	_, _ = fmt.Fprintf(w, "functions:\n")
+func writeRoutesList(w io.Writer, functions asteval.TemplateFunctions, defs []muxt.Definition, receiver *types.Named) error {
+	var funcList []Function
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {
 		s := strings.TrimPrefix(functions[name].String(), "func")
-		_, _ = fmt.Fprintf(w, "  - func %s%s\n", name, s)
+		funcList = append(funcList, Function{Name: name, Signature: s})
 	}
 
-	_, _ = fmt.Fprintf(w, "\nTemplate Routes:\n\n")
+	var defList []Definition
 	for _, def := range defs {
-		_, _ = fmt.Fprintf(w, "%s\n", def.String())
-
-		const prefix = "<!DOCTYPE"
-		if src := def.Template().Tree.Root.String(); len(src) >= len(prefix) && strings.EqualFold(src[:len(prefix)], "<!DOCTYPE") {
-			_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n\n\n", strings.Repeat("=", 40), src, strings.Repeat("-", 40))
-		} else {
-			_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n\n\n", strings.Repeat("=", 40), src, strings.Repeat("-", 40))
-		}
+		src := def.Template().Tree.Root.String()
+		defList = append(defList, Definition{
+			String:    def.String(),
+			Separator: strings.Repeat("=", 40),
+			Source:    src,
+		})
 	}
 
-	_, _ = fmt.Fprintf(w, "\nReceiver Type: %s\n", receiver.String())
-	if receiver.NumMethods() > 0 {
-		_, _ = fmt.Fprintf(w, "\nReceiver Methods:\n")
-	}
+	var methods []ReceiverMethod
 	for i := 0; i < receiver.NumMethods(); i++ {
 		m := receiver.Method(i)
-		_, _ = fmt.Fprintf(w, "  - func (%s) %s%s\n", receiver.String(), m.Name(), strings.TrimPrefix(m.Signature().String(), "func"))
+		methods = append(methods, ReceiverMethod{
+			Name:      m.Name(),
+			Signature: strings.TrimPrefix(m.Signature().String(), "func"),
+		})
 	}
+
+	return templates.ExecuteTemplate(w, "routes.txt.template", Definitions{
+		Functions:       funcList,
+		Definitions:     defList,
+		Receiver:        receiver.String(),
+		ReceiverMethods: methods,
+	})
 }

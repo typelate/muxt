@@ -1,3 +1,4 @@
+
 # Muxt Advanced Reference
 
 Supplements [muxt-guide.md](muxt-guide.md) with edge cases and detailed patterns.

@@ -1,0 +1,14 @@
+{{define "imports" -}}
+{{- if .Imports}}
+import (
+{{- range .Imports}}
+	"{{.}}"
+{{- end}}
+)
+
+{{end}}
+{{- end}}
+
+{{define "template reference" -}}
+	{{.Position.String}} {{.Kind}} {{if ne (filepathBase .Position.Filename) .Name}}{{printf "%q" .Name}}{{end}}
+{{- end}}
