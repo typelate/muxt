@@ -57,7 +57,7 @@ func (s Server) M() error          // .Err=error
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --find-receiver-type=Server
+//go:generate muxt generate --use-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 type Server struct{
@@ -78,8 +78,8 @@ func main() {
 ## Commands
 
 ```bash
-muxt generate --find-receiver-type=Server  # Generate handlers
-muxt check --find-receiver-type=Server     # Type check only
+muxt generate --use-receiver-type=Server  # Generate handlers
+muxt check --use-receiver-type=Server     # Type check only
 ```
 
 See [muxt-guide.md](muxt-guide.md) for complete documentation.

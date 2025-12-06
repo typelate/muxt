@@ -128,10 +128,10 @@ import (
 //go:embed admin/ public/ shared/
 var templateSource embed.FS
 
-//go:generate muxt generate --find-templates-variable=publicTmpl --output-routes-func=PublicRoutes --output-file=routes_public.go --output-receiver-interface=PublicHandler
+//go:generate muxt generate --use-templates-variable=publicTmpl --output-routes-func=PublicRoutes --output-file=routes_public.go --output-receiver-interface=PublicHandler
 var publicTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "public/*.gohtml"))
 
-//go:generate muxt generate --find-templates-variable=adminTmpl --output-routes-func=AdminRoutes --output-file=routes_admin.go --output-receiver-interface=AdminHandler
+//go:generate muxt generate --use-templates-variable=adminTmpl --output-routes-func=AdminRoutes --output-file=routes_admin.go --output-receiver-interface=AdminHandler
 var adminTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "admin/*.gohtml"))
 ```
 
@@ -230,7 +230,7 @@ func TestGetPortfolio(t *testing.T) {
 //go:embed *.gohtml
 var fs embed.FS
 
-//go:generate muxt generate --find-receiver-type=Server
+//go:generate muxt generate --use-receiver-type=Server
 var templates = template.Must(
     template.New("").
         Funcs(template.FuncMap{

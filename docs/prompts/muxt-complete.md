@@ -34,17 +34,17 @@ func (d TemplateData[T]) Header(k, v string) TemplateData[T] // Set header
 
 ```bash
 muxt generate \
-  --find-receiver-type=Server \
-  --find-receiver-type-package=github.com/app/server \
+  --use-receiver-type=Server \
+  --use-receiver-type-package=github.com/app/server \
   --output-file=routes.go \
   --output-routes-func=TemplateRoutes \
   --output-receiver-interface=RoutesReceiver \
-  --logger \
-  --path-prefix
+  --output-routes-func-with-logger-param \
+  --output-routes-func-with-path-prefix-param
 ```
 
-With `--logger`: `func TemplateRoutes(mux, receiver, logger *slog.Logger)`
-With `--path-prefix`: `func TemplateRoutes(mux, receiver, prefix string)`
+With `--output-routes-func-with-logger-param`: `func TemplateRoutes(mux, receiver, logger *slog.Logger)`
+With `--output-routes-func-with-path-prefix-param`: `func TemplateRoutes(mux, receiver, prefix string)`
 
 ## Generated File Structure
 
@@ -187,8 +187,8 @@ type Server struct {
 **Cross-package receiver:**
 ```bash
 muxt generate \
-  --find-receiver-type=Server \
-  --find-receiver-type-package=github.com/app/internal/server
+  --use-receiver-type=Server \
+  --use-receiver-type-package=github.com/app/internal/server
 ```
 
 **url.Values parameter:**
