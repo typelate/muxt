@@ -21,29 +21,43 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
+const (
+	helpCommandName                = "help"
+	generateCommandName            = "generate"
+	versionCommandName             = "version"
+	checkCommandName               = "check"
+	readTemplateSourceCommandName  = "read-template-source"
+	listTemplateCallersCommandName = "list-template-callers"
+	listTemplateCallsCommandName   = "list-template-calls"
+)
+
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
-	if len(args) <= 1 {
-		return writeHelp(stdout)
-	}
 	args = args[1:]
 	var err error
 	wd, args, err = global(wd, args, stderr)
 	if err != nil {
 		return err
 	}
+	if len(args) == 0 {
+		return listRoutes(wd, nil, stdout, stderr)
+	}
 	switch cmd, cmdArgs := args[0], args[1:]; cmd {
-	case "help":
-		return writeHelp(stdout)
-	case "generate", "gen", "g":
+	case helpCommandName, "h":
+		return writeHelp(stdout, nil)
+	case generateCommandName, "gen", "g":
 		return generateCommand(wd, cmdArgs, getEnv, stdout, stderr)
-	case "version", "v":
+	case versionCommandName, "v":
 		return versionCommand(cmdArgs, stdout, stderr)
-	case "check", "chk", "c":
+	case checkCommandName, "c":
 		return checkCommand(wd, cmdArgs, stderr)
-	case "documentation", "docs", "doc", "d":
-		return documentationCommand(wd, cmdArgs, stdout, stderr)
+	//case readTemplateSourceCommandName, "source":
+	//	return templateSourceCommand(wd, args[1:], stdout, stderr)
+	case listTemplateCallersCommandName, "callers":
+		return listTemplateCallersCommand(wd, args[1:], stdout, stderr)
+	case listTemplateCallsCommandName, "calls":
+		return listTemplateCallsCommand(wd, args[1:], stdout, stderr)
 	default:
-		return fmt.Errorf("unknown command")
+		return writeHelp(stderr, fmt.Errorf("unknown command: %q", cmd))
 	}
 }
 
@@ -281,18 +295,77 @@ func writeCodeGenerationComment(w io.StringWriter, args []string) {
 //go:embed help.txt
 var helpText string
 
-func writeHelp(stdout io.Writer) error {
-	var help strings.Builder
-	help.WriteString(helpText)
+func writeHelp(stderr io.Writer, err error) error {
+	var b strings.Builder
+	if err != nil {
+		b.WriteString("ERROR: ")
+		b.WriteString(err.Error())
+		b.WriteString("\n\n")
+	}
+	b.WriteString(helpText)
 	flagSet := routesFileConfigurationFlagSet(new(generate.RoutesFileConfiguration))
-	flagSet.SetOutput(&help)
+	flagSet.SetOutput(&b)
 	flagSet.PrintDefaults()
-	_, err := fmt.Fprint(stdout, help.String())
+	_, err = fmt.Fprint(stderr, b.String())
 	return err
 }
 
-func documentationCommand(wd string, args []string, stdout, stderr io.Writer) error {
-	config, err := newDocumentationConfiguration(args, stderr)
+func templateSourceCommand(wd string, args []string, stdout, stderr io.Writer) error {
+	config, err := newTemplateSourceConfiguration(args, stderr)
+	if err != nil {
+		return err
+	}
+	_, pl, err := asteval.LoadPackages(wd)
+	if err != nil {
+		return err
+	}
+	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
+	if !ok {
+		return fmt.Errorf("package not found at %s", wd)
+	}
+
+	ts, _, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
+	if err != nil {
+		return err
+	}
+	return analysis.NewTemplateSource(config, stdout, ts)
+}
+
+func listTemplateCallersCommand(wd string, args []string, stdout, stderr io.Writer) error {
+	config, err := newListTemplateCallersConfiguration(args, stderr)
+	if err != nil {
+		return err
+	}
+	fileSet, pl, err := asteval.LoadPackages(wd)
+	if err != nil {
+		return err
+	}
+	pkg, glb, ts, err := asteval.LoadTemplates(wd, config.TemplatesVariable, pl)
+	if err != nil {
+		return err
+	}
+	return analysis.NewTemplateCallers(config, stdout, fileSet, pkg, glb, ts)
+}
+
+func listTemplateCallsCommand(wd string, args []string, stdout, stderr io.Writer) error {
+	config, err := newListTemplateCallsConfiguration(args, stderr)
+	if err != nil {
+		return err
+	}
+	_, pl, err := asteval.LoadPackages(wd)
+	if err != nil {
+		return err
+	}
+	pkg, glb, ts, err := asteval.LoadTemplates(wd, config.TemplatesVariable, pl)
+	if err != nil {
+		return err
+	}
+	return analysis.NewTemplateCalls(config, stdout, pkg, glb, ts)
+}
+
+func listRoutes(wd string, args []string, stdout, stderr io.Writer) error {
+	// Default behavior (current implementation)
+	config, err := newListRoutesConfiguration(args, stderr)
 	if err != nil {
 		return err
 	}
@@ -300,7 +373,7 @@ func documentationCommand(wd string, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	return analysis.Documentation(config, stdout, wd, fileSet, pl)
+	return analysis.NewRoutes(config, stdout, wd, fileSet, pl)
 }
 
 func versionCommand(args []string, stdout, stderr io.Writer) error {
@@ -471,21 +544,60 @@ func newCheckConfiguration(args []string, stderr io.Writer) (analysis.CheckConfi
 	return g, nil
 }
 
-func newDocumentationConfiguration(args []string, stderr io.Writer) (analysis.DocumentationConfiguration, error) {
-	var g analysis.DocumentationConfiguration
+func newListRoutesConfiguration(args []string, stderr io.Writer) (analysis.DefinitionsConfiguration, error) {
+	var g analysis.DefinitionsConfiguration
 	flagSet := documentationFlagSet(&g)
 	flagSet.SetOutput(stderr)
 	if err := flagSet.Parse(args); err != nil {
 		return g, err
 	}
 	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return analysis.DocumentationConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+		return analysis.DefinitionsConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 	}
 	if g.TemplatesVariable == "" {
-		return analysis.DocumentationConfiguration{}, fmt.Errorf("no template variable specified")
+		return analysis.DefinitionsConfiguration{}, fmt.Errorf("no template variable specified")
 	}
 	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return analysis.DocumentationConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+		return analysis.DefinitionsConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
+	}
+	return g, nil
+}
+
+func newTemplateSourceConfiguration(args []string, stderr io.Writer) (analysis.TemplateSourceConfiguration, error) {
+	var g analysis.TemplateSourceConfiguration
+	flagSet := templateSourceFlagSet(&g)
+	flagSet.SetOutput(stderr)
+	if err := flagSet.Parse(args); err != nil {
+		return g, err
+	}
+	if g.TemplatesVariable == "" {
+		g.TemplatesVariable = defaultTemplatesVariableName
+	}
+	return g, nil
+}
+
+func newListTemplateCallersConfiguration(args []string, stderr io.Writer) (analysis.TemplateCallersConfiguration, error) {
+	var g analysis.TemplateCallersConfiguration
+	flagSet := listTemplateCallersFlagSet(&g)
+	flagSet.SetOutput(stderr)
+	if err := flagSet.Parse(args); err != nil {
+		return g, err
+	}
+	if g.TemplatesVariable == "" {
+		g.TemplatesVariable = defaultTemplatesVariableName
+	}
+	return g, nil
+}
+
+func newListTemplateCallsConfiguration(args []string, stderr io.Writer) (analysis.TemplateCallsConfiguration, error) {
+	var g analysis.TemplateCallsConfiguration
+	flagSet := listTemplateCallsFlagSet(&g)
+	flagSet.SetOutput(stderr)
+	if err := flagSet.Parse(args); err != nil {
+		return g, err
+	}
+	if g.TemplatesVariable == "" {
+		g.TemplatesVariable = defaultTemplatesVariableName
 	}
 	return g, nil
 }
@@ -584,7 +696,7 @@ func checkFlagSet(g *analysis.CheckConfiguration) *pflag.FlagSet {
 	return flagSet
 }
 
-func documentationFlagSet(g *analysis.DocumentationConfiguration) *pflag.FlagSet {
+func documentationFlagSet(g *analysis.DefinitionsConfiguration) *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("documentation", pflag.ContinueOnError)
 
 	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
@@ -592,6 +704,36 @@ func documentationFlagSet(g *analysis.DocumentationConfiguration) *pflag.FlagSet
 	adUseReceiverTypePackageVarToFlagSet(flagSet, &g.ReceiverPackage)
 
 	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
+
+	return flagSet
+}
+
+func templateSourceFlagSet(g *analysis.TemplateSourceConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("documentation source", pflag.ContinueOnError)
+
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+
+	flagSet.StringVar(&g.TemplateName, "name", "", "select the template with the exact name")
+
+	return flagSet
+}
+
+func listTemplateCallersFlagSet(g *analysis.TemplateCallersConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("list-template-callers", pflag.ContinueOnError)
+
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+
+	flagSet.StringArrayVar(&g.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+
+	return flagSet
+}
+
+func listTemplateCallsFlagSet(g *analysis.TemplateCallsConfiguration) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("list-template-calls", pflag.ContinueOnError)
+
+	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
+
+	flagSet.StringArrayVar(&g.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
 
 	return flagSet
 }

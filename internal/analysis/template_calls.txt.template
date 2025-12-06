@@ -1,0 +1,7 @@
+{{- range .Templates}}
+template {{printf "%q" .Name}} calls:
+{{- range .References}}
+	- {{template "template reference" .}}
+{{- end}}
+
+{{end}}

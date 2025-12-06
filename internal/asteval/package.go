@@ -1,9 +1,12 @@
 package asteval
 
 import (
+	"fmt"
 	"go/token"
+	"html/template"
 	"path/filepath"
 
+	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -48,4 +51,22 @@ func PackageWithPath(list []*packages.Package, path string) (*packages.Package, 
 		}
 	}
 	return nil, false
+}
+
+func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*packages.Package, *check.Global, *template.Template, error) {
+	pkg, ok := PackageAtFilepath(pl, wd)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("package not found at %s", wd)
+	}
+
+	ts, fm, err := Templates(wd, templatesVariable, pkg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Set up the check package for template type analysis
+	fns := check.DefaultFunctions(pkg.Types)
+	fns = fns.Add(check.Functions(fm))
+	global := check.NewGlobal(pkg.Types, pkg.Fset, NewForrest(ts), fns)
+	return pkg, global, ts, nil
 }
