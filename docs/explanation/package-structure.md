@@ -90,7 +90,7 @@ var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml", "*.g
 ### Pattern 1: Inline Templates
 
 ```go
-//go:generate muxt generate --find-receiver-type=Client
+//go:generate muxt generate --use-receiver-type=Client
 var templates = template.Must(template.New("GET / List()").Parse(`
 <ul>
 {{range .Result}}
@@ -131,7 +131,7 @@ var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
 //go:embed pages/*.gohtml components/*.gohtml layouts/*.gohtml
 var templatesDir embed.FS
 
-//go:generate muxt generate --find-receiver-type=App
+//go:generate muxt generate --use-receiver-type=App
 var templates = template.Must(template.ParseFS(templatesDir,
     "pages/*.gohtml",
     "components/*.gohtml",
@@ -147,7 +147,7 @@ var templates = template.Must(template.ParseFS(templatesDir,
 //go:embed **/*.gohtml
 var templatesDir embed.FS
 
-//go:generate muxt generate --find-receiver-type=App
+//go:generate muxt generate --use-receiver-type=App
 var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml"))
 ```
 
@@ -159,7 +159,7 @@ var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml"))
 //go:embed **/*.gohtml
 var templatesDir embed.FS
 
-//go:generate muxt generate --find-receiver-type=App
+//go:generate muxt generate --use-receiver-type=App
 var templates = template.Must(
     template.New("").
         Funcs(customFuncs).

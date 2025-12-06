@@ -97,7 +97,7 @@ import (
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --find-receiver-type=Server
+//go:generate muxt generate --use-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 type Server struct{ db Database }
@@ -118,16 +118,16 @@ Run: `go generate && go run .`
 ## CLI
 
 ```bash
-muxt generate --find-receiver-type=Server   # Generate handlers
-muxt check --find-receiver-type=Server      # Type check only
-muxt generate --find-receiver-type=Server --logger --path-prefix
+muxt generate --use-receiver-type=Server   # Generate handlers
+muxt check --use-receiver-type=Server      # Type check only
+muxt generate --use-receiver-type=Server --output-routes-func-with-logger-param --output-routes-func-with-path-prefix-param
 ```
 
 Key flags:
-- `--find-receiver-type=T` — Type with handler methods
+- `--use-receiver-type=T` — Type with handler methods
 - `--output-file=routes.go` — Output filename
-- `--logger` — Add `*slog.Logger` parameter
-- `--path-prefix` — Add path prefix parameter
+- `--output-routes-func-with-logger-param` — Add `*slog.Logger` parameter
+- `--output-routes-func-with-path-prefix-param` — Add path prefix parameter
 - `-C ./web` — Run from directory
 
 ## Generated Files
