@@ -9,7 +9,7 @@ Use this reference when designing method signatures with team members.
 |---------|----------------|-------------|----------|
 | `T` | `T` | Always `nil` | Infallible operations (static pages) |
 | `(T, error)` | `T` (zero if error) | `error` or `nil` | Most endpoints (can fail) |
-| `(T, bool)` | `T` | Always `nil` | Early exit/redirect (bool=true skips template) |
+| `(T, bool)` | `T` | Always `nil` | Early exit/redirect (bool=false skips template) |
 | `error` | `struct{}` | `error` or `nil` | No data needed (health checks) |
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
@@ -71,13 +71,13 @@ func (s Server) Download(response http.ResponseWriter, request *http.Request, id
     file, ok := s.cache.Get(id)
     if ok {
         http.ServeContent(response, request, file.Name, file.ModTime, file.Reader)
-        return file, true  // Skip template execution
+        return file, false  // I handled it, skip template
     }
-    return file, false  // Execute template
+    return file, true  // Continue to template execution
 }
 ```
 
-**Behavior:** If bool = `true`, handler returns immediately (skip template). If bool = `false`, execute template normally.
+**Behavior:** If bool = `false`, handler returns immediately (you already wrote the response). If bool = `true`, execute template normally with `.Ok()` = true.
 
 [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)
 
