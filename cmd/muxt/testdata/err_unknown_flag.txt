@@ -1,5 +1,5 @@
 ! muxt generate --unknown
-stderr 'flag'
+stderr '^unknown flag: --unknown$'
 
 -- template.gohtml --
 {{printf "Hello, %s!", "world"}}
