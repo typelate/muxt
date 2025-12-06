@@ -39,7 +39,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error) {
 }
 ```
 
-Run `muxt generate --receiver-type=Server` to generate HTTP handlers.
+Run `muxt generate --use-receiver-type=Server` to generate HTTP handlers.
 
 ## How It Works
 
@@ -78,7 +78,7 @@ Or add it to your project's module `go get -tool github.com/typelate/muxt` (note
 //go:embed *.gohtml
 var templateFS embed.FS
 
-//go:generate muxt generate --receiver-type=Server
+//go:generate muxt generate --use-receiver-type=Server
 var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 type Server struct{}
@@ -94,6 +94,8 @@ go generate && go run .
 ```
 
 ## Examples
+
+The [command tests](./cmd/muxt/testdata) were intended to be readable examples of muxt behavior.
 
 - **[Local example](./docs/examples/simple/hypertext/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
 - **[Sortable Example](http://github.com/typelate/sortable-example)** - Interactive HTMX-enabled table row sorting
