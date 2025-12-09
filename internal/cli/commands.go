@@ -584,7 +584,7 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	}
 }
 
-func writeResult[T io.WriterTo](cmd *cobra.Command, w io.Writer, result T) error {
+func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 	format, err := cmd.Flags().GetString("format")
 	if err != nil {
 		return err
