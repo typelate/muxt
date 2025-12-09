@@ -27,7 +27,7 @@ type TemplateCallers struct {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSet *token.FileSet, routesPkg *packages.Package, global *check.Global, ts *template.Template) error {
+func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSet *token.FileSet, pkg *packages.Package, global *check.Global, ts *template.Template) error {
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -37,14 +37,14 @@ func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSe
 			Position: pos,
 			Kind:     ParseTemplateNode,
 			Name:     tree.Name,
-			Data:     data,
+			data:     data,
 		})
 	}
 
 	// Find ExecuteTemplate calls
-	for _, file := range routesPkg.Syntax {
+	for _, file := range pkg.Syntax {
 		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, routesPkg.TypesInfo, config.TemplatesVariable)
+			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, config.TemplatesVariable)
 			if !ok {
 				continue
 			}
@@ -53,7 +53,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSe
 				Position: fileSet.Position(node.Pos()),
 				Kind:     ExecuteTemplateNode,
 				Name:     templateName,
-				Data:     dataType,
+				data:     dataType,
 			})
 
 			// Analyze the template to find {{template}} calls
@@ -70,8 +70,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSe
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NamedReferences{Name: name, References: refs[name]})
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
-
 	return templates.ExecuteTemplate(w, "template_callers.txt.template", result)
 }

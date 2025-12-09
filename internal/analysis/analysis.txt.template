@@ -1,14 +1,7 @@
 {{define "imports" -}}
-{{- if .Imports}}
-import (
-{{- range .Imports}}
-	"{{.}}"
-{{- end}}
-)
-
+{{- with .Imports}}
+{{with .}}{{. | indent "  "}}{{end}}
 {{end}}
 {{- end}}
 
-{{define "template reference" -}}
-	{{.Position.String}} {{.Kind}} {{if ne (filepathBase .Position.Filename) .Name}}{{printf "%q" .Name}}{{end}}
-{{- end}}
+{{define "template reference"}}{{.Position.String}} {{.Kind}} {{if ne (filepathBase .Position.Filename) .Name}}{{printf "%q" .Name}}{{end}}{{with .Data}} {{.}}{{end}}{{end}}

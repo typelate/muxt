@@ -28,14 +28,14 @@ type TemplateCalls struct {
 // NewTemplateCalls shows what templates use (other templates they call)
 func NewTemplateCalls(config TemplateCallsConfiguration, w io.Writer, pkg *packages.Package, global *check.Global, ts *template.Template) error {
 	// Track what each template uses (calls via {{template}})
-	uses := make(map[string][]TemplateReference) // template -> set of templates it calls
+	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
-	global.TemplateNodeType = func(currentTree *parse.Tree, node *parse.TemplateNode, data types.Type) {
-		uses[currentTree.Name] = append(uses[currentTree.Name], TemplateReference{
+	global.TemplateNodeType = func(tree *parse.Tree, node *parse.TemplateNode, data types.Type) {
+		refs[tree.Name] = append(refs[tree.Name], TemplateReference{
 			Name:     node.Name,
 			Kind:     ParseTemplateNode,
-			Position: asteval.NewParseNodePosition(currentTree, node),
-			Data:     data,
+			Position: asteval.NewParseNodePosition(tree, node),
+			data:     data,
 		})
 	}
 
@@ -54,15 +54,12 @@ func NewTemplateCalls(config TemplateCallsConfiguration, w io.Writer, pkg *packa
 	}
 
 	var result TemplateCalls
-	names := slices.Sorted(maps.Keys(uses))
+	names := slices.Sorted(maps.Keys(refs))
 	for _, name := range names {
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NamedReferences{
-			Name:       name,
-			References: uses[name],
-		})
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
 	return templates.ExecuteTemplate(w, "template_calls.txt.template", result)
 }

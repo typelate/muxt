@@ -1,7 +1,8 @@
 {{- range .Templates}}
 template {{printf "%q" .Name}} called by:
+{{template "imports" .}}
 {{- range .References}}
-	- {{template "template reference" .}}
+  - {{template "template reference" .}}
 {{- end}}
 
 {{end}}
