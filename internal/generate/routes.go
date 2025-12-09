@@ -96,9 +96,16 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
-	receiver, err := resolveReceiver(config, file, routesPkg)
-	if err != nil {
-		return nil, err
+
+	var receiver *types.Named
+	if config.ReceiverType == "" {
+		receiver = asteval.NamedEmptyStruct("Receiver", routesPkg.Types)
+	} else {
+		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
+		receiver, err = asteval.FindType(pl, receiverPkgPath, config.ReceiverType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ts, _, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
@@ -356,29 +363,6 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 		},
 		Args: []ast.Expr{pattern, handlerFuncLit},
 	}}
-}
-
-func resolveReceiver(config RoutesFileConfiguration, file *File, routesPkg *packages.Package) (*types.Named, error) {
-	if config.ReceiverType == "" {
-		receiver := types.NewNamed(types.NewTypeName(0, routesPkg.Types, "Receiver", nil), types.NewStruct(nil, nil), nil)
-		return receiver, nil
-	}
-
-	receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-	receiverPkg, ok := file.Package(receiverPkgPath)
-	if !ok {
-		return nil, fmt.Errorf("could not determine receiver package %s", receiverPkgPath)
-	}
-	obj := receiverPkg.Types.Scope().Lookup(config.ReceiverType)
-	if config.ReceiverType != "" && obj == nil {
-		return nil, fmt.Errorf("could not find receiver type %s in %s", config.ReceiverType, receiverPkg.PkgPath)
-	}
-	named, ok := obj.Type().(*types.Named)
-	if !ok {
-		return nil, fmt.Errorf("expected receiver %s to be a named type", config.ReceiverType)
-	}
-
-	return named, nil
 }
 
 // generatePerFileRouteFunction creates a route registration function for templates from a specific source file.

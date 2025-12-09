@@ -3,6 +3,7 @@ package asteval
 import (
 	"fmt"
 	"go/token"
+	"go/types"
 	"html/template"
 	"path/filepath"
 
@@ -69,4 +70,23 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*packa
 	fns = fns.Add(check.Functions(fm))
 	global := check.NewGlobal(pkg.Types, pkg.Fset, NewForrest(ts), fns)
 	return pkg, global, ts, nil
+}
+
+func FindType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
+	notFoundErr := fmt.Errorf("could not find receiver type %s in %s", ident, packagePath)
+	for _, pkg := range pl {
+		if pkg.PkgPath != packagePath {
+			continue
+		}
+		obj := pkg.Types.Scope().Lookup(ident)
+		if obj == nil {
+			return nil, notFoundErr
+		}
+		named, ok := obj.Type().(*types.Named)
+		if !ok {
+			return nil, fmt.Errorf("expected receiver %s to be a named type", ident)
+		}
+		return named, nil
+	}
+	return nil, notFoundErr
 }
