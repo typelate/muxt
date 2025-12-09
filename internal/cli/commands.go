@@ -595,7 +595,7 @@ func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 		if err != nil {
 			return err
 		}
-		_, err = w.Write(buf)
+		_, err = w.Write(append(buf, '\n'))
 		return err
 	case "text":
 		_, err := result.WriteTo(w)
