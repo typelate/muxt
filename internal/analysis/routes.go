@@ -43,39 +43,29 @@ type ReceiverMethod struct {
 type Definitions struct {
 	Functions       []Function
 	Definitions     []Definition
-	Receiver        string
+	Receiver        *types.Named
 	ReceiverMethods []ReceiverMethod
 }
 
 func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token.FileSet, pl []*packages.Package) error {
-	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
+	pkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
-		return fmt.Errorf("package %q not found", config.ReceiverPackage)
+		return fmt.Errorf("package not found in working directory")
 	}
 
-	config.PackagePath = routesPkg.PkgPath
-	config.PackageName = routesPkg.Name
+	config.PackagePath = pkg.PkgPath
+	config.PackageName = pkg.Name
+
 	var receiver *types.Named
 	if config.ReceiverType != "" {
-		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-		receiverPkg, ok := asteval.PackageWithPath(pl, receiverPkgPath)
-		if !ok {
-			return fmt.Errorf("could not find receiver package %s", receiverPkgPath)
+		var err error
+		receiver, err = asteval.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
+		if err != nil {
+			return err
 		}
-		obj := receiverPkg.Types.Scope().Lookup(config.ReceiverType)
-		if config.ReceiverType != "" && obj == nil {
-			return fmt.Errorf("could not find receiver type %s in %s", config.ReceiverType, receiverPkg.PkgPath)
-		}
-		named, ok := obj.Type().(*types.Named)
-		if !ok {
-			return fmt.Errorf("expected receiver %s to be a named type", config.ReceiverType)
-		}
-		receiver = named
-	} else {
-		receiver = types.NewNamed(types.NewTypeName(0, routesPkg.Types, "Receiver", nil), types.NewStruct(nil, nil), nil)
 	}
 
-	ts, functions, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
+	ts, functions, err := asteval.Templates(wd, config.TemplatesVariable, pkg)
 	if err != nil {
 		return err
 	}
@@ -83,6 +73,7 @@ func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token
 	if err != nil {
 		return err
 	}
+
 	return writeRoutesList(w, functions, definitions, receiver)
 }
 
@@ -104,19 +95,21 @@ func writeRoutesList(w io.Writer, functions asteval.TemplateFunctions, defs []mu
 		})
 	}
 
-	var methods []ReceiverMethod
-	for i := 0; i < receiver.NumMethods(); i++ {
-		m := receiver.Method(i)
-		methods = append(methods, ReceiverMethod{
-			Name:      m.Name(),
-			Signature: strings.TrimPrefix(m.Signature().String(), "func"),
-		})
+	def := Definitions{
+		Functions:   funcList,
+		Definitions: defList,
 	}
 
-	return templates.ExecuteTemplate(w, "routes.txt.template", Definitions{
-		Functions:       funcList,
-		Definitions:     defList,
-		Receiver:        receiver.String(),
-		ReceiverMethods: methods,
-	})
+	if receiver != nil {
+		def.Receiver = receiver
+		for i := 0; i < receiver.NumMethods(); i++ {
+			m := receiver.Method(i)
+			def.ReceiverMethods = append(def.ReceiverMethods, ReceiverMethod{
+				Name:      m.Name(),
+				Signature: strings.TrimPrefix(m.Signature().String(), "func"),
+			})
+		}
+	}
+
+	return templates.ExecuteTemplate(w, "routes.txt.template", def)
 }

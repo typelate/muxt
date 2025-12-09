@@ -1,13 +1,14 @@
+{{if .Receiver}}
 Receiver Type: {{.Receiver}}
 {{if .ReceiverMethods}}
 Receiver Methods:
 {{range .ReceiverMethods}}  - func ({{$.Receiver}}) {{.Name}}{{.Signature}}
 {{end}}{{end}}
 
+{{end -}}
 Template Routes:
 {{range .Definitions}}  - {{.String}}
 {{end}}
-
 Template Functions:
 {{range .Functions}}  - func {{.Name}}{{.Signature}}
 {{end}}
