@@ -1,13 +1,18 @@
 # Tests filtering template callers with --template flag
 
-muxt list-template-callers --template=header
+muxt list-template-callers --match=header
 stdout 'template "header" called by:'
 ! stdout 'template "footer" called by:'
 
-muxt list-template-callers --template=header --template=footer
+muxt list-template-callers --match=header --match=footer
 stdout 'template "header" called by:'
 stdout 'template "footer" called by:'
 ! stdout 'template "layout" called by:'
+
+# 'callers' is an alias for 'list-template-callers'
+muxt callers --match=header
+stdout 'template "header" called by:'
+! stdout 'template "footer" called by:'
 
 -- go.mod --
 module server
