@@ -4,11 +4,13 @@ USAGE:
   muxt [command] [flags]
 
 COMMANDS:
-  help            View this help documentation and available flags
-  generate        Generate HTTP handlers from templates
-  check           Type-check templates without generating code
-  documentation   Display template documentation (work in progress)
-  version         Print the muxt version
+  (no command)                   List routes from templates (default behavior)
+  help, h                        View this help documentation and available flags
+  generate, gen, g               Generate HTTP handlers from templates
+  check, c                       Type-check templates without generating code
+  list-template-callers, callers List all templates that call other templates
+  list-template-calls, calls     List all template calls made by templates
+  version, v                     Print the muxt version
 
 COMMAND-SPECIFIC FLAGS:
 
@@ -31,6 +33,9 @@ COMMAND-SPECIFIC FLAGS:
       --output-template-route-paths-type          Generated path helpers type name (default: "TemplateRoutePaths")
 
 EXAMPLES:
+  # List routes defined in templates
+  muxt
+
   # Basic generation with type checking
   muxt generate --use-receiver-type=Server
 
@@ -42,5 +47,11 @@ EXAMPLES:
 
   # Use templates from a different variable
   muxt generate --use-templates-variable=myTemplates --use-receiver-type=Handler
+
+  # List templates that call other templates
+  muxt list-template-callers
+
+  # List all template calls, optionally filtering by template name
+  muxt list-template-calls --template=layout.gohtml
 
 For detailed flag information, run: muxt generate --help
