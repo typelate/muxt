@@ -32,8 +32,7 @@ const (
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
 	var changeDir string
-
-	args = args[1:]
+	workingDirectory := &wd
 
 	var rootCommandConfig analysis.DefinitionsConfiguration
 	rootCmd := &cobra.Command{
@@ -53,15 +52,15 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				}
 				newWd = cd
 			}
-			wd = newWd
+			*workingDirectory = newWd
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSet, pl, err := asteval.LoadPackages(wd, rootCommandConfig.ReceiverPackage)
+			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
 			}
-			return analysis.NewRoutes(rootCommandConfig, cmd.OutOrStdout(), wd, fileSet, pl)
+			return analysis.NewRoutes(rootCommandConfig, cmd.OutOrStdout(), *workingDirectory, fileSet, pl)
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
@@ -76,11 +75,11 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	rootCmd.SetErr(stderr)
 
 	rootCmd.AddCommand(
-		generateCommand(&wd),
+		generateCommand(workingDirectory),
 		versionCommand(),
-		checkCommand(&wd),
-		listTemplateCallersCommand(&wd),
-		listTemplateCallsCommand(&wd),
+		checkCommand(workingDirectory),
+		listTemplateCallersCommand(workingDirectory),
+		listTemplateCallsCommand(workingDirectory),
 	)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr
