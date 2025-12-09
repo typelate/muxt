@@ -67,7 +67,7 @@ func scriptCommand() script.Cmd {
 	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
 		return func(state *script.State) (string, string, error) {
 			var stdout, stderr bytes.Buffer
-			err := cli.Commands(state.Getwd(), append([]string{"muxt"}, args...), func(s string) string {
+			err := cli.Commands(state.Getwd(), args, func(s string) string {
 				e, _ := state.LookupEnv(s)
 				return e
 			}, &stdout, &stderr)

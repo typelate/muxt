@@ -11,7 +11,7 @@ func main() {
 	if err != nil {
 		os.Exit(handleError(err))
 	}
-	os.Exit(handleError(cli.Commands(wd, os.Args, os.Getenv, os.Stdout, os.Stderr)))
+	os.Exit(handleError(cli.Commands(wd, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)))
 }
 
 func handleError(err error) int {

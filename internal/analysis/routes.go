@@ -83,7 +83,11 @@ func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token
 
 	var defList []Definition
 	for _, def := range definitions {
-		src := def.Template().Tree.Root.String()
+		t := def.Template()
+		if t == nil || t.Tree == nil || t.Tree.Root == nil {
+			continue
+		}
+		src := t.Tree.Root.String()
 		defList = append(defList, Definition{
 			String:    def.String(),
 			Separator: strings.Repeat("=", 40),
