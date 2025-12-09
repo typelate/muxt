@@ -69,7 +69,7 @@ type TemplateReference struct {
 	Kind     TemplateReferenceKind
 	Position token.Position
 	data     types.Type
-	Data     string `json:"Data,omitempty"`
+	Data     string `json:",omitempty"`
 }
 
 type NamedReferences struct {
