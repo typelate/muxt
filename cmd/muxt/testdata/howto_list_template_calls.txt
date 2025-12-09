@@ -1,13 +1,18 @@
 # Tests filtering template calls with --template flag
 
-muxt list-template-calls --template=layout
+muxt list-template-calls --match=layout
 stdout 'template "layout" calls:'
 ! stdout 'template "page.gohtml" calls:'
 
-muxt list-template-calls --template=layout --template='page.gohtml'
+muxt list-template-calls --match=layout --match='page\.gohtml'
 stdout 'template "layout" calls:'
 stdout 'template "page.gohtml" calls:'
 ! stdout 'template "header" calls:'
+
+# 'calls' is an alias for 'list-template-calls'
+muxt calls --match=layout
+stdout 'template "layout" calls:'
+! stdout 'template "page.gohtml" calls:'
 
 -- go.mod --
 module server

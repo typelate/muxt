@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"maps"
+	"regexp"
 	"slices"
 	"text/template/parse"
 
@@ -17,7 +18,7 @@ import (
 
 type TemplateCallsConfiguration struct {
 	TemplatesVariable string
-	FilterTemplates   []string
+	FilterTemplates   []*regexp.Regexp
 }
 
 type TemplateCalls struct {

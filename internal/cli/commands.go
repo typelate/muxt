@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
 
@@ -314,6 +315,7 @@ func writeCodeGenerationComment(w io.StringWriter, args []string) {
 func listTemplateCallersCommand(wd *string) *cobra.Command {
 	var config analysis.TemplateCallersConfiguration
 
+	var patterns []string
 	cmd := &cobra.Command{
 		Use:     listTemplateCallersCommandName,
 		Aliases: []string{"callers"},
@@ -321,6 +323,13 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if config.TemplatesVariable == "" {
 				config.TemplatesVariable = defaultTemplatesVariableName
+			}
+			for _, pattern := range patterns {
+				pat, err := regexp.Compile(pattern)
+				if err != nil {
+					return err
+				}
+				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
 			fileSet, pl, err := asteval.LoadPackages(*wd)
@@ -336,13 +345,14 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
-	cmd.Flags().StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
 
 	return cmd
 }
 
 func listTemplateCallsCommand(wd *string) *cobra.Command {
 	var config analysis.TemplateCallsConfiguration
+	var patterns []string
 
 	cmd := &cobra.Command{
 		Use:     listTemplateCallsCommandName,
@@ -351,6 +361,13 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if config.TemplatesVariable == "" {
 				config.TemplatesVariable = defaultTemplatesVariableName
+			}
+			for _, pattern := range patterns {
+				pat, err := regexp.Compile(pattern)
+				if err != nil {
+					return err
+				}
+				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
 			_, pl, err := asteval.LoadPackages(*wd)
@@ -366,7 +383,7 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
-	cmd.Flags().StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
 
 	return cmd
 }

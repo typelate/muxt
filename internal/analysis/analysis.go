@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 )
@@ -18,10 +19,10 @@ var templates = template.Must(template.New("output").Funcs(template.FuncMap{
 }).ParseFS(outputTemplates, "*"))
 
 // matchesAny returns true if value contains any of the filter patterns (case-insensitive substring match)
-func matchesAny(value string, filters []string) bool {
+func matchesAny(value string, filters []*regexp.Regexp) bool {
 	valueLower := strings.ToLower(value)
 	for _, filter := range filters {
-		if strings.Contains(valueLower, strings.ToLower(filter)) {
+		if filter.MatchString(valueLower) {
 			return true
 		}
 	}
