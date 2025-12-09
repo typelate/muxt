@@ -74,10 +74,6 @@ func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token
 		return err
 	}
 
-	return writeRoutesList(w, functions, definitions, receiver)
-}
-
-func writeRoutesList(w io.Writer, functions asteval.TemplateFunctions, defs []muxt.Definition, receiver *types.Named) error {
 	var funcList []Function
 	names := slices.Collect(maps.Keys(functions))
 	for _, name := range names {
@@ -86,7 +82,7 @@ func writeRoutesList(w io.Writer, functions asteval.TemplateFunctions, defs []mu
 	}
 
 	var defList []Definition
-	for _, def := range defs {
+	for _, def := range definitions {
 		src := def.Template().Tree.Root.String()
 		defList = append(defList, Definition{
 			String:    def.String(),
