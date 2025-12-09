@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/token"
@@ -61,7 +62,11 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 			if err != nil {
 				return err
 			}
-			return analysis.NewRoutes(rootCommandConfig, cmd.OutOrStdout(), *workingDirectory, fileSet, pl)
+			result, err := analysis.NewRoutes(rootCommandConfig, *workingDirectory, fileSet, pl)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
@@ -70,6 +75,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	addUseReceiverTypeVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverType)
 	adUseReceiverTypePackageVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverPackage)
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
+	rootCmd.Flags().String("format", "text", "output format (text or json)")
 
 	rootCmd.SetArgs(args)
 	rootCmd.SetOut(stdout)
@@ -340,12 +346,17 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return analysis.NewTemplateCallers(config, cmd.OutOrStdout(), fileSet, pkg, glb, ts)
+			result, err := analysis.NewTemplateCallers(config, fileSet, pkg, glb, ts)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
 		},
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
+	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd
 }
@@ -378,12 +389,17 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return analysis.NewTemplateCalls(config, cmd.OutOrStdout(), pkg, glb, ts)
+			result, err := analysis.NewTemplateCalls(config, pkg, glb, ts)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
 		},
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
+	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd
 }
@@ -566,4 +582,33 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	if err := flagSet.MarkDeprecated(name, "use --"+replacement+" instead"); err != nil {
 		panic(err)
 	}
+}
+
+type TemplateExecuter interface {
+	ExecuteTemplate(w io.Writer) error
+}
+
+func writeResult[T TemplateExecuter](cmd *cobra.Command, w io.Writer, result T) error {
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
+	switch format {
+	case "json":
+		buf, err := json.MarshalIndent(result, "", "\t")
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(buf)
+		return err
+	case "text":
+		var buf bytes.Buffer
+		err := result.ExecuteTemplate(&buf)
+		if err != nil {
+			return err
+		}
+		_, err = buf.WriteTo(w)
+		return err
+	}
+	return nil
 }
