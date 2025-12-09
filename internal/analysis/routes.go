@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
 	"go/token"
@@ -48,8 +49,13 @@ type Routes struct {
 	ReceiverMethods []ReceiverMethod
 }
 
-func (result *Routes) ExecuteTemplate(w io.Writer) error {
-	return templates.ExecuteTemplate(w, "routes.txt.template", result)
+func (result *Routes) WriteTo(w io.Writer) (int64, error) {
+	var buf bytes.Buffer
+	err := templates.ExecuteTemplate(&buf, "routes.txt.template", result)
+	if err != nil {
+		return 0, err
+	}
+	return io.Copy(w, &buf)
 }
 
 func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) (*Routes, error) {
