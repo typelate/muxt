@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"bytes"
 	"go/ast"
 	"go/types"
 	"html/template"
@@ -25,8 +26,13 @@ type TemplateCalls struct {
 	Templates []NamedReferences
 }
 
-func (result TemplateCalls) ExecuteTemplate(w io.Writer) error {
-	return templates.ExecuteTemplate(w, "template_calls.txt.template", result)
+func (result TemplateCalls) WriteTo(w io.Writer) (int64, error) {
+	var buf bytes.Buffer
+	err := templates.ExecuteTemplate(&buf, "template_calls.txt.template", result)
+	if err != nil {
+		return 0, err
+	}
+	return io.Copy(w, &buf)
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)

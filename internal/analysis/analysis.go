@@ -26,9 +26,8 @@ var templates = template.Must(template.New("output").Funcs(template.FuncMap{
 
 // matchesAny returns true if value contains any of the filter patterns (case-insensitive substring match)
 func matchesAny(value string, filters []*regexp.Regexp) bool {
-	valueLower := strings.ToLower(value)
 	for _, filter := range filters {
-		if filter.MatchString(valueLower) {
+		if filter.MatchString(value) {
 			return true
 		}
 	}

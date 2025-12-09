@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"bytes"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -26,8 +27,13 @@ type TemplateCallers struct {
 	Templates []NamedReferences
 }
 
-func (result *TemplateCallers) ExecuteTemplate(w io.Writer) error {
-	return templates.ExecuteTemplate(w, "template_callers.txt.template", result)
+func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
+	var buf bytes.Buffer
+	err := templates.ExecuteTemplate(&buf, "template_callers.txt.template", result)
+	if err != nil {
+		return 0, err
+	}
+	return io.Copy(w, &buf)
 }
 
 // NewTemplateCallers shows where templates are referenced

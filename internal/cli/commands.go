@@ -584,11 +584,7 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	}
 }
 
-type TemplateExecuter interface {
-	ExecuteTemplate(w io.Writer) error
-}
-
-func writeResult[T TemplateExecuter](cmd *cobra.Command, w io.Writer, result T) error {
+func writeResult[T io.WriterTo](cmd *cobra.Command, w io.Writer, result T) error {
 	format, err := cmd.Flags().GetString("format")
 	if err != nil {
 		return err
@@ -602,13 +598,9 @@ func writeResult[T TemplateExecuter](cmd *cobra.Command, w io.Writer, result T) 
 		_, err = w.Write(buf)
 		return err
 	case "text":
-		var buf bytes.Buffer
-		err := result.ExecuteTemplate(&buf)
-		if err != nil {
-			return err
-		}
-		_, err = buf.WriteTo(w)
+		_, err := result.WriteTo(w)
 		return err
+	default:
+		return fmt.Errorf("unknown format: %s", format)
 	}
-	return nil
 }
