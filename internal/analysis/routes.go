@@ -29,6 +29,7 @@ type Function struct {
 	Name      string
 	Signature string
 }
+
 type Definition struct {
 	String    string
 	Separator string
@@ -40,17 +41,21 @@ type ReceiverMethod struct {
 	Signature string
 }
 
-type Definitions struct {
+type Routes struct {
 	Functions       []Function
 	Definitions     []Definition
 	Receiver        *types.Named
 	ReceiverMethods []ReceiverMethod
 }
 
-func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token.FileSet, pl []*packages.Package) error {
+func (result *Routes) ExecuteTemplate(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "routes.txt.template", result)
+}
+
+func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) (*Routes, error) {
 	pkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
-		return fmt.Errorf("package not found in working directory")
+		return nil, fmt.Errorf("package not found in working directory")
 	}
 
 	config.PackagePath = pkg.PkgPath
@@ -61,17 +66,17 @@ func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token
 		var err error
 		receiver, err = asteval.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	ts, functions, err := asteval.Templates(wd, config.TemplatesVariable, pkg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	definitions, err := muxt.Definitions(ts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var funcList []Function
@@ -95,21 +100,21 @@ func NewRoutes(config DefinitionsConfiguration, w io.Writer, wd string, _ *token
 		})
 	}
 
-	def := Definitions{
+	result := Routes{
 		Functions:   funcList,
 		Definitions: defList,
 	}
 
 	if receiver != nil {
-		def.Receiver = receiver
+		result.Receiver = receiver
 		for i := 0; i < receiver.NumMethods(); i++ {
 			m := receiver.Method(i)
-			def.ReceiverMethods = append(def.ReceiverMethods, ReceiverMethod{
+			result.ReceiverMethods = append(result.ReceiverMethods, ReceiverMethod{
 				Name:      m.Name(),
 				Signature: strings.TrimPrefix(m.Signature().String(), "func"),
 			})
 		}
 	}
 
-	return templates.ExecuteTemplate(w, "routes.txt.template", def)
+	return &result, nil
 }

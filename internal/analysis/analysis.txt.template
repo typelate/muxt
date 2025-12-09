@@ -1,6 +1,6 @@
 {{define "imports" -}}
 {{- with .Imports}}
-{{with .}}{{. | indent "  "}}{{end}}
+{{with .}}{{formatImports . | indent "  "}}{{end}}
 {{end}}
 {{- end}}
 

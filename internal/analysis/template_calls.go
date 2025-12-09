@@ -25,8 +25,12 @@ type TemplateCalls struct {
 	Templates []NamedReferences
 }
 
+func (result TemplateCalls) ExecuteTemplate(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "template_calls.txt.template", result)
+}
+
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, w io.Writer, pkg *packages.Package, global *check.Global, ts *template.Template) error {
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, global *check.Global, ts *template.Template) (*TemplateCalls, error) {
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
@@ -61,5 +65,5 @@ func NewTemplateCalls(config TemplateCallsConfiguration, w io.Writer, pkg *packa
 		}
 		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
-	return templates.ExecuteTemplate(w, "template_calls.txt.template", result)
+	return &result, nil
 }

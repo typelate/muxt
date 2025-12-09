@@ -26,8 +26,12 @@ type TemplateCallers struct {
 	Templates []NamedReferences
 }
 
+func (result *TemplateCallers) ExecuteTemplate(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "template_callers.txt.template", result)
+}
+
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSet *token.FileSet, pkg *packages.Package, global *check.Global, ts *template.Template) error {
+func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, pkg *packages.Package, global *check.Global, ts *template.Template) (*TemplateCallers, error) {
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -72,5 +76,5 @@ func NewTemplateCallers(config TemplateCallersConfiguration, w io.Writer, fileSe
 		}
 		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
-	return templates.ExecuteTemplate(w, "template_callers.txt.template", result)
+	return &result, nil
 }

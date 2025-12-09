@@ -1,6 +1,7 @@
 package astgen
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -21,6 +22,10 @@ func NewTypeFormatter(outputPkgPath string) *TypeFormatter {
 		OutPackage: outputPkgPath,
 		Imports:    make(map[string]string),
 	}
+}
+
+func (tf *TypeFormatter) MarshalJSON() ([]byte, error) {
+	return json.MarshalIndent(tf.Imports, "", "  ")
 }
 
 func (tf *TypeFormatter) Qualifier(pkg *types.Package) string {
