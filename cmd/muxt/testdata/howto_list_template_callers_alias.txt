@@ -1,0 +1,50 @@
+# Tests callers alias for list-template-callers command
+
+muxt callers
+stdout 'template "header" called by:'
+stdout 'template "footer" called by:'
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*"))
+
+type T struct{}
+
+func f() {
+	_ = templates.ExecuteTemplate(io.Discard, "layout", T{})
+}
+
+-- layout.gohtml --
+{{define "layout"}}
+<!DOCTYPE html>
+<html>
+{{template "header" .}}
+<body>
+{{template "footer"}}
+</body>
+</html>
+{{end}}
+
+-- header.gohtml --
+{{define "header"}}
+<head><title>Title</title></head>
+{{end}}
+
+-- footer.gohtml --
+{{define "footer"}}
+<footer>Copyright</footer>
+{{end}}

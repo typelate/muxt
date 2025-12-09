@@ -1,0 +1,52 @@
+# Tests list-template-callers command showing which templates call other templates
+
+muxt list-template-callers
+stdout 'template "footer" called by:'
+stdout 'template "header" called by:'
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*"))
+
+type T struct{}
+
+func init() {
+	_ = templates.ExecuteTemplate(io.Discard, "layout", T{})
+}
+
+-- layout.gohtml --
+{{define "layout"}}
+<div>
+{{template "header" .}}
+{{template "footer" .}}
+</div>
+{{end}}
+
+-- header.gohtml --
+{{define "header"}}
+<header>Header</header>
+{{end}}
+
+-- footer.gohtml --
+{{define "footer"}}
+<footer>Footer</footer>
+{{end}}
+
+-- page.gohtml --
+{{define "GET / Page()"}}
+{{template "layout" .}}
+{{end}}
