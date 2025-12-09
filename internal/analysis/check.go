@@ -173,7 +173,7 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 		return fmt.Errorf("template %q not found", templateName)
 	}
 	tree := ts2.Tree
-	global.TemplateNodeType = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
+	global.InspectTemplateNode = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
 		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(asteval.NewParseNodePosition(tree, node), node, node.Name, dataType))
 	}
 	if err := check.Execute(global, tree, dataType); err != nil {
