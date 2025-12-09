@@ -85,7 +85,7 @@ func NewNamedReferences(pkgPath, name string, refs []TemplateReference) NamedRef
 	}
 
 	slices.SortFunc(refs, func(a, b TemplateReference) int {
-		c := strings.Compare(a.Name, a.Name)
+		c := strings.Compare(a.Name, b.Name)
 		if c != 0 {
 			return c
 		}
@@ -101,7 +101,7 @@ func NewNamedReferences(pkgPath, name string, refs []TemplateReference) NamedRef
 		if c != 0 {
 			return c
 		}
-		return strings.Compare(a.Data, a.Data)
+		return strings.Compare(a.Data, b.Data)
 	})
 	refs = slices.CompactFunc(refs, func(a, b TemplateReference) bool {
 		return a.Kind == b.Kind && a.Name == b.Name && a.Position == b.Position && a.Data == b.Data
