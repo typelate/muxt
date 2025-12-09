@@ -26,7 +26,7 @@ type TemplateCalls struct {
 	Templates []NamedReferences
 }
 
-func (result TemplateCalls) WriteTo(w io.Writer) (int64, error) {
+func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 	var buf bytes.Buffer
 	err := templates.ExecuteTemplate(&buf, "template_calls.txt.template", result)
 	if err != nil {
