@@ -37,7 +37,6 @@ type T struct{}
 func init() {
 	_ = templates.ExecuteTemplate(io.Discard, "layout", T{})
 }
-
 -- layout.gohtml --
 {{define "layout"}}
 <div>

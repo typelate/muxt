@@ -28,7 +28,6 @@ func init() {
 	_ = templates.ExecuteTemplate(io.Discard, "layout", T{})
 	_ = templates.ExecuteTemplate(io.Discard, "GET / Page()", T{})
 }
-
 -- layout.gohtml --
 {{define "layout"}}
 <div>
