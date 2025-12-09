@@ -17,22 +17,6 @@ var templates = template.Must(template.New("output").Funcs(template.FuncMap{
 	"filepathBase": filepath.Base,
 }).ParseFS(outputTemplates, "*"))
 
-type typeFormatter struct {
-	outputPkgPath string
-	imports       map[string]string
-}
-
-func (tf *typeFormatter) qualifier(pkg *types.Package) string {
-	if pkg == nil {
-		return ""
-	}
-	if pkg.Path() == tf.outputPkgPath {
-		return ""
-	}
-	tf.imports[pkg.Path()] = pkg.Name()
-	return pkg.Name()
-}
-
 // matchesAny returns true if value contains any of the filter patterns (case-insensitive substring match)
 func matchesAny(value string, filters []string) bool {
 	valueLower := strings.ToLower(value)
