@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
@@ -22,7 +23,6 @@ import (
 )
 
 const (
-	helpCommandName                = "help"
 	generateCommandName            = "generate"
 	versionCommandName             = "version"
 	checkCommandName               = "check"
@@ -31,70 +31,106 @@ const (
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
+	var changeDir string
+
 	args = args[1:]
-	var err error
-	wd, args, err = global(wd, args, stderr)
-	if err != nil {
-		return err
+
+	var rootCommandConfig analysis.DefinitionsConfiguration
+	rootCmd := &cobra.Command{
+		Use:   "muxt [command]",
+		Short: `Generate HTTP Endpoints from HTML Templates`,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if changeDir == "" {
+				return nil
+			}
+			var newWd string
+			if filepath.IsAbs(changeDir) {
+				newWd = changeDir
+			} else {
+				cd, err := filepath.Abs(filepath.Join(wd, changeDir))
+				if err != nil {
+					return err
+				}
+				newWd = cd
+			}
+			wd = newWd
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fileSet, pl, err := asteval.LoadPackages(wd, rootCommandConfig.ReceiverPackage)
+			if err != nil {
+				return err
+			}
+			return analysis.NewRoutes(rootCommandConfig, cmd.OutOrStdout(), wd, fileSet, pl)
+		},
 	}
-	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return listRoutes(wd, args, stdout, stderr)
+	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
+
+	addUseTemplatesVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.TemplatesVariable)
+	addUseReceiverTypeVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverType)
+	adUseReceiverTypePackageVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverPackage)
+	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
+
+	rootCmd.SetArgs(args)
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+
+	rootCmd.AddCommand(
+		generateCommand(&wd),
+		versionCommand(),
+		checkCommand(&wd),
+		listTemplateCallersCommand(&wd),
+		listTemplateCallsCommand(&wd),
+	)
+
+	// Ensure all flag sets route their output (including deprecation warnings) to stderr
+	for _, cmd := range rootCmd.Commands() {
+		cmd.Flags().SetOutput(stderr)
+		cmd.PersistentFlags().SetOutput(stderr)
 	}
-	switch cmd, cmdArgs := args[0], args[1:]; cmd {
-	case helpCommandName, "h":
-		return writeHelp(stdout, nil)
-	case generateCommandName, "gen", "g":
-		return generateCommand(wd, cmdArgs, getEnv, stdout, stderr)
-	case versionCommandName, "v":
-		return versionCommand(cmdArgs, stdout, stderr)
-	case checkCommandName, "c":
-		return checkCommand(wd, cmdArgs, stderr)
-	//case readTemplateSourceCommandName, "source":
-	//	return templateSourceCommand(wd, args[1:], stdout, stderr)
-	case listTemplateCallersCommandName, "callers":
-		return listTemplateCallersCommand(wd, args[1:], stdout, stderr)
-	case listTemplateCallsCommandName, "calls":
-		return listTemplateCallsCommand(wd, args[1:], stdout, stderr)
-	default:
-		return writeHelp(stderr, fmt.Errorf("unknown command: %q", cmd))
-	}
+	rootCmd.Flags().SetOutput(stderr)
+	rootCmd.PersistentFlags().SetOutput(stderr)
+
+	return rootCmd.Execute()
 }
 
-func checkCommand(workingDirectory string, args []string, stderr io.Writer) error {
+func checkCommand(workingDirectory *string) *cobra.Command {
 	var config analysis.CheckConfiguration
-
-	flagSet := pflag.NewFlagSet("check", pflag.ContinueOnError)
-	addUseTemplatesVarToFlagSet(flagSet, &config.TemplatesVariable)
-	addVerboseFlagToFlagSet(flagSet, &config.Verbose)
 	var rt string
-	addDeprecatedReceiverType(flagSet, &rt)
 
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return err
-	}
-	if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
-		return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+	cmd := &cobra.Command{
+		Use:     checkCommandName,
+		Aliases: []string{"c"},
+		Short:   "Check templates for errors",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
+				return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+			}
+
+			fileSet, pl, err := asteval.LoadPackages(*workingDirectory)
+			if err != nil {
+				return err
+			}
+			logger := log.New(cmd.ErrOrStderr(), "", 0)
+			if err := analysis.Check(config, *workingDirectory, logger, fileSet, pl); err != nil {
+				return fmt.Errorf("fail: %s", err)
+			}
+			return nil
+		},
 	}
 
-	fileSet, pl, err := asteval.LoadPackages(workingDirectory)
-	if err != nil {
-		return err
-	}
-	logger := log.New(stderr, "", 0)
-	if err := analysis.Check(config, workingDirectory, logger, fileSet, pl); err != nil {
-		return fmt.Errorf("fail: %s", err)
-	}
-	return nil
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
+	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
+	addDeprecatedReceiverType(cmd.Flags(), &rt)
+
+	return cmd
 }
 
 const (
 	codeGenerationComment = `// Code generated by muxt generate %s. DO NOT EDIT.` + "\n"
 )
 
-func generateFlagSet(config *generate.RoutesFileConfiguration) *pflag.FlagSet {
-	flagSet := pflag.NewFlagSet("generate", pflag.ContinueOnError)
-
+func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfiguration) {
 	addUseTemplatesVarToFlagSet(flagSet, &config.TemplatesVariable)
 	addUseReceiverTypeVarToFlagSet(flagSet, &config.ReceiverType)
 	adUseReceiverTypePackageVarToFlagSet(flagSet, &config.ReceiverPackage)
@@ -103,118 +139,125 @@ func generateFlagSet(config *generate.RoutesFileConfiguration) *pflag.FlagSet {
 	addOutputFlagsToFlagSet(flagSet, config)
 	addDeprecatedUseFlagsToFlagSet(flagSet, config)
 	addDeprecatedOutputFlagsToFlagSet(flagSet, config)
-
-	return flagSet
 }
 
-func generateCommand(workingDirectory string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
+func generateCommand(workingDirectory *string) *cobra.Command {
 	var config generate.RoutesFileConfiguration
-	flagSet := generateFlagSet(&config)
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return err
-	}
-	if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
-		return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
-	}
-	if config.RoutesFunction != "" && !token.IsIdentifier(config.RoutesFunction) {
-		return fmt.Errorf(outputRoutesFunc + errIdentSuffix)
-	}
-	if config.ReceiverType != "" && !token.IsIdentifier(config.ReceiverType) {
-		return fmt.Errorf(useReceiverType + errIdentSuffix)
-	}
-	if config.ReceiverInterface != "" && !token.IsIdentifier(config.ReceiverInterface) {
-		return fmt.Errorf(outputReceiverInterface + errIdentSuffix)
-	}
-	if config.TemplateDataType != "" && !token.IsIdentifier(config.TemplateDataType) {
-		return fmt.Errorf(outputTemplateDataType + errIdentSuffix)
-	}
-	if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
-		return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
-	}
-	if config.OutputFileName != "" && filepath.Ext(config.OutputFileName) != ".go" {
-		return fmt.Errorf("output filename must use .go extension")
-	}
 
-	if v, ok := cliVersion(); ok {
-		config.MuxtVersion = v
-	}
-	applyDefaults(&config)
-	fileSet, pl, err := asteval.LoadPackages(workingDirectory, config.ReceiverPackage)
-	if err != nil {
-		return err
-	}
-	files, err := generate.TemplateRoutesFile(workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
-	if err != nil {
-		return err
-	}
+	cmd := &cobra.Command{
+		Use:     generateCommandName,
+		Aliases: []string{"gen", "g"},
+		Short:   "Generate HTTP routes from templates",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			stdout := cmd.OutOrStdout()
+			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
+				return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+			}
+			if config.RoutesFunction != "" && !token.IsIdentifier(config.RoutesFunction) {
+				return fmt.Errorf(outputRoutesFunc + errIdentSuffix)
+			}
+			if config.ReceiverType != "" && !token.IsIdentifier(config.ReceiverType) {
+				return fmt.Errorf(useReceiverType + errIdentSuffix)
+			}
+			if config.ReceiverInterface != "" && !token.IsIdentifier(config.ReceiverInterface) {
+				return fmt.Errorf(outputReceiverInterface + errIdentSuffix)
+			}
+			if config.TemplateDataType != "" && !token.IsIdentifier(config.TemplateDataType) {
+				return fmt.Errorf(outputTemplateDataType + errIdentSuffix)
+			}
+			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
+				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
+			}
+			if config.OutputFileName != "" && filepath.Ext(config.OutputFileName) != ".go" {
+				return fmt.Errorf("output filename must use .go extension")
+			}
 
-	// CLEANUP HEURISTIC:
-	// We automatically delete muxt-generated files that are no longer needed to avoid
-	// manual cleanup when template files are renamed or generation modes change.
-	//
-	// Files are identified by:
-	// 1. Presence of "// Code generated by muxt generate" comment
-	// 2. Matching --output-routes-func value (to differentiate multiple route sets)
-	//
-	// Cleanup scenarios:
-	// - Template renamed: old_template_routes_gen.go deleted when template renamed to new.gohtml
-	// - Switch to single-file: all per-file *_template_routes_gen.go files deleted
-	// - Switch to multi-file: old single template_routes.go overwritten (if same filename)
-	// - Routes function unchanged: only deletes files matching current routes function
-	//
-	// IMPORTANT: If you change --output-routes-func value, old files with the previous
-	// routes function name will NOT be deleted (to allow multiple route sets to coexist).
-	// To clean up after changing routes function name, manually delete old files or
-	// temporarily use the old --output-routes-func value with current templates.
+			if v, ok := cliVersion(); ok {
+				config.MuxtVersion = v
+			}
+			applyDefaults(&config)
+			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, config.ReceiverPackage)
+			if err != nil {
+				return err
+			}
+			files, err := generate.TemplateRoutesFile(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
+			if err != nil {
+				return err
+			}
 
-	// Find existing generated files for cleanup
-	oldGeneratedFiles, err := generate.FileArguments(workingDirectory, config.RoutesFunction)
-	if err != nil {
-		return err
-	}
+			// CLEANUP HEURISTIC:
+			// We automatically delete muxt-generated files that are no longer needed to avoid
+			// manual cleanup when template files are renamed or generation modes change.
+			//
+			// Files are identified by:
+			// 1. Presence of "// Code generated by muxt generate" comment
+			// 2. Matching --output-routes-func value (to differentiate multiple route sets)
+			//
+			// Cleanup scenarios:
+			// - Template renamed: old_template_routes_gen.go deleted when template renamed to new.gohtml
+			// - Switch to single-file: all per-file *_template_routes_gen.go files deleted
+			// - Switch to multi-file: old single template_routes.go overwritten (if same filename)
+			// - Routes function unchanged: only deletes files matching current routes function
+			//
+			// IMPORTANT: If you change --output-routes-func value, old files with the previous
+			// routes function name will NOT be deleted (to allow multiple route sets to coexist).
+			// To clean up after changing routes function name, manually delete old files or
+			// temporarily use the old --output-routes-func value with current templates.
 
-	for oldFilePath, oldArgs := range oldGeneratedFiles {
-		var oldConfig generate.RoutesFileConfiguration
-		set := generateFlagSet(&oldConfig)
-		set.SetOutput(io.Discard)
-		if err := set.Parse(oldArgs); err != nil {
-			log.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", oldFilePath, err)
-			continue
-		}
-		if oldConfig.RoutesFunction != config.RoutesFunction {
-			delete(oldGeneratedFiles, oldFilePath)
-		}
-	}
+			// Find existing generated files for cleanup
+			oldGeneratedFiles, err := generate.FileArguments(*workingDirectory, config.RoutesFunction)
+			if err != nil {
+				return err
+			}
 
-	// Write new files
-	newGeneratedFiles := make(map[string]bool)
-	for i, file := range files {
-		var sb bytes.Buffer
-		writeCodeGenerationComment(&sb, configToArgs(config))
-		sb.WriteString(file.Content)
-		if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
-			for _, f := range files[:i] {
-				if rmErr := os.Remove(f.Path); rmErr != nil {
-					err = errors.Join(err, rmErr)
+			for oldFilePath, oldArgs := range oldGeneratedFiles {
+				var oldConfig generate.RoutesFileConfiguration
+				set := pflag.NewFlagSet("parse-old", pflag.ContinueOnError)
+				addGenerateFlags(set, &oldConfig)
+				set.SetOutput(io.Discard)
+				if err := set.Parse(oldArgs); err != nil {
+					log.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", oldFilePath, err)
+					continue
+				}
+				if oldConfig.RoutesFunction != config.RoutesFunction {
+					delete(oldGeneratedFiles, oldFilePath)
 				}
 			}
-			return err
-		}
-		newGeneratedFiles[file.Path] = true
-	}
 
-	// Clean up orphaned files
-	// Only deletes files that match the current routes function name but weren't regenerated
-	for oldFile := range oldGeneratedFiles {
-		if !newGeneratedFiles[oldFile] {
-			if err := os.Remove(oldFile); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("failed to remove orphaned file %s: %w", oldFile, err)
+			// Write new files
+			newGeneratedFiles := make(map[string]bool)
+			for i, file := range files {
+				var sb bytes.Buffer
+				writeCodeGenerationComment(&sb, configToArgs(config))
+				sb.WriteString(file.Content)
+				if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
+					for _, f := range files[:i] {
+						if rmErr := os.Remove(f.Path); rmErr != nil {
+							err = errors.Join(err, rmErr)
+						}
+					}
+					return err
+				}
+				newGeneratedFiles[file.Path] = true
 			}
-		}
+
+			// Clean up orphaned files
+			// Only deletes files that match the current routes function name but weren't regenerated
+			for oldFile := range oldGeneratedFiles {
+				if !newGeneratedFiles[oldFile] {
+					if err := os.Remove(oldFile); err != nil && !os.IsNotExist(err) {
+						return fmt.Errorf("failed to remove orphaned file %s: %w", oldFile, err)
+					}
+				}
+			}
+
+			return nil
+		},
 	}
 
-	return nil
+	addGenerateFlags(cmd.Flags(), &config)
+
+	return cmd
 }
 
 func configToArgs(config generate.RoutesFileConfiguration) []string {
@@ -269,116 +312,98 @@ func writeCodeGenerationComment(w io.StringWriter, args []string) {
 	}
 }
 
-//go:embed help.txt
-var helpText string
-
-func writeHelp(stderr io.Writer, errArg error) error {
-	var b strings.Builder
-	if errArg != nil {
-		b.WriteString("ERROR: ")
-		b.WriteString(errArg.Error())
-		b.WriteString("\n\n")
-	}
-	b.WriteString(helpText)
-	if _, err := fmt.Fprint(stderr, b.String()); err != nil {
-		return errors.Join(errArg, err)
-	}
-	return errArg
-}
-
-func listTemplateCallersCommand(wd string, args []string, stdout, stderr io.Writer) error {
+func listTemplateCallersCommand(wd *string) *cobra.Command {
 	var config analysis.TemplateCallersConfiguration
 
-	flagSet := pflag.NewFlagSet("list-template-callers", pflag.ContinueOnError)
-	addUseTemplatesVarToFlagSet(flagSet, &config.TemplatesVariable)
-	flagSet.StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+	cmd := &cobra.Command{
+		Use:     listTemplateCallersCommandName,
+		Aliases: []string{"callers"},
+		Short:   "List template callers",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if config.TemplatesVariable == "" {
+				config.TemplatesVariable = defaultTemplatesVariableName
+			}
 
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return err
-	}
-	if config.TemplatesVariable == "" {
-		config.TemplatesVariable = defaultTemplatesVariableName
-	}
-
-	fileSet, pl, err := asteval.LoadPackages(wd)
-	if err != nil {
-		return err
-	}
-	pkg, glb, ts, err := asteval.LoadTemplates(wd, config.TemplatesVariable, pl)
-	if err != nil {
-		return err
-	}
-	return analysis.NewTemplateCallers(config, stdout, fileSet, pkg, glb, ts)
-}
-
-func listTemplateCallsCommand(wd string, args []string, stdout, stderr io.Writer) error {
-	var config analysis.TemplateCallsConfiguration
-
-	flagSet := pflag.NewFlagSet("list-template-calls", pflag.ContinueOnError)
-
-	addUseTemplatesVarToFlagSet(flagSet, &config.TemplatesVariable)
-	flagSet.StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
-
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return err
-	}
-	if config.TemplatesVariable == "" {
-		config.TemplatesVariable = defaultTemplatesVariableName
-	}
-
-	_, pl, err := asteval.LoadPackages(wd)
-	if err != nil {
-		return err
-	}
-	pkg, glb, ts, err := asteval.LoadTemplates(wd, config.TemplatesVariable, pl)
-	if err != nil {
-		return err
-	}
-	return analysis.NewTemplateCalls(config, stdout, pkg, glb, ts)
-}
-
-func listRoutes(wd string, args []string, stdout, stderr io.Writer) error {
-	// Default behavior (current implementation)
-	config, err := newListRoutesConfiguration(args, stderr)
-	if err != nil {
-		return err
-	}
-	fileSet, pl, err := asteval.LoadPackages(wd, config.ReceiverPackage)
-	if err != nil {
-		return err
-	}
-	return analysis.NewRoutes(config, stdout, wd, fileSet, pl)
-}
-
-func versionCommand(args []string, stdout, stderr io.Writer) error {
-	var verbose bool
-	flagSet := pflag.NewFlagSet("version", pflag.ContinueOnError)
-	flagSet.SetOutput(stderr)
-	flagSet.BoolVarP(&verbose, "verbose", "v", false, "verbose output")
-	if err := flagSet.Parse(args); err != nil {
-		return err
-	}
-
-	v, ok := cliVersion()
-	if !ok {
-		return fmt.Errorf("missing CLI version")
-	}
-	if _, err := fmt.Fprintln(stdout, v); err != nil {
-		return err
-	}
-
-	if verbose {
-		bi, ok := debug.ReadBuildInfo()
-		if ok {
-			if _, err := fmt.Fprintf(stdout, "go version: %s\n", bi.GoVersion); err != nil {
+			fileSet, pl, err := asteval.LoadPackages(*wd)
+			if err != nil {
 				return err
 			}
-		}
+			pkg, glb, ts, err := asteval.LoadTemplates(*wd, config.TemplatesVariable, pl)
+			if err != nil {
+				return err
+			}
+			return analysis.NewTemplateCallers(config, cmd.OutOrStdout(), fileSet, pkg, glb, ts)
+		},
 	}
 
-	return nil
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
+	cmd.Flags().StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+
+	return cmd
+}
+
+func listTemplateCallsCommand(wd *string) *cobra.Command {
+	var config analysis.TemplateCallsConfiguration
+
+	cmd := &cobra.Command{
+		Use:     listTemplateCallsCommandName,
+		Aliases: []string{"calls"},
+		Short:   "List template calls",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if config.TemplatesVariable == "" {
+				config.TemplatesVariable = defaultTemplatesVariableName
+			}
+
+			_, pl, err := asteval.LoadPackages(*wd)
+			if err != nil {
+				return err
+			}
+			pkg, glb, ts, err := asteval.LoadTemplates(*wd, config.TemplatesVariable, pl)
+			if err != nil {
+				return err
+			}
+			return analysis.NewTemplateCalls(config, cmd.OutOrStdout(), pkg, glb, ts)
+		},
+	}
+
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariable)
+	cmd.Flags().StringArrayVar(&config.FilterTemplates, "template", nil, "filter by template name (can specify multiple times)")
+
+	return cmd
+}
+
+func versionCommand() *cobra.Command {
+	var verbose bool
+
+	cmd := &cobra.Command{
+		Use:     versionCommandName,
+		Aliases: []string{"v"},
+		Short:   "Print the version number",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			v, ok := cliVersion()
+			if !ok {
+				return fmt.Errorf("missing CLI version")
+			}
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), v); err != nil {
+				return err
+			}
+
+			if verbose {
+				bi, ok := debug.ReadBuildInfo()
+				if ok {
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "go version: %s\n", bi.GoVersion); err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+
+	return cmd
 }
 
 func cliVersion() (string, bool) {
@@ -387,25 +412,6 @@ func cliVersion() (string, bool) {
 		return "", false
 	}
 	return bi.Main.Version, true
-}
-
-func global(wd string, args []string, stdout io.Writer) (string, []string, error) {
-	var changeDir string
-	flagSet := pflag.NewFlagSet("muxt global", pflag.ExitOnError)
-	flagSet.SetOutput(stdout)
-	flagSet.SetInterspersed(false)
-	flagSet.StringVarP(&changeDir, "C", "C", "", "change root directory")
-	if err := flagSet.Parse(args); err != nil {
-		return "", nil, err
-	}
-	if filepath.IsAbs(changeDir) {
-		return changeDir, flagSet.Args(), nil
-	}
-	cd, err := filepath.Abs(filepath.Join(wd, changeDir))
-	if err != nil {
-		return "", nil, err
-	}
-	return cd, flagSet.Args(), nil
 }
 
 const (
@@ -476,25 +482,6 @@ func applyDefaults(config *generate.RoutesFileConfiguration) {
 	config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 }
 
-func newListRoutesConfiguration(args []string, stderr io.Writer) (analysis.DefinitionsConfiguration, error) {
-	var g analysis.DefinitionsConfiguration
-	flagSet := documentationFlagSet(&g)
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return g, err
-	}
-	if g.TemplatesVariable != "" && !token.IsIdentifier(g.TemplatesVariable) {
-		return analysis.DefinitionsConfiguration{}, fmt.Errorf(useTemplatesVariable + errIdentSuffix)
-	}
-	if g.TemplatesVariable == "" {
-		return analysis.DefinitionsConfiguration{}, fmt.Errorf("no template variable specified")
-	}
-	if g.ReceiverType != "" && !token.IsIdentifier(g.ReceiverType) {
-		return analysis.DefinitionsConfiguration{}, fmt.Errorf(useReceiverType + errIdentSuffix)
-	}
-	return g, nil
-}
-
 // addUseTemplatesVarToFlagSet was split out because it is used for a few different commands
 func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
 	flagSet.StringVar(out, useTemplatesVariable, defaultTemplatesVariableName, useTemplatesVariableHelp)
@@ -563,16 +550,4 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	if err := flagSet.MarkDeprecated(name, "use --"+replacement+" instead"); err != nil {
 		panic(err)
 	}
-}
-
-func documentationFlagSet(g *analysis.DefinitionsConfiguration) *pflag.FlagSet {
-	flagSet := pflag.NewFlagSet("documentation", pflag.ContinueOnError)
-
-	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
-	addUseReceiverTypeVarToFlagSet(flagSet, &g.ReceiverType)
-	adUseReceiverTypePackageVarToFlagSet(flagSet, &g.ReceiverPackage)
-
-	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
-
-	return flagSet
 }
