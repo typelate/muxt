@@ -26,7 +26,6 @@ const (
 	generateCommandName            = "generate"
 	versionCommandName             = "version"
 	checkCommandName               = "check"
-	readTemplateSourceCommandName  = "read-template-source"
 	listTemplateCallersCommandName = "list-template-callers"
 	listTemplateCallsCommandName   = "list-template-calls"
 )
@@ -310,27 +309,6 @@ func writeHelp(stderr io.Writer, err error) error {
 	return err
 }
 
-func templateSourceCommand(wd string, args []string, stdout, stderr io.Writer) error {
-	config, err := newTemplateSourceConfiguration(args, stderr)
-	if err != nil {
-		return err
-	}
-	_, pl, err := asteval.LoadPackages(wd)
-	if err != nil {
-		return err
-	}
-	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
-	if !ok {
-		return fmt.Errorf("package not found at %s", wd)
-	}
-
-	ts, _, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
-	if err != nil {
-		return err
-	}
-	return analysis.NewTemplateSource(config, stdout, ts)
-}
-
 func listTemplateCallersCommand(wd string, args []string, stdout, stderr io.Writer) error {
 	config, err := newListTemplateCallersConfiguration(args, stderr)
 	if err != nil {
@@ -563,19 +541,6 @@ func newListRoutesConfiguration(args []string, stderr io.Writer) (analysis.Defin
 	return g, nil
 }
 
-func newTemplateSourceConfiguration(args []string, stderr io.Writer) (analysis.TemplateSourceConfiguration, error) {
-	var g analysis.TemplateSourceConfiguration
-	flagSet := templateSourceFlagSet(&g)
-	flagSet.SetOutput(stderr)
-	if err := flagSet.Parse(args); err != nil {
-		return g, err
-	}
-	if g.TemplatesVariable == "" {
-		g.TemplatesVariable = defaultTemplatesVariableName
-	}
-	return g, nil
-}
-
 func newListTemplateCallersConfiguration(args []string, stderr io.Writer) (analysis.TemplateCallersConfiguration, error) {
 	var g analysis.TemplateCallersConfiguration
 	flagSet := listTemplateCallersFlagSet(&g)
@@ -704,16 +669,6 @@ func documentationFlagSet(g *analysis.DefinitionsConfiguration) *pflag.FlagSet {
 	adUseReceiverTypePackageVarToFlagSet(flagSet, &g.ReceiverPackage)
 
 	addVerboseFlagToFlagSet(flagSet, &g.Verbose)
-
-	return flagSet
-}
-
-func templateSourceFlagSet(g *analysis.TemplateSourceConfiguration) *pflag.FlagSet {
-	flagSet := pflag.NewFlagSet("documentation source", pflag.ContinueOnError)
-
-	addUseTemplatesVarToFlagSet(flagSet, &g.TemplatesVariable)
-
-	flagSet.StringVar(&g.TemplateName, "name", "", "select the template with the exact name")
 
 	return flagSet
 }
