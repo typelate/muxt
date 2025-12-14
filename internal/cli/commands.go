@@ -119,6 +119,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
 			if err := analysis.Check(config, *workingDirectory, logger, fileSet, pl); err != nil {
+				cmd.SilenceUsage = true
 				return fmt.Errorf("fail: %s", err)
 			}
 			return nil
