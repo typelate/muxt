@@ -4,7 +4,7 @@ cat template_routes.go
 
 ! muxt check  -v
 stderr 'checking endpoint GET /fruits/\{name\}/tree ToUpper\(name\)'
-stderr 'ERROR type check failed: template.gohtml:2:20: executing "GET /fruits/\{name\}/tree ToUpper\(name\)" at <\.Result\.Name>: Name not found on any'
+stderr 'ERROR type check failed: /.*template\.gohtml:2:20: executing "GET /fruits/\{name\}/tree ToUpper\(name\)" at <\.Result\.Name>: Name not found on any'
 
 exec go test -cover
 

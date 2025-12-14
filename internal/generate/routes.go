@@ -155,7 +155,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 			}
 
 			// Generate filename: strip .gohtml extension, add _template_routes_gen.go
-			baseFileName := strings.TrimSuffix(sourceFile, filepath.Ext(sourceFile))
+			// sourceFile may be an absolute path, so extract just the base filename
+			baseFileName := strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile))
 			outputFileName := baseFileName + "_template_routes_gen.go"
 			outputFilePath := filepath.Join(wd, outputFileName)
 
@@ -177,7 +178,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 
 		// Embed all file-scoped receiver interfaces
 		for _, sourceFile := range sourceFiles {
-			fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
+			fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 			receiverInterfaceName := fileIdentifier + "RoutesReceiver"
 			receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
 				Type: ast.NewIdent(receiverInterfaceName),
@@ -237,7 +238,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	// Call per-file route functions (only in multiple-files mode)
 	if config.OutputMultipleFiles {
 		for _, sourceFile := range sourceFiles {
-			fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
+			fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 			funcName := fileIdentifier + config.RoutesFunction
 
 			callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
@@ -381,7 +382,7 @@ func generatePerFileRouteFunction(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
+	fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}
@@ -455,7 +456,7 @@ func generatePerFileAST(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	fileIdentifier := muxt.FileNameToPrivateIdentifier(sourceFile)
+	fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 	if fileIdentifier == "" {
 		return nil, fmt.Errorf("could not generate identifier from filename: %s", sourceFile)
 	}

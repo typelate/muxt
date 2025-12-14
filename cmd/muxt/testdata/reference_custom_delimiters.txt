@@ -1,0 +1,101 @@
+# Test that custom template delimiters work correctly
+
+muxt generate
+
+muxt check
+! stderr .
+
+exec go test
+
+stdout 'PASS'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(
+	template.Must(
+		template.Must(
+			template.New("").ParseFS(source, "default.gohtml")).
+			Delims("(((", ")))").ParseFS(source, "triple_parens.gohtml")).
+		Delims("[[", "]]").ParseFS(source, "double_square.gohtml"))
+-- default.gohtml --
+{{define "GET /"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Default delimiters</h1>
+</body>
+</html>
+{{end}}
+-- triple_parens.gohtml --
+(((define "GET /parens")))
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Triple parentheses delimiters</h1>
+</body>
+</html>
+(((end)))
+-- double_square.gohtml --
+[[define "GET /square"]]
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Double square bracket delimiters</h1>
+</body>
+</html>
+[[end]]
+-- main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+type T struct{}
+
+func TestRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"/", "Default delimiters"},
+		{"/parens", "Triple parentheses delimiters"},
+		{"/square", "Double square bracket delimiters"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("expected status OK, got %d", rec.Code)
+			}
+
+			body := rec.Body.String()
+			if !strings.Contains(body, tt.expected) {
+				t.Errorf("expected body to contain %q, got: %s", tt.expected, body)
+			}
+		})
+	}
+}

@@ -1,0 +1,77 @@
+# Test that template.New() name is preserved when followed by ParseFS()
+
+muxt generate
+
+muxt check
+! stderr .
+
+exec go test
+
+stdout 'PASS'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+// Test that New("base") creates a named template that is preserved after ParseFS
+var templates = template.Must(template.New("base").ParseFS(source, "*.gohtml"))
+-- index.gohtml --
+{{define "GET /"}}
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Index</h1>
+  {{template "base"}}
+</body>
+</html>
+{{end}}
+
+{{define "base"}}
+<p>Base template content</p>
+{{end}}
+-- main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+type T struct{}
+
+func TestBaseTemplatePreserved(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Should contain both the index content and the base template
+	if !strings.Contains(body, "Index") {
+		t.Errorf("expected body to contain 'Index', got: %s", body)
+	}
+
+	if !strings.Contains(body, "Base template content") {
+		t.Errorf("expected body to contain base template content, got: %s", body)
+	}
+}
