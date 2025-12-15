@@ -58,6 +58,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
@@ -112,14 +113,13 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
 				return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
 			}
-
+			cmd.SilenceUsage = true
 			fileSet, pl, err := asteval.LoadPackages(*workingDirectory)
 			if err != nil {
 				return err
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
 			if err := analysis.Check(config, *workingDirectory, logger, fileSet, pl); err != nil {
-				cmd.SilenceUsage = true
 				return fmt.Errorf("fail: %s", err)
 			}
 			return nil
@@ -183,6 +183,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 				config.MuxtVersion = v
 			}
 			applyDefaults(&config)
+			cmd.SilenceUsage = true
 			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
 				return err
@@ -371,6 +372,7 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 		Aliases: []string{"calls"},
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if config.TemplatesVariable == "" {
 				config.TemplatesVariable = defaultTemplatesVariableName
 			}
@@ -413,6 +415,7 @@ func versionCommand() *cobra.Command {
 		Aliases: []string{"v"},
 		Short:   "Print the version number",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			v, ok := cliVersion()
 			if !ok {
 				return fmt.Errorf("missing CLI version")
