@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	templateExecuteFunc = "ExecuteTemplate"
+	TemplateExecuteFunc = "ExecuteTemplate"
 )
 
 func Templates(workingDirectory, templatesVariable string, pkg *packages.Package) (*template.Template, TemplateFunctions, error) {
@@ -489,7 +489,7 @@ func ExecuteTemplateArguments(node ast.Node, info *types.Info, templatesVariable
 	if !ok {
 		return "", nil, false
 	}
-	if sel.Sel.Name != templateExecuteFunc {
+	if sel.Sel.Name != TemplateExecuteFunc {
 		return "", nil, false
 	}
 	templatesIdent, ok := sel.X.(*ast.Ident)

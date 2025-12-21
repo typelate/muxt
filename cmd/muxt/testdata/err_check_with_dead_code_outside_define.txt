@@ -4,7 +4,7 @@
 muxt generate --use-receiver-type=T
 
 ! muxt check
-stderr 'unused template'
+stderr 'Unused templates'
 stderr '"template.gohtml"'
 
 -- template.gohtml --

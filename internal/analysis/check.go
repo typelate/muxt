@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template/parse"
 
@@ -51,8 +52,10 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
-			if err := findTemplateExecution(executedTemplates, global, fileSet, routesPkg.PkgPath, ts, node, templateName, dataType); err != nil {
-				log.Println("ERROR", err)
+			qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
+			if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
+				log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
+				log.Println(" - ", err)
 				log.Println()
 				errs = append(errs, err)
 			}
@@ -60,11 +63,12 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	}
 	unusedTemplates := findUnusedTemplates(ts, executedTemplates)
 	if len(unusedTemplates) > 0 {
+		log.Println("Unused templates:")
 		for _, name := range unusedTemplates {
-			err := fmt.Errorf("unused template %q", name)
-			log.Println("ERROR", err.Error())
-			errs = append(errs, err)
+			t := ts.Lookup(name)
+			log.Printf("  - %s: %q", asteval.NewParseNodePosition(t.Tree, t.Tree.Root), name)
 		}
+		errs = append(errs, fmt.Errorf("unused templates %d", len(unusedTemplates)))
 	}
 	switch len(errs) {
 	case 1:
@@ -165,7 +169,7 @@ func newTemplateExecution(pos token.Position, n any, templateName string, dataTy
 	}
 }
 
-func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, routesPkgPath string, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
+func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, qualifier types.Qualifier, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
 	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(fileSet.Position(node.Pos()), node, templateName, dataType))
 	ts2 := ts.Lookup(templateName)
 	if ts2 == nil {
@@ -175,7 +179,7 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 	global.InspectTemplateNode = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
 		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(asteval.NewParseNodePosition(tree, node), node, node.Name, dataType))
 	}
-	global.Qualifier = astgen.NewTypeFormatter(routesPkgPath).Qualifier
+	global.Qualifier = qualifier
 	if err := check.Execute(global, tree, dataType); err != nil {
 		return err
 	}
