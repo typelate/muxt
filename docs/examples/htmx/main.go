@@ -1,11 +1,21 @@
-package hypertext
+package main
 
 import (
+	"cmp"
 	"embed"
 	"html/template"
+	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
 )
+
+func main() {
+	mux := http.NewServeMux()
+	srv := new(Server)
+	TemplateRoutes(mux, srv)
+	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8000"), mux))
+}
 
 //go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server
 

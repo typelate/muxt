@@ -1,4 +1,4 @@
-package hypertext
+package main
 
 import (
 	"bytes"

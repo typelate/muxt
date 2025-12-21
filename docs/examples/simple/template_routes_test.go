@@ -1,6 +1,7 @@
-package hypertext_test
+package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -8,32 +9,30 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/typelate/dom/domtest"
 	"golang.org/x/net/html/atom"
-
-	"github.com/typelate/muxt/docs/examples/simple/hypertext"
-	"github.com/typelate/muxt/docs/examples/simple/hypertext/internal/fake"
 )
 
 func TestRoutes(t *testing.T) {
 	type Case struct {
 		Name  string
-		Given func(*testing.T, *fake.Backend)
+		Given func(*testing.T, *BackendMock)
 		When  func(*testing.T) *http.Request
-		Then  func(*testing.T, *http.Response, *fake.Backend)
+		Then  func(*testing.T, *http.Response, *BackendMock)
 	}
 
 	run := func(tt Case) func(t *testing.T) {
 		return func(t *testing.T) {
-			backend := new(fake.Backend)
+			backend := new(BackendMock)
 			if tt.Given != nil {
 				tt.Given(t, backend)
 			}
 			req := tt.When(t)
 
 			mux := http.NewServeMux()
-			hypertext.TemplateRoutes(mux, backend)
+			TemplateRoutes(mux, backend)
 			rec := httptest.NewRecorder()
 
 			mux.ServeHTTP(rec, req)
@@ -49,15 +48,15 @@ func TestRoutes(t *testing.T) {
 	for _, tt := range []Case{
 		{
 			Name: "when the row edit form is submitted",
-			Given: func(t *testing.T, f *fake.Backend) {
-				f.SubmitFormEditRowReturns(hypertext.Row{ID: 1, Name: "a", Value: 97}, nil)
+			Given: func(t *testing.T, f *BackendMock) {
+				f.On("SubmitFormEditRow", 1, EditRow{5}).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
 			},
 			When: func(t *testing.T) *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, hypertext.TemplateRoutePaths{}.SubmitFormEditRow(1), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
+				req := httptest.NewRequest(http.MethodPatch, TemplateRoutePaths{}.SubmitFormEditRow(1), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				return req
 			},
-			Then: func(t *testing.T, res *http.Response, f *fake.Backend) {
+			Then: func(t *testing.T, res *http.Response, f *BackendMock) {
 				assert.Equal(t, http.StatusOK, res.StatusCode)
 
 				fragment := domtest.ParseResponseDocumentFragment(t, res, atom.Tbody)
@@ -67,22 +66,18 @@ func TestRoutes(t *testing.T) {
 				require.Equal(t, "a", tdList.Item(0).TextContent())
 				require.Equal(t, "97", tdList.Item(1).TextContent())
 
-				if assert.Equal(t, 1, f.SubmitFormEditRowCallCount()) {
-					id, form := f.SubmitFormEditRowArgsForCall(0)
-					require.EqualValues(t, 1, id)
-					require.Equal(t, hypertext.EditRow{Value: 5}, form)
-				}
+				f.AssertExpectations(t)
 			},
 		},
 		{
 			Name: "when the row edit form is requested",
-			Given: func(t *testing.T, f *fake.Backend) {
-				f.GetFormEditRowReturns(hypertext.Row{ID: 1, Name: "a", Value: 97}, nil)
+			Given: func(t *testing.T, f *BackendMock) {
+				f.On("GetFormEditRowReturns", 1).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
 			},
 			When: func(t *testing.T) *http.Request {
-				return httptest.NewRequest(http.MethodGet, hypertext.TemplateRoutePaths{}.GetFormEditRow(1), nil)
+				return httptest.NewRequest(http.MethodGet, TemplateRoutePaths{}.GetFormEditRow(1), nil)
 			},
-			Then: func(t *testing.T, res *http.Response, f *fake.Backend) {
+			Then: func(t *testing.T, res *http.Response, f *BackendMock) {
 				assert.Equal(t, http.StatusOK, res.StatusCode)
 
 				fragment := domtest.ParseResponseDocumentFragment(t, res, atom.Tbody)
@@ -99,4 +94,22 @@ func TestRoutes(t *testing.T) {
 	} {
 		t.Run(tt.Name, run(tt))
 	}
+}
+
+type BackendMock struct {
+	mock.Mock
+}
+
+func (s *BackendMock) List(ctx context.Context) []Row {
+	return s.Mock.Called(ctx)[0].([]Row)
+}
+
+func (s *BackendMock) SubmitFormEditRow(fruitID int, form EditRow) (Row, error) {
+	res := s.Mock.Called(fruitID, form)
+	return res.Get(0).(Row), res.Get(1).(error)
+}
+
+func (s *BackendMock) GetFormEditRow(fruitID int) (Row, error) {
+	res := s.Mock.Called(fruitID)
+	return res.Get(0).(Row), res.Get(1).(error)
 }

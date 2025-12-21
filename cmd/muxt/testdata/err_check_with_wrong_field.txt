@@ -18,8 +18,8 @@ import (
 	"html/template"
 	"io"
 
-	"example.com/internal/database"
 	a "example.com/internal/api"
+	"example.com/internal/database"
 )
 
 //go:embed *.gohtml
@@ -48,8 +48,8 @@ func main() {
 
 	// globally scoped type
 	// TODO: fix this, it should use 'a' not 'api'
-  var d4 a.Body
-  _ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d4)
+	var d4 a.Body
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d4)
 }
 -- internal/database/types.go --
 package db
@@ -57,7 +57,6 @@ package db
 type Row struct {
 	Column3 int
 }
-
 -- internal/api/types.go --
 package api
 

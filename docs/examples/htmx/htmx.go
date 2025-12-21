@@ -1,4 +1,4 @@
-package hypertext
+package main
 
 func (data *TemplateData[R, T]) HXLocation(link string) *TemplateData[R, T] {
 	return data.Header("HX-Location", link)

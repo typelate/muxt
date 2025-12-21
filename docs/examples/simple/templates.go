@@ -1,13 +1,13 @@
-package hypertext
+package main
 
 import (
 	"embed"
 	"html/template"
 )
 
-//go:generate go run github.com/typelate/muxt generate --use-receiver-type Backend --use-receiver-type-package github.com/typelate/muxt/docs/examples/simple --output-routes-func TemplateRoutes
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type Backend --use-receiver-type-package github.com/typelate/muxt/docs/examples/simple
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
-//counterfeiter:generate -o internal/fake/routes_receiver.go -fake-name Backend . RoutesReceiver
+//counterfeiter:generate -o internal/fake/routes_receiver.go -fake-name FakeBackend . RoutesReceiver
 
 //go:embed *.gohtml
 var templateSource embed.FS
