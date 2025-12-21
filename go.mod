@@ -7,7 +7,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	github.com/typelate/check v0.0.6
+	github.com/typelate/check v0.1.0
 	github.com/typelate/dom v0.7.0
 	golang.org/x/net v0.48.0
 	golang.org/x/tools v0.40.0
