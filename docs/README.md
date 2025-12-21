@@ -36,8 +36,8 @@ Type-safe HTTP handlers from Go HTML templates.
 
 ## Examples
 
-- **[Hypertext Example](./examples/simple/hypertext/)** - Full application with tests
-- **[HTMX Helpers](./examples/htmx/)** - HTMX integration code
+- **[Hypertext Example](examples/simple)** - Full application with tests
+- **[HTMX Helpers](examples/htmx)** - HTMX integration code
 
 ## AI Assistant Prompts
 

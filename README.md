@@ -99,7 +99,7 @@ go generate && go run .
 
 The [command tests](./cmd/muxt/testdata) were intended to be readable examples of muxt behavior.
 
-- **[Local example](./docs/examples/simple/hypertext/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
+- **[Local example](./docs/examples/simple/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
 - **[Sortable Example](http://github.com/typelate/sortable-example)** - Interactive HTMX-enabled table row sorting
 - **[HTMX Template](https://github.com/typelate/htmx-template)** - Full HTMX integration patterns
 

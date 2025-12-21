@@ -72,7 +72,7 @@ func TestRoutes(t *testing.T) {
 		{
 			Name: "when the row edit form is requested",
 			Given: func(t *testing.T, f *BackendMock) {
-				f.On("GetFormEditRowReturns", 1).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
+				f.On("GetFormEditRow", 1).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
 			},
 			When: func(t *testing.T) *http.Request {
 				return httptest.NewRequest(http.MethodGet, TemplateRoutePaths{}.GetFormEditRow(1), nil)
@@ -101,15 +101,21 @@ type BackendMock struct {
 }
 
 func (s *BackendMock) List(ctx context.Context) []Row {
-	return s.Mock.Called(ctx)[0].([]Row)
+	return s.Mock.MethodCalled("List", ctx)[0].([]Row)
 }
 
 func (s *BackendMock) SubmitFormEditRow(fruitID int, form EditRow) (Row, error) {
-	res := s.Mock.Called(fruitID, form)
-	return res.Get(0).(Row), res.Get(1).(error)
+	return err1Result[Row](s.Mock.MethodCalled("SubmitFormEditRow", fruitID, form))
 }
 
 func (s *BackendMock) GetFormEditRow(fruitID int) (Row, error) {
-	res := s.Mock.Called(fruitID)
-	return res.Get(0).(Row), res.Get(1).(error)
+	return err1Result[Row](s.Mock.MethodCalled("GetFormEditRow", fruitID))
+}
+
+func err1Result[T any](res mock.Arguments) (T, error) {
+	row := res.Get(0).(T)
+	if err := res.Get(1); err != nil {
+		return row, err.(error)
+	}
+	return row, nil
 }
