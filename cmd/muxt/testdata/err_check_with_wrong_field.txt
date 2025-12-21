@@ -1,5 +1,8 @@
 ! muxt check
-stderr '<\.Missing>: Missing not found on struct\{Field1 int}'
+stderr '<\.Missing>: Missing not found on struct\{Field2 int}'
+stderr '<\.Missing>: Missing not found on GlobalType'
+stderr '<\.Missing>: Missing not found on db.Row'
+stderr '<\.Missing>: Missing not found on api.Body'
 
 -- template.gohtml --
 {{.Missing}}
@@ -14,6 +17,9 @@ import (
 	"embed"
 	"html/template"
 	"io"
+
+	"example.com/internal/database"
+	a "example.com/internal/api"
 )
 
 //go:embed *.gohtml
@@ -21,9 +27,40 @@ var source embed.FS
 
 var templates = template.Must(template.ParseFS(source, "*"))
 
+type GlobalType struct {
+	Field1 int
+}
+
 func main() {
-	var data struct {
-  	Field1 int
-  }
-	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", data)
+	// inline data type
+	var d1 struct {
+		Field2 int
+	}
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d1)
+
+	// globally scoped type
+	var d2 GlobalType
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d2)
+
+	// globally scoped type
+	var d3 db.Row
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d3)
+
+	// globally scoped type
+	// TODO: fix this, it should use 'a' not 'api'
+  var d4 a.Body
+  _ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d4)
+}
+-- internal/database/types.go --
+package db
+
+type Row struct {
+	Column3 int
+}
+
+-- internal/api/types.go --
+package api
+
+type Body struct {
+	Field4 int
 }
