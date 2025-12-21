@@ -15,6 +15,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 type CheckConfiguration struct {
@@ -50,7 +51,7 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
-			if err := findTemplateExecution(executedTemplates, global, fileSet, ts, node, templateName, dataType); err != nil {
+			if err := findTemplateExecution(executedTemplates, global, fileSet, routesPkg.PkgPath, ts, node, templateName, dataType); err != nil {
 				log.Println("ERROR", err)
 				log.Println()
 				errs = append(errs, err)
@@ -164,7 +165,7 @@ func newTemplateExecution(pos token.Position, n any, templateName string, dataTy
 	}
 }
 
-func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
+func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, routesPkgPath string, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
 	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(fileSet.Position(node.Pos()), node, templateName, dataType))
 	ts2 := ts.Lookup(templateName)
 	if ts2 == nil {
@@ -174,6 +175,7 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 	global.InspectTemplateNode = func(tree *parse.Tree, node *parse.TemplateNode, tp types.Type) {
 		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(asteval.NewParseNodePosition(tree, node), node, node.Name, dataType))
 	}
+	global.Qualifier = astgen.NewTypeFormatter(routesPkgPath).Qualifier
 	if err := check.Execute(global, tree, dataType); err != nil {
 		return err
 	}
