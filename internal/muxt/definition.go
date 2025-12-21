@@ -255,8 +255,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
 	if err != nil {
-		//msg := err.Error()
-		//regexp.MustCompile(`template_name\.go:\d*:\d*: (.*)`)
+		// msg := err.Error()
+		// regexp.MustCompile(`template_name\.go:\d*:\d*: (.*)`)
 		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
 		return fmt.Errorf("failed to parse handler expression %s: %v", loc, err)
 	}
