@@ -17,7 +17,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8000"), mux))
 }
 
-//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-htmx-helpers
 
 //go:embed *.gohtml
 var templateSource embed.FS

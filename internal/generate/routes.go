@@ -69,6 +69,7 @@ type RoutesFileConfiguration struct {
 	Logger              bool
 	Verbose             bool
 	OutputMultipleFiles bool
+	HTMXHelpers         bool
 }
 
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
@@ -299,40 +300,45 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	for _, s := range is {
 		importSpecs = append(importSpecs, s)
 	}
+	decls := []ast.Decl{
+		// import
+		&ast.GenDecl{
+			Tok:   token.IMPORT,
+			Specs: importSpecs,
+		},
+
+		// type
+		&ast.GenDecl{
+			Tok: token.TYPE,
+			Specs: []ast.Spec{
+				&ast.TypeSpec{Name: ast.NewIdent(config.ReceiverInterface), Type: receiverInterface},
+			},
+		},
+
+		// func routes
+		routesFunc,
+
+		templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
+		templateDataMuxtVersionMethod(config),
+		templateDataPathMethod(config),
+		templateDataResultMethod(config.TemplateDataType),
+		templateDataRequestMethod(file, config.TemplateDataType),
+		templateDataStatusCodeMethod(config.TemplateDataType),
+		templateDataHeaderMethod(config.TemplateDataType),
+		templateDataOkay(config.TemplateDataType),
+		templateDataError(file, config.TemplateDataType),
+		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
+		templateRedirect(file, config),
+	}
+	if config.HTMXHelpers {
+		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
+			decls = append(decls, method)
+		}
+	}
+	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{
-		Name: ast.NewIdent(config.PackageName),
-		Decls: append([]ast.Decl{
-			// import
-			&ast.GenDecl{
-				Tok:   token.IMPORT,
-				Specs: importSpecs,
-			},
-
-			// type
-			&ast.GenDecl{
-				Tok: token.TYPE,
-				Specs: []ast.Spec{
-					&ast.TypeSpec{Name: ast.NewIdent(config.ReceiverInterface), Type: receiverInterface},
-				},
-			},
-
-			// func routes
-			routesFunc,
-
-			templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
-			templateDataMuxtVersionMethod(config),
-			templateDataPathMethod(config),
-			templateDataResultMethod(config.TemplateDataType),
-			templateDataRequestMethod(file, config.TemplateDataType),
-			templateDataStatusCodeMethod(config.TemplateDataType),
-			templateDataHeaderMethod(config.TemplateDataType),
-			templateDataOkay(config.TemplateDataType),
-			templateDataError(file, config.TemplateDataType),
-			templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
-			templateRedirect(file, config),
-
-			// func newResultData
-		}, routePathDecls...),
+		Name:  ast.NewIdent(config.PackageName),
+		Decls: decls,
 	}
 
 	filePath := filepath.Join(wd, config.OutputFileName)

@@ -307,6 +307,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.OutputMultipleFiles {
 		args = append(args, "--"+outputMultipleFiles)
 	}
+	if config.HTMXHelpers {
+		args = append(args, "--"+outputHTMXHelpers)
+	}
 
 	return args
 }
@@ -463,6 +466,7 @@ const (
 	outputRoutesFuncWithLoggerParam = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix  = "output-routes-func-with-path-prefix-param"
 	outputMultipleFiles             = "output-multiple-files"
+	outputHTMXHelpers               = "output-htmx-helpers"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -495,6 +499,7 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithLoggerParamHelp = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp  = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputMultipleFilesHelp             = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
+	outputHTMXHelpersHelp               = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -542,6 +547,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
+	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
 }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {

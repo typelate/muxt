@@ -363,3 +363,180 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 		},
 	}
 }
+
+// HTMX Response Header Helpers
+
+func htmxHeaderSetterMethod(templateDataTypeIdent, methodName, headerName, paramName string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{List: []*ast.Field{{
+				Names: []*ast.Ident{ast.NewIdent(paramName)},
+				Type:  ast.NewIdent("string"),
+			}}},
+			Results: &ast.FieldList{List: []*ast.Field{{
+				Type: &ast.StarExpr{X: &ast.IndexListExpr{
+					X:       ast.NewIdent(templateDataTypeIdent),
+					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
+				}},
+			}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Header")},
+						Args: []ast.Expr{astgen.String(headerName), ast.NewIdent(paramName)},
+					}},
+				},
+			},
+		},
+	}
+}
+
+func htmxRefreshMethod(templateDataTypeIdent string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent("HXRefresh"),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{
+				Type: &ast.StarExpr{X: &ast.IndexListExpr{
+					X:       ast.NewIdent(templateDataTypeIdent),
+					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
+				}},
+			}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Header")},
+						Args: []ast.Expr{astgen.String("HX-Refresh"), astgen.String("true")},
+					}},
+				},
+			},
+		},
+	}
+}
+
+// HTMX Request Header Helpers
+
+func htmxRequestHeaderStringMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.SelectorExpr{
+								X: &ast.CallExpr{
+									Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
+								},
+								Sel: ast.NewIdent("Header"),
+							},
+							Sel: ast.NewIdent("Get"),
+						},
+						Args: []ast.Expr{astgen.String(headerName)},
+					}},
+				},
+			},
+		},
+	}
+}
+
+func htmxRequestHeaderBoolNonEmptyMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.BinaryExpr{
+						X: &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X: &ast.SelectorExpr{
+									X: &ast.CallExpr{
+										Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
+									},
+									Sel: ast.NewIdent("Header"),
+								},
+								Sel: ast.NewIdent("Get"),
+							},
+							Args: []ast.Expr{astgen.String(headerName)},
+						},
+						Op: token.NEQ,
+						Y:  astgen.String(""),
+					}},
+				},
+			},
+		},
+	}
+}
+
+func htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.BinaryExpr{
+						X: &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X: &ast.SelectorExpr{
+									X: &ast.CallExpr{
+										Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
+									},
+									Sel: ast.NewIdent("Header"),
+								},
+								Sel: ast.NewIdent("Get"),
+							},
+							Args: []ast.Expr{astgen.String(headerName)},
+						},
+						Op: token.EQL,
+						Y:  astgen.String("true"),
+					}},
+				},
+			},
+		},
+	}
+}
+
+func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl {
+	return []*ast.FuncDecl{
+		// Response header setters
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXLocation", "HX-Location", "link"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXPushURL", "HX-Push-Url", "link"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXRedirect", "HX-Redirect", "link"),
+		htmxRefreshMethod(templateDataTypeIdent),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReplaceURL", "HX-Replace-Url", "link"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReswap", "HX-Reswap", "swap"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXRetarget", "HX-Retarget", "target"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReselect", "HX-Reselect", "selector"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTrigger", "HX-Trigger", "eventName"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSettle", "HX-Trigger-After-Settle", "eventName"),
+		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSwap", "HX-Trigger-After-Swap", "eventName"),
+
+		// Request header getters
+		htmxRequestHeaderBoolNonEmptyMethod(templateDataTypeIdent, "HXBoosted", "HX-Boosted"),
+		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXCurrentURL", "HX-Current-Url"),
+		htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, "HXHistoryRestoreRequest", "HX-History-Restore-Request"),
+		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXPrompt", "HX-Prompt"),
+		htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, "HXRequest", "HX-Request"),
+		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTargetElementID", "HX-Target"),
+		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTriggerName", "HX-Trigger-Name"),
+		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTriggerElementID", "HX-Trigger"),
+	}
+}
