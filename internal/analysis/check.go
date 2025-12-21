@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -61,23 +60,22 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	unusedTemplates := findUnusedTemplates(ts, executedTemplates)
 	if len(unusedTemplates) > 0 {
 		for _, name := range unusedTemplates {
-			errs = append(errs, fmt.Errorf("unused template %q", name))
+			err := fmt.Errorf("unused template %q", name)
+			log.Println("ERROR", err.Error())
+			errs = append(errs, err)
 		}
 	}
-	if len(errs) == 1 {
-		log.Printf("1 error")
-		return errs[0]
-	} else if len(errs) > 0 {
-		log.Printf("%d errors\n", len(errs))
-		for i, err := range errs {
-			fmt.Printf("- %d: %s\n", i+1, err.Error())
+	switch len(errs) {
+	case 1:
+		return fmt.Errorf("1 error")
+	default:
+		return fmt.Errorf("%d errors", len(errs))
+	case 0:
+		if config.Verbose {
+			log.Println(`OK`)
 		}
-		return errors.Join(errs...)
+		return nil
 	}
-	if config.Verbose {
-		log.Println(`OK`)
-	}
-	return nil
 }
 
 // findUnusedTemplates returns a list of template names that are defined but never used.

@@ -1,0 +1,29 @@
+! muxt check
+stderr '<\.Missing>: Missing not found on struct\{Field1 int}'
+
+-- template.gohtml --
+{{.Missing}}
+-- go.mod --
+module example.com
+
+go 1.24
+-- main.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*"))
+
+func main() {
+	var data struct {
+  	Field1 int
+  }
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", data)
+}
