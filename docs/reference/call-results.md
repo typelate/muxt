@@ -113,6 +113,21 @@ Templates receive `TemplateData[T]` where `T` is the method's first return value
 | `.Path(name)` | `string` | Path parameter value |
 | `.StatusCode(code)` | `int` | Set HTTP status (returns code for chaining) |
 | `.Header(key, val)` | `string` | Set response header (returns val for chaining) |
+| `.String()` | `string` | Returns `""` (implements `fmt.Stringer`) |
+
+**Why `{{.}}` outputs nothing:**
+
+`TemplateData` implements `fmt.Stringer` returning an empty string. This allows methods that return `*TemplateData` (like `.Header()` and `.StatusCode()`) to be called directly in templates without outputting anything:
+
+```gotemplate
+{{.Header "HX-Trigger" "contact-sent"}}
+```
+
+Without `String()`, this would output the struct's internal fields. Previously you needed the workaround `{{with .Header "HX-Trigger" "contact-sent"}}{{end}}` to suppress output.
+
+To access the receiver method's return value, use `{{.Result}}` explicitly.
+
+[reference_template_data_stringer.txt](../../cmd/muxt/testdata/reference_template_data_stringer.txt)
 
 **Chaining examples:**
 ```gotemplate
