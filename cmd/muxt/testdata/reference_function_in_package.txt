@@ -7,7 +7,7 @@ muxt check
 exec go build -o build
 
 -- template.gohtml --
-{{define "GET / function(ctx)" }}{{.}}{{end}}
+{{define "GET / function(ctx)" }}{{.Result}}{{end}}
 
 -- go.mod --
 module server

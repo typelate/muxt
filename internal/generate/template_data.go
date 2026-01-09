@@ -514,6 +514,23 @@ func htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, methodName, headerNa
 	}
 }
 
+func templateDataStringMethod(templateDataTypeIdent string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent("String"),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{astgen.String("")},
+				},
+			},
+		},
+	}
+}
+
 func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl {
 	return []*ast.FuncDecl{
 		// Response header setters

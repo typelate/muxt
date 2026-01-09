@@ -329,6 +329,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		templateDataError(file, config.TemplateDataType),
 		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
 		templateRedirect(file, config),
+		templateDataStringMethod(config.TemplateDataType),
 	}
 	if config.HTMXHelpers {
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
