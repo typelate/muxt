@@ -213,6 +213,10 @@ func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R,
 	return data.StatusCode(code), nil
 }
 
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }

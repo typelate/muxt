@@ -1,0 +1,76 @@
+# TemplateData implements Stringer returning empty string
+# When {{.}} is used in a template with the default TemplateData type,
+# the result should be empty, not the default struct representation.
+
+muxt generate
+cat template_routes.go
+
+exec go test -v
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- go.mod --
+module example.com
+
+go 1.25
+-- template.gohtml --
+{{define "GET /dot"}}prefix{{.}}suffix{{end}}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestTemplateDataStringer(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/dot", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+
+	// When {{.}} is rendered with TemplateData, it should output empty string
+	// via the String() method, resulting in "prefixsuffix" with nothing between
+	if body != "prefixsuffix" {
+		t.Errorf("expected body to be 'prefixsuffix', got %q", body)
+	}
+
+	// Make sure the body doesn't contain struct field names which would
+	// indicate the default struct representation was used
+	if strings.Contains(body, "TemplateData") {
+		t.Error("body should not contain 'TemplateData' struct name")
+	}
+	if strings.Contains(body, "receiver") {
+		t.Error("body should not contain struct field names")
+	}
+	if strings.Contains(body, "response") {
+		t.Error("body should not contain struct field names")
+	}
+	if strings.Contains(body, "request") {
+		t.Error("body should not contain struct field names")
+	}
+	if strings.Contains(body, "{") {
+		t.Error("body should not contain struct literal characters")
+	}
+}
