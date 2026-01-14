@@ -21,11 +21,11 @@
 ```
 Template Name (with route pattern and method call)
     ↓
-Parser (internal/muxt/parse)
+Parser (./internal/muxt/parse)
     ↓
-Type Checker (go/types analysis)
+Type Checker (go/types ./internal/analysis)
     ↓
-Generator (internal/muxt/generate)
+Generator (./internal/muxt/generate)
     ↓
 HTTP Handler Code
 ```
@@ -53,13 +53,12 @@ ls cmd/muxt/testdata/ | grep your-feature
 Tests are `txtar` files (text archive format) in `cmd/muxt/testdata/`:
 
 ```bash
-# Extract a test to work on it
-mkdir -p ./cmd/muxt/testdata/your-test
-cd ./cmd/muxt/testdata/your-test
-txtar -extract ../your-test.txt
+# Extract a test to inspect it
+mkdir -p ./cmd/your-test
+cd ./cmd/your-test
+txtar -extract ../muxt/testdata/your-test.txt
+# Files are extracted, edit them normally, but make test changes in the original txtar file.
 
-# Files are extracted, edit them normally
-cd ../../../..
 
 # Run tests in the extracted directory
 go -C ./cmd/muxt/testdata/your-test test
@@ -93,9 +92,6 @@ Update the generator code in order:
 ```bash
 # Check for build/type errors
 go test ./cmd/muxt
-
-# Verify generated code is valid
-go -C ./cmd/muxt/testdata/your-test test
 
 # Run the formatter
 go fmt ./...
