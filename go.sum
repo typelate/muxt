@@ -33,8 +33,12 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/typelate/check v0.1.0 h1:gR5edBp4bovkBba7go+LWOKYy9kmzi9w7gs6OVteGWg=
 github.com/typelate/check v0.1.0/go.mod h1:nhEmO+YANCfkLmz96C9FO3U5tRPMBiJYrZHheC2dbJw=
+github.com/typelate/check v0.1.1 h1:tgTA7qP/z8Xf4ecn5ew2QKoIyUr4GVRgP6XKi9SlpQo=
+github.com/typelate/check v0.1.1/go.mod h1:ePRFc8wpmTy5SpyMHHzbuZxReerD5FKgJh6AZk+wczM=
 github.com/typelate/dom v0.7.1 h1:AfLFuzPtyNf28yhyAB6iJmjXkeAml0evMpRicPU+0oo=
 github.com/typelate/dom v0.7.1/go.mod h1:rMxxYIyJFPYLUEP7axtmApy1Es7vwcbz19OPaO8Mf88=
+github.com/typelate/dom v0.7.2 h1:BmdmhskiENlX6OaTLFDb93u6MbMIHDIgF4y/rSiqHWQ=
+github.com/typelate/dom v0.7.2/go.mod h1:O5f90nKvP99k36mSoxRekl+TkfnYLmMVFoR4EDL+n5k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
