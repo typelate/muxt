@@ -30,3 +30,5 @@ cmd/muxt/testdata/*/**
 !cmd/muxt/testdata/*.txt
 
 tmp
+
+cmd/tmp
