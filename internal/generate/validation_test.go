@@ -297,6 +297,7 @@ func Test_inputValidations(t *testing.T) {
 				DataAtom: atom.Body,
 				Data:     atom.Body.String(),
 			})
+			require.NoError(t, err)
 			fragment := dom.NewDocumentFragment(nodes)
 
 			pl, err := loadPkg()

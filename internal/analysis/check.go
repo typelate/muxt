@@ -71,15 +71,15 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 		errs = append(errs, fmt.Errorf("unused templates %d", len(unusedTemplates)))
 	}
 	switch len(errs) {
-	case 1:
-		return fmt.Errorf("1 error")
-	default:
-		return fmt.Errorf("%d errors", len(errs))
 	case 0:
 		if config.Verbose {
 			log.Println(`OK`)
 		}
 		return nil
+	case 1:
+		return fmt.Errorf("1 error")
+	default:
+		return fmt.Errorf("%d errors", len(errs))
 	}
 }
 

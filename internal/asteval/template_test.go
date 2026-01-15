@@ -262,6 +262,7 @@ func TestTemplates(t *testing.T) {
 		tsHTML, _, err := asteval.Templates(dir, "templatesHTML", pkg)
 		require.NoError(t, err)
 		tsGoHTML, _, err := asteval.Templates(dir, "templatesGoHTML", pkg)
+		require.NoError(t, err)
 		assert.NotNil(t, tsHTML.Lookup("script.html"))
 		assert.NotNil(t, tsHTML.Lookup("console_log"))
 		assert.Nil(t, tsGoHTML.Lookup("script.html"))
@@ -455,6 +456,9 @@ func createTestDir(t *testing.T, filename string) string {
 		t.Fatal(err)
 	}
 	tfs, err := txtar.FS(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.CopyFS(dir, tfs); err != nil {
 		log.Fatal(err)
 	}

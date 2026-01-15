@@ -153,6 +153,7 @@ func TestHTTPStatusCode(t *testing.T) {
 	wd, err := workingDir()
 	require.NoError(t, err)
 	pl, err := loadPackages(wd, []string{wd})
+	require.NoError(t, err)
 
 	file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 	require.NoError(t, err)

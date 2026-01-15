@@ -104,22 +104,6 @@ func calculateIdentifiers(in []Definition) {
 	}
 }
 
-// fileNameToIdentifier converts a template source filename to a Go identifier prefix.
-// For example: "index.gohtml" -> "Index", "user-profile.gohtml" -> "UserProfile"
-// Returns empty string for empty filenames.
-func fileNameToIdentifier(filename string) string {
-	if filename == "" {
-		return ""
-	}
-	// Strip the extension
-	base := strings.TrimSuffix(filename, filepath.Ext(filename))
-	if base == "" {
-		return ""
-	}
-	// Convert to PascalCase using strcase
-	return strcase.ToGoPascal(base)
-}
-
 // FileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.
 // For example: "index.gohtml" -> "index", "user-profile.gohtml" -> "userProfile"
 // Returns empty string for empty filenames.

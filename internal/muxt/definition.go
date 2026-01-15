@@ -357,19 +357,6 @@ func patternScope() []string {
 	}
 }
 
-func (def Definition) matchReceiver(funcDecl *ast.FuncDecl, receiverTypeIdent string) bool {
-	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Name.Name != def.fun.Name ||
-		funcDecl.Recv == nil || len(funcDecl.Recv.List) < 1 {
-		return false
-	}
-	exp := funcDecl.Recv.List[0].Type
-	if star, ok := exp.(*ast.StarExpr); ok {
-		exp = star.X
-	}
-	ident, ok := exp.(*ast.Ident)
-	return ok && ident.Name == receiverTypeIdent
-}
-
 // analyzeRedirectCalls performs static analysis on all templates to determine
 // which ones can call the Redirect method. It updates the canRedirect field
 // on each Definition in the templates slice.
