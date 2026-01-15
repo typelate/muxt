@@ -327,8 +327,15 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
+			// Allow identifiers that are either in the known scope (special identifiers + path parameters)
+			// or look like valid method parameter names (for cookie params and other parameters not known at parse time).
+			// The type checker will validate these later against the actual method signature.
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok {
-				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
+				// Check if it's a valid Go identifier that could be a parameter
+				// This allows cookie parameters and other runtime-determined parameters.
+				if !token.IsIdentifier(exp.Name) {
+					return fmt.Errorf("invalid identifier %s at index %d", exp.Name, i)
+				}
 			}
 		case *ast.CallExpr:
 			if err := checkArguments(identifiers, exp); err != nil {

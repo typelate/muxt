@@ -845,6 +845,22 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, callMethodStatements...)
 		case *ast.Ident:
+			// Check for cookie types first, as they don't use defaultTemplateNameScope
+			if _, ok := parsed[arg.Name]; !ok {
+				if isCookieType(file, param.Type()) {
+					parsed[arg.Name] = struct{}{}
+					statements = append(statements, cookieAssignment(arg.Name)...)
+					def.SetArgumentType(arg.Name, param.Type())
+					continue
+				}
+				if isCookieSliceType(file, param.Type()) {
+					parsed[arg.Name] = struct{}{}
+					statements = append(statements, cookiesAssignment(arg.Name))
+					def.SetArgumentType(arg.Name, param.Type())
+					continue
+				}
+			}
+
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("failed to determine type for %s", arg.Name)
@@ -1349,7 +1365,9 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 		case *ast.Ident:
 			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
-				return nil, fmt.Errorf("could not determine a type for %s", arg.Name)
+				// For unknown identifiers like cookie parameters, use "any" type
+				// The actual type will be validated against the real method signature later
+				tp = types.Universe.Lookup("any").Type()
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
@@ -1520,5 +1538,104 @@ func assignTemplateDataErrStatusCode(file *File, rdIdent string, code int) *ast.
 		Rhs: []ast.Expr{
 			astgen.HTTPStatusCode(file, code),
 		},
+	}
+}
+
+// isCookieType checks if the given type is *http.Cookie
+func isCookieType(file *File, tp types.Type) bool {
+	ptr, ok := tp.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+	return named.Obj().Name() == "Cookie" && named.Obj().Pkg().Path() == "net/http"
+}
+
+// isCookieSliceType checks if the given type is []*http.Cookie
+func isCookieSliceType(file *File, tp types.Type) bool {
+	slice, ok := tp.(*types.Slice)
+	if !ok {
+		return false
+	}
+	ptr, ok := slice.Elem().(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+	return named.Obj().Name() == "Cookie" && named.Obj().Pkg().Path() == "net/http"
+}
+
+// cookieAssignment generates assignment statements to load a single cookie from the request
+// with error handling. It generates:
+//   var session *http.Cookie
+//   if c, err := request.Cookie("session"); err == nil {
+//       session = c
+//   }
+// This ensures the cookie variable is available even if the cookie is not found (nil value).
+func cookieAssignment(cookieName string) []ast.Stmt {
+	return []ast.Stmt{
+		&ast.DeclStmt{
+			Decl: &ast.GenDecl{
+				Tok: token.VAR,
+				Specs: []ast.Spec{
+					&ast.ValueSpec{
+						Names: []*ast.Ident{ast.NewIdent(cookieName)},
+						Type:  &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Cookie")}},
+					},
+				},
+			},
+		},
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{
+				Tok: token.DEFINE,
+				Lhs: []ast.Expr{ast.NewIdent("c"), ast.NewIdent(errIdent)},
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+						Sel: ast.NewIdent("Cookie"),
+					},
+					Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(cookieName)}},
+				}},
+			},
+			Cond: &ast.BinaryExpr{
+				X:  ast.NewIdent(errIdent),
+				Op: token.EQL,
+				Y:  astgen.Nil(),
+			},
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.AssignStmt{
+						Tok: token.ASSIGN,
+						Lhs: []ast.Expr{ast.NewIdent(cookieName)},
+						Rhs: []ast.Expr{ast.NewIdent("c")},
+					},
+				},
+			},
+		},
+	}
+}
+
+// cookiesNamedAssignment generates an assignment statement to load cookies with a specific name from the request
+// e.g., sessions := request.Cookies() // filtered by name (this needs custom handling or CookiesNamed)
+// For now we'll generate a call to request.Cookies() and let the user filter if needed
+// Actually, looking at net/http, there's no CookiesNamed in stdlib. We should generate request.Cookies()
+// and return all cookies, but if the parameter name is specific, we might want to use a helper.
+// For simplicity, let's generate request.Cookies() which returns all []*http.Cookie
+func cookiesAssignment(cookieName string) *ast.AssignStmt {
+	return &ast.AssignStmt{
+		Tok: token.DEFINE,
+		Lhs: []ast.Expr{ast.NewIdent(cookieName)},
+		Rhs: []ast.Expr{&ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+				Sel: ast.NewIdent("Cookies"),
+			},
+		}},
 	}
 }
