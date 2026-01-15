@@ -1,0 +1,124 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+cat template_routes.go
+
+exec go test -cover
+
+-- template.gohtml --
+
+{{- define "GET / Dashboard(ctx, session)"}}{{if .Result.LoggedIn}}<p>{{.Result.Name}}</p>{{else}}<p>not logged in</p>{{end}}{{end}}
+{{- define "GET /list GetCookies(ctx, cookies)"}}{{if .Result.Count}}<p>{{.Result.Count}}</p>{{else}}<p>no cookies</p>{{end}}{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+type CookieResult struct {
+	Name string
+	LoggedIn bool
+}
+
+func (T) Dashboard(ctx context.Context, session *http.Cookie) (CookieResult, error) {
+	if session == nil {
+		return CookieResult{}, nil
+	}
+	return CookieResult{Name: session.Value, LoggedIn: true}, nil
+}
+
+type CookiesResult struct {
+	Count int
+}
+
+func (T) GetCookies(ctx context.Context, cookies []*http.Cookie) (CookiesResult, error) {
+	return CookiesResult{Count: len(cookies)}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	t.Run("single cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if res.StatusCode != http.StatusOK {
+			t.Error("expected OK")
+		}
+		assertBodyContains(t, rec, "abc123")
+	})
+
+	t.Run("no cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if res.StatusCode != http.StatusOK {
+			t.Error("expected OK")
+		}
+		assertBodyContains(t, rec, "not logged in")
+	})
+
+	t.Run("multiple cookies", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/list", nil)
+		req.AddCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
+		req.AddCookie(&http.Cookie{Name: "cookie2", Value: "value2"})
+		req.AddCookie(&http.Cookie{Name: "cookie3", Value: "value3"})
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		res := rec.Result()
+		if res.StatusCode != http.StatusOK {
+			t.Error("expected OK")
+		}
+		assertBodyContains(t, rec, "3")
+	})
+
+	t.Run("no cookies", func(t *testing.T) {
+  		req := httptest.NewRequest(http.MethodGet, "/list", nil)
+  		rec := httptest.NewRecorder()
+  		mux.ServeHTTP(rec, req)
+  		res := rec.Result()
+  		if res.StatusCode != http.StatusOK {
+  			t.Error("expected OK")
+  		}
+  		assertBodyContains(t, rec, "no cookies")
+  	})
+}
+
+func assertBodyContains(t *testing.T, rec *httptest.ResponseRecorder, exp string) {
+	t.Helper()
+
+	buf := rec.Body.Bytes()
+
+	if !bytes.Contains(buf, []byte(exp)) {
+		t.Errorf("expected result to contain %q got %q", exp, string(buf))
+	}
+}

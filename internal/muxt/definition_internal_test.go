@@ -320,9 +320,8 @@ func TestNewTemplateName(t *testing.T) {
 			Name:     "when an identifier is not defined",
 			In:       "GET / F(unknown)",
 			ExpMatch: true,
-			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "unknown argument unknown")
-			},
+			// Unknown identifiers are now allowed at parse time
+			// and will be validated at code generation time against the method signature
 		},
 		{
 			Name:     "wrong argument expression type",
