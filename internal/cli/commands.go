@@ -16,6 +16,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/ettle/strcase"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -182,7 +183,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if v, ok := cliVersion(); ok {
 				config.MuxtVersion = v
 			}
-			applyDefaults(&config)
+			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
 			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
@@ -309,6 +310,11 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.HTMXHelpers {
 		args = append(args, "--"+outputHTMXHelpers)
+	}
+
+	// Add output-exported-default-identifiers flag if false (true is the default)
+	if !config.OutputExportedDefaultIdentifiers {
+		args = append(args, "--"+outputExportedDefaultIdentifiers+"=false")
 	}
 
 	return args
@@ -465,8 +471,9 @@ const (
 	outputTemplateRoutePathsType    = "output-template-route-paths-type"
 	outputRoutesFuncWithLoggerParam = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix  = "output-routes-func-with-path-prefix-param"
-	outputMultipleFiles             = "output-multiple-files"
-	outputHTMXHelpers               = "output-htmx-helpers"
+	outputMultipleFiles                = "output-multiple-files"
+	outputHTMXHelpers                  = "output-htmx-helpers"
+	outputExportedDefaultIdentifiers   = "output-exported-default-identifiers"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -499,7 +506,8 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithLoggerParamHelp = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp  = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputMultipleFilesHelp             = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
-	outputHTMXHelpersHelp               = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputHTMXHelpersHelp                = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputExportedDefaultIdentifiersHelp = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -514,13 +522,31 @@ const (
 	defaultPackageName                = "main"
 )
 
-func applyDefaults(config *generate.RoutesFileConfiguration) {
+func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 	config.TemplatesVariable = cmp.Or(config.TemplatesVariable, defaultTemplatesVariableName)
-	config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
-	config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
-	config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
-	config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+	
+	// Apply defaults and convert to private if --output-exported-default-identifiers=false
+	if !config.OutputExportedDefaultIdentifiers {
+		if !flagSet.Changed(outputRoutesFunc) {
+			config.RoutesFunction = strcase.ToGoCamel(defaultRoutesFunctionName)
+		}
+		if !flagSet.Changed(outputReceiverInterface) {
+			config.ReceiverInterface = strcase.ToGoCamel(defaultReceiverInterfaceName)
+		}
+		if !flagSet.Changed(outputTemplateDataType) {
+			config.TemplateDataType = strcase.ToGoCamel(defaultTemplateDataTypeName)
+		}
+		if !flagSet.Changed(outputTemplateRoutePathsType) {
+			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
+		}
+	} else {
+		// Normal defaults when exported identifiers are enabled
+		config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
+		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
+		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
+		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+	}
 }
 
 // addUseTemplatesVarToFlagSet was split out because it is used for a few different commands
@@ -548,6 +574,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {

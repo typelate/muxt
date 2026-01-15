@@ -64,12 +64,13 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	TemplateRoutePathsTypeName string
-	OutputFileName      string
-	PathPrefix          bool
-	Logger              bool
-	Verbose             bool
-	OutputMultipleFiles bool
-	HTMXHelpers         bool
+	OutputFileName                 string
+	PathPrefix                     bool
+	Logger                         bool
+	Verbose                        bool
+	OutputMultipleFiles            bool
+	HTMXHelpers                    bool
+	OutputExportedDefaultIdentifiers bool
 }
 
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
