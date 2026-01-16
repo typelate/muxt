@@ -613,10 +613,20 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
 	}
 
-	resultType := sig.Results().At(0).Type()
-	typeExpr, err := file.TypeASTExpression(resultType)
-	if err != nil {
-		return nil, err
+	var resultType types.Type
+	var typeExpr ast.Expr
+	var err error
+	if methodOnlyReturnsErr(sig) {
+		// Pattern 4: Error Only - use struct{} as result type
+		resultType = types.NewStruct(nil, nil) // empty struct type for type checking
+		typeExpr = astgen.EmptyStructType()    // struct{} AST node for code gen
+	} else {
+		// Pattern 1, 2, 3: Use actual return type
+		resultType = sig.Results().At(0).Type()
+		typeExpr, err = file.TypeASTExpression(resultType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	handlerFunc := &ast.FuncLit{
@@ -1175,6 +1185,61 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 		assert.NotNil(assertion, methodIdent)
 		return nil, fmt.Errorf("method %s has no results it should have one or two", methodIdent.Name)
 	case 1:
+		// Check if the single return is an error type (Pattern 4: Error Only)
+		resultType := method.Results().At(0).Type()
+		errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+
+		if types.Implements(resultType, errorType) {
+			// Pattern 4: Error Only - call method, check error, set Result = struct{}{}
+			errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+
+			// Check if the concrete error type implements StatusCode() at compile time
+			statusCoderIface := statusCoderInterface()
+			if types.Implements(resultType, statusCoderIface) {
+				// Concrete error type implements StatusCode(), cast and call it
+				errTypeExpr, errTypeErr := file.TypeASTExpression(resultType)
+				if errTypeErr != nil {
+					return nil, errTypeErr
+				}
+
+				errBlock.List = append(errBlock.List, &ast.AssignStmt{
+					Lhs: []ast.Expr{&ast.SelectorExpr{
+						X:   ast.NewIdent(rdIdent),
+						Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode),
+					}},
+					Tok: token.ASSIGN,
+					Rhs: []ast.Expr{&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.TypeAssertExpr{
+								X:    ast.NewIdent(errIdent),
+								Type: errTypeExpr,
+							},
+							Sel: ast.NewIdent("StatusCode"),
+						},
+						Args: []ast.Expr{},
+					}},
+				})
+			} else {
+				// Generic error or error that doesn't have StatusCode(), use default 500
+				errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
+			}
+
+			return []ast.Stmt{
+				// var err error
+				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
+				// err = receiver.Method(args...)
+				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+				// if err != nil { append error, set errStatusCode }
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+					Body: errBlock,
+				},
+				// data.result = struct{}{}
+				&ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{&ast.CompositeLit{Type: astgen.EmptyStructType()}}},
+			}, nil
+		}
+
+		// Pattern 1: Single Value (not error) - existing behavior
 		return []ast.Stmt{
 			&ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
 			&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
@@ -1230,6 +1295,18 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 
 		return nil, fmt.Errorf("expected last result to be either an error or a bool")
 	}
+}
+
+// methodOnlyReturnsErr returns true if the method signature has exactly one
+// return value and that value implements the error interface.
+// This is used to handle Pattern 4: Error Only returns (health checks, webhooks).
+func methodOnlyReturnsErr(sig *types.Signature) bool {
+	if sig.Results().Len() != 1 {
+		return false
+	}
+	resultType := sig.Results().At(0).Type()
+	errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	return types.Implements(resultType, errorType)
 }
 
 var assertion AssertionFailureReporter

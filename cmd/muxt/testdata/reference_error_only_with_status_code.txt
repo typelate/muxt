@@ -1,0 +1,82 @@
+# Error only with StatusCode method
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go build
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.24
+
+-- server.go --
+package main
+
+import "context"
+
+type Server struct{}
+
+// StatusErr is an error type with an optional StatusCode() method
+type StatusErr interface {
+	error
+	StatusCode() int
+}
+
+type ServiceUnavailableError struct {
+	Message string
+}
+
+func (e ServiceUnavailableError) Error() string { return e.Message }
+func (e ServiceUnavailableError) StatusCode() int { return 503 }
+
+func (s Server) Healthcheck(ctx context.Context) StatusErr {
+	return ServiceUnavailableError{Message: "database unavailable"}
+}
+
+func main() {}
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+-- template.gohtml --
+{{define "GET /health Healthcheck(ctx)"}}
+{{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK{{end}}
+{{end}}
+
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHealthcheckWithError(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 503 {
+		t.Errorf("expected status 503, got %d", rec.Code)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "Unhealthy: database unavailable" {
+		t.Errorf("unexpected body: %q", body)
+	}
+}
