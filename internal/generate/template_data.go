@@ -173,6 +173,42 @@ func templateRedirect(file *File, config RoutesFileConfiguration) *ast.FuncDecl 
 	}
 }
 
+func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, methodName string, statusCode int) *ast.FuncDecl {
+	const urlParamIdent = "url"
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{List: []*ast.Field{
+				{Names: []*ast.Ident{ast.NewIdent(urlParamIdent)}, Type: ast.NewIdent("string")},
+			}},
+			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(config.TemplateDataType), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{Results: []ast.Expr{
+					&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent(templateDataReceiverName),
+							Sel: ast.NewIdent("Redirect"),
+						},
+						Args: []ast.Expr{ast.NewIdent(urlParamIdent), astgen.HTTPStatusCode(file, statusCode)},
+					},
+				}},
+			},
+		},
+	}
+}
+
+func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration) []*ast.FuncDecl {
+	return []*ast.FuncDecl{
+		templateRedirectHelperMethod(file, config, "RedirectMultipleChoices", 300),
+		templateRedirectHelperMethod(file, config, "RedirectMovedPermanently", 301),
+		templateRedirectHelperMethod(file, config, "RedirectFound", 302),
+		templateRedirectHelperMethod(file, config, "RedirectSeeOther", 303),
+	}
+}
+
 func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	const versionIdent = "muxtVersion"
 	return &ast.FuncDecl{
