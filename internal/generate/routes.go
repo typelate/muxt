@@ -64,12 +64,12 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	TemplateRoutePathsTypeName string
-	OutputFileName                 string
-	PathPrefix                     bool
-	Logger                         bool
-	Verbose                        bool
-	OutputMultipleFiles            bool
-	HTMXHelpers                    bool
+	OutputFileName                   string
+	PathPrefix                       bool
+	Logger                           bool
+	Verbose                          bool
+	OutputMultipleFiles              bool
+	HTMXHelpers                      bool
 	OutputExportedDefaultIdentifiers bool
 }
 
@@ -330,8 +330,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		templateDataError(file, config.TemplateDataType),
 		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
 		templateRedirect(file, config),
-		templateDataStringMethod(config.TemplateDataType),
 	}
+	for _, method := range templateRedirectHelperMethods(file, config) {
+		decls = append(decls, method)
+	}
+	decls = append(decls,
+		templateDataStringMethod(config.TemplateDataType),
+	)
 	if config.HTMXHelpers {
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
 			decls = append(decls, method)

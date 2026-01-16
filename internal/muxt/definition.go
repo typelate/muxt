@@ -480,7 +480,17 @@ func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map
 	return false
 }
 
-// containsRedirectCall checks if a command node contains a call to .Redirect
+// isRedirectMethod returns true if the method name is a redirect method
+// that sets the redirectURL field on TemplateData
+func isRedirectMethod(methodName string) bool {
+	switch methodName {
+	case "Redirect", "RedirectMultipleChoices", "RedirectMovedPermanently", "RedirectFound", "RedirectSeeOther":
+		return true
+	}
+	return false
+}
+
+// containsRedirectCall checks if a command node contains a call to a redirect method
 func containsRedirectCall(cmd *parse.CommandNode) bool {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return false
@@ -488,22 +498,22 @@ func containsRedirectCall(cmd *parse.CommandNode) bool {
 
 	for _, arg := range cmd.Args {
 		if field, ok := arg.(*parse.FieldNode); ok {
-			// Check if this is a .Redirect call
-			if len(field.Ident) > 0 && field.Ident[len(field.Ident)-1] == "Redirect" {
+			// Check if this is a redirect method call
+			if len(field.Ident) > 0 && isRedirectMethod(field.Ident[len(field.Ident)-1]) {
 				return true
 			}
-			// Also check if any part of the chain is Redirect
+			// Also check if any part of the chain is a redirect method
 			for _, ident := range field.Ident {
-				if ident == "Redirect" {
+				if isRedirectMethod(ident) {
 					return true
 				}
 			}
 		}
 		// Check for chain nodes like .field.Redirect or (.Redirect ...).Header
 		if chain, ok := arg.(*parse.ChainNode); ok {
-			// Check if any field in the chain is Redirect
+			// Check if any field in the chain is a redirect method
 			for _, field := range chain.Field {
-				if field == "Redirect" {
+				if isRedirectMethod(field) {
 					return true
 				}
 			}
