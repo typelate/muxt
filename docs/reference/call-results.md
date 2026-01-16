@@ -113,6 +113,11 @@ Templates receive `TemplateData[T]` where `T` is the method's first return value
 | `.Path(name)` | `string` | Path parameter value |
 | `.StatusCode(code)` | `int` | Set HTTP status (returns code for chaining) |
 | `.Header(key, val)` | `string` | Set response header (returns val for chaining) |
+| `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code |
+| `.RedirectMultipleChoices(url)` | `*TemplateData, error` | Redirect with 300 status |
+| `.RedirectMovedPermanently(url)` | `*TemplateData, error` | Redirect with 301 status |
+| `.RedirectFound(url)` | `*TemplateData, error` | Redirect with 302 status |
+| `.RedirectSeeOther(url)` | `*TemplateData, error` | Redirect with 303 status |
 | `.String()` | `string` | Returns `""` (implements `fmt.Stringer`) |
 
 **Why `{{.}}` outputs nothing:**
