@@ -4,7 +4,12 @@
 
 Declare routes in template names using `http.ServeMux` patterns. Muxt analyzes receiver methods and generates handlers that parse parameters to match method signatures.
 
-You can use `muxt generate` to generate `http.Handler` glue code or you can just use `muxt check`, `muxt list-template-calls`, and `muxt list-template-callers` to find bugs and more safely refactor your `"text/template"` or `"html/template"` source code.
+Muxt commands include:
+- `muxt generate` to generate `http.Handler` glue code
+- `muxt` list template routes
+- `muxt check` to find bugs and more safely refactor your `"text/template"` or `"html/template"` source code
+- `muxt list-template-calls` list all call sites for a template (omit flag `--patterns` to list all call sites)
+- `muxt list-template-callers` list all callers for a template (omit flag `--patterns` to list all callers for all templates)
 
 ## Syntax
 
