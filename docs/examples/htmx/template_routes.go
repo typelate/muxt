@@ -174,6 +174,26 @@ func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R,
 	return data.StatusCode(code), nil
 }
 
+func (data *TemplateData[R, T]) RedirectMultipleChoices(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *TemplateData[R, T]) RedirectMovedPermanently(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *TemplateData[R, T]) RedirectFound(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *TemplateData[R, T]) RedirectSeeOther(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
 func (data *TemplateData[R, T]) HXLocation(link string) *TemplateData[R, T] {
 	return data.Header("HX-Location", link)
 }
