@@ -1,0 +1,57 @@
+muxt generate --use-receiver-type=Server
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- hypertext.go --
+package hypertext
+
+import (
+	"html/template"
+	"net/http"
+)
+
+type Server struct{}
+
+type CookiesLister interface {
+	Cookies() []*http.Cookie
+}
+
+func (Server) CountCookies(request CookiesLister) int {
+	return len(request.Cookies())
+}
+
+var templates = template.Must(template.New("").Parse(`
+{{define "GET /{$} CountCookies(request)"}}Count: {{.Result}}{{end}}
+`))
+-- hypertext_test.go --
+package hypertext
+
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := new(Server)
+	TemplateRoutes(mux, srv)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Result().StatusCode != http.StatusOK {
+		t.Error("wrong status code")
+	}
+
+	if got := rec.Body.Bytes(); !bytes.Contains(got, []byte("Count: 0")) {
+		t.Errorf("wrong body %q", string(got))
+	}
+}
