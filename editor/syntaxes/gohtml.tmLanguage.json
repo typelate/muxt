@@ -1,0 +1,135 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Go HTML Template",
+  "scopeName": "text.html.gohtml",
+  "fileTypes": ["gohtml"],
+  "foldingStartMarker": "(?x)(<(?i:head|body|table|thead|tbody|tfoot|tr|div|select|fieldset|style|script|ul|ol|li|form|dl)\\b|\\{\\{\\s*(?:if|with|range|define|block)\\b)",
+  "foldingStopMarker": "(?x)(</(?i:head|body|table|thead|tbody|tfoot|tr|div|select|fieldset|style|script|ul|ol|li|form|dl)>|\\{\\{\\s*(?:else|end)\\b)",
+  "patterns": [
+    { "include": "#muxt-define" },
+    { "include": "#muxt-block" },
+    { "include": "source.gotemplate" },
+    { "include": "text.html.basic" }
+  ],
+  "repository": {
+    "muxt-define": {
+      "comment": "Matches {{define \"METHOD /path Call()\"}} for muxt route patterns",
+      "begin": "(\\{\\{)(-)?\\s*(define)\\s+(\")",
+      "end": "(\")(\\s*-)?\\s*(\\}\\})",
+      "beginCaptures": {
+        "1": { "name": "punctuation.section.embedded.begin.gotemplate" },
+        "2": { "name": "keyword.operator.whitespace.gotemplate" },
+        "3": { "name": "keyword.control.gotemplate" },
+        "4": { "name": "punctuation.definition.string.begin.gotemplate" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.gotemplate" },
+        "2": { "name": "keyword.operator.whitespace.gotemplate" },
+        "3": { "name": "punctuation.section.embedded.end.gotemplate" }
+      },
+      "name": "meta.template.define.muxt",
+      "contentName": "string.quoted.double.template-name.muxt",
+      "patterns": [
+        { "include": "#muxt-template-name" }
+      ]
+    },
+    "muxt-block": {
+      "comment": "Matches {{block \"METHOD /path Call()\" .}} for muxt route patterns",
+      "begin": "(\\{\\{)(-)?\\s*(block)\\s+(\")",
+      "end": "(\")(\\s+[.$][\\w]*)?(\\s*-)?\\s*(\\}\\})",
+      "beginCaptures": {
+        "1": { "name": "punctuation.section.embedded.begin.gotemplate" },
+        "2": { "name": "keyword.operator.whitespace.gotemplate" },
+        "3": { "name": "keyword.control.gotemplate" },
+        "4": { "name": "punctuation.definition.string.begin.gotemplate" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.gotemplate" },
+        "2": { "name": "variable.language.this.gotemplate" },
+        "3": { "name": "keyword.operator.whitespace.gotemplate" },
+        "4": { "name": "punctuation.section.embedded.end.gotemplate" }
+      },
+      "name": "meta.template.block.muxt",
+      "contentName": "string.quoted.double.template-name.muxt",
+      "patterns": [
+        { "include": "#muxt-template-name" }
+      ]
+    },
+    "muxt-template-name": {
+      "comment": "Muxt template name pattern: [METHOD ][HOST]/PATH[ STATUS][ CALL]",
+      "patterns": [
+        { "include": "#muxt-http-method" },
+        { "include": "#muxt-http-status" },
+        { "include": "#muxt-path-pattern" },
+        { "include": "#muxt-method-call" }
+      ]
+    },
+    "muxt-http-method": {
+      "match": "\\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|CONNECT|TRACE)\\b",
+      "name": "keyword.other.http-method.muxt"
+    },
+    "muxt-http-status": {
+      "patterns": [
+        {
+          "match": "\\b(http\\.Status[A-Za-z]+)\\b",
+          "name": "constant.language.http-status.muxt"
+        },
+        {
+          "match": "(?<![\\w/])([1-5][0-9]{2})(?![\\w])",
+          "name": "constant.numeric.http-status.muxt"
+        }
+      ]
+    },
+    "muxt-path-pattern": {
+      "patterns": [
+        {
+          "match": "(\\{)([a-zA-Z_][a-zA-Z0-9_]*)(\\.\\.\\.)?(\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.path-param.begin.muxt" },
+            "2": { "name": "variable.parameter.path.muxt" },
+            "3": { "name": "keyword.operator.variadic.muxt" },
+            "4": { "name": "punctuation.definition.path-param.end.muxt" }
+          }
+        },
+        {
+          "match": "(\\{)(\\$)(\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.path-param.begin.muxt" },
+            "2": { "name": "keyword.operator.exact-match.muxt" },
+            "3": { "name": "punctuation.definition.path-param.end.muxt" }
+          }
+        }
+      ]
+    },
+    "muxt-method-call": {
+      "begin": "([A-Z][a-zA-Z0-9_]*)(\\()",
+      "end": "(\\))",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.muxt" },
+        "2": { "name": "punctuation.parenthesis.open.muxt" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.parenthesis.close.muxt" }
+      },
+      "patterns": [
+        { "include": "#muxt-method-call-args" }
+      ]
+    },
+    "muxt-method-call-args": {
+      "patterns": [
+        {
+          "match": "\\b(ctx|request|response|form)\\b",
+          "name": "variable.language.special.muxt"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.argument.muxt"
+        },
+        {
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
+          "name": "variable.parameter.muxt"
+        }
+      ]
+    }
+  }
+}

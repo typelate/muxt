@@ -1,0 +1,44 @@
+{
+  "comments": {
+    "blockComment": ["{{/*", "*/}}"]
+  },
+  "brackets": [
+    ["{{", "}}"],
+    ["<", ">"],
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{{", "close": "}}" },
+    { "open": "<!--", "close": "-->" },
+    { "open": "<", "close": ">", "notIn": ["string"] },
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "'", "close": "'", "notIn": ["string"] },
+    { "open": "`", "close": "`", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["{{", "}}"],
+    ["<", ">"],
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""],
+    ["'", "'"],
+    ["`", "`"]
+  ],
+  "folding": {
+    "markers": {
+      "start": "^\\s*({{\\s*define|{{\\s*block|{{\\s*if|{{\\s*range|{{\\s*with|<[a-zA-Z][^/>]*>)",
+      "end": "^\\s*({{\\s*end|</[a-zA-Z][^>]*>)"
+    }
+  },
+  "indentationRules": {
+    "increaseIndentPattern": "<(?!area|base|br|col|embed|hr|img|input|keygen|link|menuitem|meta|param|source|track|wbr)[a-zA-Z][^/>]*>(?!.*</\\1>)|{{\\s*(if|range|with|block|define)",
+    "decreaseIndentPattern": "^\\s*(</[a-zA-Z][^>]*>|{{\\s*end)"
+  },
+  "wordPattern": "[a-zA-Z_][a-zA-Z0-9_]*"
+}
