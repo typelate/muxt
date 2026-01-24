@@ -51,7 +51,6 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		})
 	}
 
-	// Find ExecuteTemplate calls
 	for _, file := range pkg.Syntax {
 		for node := range ast.Preorder(file) {
 			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, config.TemplatesVariable)
@@ -82,5 +81,6 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		}
 		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
+
 	return &result, nil
 }

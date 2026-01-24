@@ -13,7 +13,7 @@ muxt list-template-callers --match "GET /users"
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Pass multiple times to combine results across template sets. |
 | `--match` | string[] | _(all)_ | Filter by template name. Can specify multiple regular expressions. Omit to list callers for all templates. |
 | `--format` | string | `text` | Output format: `text` or `json`. |
 

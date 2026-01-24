@@ -12,7 +12,7 @@ muxt check --use-templates-variable=templates --verbose
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Pass multiple times to check multiple template sets. |
 | `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
 ## Verbose Output

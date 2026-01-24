@@ -4,8 +4,71 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/generate"
 )
+
+func TestFixTemplateVariables(t *testing.T) {
+	t.Run("empty slice gets the default", func(t *testing.T) {
+		got := []string(nil)
+		require.NoError(t, fixTemplateVariables(&got, ""))
+		assert.Equal(t, []string{defaultTemplatesVariableName}, got)
+	})
+
+	t.Run("default slice with deprecated flag adopts the deprecated value", func(t *testing.T) {
+		got := []string{defaultTemplatesVariableName}
+		require.NoError(t, fixTemplateVariables(&got, "myTemplates"))
+		assert.Equal(t, []string{"myTemplates"}, got)
+	})
+
+	t.Run("deprecated flag combined with non-default new flag is rejected", func(t *testing.T) {
+		got := []string{"adminTemplates", "publicTemplates"}
+		err := fixTemplateVariables(&got, "legacyTemplates")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), deprecatedTemplatesVariable)
+		assert.Contains(t, err.Error(), useTemplatesVariable)
+	})
+
+	t.Run("explicit user values pass through", func(t *testing.T) {
+		got := []string{"adminTemplates", "publicTemplates"}
+		require.NoError(t, fixTemplateVariables(&got, ""))
+		assert.Equal(t, []string{"adminTemplates", "publicTemplates"}, got)
+	})
+
+	t.Run("duplicate user values are rejected", func(t *testing.T) {
+		got := []string{"adminTemplates", "adminTemplates"}
+		err := fixTemplateVariables(&got, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate template variable")
+		assert.Contains(t, err.Error(), "adminTemplates")
+	})
+
+	t.Run("empty user value is rejected", func(t *testing.T) {
+		got := []string{""}
+		err := fixTemplateVariables(&got, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), useTemplatesVariable)
+		assert.Contains(t, err.Error(), "must not be empty")
+	})
+}
+
+func TestFindDuplicateVariables(t *testing.T) {
+	t.Run("no duplicates returns nil", func(t *testing.T) {
+		require.NoError(t, findDuplicateVariables([]string{"a", "b", "c"}))
+	})
+
+	t.Run("empty slice returns nil", func(t *testing.T) {
+		require.NoError(t, findDuplicateVariables(nil))
+	})
+
+	t.Run("duplicate is reported", func(t *testing.T) {
+		err := findDuplicateVariables([]string{"a", "b", "a"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "a")
+	})
+}
 
 func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 	for _, tc := range []struct {
