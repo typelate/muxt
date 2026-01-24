@@ -1,0 +1,74 @@
+muxt generate --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
+
+cat template_routes.go
+
+muxt check --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- templates.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed admin/*.gohtml
+var adminFS embed.FS
+
+var adminTemplates = template.Must(template.ParseFS(adminFS, "admin/*.gohtml"))
+
+//go:embed public/*.gohtml
+var publicFS embed.FS
+
+var publicTemplates = template.Must(template.ParseFS(publicFS, "public/*.gohtml"))
+
+-- admin/view.gohtml --
+Admin Page
+
+{{define "GET /admin"}}{{template "view.gohtml"}}{{end}}
+
+-- public/view.gohtml --
+Public Page
+
+{{define "GET /public"}}{{template "view.gohtml"}}{{end}}
+
+-- handlers.go --
+package main
+
+func main() {}
+-- handlers_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestPublic(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/public", nil)
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+	mux.ServeHTTP(rec, req)
+	if exp, got := http.StatusOK, rec.Result().StatusCode; got != exp  {
+		t.Errorf("expected %d got %d", exp, got)
+	}
+}
+
+func TestAdmin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+	mux.ServeHTTP(rec, req)
+	if exp, got := http.StatusOK, rec.Result().StatusCode; got != exp  {
+		t.Errorf("expected %d got %d", exp, got)
+	}
+}
