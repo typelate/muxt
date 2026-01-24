@@ -71,5 +71,6 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, 
 		}
 		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 	}
+
 	return &result, nil
 }

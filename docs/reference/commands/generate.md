@@ -35,7 +35,7 @@ These flags tell muxt what existing code to look for and use:
 |------|------|---------|-------------|
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
-| `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Pass multiple times to generate routes from multiple template sets. See [templates-variable.md](../templates-variable.md#multiple-template-variables). |
 
 **Type resolution:**
 - **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`

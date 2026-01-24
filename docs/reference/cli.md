@@ -60,7 +60,7 @@ These flags tell muxt what existing code to look for and use:
 |------|------|---------|-------------|
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
-| `--use-templates-variable` | string | `templates` | Global `*template.Template` variable name to search for. |
+| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Can be specified multiple times to generate routes from multiple template sets. |
 
 **Type resolution:**
 - **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`
@@ -147,7 +147,7 @@ muxt check --verbose
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--use-templates-variable` | string | `templates` | Template variable name. Same as in `generate`. |
+| `--use-templates-variable` | string[] | `templates` | Template variable name(s). Same as in `generate`. |
 | `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
 **Verbose output:**
@@ -179,7 +179,7 @@ Supports the same **Use Flags** as `muxt generate`:
 |------|------|---------|-------------|
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for receiver type. |
-| `--use-templates-variable` | string | `templates` | Template variable name. |
+| `--use-templates-variable` | string[] | `templates` | Template variable name(s). Same as in `generate`. |
 | `--verbose`, `-v` | bool | `false` | Enable verbose output. |
 
 ---
@@ -243,6 +243,13 @@ muxt generate \
   --output-routes-func=RegisterRoutes \
   --output-receiver-interface=Handler \
   --output-file=routes.go
+```
+
+**Multiple template variables:**
+```bash
+muxt generate \
+  --use-templates-variable=adminTemplates \
+  --use-templates-variable=publicTemplates
 ```
 
 **Mount under subpath:**

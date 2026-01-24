@@ -1,0 +1,56 @@
+# Tests list-template-callers with multiple --use-templates-variable flags.
+# Each variable's callers are reported in its own section, with no duplication
+# across variables. admin-layout is only referenced from the adminTemplates
+# variable and public-layout only from publicTemplates, so each appears once
+# in the combined output.
+
+muxt list-template-callers --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
+
+cp stdout out.txt
+count-matches 'template "admin-layout" called by:' out.txt 1
+count-matches 'template "public-layout" called by:' out.txt 1
+count-matches 'template "header" called by:' out.txt 2
+
+# JSON output across multiple variables must be a single valid JSON document,
+# not concatenated objects.
+muxt list-template-callers --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates --format=json
+
+cp stdout out.json
+count-matches '^\{' out.json 1
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed admin/*.gohtml
+var adminFS embed.FS
+
+//go:embed public/*.gohtml
+var publicFS embed.FS
+
+var adminTemplates = template.Must(template.ParseFS(adminFS, "admin/*.gohtml"))
+var publicTemplates = template.Must(template.ParseFS(publicFS, "public/*.gohtml"))
+
+type T struct{}
+
+func init() {
+	_ = adminTemplates.ExecuteTemplate(io.Discard, "admin-layout", T{})
+	_ = publicTemplates.ExecuteTemplate(io.Discard, "public-layout", T{})
+}
+-- admin/layout.gohtml --
+{{define "admin-layout"}}{{template "header" .}}{{end}}
+{{define "header"}}<header>admin</header>{{end}}
+{{define "footer"}}<footer>admin</footer>{{end}}
+-- public/layout.gohtml --
+{{define "public-layout"}}{{template "header" .}}{{end}}
+{{define "header"}}<header>public</header>{{end}}
+{{define "footer"}}<footer>public</footer>{{end}}

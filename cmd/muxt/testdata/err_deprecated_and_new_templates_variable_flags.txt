@@ -1,0 +1,26 @@
+# Tests that the deprecated --templates-variable flag cannot be combined with
+# the new --use-templates-variable flag when the new flag is set to a
+# non-default value. The two flags target the same field, so combining them
+# would silently lose information.
+
+! muxt generate --templates-variable=legacy --use-templates-variable=adminTemplates
+stderr 'deprecated flag templates-variable not permitted along with use-templates-variable'
+
+-- go.mod --
+module example.com
+
+go 1.22
+-- template.gohtml --
+{{define "GET /" }}Hello{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var adminTemplates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))

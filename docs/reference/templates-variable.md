@@ -82,6 +82,38 @@ muxt generate --use-templates-variable=myTemplates
 var myTemplates = template.Must(template.ParseFS(fs, "*.gohtml"))
 ```
 
+## Multiple Template Variables
+
+`--use-templates-variable` can be passed multiple times. Each variable becomes the root of an independent namespace.
+
+```bash
+muxt generate --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
+```
+
+```go
+//go:embed admin/*.gohtml
+var adminFS embed.FS
+var adminTemplates = template.Must(template.ParseFS(adminFS, "admin/*.gohtml"))
+
+//go:embed public/*.gohtml
+var publicFS embed.FS
+var publicTemplates = template.Must(template.ParseFS(publicFS, "public/*.gohtml"))
+```
+
+Each generated handler calls `ExecuteTemplate` on its own variable, so each variable carries its own:
+
+- **Template name namespace** — `{{define "header"}}` in `adminTemplates` does not collide with `{{define "header"}}` in `publicTemplates`. `*template.Template` has a global namespace; later definitions silently overwrite earlier ones, so without separate variables every name in the app must be globally unique.
+- **`Funcs` map** — register admin-only template functions on `adminTemplates` without exposing them to public pages.
+- **Template `Option`s** — e.g. `Option("missingkey=error")` can apply to one set without forcing the same on the other.
+- **`embed.FS`** — each variable can pull from a different filesystem, including filesystems exported by separate Go packages.
+
+This is what makes templates portable across projects: a reusable admin component can ship its own template variable with its own names and helpers, and a consumer can mount it without worrying about name collisions in their own template set.
+
+Routes from all variables are combined into a single generated `TemplateRoutes` function. Duplicate route patterns across variables are detected at generation time — if both `adminTemplates` and `publicTemplates` define `GET /`, generation fails with a `duplicate route pattern` error.
+
+[reference_multiple_templates_variables.txt](../../cmd/muxt/testdata/reference_multiple_templates_variables.txt)
+[err_duplicate_route_different_variables.txt](../../cmd/muxt/testdata/err_duplicate_route_different_variables.txt)
+
 ## How Muxt Uses This
 
 **`muxt check`:**
