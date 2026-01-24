@@ -1,0 +1,34 @@
+! muxt generate --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
+stderr 'duplicate route pattern "GET /'"
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- templates.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed admin/*.gohtml
+var adminFS embed.FS
+
+var adminTemplates = template.Must(template.ParseFS(adminFS, "admin/*.gohtml"))
+
+//go:embed public/*.gohtml
+var publicFS embed.FS
+
+var publicTemplates = template.Must(template.ParseFS(publicFS, "public/*.gohtml"))
+-- admin/index.gohtml --
+Administrator
+
+{{define "GET /"}}{{template "index.gohtml" .}}{{end}}
+
+-- public/index.gohtml --
+Public
+
+{{define "GET /"}}{{template "index.gohtml" .}}{{end}}
+

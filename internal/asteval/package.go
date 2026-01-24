@@ -23,7 +23,7 @@ func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*package
 	fileSet := token.NewFileSet()
 	pl, err := packages.Load(&packages.Config{
 		Fset: fileSet,
-		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
 		Dir:  wd,
 	}, patterns...)
 	if err != nil {

@@ -1,0 +1,63 @@
+# Tests that muxt check detects unused templates when template files are shared
+# but each template variable doesn't use all of them.
+#
+# With strict per-variable checking:
+# - templatesA includes shared.gohtml with "both", "for a", "for b"
+#   but only uses "for a" (transitively uses "both")
+#   so "for b" is unused in templatesA
+# - templatesB includes shared.gohtml with "both", "for a", "for b"
+#   but only uses "for b" (transitively uses "both")
+#   so "for a" is unused in templatesB
+
+muxt generate --use-templates-variable templatesA --use-templates-variable templatesB
+
+! muxt check --use-templates-variable templatesA
+stderr 'Unused templates'
+stderr '"for b"'
+! stderr '"for a"'
+
+! muxt check --use-templates-variable templatesB
+stderr 'Unused templates'
+! stderr '"for b"'
+stderr '"for a"'
+
+! muxt check --use-templates-variable templatesA --use-templates-variable templatesB
+stderr 'Unused templates'
+stderr '"for b"'
+stderr '"for a"'
+
+-- a.gohtml --
+{{define "GET /a"}}{{template "for a"}}{{end}}
+-- b.gohtml --
+{{define "GET /b"}}{{template "for b"}}{{end}}
+-- shared.gohtml --
+{{define "both"}}both{{end}}
+{{define "for a"}}a: {{template "both" .}}{{end}}
+{{define "for b"}}b: {{template "both" .}}{{end}}
+-- go.mod --
+module example.com
+
+go 1.25
+-- template.go --
+package example
+
+import (
+	_ "embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var (
+    templatesA = template.Must(template.ParseFS(formHTML, "shared.gohtml", "a.gohtml"))
+    templatesB = template.Must(template.ParseFS(formHTML, "shared.gohtml", "b.gohtml"))
+)
+
+type T struct{}
+
+func (T) Endpoint() []string { return []string{"hello"} }
+-- receiver.go --
+package example
+
+func (T) Index() string { return "index" }

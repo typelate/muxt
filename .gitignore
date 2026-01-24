@@ -24,6 +24,7 @@ go.work.sum
 .env
 
 .claude/settings.local.json
+.claude/plans
 
 # Ignore working directories for iterating on ./cmd/muxt/testdata tests
 cmd/muxt/testdata/*/**
