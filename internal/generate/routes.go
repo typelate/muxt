@@ -265,7 +265,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		def := parseBasedDefinitions[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s", def.Pattern())
+			logger.Printf("generating handler for pattern %s", def.RawPattern())
 		}
 		if def.FunctionIdentifier() == nil {
 			handlerFunc := noReceiverMethodCall(file, def, config, config.ReceiverInterface)
@@ -361,13 +361,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 }
 
 func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
-	pattern := ast.Expr(astgen.String(def.Pattern()))
+	pattern := ast.Expr(astgen.String(def.RawPattern()))
 	if config.PathPrefix {
-		i := strings.Index(def.Pattern(), "/")
+		i := strings.Index(def.RawPattern(), "/")
 		pattern = &ast.BinaryExpr{
-			X:  astgen.String(def.Pattern()[:i]),
+			X:  astgen.String(def.RawPattern()[:i]),
 			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.Pattern()[i:])),
+			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.RawPattern()[i:])),
 		}
 	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
@@ -435,7 +435,7 @@ func generatePerFileRouteFunction(
 		t := defs[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s in %s", t.Pattern(), sourceFile)
+			logger.Printf("generating handler for pattern %s in %s", t.RawPattern(), sourceFile)
 		}
 		if t.FunctionIdentifier() == nil {
 			handlerFunc := noReceiverMethodCall(file, t, config, receiverInterfaceName)
@@ -567,10 +567,10 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 	}
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
@@ -688,10 +688,10 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	})
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
