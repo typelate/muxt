@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
-	"slices"
 	"strings"
 
 	"github.com/ettle/strcase"
@@ -131,7 +130,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 			}
 			for _, tv := range config.TemplatesVariables {
 				if tv != "" && !token.IsIdentifier(tv) {
-					return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
 				}
 			}
 			cmd.SilenceUsage = true
@@ -186,7 +185,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			stdout := cmd.OutOrStdout()
 			for _, tv := range config.TemplatesVariables {
 				if tv != "" && !token.IsIdentifier(tv) {
-					return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
+					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
 				}
 			}
 			if config.RoutesFunction != "" && !token.IsIdentifier(config.RoutesFunction) {
@@ -575,12 +574,8 @@ const (
 	defaultPackageName                = "main"
 )
 
-func defaultTemplatesVariable() *[]string {
-	return &[]string{defaultTemplatesVariableName}
-}
-
 func isDefaultTemplatesVariable(in *[]string) bool {
-	return in != nil && slices.Equal(*in, *defaultTemplatesVariable())
+	return in != nil && len(*in) == 1 && (*in)[0] == defaultTemplatesVariableName
 }
 
 func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
@@ -712,8 +707,19 @@ func fixTemplateVariables(templateVariables *[]string, deprecatedTemplatesVar st
 		return nil
 	}
 	if len(*templateVariables) == 0 {
-		*templateVariables = *defaultTemplatesVariable()
+		*templateVariables = []string{defaultTemplatesVariableName}
 		return nil
+	}
+	return findDuplicateVariables(*templateVariables)
+}
+
+func findDuplicateVariables(in []string) error {
+	seen := make(map[string]struct{}, len(in))
+	for _, tv := range in {
+		if _, ok := seen[tv]; ok {
+			return fmt.Errorf("duplicate template variable: %s", tv)
+		}
+		seen[tv] = struct{}{}
 	}
 	return nil
 }
