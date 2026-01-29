@@ -19,8 +19,8 @@ import (
 )
 
 type TemplateCallersConfiguration struct {
-	TemplatesVariable string
-	FilterTemplates   []*regexp.Regexp
+	TemplatesVariables []string
+	FilterTemplates    []*regexp.Regexp
 }
 
 type TemplateCallers struct {
@@ -51,36 +51,38 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		})
 	}
 
-	// Find ExecuteTemplate calls
-	for _, file := range pkg.Syntax {
-		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, config.TemplatesVariable)
-			if !ok {
+	var result TemplateCallers
+	for _, tv := range config.TemplatesVariables {
+		for _, file := range pkg.Syntax {
+			for node := range ast.Preorder(file) {
+				templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, tv)
+				if !ok {
+					continue
+				}
+
+				refs[templateName] = append(refs[templateName], TemplateReference{
+					Position: fileSet.Position(node.Pos()),
+					Kind:     ExecuteTemplateNode,
+					Name:     templateName,
+					data:     dataType,
+				})
+
+				// Analyze the template to find {{template}} calls
+				t := ts.Lookup(templateName)
+				if t != nil && t.Tree != nil {
+					_ = check.Execute(global, t.Tree, dataType)
+				}
+			}
+		}
+
+		names := slices.Sorted(maps.Keys(refs))
+		for _, name := range names {
+			if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 				continue
 			}
-
-			refs[templateName] = append(refs[templateName], TemplateReference{
-				Position: fileSet.Position(node.Pos()),
-				Kind:     ExecuteTemplateNode,
-				Name:     templateName,
-				data:     dataType,
-			})
-
-			// Analyze the template to find {{template}} calls
-			t := ts.Lookup(templateName)
-			if t != nil && t.Tree != nil {
-				_ = check.Execute(global, t.Tree, dataType)
-			}
+			result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
 		}
 	}
 
-	var result TemplateCallers
-	names := slices.Sorted(maps.Keys(refs))
-	for _, name := range names {
-		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
-			continue
-		}
-		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
-	}
 	return &result, nil
 }

@@ -1,5 +1,5 @@
 ! muxt generate
-stderr 'duplicate route pattern: GET /'
+stderr 'duplicate route pattern "GET /"'
 
 -- template.gohtml --
 {{define "GET / Greetings()" }}

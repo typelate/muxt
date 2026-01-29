@@ -20,8 +20,8 @@ import (
 )
 
 type CheckConfiguration struct {
-	Verbose           bool
-	TemplatesVariable string
+	Verbose            bool
+	TemplatesVariables []string
 }
 
 func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) error {
@@ -30,46 +30,50 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 		return fmt.Errorf("package not found at %s", wd)
 	}
 
-	ts, fm, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
-	if err != nil {
-		return err
-	}
-	fns := check.DefaultFunctions(routesPkg.Types)
-	fns = fns.Add(check.Functions(fm))
-
-	global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, asteval.NewForrest(ts), fns)
-
-	// Track which templates are executed via ExecuteTemplate calls
-	executedTemplates := make(map[string][]TemplateExecution)
-
 	var errs []error
-	for _, file := range routesPkg.Syntax {
-		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, routesPkg.TypesInfo, config.TemplatesVariable)
-			if !ok {
-				continue
-			}
-			if config.Verbose {
-				log.Println("checking endpoint", templateName)
-			}
-			qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
-			if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
-				log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
-				log.Println(" - ", err)
-				log.Println()
-				errs = append(errs, err)
+
+	for _, tv := range config.TemplatesVariables {
+		ts, fm, err := asteval.Templates(wd, tv, routesPkg)
+		if err != nil {
+			return err
+		}
+		fns := check.DefaultFunctions(routesPkg.Types)
+		fns = fns.Add(check.Functions(fm))
+
+		global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, asteval.NewForrest(ts), fns)
+
+		executedTemplates := make(map[string][]TemplateExecution)
+
+		for _, file := range routesPkg.Syntax {
+			for node := range ast.Preorder(file) {
+				templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, routesPkg.TypesInfo, tv)
+				if !ok {
+					continue
+				}
+				if config.Verbose {
+					log.Println("checking endpoint", templateName)
+				}
+				qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
+				if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
+					log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
+					log.Println(" - ", err)
+					log.Println()
+					errs = append(errs, err)
+				}
 			}
 		}
-	}
-	unusedTemplates := findUnusedTemplates(ts, executedTemplates)
-	if len(unusedTemplates) > 0 {
-		log.Println("Unused templates:")
-		for _, name := range unusedTemplates {
-			t := ts.Lookup(name)
-			log.Printf("  - %s: %q", asteval.NewParseNodePosition(t.Tree, t.Tree.Root), name)
+
+		unusedTemplates := findUnusedTemplates(ts, executedTemplates)
+		if len(unusedTemplates) > 0 {
+			log.Println("Unused templates:")
+			for _, name := range unusedTemplates {
+				t := ts.Lookup(name)
+				log.Printf("  - %s: %q", asteval.NewParseNodePosition(t.Tree, t.Tree.Root), name)
+			}
+			errs = append(errs, fmt.Errorf("unused templates %d", len(unusedTemplates)))
 		}
-		errs = append(errs, fmt.Errorf("unused templates %d", len(unusedTemplates)))
 	}
+
 	switch len(errs) {
 	case 0:
 		if config.Verbose {

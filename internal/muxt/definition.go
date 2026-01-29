@@ -18,9 +18,8 @@ import (
 	"github.com/typelate/muxt/internal/astgen"
 )
 
-func Definitions(ts *template.Template) ([]Definition, error) {
+func Definitions(ts *template.Template, templatesVariable string) ([]Definition, error) {
 	var defs []Definition
-	patterns := make(map[string]struct{})
 	for _, t := range ts.Templates() {
 		mt, err, ok := newDefinition(t)
 		if !ok {
@@ -29,11 +28,6 @@ func Definitions(ts *template.Template) ([]Definition, error) {
 		if err != nil {
 			return defs, err
 		}
-		pattern := strings.Join([]string{mt.method, mt.host, mt.path}, " ")
-		if _, exists := patterns[pattern]; exists {
-			return defs, fmt.Errorf("duplicate route pattern: %s", mt.pattern)
-		}
-
 		// Extract source file from ParseName if available
 		if t.Tree != nil && t.Tree.ParseName != "" {
 			// ParseName contains the filename used when parsing
@@ -41,7 +35,8 @@ func Definitions(ts *template.Template) ([]Definition, error) {
 		}
 		// else sourceFile remains empty string for Parse() defined templates
 
-		patterns[pattern] = struct{}{}
+		mt.templatesVariable = templatesVariable
+
 		defs = append(defs, mt)
 	}
 	slices.SortFunc(defs, Definition.byPathThenMethod)
@@ -51,6 +46,23 @@ func Definitions(ts *template.Template) ([]Definition, error) {
 	analyzeRedirectCalls(ts, defs)
 
 	return defs, nil
+}
+
+func CheckForDuplicatePatterns(templates []Definition) error {
+	patterns := make(map[string]Definition)
+	for _, def := range templates {
+		pat := def.Pattern()
+		other, ok := patterns[pat]
+		if ok {
+			err := fmt.Errorf("duplicate route pattern %q", pat)
+			if a, b := def.SourceFile(), other.SourceFile(); a != "" && b != "" && a != b {
+				return fmt.Errorf("duplicate template in %s and %s: %w", a, b, err)
+			}
+			return err
+		}
+		patterns[pat] = def
+	}
+	return nil
 }
 
 type Definition struct {
@@ -87,12 +99,39 @@ type Definition struct {
 	// canRedirect indicates whether this template (or any template it calls) can call the Redirect method.
 	// This is determined by static analysis of the template's action nodes.
 	canRedirect bool
+
+	// templatesVariable is the name of the package-level *template.Template
+	// variable that contains this template (e.g., "templates", "adminTemplates")
+	templatesVariable string
 }
 
-func (def Definition) SourceFile() string             { return def.sourceFile }
-func (def Definition) Pattern() string                { return def.pattern }
-func (def Definition) Name() string                   { return def.name }
-func (def Definition) Path() string                   { return def.path }
+func (def Definition) SourceFile() string { return def.sourceFile }
+func (def Definition) RawPattern() string { return def.pattern }
+
+// Pattern returns a normalized http.ServeMux pattern.
+func (def Definition) Pattern() string {
+	var sb strings.Builder
+
+	if m := def.HTTPMethod(); m != "" {
+		sb.WriteString(m)
+		sb.WriteString(" ")
+	}
+
+	if h := def.Host(); h != "" {
+		sb.WriteString(h)
+	}
+	sb.WriteString(def.Path())
+
+	return sb.String()
+}
+
+func (def Definition) Name() string { return def.name }
+func (def Definition) Path() string { return strings.TrimSpace(def.path) }
+func (def Definition) Host() string { return strings.ToLower(strings.TrimSpace(def.host)) }
+
+// HTTPMethod does normalization based on the convention (not requirement) that method characters are ASCII and uppercase
+func (def Definition) HTTPMethod() string { return strings.ToUpper(strings.TrimSpace(def.method)) }
+
 func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
 func (def Definition) MayRedirect() bool              { return def.canRedirect }
 func (def Definition) Template() *template.Template   { return def.template }
@@ -100,6 +139,7 @@ func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
 func (def Definition) Identifier() string             { return def.identifier }
+func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -109,7 +149,7 @@ func (def Definition) ArgumentType(name string) (types.Type, bool) {
 
 func (def Definition) String() string { return def.name }
 
-func (def Definition) Method() string {
+func (def Definition) Call() string {
 	if def.fun == nil {
 		return ""
 	}
@@ -192,7 +232,7 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 
 var (
 	pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
-	templateNameMux    = regexp.MustCompile(`^(?P<pattern>(((?P<METHOD>[A-Z]+)\s+)?)(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
+	templateNameMux    = regexp.MustCompile(`^(?P<pattern>((?P<METHOD>[A-Z]+)\s+)?(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
 )
 
 func (def Definition) PathValueIdentifiers() []string {
