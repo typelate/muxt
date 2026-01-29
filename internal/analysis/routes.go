@@ -18,12 +18,12 @@ import (
 )
 
 type DefinitionsConfiguration struct {
-	Verbose           bool
-	ReceiverPackage   string
-	PackageName       string
-	PackagePath       string
-	ReceiverType      string
-	TemplatesVariable string
+	Verbose            bool
+	ReceiverPackage    string
+	PackageName        string
+	PackagePath        string
+	ReceiverType       string
+	TemplatesVariables []string
 }
 
 type Function struct {
@@ -58,7 +58,7 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 	return io.Copy(w, &buf)
 }
 
-func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) (*Routes, error) {
+func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) ([]*Routes, error) {
 	pkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
 		return nil, fmt.Errorf("package not found in working directory")
@@ -76,51 +76,59 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 		}
 	}
 
-	ts, functions, err := asteval.Templates(wd, config.TemplatesVariable, pkg)
-	if err != nil {
-		return nil, err
-	}
-	definitions, err := muxt.Definitions(ts)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		results []*Routes
+	)
 
-	var funcList []Function
-	names := slices.Collect(maps.Keys(functions))
-	for _, name := range names {
-		s := strings.TrimPrefix(functions[name].String(), "func")
-		funcList = append(funcList, Function{Name: name, Signature: s})
-	}
-
-	var defList []Definition
-	for _, def := range definitions {
-		t := def.Template()
-		if t == nil || t.Tree == nil || t.Tree.Root == nil {
-			continue
+	for _, tv := range config.TemplatesVariables {
+		ts, functions, err := asteval.Templates(wd, tv, pkg)
+		if err != nil {
+			return nil, err
 		}
-		src := t.Tree.Root.String()
-		defList = append(defList, Definition{
-			String:    def.String(),
-			Separator: strings.Repeat("=", 40),
-			Source:    src,
-		})
-	}
 
-	result := Routes{
-		Functions:   funcList,
-		Definitions: defList,
-	}
+		definitions, err := muxt.Definitions(ts, tv)
+		if err != nil {
+			return nil, err
+		}
 
-	if receiver != nil {
-		result.Receiver = receiver
-		for i := 0; i < receiver.NumMethods(); i++ {
-			m := receiver.Method(i)
-			result.ReceiverMethods = append(result.ReceiverMethods, ReceiverMethod{
-				Name:      m.Name(),
-				Signature: strings.TrimPrefix(m.Signature().String(), "func"),
+		var funcList []Function
+		names := slices.Collect(maps.Keys(functions))
+		for _, name := range names {
+			s := strings.TrimPrefix(functions[name].String(), "func")
+			funcList = append(funcList, Function{Name: name, Signature: s})
+		}
+
+		var defList []Definition
+		for _, def := range definitions {
+			t := def.Template()
+			if t == nil || t.Tree == nil || t.Tree.Root == nil {
+				continue
+			}
+			src := t.Tree.Root.String()
+			defList = append(defList, Definition{
+				String:    def.String(),
+				Separator: strings.Repeat("=", 40),
+				Source:    src,
 			})
 		}
+
+		result := Routes{
+			Functions:   funcList,
+			Definitions: defList,
+		}
+
+		if receiver != nil {
+			result.Receiver = receiver
+			for i := 0; i < receiver.NumMethods(); i++ {
+				m := receiver.Method(i)
+				result.ReceiverMethods = append(result.ReceiverMethods, ReceiverMethod{
+					Name:      m.Name(),
+					Signature: strings.TrimPrefix(m.Signature().String(), "func"),
+				})
+			}
+		}
+		results = append(results, &result)
 	}
 
-	return &result, nil
+	return results, nil
 }

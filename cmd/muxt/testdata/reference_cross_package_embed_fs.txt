@@ -1,0 +1,109 @@
+# This package shows how the fs.FS for template.ParseFS may come from a different package
+
+cd internal/views
+
+muxt generate --use-receiver-type=Handler --use-receiver-type-package=example.com/internal/endpoints --output-routes-func=Routes
+muxt check
+
+cd ../../
+
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.23
+-- main_test.go --
+package main_test
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/internal/endpoints"
+	"example.com/internal/views"
+)
+
+func TestCrossPackageEmbedFS(t *testing.T) {
+	mux := http.NewServeMux()
+	var h endpoints.Handler
+
+	views.Routes(mux, h)
+
+	t.Run("GET / renders home page", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		body, _ := io.ReadAll(rec.Body)
+		if !strings.Contains(string(body), "Home") {
+			t.Errorf("expected 'Home' in response, got: %q", string(body))
+		}
+	})
+
+	t.Run("GET /user/{id} renders user page", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/user/alice", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		body, _ := io.ReadAll(rec.Body)
+		content := string(body)
+		if !strings.Contains(content, "alice") {
+			t.Errorf("expected 'alice' in response, got: %q", content)
+		}
+	})
+}
+-- internal/endpoints/handler.go --
+package endpoints
+
+type Handler struct{}
+
+type HomePage struct {
+	Page string
+}
+
+type UserPage struct {
+	ID string
+}
+
+func (Handler) Index() HomePage {
+	return HomePage{Page: "Home"}
+}
+
+func (Handler) GetUser(id string) UserPage {
+	return UserPage{ID: id}
+}
+-- internal/views/generate.go --
+package views
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFS embed.FS
+
+var (
+	templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+)
+-- internal/views/routes.gohtml --
+{{define "GET / Index()"}}
+<h1>{{.Result.Page}}</h1>
+{{end}}
+{{define "GET /user/{id} GetUser(id)"}}
+<p>User ID: {{.Result.ID}}</p>
+{{end}}

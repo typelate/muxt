@@ -66,7 +66,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		},
 		{
 			Out: "ReadX",
-			In:  "GET /x Method()",
+			In:  "GET /x Handler()",
 		},
 		{
 			Out: "ReadExampleComIndex",

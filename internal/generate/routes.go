@@ -57,13 +57,13 @@ type RoutesFileConfiguration struct {
 	MuxtVersion,
 	PackageName,
 	PackagePath,
-	TemplatesVariable,
 	RoutesFunction,
 	ReceiverType,
 	ReceiverPackage,
 	ReceiverInterface,
 	TemplateDataType,
 	TemplateRoutePathsTypeName string
+	TemplatesVariables               []string
 	OutputFileName                   string
 	PathPrefix                       bool
 	Logger                           bool
@@ -76,13 +76,11 @@ type RoutesFileConfiguration struct {
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
 // Returns a map where keys are source filenames and values are template slices.
 // Templates with empty sourceFile (Parse-based) are grouped under "".
-func groupTemplatesBySourceFile(defs []muxt.Definition) map[string][]muxt.Definition {
-	groups := make(map[string][]muxt.Definition)
+func groupTemplatesBySourceFile(groups map[string][]muxt.Definition, defs []muxt.Definition) {
 	for _, d := range defs {
 		key := d.SourceFile()
 		groups[key] = append(groups[key], d)
 	}
-	return groups
 }
 
 func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
@@ -110,19 +108,31 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		}
 	}
 
-	ts, _, err := asteval.Templates(wd, config.TemplatesVariable, routesPkg)
-	if err != nil {
-		return nil, err
-	}
-	templates, err := muxt.Definitions(ts)
-	if err != nil {
-		return nil, err
+	var (
+		definitionGroups = make(map[string][]muxt.Definition)
+		routeDefinitions []muxt.Definition
+	)
+	for _, tv := range config.TemplatesVariables {
+		ts, _, err := asteval.Templates(wd, tv, routesPkg)
+		if err != nil {
+			return nil, err
+		}
+
+		defs, err := muxt.Definitions(ts, tv)
+		if err != nil {
+			return nil, err
+		}
+
+		groupTemplatesBySourceFile(definitionGroups, defs)
+		routeDefinitions = append(routeDefinitions, defs...)
 	}
 
-	// Group templates by source file
-	definitionGroups := groupTemplatesBySourceFile(templates)
 	parseBasedDefinitions := definitionGroups[""]
-	delete(definitionGroups, "") // Remove parse-based templates from groups
+	delete(definitionGroups, "")
+
+	if err := muxt.CheckForDuplicatePatterns(routeDefinitions); err != nil {
+		return nil, err
+	}
 
 	// Separate valid file paths from non-file-path source names
 	// Non-file-path sources (containing spaces, slashes, etc.) should be treated like Parse-based templates
@@ -131,7 +141,6 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		// Check if sourceFile is a valid file path (no spaces, path separators in basename)
 		baseName := filepath.Base(sourceFile)
 		if strings.ContainsAny(baseName, " /\\()") {
-			// Not a valid file path - move definitions to parseBasedmuxt.Definitions
 			parseBasedDefinitions = append(parseBasedDefinitions, definitionGroups[sourceFile]...)
 			delete(definitionGroups, sourceFile)
 		} else {
@@ -140,9 +149,10 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	}
 	slices.Sort(sourceFiles)
 
-	var generatedFiles []GeneratedFile
-	var receiverInterface *ast.InterfaceType
-
+	var (
+		generatedFiles    []GeneratedFile
+		receiverInterface *ast.InterfaceType
+	)
 	if config.OutputMultipleFiles {
 		// Generate per-file route files (original behavior)
 		for _, sourceFile := range sourceFiles {
@@ -265,7 +275,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		def := parseBasedDefinitions[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s", def.Pattern())
+			logger.Printf("generating handler for pattern %s", def.RawPattern())
 		}
 		if def.FunctionIdentifier() == nil {
 			handlerFunc := noReceiverMethodCall(file, def, config, config.ReceiverInterface)
@@ -281,7 +291,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
 	}
 
-	routePathDecls, err := routePathTypeAndMethods(file, config, templates)
+	routePathDecls, err := routePathTypeAndMethods(file, config, routeDefinitions)
 	if err != nil {
 		return nil, err
 	}
@@ -361,13 +371,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 }
 
 func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
-	pattern := ast.Expr(astgen.String(def.Pattern()))
+	pattern := ast.Expr(astgen.String(def.RawPattern()))
 	if config.PathPrefix {
-		i := strings.Index(def.Pattern(), "/")
+		i := strings.Index(def.RawPattern(), "/")
 		pattern = &ast.BinaryExpr{
-			X:  astgen.String(def.Pattern()[:i]),
+			X:  astgen.String(def.RawPattern()[:i]),
 			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.Pattern()[i:])),
+			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(def.RawPattern()[i:])),
 		}
 	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
@@ -435,7 +445,7 @@ func generatePerFileRouteFunction(
 		t := defs[i]
 		const dataVarIdent = "result"
 		if config.Verbose {
-			logger.Printf("generating handler for pattern %s in %s", t.Pattern(), sourceFile)
+			logger.Printf("generating handler for pattern %s in %s", t.RawPattern(), sourceFile)
 		}
 		if t.FunctionIdentifier() == nil {
 			handlerFunc := noReceiverMethodCall(file, t, config, receiverInterfaceName)
@@ -567,17 +577,17 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 	}
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
 		},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
 			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(templateDataVarIdent)}},
 		}},
 	}
@@ -688,17 +698,17 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	})
 
 	if config.Logger {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.Pattern()))
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
 	}
 
-	execTemplates := checkExecuteTemplateError(file, config.Logger, def.Pattern())
+	execTemplates := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
 	execTemplates.Init = &ast.AssignStmt{
 		Lhs: []ast.Expr{
 			ast.NewIdent(errIdent),
 		},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(config.TemplatesVariable), Sel: ast.NewIdent("ExecuteTemplate")},
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
 			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(resultDataIdent)}},
 		}},
 	}

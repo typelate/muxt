@@ -13,7 +13,7 @@ import (
 // TestMarkdownLinks validates that all relative links in markdown files
 // point to files that exist within the repository.
 func TestMarkdownLinks(t *testing.T) {
-	// Pattern matches markdown links: [text](path)
+	// RawPattern matches markdown links: [text](path)
 	// Captures the path part, excluding anchors (#section)
 	linkPattern := regexp.MustCompile(`\[([^\]]+)\]\(([^)#]+)`)
 
