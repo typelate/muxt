@@ -89,10 +89,30 @@ type Definition struct {
 	canRedirect bool
 }
 
-func (def Definition) SourceFile() string             { return def.sourceFile }
-func (def Definition) Pattern() string                { return def.pattern }
+func (def Definition) SourceFile() string { return def.sourceFile }
+func (def Definition) RawPattern() string { return def.pattern }
+
+// Pattern returns a normalized http.ServeMux pattern.
+func (def Definition) Pattern() string {
+	var sb strings.Builder
+
+	if m := def.Call(); m != "" {
+		sb.WriteString(m)
+		sb.WriteString(" ")
+	}
+
+	if h := def.Host(); h != "" {
+		sb.WriteString(h)
+	}
+	sb.WriteString(def.Path())
+
+	return sb.String()
+}
+
 func (def Definition) Name() string                   { return def.name }
-func (def Definition) Path() string                   { return def.path }
+func (def Definition) Path() string                   { return strings.TrimSpace(def.path) }
+func (def Definition) Host() string                   { return strings.TrimSpace(strings.ToLower(def.host)) }
+func (def Definition) HTTPMethod() string             { return strings.TrimSpace(strings.TrimSpace(def.method)) }
 func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
 func (def Definition) MayRedirect() bool              { return def.canRedirect }
 func (def Definition) Template() *template.Template   { return def.template }
@@ -109,7 +129,7 @@ func (def Definition) ArgumentType(name string) (types.Type, bool) {
 
 func (def Definition) String() string { return def.name }
 
-func (def Definition) Method() string {
+func (def Definition) Call() string {
 	if def.fun == nil {
 		return ""
 	}
