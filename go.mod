@@ -9,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/typelate/check v0.1.1
 	github.com/typelate/dom v0.7.2
-	golang.org/x/net v0.49.0
+	golang.org/x/net v0.50.0
 	golang.org/x/tools v0.41.0
 	rsc.io/script v0.0.2
 )
