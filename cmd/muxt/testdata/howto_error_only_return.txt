@@ -1,0 +1,69 @@
+# Health check with error only return
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go build
+exec go test
+
+-- go.mod --
+module example.com
+
+go 1.24
+
+-- server.go --
+package main
+
+import "context"
+
+type Server struct{}
+
+func (s Server) Healthcheck(ctx context.Context) error {
+	return nil
+}
+
+func main() {}
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+-- template.gohtml --
+{{define "GET /health Healthcheck(ctx)"}}
+{{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK{{end}}
+{{end}}
+
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHealthcheck(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "OK" {
+		t.Errorf("expected body 'OK', got %q", body)
+	}
+}

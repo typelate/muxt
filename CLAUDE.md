@@ -100,6 +100,15 @@ gofumpt -w .
 
 ## Common Tasks
 
+### Exploring Existing Behavior
+
+To explore existing functionality in a smaller scope.
+- Create a main.go file in a new directory inside ./cmd/tmp/<some-dir>
+- Run the new executable package with `go run ./cmd/tmp/explore-asterr`
+
+**Do not do this in /tmp!**
+**Do not add go.mod to ./cmd/tmp directories otherwise running muxt will not work!**
+
 ### Adding a New Feature
 
 1. Create a test file: `cmd/muxt/testdata/reference_my_feature.txt`
