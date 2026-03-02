@@ -33,6 +33,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/typelate/check v0.1.1 h1:tgTA7qP/z8Xf4ecn5ew2QKoIyUr4GVRgP6XKi9SlpQo=
 github.com/typelate/check v0.1.1/go.mod h1:ePRFc8wpmTy5SpyMHHzbuZxReerD5FKgJh6AZk+wczM=
+github.com/typelate/check v0.1.2 h1:JPKq7p0RDjuxPvurbSrp8f6su/RtPEN3sCMI7DiDsvU=
+github.com/typelate/check v0.1.2/go.mod h1:1fdEbmtW29F/Hog3XMNFT0nP7MpXLdZ3/55oKp2yPRA=
 github.com/typelate/dom v0.7.2 h1:BmdmhskiENlX6OaTLFDb93u6MbMIHDIgF4y/rSiqHWQ=
 github.com/typelate/dom v0.7.2/go.mod h1:O5f90nKvP99k36mSoxRekl+TkfnYLmMVFoR4EDL+n5k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
