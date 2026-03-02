@@ -53,7 +53,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
 			}
-			td.result = td.result
 		}
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", &td); err != nil {
@@ -88,7 +87,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
 			}
-			td.result = td.result
 		}
 		buf := bytes.NewBuffer(nil)
 		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", &td); err != nil {

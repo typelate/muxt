@@ -657,13 +657,15 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		return nil, err
 	}
 
-	receiverCallStatements, err := callReceiverMethod(file, resultDataIdent, &ast.SelectorExpr{
+	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
+	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
+	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
 		X:   ast.NewIdent(resultDataIdent),
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
 	}, sig, &ast.CallExpr{
 		Fun:  callFun,
 		Args: slices.Clone(def.CallExpression().Args),
-	})
+	}, errBody)
 	if err != nil {
 		return nil, err
 	}
@@ -677,7 +679,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 			Y:  astgen.Int(0),
 		},
 		Body: &ast.BlockStmt{
-			List: receiverCallStatements,
+			List: receiverCall.Stmts(),
 		},
 	})
 
@@ -836,19 +838,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				arg.Fun = ast.NewIdent(arg.Fun.(*ast.Ident).Name)
 			}
 
-			callMethodStatements, err := callReceiverMethod(file, rdIdent, ast.NewIdent(resultVarIdent), callSig, arg)
+			errBody := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+			errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
+			nestedCall, err := callReceiverMethod(rdIdent, ast.NewIdent(resultVarIdent), callSig, arg, errBody)
 			if err != nil {
 				return nil, err
 			}
-			if len(callMethodStatements) > 2 {
-				callMethodStatements = callMethodStatements[1 : len(callMethodStatements)-1]
-			}
-			if assign, ok := callMethodStatements[0].(*ast.AssignStmt); ok {
-				assign.Tok = token.DEFINE
-				callMethodStatements[0] = assign
-			}
 
-			statements = append(parseArgStatements, callMethodStatements...)
+			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
@@ -1170,7 +1167,41 @@ func parseBlock(tmpIdent string, parseCall ast.Expr, validations []ast.Stmt, err
 	return block.List
 }
 
-func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *types.Signature, call *ast.CallExpr) ([]ast.Stmt, error) {
+type receiverMethodCall struct {
+	VarDecl ast.Stmt        // var err/ok declaration; nil for 1-result
+	Assign  *ast.AssignStmt // dataVar[, err/ok] = call
+	Check   ast.Stmt        // if err != nil / if !ok; nil for 1-result
+	SetOkay *ast.AssignStmt // td.okay = true; nil for error-returning methods
+}
+
+// DefineStmts returns statements for use as an inline call where the result
+// variable is being defined. It sets Assign to use := and includes the Check
+// if present.
+func (r *receiverMethodCall) DefineStmts() []ast.Stmt {
+	r.Assign.Tok = token.DEFINE
+	stmts := []ast.Stmt{r.Assign}
+	if r.Check != nil {
+		stmts = append(stmts, r.Check)
+	}
+	return stmts
+}
+
+func (r *receiverMethodCall) Stmts() []ast.Stmt {
+	var stmts []ast.Stmt
+	if r.VarDecl != nil {
+		stmts = append(stmts, r.VarDecl)
+	}
+	stmts = append(stmts, r.Assign)
+	if r.Check != nil {
+		stmts = append(stmts, r.Check)
+	}
+	if r.SetOkay != nil {
+		stmts = append(stmts, r.SetOkay)
+	}
+	return stmts
+}
+
+func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signature, call *ast.CallExpr, errBody *ast.BlockStmt) (*receiverMethodCall, error) {
 	const (
 		okIdent = "ok"
 	)
@@ -1180,9 +1211,9 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 		assert.NotNil(assertion, methodIdent)
 		return nil, fmt.Errorf("method %s has no results it should have one or two", methodIdent.Name)
 	case 1:
-		return []ast.Stmt{
-			&ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
-			&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+		return &receiverMethodCall{
+			Assign: &ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+			SetOkay: &ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
 				X:   ast.NewIdent(rdIdent),
 				Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
 			}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}},
@@ -1193,28 +1224,22 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 		errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 		assert.NotNil(assertion, errorType)
 
-		errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
-		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
 		if types.Implements(lastResult, errorType) {
-			return []ast.Stmt{
-				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
-				&ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
-				&ast.IfStmt{
+			return &receiverMethodCall{
+				VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
+				Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+				Check: &ast.IfStmt{
 					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-					Body: errBlock,
+					Body: errBody,
 				},
-				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
-					X:   ast.NewIdent(rdIdent),
-					Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
-				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{dataVar}},
 			}, nil
 		}
 
 		if basic, ok := lastResult.(*types.Basic); ok && basic.Kind() == types.Bool {
-			return []ast.Stmt{
-				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("ok")}, Type: ast.NewIdent("bool")}}}},
-				&ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(okIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
-				&ast.IfStmt{
+			return &receiverMethodCall{
+				VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("ok")}, Type: ast.NewIdent("bool")}}}},
+				Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(okIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+				Check: &ast.IfStmt{
 					Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
 					Body: &ast.BlockStmt{
 						List: []ast.Stmt{
@@ -1222,11 +1247,7 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 						},
 					},
 				},
-				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
-					X:   ast.NewIdent(rdIdent),
-					Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
-				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{dataVar}},
-				&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+				SetOkay: &ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
 					X:   ast.NewIdent(rdIdent),
 					Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
 				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}},
@@ -1236,6 +1257,7 @@ func callReceiverMethod(file *File, rdIdent string, dataVar ast.Expr, method *ty
 		return nil, fmt.Errorf("expected last result to be either an error or a bool")
 	}
 }
+
 
 var assertion AssertionFailureReporter
 
