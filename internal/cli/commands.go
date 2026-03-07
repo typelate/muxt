@@ -109,6 +109,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 		Use:     checkCommandName,
 		Aliases: []string{"c"},
 		Short:   "Check templates for errors",
+		Long:    commandHelp("reference/commands/check.md"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
 				return fmt.Errorf(useTemplatesVariable + errIdentSuffix)
@@ -155,7 +156,12 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 		Use:     generateCommandName,
 		Aliases: []string{"gen", "g"},
 		Short:   "Generate HTTP routes from templates",
-		Long:    generateLongHelp(),
+		Long: commandHelp(
+			"reference/commands/generate.md",
+			"reference/template-names.md",
+			"reference/call-parameters.md",
+			"reference/call-results.md",
+		),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			stdout := cmd.OutOrStdout()
 			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
@@ -337,6 +343,7 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 		Use:     listTemplateCallersCommandName,
 		Aliases: []string{"callers"},
 		Short:   "List template callers",
+		Long:    commandHelp("reference/commands/list-template-callers.md"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if config.TemplatesVariable == "" {
 				config.TemplatesVariable = defaultTemplatesVariableName
@@ -380,6 +387,7 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 		Use:     listTemplateCallsCommandName,
 		Aliases: []string{"calls"},
 		Short:   "List template calls",
+		Long:    commandHelp("reference/commands/list-template-calls.md"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			if config.TemplatesVariable == "" {
@@ -423,6 +431,7 @@ func versionCommand() *cobra.Command {
 		Use:     versionCommandName,
 		Aliases: []string{"v"},
 		Short:   "Print the version number",
+		Long:    commandHelp("reference/commands/version.md"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			v, ok := cliVersion()

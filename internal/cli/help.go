@@ -15,16 +15,14 @@ import (
 
 var markdownLinkRe = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 
-func generateLongHelp() string {
+// commandHelp reads and renders markdown files from the embedded docs FS.
+// It concatenates all specified files and renders them with glamour for terminal output.
+func commandHelp(docFiles ...string) string {
 	docFS := docs.Markdown()
 	baseURL := githubBlobURL()
 
 	var buf strings.Builder
-	for _, name := range []string{
-		"reference/template-names.md",
-		"reference/call-parameters.md",
-		"reference/call-results.md",
-	} {
+	for _, name := range docFiles {
 		data, err := fs.ReadFile(docFS, name)
 		if err != nil {
 			continue

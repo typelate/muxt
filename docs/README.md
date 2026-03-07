@@ -16,7 +16,12 @@ Type-safe HTTP handlers from Go HTML templates.
 
 ## Reference
 
-- **[CLI](reference/cli.md)** - Commands and flags
+- **[CLI Overview](reference/cli.md)** - Commands and flags
+  - [`muxt generate`](reference/commands/generate.md) - Generate HTTP handlers
+  - [`muxt check`](reference/commands/check.md) - Type-check templates
+  - [`muxt version`](reference/commands/version.md) - Print version
+  - [`muxt list-template-callers`](reference/commands/list-template-callers.md) - List callers
+  - [`muxt list-template-calls`](reference/commands/list-template-calls.md) - List call sites
 - **[Template Name Syntax](reference/template-names.md)** - Route naming syntax
 - **[Call Parameters](reference/call-parameters.md)** - Method parameter parsing
 - **[Call Results](reference/call-results.md)** - Return value handling
