@@ -156,12 +156,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 		Use:     generateCommandName,
 		Aliases: []string{"gen", "g"},
 		Short:   "Generate HTTP routes from templates",
-		Long: commandHelp(
-			"reference/commands/generate.md",
-			"reference/template-names.md",
-			"reference/call-parameters.md",
-			"reference/call-results.md",
-		),
+		Long:    commandHelp("reference/commands/generate.md"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			stdout := cmd.OutOrStdout()
 			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"io/fs"
 	"path"
 	"regexp"
@@ -19,7 +18,6 @@ var markdownLinkRe = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 // It concatenates all specified files and renders them with glamour for terminal output.
 func commandHelp(docFiles ...string) string {
 	docFS := docs.Markdown()
-	baseURL := githubBlobURL()
 
 	var buf strings.Builder
 	for _, name := range docFiles {
@@ -27,13 +25,14 @@ func commandHelp(docFiles ...string) string {
 		if err != nil {
 			continue
 		}
-		content := rewriteDocLinks(string(data), name, baseURL)
+		content := resolveToRepoRoot(string(data), name)
 		buf.WriteString(content)
 		buf.WriteString("\n\n")
 	}
 
 	r, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
+		glamour.WithBaseURL(githubBlobURL()+"/"),
 	)
 	if err != nil {
 		return buf.String()
@@ -47,7 +46,10 @@ func commandHelp(docFiles ...string) string {
 	return strings.TrimSpace(out)
 }
 
-func rewriteDocLinks(markdown string, docPath string, baseURL string) string {
+// resolveToRepoRoot rewrites relative markdown links to be relative to the
+// repository root. This normalizes links from files at different depths so
+// they can share a single WithBaseURL for the GitHub blob prefix.
+func resolveToRepoRoot(markdown string, docPath string) string {
 	docDir := path.Dir("docs/" + docPath)
 
 	return markdownLinkRe.ReplaceAllStringFunc(markdown, func(match string) string {
@@ -63,7 +65,7 @@ func rewriteDocLinks(markdown string, docPath string, baseURL string) string {
 		}
 
 		resolved := path.Clean(path.Join(docDir, href))
-		return fmt.Sprintf("[%s](%s/%s)", text, baseURL, resolved)
+		return "[" + text + "](" + resolved + ")"
 	})
 }
 
@@ -78,5 +80,5 @@ func githubBlobURL() string {
 		version = "main"
 	}
 
-	return fmt.Sprintf("https://%s/blob/%s", bi.Main.Path, version)
+	return "https://" + bi.Main.Path + "/blob/" + version
 }
