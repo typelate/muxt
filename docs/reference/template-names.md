@@ -1,6 +1,6 @@
 # Template Name Syntax Reference
 
-Complete specification for Muxt template naming. Use when pair programming to validate route definitions.
+Complete specification for Muxt template naming. Use when programming to validate route definitions.
 
 ## Syntax
 
