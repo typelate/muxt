@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"cmp"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -156,6 +155,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 		Use:     generateCommandName,
 		Aliases: []string{"gen", "g"},
 		Short:   "Generate HTTP routes from templates",
+		Long:    generateLongHelp(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			stdout := cmd.OutOrStdout()
 			if config.TemplatesVariable != "" && !token.IsIdentifier(config.TemplatesVariable) {
