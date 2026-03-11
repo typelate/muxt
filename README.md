@@ -159,7 +159,11 @@ Claude Code skills for working with Muxt codebases:
 | [sqlc.md](docs/skills/sqlc.md) | Use Muxt with sqlc for type-safe SQL + HTML |
 | [goland-gotype.md](docs/skills/goland-gotype.md) | Add gotype comments for GoLand IDE support (GoLand-only) |
 
-Install as Claude Code skills or paste into AI assistant sessions.
+Install as Claude Code skills:
+
+```bash
+for f in docs/skills/*.md; do d=~/.claude/skills/$(basename "${f%.md}"); mkdir -p "$d"; cp "$f" "$d/SKILL.md"; done
+```
 
 ## License
 
