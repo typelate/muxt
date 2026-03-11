@@ -7,8 +7,10 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 | Command | Purpose | Common Flags |
 |---------|---------|--------------|
 | `generate` | Generate HTTP handlers from templates | `--use-receiver-type`, `--output-routes-func-with-logger-param`, `--output-file` |
-| `check` | Type-check templates without generating | `--use-receiver-type`, `--verbose` |
+| `check` | Type-check templates without generating | `--use-templates-variable`, `--verbose` |
 | `documentation` | Generate markdown docs from templates | Same as `generate` |
+| `list-template-callers` | List callers of a template | `--match`, `--format` |
+| `list-template-calls` | List templates called by a template | `--match`, `--format` |
 | `version` | Print muxt version | `-v, --verbose` |
 
 ## Flag Categories
@@ -115,24 +117,35 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix stri
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathPrefix string) TemplateRoutePaths
 ```
 
-[How to Add Logging](../how-to/add-logging.md)
+#### Logging Behavior
+
+Without `--output-routes-func-with-logger-param`, generated handlers call `slog.ErrorContext` on the **default logger** when template execution fails.
+
+With the flag enabled, the generated handler uses the provided `*slog.Logger`:
+
+| Level | When | Fields |
+|-------|------|--------|
+| `DEBUG` | Every request | `pattern`, `path`, `method` |
+| `ERROR` | Template execution failure | `pattern`, `path`, `error` |
+
+Receiver method errors are **not** logged — they are stored in `TemplateData` for the template to render via `{{if .Err}}`.
+
+See [Add Logging tutorial](../tutorials/add-logging.md) for setup examples.
 
 ### `muxt check`
 
 Type-check templates without generating code. Use in CI or during development.
 
-**Aliases:** `c`, `typelate`
+**Aliases:** `c`
 
 ```bash
-muxt check --use-receiver-type=App --verbose
+muxt check --verbose
 ```
 
 #### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Same as in `generate`. |
-| `--use-receiver-type-package` | string | _(current pkg)_ | Package path for receiver type. Same as in `generate`. |
 | `--use-templates-variable` | string | `templates` | Template variable name. Same as in `generate`. |
 | `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
@@ -219,7 +232,7 @@ go generate ./...
 
 **CI type checking:**
 ```bash
-muxt check --use-receiver-type=App --verbose
+muxt check --verbose
 ```
 
 **Custom naming:**
@@ -252,9 +265,19 @@ Routes(mux, app, "/api/v1")
 
 ---
 
+## Command Reference Pages
+
+- [`muxt generate`](commands/generate.md) — Full generate command reference
+- [`muxt check`](commands/check.md) — Full check command reference
+- [`muxt list-template-callers`](commands/list-template-callers.md) — List template callers
+- [`muxt list-template-calls`](commands/list-template-calls.md) — List template call sites
+- [`muxt version`](commands/version.md) — Version command reference
+
 ## Related
 
-- [templates-variable.md](templates-variable.md) — Template variable setup requirements
-- [template-names.md](template-names.md) — Template naming syntax
-- [type-checking.md](type-checking.md) — Type checking behavior
-- [How to Add Logging](../how-to/add-logging.md) — Using `--output-routes-func-with-logger-param` flag
+- [Template Name Syntax](template-names.md) — Route naming syntax
+- [Call Parameters](call-parameters.md) — Method parameter parsing
+- [Call Results](call-results.md) — Return value handling
+- [Templates Variable](templates-variable.md) — Template variable requirements
+- [Type Checking](type-checking.md) — Type checking behavior
+- [Add Logging](../tutorials/add-logging.md) — Structured logging with `log/slog`

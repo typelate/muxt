@@ -313,6 +313,4 @@ internal/hypertext/
 
 ## Related
 
-- [How to Integrate](../how-to/integrate-existing-project.md) — Production migration patterns
-- [How to Test](../how-to/test-handlers.md) — Testing patterns with counterfeiter and domtest
 - [CLI Reference](../reference/cli.md) — Generation flags and options

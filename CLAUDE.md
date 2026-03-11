@@ -160,11 +160,9 @@ ls cmd/muxt/testdata/err_*.txt
 - `docs/examples/` — Complete working examples
 
 ### Documentation
-- `docs/tutorials/` — Getting started guides
-- `docs/how-to/` — Task-oriented guides
 - `docs/reference/` — Feature reference
 - `docs/explanation/` — Design philosophy
-- `docs/prompts/` — Prompts for AI assistants
+- `docs/skills/` — Claude Code skills for AI assistants
 
 ## Important Implementation Details
 
@@ -230,6 +228,6 @@ go -C ./cmd/muxt/testdata/debug-test test -v
 
 ## Questions?
 
-- Check `docs/prompts/muxt-guide.md` for template syntax reference
+- Check `docs/reference/template-names.md` for template syntax reference
 - Review existing test files in `cmd/muxt/testdata/`
 - Open an issue with a minimal example

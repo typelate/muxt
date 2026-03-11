@@ -2,21 +2,14 @@
 
 Type-safe HTTP handlers from Go HTML templates.
 
-## Quick Start
-
-- **[Tutorial: Your First App](tutorials/getting-started.md)** - Build "Hello, world!" in 7 steps
-
-## How-To
-
-- **[Integrate into Existing Project](how-to/integrate-existing-project.md)**
-- **[Write Receiver Methods](how-to/write-receiver-methods.md)**
-- **[Test Handlers](how-to/test-handlers.md)**
-- **[Use HTMX](how-to/use-htmx.md)**
-- **[Add Logging](how-to/add-logging.md)**
-
 ## Reference
 
-- **[CLI](reference/cli.md)** - Commands and flags
+- **[CLI Overview](reference/cli.md)** - Commands and flags
+  - [`muxt generate`](reference/commands/generate.md) - Generate HTTP handlers
+  - [`muxt check`](reference/commands/check.md) - Type-check templates
+  - [`muxt version`](reference/commands/version.md) - Print version
+  - [`muxt list-template-callers`](reference/commands/list-template-callers.md) - List callers
+  - [`muxt list-template-calls`](reference/commands/list-template-calls.md) - List call sites
 - **[Template Name Syntax](reference/template-names.md)** - Route naming syntax
 - **[Call Parameters](reference/call-parameters.md)** - Method parameter parsing
 - **[Call Results](reference/call-results.md)** - Return value handling
@@ -34,21 +27,32 @@ Type-safe HTTP handlers from Go HTML templates.
 - **[Package Structure](explanation/package-structure.md)**
 - **[Architecture Decisions](explanation/decisions/)**
 
+## Tutorials
+
+- **[Add Logging](tutorials/add-logging.md)** - Structured logging with `log/slog`
+
 ## Examples
 
 - **[Hypertext Example](examples/simple)** - Full application with tests
 - **[HTMX Helpers](examples/htmx)** - HTMX integration code
 
-## AI Assistant Prompts
+## AI Assistant Skills
 
-For AI assistants (Claude, ChatGPT, etc.):
+Claude Code skills for working with Muxt:
 
-- **[muxt-quick.md](prompts/muxt-quick.md)** - Quick reference (~4KB)
-- **[muxt-guide.md](prompts/muxt-guide.md)** - Practical guide (~8KB)
-- **[muxt-complete.md](prompts/muxt-complete.md)** - Complete reference (~14KB)
-
-Choose by complexity: quick → guide → complete
+- **[explore-from-route.md](skills/explore-from-route.md)** - Trace from a URL path to its template and receiver method
+- **[explore-from-method.md](skills/explore-from-method.md)** - Find which routes and templates use a receiver method
+- **[explore-from-error.md](skills/explore-from-error.md)** - Trace an error message back to its handler and template
+- **[explore-repo-overview.md](skills/explore-repo-overview.md)** - Map all routes, templates, and the receiver type
+- **[template-driven-development.md](skills/template-driven-development.md)** - Create new templates and methods using TDD
+- **[forms.md](skills/forms.md)** - Form creation, struct binding, validation, and accessible form HTML
+- **[debug-generation-errors.md](skills/debug-generation-errors.md)** - Diagnose and fix `muxt generate` / `muxt check` errors
+- **[refactoring.md](skills/refactoring.md)** - Rename methods, change patterns, move templates safely
+- **[htmx.md](skills/htmx.md)** - Explore, develop, and test HTMX interactions
+- **[integrate-existing-project.md](skills/integrate-existing-project.md)** - Add Muxt to an existing Go web application
+- **[sqlc.md](skills/sqlc.md)** - Use Muxt with sqlc for type-safe SQL + HTML
+- **[goland-gotype.md](skills/goland-gotype.md)** - Add gotype comments for GoLand IDE support (GoLand-only)
 
 ---
 
-Organized by [Diátaxis](https://diataxis.fr/): Tutorials (learning), How-to (tasks), Reference (specs), Explanation (concepts)
+Organized by [Diátaxis](https://diataxis.fr/): Reference (specs), Explanation (concepts). Task-oriented workflows are in AI Assistant Skills.

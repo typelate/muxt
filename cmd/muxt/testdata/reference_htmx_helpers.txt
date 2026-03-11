@@ -1,0 +1,131 @@
+# Tests --output-htmx-helpers flag generates HTMX response header setters and request header readers
+#
+# Grep assertions verify all HTMX helper function names exist in generated code.
+# Integration tests exercise representative behavior: HXRequest (request reader),
+# HXTrigger and HXRetarget (response header setters).
+
+muxt generate --output-htmx-helpers
+
+grep 'func.*HXLocation' template_routes.go
+grep 'func.*HXPushURL' template_routes.go
+grep 'func.*HXRedirect' template_routes.go
+grep 'func.*HXRefresh' template_routes.go
+grep 'func.*HXReplaceURL' template_routes.go
+grep 'func.*HXReswap' template_routes.go
+grep 'func.*HXRetarget' template_routes.go
+grep 'func.*HXReselect' template_routes.go
+grep 'func.*HXTrigger\b' template_routes.go
+grep 'func.*HXTriggerAfterSettle' template_routes.go
+grep 'func.*HXTriggerAfterSwap' template_routes.go
+grep 'func.*HXRequest' template_routes.go
+grep 'func.*HXBoosted' template_routes.go
+grep 'func.*HXCurrentURL' template_routes.go
+grep 'func.*HXHistoryRestoreRequest' template_routes.go
+grep 'func.*HXPrompt' template_routes.go
+grep 'func.*HXTargetElementID' template_routes.go
+grep 'func.*HXTriggerName' template_routes.go
+grep 'func.*HXTriggerElementID' template_routes.go
+
+exec go test -v
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- template.gohtml --
+{{define "GET / 200"}}
+{{if .HXRequest}}
+  <div id="content">HTMX fragment</div>
+{{else}}
+<!DOCTYPE html>
+<html><body>
+  <div id="content">Full page</div>
+</body></html>
+{{end}}
+{{end}}
+
+{{define "POST /trigger 200"}}
+{{.HXTrigger "itemCreated"}}
+{{.HXRetarget "#item-list"}}
+<div>Created</div>
+{{end}}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestFullPage(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if want := "Full page"; !strings.Contains(body, want) {
+		t.Errorf("expected body to contain %q, got %q", want, body)
+	}
+}
+
+func TestHTMXFragment(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if want := "HTMX fragment"; !strings.Contains(body, want) {
+		t.Errorf("expected body to contain %q, got %q", want, body)
+	}
+}
+
+func TestHTMXResponseHeaders(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/trigger", nil)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("HX-Trigger"); got != "itemCreated" {
+		t.Errorf("expected HX-Trigger 'itemCreated', got %q", got)
+	}
+	if got := rec.Header().Get("HX-Retarget"); got != "#item-list" {
+		t.Errorf("expected HX-Retarget '#item-list', got %q", got)
+	}
+}
