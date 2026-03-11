@@ -23,40 +23,26 @@ Muxt extends this with optional status codes and method calls:
 [METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
 ```
 
-## Example
-
-Define a template with a route pattern and method call:
-
-```gotemplate
-{{define "GET /{id} GetUser(ctx, id)"}}
-  {{with $err := .Err}}
-    <div class="error" data-type="{{printf `%T` $err}}">{{$err.Error}}</div>
-  {{else}}
-    <h1>{{.Result.Name}}</h1>
-    <p>{{.Result.Email}}</p>
-  {{end}}
-{{end}}
-```
-
-Implement the receiver method:
-
-```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-    return s.db.GetUser(ctx, id)  // id automatically parsed from string
-}
-```
-
-Run `muxt generate --use-receiver-type=Server` to generate HTTP handlers.
+For example, `"GET /article/{id} GetArticle(ctx, id)"` means: handle GET requests to `/article/{id}`, call `GetArticle` with the request context and the `id` path parameter, render the template with the result.
 
 ## How It Works
 
-**Template names define the contract.** Muxt analyzes method signatures using `go/types` and generates handlers that:
+**Template names define the contract** between your HTML and your Go code. Without Muxt, this connection relies on **connascence of name** through raw strings: `templates.ExecuteTemplate(w, "user-profile", data)` uses a string that must match a template name, and `{{.Name}}` must match a field on whatever `data` happens to be. A typo in either place is a runtime error.
 
-- Parse path parameters to method argument types (`string`, `int`, `bool`, custom `TextUnmarshaler`)
+Muxt upgrades this to **connascence of type**. It uses `go/types` to verify at generation time that:
+
+- The method named in the template (`GetArticle`) exists on the receiver type with the correct signature
+- Path parameters (`id`) can be parsed to the method's parameter types (`string`, `int`, `bool`, custom `TextUnmarshaler`)
+- The template body's field access (`.Result.Title`) is valid for the method's return type
+- Form parameters (`form`) match a concrete struct type with the right fields
 - Bind form data to struct fields with validation
 - Inject request context, `*http.Request`, or `http.ResponseWriter` when named
-- Handle errors and return values through `TemplateData[T]`
+- Handle errors and return values through `TemplateData[R, T]`
 - Set HTTP status codes from template names, return values, or error types
+
+If any of these are wrong, `go generate` or `muxt check` fails with a clear error pointing to the template. No runtime surprises.
+
+`TemplateRoutePaths` extends this to URLs: instead of hardcoding `href="/article/42"`, templates use `{{$.Path.GetArticle 42}}`. If the route pattern changes, the generated method signature changes, and the compiler catches every stale reference.
 
 **No (additional) runtime reflection.** All type checking happens at generation time. The generated code uses only `net/http` and `html/template` from the standard library.
 
@@ -100,6 +86,37 @@ func (s Server) Home(ctx context.Context) string {
 go generate && go run .
 ```
 
+Key elements:
+- `//go:embed *.gohtml` embeds template files into the binary
+- `//go:generate muxt generate` tells `go generate` to run Muxt
+- `--use-receiver-type=Server` tells Muxt to look up method signatures on `Server`
+- The `templates` variable must be package-level (Muxt finds it via static analysis)
+
+## Example
+
+Define a template with a route pattern and method call:
+
+```gotemplate
+{{define "GET /{id} GetUser(ctx, id)"}}
+  {{with $err := .Err}}
+    <div class="error" data-type="{{printf `%T` $err}}">{{$err.Error}}</div>
+  {{else}}
+    <h1>{{.Result.Name}}</h1>
+    <p>{{.Result.Email}}</p>
+  {{end}}
+{{end}}
+```
+
+Implement the receiver method:
+
+```go
+func (s Server) GetUser(ctx context.Context, id int) (User, error) {
+    return s.db.GetUser(ctx, id)  // id automatically parsed from string
+}
+```
+
+Run `muxt generate --use-receiver-type=Server` to generate HTTP handlers.
+
 ## Examples
 
 The [command tests](./cmd/muxt/testdata) were intended to be readable examples of muxt behavior.
@@ -110,26 +127,39 @@ The [command tests](./cmd/muxt/testdata) were intended to be readable examples o
 
 ## Documentation
 
-Comprehensive documentation organized by task:
-
-- **[Getting Started Tutorial](docs/tutorials/getting-started.md)** - Build your first Muxt application
-- **[How-To Guides](docs/how-to/)** - Integrate, test, use HTMX, add logging
 - **[Reference](docs/reference/)** - CLI, syntax, parameters, type checking
 - **[Explanation](docs/explanation/)** - Design philosophy, patterns, decisions
 
 See the [full documentation index](docs/) for all available resources.
 
+### Go Standard Library
+
+- [html/template](https://pkg.go.dev/html/template) — Template syntax, functions, escaping
+- [net/http](https://pkg.go.dev/net/http) — `ServeMux` routing patterns, `Handler` interface
+- [embed](https://pkg.go.dev/embed) — File embedding directives
+- [log/slog](https://pkg.go.dev/log/slog) — Structured logging (used by generated handlers)
+- [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements) — `ServeMux` pattern syntax that Muxt extends
+
 ## Using with AI Assistants
 
-Paste these prompts into Claude Code or other AI assistants when building hypermedia apps:
+Claude Code skills for working with Muxt codebases:
 
-| Prompt | Use Case |
-|--------|----------|
-| [muxt-quick.md](docs/prompts/muxt-quick.md) | Syntax lookup, minimal context |
-| [muxt-guide.md](docs/prompts/muxt-guide.md) | Comprehensive guide for building apps |
-| [muxt-complete.md](docs/prompts/muxt-complete.md) | Edge cases, testing patterns, advanced usage |
+| Skill | Use Case |
+|-------|----------|
+| [explore-from-route.md](docs/skills/explore-from-route.md) | Trace from a URL path to its template and receiver method |
+| [explore-from-method.md](docs/skills/explore-from-method.md) | Find which routes and templates use a receiver method |
+| [explore-from-error.md](docs/skills/explore-from-error.md) | Trace an error message back to its handler and template |
+| [explore-repo-overview.md](docs/skills/explore-repo-overview.md) | Map all routes, templates, and the receiver type |
+| [template-driven-development.md](docs/skills/template-driven-development.md) | Create new templates and receiver methods using TDD |
+| [forms.md](docs/skills/forms.md) | Form creation, struct binding, validation, and accessible form HTML |
+| [debug-generation-errors.md](docs/skills/debug-generation-errors.md) | Diagnose and fix `muxt generate` / `muxt check` errors |
+| [refactoring.md](docs/skills/refactoring.md) | Rename methods, change patterns, move templates safely |
+| [htmx.md](docs/skills/htmx.md) | Explore, develop, and test HTMX interactions |
+| [integrate-existing-project.md](docs/skills/integrate-existing-project.md) | Add Muxt to an existing Go web application |
+| [sqlc.md](docs/skills/sqlc.md) | Use Muxt with sqlc for type-safe SQL + HTML |
+| [goland-gotype.md](docs/skills/goland-gotype.md) | Add gotype comments for GoLand IDE support (GoLand-only) |
 
-Start with `muxt-guide.md` for most sessions. Use `muxt-quick.md` when context is limited.
+Install as Claude Code skills or paste into AI assistant sessions.
 
 ## License
 

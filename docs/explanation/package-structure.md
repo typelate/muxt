@@ -204,6 +204,5 @@ var customFuncs = template.FuncMap{
 
 ## Related
 
-- [How to Integrate Muxt](../how-to/integrate-existing-project.md) - Practical integration examples
 - [Templates Variable Reference](../reference/templates-variable.md) - Detailed specification
 - [Advanced Patterns](advanced-patterns.md) - Production patterns for template organization

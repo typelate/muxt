@@ -24,19 +24,24 @@ func TestMarkdownLinks(t *testing.T) {
 		t.Fatalf("Failed to resolve repo root: %v", err)
 	}
 
-	require.NoError(t, filepath.WalkDir(absRepo, func(path string, d os.DirEntry, err error) error {
+	require.NoError(t, filepath.WalkDir(absRepo, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		// Only check markdown files
-		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if d.IsDir() {
+			return nil
+		}
+		switch ext := filepath.Ext(p); ext {
+		case ".md", ".txt":
+		default:
 			return nil
 		}
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(p)
 		if err != nil {
-			t.Logf("Failed to read %s: %v", path, err)
+			t.Logf("Failed to read %s: %v", p, err)
 			return nil
 		}
 
@@ -54,32 +59,32 @@ func TestMarkdownLinks(t *testing.T) {
 				continue
 			}
 
-			// Resolve relative path from the markdown file's location
-			mdDir := filepath.Dir(path)
+			// Resolve relative p from the markdown file's location
+			mdDir := filepath.Dir(p)
 			targetPath := filepath.Join(mdDir, filepath.FromSlash(linkPath))
 
-			// Clean the path (resolve .. and .)
+			// Clean the p (resolve .. and .)
 			targetPath = filepath.Clean(targetPath)
 
-			// Ensure the path doesn't escape the repository
+			// Ensure the p doesn't escape the repository
 			absTarget, err := filepath.Abs(targetPath)
 			if err != nil {
-				t.Logf("%s: failed to resolve absolute path for %q: %v", path, linkPath, err)
-				failures = append(failures, path+" -> "+linkPath)
+				t.Logf("%s: failed to resolve absolute p for %q: %v", p, linkPath, err)
+				failures = append(failures, p+" -> "+linkPath)
 				continue
 			}
 
 			if !strings.HasPrefix(absTarget, absRepo) {
-				t.Logf("%s: link %q escapes repository bounds", path, linkPath)
-				failures = append(failures, path+" -> "+linkPath)
+				t.Logf("%s: link %q escapes repository bounds", p, linkPath)
+				failures = append(failures, p+" -> "+linkPath)
 				continue
 			}
 
 			// Check if the file exists
 			if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 				t.Logf("%s: broken link [%s](%s) -> target %s does not exist",
-					path, linkText, linkPath, targetPath)
-				failures = append(failures, path+" -> "+linkPath)
+					p, linkText, linkPath, targetPath)
+				failures = append(failures, p+" -> "+linkPath)
 			}
 		}
 
