@@ -180,23 +180,23 @@ Same Given-When-Then pattern, but focus on verifying the method was called corre
 },
 ```
 
-For form-based mutations (POST with form data), see [Forms](forms.md).
+For form-based mutations (POST with form data), see [Forms](../forms/SKILL.md).
 
 ## Choosing Call Parameters
 
-See [Call Parameters Reference](../reference/call-parameters.md) for the full table.
+See [Call Parameters Reference](../../reference/call-parameters.md) for the full table.
 
 | Parameter | Type | Use When |
 |-----------|------|----------|
 | `ctx` | `context.Context` | Always (recommended first param) |
-| `form` | struct | POST/PUT/PATCH with form data (see [Forms](forms.md)) |
+| `form` | struct | POST/PUT/PATCH with form data (see [Forms](../forms/SKILL.md)) |
 | `{param}` | string/int/custom | Path parameter extraction |
 | `request` | `*http.Request` | Need headers, cookies, full request |
 | `response` | `http.ResponseWriter` | Streaming, file downloads, custom headers |
 
 ## Choosing Return Types
 
-See [Call Results Reference](../reference/call-results.md) for the full table.
+See [Call Results Reference](../../reference/call-results.md) for the full table.
 
 | Pattern | Use When |
 |---------|----------|
@@ -355,9 +355,9 @@ A failing test may be an expected `go test` or `muxt check` compilation failure.
 
 ## Reference
 
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [Template Name Syntax](../reference/template-names.md)
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [Template Name Syntax](../../reference/template-names.md)
 - [domtest](https://github.com/typelate/dom) — HTML assertion library
 - [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) — Test double generation
 
@@ -382,4 +382,4 @@ These txtar test files demonstrate the behaviors documented in this skill:
 | Multiple template files | `reference_multiple_template_files.txt` |
 | Sub-template decomposition | `reference_multiple_hypermedia_children.txt` |
 
-For form-related test cases, see [Forms](forms.md#test-cases-cmdmuxttestdata).
+For form-related test cases, see [Forms](../forms/SKILL.md#test-cases-cmdmuxttestdata).

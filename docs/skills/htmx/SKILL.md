@@ -11,21 +11,13 @@ Explore and develop HTMX interactions in a Muxt codebase. Covers discovery, the 
 
 ### Find HTMX Interactions
 
-Scan templates for HTMX attributes that trigger HTTP requests:
+Run the discovery script to find all HTMX attributes in templates:
 
 ```bash
-grep -rn 'hx-get\|hx-post\|hx-put\|hx-patch\|hx-delete' --include='*.gohtml' .
+bash ${CLAUDE_SKILL_DIR}/scripts/find-interactions.sh
 ```
 
-Each match is a client-side interaction that targets a Muxt route. Note the associated attributes:
-
-```bash
-# Find swap targets — where does the response go?
-grep -rn 'hx-target\|hx-swap\|hx-select' --include='*.gohtml' .
-
-# Find triggers — what starts the request?
-grep -rn 'hx-trigger\|hx-confirm\|hx-boost' --include='*.gohtml' .
-```
+Each match is a client-side interaction that targets a Muxt route.
 
 ### Trace an Interaction
 
@@ -219,6 +211,41 @@ When templates set HTMX response headers via helpers like `.HXRetarget` or `.HXT
     assert.Equal(t, "#task-list", rec.Header().Get("HX-Retarget"))
 ```
 
+## Exploring HTMX Interactions with a Fake Server
+
+For quick interactive exploration of HTMX behavior, generate a fake server:
+
+```bash
+muxt generate-fake-server path/to/package
+```
+
+Edit `./cmd/explore-goland/main.go` to set up fake return values so routes render with realistic data:
+
+```go
+receiver := new(fake.RoutesReceiver)
+receiver.ListArticlesReturns([]hypertext.Article{
+    {ID: 1, Title: "First Post"},
+    {ID: 2, Title: "Second Post"},
+}, nil)
+```
+
+Run the server and use Chrome DevTools MCP to exercise the HTMX interactions:
+
+```
+navigate_page({"url": "http://127.0.0.1:<port>/"})
+take_snapshot({})
+```
+
+Click HTMX-enabled elements and observe what happens:
+
+```
+click({"uid": "<button-uid>"})
+take_snapshot({})
+list_network_requests({"resourceTypes": ["fetch", "xhr"]})
+```
+
+This lets you verify `hx-get`, `hx-post`, swap targets, and fragment responses with the full frontend stack (JavaScript, CSS, HTMX runtime) in a real browser. Modify the fake return values in `main.go` and re-run to test different states.
+
 ## Testing HTMX Islands with chromedp
 
 For dynamic [islands](https://htmx.org/essays/hypermedia-friendly-scripting/#islands) that load content via HTMX after the initial page render, `domtest` alone cannot verify the behavior because it doesn't execute JavaScript. Use [chromedp](https://github.com/chromedp/chromedp) to test these interactions in a real browser.
@@ -326,7 +353,7 @@ By default, HTMX triggers on `change` for inputs. Add `hx-trigger` for different
 <input name="username" hx-post="/signup/username" hx-trigger="keyup delay:500ms">
 ```
 
-This is an HTMX-specific pattern. For standard HTML forms without HTMX, rely on HTML5 validation attributes (`required`, `pattern`, `min`/`max`) for client-side feedback, and handle validation errors on the full form submission. See [Forms](forms.md#re-rendering-after-validation-errors).
+This is an HTMX-specific pattern. For standard HTML forms without HTMX, rely on HTML5 validation attributes (`required`, `pattern`, `min`/`max`) for client-side feedback, and handle validation errors on the full form submission. See [Forms](../forms/SKILL.md#re-rendering-after-validation-errors).
 
 See [HTMX inline validation example](https://htmx.org/examples/inline-validation/).
 
@@ -355,9 +382,9 @@ See [HTMX response-targets extension](https://htmx.org/extensions/response-targe
 
 ## Reference
 
-- [`muxt generate` flags](../reference/commands/generate.md) — `--output-htmx-helpers` flag
-- [HTMX Example](../examples/htmx/) — Counter app with HTMX helpers
-- [Template Name Syntax](../reference/template-names.md)
+- [`muxt generate` flags](../../reference/commands/generate.md) — `--output-htmx-helpers` flag
+- [HTMX Example](../../examples/htmx/) — Counter app with HTMX helpers
+- [Template Name Syntax](../../reference/template-names.md)
 - [chromedp](https://github.com/chromedp/chromedp) — Headless Chrome for island testing
 
 ### Examples and Test Cases

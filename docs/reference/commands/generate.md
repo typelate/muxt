@@ -157,4 +157,4 @@ Routes(mux, app, "/docs")
 - [Call Parameters](../call-parameters.md) — Method parameter parsing
 - [Call Results](../call-results.md) — Return value handling
 - [Templates Variable](../templates-variable.md) — Template variable requirements
-- [Debug Generation Errors](../../skills/debug-generation-errors.md) — Error reference table
+- [Debug Generation Errors](../../skills/debug-generation-errors/SKILL.md) — Error reference table

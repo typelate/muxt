@@ -31,6 +31,8 @@ const (
 	checkCommandName               = "check"
 	listTemplateCallersCommandName = "list-template-callers"
 	listTemplateCallsCommandName   = "list-template-calls"
+	exploreModuleCommandName       = "explore-module"
+	generateFakeServerCommandName  = "generate-fake-server"
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
@@ -89,6 +91,8 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 		checkCommand(workingDirectory),
 		listTemplateCallersCommand(workingDirectory),
 		listTemplateCallsCommand(workingDirectory),
+		exploreModuleCommand(workingDirectory),
+		generateFakeServerCommand(workingDirectory),
 	)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr
@@ -514,10 +518,10 @@ This function also receives an argument with a type matching the name given by o
 
 const (
 	defaultTemplatesVariableName      = "templates"
-	defaultRoutesFunctionName         = "TemplateRoutes"
+	defaultRoutesFunctionName         = generate.DefaultRoutesFunctionName
 	defaultOutputFileName             = "template_routes.go"
-	defaultReceiverInterfaceName      = "RoutesReceiver"
-	defaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
+	defaultReceiverInterfaceName      = generate.DefaultReceiverInterfaceName
+	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultPackageName                = "main"
 )
@@ -619,6 +623,127 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	if err := flagSet.MarkDeprecated(name, "use --"+replacement+" instead"); err != nil {
 		panic(err)
 	}
+}
+
+func exploreModuleCommand(workingDirectory *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     exploreModuleCommandName,
+		Aliases: []string{"explore"},
+		Short:   "Explore all muxt packages in the module",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			result, err := analysis.NewModule(*workingDirectory, addGenerateFlags)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
+		},
+	}
+
+	cmd.Flags().String("format", "text", "output format (text or json)")
+
+	return cmd
+}
+
+func generateFakeServerCommand(workingDirectory *string) *cobra.Command {
+	var outputDir string
+
+	cmd := &cobra.Command{
+		Use:   generateFakeServerCommandName + " [package-dirs...]",
+		Short: "Generate a fake server main.go for exploring routes (unstable -- do not depend on the fake interface)",
+		Long: `Generate a main.go and internal/fake/receiver.go containing a counterfeiter fake
+and an httptest server for interactively exploring routes. The target package
+must be a library (not main).
+
+WARNING: The generated fake interface is unstable and should not be relied upon.
+This command is intended for exploratory use only.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			mod, err := analysis.NewModule(*workingDirectory, addGenerateFlags)
+			if err != nil {
+				return err
+			}
+
+			if len(args) == 0 {
+				args = []string{*workingDirectory}
+			}
+
+			outDir := outputDir
+			if outDir == "" {
+				outDir = filepath.Join(*workingDirectory, "cmd", "explore-goland")
+			}
+			if !filepath.IsAbs(outDir) {
+				outDir = filepath.Join(*workingDirectory, outDir)
+			}
+
+			relOutDir, err := filepath.Rel(mod.ModuleDir, outDir)
+			if err != nil {
+				return fmt.Errorf("computing fake import path: %w", err)
+			}
+			fakeImportPath := mod.ModulePath + "/" + filepath.ToSlash(relOutDir) + "/internal/fake"
+
+			for _, arg := range args {
+				dir := arg
+				if !filepath.IsAbs(dir) {
+					dir = filepath.Join(*workingDirectory, dir)
+				}
+
+				var pkg *analysis.PackageInfo
+				for i := range mod.Packages {
+					if mod.Packages[i].Dir == dir {
+						pkg = &mod.Packages[i]
+						break
+					}
+				}
+				if pkg == nil {
+					return fmt.Errorf("no muxt-generated package found at %s", dir)
+				}
+
+				_, pl, err := asteval.LoadPackages(pkg.Dir)
+				if err != nil {
+					return err
+				}
+
+				config := generate.FakeServerConfig{
+					PackagePath:       pkg.Path,
+					PackageDir:        pkg.Dir,
+					RoutesFunction:    pkg.Config.RoutesFunction,
+					ReceiverInterface: pkg.Config.ReceiverInterface,
+					Logger:            pkg.Config.Logger,
+					PathPrefix:        pkg.Config.PathPrefix,
+					FakeImportPath:    fakeImportPath,
+				}
+
+				files, err := generate.GenerateFakeServer(config, pl)
+				if err != nil {
+					return err
+				}
+
+				fakeDir := filepath.Join(outDir, "internal", "fake")
+				if err := os.MkdirAll(fakeDir, 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(outDir, "main.go"), files.Main, 0o644); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(fakeDir, "receiver.go"), files.Fake, 0o644); err != nil {
+					return err
+				}
+
+				relOut, err := filepath.Rel(*workingDirectory, outDir)
+				if err != nil {
+					relOut = outDir
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Run: go run ./%s\n", relOut)
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "output directory (default: ./cmd/explore-goland)")
+
+	return cmd
 }
 
 func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
