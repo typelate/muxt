@@ -84,9 +84,9 @@ See Go's [log/slog documentation](https://pkg.go.dev/log/slog) and [structured l
 
 ## Reference
 
-- [Call Results](../reference/call-results.md)
-- [Template Name Syntax](../reference/template-names.md)
-- [CLI Commands](../reference/cli.md)
+- [Call Results](../../reference/call-results.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [CLI Commands](../../reference/cli.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

@@ -233,40 +233,10 @@ If you switch output strategies, delete the old generated files manually or let 
 
 ## Finding Duplicates and Coupling
 
-Use `muxt list-template-calls` and `muxt list-template-callers` with `--format json` and jq to analyze template relationships before refactoring.
-
-### List All Route Templates
+Run the analysis script to list all routes, find duplicates, and identify shared sub-templates (requires jq):
 
 ```bash
-muxt list-template-callers --format json | jq '[.Templates[].Name]'
-```
-
-### Find Duplicate Route Patterns
-
-Two templates with the same HTTP method + path cause a panic at registration. Find them before `go generate`:
-
-```bash
-muxt list-template-callers --format json | jq '
-  [.Templates[].Name
-   | select(test("^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) "))
-  ] | group_by(split(" ") | .[0:2] | join(" "))
-    | map(select(length > 1))
-    | .[]
-'
-```
-
-### Find Sub-templates Shared by Multiple Routes
-
-Shared sub-templates create coupling between routes. Before renaming or removing a sub-template, check which routes depend on it:
-
-```bash
-muxt list-template-calls --format json | jq '
-  [.Templates[]
-   | select(.Name | test("^(GET|POST|PUT|PATCH|DELETE) "))
-   | {route: .Name, refs: [.References[].Name]}
-  ] | [.[].refs[]]
-    | group_by(.) | map(select(length > 1)) | map(.[0])
-'
+bash ${CLAUDE_SKILL_DIR}/scripts/analyze-templates.sh
 ```
 
 ### Find All Callers of a Sub-template
@@ -292,10 +262,10 @@ muxt list-template-calls --match "SubmitFormEditRow" --format json | jq '
 
 ## Reference
 
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [Template Name Syntax](../reference/template-names.md)
-- [Debug Generation Errors](debug-generation-errors.md) — When refactoring triggers errors
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Debug Generation Errors](../debug-generation-errors/SKILL.md) — When refactoring triggers errors
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

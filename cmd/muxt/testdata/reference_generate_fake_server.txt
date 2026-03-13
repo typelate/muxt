@@ -1,0 +1,114 @@
+# Test generate-fake-server generates a working fake server
+
+cd hypertext
+
+muxt generate
+
+cd ..
+
+muxt generate-fake-server hypertext
+
+exists cmd/explore-goland/main.go
+exists cmd/explore-goland/internal/fake/receiver.go
+
+cp server_test.go cmd/explore-goland/server_test.go
+
+exec go test -count=1 ./cmd/explore-goland/
+
+-- go.mod --
+module example.com
+
+go 1.24
+
+-- hypertext/template.go --
+package hypertext
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	templateFiles embed.FS
+
+	templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+)
+-- hypertext/index.gohtml --
+{{define "GET /{$}"}}
+<h1>Hello</h1>
+{{end}}
+-- hypertext/about.gohtml --
+{{define "GET /about"}}
+<h1>About</h1>
+{{end}}
+-- server_test.go --
+package main
+
+import (
+	"bufio"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+)
+
+func TestFakeServer(t *testing.T) {
+	binPath := filepath.Join(t.TempDir(), "server")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binPath, ".")
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		t.Fatal("build:", err)
+	}
+
+	cmd := exec.CommandContext(t.Context(), binPath)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal("start:", err)
+	}
+	defer func() {
+		_ = cmd.Process.Signal(syscall.SIGINT)
+		_ = cmd.Wait()
+	}()
+
+	scanner := bufio.NewScanner(stdout)
+	if !scanner.Scan() {
+		t.Fatal("no output from server")
+	}
+	_, serverURL, found := strings.Cut(scanner.Text(), "Explore at: ")
+	if !found {
+		t.Fatalf("unexpected first line: %q", scanner.Text())
+	}
+
+	tests := []struct {
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		{"/", http.StatusOK, "Hello"},
+		{"/about", http.StatusOK, "About"},
+		{"/nonexistent", http.StatusNotFound, ""},
+	}
+	for _, tt := range tests {
+		resp, err := http.Get(serverURL + tt.path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", tt.path, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != tt.wantStatus {
+			t.Errorf("GET %s: status %d, want %d", tt.path, resp.StatusCode, tt.wantStatus)
+		}
+		if tt.wantBody != "" && !strings.Contains(string(body), tt.wantBody) {
+			t.Errorf("GET %s: body %q does not contain %q", tt.path, body, tt.wantBody)
+		}
+	}
+}

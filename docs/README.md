@@ -40,18 +40,19 @@ Type-safe HTTP handlers from Go HTML templates.
 
 Claude Code skills for working with Muxt:
 
-- **[explore-from-route.md](skills/explore-from-route.md)** - Trace from a URL path to its template and receiver method
-- **[explore-from-method.md](skills/explore-from-method.md)** - Find which routes and templates use a receiver method
-- **[explore-from-error.md](skills/explore-from-error.md)** - Trace an error message back to its handler and template
-- **[explore-repo-overview.md](skills/explore-repo-overview.md)** - Map all routes, templates, and the receiver type
-- **[template-driven-development.md](skills/template-driven-development.md)** - Create new templates and methods using TDD
-- **[forms.md](skills/forms.md)** - Form creation, struct binding, validation, and accessible form HTML
-- **[debug-generation-errors.md](skills/debug-generation-errors.md)** - Diagnose and fix `muxt generate` / `muxt check` errors
-- **[refactoring.md](skills/refactoring.md)** - Rename methods, change patterns, move templates safely
-- **[htmx.md](skills/htmx.md)** - Explore, develop, and test HTMX interactions
-- **[integrate-existing-project.md](skills/integrate-existing-project.md)** - Add Muxt to an existing Go web application
-- **[sqlc.md](skills/sqlc.md)** - Use Muxt with sqlc for type-safe SQL + HTML
-- **[goland-gotype.md](skills/goland-gotype.md)** - Add gotype comments for GoLand IDE support (GoLand-only)
+- **[explore-from-route](skills/explore-from-route/SKILL.md)** - Trace from a URL path to its template and receiver method
+- **[explore-from-method](skills/explore-from-method/SKILL.md)** - Find which routes and templates use a receiver method
+- **[explore-from-error](skills/explore-from-error/SKILL.md)** - Trace an error message back to its handler and template
+- **[explore-repo-overview](skills/explore-repo-overview/SKILL.md)** - Map all routes, templates, and the receiver type
+- **[template-driven-development](skills/template-driven-development/SKILL.md)** - Create new templates and methods using TDD
+- **[forms](skills/forms/SKILL.md)** - Form creation, struct binding, validation, and accessible form HTML
+- **[debug-generation-errors](skills/debug-generation-errors/SKILL.md)** - Diagnose and fix `muxt generate` / `muxt check` errors
+- **[refactoring](skills/refactoring/SKILL.md)** - Rename methods, change patterns, move templates safely
+- **[htmx](skills/htmx/SKILL.md)** - Explore, develop, and test HTMX interactions
+- **[integrate-existing-project](skills/integrate-existing-project/SKILL.md)** - Add Muxt to an existing Go web application
+- **[sqlc](skills/sqlc/SKILL.md)** - Use Muxt with sqlc for type-safe SQL + HTML
+- **[goland-gotype](skills/goland-gotype/SKILL.md)** - Add gotype comments for GoLand IDE support (GoLand-only)
+- **[maintain-tools](skills/maintain-tools/SKILL.md)** - Install and update muxt, gofumpt, counterfeiter, and other tools
 
 ---
 

@@ -67,14 +67,48 @@ Use gopls to inspect types referenced in the template:
 2. **Go to Definition** on form struct types if the template handles `POST` with form binding
 3. **Package API** for any imported types used as parameters or return values
 
+## Step 5: Explore the Route Interactively (Optional)
+
+To see what a route renders, generate a fake server and set up return values for the method:
+
+```bash
+muxt generate-fake-server path/to/package
+```
+
+Edit `./cmd/explore-goland/main.go` to configure the fake receiver with test data:
+
+```go
+receiver := new(fake.RoutesReceiver)
+receiver.GetArticleReturns(hypertext.Article{
+    ID: 1, Title: "Example Article", Body: "Content here",
+}, nil)
+```
+
+Run the server and browse to the route:
+
+```bash
+go run ./cmd/explore-goland/
+```
+
+Use Chrome DevTools MCP to inspect what the template renders with the fake data:
+
+```
+navigate_page({"url": "http://127.0.0.1:<port>/article/1"})
+take_snapshot({})
+take_screenshot({})
+```
+
+Modify the return values in `main.go` to test different states (errors, empty data, edge cases) and re-run.
+
 ## Reference
 
-- [Template Name Syntax](../reference/template-names.md)
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [CLI Commands](../reference/cli.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [CLI Commands](../../reference/cli.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 
 - `reference_list_template_calls.txt` — `muxt list-template-calls` output format
 - `howto_list_template_calls.txt` — Using `--match` flag to filter template calls
+- `reference_generate_fake_server.txt` — `muxt generate-fake-server` end-to-end test

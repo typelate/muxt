@@ -46,6 +46,10 @@ const (
 	pathPrefixPathsStructFieldName = "pathsPrefix"
 
 	executeTemplateErrorMessage = "failed to render page"
+
+	DefaultRoutesFunctionName         = "TemplateRoutes"
+	DefaultReceiverInterfaceName      = "RoutesReceiver"
+	DefaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
 )
 
 type GeneratedFile struct {

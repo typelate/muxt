@@ -7,7 +7,7 @@ description: "Muxt: Use when adding gotype comments to Go HTML templates for Jet
 
 Add `gotype` comments to sub-templates so JetBrains GoLand can provide IDE completion and type checking for dot context fields.
 
-**This is a GoLand-only feature.** `muxt check` has its own static analysis and does not use `gotype` comments. See [Type Checking](../reference/type-checking.md) and [`muxt check`](../reference/commands/check.md).
+**This is a GoLand-only feature.** `muxt check` has its own static analysis and does not use `gotype` comments. See [Type Checking](../../reference/type-checking.md) and [`muxt check`](../../reference/commands/check.md).
 
 ## Syntax
 
@@ -54,9 +54,9 @@ Add `gotype` when all of the following apply:
 
 ## Reference
 
-- [Type Checking](../reference/type-checking.md)
-- [`muxt check`](../reference/commands/check.md)
-- [Call Results](../reference/call-results.md)
+- [Type Checking](../../reference/type-checking.md)
+- [`muxt check`](../../reference/commands/check.md)
+- [Call Results](../../reference/call-results.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

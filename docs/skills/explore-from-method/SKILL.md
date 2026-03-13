@@ -57,10 +57,10 @@ Open the `.gohtml` file(s) to see how the method's return value is rendered:
 
 ## Reference
 
-- [Template Name Syntax](../reference/template-names.md)
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [CLI Commands](../reference/cli.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [CLI Commands](../../reference/cli.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

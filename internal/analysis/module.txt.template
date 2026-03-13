@@ -1,0 +1,37 @@
+Module: {{.ModulePath}}
+{{range .Packages}}
+Package: {{.Path}}
+  Dir: {{.Dir}}
+{{- with .MuxtVersion}}
+  Muxt Version: {{.}}
+{{- end}}
+
+  Config:
+    Routes Function:    {{.Config.RoutesFunction}}
+    Receiver Interface: {{.Config.ReceiverInterface}}
+{{- with .Config.ReceiverType}}
+    Receiver Type:      {{.}}
+{{- end}}
+{{- with .Config.ReceiverPackage}}
+    Receiver Package:   {{.}}
+{{- end}}
+    Route Paths Type:   {{.Config.TemplateRoutePathsType}}
+{{- if .Config.HTMXHelpers}}
+    HTMX Helpers:       true
+{{- end}}
+
+  Commands:
+    List Routes: {{.Commands.ListRoutes}}
+    Calls:       {{.Commands.Calls}}
+    Callers:     {{.Commands.Callers}}
+    Check:       {{.Commands.Check}}
+    Generate:    {{.Commands.Generate}}
+{{- with .ExternalAssets}}
+
+  External Assets:
+{{- range .}}
+    {{.URL}}
+      {{.File}}:{{.Line}}:{{.StartCol}}
+{{- end}}
+{{- end}}
+{{end}}
