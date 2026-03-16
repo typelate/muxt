@@ -265,7 +265,7 @@ func (s *Server) GetArticle(ctx context.Context, id int64) (database.Article, er
 
 The user sees "Not Found" or "Internal Server Error". The log captures the real database error. Muxt sets the HTTP status code from `StatusCode()`.
 
-See [Domain Errors with HTTP Semantics](../explanation/advanced-patterns.md) for more patterns (validation errors, authorization errors, multiple error states).
+See [Domain Errors with HTTP Semantics](../../explanation/advanced-patterns.md) for more patterns (validation errors, authorization errors, multiple error states).
 
 ## Testing with a Real Database
 
@@ -476,8 +476,8 @@ Use chromedp for targeted island tests only. Prefer `domtest` for everything els
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) — Pure Go SQLite driver (no CGo)
 - [pgtestdb](https://github.com/peterldowns/pgtestdb) — Isolated test databases for PostgreSQL
 - [OWASP Error Handling Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html) — Why not to leak errors
-- [Domain Errors with HTTP Semantics](../explanation/advanced-patterns.md) — Error wrapping patterns
+- [Domain Errors with HTTP Semantics](../../explanation/advanced-patterns.md) — Error wrapping patterns
 - [chromedp](https://github.com/chromedp/chromedp) — Headless Chrome for island testing
 - [domtest](https://github.com/typelate/dom) — HTML assertion library
-- [Template-Driven Development](template-driven-development.md) — TDD workflow
-- [Call Parameters](../reference/call-parameters.md) — How `form` parameters work
+- [Template-Driven Development](../muxt_test-driven-development/SKILL.md) — TDD workflow
+- [Call Parameters](../../reference/call-parameters.md) — How `form` parameters work

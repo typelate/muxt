@@ -274,7 +274,7 @@ The result type carries per-field errors while `.Request.FormValue` preserves th
 
 For standard HTML forms, rely on the supported HTML5 validation attributes for client-side validation. These provide immediate browser feedback without extra endpoints. Muxt generates matching server-side checks for the supported subset — write tests to verify the behavior you depend on, especially for attributes muxt does not enforce.
 
-For per-field inline validation (validating individual fields as the user types or tabs away), see [HTMX Inline Validation](htmx.md#inline-field-validation) — that pattern requires HTMX and a dedicated validation endpoint per field.
+For per-field inline validation (validating individual fields as the user types or tabs away), see [HTMX Inline Validation](../muxt_htmx/SKILL.md#inline-field-validation) — that pattern requires HTMX and a dedicated validation endpoint per field.
 
 ## Testing Forms
 
@@ -471,10 +471,10 @@ When the handler returns per-field errors, assert that the re-rendered form show
 
 ## Reference
 
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [Template Name Syntax](../reference/template-names.md)
-- [Template-Driven Development](template-driven-development.md) — TDD workflow for all route types
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Template-Driven Development](../muxt_test-driven-development/SKILL.md) — TDD workflow for all route types
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

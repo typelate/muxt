@@ -292,10 +292,10 @@ muxt list-template-calls --match "SubmitFormEditRow" --format json | jq '
 
 ## Reference
 
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [Template Name Syntax](../reference/template-names.md)
-- [Debug Generation Errors](debug-generation-errors.md) — When refactoring triggers errors
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Debug Generation Errors](../muxt_debug-generation-errors/SKILL.md) — When refactoring triggers errors
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

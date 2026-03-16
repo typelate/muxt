@@ -56,7 +56,7 @@ If the receiver type lives in a different package:
 //go:generate muxt generate --use-receiver-type=Server --use-receiver-type-package=github.com/yourorg/yourapp/internal/domain
 ```
 
-See [Templates Variable](../reference/templates-variable.md) for embedding patterns (subdirectories, custom functions, multiple directories).
+See [Templates Variable](../../reference/templates-variable.md) for embedding patterns (subdirectories, custom functions, multiple directories).
 
 ## Step 3: Write Templates and Receiver Methods
 
@@ -94,7 +94,7 @@ func (s *Server) Dashboard(ctx context.Context) (DashboardData, error) {
 
 Use concrete return types (not `any`). Return `(T, error)` for fallible operations.
 
-See [Template-Driven Development](template-driven-development.md) for the full TDD workflow.
+See [Template-Driven Development](../muxt_test-driven-development/SKILL.md) for the full TDD workflow.
 
 ## Step 4: Generate and Wire
 
@@ -190,16 +190,16 @@ func TestDashboardRoute(t *testing.T) {
 }
 ```
 
-See [Template-Driven Development](template-driven-development.md) for the full testing workflow.
+See [Template-Driven Development](../muxt_test-driven-development/SKILL.md) for the full testing workflow.
 
 ## Reference
 
-- [CLI Commands](../reference/cli.md)
-- [Template Name Syntax](../reference/template-names.md)
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [Templates Variable](../reference/templates-variable.md)
-- [Package Structure](../explanation/package-structure.md)
+- [CLI Commands](../../reference/cli.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [Templates Variable](../../reference/templates-variable.md)
+- [Package Structure](../../explanation/package-structure.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 

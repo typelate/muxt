@@ -326,7 +326,7 @@ By default, HTMX triggers on `change` for inputs. Add `hx-trigger` for different
 <input name="username" hx-post="/signup/username" hx-trigger="keyup delay:500ms">
 ```
 
-This is an HTMX-specific pattern. For standard HTML forms without HTMX, rely on HTML5 validation attributes (`required`, `pattern`, `min`/`max`) for client-side feedback, and handle validation errors on the full form submission. See [Forms](forms.md#re-rendering-after-validation-errors).
+This is an HTMX-specific pattern. For standard HTML forms without HTMX, rely on HTML5 validation attributes (`required`, `pattern`, `min`/`max`) for client-side feedback, and handle validation errors on the full form submission. See [Forms](../muxt_forms/SKILL.md#re-rendering-after-validation-errors).
 
 See [HTMX inline validation example](https://htmx.org/examples/inline-validation/).
 
@@ -355,9 +355,9 @@ See [HTMX response-targets extension](https://htmx.org/extensions/response-targe
 
 ## Reference
 
-- [`muxt generate` flags](../reference/commands/generate.md) — `--output-htmx-helpers` flag
-- [HTMX Example](../examples/htmx/) — Counter app with HTMX helpers
-- [Template Name Syntax](../reference/template-names.md)
+- [`muxt generate` flags](../../reference/commands/generate.md) — `--output-htmx-helpers` flag
+- [HTMX Example](../../examples/htmx/) — Counter app with HTMX helpers
+- [Template Name Syntax](../../reference/template-names.md)
 - [chromedp](https://github.com/chromedp/chromedp) — Headless Chrome for island testing
 
 ### Examples and Test Cases

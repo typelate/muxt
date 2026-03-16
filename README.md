@@ -146,19 +146,19 @@ Claude Code skills for working with Muxt codebases:
 
 | Skill | Use Case |
 |-------|----------|
-| [explore-from-route](docs/skills/explore-from-route/SKILL.md) | Trace from a URL path to its template and receiver method |
-| [explore-from-method](docs/skills/explore-from-method/SKILL.md) | Find which routes and templates use a receiver method |
-| [explore-from-error](docs/skills/explore-from-error/SKILL.md) | Trace an error message back to its handler and template |
-| [explore-repo-overview](docs/skills/explore-repo-overview/SKILL.md) | Map all routes, templates, and the receiver type |
-| [template-driven-development](docs/skills/template-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
-| [forms](docs/skills/forms/SKILL.md) | Form creation, struct binding, validation, and accessible form HTML |
-| [debug-generation-errors](docs/skills/debug-generation-errors/SKILL.md) | Diagnose and fix `muxt generate` / `muxt check` errors |
-| [refactoring](docs/skills/refactoring/SKILL.md) | Rename methods, change patterns, move templates safely |
-| [htmx](docs/skills/htmx/SKILL.md) | Explore, develop, and test HTMX interactions |
-| [integrate-existing-project](docs/skills/integrate-existing-project/SKILL.md) | Add Muxt to an existing Go web application |
-| [sqlc](docs/skills/sqlc/SKILL.md) | Use Muxt with sqlc for type-safe SQL + HTML |
-| [goland-gotype](docs/skills/goland-gotype/SKILL.md) | Add gotype comments for GoLand IDE support (GoLand-only) |
-| [maintain-tools](docs/skills/maintain-tools/SKILL.md) | Install and update muxt, gofumpt, counterfeiter, and other tools |
+| [explore-from-route](docs/skills/muxt_explore-from-route/SKILL.md) | Trace from a URL path to its template and receiver method |
+| [explore-from-method](docs/skills/muxt_explore-from-method/SKILL.md) | Find which routes and templates use a receiver method |
+| [explore-from-error](docs/skills/muxt_explore-from-error/SKILL.md) | Trace an error message back to its handler and template |
+| [explore-repo-overview](docs/skills/muxt_explore-repo-overview/SKILL.md) | Map all routes, templates, and the receiver type |
+| [template-driven-development](docs/skills/muxt_test-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
+| [forms](docs/skills/muxt_forms/SKILL.md) | Form creation, struct binding, validation, and accessible form HTML |
+| [debug-generation-errors](docs/skills/muxt_debug-generation-errors/SKILL.md) | Diagnose and fix `muxt generate` / `muxt check` errors |
+| [refactoring](docs/skills/muxt_refactoring/SKILL.md) | Rename methods, change patterns, move templates safely |
+| [htmx](docs/skills/muxt_htmx/SKILL.md) | Explore, develop, and test HTMX interactions |
+| [integrate-existing-project](docs/skills/muxt_integrate-existing-project/SKILL.md) | Add Muxt to an existing Go web application |
+| [sqlc](docs/skills/muxt_sqlc/SKILL.md) | Use Muxt with sqlc for type-safe SQL + HTML |
+| [goland-gotype](docs/skills/muxt_goland-gotype/SKILL.md) | Add gotype comments for GoLand IDE support (GoLand-only) |
+| [maintain-tools](docs/skills/muxt_maintain-tools/SKILL.md) | Install and update muxt, gofumpt, counterfeiter, and other tools |
 
 Install as Claude Code skills:
 

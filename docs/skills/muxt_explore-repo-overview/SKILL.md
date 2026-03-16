@@ -48,7 +48,7 @@ muxt list-template-calls | wc -l
 muxt list-template-callers | wc -l
 ```
 
-If the output is large, use `--match` to focus on a specific area of interest (see the [explore-from-route](../explore-from-route/SKILL.md) and [explore-from-method](../explore-from-method/SKILL.md) skills). Or page through it:
+If the output is large, use `--match` to focus on a specific area of interest (see the [explore-from-route](../muxt_explore-from-route/SKILL.md) and [explore-from-method](../muxt_explore-from-method/SKILL.md) skills). Or page through it:
 
 ```bash
 muxt list-template-calls | head -50

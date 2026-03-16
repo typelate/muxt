@@ -69,10 +69,10 @@ Use gopls to inspect types referenced in the template:
 
 ## Reference
 
-- [Template Name Syntax](../reference/template-names.md)
-- [Call Parameters](../reference/call-parameters.md)
-- [Call Results](../reference/call-results.md)
-- [CLI Commands](../reference/cli.md)
+- [Template Name Syntax](../../reference/template-names.md)
+- [Call Parameters](../../reference/call-parameters.md)
+- [Call Results](../../reference/call-results.md)
+- [CLI Commands](../../reference/cli.md)
 
 ### Test Cases (`cmd/muxt/testdata/`)
 
