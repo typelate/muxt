@@ -129,7 +129,7 @@ type CreateArticleParams struct {
 
 Name your HTML form `input` fields to match these struct fields. Muxt parses form data into the struct automatically:
 
-```gotemplate
+```gotmpl
 {{define "POST /article 201 CreateArticle(ctx, form)"}}
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>
@@ -139,7 +139,7 @@ Name your HTML form `input` fields to match these struct fields. Muxt parses for
 {{end}}
 ```
 
-```html
+```gotmpl
 <form method="post" action="{{$.Path.CreateArticle}}">
   <input name="Title" type="text">
   <textarea name="Body"></textarea>
@@ -186,7 +186,7 @@ func (s *Server) ListArticles(ctx context.Context) ([]database.Article, error) {
 
 Templates access the generated struct fields directly:
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>

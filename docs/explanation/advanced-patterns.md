@@ -37,7 +37,7 @@ func (data *TemplateData[T]) ErrorStatusCode() *TemplateData[T] {
 ```
 
 **Usage in templates:**
-```gotemplate
+```gotmpl
 {{define "GET /portfolio/{id} GetPortfolio(ctx, id)"}}
 {{if .CanEditPortfolio .Result}}
   <button hx-get="/portfolio/{{.Result.ID}}/edit">Edit</button>
@@ -258,7 +258,7 @@ func dateOnlyFn(t time.Time) string {
 ```
 
 **Usage:**
-```gotemplate
+```gotmpl
 {{define "GET /report/{id} GetReport(ctx, id)"}}
 <p>Return: {{.Result.Return | percent true}}</p>
 <p>Balance: {{.Result.Balance | dollars}}</p>

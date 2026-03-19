@@ -119,7 +119,7 @@ Run `go generate ./...` followed by `go build` or `go test` to see the compiler 
 
 **Fix:** Match the template arguments to the method parameters (or vice versa based on what was changed more recently):
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 ```
 
@@ -185,7 +185,7 @@ func (s Server) Home(ctx context.Context) HomePage { ... }
 
 **Fix:** Each route pattern must be unique. Rename or remove the duplicate:
 
-```gotemplate
+```gotmpl
 {{/* These conflict: */}}
 {{define "GET / Greetings()"}}...{{end}}
 {{define "GET / Welcome()"}}...{{end}}
@@ -212,7 +212,7 @@ type Article struct {
 }
 ```
 
-```gotemplate
+```gotmpl
 {{/* Wrong: */}}
 <h1>{{.Result.Name}}</h1>
 

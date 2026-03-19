@@ -46,7 +46,7 @@ gopls implementation template_routes.go:21:2
 
 Change the method name in every template that calls it:
 
-```gotemplate
+```gotmpl
 {{/* Before */}}
 {{define "GET /article/{id} GetArticle(ctx, id)"}}...{{end}}
 
@@ -105,7 +105,7 @@ go test ./...
 
 ### 1. Update the Template Name
 
-```gotemplate
+```gotmpl
 {{/* Before */}}
 {{define "GET /article/{id} GetArticle(ctx, id)"}}...{{end}}
 
@@ -119,7 +119,7 @@ If the parameter name or type changes, update the method signature too.
 
 Search templates for `$.Path.GetArticle` and update the arguments:
 
-```gotemplate
+```gotmpl
 {{/* Before */}}
 <a href="{{$.Path.GetArticle 42}}">View</a>
 
@@ -194,7 +194,7 @@ This tells Muxt to look up the receiver type in a different package than the tem
 
 1. Add the parameter to the template call expression:
 
-```gotemplate
+```gotmpl
 {{/* Before */}}
 {{define "GET /article/{id} GetArticle(ctx, id)"}}...{{end}}
 

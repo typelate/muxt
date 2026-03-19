@@ -25,7 +25,7 @@ func (s Server) About() AboutPage {
     return AboutPage{Version: s.version}
 }
 ```
-```gotemplate
+```gotmpl
 {{define "GET /about About()"}}
 <h1>{{.Result.Version}}</h1>
 {{end}}
@@ -46,7 +46,7 @@ func (s Server) GetUser(ctx context.Context, id int) (User, error) {
     return user, nil
 }
 ```
-```gotemplate
+```gotmpl
 {{define "GET /user/{id} GetUser(ctx, id)"}}
 {{with $err := .Err}}
   <div class="error">{{$err.Error}}</div>
@@ -93,7 +93,7 @@ func (s Server) Healthcheck() error {
     return nil
 }
 ```
-```gotemplate
+```gotmpl
 {{define "GET /health Healthcheck()"}}
 {{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK{{end}}
 {{end}}
@@ -124,7 +124,7 @@ Templates receive `TemplateData[T]` where `T` is the method's first return value
 
 `TemplateData` implements `fmt.Stringer` returning an empty string. This allows methods that return `*TemplateData` (like `.Header()` and `.StatusCode()`) to be called directly in templates without outputting anything:
 
-```gotemplate
+```gotmpl
 {{.Header "HX-Trigger" "contact-sent"}}
 ```
 
@@ -135,7 +135,7 @@ To access the receiver method's return value, use `{{.Result}}` explicitly.
 [reference_template_data_stringer.txt](../../cmd/muxt/testdata/reference_template_data_stringer.txt)
 
 **Chaining examples:**
-```gotemplate
+```gotmpl
 {{with and (.StatusCode 404) (.Header "X-Error" "not-found")}}
   <div>User not found</div>
 {{end}}
@@ -188,7 +188,7 @@ type UserResult struct {
 ```
 
 **Template status override:**
-```gotemplate
+```gotmpl
 {{if .Err}}
   {{with .StatusCode 404}}
     <div>Not found</div>
@@ -201,7 +201,7 @@ Prefer template name for static codes (201 for POST). Use error/result types for
 ## Request Access in Templates
 
 **Access headers, URL, cookies:**
-```gotemplate
+```gotmpl
 {{define "GET /profile Profile(ctx)"}}
 {{if .Request.Header.Get "HX-Request"}}
   <div>{{.Result.Name}}</div>  <!-- HTMX partial -->
@@ -212,7 +212,7 @@ Prefer template name for static codes (201 for POST). Use error/result types for
 ```
 
 **Path parameters:**
-```gotemplate
+```gotmpl
 {{define "GET /user/{id} GetUser(ctx, id)"}}
 <p>User ID from path: {{.Path "id"}}</p>
 <h1>{{.Result.Name}}</h1>

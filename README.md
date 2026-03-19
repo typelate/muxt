@@ -57,7 +57,7 @@ Or add it to your project's module `go get -tool github.com/typelate/muxt` (note
 ## Quick Start
 
 1. Create a template file `index.gohtml`:
-```gotemplate
+```gotmpl
 {{define "GET / Home(ctx)"}}
 <!DOCTYPE html>
 <html>
@@ -96,7 +96,7 @@ Key elements:
 
 Define a template with a route pattern and method call:
 
-```gotemplate
+```gotmpl
 {{define "GET /{id} GetUser(ctx, id)"}}
   {{with $err := .Err}}
     <div class="error" data-type="{{printf `%T` $err}}">{{$err.Error}}</div>

@@ -9,12 +9,12 @@ Complete specification for Muxt template naming. Use when pair programming to va
 ```
 
 **All components:**
-```gotemplate
+```gotmpl
 {{define "GET example.com/greet/{language} 200 Greeting(ctx, language)"}}{{end}}
 ```
 
 **Minimal (path only):**
-```gotemplate
+```gotmpl
 {{define "/"}}{{end}}
 ```
 
@@ -38,7 +38,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 
 ### Basic Paths
 
-```gotemplate
+```gotmpl
 {{define "GET /"}}{{end}}              <!-- Root -->
 {{define "GET /about"}}{{end}}         <!-- Static path -->
 {{define "GET /user/{id}"}}{{end}}     <!-- Path parameter -->
@@ -49,7 +49,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 
 ### Path Matching Modes
 
-```gotemplate
+```gotmpl
 {{define "GET /{$}"}}{{end}}           <!-- Exact: "/" only, not "/foo" -->
 {{define "GET /static/"}}{{end}}       <!-- Prefix: "/static/", "/static/foo", "/static/foo/bar" -->
 {{define "GET /files/{path...}"}}{{end}}  <!-- Wildcard: captures "/files/a/b/c" as path="a/b/c" -->
@@ -61,7 +61,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 
 ### Path Parameters Are Type-Safe
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}{{end}}
 ```
 
@@ -78,7 +78,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 ## HTTP Methods
 
-```gotemplate
+```gotmpl
 {{define "GET /posts"}}{{end}}          <!-- Read -->
 {{define "POST /posts"}}{{end}}         <!-- Create -->
 {{define "PUT /posts/{id}"}}{{end}}     <!-- Replace -->
@@ -94,7 +94,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 **Three formats:**
 
-```gotemplate
+```gotmpl
 {{define "POST /user 201 CreateUser(ctx, form)"}}{{end}}      <!-- Integer with method -->
 {{define "GET /admin http.StatusUnauthorized"}}{{end}}        <!-- Constant -->
 {{define "GET /error 400"}}{{end}}                             <!-- Integer -->
@@ -137,7 +137,7 @@ MethodName(arg1, arg2, ...)
 
 ### Examples
 
-```gotemplate
+```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{end}}
 {{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form fields -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
@@ -151,7 +151,7 @@ Parameter names in template must match method signature exactly. Case-sensitive.
 
 ## Host Matching
 
-```gotemplate
+```gotmpl
 {{define "api.example.com/v1/users ListUsers(ctx)"}}{{end}} <!-- Specific host -->
 {{define "admin.example.com/ AdminHome(ctx)"}}{{end}}       <!-- Admin subdomain -->
 {{define "example.com/{$} Home(ctx)"}}{{end}}               <!-- Exact host + path -->
@@ -162,7 +162,7 @@ Host patterns enable multi-tenant apps or API versioning by subdomain. Omit host
 ## Common Patterns
 
 **REST resources:**
-```gotemplate
+```gotmpl
 {{define "GET /posts ListPosts(ctx)"}}{{end}}
 {{define "POST /posts 201 CreatePost(ctx, form)"}}{{end}}
 {{define "GET /posts/{id} GetPost(ctx, id)"}}{{end}}
@@ -171,17 +171,17 @@ Host patterns enable multi-tenant apps or API versioning by subdomain. Omit host
 ```
 
 **Nested resources:**
-```gotemplate
+```gotmpl
 {{define "GET /users/{userID}/posts/{postID} GetUserPost(ctx, userID, postID)"}}{{end}}
 ```
 
 **File serving:**
-```gotemplate
+```gotmpl
 {{define "GET /static/ ServeStatic(response, request)"}}{{end}}
 ```
 
 **Wildcards for paths:**
-```gotemplate
+```gotmpl
 {{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}  <!-- path captures "a/b/c.txt" -->
 ```
 

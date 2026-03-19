@@ -21,7 +21,7 @@ func (s Server) GetUser(ctx context.Context) (User, error) {
     return User{Name: "Alice", Email: "alice@example.com"}, nil
 }
 ```
-```gotemplate
+```gotmpl
 {{define "GET /user GetUser(ctx)"}}
 <h1>{{.Result.Name}}</h1>       <!-- OK: User has Name field -->
 <p>{{.Result.Email}}</p>        <!-- OK: User has Email field -->
@@ -35,7 +35,7 @@ func (s Server) GetData(ctx context.Context) (any, error) {
     return SomeData{}, nil
 }
 ```
-```gotemplate
+```gotmpl
 {{define "GET /data GetData(ctx)"}}
 {{.Result.Anything}}  <!-- No error: any disables type checking -->
 {{end}}
@@ -109,7 +109,7 @@ func (s Server) GetPost(ctx context.Context, id int) (Post, error) {
 ```
 
 **Template:**
-```gotemplate
+```gotmpl
 {{define "GET /posts/{id} GetPost(ctx, id)"}}
 <h1>{{.Result.Title}}</h1>         <!-- OK -->
 <p>By {{.Result.Author}}</p>       <!-- OK -->

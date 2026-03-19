@@ -35,7 +35,7 @@ go generate ./...
 
 Start with the template name (route pattern + call) and body:
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 {{with $err := .Err}}
   <div class="error">{{$err.Error}}</div>
@@ -153,7 +153,7 @@ func (s Server) DeleteArticle(ctx context.Context, id int) error {
 
 ### 2. Write the Template
 
-```gotemplate
+```gotmpl
 {{define "DELETE /article/{id} DeleteArticle(ctx, id)"}}
 {{if .Err}}
   <div role="alert">{{.Err.Error}}</div>
@@ -210,7 +210,7 @@ See [Call Results Reference](../../reference/call-results.md) for the full table
 Four ways to set HTTP status codes, in order of precedence:
 
 **1. Template name** (static, most common):
-```gotemplate
+```gotmpl
 {{define "POST /user 201 CreateUser(ctx, form)"}}...{{end}}
 ```
 
@@ -232,7 +232,7 @@ type UserResult struct {
 ```
 
 **4. In template** (for error cases):
-```gotemplate
+```gotmpl
 {{with and (.StatusCode 404) .Err}}<div>Not found</div>{{end}}
 ```
 
@@ -254,7 +254,7 @@ Methods that need `response http.ResponseWriter` or `request *http.Request` can 
 
 Use a high-level template for error checking, delegating the happy path to a sub-template:
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>
@@ -277,7 +277,7 @@ This keeps route templates focused on control flow and sub-templates focused on 
 
 Break large templates into focused sub-templates:
 
-```gotemplate
+```gotmpl
 {{define "GET /dashboard Dashboard(ctx)"}}
 {{if .Err}}
   {{template "error" .Err}}
@@ -296,7 +296,7 @@ Each sub-template can be tested independently.
 
 Use `$.Path` in templates for `href` and `action` attributes instead of hardcoded strings. `TemplateRoutes` returns a `TemplateRoutePaths` value, and each route template gets access to it via `.Path`:
 
-```gotemplate
+```gotmpl
 {{define "GET /{$} Home(ctx)"}}
 <nav>
   <a href="{{$.Path.ListArticles}}">Articles</a>
