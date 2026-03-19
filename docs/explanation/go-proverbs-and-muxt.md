@@ -46,7 +46,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 
 Your templates check for errors and decide how to present them:
 
-```gotemplate
+```gotmpl
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>
 {{else}}
@@ -76,7 +76,7 @@ Compare this to a runtime dependency where you're stuck with whatever behavior t
 
 Template names are both design and documentation:
 
-```gotemplate
+```gotmpl
 {{define "POST /user 201 CreateUser(ctx, username, email)"}}
 ```
 

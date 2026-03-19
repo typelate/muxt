@@ -7,14 +7,14 @@ Current limitations and workarounds for Muxt.
 **Issue:** Template HTML must be valid for form validation generation.
 
 **Not allowed (invalid HTML):**
-```gotemplate
+```gotmpl
 <details {{if .Open}}open{{end}}>
     <p>Content</p>
 </details>
 ```
 
 **Workaround:**
-```gotemplate
+```gotmpl
 {{define "content"}}<p>Content</p>{{end}}
 
 {{if .Open}}
@@ -25,7 +25,7 @@ Current limitations and workarounds for Muxt.
 ```
 
 **Allowed (actions in attribute values):**
-```gotemplate
+```gotmpl
 <div title="{{.HelpText}}" class="{{.ClassName}}">
     <p>Content</p>
 </div>
@@ -49,7 +49,7 @@ type Data struct {
     User any  // Disables checking
 }
 ```
-```gotemplate
+```gotmpl
 {{.Result.User.AnythingHere}}  <!-- No error, even if invalid -->
 ```
 
@@ -86,7 +86,7 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 **Issue:** Nested `{{template}}` or `{{block}}` calls may not preserve full type context.
 
 **Example:**
-```gotemplate
+```gotmpl
 {{define "user"}}
 <div>{{.Name}}</div>  <!-- Type checking depends on caller context -->
 {{end}}

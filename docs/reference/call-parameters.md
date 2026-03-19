@@ -21,7 +21,7 @@ Parameter names in template call must match method signature exactly.
 
 **Without `--use-receiver-type`:** Path params are `string`, return types are `any`
 
-```gotemplate
+```gotmpl
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}
 ```
 ```go
@@ -82,7 +82,7 @@ func (id *UserID) UnmarshalText(text []byte) error {
 ## Form Parameters
 
 **Generic url.Values for fields:**
-```gotemplate
+```gotmpl
 {{define "POST /login Login(ctx, form)"}}{{end}}
 ```
 ```go
@@ -94,7 +94,7 @@ func (s Server) Login(ctx context.Context, form url.Values) (Session, error) {
 [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt)
 
 **Struct binding:**
-```gotemplate
+```gotmpl
 {{define "POST /login Login(ctx, form)"}}{{end}}
 ```
 ```go
@@ -124,7 +124,7 @@ Struct field names must match form field names exactly (case-sensitive) unless u
 ## Advanced Patterns
 
 **Mixing path, form, and special parameters:**
-```gotemplate
+```gotmpl
 {{define "POST /user/{id}/update UpdateUser(ctx, id, form)"}}{{end}}
 ```
 ```go

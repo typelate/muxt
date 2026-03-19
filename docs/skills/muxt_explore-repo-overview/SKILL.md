@@ -72,7 +72,7 @@ Look for two patterns:
 
 The `.Path` method is available on `TemplateData` in every route template. Each route with a call expression gets a corresponding method on `TemplateRoutePaths`:
 
-```gotemplate
+```gotmpl
 {{define "GET /{$} Home(ctx)"}}
   <a href="{{$.Path.ListUsers}}">Users</a>
   <a href="{{$.Path.GetUser 42}}">User 42</a>

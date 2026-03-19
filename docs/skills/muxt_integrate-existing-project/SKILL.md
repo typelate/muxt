@@ -62,7 +62,7 @@ See [Templates Variable](../../reference/templates-variable.md) for embedding pa
 
 Create a route template (`internal/hypertext/dashboard.gohtml`):
 
-```gotemplate
+```gotmpl
 {{define "GET /dashboard Dashboard(ctx)"}}
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>

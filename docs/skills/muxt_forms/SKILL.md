@@ -51,7 +51,7 @@ type FilterForm struct {
 
 Use a `form` parameter in the call expression. The status code is optional (defaults to 200):
 
-```gotemplate
+```gotmpl
 {{define "POST /article 201 CreateArticle(ctx, form)"}}...{{end}}
 {{define "PATCH /article/{id} UpdateArticle(ctx, id, form)"}}...{{end}}
 {{define "POST /contact SendMessage(form)"}}...{{end}}
@@ -63,7 +63,7 @@ The `form` parameter tells Muxt to parse the request body as form data and bind 
 
 Use semantic HTML with proper labeling, ARIA attributes, and validation feedback:
 
-```gotemplate
+```gotmpl
 {{define "POST /article 201 CreateArticle(ctx, form)"}}
 {{if .Err}}
   <div role="alert" aria-live="polite">
@@ -79,7 +79,7 @@ Use semantic HTML with proper labeling, ARIA attributes, and validation feedback
 
 Use `<label>` with `for`/`id` pairs. Add `aria-describedby` for help text and `aria-invalid` for error states:
 
-```gotemplate
+```gotmpl
 <form method="post" action="{{$.Path.CreateArticle}}">
   <div>
     <label for="title">Title</label>
@@ -120,7 +120,7 @@ Use `<label>` with `for`/`id` pairs. Add `aria-describedby` for help text and `a
 
 For slice fields, use a `<fieldset>` with a `<legend>`:
 
-```gotemplate
+```gotmpl
 <fieldset>
   <legend>Categories</legend>
   <div>
@@ -157,7 +157,7 @@ These common HTML5 validation attributes are **not** enforced server-side by mux
 - `accept` — file input types not validated
 - `multiple` — not validated
 
-```gotemplate
+```gotmpl
 <input name="Age" type="number" min="0" max="150"
        aria-describedby="age-help">
 <p id="age-help">Age must be between 0 and 150.</p>
@@ -169,7 +169,7 @@ These common HTML5 validation attributes are **not** enforced server-side by mux
 
 When validation fails, the generated handler returns HTTP 400 with an error message. Display it with `role="alert"`:
 
-```gotemplate
+```gotmpl
 {{if .Err}}
 <div role="alert" aria-live="polite">
   <p>{{.Err.Error}}</p>
@@ -237,7 +237,7 @@ func (s Server) UpdateArticle(ctx context.Context, id int, form UpdateArticleFor
 
 The template reads submitted values from the request and displays per-field errors:
 
-```gotemplate
+```gotmpl
 {{define "PATCH /article/{id} UpdateArticle(ctx, id, form)"}}
 {{if .Err}}
   <div role="alert"><p>{{.Err.Error}}</p></div>

@@ -45,7 +45,7 @@ Muxt takes this further: when you read the **template**, you see:
 
 Everything you need is right there. In the template name.
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 <article>
     <header>

@@ -85,7 +85,7 @@ Use these to detect HTMX requests and branch template output:
 
 Use `.HXRequest` to return fragments for HTMX and full pages for direct navigation:
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 {{if .HXRequest}}
   {{template "article-content" .}}
@@ -266,7 +266,7 @@ HTMX enables per-field validation by sending individual field values to the serv
 
 Add `hx-post` to an input's wrapping `<div>`. Use `hx-target="this"` and `hx-swap="outerHTML"` so the server response replaces the entire field container:
 
-```gotemplate
+```gotmpl
 {{define "GET /contact Contact(ctx)"}}
 <form hx-post="{{$.Path.SubmitContact}}">
   <div hx-target="this" hx-swap="outerHTML">
@@ -283,7 +283,7 @@ Add `hx-post` to an input's wrapping `<div>`. Use `hx-target="this"` and `hx-swa
 
 The validation endpoint receives the request, checks the field, and returns the same container with error or success styling:
 
-```gotemplate
+```gotmpl
 {{define "POST /contact/email ValidateEmail(request)"}}
 <div hx-target="this" hx-swap="outerHTML">
   <label for="email">Email</label>

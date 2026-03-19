@@ -13,7 +13,7 @@ Add `gotype` comments to sub-templates so JetBrains GoLand can provide IDE compl
 
 Place a `gotype` comment as the first line inside a template definition:
 
-```gotemplate
+```gotmpl
 {{define "article-card"}}
 {{- /* gotype: example.com/hypertext.Article */ -}}
 <div class="card">
@@ -34,7 +34,7 @@ Add `gotype` when all of the following apply:
 
 ## Example
 
-```gotemplate
+```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
 {{if .Err}}
   <div class="error">{{.Err.Error}}</div>
