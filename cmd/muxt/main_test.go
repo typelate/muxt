@@ -34,7 +34,7 @@ func TestDocumentation(t *testing.T) {
 	t.Run("check example", func(t *testing.T) {
 		ctx := t.Context()
 		buf := bytes.NewBuffer(nil)
-		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/htmx"), "check")
+		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/counter-htmx"), "check")
 		cmd.Dir = "."
 		cmd.Stderr = buf
 		cmd.Stdout = buf
