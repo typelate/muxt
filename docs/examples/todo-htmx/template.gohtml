@@ -1,0 +1,103 @@
+{{define "imports"}}
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/todomvc-app-css@2.4.3/index.css"
+	      integrity="sha384-ePF14pqs5v8ylPpSy0zJxjZ6BkFLzj5Z7f+MBj/vU24JQTFe4UhqiGudkC8w341i"
+	      crossorigin="anonymous">
+	<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"
+	        integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm"
+	        crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/htmx-ext-response-targets@2.0.2/response-targets.js"
+	        integrity="sha384-NtTh9TBZ2X/pFpfsVvQOjSsYWmjmqG6h5ioQWVAe2/j3AuTHRmfqvoqp+iOed+I0"
+	        crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/htmx-ext-remove-me@2.0.2/dist/remove-me.js"
+	        integrity="sha384-Z8DDWoBYcKh0UQZnwNp9+6+bOqAGG3EQF8mEiv2vR8sUXSIoJ1s6FKjaWyDRGU1e"
+	        crossorigin="anonymous"></script>
+{{end}}
+
+{{define "error"}}
+<div id="error" class="error-banner"
+     style="background: #b83f45; color: white; padding: 10px 16px; text-align: center; font-size: 14px;"
+     data-remove-me="5s">{{.}}</div>
+{{end}}
+
+{{define "todo-item"}}
+<li id="todo-{{.ID}}" class="{{if .Done}}completed{{end}}">
+	<div class="view">
+		<input class="toggle" type="checkbox" {{if .Done}}checked{{end}}
+		       hx-patch="/todos/{{.ID}}" hx-target="#todo-{{.ID}}" hx-swap="outerHTML"
+		       hx-target-4*="#error" hx-swap-4*="innerHTML">
+		<label>{{.Title}}</label>
+		<button class="destroy" hx-delete="/todos/{{.ID}}" hx-target="#todo-{{.ID}}" hx-swap="delete"
+		        hx-target-4*="#error" hx-swap-4*="innerHTML"></button>
+	</div>
+</li>
+{{end}}
+
+{{define "footer"}}
+<footer id="footer" class="footer" hx-swap-oob="true">
+	<span class="todo-count"><strong>{{.ItemsLeft}}</strong> {{if eq .ItemsLeft 1}}item{{else}}items{{end}} left</span>
+	<ul class="filters">
+		<li><a href="/" class="{{if eq .Filter ""}}selected{{end}}">All</a></li>
+		<li><a href="/?filter=active" class="{{if eq .Filter "active"}}selected{{end}}">Active</a></li>
+		<li><a href="/?filter=completed" class="{{if eq .Filter "completed"}}selected{{end}}">Completed</a></li>
+	</ul>
+	{{if .HasCompleted}}<button class="clear-completed" hx-post="/todos/clear-completed" hx-target="#todo-list" hx-swap="innerHTML">Clear completed</button>{{end}}
+</footer>
+{{end}}
+
+{{define "GET /{$} ListTodos(form)"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Muxt • TodoMVC</title>
+	{{template "imports"}}
+</head>
+<body hx-ext="response-targets,remove-me">
+	<section class="todoapp">
+		<header class="header">
+			<h1>todos</h1>
+			<div id="error"></div>
+			<form hx-post="/todos" hx-target="#todo-list" hx-swap="beforeend" hx-on::after-request="if(event.detail.successful) this.reset()">
+				<input class="new-todo" name="todo" placeholder="What needs to be done?" autofocus>
+			</form>
+		</header>
+		<section class="main">
+			<input id="toggle-all" class="toggle-all" type="checkbox" {{if .Result.AllDone}}checked{{end}}
+			       hx-post="/todos/toggle-all" hx-target="#todo-list" hx-swap="innerHTML">
+			<label for="toggle-all">Mark all as complete</label>
+			<ul id="todo-list" class="todo-list">
+				{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
+			</ul>
+		</section>
+		{{template "footer" .Result}}
+	</section>
+</body>
+</html>
+{{end}}
+
+{{define "POST /todos CreateTodo(form)"}}
+{{template "todo-item" .Result.Todo}}
+{{template "footer" .Result}}
+{{end}}
+
+{{define "PATCH /todos/{id} ToggleTodo(id)"}}
+{{- if .Err}}{{.StatusCode 404}}{{template "error" .Err}}
+{{- else}}
+{{template "todo-item" .Result.Todo}}
+{{template "footer" .Result}}
+{{- end}}
+{{end}}
+
+{{define "DELETE /todos/{id} DeleteTodo(id)"}}
+{{template "footer" .Result}}
+{{end}}
+
+{{define "POST /todos/toggle-all ToggleAll()"}}
+{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
+{{template "footer" .Result}}
+{{end}}
+
+{{define "POST /todos/clear-completed ClearCompleted()"}}
+{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
+{{template "footer" .Result}}
+{{end}}

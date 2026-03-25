@@ -7,7 +7,7 @@ import (
 )
 
 func TestGoVet(t *testing.T) {
-	for _, dir := range []string{"counter-htmx", "simple"} {
+	for _, dir := range []string{"counter-htmx", "simple", "todo-htmx"} {
 		t.Run(dir, func(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), "go", "vet", "./...")
 			var buf bytes.Buffer
