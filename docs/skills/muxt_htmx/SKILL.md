@@ -356,13 +356,13 @@ See [HTMX response-targets extension](https://htmx.org/extensions/response-targe
 ## Reference
 
 - [`muxt generate` flags](../../reference/commands/generate.md) — `--output-htmx-helpers` flag
-- [HTMX Example](../../examples/htmx/) — Counter app with HTMX helpers
+- [HTMX Example](../../examples/counter-htmx/) — Counter app with HTMX helpers
 - [Template Name Syntax](../../reference/template-names.md)
 - [chromedp](https://github.com/chromedp/chromedp) — Headless Chrome for island testing
 
 ### Examples and Test Cases
 
-- `docs/examples/htmx/` — Complete counter app demonstrating `--output-htmx-helpers`
+- `docs/examples/counter-htmx/` — Complete counter app demonstrating `--output-htmx-helpers`
 - `cmd/muxt/testdata/reference_htmx_helpers.txt` — `--output-htmx-helpers` flag, HX-Request detection, response header assertions
 - `cmd/muxt/testdata/howto_form_basic.txt` — Form binding (relevant to HTMX POST patterns)
 - `cmd/muxt/testdata/reference_status_codes.txt` — Status codes (relevant to HTMX response handling)
