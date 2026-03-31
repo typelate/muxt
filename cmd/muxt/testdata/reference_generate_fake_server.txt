@@ -19,7 +19,6 @@ exec go test -count=1 ./cmd/explore-goland/
 module example.com
 
 go 1.24
-
 -- hypertext/template.go --
 package hypertext
 
