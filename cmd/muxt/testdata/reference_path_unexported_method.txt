@@ -1,0 +1,61 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+cat template_routes.go
+stdout 'func \(routePaths TemplateRoutePaths\) ListItems\(\) string'
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "GET /items listItems(ctx)" }}
+	<h1>Items</h1>
+{{end}}
+
+-- go.mod --
+module example.com
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) listItems(_ context.Context) string { return "items" }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/items", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	res := rec.Result()
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	path := TemplateRoutePaths{}.ListItems()
+	if path != "/items" {
+		t.Errorf("TemplateRoutePaths{}.ListItems() = %q, want %q", path, "/items")
+	}
+}
