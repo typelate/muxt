@@ -9,6 +9,8 @@ import (
 	"go/types"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -49,8 +51,12 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	textMarshalerUnderlying := textMarshalerType.Underlying()
 	textMarshalerInterface := textMarshalerUnderlying.(*types.Interface)
 
+	ident := def.Identifier()
+	r, size := utf8.DecodeRuneInString(ident)
+	ident = string(utf8.AppendRune(nil, unicode.ToUpper(r))) + ident[size:]
+
 	method := &ast.FuncDecl{
-		Name: ast.NewIdent(def.Identifier()),
+		Name: ast.NewIdent(ident),
 		Recv: &ast.FieldList{
 			List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent(methodReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
