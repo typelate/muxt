@@ -98,6 +98,21 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 
 **Workaround:** Pass data explicitly and ensure subtemplates don't assume specific types.
 
+## TemplateRoutePaths Method Name Collision
+
+**Issue:** `TemplateRoutePaths` methods are always exported so they can be called from templates. This has two consequences:
+
+1. **Collision:** If a receiver has both an exported and unexported handler method that differ only in the first letter's case (e.g., `List` and `list`), generation fails because both would produce the same `TemplateRoutePaths.List()` method.
+2. **Unexportable identifiers:** Handler methods starting with `_` (e.g., `_list`) cannot be exported, so generation fails.
+
+**Errors:**
+- `TemplateRoutePaths method name collision: handlers list and List both produce method List`
+- `cannot export identifier "_list" for TemplateRoutePaths method: first character '_' has no uppercase form`
+
+**Fix:** Rename the handler method to start with a letter.
+
+**Test files:** `err_path_method_collision.txt`, `err_path_method_unexportable.txt`
+
 ## Reporting Issues
 
 Found a limitation not listed here? [Open an issue](https://github.com/typelate/muxt/issues/new) with:

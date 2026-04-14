@@ -1,0 +1,30 @@
+! muxt generate --use-receiver-type=T
+
+stderr 'cannot export identifier "_list" for TemplateRoutePaths method'
+
+-- template.gohtml --
+{{define "GET /items _list(ctx)" }}
+	<ul></ul>
+{{end}}
+
+-- go.mod --
+module example.com
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) _list(_ context.Context) []string { return nil }

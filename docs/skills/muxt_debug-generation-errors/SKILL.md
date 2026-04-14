@@ -232,6 +232,26 @@ type Article struct {
 
 **Test files:** `err_check_with_unused_template.txt`, `err_check_with_dead_code_outside_define.txt`
 
+### Path Method Name Collision
+
+**Error:** `TemplateRoutePaths method name collision: handlers list and List both produce method List`
+
+**Cause:** Two handler methods differ only in the case of the first letter (e.g., `list` and `List`). Since `TemplateRoutePaths` methods are always exported for template access, both would produce the same method name.
+
+**Fix:** Rename one of the handler methods so they don't collide after capitalization.
+
+**Test file:** `err_path_method_collision.txt`
+
+### Unexportable Path Method Identifier
+
+**Error:** `cannot export identifier "_list" for TemplateRoutePaths method: first character '_' has no uppercase form`
+
+**Cause:** The handler method starts with a character that has no uppercase form (e.g., `_`). `TemplateRoutePaths` methods must be exported for template access.
+
+**Fix:** Rename the handler method to start with a letter.
+
+**Test file:** `err_path_method_unexportable.txt`
+
 ### CLI Errors
 
 **Error:** `unknown command` or `unknown flag`
@@ -273,3 +293,5 @@ type Article struct {
 | Unknown flag | `err_unknown_flag.txt` |
 | Invalid identifier flag | `err_invalid_identifier_flag.txt` |
 | Invalid output filename | `err_invalid_output_filename.txt` |
+| Path method name collision | `err_path_method_collision.txt` |
+| Unexportable path method | `err_path_method_unexportable.txt` |
