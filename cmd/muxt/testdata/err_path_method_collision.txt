@@ -1,6 +1,6 @@
 ! muxt generate --use-receiver-type=T
 
-stderr 'TemplateRoutePaths method name collision: handlers list and List both produce method List'
+stderr 'TemplateRoutePaths method name collision: handlers List and List both produce method List'
 
 -- template.gohtml --
 {{define "GET /items list(ctx)" }}

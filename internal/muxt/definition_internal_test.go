@@ -115,6 +115,109 @@ func mustNewTemplateName(in ...string) []Definition {
 	return result
 }
 
+func TestCalculateIdentifiers(t *testing.T) {
+	for _, tt := range []struct {
+		Name     string
+		In       []string
+		Expected []string
+	}{
+		{
+			Name:     "no functions",
+			In:       []string{"GET /articles", "POST /articles"},
+			Expected: []string{"ReadArticles", "CreateArticles"},
+		},
+		{
+			Name:     "unique function names",
+			In:       []string{"GET /articles Article()", "POST /articles Create()"},
+			Expected: []string{"Article", "Create"},
+		},
+		{
+			Name:     "lowercase function name is exported",
+			In:       []string{"GET /endpoint x()"},
+			Expected: []string{"X"},
+		},
+		{
+			Name:     "lowercase duplicate function name is exported in Calling suffix",
+			In:       []string{"GET /endpoint x()", "POST /endpoint x()"},
+			Expected: []string{"ReadEndpointCallingX", "CreateEndpointCallingX"},
+		},
+		{
+			Name:     "duplicate function at index 0 duplicated later",
+			In:       []string{"GET /articles Article()", "POST /articles Article()"},
+			Expected: []string{"ReadArticlesCallingArticle", "CreateArticlesCallingArticle"},
+		},
+		{
+			Name: "no-function routes before duplicate function (reproduces panic)",
+			In: []string{
+				"GET /",
+				"POST /",
+				"GET /articles",
+				"POST /articles",
+				"GET /articles/{id}",
+				"PUT /articles/{id}",
+				"DELETE /articles/{id}",
+				"GET /articles/{id}/comments",
+				"POST /articles/{id}/comments",
+				"GET /articles/{id}/comments/{commentId}",
+				"PUT /articles/{id}/comments/{commentId}",
+				"GET /search Article()",
+				"POST /search Article()",
+			},
+			Expected: []string{
+				"ReadIndex",
+				"CreateIndex",
+				"ReadArticles",
+				"CreateArticles",
+				"ReadArticlesByID",
+				"ReplaceArticlesByID",
+				"DeleteArticlesByID",
+				"ReadArticlesCommentsByID",
+				"CreateArticlesCommentsByID",
+				"ReadArticlesCommentsByIDAndCommentID",
+				"ReplaceArticlesCommentsByIDAndCommentID",
+				"ReadSearchCallingArticle",
+				"CreateSearchCallingArticle",
+			},
+		},
+		{
+			Name: "three or more routes calling the same function",
+			In: []string{
+				"GET /a Article()",
+				"POST /a Article()",
+				"PUT /a Article()",
+			},
+			Expected: []string{
+				"ReadACallingArticle",
+				"CreateACallingArticle",
+				"ReplaceACallingArticle",
+			},
+		},
+		{
+			Name: "no-function before first occurrence, then duplicate",
+			In: []string{
+				"GET /",
+				"GET /articles Article()",
+				"POST /articles Article()",
+			},
+			Expected: []string{
+				"ReadIndex",
+				"ReadArticlesCallingArticle",
+				"CreateArticlesCallingArticle",
+			},
+		},
+	} {
+		t.Run(tt.Name, func(t *testing.T) {
+			defs := mustNewTemplateName(tt.In...)
+			calculateIdentifiers(defs)
+			got := make([]string, len(defs))
+			for i, d := range defs {
+				got[i] = d.identifier
+			}
+			assert.Equal(t, tt.Expected, got)
+		})
+	}
+}
+
 func TestNewTemplateName(t *testing.T) {
 	for _, tt := range []struct {
 		Name         string
