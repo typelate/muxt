@@ -29,7 +29,16 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 			},
 		},
 	}
+	seen := make(map[string]string, len(defs))
 	for _, t := range defs {
+		exported, err := exportIdentifier(t.Identifier())
+		if err != nil {
+			return nil, err
+		}
+		if prev, ok := seen[exported]; ok {
+			return nil, fmt.Errorf("TemplateRoutePaths method name collision: handlers %s and %s both produce method %s", prev, t.Identifier(), exported)
+		}
+		seen[exported] = t.Identifier()
 		decl, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
@@ -51,9 +60,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	textMarshalerUnderlying := textMarshalerType.Underlying()
 	textMarshalerInterface := textMarshalerUnderlying.(*types.Interface)
 
-	ident := def.Identifier()
-	r, size := utf8.DecodeRuneInString(ident)
-	ident = string(utf8.AppendRune(nil, unicode.ToUpper(r))) + ident[size:]
+	ident, err := exportIdentifier(def.Identifier())
+	if err != nil {
+		return nil, err
+	}
 
 	method := &ast.FuncDecl{
 		Name: ast.NewIdent(ident),
@@ -236,4 +246,13 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	method.Type.Params.List = fields
 
 	return method, nil
+}
+
+func exportIdentifier(s string) (string, error) {
+	r, size := utf8.DecodeRuneInString(s)
+	exported := string(utf8.AppendRune(nil, unicode.ToUpper(r))) + s[size:]
+	if !token.IsExported(exported) {
+		return "", fmt.Errorf("cannot export identifier %q for TemplateRoutePaths method: first character %q has no uppercase form", s, r)
+	}
+	return exported, nil
 }

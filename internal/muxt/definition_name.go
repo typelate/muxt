@@ -71,36 +71,42 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 	return sb.String()
 }
 
+func (def Definition) exportedFunctionName() string {
+	if def.fun == nil || def.fun.Name == "" {
+		return ""
+	}
+	return strcase.ToGoPascal(def.fun.Name)
+}
+
 func calculateIdentifiers(in []Definition) {
 	var (
-		sb     strings.Builder
-		idents = make([]string, 0, len(in))
-		dupes  []string
+		sb    strings.Builder
+		dupes []string
 	)
 	for i, t := range in {
-		if t.fun != nil && t.fun.Name != "" {
-			ident := t.fun.Name
-			if j := slices.Index(idents, ident); j > 0 {
-				routePrev := in[j].generateEndpointPatternIdentifier(&sb)
-				idents[i] = routePrev + "Calling" + ident
-				route := t.generateEndpointPatternIdentifier(&sb)
-				idents = append(idents, route+"Calling"+t.fun.Name)
-				dupes = append(dupes, idents[j])
-				in[i].identifier = ident
-				continue
-			}
-			if slices.Contains(dupes, ident) {
-				route := t.generateEndpointPatternIdentifier(&sb)
-				idents = append(idents, route+"Calling"+t.fun.Name)
-				in[i].identifier = ident
-				continue
-			}
-			idents = append(idents, t.fun.Name)
-			in[i].identifier = ident
+		if t.fun == nil || t.fun.Name == "" {
+			in[i].identifier = t.generateEndpointPatternIdentifier(&sb)
 			continue
 		}
-		ident := t.generateEndpointPatternIdentifier(&sb)
-		in[i].identifier = ident
+		ident := t.fun.Name
+		exported := t.exportedFunctionName()
+		if slices.Contains(dupes, ident) {
+			route := t.generateEndpointPatternIdentifier(&sb)
+			in[i].identifier = route + "Calling" + exported
+			continue
+		}
+		j := slices.IndexFunc(in[:i], func(d Definition) bool {
+			return d.fun != nil && d.fun.Name == ident
+		})
+		if j >= 0 {
+			routePrev := in[j].generateEndpointPatternIdentifier(&sb)
+			in[j].identifier = routePrev + "Calling" + exported
+			route := t.generateEndpointPatternIdentifier(&sb)
+			in[i].identifier = route + "Calling" + exported
+			dupes = append(dupes, ident)
+			continue
+		}
+		in[i].identifier = exported
 	}
 }
 
