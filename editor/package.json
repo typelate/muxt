@@ -1,0 +1,57 @@
+{
+  "name": "muxt-gohtml",
+  "displayName": "Go HTML Templates (muxt)",
+  "description": "Syntax highlighting for Go HTML templates with muxt route pattern support",
+  "version": "0.1.0",
+  "publisher": "typelate",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/typelate/muxt"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "go",
+    "golang",
+    "html",
+    "template",
+    "gohtml",
+    "muxt"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "gotemplate",
+        "aliases": ["Go Template"],
+        "extensions": [".gotmpl", ".tmpl"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "gohtml",
+        "aliases": ["Go HTML Template"],
+        "extensions": [".gohtml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gotemplate",
+        "scopeName": "source.gotemplate",
+        "path": "./syntaxes/gotemplate.tmLanguage.json"
+      },
+      {
+        "language": "gohtml",
+        "scopeName": "text.html.gohtml",
+        "path": "./syntaxes/gohtml.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.gotemplate": "gotemplate"
+        }
+      }
+    ]
+  }
+}
