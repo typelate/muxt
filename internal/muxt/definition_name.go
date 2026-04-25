@@ -47,7 +47,7 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 				continue
 			}
 			if pathSegment == "$" {
-				sb.WriteString("Index")
+				sb.WriteString("Exact")
 				continue
 			}
 			pathSegment = strings.TrimRight(pathSegment, ".")

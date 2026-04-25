@@ -57,8 +57,14 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 			In:  "/peach/{peachID}/pear/{pearID}/plum",
 		},
 		{
-			Out: "PeachPearPlumIndexByPeachIDAndPearID",
+			Out: "PeachPearPlumExactByPeachIDAndPearID",
 			In:  "/peach/{peachID}/pear/{pearID}/plum/{$}",
+		},
+		{
+			// Regression: GET / and GET /{$} are distinct routes in
+			// http.ServeMux and must produce distinct generated identifiers.
+			Out: "ReadExact",
+			In:  "GET /{$}",
 		},
 		{
 			Out: "PlumPrune",
