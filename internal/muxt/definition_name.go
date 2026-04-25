@@ -46,7 +46,7 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 			if len(pathSegment) == 0 {
 				continue
 			}
-			if pathSegment == "$" {
+			if isPathParam && pathSegment == "$" {
 				sb.WriteString("Exact")
 				continue
 			}
