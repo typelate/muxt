@@ -82,6 +82,7 @@ These flags control the names of generated types and functions:
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
+| `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
 
 #### Deprecated Flags
 

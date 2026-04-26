@@ -1,0 +1,84 @@
+# --output-multipart-max-memory sets the ParseMultipartForm maxMemory.
+# A request larger than the configured limit should not crash the handler;
+# the handler can still process it (overflow goes to disk via temp files),
+# so this test asserts the literal in the generated code reflects the flag.
+
+muxt generate --use-receiver-type=T --output-multipart-max-memory=1024
+muxt check
+
+grep 'ParseMultipartForm\(1024\)' template_routes.go
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>{{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	File *multipart.FileHeader `name:"file"`
+}
+
+type T struct{}
+
+func (T) Upload(form UploadForm) int {
+	if form.File == nil {
+		return 0
+	}
+	return 1
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test_under_limit(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	fw, err := w.CreateFormFile("file", "small.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("ok")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Result().StatusCode, http.StatusCreated)
+	}
+}

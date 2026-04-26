@@ -1,0 +1,83 @@
+# A url-encoded POST to a multipart route should not 400.
+# ParseMultipartForm returns http.ErrNotMultipart for non-multipart bodies but
+# still populates request.PostForm via its internal ParseForm call. The
+# generated handler exempts ErrNotMultipart from the error capture, so text
+# fields bind normally and file fields stay nil.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>{{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	Title  string                `name:"title"`
+	Avatar *multipart.FileHeader `name:"avatar"`
+}
+
+type T struct {
+	spy func(UploadForm) string
+}
+
+func (t T) Upload(form UploadForm) string {
+	return t.spy(form)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func Test_url_encoded_to_multipart_route(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	service.spy = func(form UploadForm) string {
+		if form.Title != "hello" {
+			t.Errorf("Title = %q, want %q", form.Title, "hello")
+		}
+		if form.Avatar != nil {
+			t.Errorf("Avatar = %+v, want nil for url-encoded post", form.Avatar)
+		}
+		return form.Title
+	}
+
+	TemplateRoutes(mux, service)
+
+	body := url.Values{"title": {"hello"}}.Encode()
+	req := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader(body))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Result().StatusCode, http.StatusCreated; got != want {
+		t.Errorf("status = %d, want %d (url-encoded POST should not be rejected as 400)", got, want)
+	}
+}

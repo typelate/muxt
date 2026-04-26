@@ -1,0 +1,82 @@
+# Raw mode: receiver method takes *multipart.Form directly
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>{{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct {
+	spy func(*multipart.Form) int
+}
+
+func (t T) Upload(form *multipart.Form) int {
+	return t.spy(form)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	service.spy = func(form *multipart.Form) int {
+		if form == nil {
+			t.Fatal("expected non-nil *multipart.Form")
+		}
+		if got := len(form.Value["title"]); got != 1 || form.Value["title"][0] != "hi" {
+			t.Errorf("Value[title] = %v, want [hi]", form.Value["title"])
+		}
+		return len(form.Value)
+	}
+
+	TemplateRoutes(mux, service)
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	if err := w.WriteField("title", "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Result().StatusCode, http.StatusCreated)
+	}
+}

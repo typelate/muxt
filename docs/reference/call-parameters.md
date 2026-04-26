@@ -9,7 +9,8 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `ctx` | `context.Context` | `request.Context()` | N/A | Need request context (always recommended first param) |
 | `request` | `*http.Request` | Direct | N/A | Need headers, cookies, or full request |
 | `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
-| `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once |
+| `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
+| `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
 
@@ -121,6 +122,55 @@ Struct field names must match form field names exactly (case-sensitive) unless u
 
 [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) · [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt)
 
+## Multipart Parameters
+
+Use `multipart` instead of `form` when the request body is `multipart/form-data` — required for `<input type="file">` uploads. Muxt calls `request.ParseMultipartForm` and binds both text fields and file fields.
+
+`form` and `multipart` are **mutually exclusive** in the same call — `ParseMultipartForm` populates `request.PostForm`, so `multipart` is a strict superset of `form` for routes that accept multipart bodies.
+
+**Struct binding with file fields:**
+```gotmpl
+{{define "POST /upload 201 Upload(ctx, multipart)"}}{{end}}
+```
+```go
+import "mime/multipart"
+
+type UploadForm struct {
+    Title  string                  `name:"title"`
+    Tags   []string                `name:"tag"`
+    Avatar *multipart.FileHeader   `name:"avatar"`  // single file
+    Photos []*multipart.FileHeader `name:"photos"`  // multiple files for the same name
+}
+
+func (s Server) Upload(ctx context.Context, form UploadForm) (Result, error) {
+    f, err := form.Avatar.Open()
+    if err != nil { return Result{}, err }
+    defer f.Close()
+    // ... read and store the file ...
+}
+```
+
+[howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) · [reference_multipart_basic.txt](../../cmd/muxt/testdata/reference_multipart_basic.txt) · [reference_multipart_multiple_files.txt](../../cmd/muxt/testdata/reference_multipart_multiple_files.txt) · [reference_multipart_mixed.txt](../../cmd/muxt/testdata/reference_multipart_mixed.txt)
+
+**Raw `*multipart.Form` access:**
+```gotmpl
+{{define "POST /upload Upload(ctx, multipart)"}}{{end}}
+```
+```go
+func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
+    for name, files := range form.File { ... }
+    return nil
+}
+```
+
+[reference_multipart_raw.txt](../../cmd/muxt/testdata/reference_multipart_raw.txt)
+
+**Max upload size:** Defaults to 32 MiB. Override with `--output-multipart-max-memory=<size>` (e.g. `64MB`, `128MiB`). Data exceeding this limit spills to the OS temp directory per the standard `mime/multipart` semantics.
+
+**Parse errors:** Malformed multipart bodies are captured into `td.errList` with `td.errStatusCode = http.StatusBadRequest` (unlike `form`, which silently ignores parse errors).
+
+[reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
+
 ## Advanced Patterns
 
 **Mixing path, form, and special parameters:**
@@ -197,6 +247,17 @@ Validation errors should return from your method. Display them in templates with
 - [reference_form_field_types.txt](../../cmd/muxt/testdata/reference_form_field_types.txt) — All supported field types
 - [reference_form_with_empty_struct.txt](../../cmd/muxt/testdata/reference_form_with_empty_struct.txt) — Empty struct edge case
 - [err_form_unsupported_field_type.txt](../../cmd/muxt/testdata/err_form_unsupported_field_type.txt) — Unsupported types
+
+**Multipart (`multipart/form-data`, file uploads):**
+- [howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) — End-to-end file upload walkthrough
+- [reference_multipart_basic.txt](../../cmd/muxt/testdata/reference_multipart_basic.txt) — Single `*multipart.FileHeader` field
+- [reference_multipart_multiple_files.txt](../../cmd/muxt/testdata/reference_multipart_multiple_files.txt) — `[]*multipart.FileHeader` field
+- [reference_multipart_mixed.txt](../../cmd/muxt/testdata/reference_multipart_mixed.txt) — Mixed text + slice + file fields
+- [reference_multipart_raw.txt](../../cmd/muxt/testdata/reference_multipart_raw.txt) — Raw `*multipart.Form` mode
+- [reference_multipart_with_name_tag.txt](../../cmd/muxt/testdata/reference_multipart_with_name_tag.txt) — `name` tag rebind
+- [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) — `--output-multipart-max-memory` flag
+- [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt) — Malformed body → 400
+- [err_multipart_with_form.txt](../../cmd/muxt/testdata/err_multipart_with_form.txt) — `form` + `multipart` rejected
 
 **Multiple arguments:**
 - [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple params

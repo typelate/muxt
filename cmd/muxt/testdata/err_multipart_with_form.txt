@@ -1,0 +1,39 @@
+# Using form and multipart in the same call site is rejected
+
+! muxt generate --use-receiver-type=T
+stderr 'has both "form" and "multipart" arguments'
+
+-- in.go --
+package main
+
+import "mime/multipart"
+
+type (
+	T  struct{}
+	In struct {
+		Title string
+	}
+)
+
+func (T) Upload(form In, m *multipart.Form) int { return 0 }
+
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+
+-- go.mod --
+module example.com
+
+go 1.22
+
+-- template.gohtml --
+{{define "POST / Upload(form, multipart)" }}<p>{{.}}</p>{{end}}

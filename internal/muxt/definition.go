@@ -344,6 +344,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 const (
 	TemplateNameScopeIdentifierContext      = "ctx"
 	TemplateNameScopeIdentifierForm         = "form"
+	TemplateNameScopeIdentifierMultipart    = "multipart"
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 )
@@ -354,6 +355,7 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierHTTPResponse,
 		TemplateNameScopeIdentifierContext,
 		TemplateNameScopeIdentifierForm,
+		TemplateNameScopeIdentifierMultipart,
 	}
 }
 

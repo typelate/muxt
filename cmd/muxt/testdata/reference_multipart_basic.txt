@@ -1,0 +1,102 @@
+# Receiver method binds a single *multipart.FileHeader field
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>uploaded {{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	Avatar *multipart.FileHeader `name:"avatar"`
+}
+
+type T struct {
+	spy func(UploadForm) string
+}
+
+func (t T) Upload(multipart UploadForm) string {
+	return t.spy(multipart)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	service.spy = func(form UploadForm) string {
+		if form.Avatar == nil {
+			t.Fatalf("expected Avatar file, got nil")
+		}
+		if form.Avatar.Filename != "hello.txt" {
+			t.Errorf("filename = %q, want %q", form.Avatar.Filename, "hello.txt")
+		}
+		f, err := form.Avatar.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		body, _ := io.ReadAll(f)
+		if string(body) != "hi" {
+			t.Errorf("body = %q, want %q", string(body), "hi")
+		}
+		return form.Avatar.Filename
+	}
+
+	TemplateRoutes(mux, service)
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	fw, err := w.CreateFormFile("avatar", "hello.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("hi")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("status = %d %s, want %d", res.StatusCode, http.StatusText(res.StatusCode), http.StatusCreated)
+	}
+}
