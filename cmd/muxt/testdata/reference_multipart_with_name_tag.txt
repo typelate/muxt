@@ -1,0 +1,94 @@
+# name struct tag rebinds the request field name
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>{{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	DisplayName string                `name:"display-name"`
+	Picture     *multipart.FileHeader `name:"profile-picture"`
+}
+
+type T struct {
+	spy func(UploadForm) string
+}
+
+func (t T) Upload(multipart UploadForm) string {
+	return t.spy(multipart)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	service.spy = func(form UploadForm) string {
+		if form.DisplayName != "Ada" {
+			t.Errorf("DisplayName = %q, want Ada", form.DisplayName)
+		}
+		if form.Picture == nil || form.Picture.Filename != "p.png" {
+			t.Errorf("Picture = %+v, want filename p.png", form.Picture)
+		}
+		return form.DisplayName
+	}
+
+	TemplateRoutes(mux, service)
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	if err := w.WriteField("display-name", "Ada"); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := w.CreateFormFile("profile-picture", "p.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("PNGDATA")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Result().StatusCode, http.StatusCreated)
+	}
+}

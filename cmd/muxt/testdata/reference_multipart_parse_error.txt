@@ -1,0 +1,62 @@
+# A malformed multipart body causes ParseMultipartForm to return an error;
+# the generated handler captures it as 400 Bad Request via td.errStatusCode.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>uploaded</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	File *multipart.FileHeader `name:"file"`
+}
+
+type T struct{}
+
+func (T) Upload(form UploadForm) int { return 0 }
+
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test_malformed_body(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	// Claim multipart content-type but send a garbage body.
+	req := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader("not a real multipart body"))
+	req.Header.Set("content-type", `multipart/form-data; boundary=----nope`)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Result().StatusCode, http.StatusBadRequest; got != want {
+		t.Errorf("status = %d, want %d", got, want)
+	}
+}

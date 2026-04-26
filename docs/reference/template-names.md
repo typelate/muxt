@@ -129,9 +129,20 @@ MethodName(arg1, arg2, ...)
 | `ctx` | `context.Context` | `request.Context()` | N/A |
 | `request` | `*http.Request` | Direct | N/A |
 | `response` | `http.ResponseWriter` | Direct | N/A |
-| `form` | struct or `url.Values` | `request.Form` | Yes |
+| `form` | struct or `url.Values` | `request.Form` (after `ParseForm`) | Yes |
+| `multipart` | struct or `*multipart.Form` | `request.MultipartForm` (after `ParseMultipartForm`) | Yes |
 | Path param | Any parseable | `request.PathValue(name)` | Yes |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes |
+
+`form` and `multipart` are mutually exclusive in the same call site. Use
+`form` for routes that handle `application/x-www-form-urlencoded` bodies and
+`multipart` for routes that handle `multipart/form-data` (file uploads, etc.).
+In struct-binding mode, `multipart` additionally supports
+`*multipart.FileHeader` and `[]*multipart.FileHeader` fields, sourced from
+`request.MultipartForm.File`. The default `maxMemory` for `ParseMultipartForm`
+is 32 MiB; override with the `--output-multipart-max-memory=<size>` generator
+flag (e.g. `64MB`, `128MiB`). Per `mime/multipart`'s standard semantics,
+upload data exceeding `maxMemory` spills to the OS temp directory.
 
 **Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
 

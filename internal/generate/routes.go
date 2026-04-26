@@ -75,7 +75,14 @@ type RoutesFileConfiguration struct {
 	OutputMultipleFiles              bool
 	HTMXHelpers                      bool
 	OutputExportedDefaultIdentifiers bool
+	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
+	// Defaults to 32 MiB when zero.
+	MultipartMaxMemory int64
 }
+
+// DefaultMultipartMaxMemory is the default maxMemory value passed to
+// request.ParseMultipartForm when no override is set.
+const DefaultMultipartMaxMemory int64 = 32 << 20
 
 // groupTemplatesBySourceFile groups templates by their sourceFile field.
 // Returns a map where keys are source filenames and values are template slices.
@@ -806,6 +813,20 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 	if parsed == nil {
 		parsed = make(map[string]struct{})
 	}
+	hasForm, hasMultipart := false, false
+	for _, a := range call.Args {
+		if id, ok := a.(*ast.Ident); ok {
+			switch id.Name {
+			case muxt.TemplateNameScopeIdentifierForm:
+				hasForm = true
+			case muxt.TemplateNameScopeIdentifierMultipart:
+				hasMultipart = true
+			}
+		}
+	}
+	if hasForm && hasMultipart {
+		return nil, fmt.Errorf("call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), muxt.TemplateNameScopeIdentifierForm, muxt.TemplateNameScopeIdentifierMultipart)
+	}
 	resultCount := 0
 	for i, a := range call.Args {
 		param := signature.Params().At(i)
@@ -872,6 +893,12 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 							return nil, err
 						}
 						statements = append(statements, callParseForm(), declareFormVar)
+					case muxt.TemplateNameScopeIdentifierMultipart:
+						declareMultipartVar, err := multipartVariableAssignment(file, arg, param.Type())
+						if err != nil {
+							return nil, err
+						}
+						statements = append(statements, callParseMultipartForm(file, config, rdIdent), declareMultipartVar)
 					case muxt.TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
 					default:
@@ -900,6 +927,12 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					return nil, err
 				}
 				statements = s
+			case arg.Name == muxt.TemplateNameScopeIdentifierMultipart:
+				s, err := appendParseMultipartFormToStructStatements(statements, def, file, resultType, arg, param, validationFailureBlock, rdIdent, config)
+				if err != nil {
+					return nil, err
+				}
+				statements = s
 			default:
 				pt, _ := file.TypeASTExpression(param.Type())
 				at, _ := file.TypeASTExpression(argType)
@@ -911,18 +944,33 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 }
 
 func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
-	const parsedVariableName = "value"
-	statements = append(statements, callParseForm())
+	return appendStructFieldParseStatements(statements, def, file, resultType, arg, param, validationBlock, rdIdent, callParseForm(), nil)
+}
 
-	declareFormVar, err := formVariableDeclaration(file, arg, param.Type())
+// fileFieldHandler binds a struct field by name from a non-form-encoded source
+// (e.g. request.MultipartForm.File). It returns the assignment statement and
+// true if it handled the field, or (nil, false) to fall through to text-field
+// parsing. Pass nil to disable file-field handling.
+type fileFieldHandler func(arg *ast.Ident, field *types.Var, inputName string) (ast.Stmt, bool)
+
+// appendStructFieldParseStatements emits per-field parse statements for a
+// receiver method param that is a struct bound to form fields. Used by both
+// `form` (with parseCall = callParseForm() and fileField = nil) and
+// `multipart` (with parseCall = callParseMultipartForm(...) and a fileField
+// closure that recognizes *multipart.FileHeader / []*multipart.FileHeader).
+func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string, parseCall ast.Stmt, fileField fileFieldHandler) ([]ast.Stmt, error) {
+	const parsedVariableName = "value"
+	statements = append(statements, parseCall)
+
+	declareVar, err := formVariableDeclaration(file, arg, param.Type())
 	if err != nil {
 		return nil, err
 	}
-	statements = append(statements, declareFormVar)
+	statements = append(statements, declareVar)
 
 	form, ok := param.Type().Underlying().(*types.Struct)
 	if !ok {
-		return nil, fmt.Errorf("expected form parameter type to be a struct")
+		return nil, fmt.Errorf("expected %s parameter type to be a struct", arg.Name)
 	}
 
 	for i := 0; i < form.NumFields(); i++ {
@@ -931,6 +979,14 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 		if name, found := tags.Lookup(InputAttributeNameStructTag); found {
 			inputName = name
 		}
+
+		if fileField != nil {
+			if stmt, handled := fileField(arg, field, inputName); handled {
+				statements = append(statements, stmt)
+				continue
+			}
+		}
+
 		var fieldTemplate *template.Template
 		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
 			fieldTemplate = def.Template().Lookup(name)
@@ -952,9 +1008,9 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 		case *types.Slice:
 			parseResult = func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}},
 					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}, expr)},
+					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}, expr)},
 				}
 			}
 			str = ast.NewIdent("val")
@@ -965,7 +1021,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 			}
 			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
 			}
 			statements = append(statements, &ast.RangeStmt{
 				Key:   ast.NewIdent("_"),
@@ -977,7 +1033,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 		default:
 			parseResult = func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierForm), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}},
 					Tok: token.ASSIGN,
 					Rhs: []ast.Expr{expr},
 				}
@@ -990,7 +1046,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 			}
 			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for form field %s: %w", field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
 			}
 			if len(parseStatements) > 1 {
 				statements = append(statements, &ast.BlockStmt{
@@ -1003,6 +1059,144 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 	}
 
 	return statements, nil
+}
+
+// appendParseMultipartFormToStructStatements is a thin wrapper over
+// appendStructFieldParseStatements that emits a ParseMultipartForm call and a
+// file-field handler recognizing *multipart.FileHeader and
+// []*multipart.FileHeader fields (sourced from request.MultipartForm.File).
+// All other field-binding behavior is shared with the form codepath.
+func appendParseMultipartFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string, config RoutesFileConfiguration) ([]ast.Stmt, error) {
+	return appendStructFieldParseStatements(statements, def, file, resultType, arg, param, validationBlock, rdIdent, callParseMultipartForm(file, config, rdIdent), multipartFileFieldHandler(file))
+}
+
+// multipartFileFieldHandler returns a fileFieldHandler that binds
+// *multipart.FileHeader and []*multipart.FileHeader struct fields from
+// request.MultipartForm.File. Returns nil if mime/multipart isn't in scope, in
+// which case all fields fall through to text-field parsing.
+func multipartFileFieldHandler(file *File) fileFieldHandler {
+	fileHeaderType, ok := lookupMultipartFileHeaderType(file)
+	if !ok {
+		return nil
+	}
+	return func(arg *ast.Ident, field *types.Var, inputName string) (ast.Stmt, bool) {
+		if isPointerToNamed(field.Type(), fileHeaderType) {
+			return fileHeaderSingleAssignment(arg, field.Name(), inputName), true
+		}
+		if isSliceOfPointerToNamed(field.Type(), fileHeaderType) {
+			return fileHeaderSliceAssignment(arg, field.Name(), inputName), true
+		}
+		return nil, false
+	}
+}
+
+// lookupMultipartFileHeaderType returns the *types.Named for
+// mime/multipart.FileHeader and whether the package was found.
+func lookupMultipartFileHeaderType(file *File) (*types.Named, bool) {
+	pkg, ok := file.Types("mime/multipart")
+	if !ok {
+		return nil, false
+	}
+	obj := pkg.Scope().Lookup("FileHeader")
+	if obj == nil {
+		return nil, false
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return nil, false
+	}
+	return named, true
+}
+
+func isPointerToNamed(t types.Type, target *types.Named) bool {
+	ptr, ok := t.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+	return named.Obj() == target.Obj()
+}
+
+func isSliceOfPointerToNamed(t types.Type, target *types.Named) bool {
+	s, ok := t.(*types.Slice)
+	if !ok {
+		return false
+	}
+	return isPointerToNamed(s.Elem(), target)
+}
+
+// fileHeaderSingleAssignment emits:
+//
+//	if request.MultipartForm != nil {
+//	    if fhs := request.MultipartForm.File["<inputName>"]; len(fhs) > 0 {
+//	        <arg>.Field = fhs[0]
+//	    }
+//	}
+func fileHeaderSingleAssignment(arg *ast.Ident, fieldName, inputName string) ast.Stmt {
+	const tmp = "fhs"
+	inner := &ast.IfStmt{
+		Init: &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(tmp)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.IndexExpr{
+				X: &ast.SelectorExpr{
+					X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("MultipartForm")},
+					Sel: ast.NewIdent("File"),
+				},
+				Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)},
+			}},
+		},
+		Cond: &ast.BinaryExpr{
+			X:  astgen.CallBuiltinLen(ast.NewIdent(tmp)),
+			Op: token.GTR,
+			Y:  &ast.BasicLit{Kind: token.INT, Value: "0"},
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fieldName)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.IndexExpr{X: ast.NewIdent(tmp), Index: &ast.BasicLit{Kind: token.INT, Value: "0"}}},
+			},
+		}},
+	}
+	return wrapInMultipartFormNotNil(inner)
+}
+
+// fileHeaderSliceAssignment emits:
+//
+//	if request.MultipartForm != nil {
+//	    <arg>.Field = request.MultipartForm.File["<inputName>"]
+//	}
+func fileHeaderSliceAssignment(arg *ast.Ident, fieldName, inputName string) ast.Stmt {
+	assign := &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fieldName)}},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{&ast.IndexExpr{
+			X: &ast.SelectorExpr{
+				X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("MultipartForm")},
+				Sel: ast.NewIdent("File"),
+			},
+			Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)},
+		}},
+	}
+	return wrapInMultipartFormNotNil(assign)
+}
+
+// wrapInMultipartFormNotNil wraps stmt in `if request.MultipartForm != nil { stmt }`.
+// ParseMultipartForm leaves request.MultipartForm nil if it returns an error,
+// so we guard accesses to avoid nil-pointer panics on malformed bodies.
+func wrapInMultipartFormNotNil(stmt ast.Stmt) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("MultipartForm")},
+			Op: token.NEQ,
+			Y:  ast.NewIdent("nil"),
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{stmt}},
+	}
 }
 
 func formVariableDeclaration(file *File, arg *ast.Ident, tp types.Type) (*ast.DeclStmt, error) {
@@ -1054,7 +1248,7 @@ func httpServeMuxField(file *File) *ast.Field {
 	}
 }
 
-func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, resultType types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
+func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
 	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
 	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
 	switch tp := valueType.(type) {
@@ -1262,7 +1456,6 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 	}
 }
 
-
 var assertion AssertionFailureReporter
 
 type AssertionFailureReporter struct{}
@@ -1300,6 +1493,13 @@ func defaultTemplateNameScope(file *File, def muxt.Definition, argumentIdentifie
 			return nil, false
 		}
 		t := pkg.Scope().Lookup("Values").Type()
+		return t, true
+	case muxt.TemplateNameScopeIdentifierMultipart:
+		pkg, ok := file.Types("mime/multipart")
+		if !ok {
+			return nil, false
+		}
+		t := types.NewPointer(pkg.Scope().Lookup("Form").Type())
 		return t, true
 	default:
 		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
@@ -1401,6 +1601,77 @@ func callParseForm() *ast.ExprStmt {
 		},
 		Args: []ast.Expr{},
 	}}
+}
+
+// callParseMultipartForm emits:
+//
+//	if err := request.ParseMultipartForm(<maxMemory>); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+//	    td.errList = append(td.errList, err)
+//	    td.errStatusCode = http.StatusBadRequest
+//	}
+//
+// http.ErrNotMultipart is exempted because ParseMultipartForm calls ParseForm
+// internally, so url-encoded POSTs to a multipart route still populate
+// request.PostForm — the receiver method should run with text fields bound
+// (file fields stay nil). Other errors (truncated body, bad boundary,
+// underlying ParseForm failures) are real and surface as 400.
+func callParseMultipartForm(file *File, config RoutesFileConfiguration, rdIdent string) *ast.IfStmt {
+	maxMemory := config.MultipartMaxMemory
+	if maxMemory <= 0 {
+		maxMemory = DefaultMultipartMaxMemory
+	}
+	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
+	httpPkg := astgen.AddNetHTTP(file)
+	notNil := &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: ast.NewIdent("nil")}
+	notErrNotMultipart := &ast.UnaryExpr{
+		Op: token.NOT,
+		X: astgen.Call(file, "", "errors", "Is",
+			ast.NewIdent(errIdent),
+			&ast.SelectorExpr{X: ast.NewIdent(httpPkg), Sel: ast.NewIdent("ErrNotMultipart")},
+		),
+	}
+	return &ast.IfStmt{
+		Init: &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(errIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+					Sel: ast.NewIdent("ParseMultipartForm"),
+				},
+				Args: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: strconv.FormatInt(maxMemory, 10)}},
+			}},
+		},
+		Cond: &ast.BinaryExpr{X: notNil, Op: token.LAND, Y: notErrNotMultipart},
+		Body: errBlock,
+	}
+}
+
+// multipartVariableAssignment emits `var <arg> <Type> = request.MultipartForm`
+// for raw-mode multipart binding.
+func multipartVariableAssignment(file *File, arg *ast.Ident, tp types.Type) (*ast.DeclStmt, error) {
+	typeExp, err := file.TypeASTExpression(tp)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.DeclStmt{
+		Decl: &ast.GenDecl{
+			Tok: token.VAR,
+			Specs: []ast.Spec{
+				&ast.ValueSpec{
+					Names: []*ast.Ident{ast.NewIdent(arg.Name)},
+					Type:  typeExp,
+					Values: []ast.Expr{
+						&ast.SelectorExpr{
+							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+							Sel: ast.NewIdent("MultipartForm"),
+						},
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 func contextAssignment(ident string) *ast.AssignStmt {

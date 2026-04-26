@@ -1,0 +1,95 @@
+# How to handle a multipart/form-data file upload with a typed struct param.
+#
+# The receiver method takes a struct whose fields are bound from the parsed
+# multipart form. Text fields use the standard form-binding rules; file
+# fields must be *multipart.FileHeader or []*multipart.FileHeader.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>uploaded {{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	Caption string                `name:"caption"`
+	File    *multipart.FileHeader `name:"file"`
+}
+
+type T struct{}
+
+// Upload reads the uploaded file into memory and returns its byte length.
+func (T) Upload(form UploadForm) int {
+	if form.File == nil {
+		return 0
+	}
+	f, err := form.File.Open()
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	body, _ := io.ReadAll(f)
+	return len(body)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	if err := w.WriteField("caption", "my upload"); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := w.CreateFormFile("file", "doc.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("hello world")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Result().StatusCode, http.StatusCreated)
+	}
+}

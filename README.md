@@ -34,8 +34,8 @@ Muxt upgrades this to **connascence of type**. It uses `go/types` to verify at g
 - The method named in the template (`GetArticle`) exists on the receiver type with the correct signature
 - Path parameters (`id`) can be parsed to the method's parameter types (`string`, `int`, `bool`, custom `TextUnmarshaler`)
 - The template body's field access (`.Result.Title`) is valid for the method's return type
-- Form parameters (`form`) match a concrete struct type with the right fields
-- Bind form data to struct fields with validation
+- Form parameters (`form`, or `multipart` for file uploads) match a concrete struct type with the right fields
+- Bind form data to struct fields with validation, including `*multipart.FileHeader` for uploads
 - Inject request context, `*http.Request`, or `http.ResponseWriter` when named
 - Handle errors and return values through `TemplateData[R, T]`
 - Set HTTP status codes from template names, return values, or error types

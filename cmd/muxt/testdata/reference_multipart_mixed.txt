@@ -1,0 +1,110 @@
+# Mixed text + file fields in a multipart struct
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /upload 201 Upload(multipart)" }}<p>{{.Result}}</p>{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"mime/multipart"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type UploadForm struct {
+	Title  string                `name:"title"`
+	Count  int                   `name:"count"`
+	Tags   []string              `name:"tag"`
+	Avatar *multipart.FileHeader `name:"avatar"`
+}
+
+type T struct {
+	spy func(UploadForm) string
+}
+
+func (t T) Upload(multipart UploadForm) string {
+	return t.spy(multipart)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	service.spy = func(form UploadForm) string {
+		if form.Title != "hello" {
+			t.Errorf("Title = %q, want %q", form.Title, "hello")
+		}
+		if form.Count != 3 {
+			t.Errorf("Count = %d, want 3", form.Count)
+		}
+		if len(form.Tags) != 2 || form.Tags[0] != "go" || form.Tags[1] != "web" {
+			t.Errorf("Tags = %#v, want [go web]", form.Tags)
+		}
+		if form.Avatar == nil || form.Avatar.Filename != "x.txt" {
+			t.Errorf("Avatar = %+v, want filename x.txt", form.Avatar)
+		}
+		return form.Title
+	}
+
+	TemplateRoutes(mux, service)
+
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	if err := w.WriteField("title", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.WriteField("count", "3"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tag := range []string{"go", "web"} {
+		if err := w.WriteField("tag", tag); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fw, err := w.CreateFormFile("avatar", "x.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("xx")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("content-type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Result().StatusCode, http.StatusCreated)
+	}
+}

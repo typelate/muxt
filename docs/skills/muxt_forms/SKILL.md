@@ -1,6 +1,6 @@
 ---
 name: muxt-forms
-description: "Muxt: Use when creating HTML forms in a Muxt codebase — form struct design, field mapping, accessible form HTML with ARIA, validation attributes, field type parsing, error display, and testing form submissions."
+description: "Muxt: Use when creating HTML forms in a Muxt codebase — form struct design, field mapping, accessible form HTML with ARIA, validation attributes, field type parsing, error display, multipart/file uploads, and testing form submissions."
 ---
 
 # Form Creation and Binding
@@ -469,6 +469,89 @@ When the handler returns per-field errors, assert that the re-rendered form show
 },
 ```
 
+## File Uploads (Multipart Forms)
+
+Use the `multipart` parameter instead of `form` when the request is `multipart/form-data` — required for `<input type="file">`. `multipart` is a strict superset of `form`: it parses both text fields and file fields. The two parameters are **mutually exclusive** in the same call.
+
+### Form HTML
+
+Set `enctype="multipart/form-data"` on the form element. Use `<input type="file">` for files.
+
+```html
+<form method="post" action="{{$.Path.Upload}}" enctype="multipart/form-data">
+  <label for="title">Title</label>
+  <input id="title" name="title" type="text" required>
+
+  <label for="avatar">Avatar</label>
+  <input id="avatar" name="avatar" type="file" accept="image/*" required>
+
+  <button type="submit">Upload</button>
+</form>
+```
+
+### Struct Definition
+
+Import `mime/multipart` and use `*multipart.FileHeader` for single files, `[]*multipart.FileHeader` for multiple files under the same name. Text fields work the same as `form`.
+
+```go
+import "mime/multipart"
+
+type UploadForm struct {
+    Title  string                  `name:"title"`
+    Tags   []string                `name:"tag"`         // multiple values allowed
+    Avatar *multipart.FileHeader   `name:"avatar"`      // single file
+    Photos []*multipart.FileHeader `name:"photos"`      // multiple files
+}
+```
+
+### Template and Method
+
+```gotmpl
+{{define "POST /upload 201 Upload(ctx, multipart)"}}<p>{{.Result.Filename}}</p>{{end}}
+```
+
+```go
+func (s Server) Upload(ctx context.Context, form UploadForm) (UploadResult, error) {
+    if form.Avatar == nil {
+        return UploadResult{}, errors.New("avatar is required")
+    }
+    f, err := form.Avatar.Open()
+    if err != nil {
+        return UploadResult{}, fmt.Errorf("opening upload: %w", err)
+    }
+    defer f.Close()
+    // ... store the file ...
+    return UploadResult{Filename: form.Avatar.Filename}, nil
+}
+```
+
+The receiver method's parameter name is independent of the call-site `multipart` identifier — name it `form`, `upload`, or anything readable.
+
+### Raw `*multipart.Form`
+
+For full access to `Value` and `File` maps, accept `*multipart.Form` directly:
+
+```go
+func (s Server) Upload(ctx context.Context, form *multipart.Form) (Result, error) {
+    for name, headers := range form.File { ... }
+    return Result{}, nil
+}
+```
+
+### Max upload size
+
+Defaults to 32 MiB. Override globally with `--output-multipart-max-memory=<size>` (e.g. `64MB`, `128MiB`, `1GB`). Per `mime/multipart` semantics, data exceeding `maxMemory` spills to the OS temp directory — handlers see file headers regardless of size, but `Open()` may return a temp-file reader.
+
+### Error handling
+
+Malformed multipart bodies (truncated, bad boundary) are captured into `td.errList` with `td.errStatusCode = http.StatusBadRequest`. The receiver method is still called — guard nil-checks on file fields if you don't trust the request:
+
+```go
+if form.Avatar != nil {
+    // ... process the file ...
+}
+```
+
 ## Reference
 
 - [Call Parameters](../../reference/call-parameters.md)
@@ -494,3 +577,12 @@ When the handler returns per-field errors, assert that the re-rendered form show
 | Bool return with form | `err_form_bool_return.txt` |
 | Unsupported return with form | `err_form_unsupported_return.txt` |
 | Undefined form method | `err_form_with_undefined_method.txt` |
+| Multipart with single file | `reference_multipart_basic.txt` |
+| Multipart with `[]*FileHeader` | `reference_multipart_multiple_files.txt` |
+| Multipart with text + files | `reference_multipart_mixed.txt` |
+| Multipart raw `*multipart.Form` | `reference_multipart_raw.txt` |
+| Multipart `name` tag rebind | `reference_multipart_with_name_tag.txt` |
+| `--output-multipart-max-memory` | `reference_multipart_max_memory_flag.txt` |
+| Multipart parse error → 400 | `reference_multipart_parse_error.txt` |
+| File upload how-to | `howto_multipart_file_upload.txt` |
+| `form` + `multipart` rejected | `err_multipart_with_form.txt` |

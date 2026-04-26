@@ -10,12 +10,15 @@ import (
 	"go/token"
 	"io"
 	"log"
+	"math"
+	"strconv"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/ettle/strcase"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -321,6 +324,11 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 		args = append(args, "--"+outputExportedDefaultIdentifiers+"=false")
 	}
 
+	// Add output-multipart-max-memory if explicitly set
+	if config.MultipartMaxMemory > 0 {
+		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
+	}
+
 	return args
 }
 
@@ -478,6 +486,7 @@ const (
 	outputMultipleFiles              = "output-multiple-files"
 	outputHTMXHelpers                = "output-htmx-helpers"
 	outputExportedDefaultIdentifiers = "output-exported-default-identifiers"
+	outputMultipartMaxMemory         = "output-multipart-max-memory"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -512,6 +521,7 @@ This function also receives an argument with a type matching the name given by o
 	outputMultipleFilesHelp              = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 	outputHTMXHelpersHelp                = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
+	outputMultipartMaxMemoryHelp         = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -579,7 +589,42 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
+	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }
+
+// multipartMaxMemoryFlag implements pflag.Value to parse human-readable byte
+// sizes (e.g. "32MB", "64MiB", "1GB") into RoutesFileConfiguration.MultipartMaxMemory.
+type multipartMaxMemoryFlag struct {
+	cfg *generate.RoutesFileConfiguration
+}
+
+func (f *multipartMaxMemoryFlag) String() string {
+	if f == nil || f.cfg == nil {
+		return humanize.IBytes(uint64(generate.DefaultMultipartMaxMemory))
+	}
+	n := f.cfg.MultipartMaxMemory
+	if n <= 0 {
+		n = generate.DefaultMultipartMaxMemory
+	}
+	return humanize.IBytes(uint64(n))
+}
+
+func (f *multipartMaxMemoryFlag) Set(v string) error {
+	n, err := humanize.ParseBytes(v)
+	if err != nil {
+		return fmt.Errorf("invalid byte size %q: %w", v, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("multipart max memory must be positive, got %q", v)
+	}
+	if n > math.MaxInt64 {
+		return fmt.Errorf("multipart max memory %q exceeds int64 maximum", v)
+	}
+	f.cfg.MultipartMaxMemory = int64(n)
+	return nil
+}
+
+func (f *multipartMaxMemoryFlag) Type() string { return "bytes" }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")
