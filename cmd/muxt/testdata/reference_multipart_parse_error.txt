@@ -13,7 +13,6 @@ exec go test -cover
 module server
 
 go 1.22
-
 -- template.go --
 package server
 
@@ -35,7 +34,6 @@ type UploadForm struct {
 type T struct{}
 
 func (T) Upload(form UploadForm) int { return 0 }
-
 -- template_test.go --
 package server
 

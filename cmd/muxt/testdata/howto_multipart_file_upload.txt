@@ -16,7 +16,6 @@ exec go test -cover
 module server
 
 go 1.22
-
 -- template.go --
 package server
 
@@ -52,7 +51,6 @@ func (T) Upload(form UploadForm) int {
 	body, _ := io.ReadAll(f)
 	return len(body)
 }
-
 -- template_test.go --
 package server
 

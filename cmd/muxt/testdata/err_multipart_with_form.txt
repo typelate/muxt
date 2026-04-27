@@ -16,7 +16,6 @@ type (
 )
 
 func (T) Upload(form In, m *multipart.Form) int { return 0 }
-
 -- template.go --
 package main
 
@@ -29,11 +28,9 @@ import (
 var templatesDir embed.FS
 
 var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
-
 -- go.mod --
 module example.com
 
 go 1.22
-
 -- template.gohtml --
 {{define "POST / Upload(form, multipart)" }}<p>{{.}}</p>{{end}}

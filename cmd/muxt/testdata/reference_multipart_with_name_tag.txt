@@ -12,7 +12,6 @@ exec go test -cover
 module server
 
 go 1.22
-
 -- template.go --
 package server
 
@@ -39,7 +38,6 @@ type T struct {
 func (t T) Upload(multipart UploadForm) string {
 	return t.spy(multipart)
 }
-
 -- template_test.go --
 package server
 

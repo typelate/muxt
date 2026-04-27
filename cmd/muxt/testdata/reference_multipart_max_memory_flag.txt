@@ -17,7 +17,6 @@ exec go test -cover
 module server
 
 go 1.22
-
 -- template.go --
 package server
 
@@ -44,7 +43,6 @@ func (T) Upload(form UploadForm) int {
 	}
 	return 1
 }
-
 -- template_test.go --
 package server
 
