@@ -1,144 +1,104 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt) [![Go](https://github.com/typelate/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/typelate/muxt/actions/workflows/go.yml)
 
-**Generate HTTP handlers from html/template definitions.**
+**Server-rendered HTML, type-checked at `go generate` time.**
 
-Declare routes in template names using `http.ServeMux` patterns. Muxt analyzes receiver methods and generates handlers that parse parameters to match method signatures.
-
-Muxt commands include:
-- `muxt generate` to generate `http.Handler` glue (see `template_routes.go` for the output)
-- `muxt` list template routes
-- `muxt check` to find bugs and more safely refactor your `"text/template"` or `"html/template"` source code
-- `muxt list-template-calls` list all call sites for a template (omit flag `--patterns` to list all call sites)
-- `muxt list-template-callers` list all callers for a template (omit flag `--patterns` to list all callers for all templates)
-
-## Syntax
-
-Standard `http.ServeMux` pattern:
-```
-[METHOD ][HOST]/[PATH]
+```gotmpl
+{{define "GET /article/{id} GetArticle(ctx, id)"}}
+  <h1>{{.Result.Title}}</h1>
+{{end}}
 ```
 
-Muxt extends this with optional status codes and method calls:
+```go
+func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 ```
-[METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
-```
 
-For example, `"GET /article/{id} GetArticle(ctx, id)"` means: handle GET requests to `/article/{id}`, call `GetArticle` with the request context and the `id` path parameter, render the template with the result.
+The template name is the route, the handler call, and the parameter list. Muxt uses `go/types` to verify the whole chain — `GetArticle` exists on `Server`, `id` parses to `int`, `.Result.Title` is valid on `Article` — then writes the `http.Handler` glue. Typos and signature drift become `go generate` errors, not 5 PM pages.
 
-## How It Works
+## Why Muxt
 
-**Template names define the contract** between your HTML and your Go code. Without Muxt, this connection relies on **connascence of name** through raw strings: `templates.ExecuteTemplate(w, "user-profile", data)` uses a string that must match a template name, and `{{.Name}}` must match a field on whatever `data` happens to be. A typo in either place is a runtime error.
+- **Single source of truth.** Route, handler, and HTML live together. No separate `mux.HandleFunc` registration to drift out of sync.
+- **Caught at generate time.** `go/types` flags stale field access, parameter mismatches, and missing methods before they ship.
+- **No runtime reflection.** Generated code uses only `net/http` and `html/template`. Reads like hand-written Go.
+- **Built for hypermedia.** HTMX, Datastar, and plain server-rendered HTML are the happy path — not an afterthought.
 
-Muxt upgrades this to **connascence of type**. It uses `go/types` to verify at generation time that:
-
-- The method named in the template (`GetArticle`) exists on the receiver type with the correct signature
-- Path parameters (`id`) can be parsed to the method's parameter types (`string`, `int`, `bool`, custom `TextUnmarshaler`)
-- The template body's field access (`.Result.Title`) is valid for the method's return type
-- Form parameters (`form`, or `multipart` for file uploads) match a concrete struct type with the right fields
-- Bind form data to struct fields with validation, including `*multipart.FileHeader` for uploads
-- Inject request context, `*http.Request`, or `http.ResponseWriter` when named
-- Handle errors and return values through `TemplateData[R, T]`
-- Set HTTP status codes from template names, return values, or error types
-
-If any of these are wrong, `go generate` or `muxt check` fails with a clear error pointing to the template. No runtime surprises.
-
-`TemplateRoutePaths` extends this to URLs: instead of hardcoding `href="/article/42"`, templates use `{{$.Path.GetArticle 42}}`. If the route pattern changes, the generated method signature changes, and the compiler catches every stale reference.
-
-**No (additional) runtime reflection.** All type checking happens at generation time. The generated code uses only `net/http` and `html/template` from the standard library.
-
-## Installation
+## Install
 
 ```bash
 go install github.com/typelate/muxt@latest
 ```
 
-Or add it to your project's module `go get -tool github.com/typelate/muxt` (note the project [license documentation](#License)).
+Or as a project tool: `go get -tool github.com/typelate/muxt` (note the [license](#License)). Pre-built binaries are also attached to each [release](https://github.com/typelate/muxt/releases).
 
 ## Quick Start
 
-1. Create a template file `index.gohtml`:
-```gotmpl
-{{define "GET / Home(ctx)"}}
-<!DOCTYPE html>
-<html>
-<body><h1>{{.Result}}</h1></body>
-</html>
-{{end}}
+1. Create a template `index.gohtml`:
+   ```gotmpl
+   {{define "GET / Home(ctx)"}}
+   <h1>{{.Result}}</h1>
+   {{end}}
+   ```
+
+2. Wire it up in `main.go`:
+   ```go
+   //go:embed *.gohtml
+   var templateFS embed.FS
+
+   //go:generate muxt generate --use-receiver-type=Server
+   var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+
+   type Server struct{}
+
+   func (s Server) Home(ctx context.Context) string { return "Hello, Muxt!" }
+   ```
+
+3. Generate and run:
+   ```bash
+   go generate && go run .
+   ```
+
+The `templates` variable must be package-level — Muxt finds it via static analysis.
+
+## Template Syntax
+
+Standard `http.ServeMux` pattern, optionally with a status code and method call:
+
+```
+[METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
 ```
 
-2. Add generation directives to `main.go`:
-```go
-//go:embed *.gohtml
-var templateFS embed.FS
+Example: `"POST /user/{id} 201 CreateUser(ctx, id, form)"`
 
-//go:generate muxt generate --use-receiver-type=Server
-var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
+Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body), `multipart` (file uploads, including `*multipart.FileHeader` fields). Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
 
-type Server struct{}
+`TemplateRoutePaths` extends type safety to URLs: `{{$.Path.GetArticle 42}}` instead of hardcoded `href="/article/42"`. Change the route pattern, the compiler finds every stale reference.
 
-func (s Server) Home(ctx context.Context) string {
-    return "Hello, Muxt!"
-}
-```
+## Commands
 
-3. Generate handlers and run:
-```bash
-go generate && go run .
-```
-
-Key elements:
-- `//go:embed *.gohtml` embeds template files into the binary
-- `//go:generate muxt generate` tells `go generate` to run Muxt
-- `--use-receiver-type=Server` tells Muxt to look up method signatures on `Server`
-- The `templates` variable must be package-level (Muxt finds it via static analysis)
-
-## Example
-
-Define a template with a route pattern and method call:
-
-```gotmpl
-{{define "GET /{id} GetUser(ctx, id)"}}
-  {{with $err := .Err}}
-    <div class="error" data-type="{{printf `%T` $err}}">{{$err.Error}}</div>
-  {{else}}
-    <h1>{{.Result.Name}}</h1>
-    <p>{{.Result.Email}}</p>
-  {{end}}
-{{end}}
-```
-
-Implement the receiver method:
-
-```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-    return s.db.GetUser(ctx, id)  // id automatically parsed from string
-}
-```
-
-Run `muxt generate --use-receiver-type=Server` to generate HTTP handlers.
+- `muxt generate` — generate `http.Handler` glue (writes `template_routes.go`)
+- `muxt check` — type-check templates without generating (use in CI or editor save hooks)
+- `muxt list-template-calls` / `muxt list-template-callers` — explore call sites and callers
 
 ## Examples
 
-The [command tests](./cmd/muxt/testdata) were intended to be readable examples of muxt behavior.
+- **[Local example](./docs/examples/simple/)** — complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
+- **[Sortable Example](http://github.com/typelate/sortable-example)** — HTMX-enabled table row sorting
+- **[HTMX Template](https://github.com/typelate/htmx-template)** — full HTMX integration patterns
 
-- **[Local example](./docs/examples/simple/)** - Complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
-- **[Sortable Example](http://github.com/typelate/sortable-example)** - Interactive HTMX-enabled table row sorting
-- **[HTMX Template](https://github.com/typelate/htmx-template)** - Full HTMX integration patterns
+The [command tests](./cmd/muxt/testdata) double as readable examples of every feature.
 
 ## Documentation
 
-- **[Reference](docs/reference/)** - CLI, syntax, parameters, type checking
-- **[Explanation](docs/explanation/)** - Design philosophy, patterns, decisions
+- **[Reference](docs/reference/)** — CLI, syntax, parameters, type checking
+- **[Explanation](docs/explanation/)** — design philosophy, patterns, decisions
 
-See the [full documentation index](docs/) for all available resources.
+See the [full documentation index](docs/).
 
 ### Go Standard Library
 
-- [html/template](https://pkg.go.dev/html/template) — Template syntax, functions, escaping
+- [html/template](https://pkg.go.dev/html/template) — template syntax, functions, escaping
 - [net/http](https://pkg.go.dev/net/http) — `ServeMux` routing patterns, `Handler` interface
-- [embed](https://pkg.go.dev/embed) — File embedding directives
-- [log/slog](https://pkg.go.dev/log/slog) — Structured logging (used by generated handlers)
-- [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements) — `ServeMux` pattern syntax that Muxt extends
+- [embed](https://pkg.go.dev/embed) — file embedding directives
+- [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements) — pattern syntax Muxt extends
 
 ## Using with AI Assistants
 
@@ -150,8 +110,8 @@ Claude Code skills for working with Muxt codebases:
 | [explore-from-method](docs/skills/muxt_explore-from-method/SKILL.md) | Find which routes and templates use a receiver method |
 | [explore-from-error](docs/skills/muxt_explore-from-error/SKILL.md) | Trace an error message back to its handler and template |
 | [explore-repo-overview](docs/skills/muxt_explore-repo-overview/SKILL.md) | Map all routes, templates, and the receiver type |
-| [template-driven-development](docs/skills/muxt_test-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
-| [forms](docs/skills/muxt_forms/SKILL.md) | Form creation, struct binding, validation, and accessible form HTML |
+| [test-driven-development](docs/skills/muxt_test-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
+| [forms](docs/skills/muxt_forms/SKILL.md) | Form creation, struct binding, validation, accessible HTML |
 | [debug-generation-errors](docs/skills/muxt_debug-generation-errors/SKILL.md) | Diagnose and fix `muxt generate` / `muxt check` errors |
 | [refactoring](docs/skills/muxt_refactoring/SKILL.md) | Rename methods, change patterns, move templates safely |
 | [htmx](docs/skills/muxt_htmx/SKILL.md) | Explore, develop, and test HTMX interactions |
@@ -170,8 +130,4 @@ for d in docs/skills/*/; do cp -r "$d" ~/.claude/skills/"$(basename "$d")"; done
 
 Muxt generator: [GNU AGPLv3](LICENSE)
 
-Generated code: [MIT License](https://choosealicense.com/licenses/mit/) - The Go code generated by Muxt is not covered by AGPL. It is provided as-is without warranty. Use it freely in your projects.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/image?repos=typelate/muxt&type=date&legend=top-left)](https://www.star-history.com/?repos=typelate%2Fmuxt&type=date&legend=top-left)
+Generated code: [MIT License](https://choosealicense.com/licenses/mit/) — Go code generated by Muxt is not covered by AGPL. It is provided as-is without warranty. Use it freely in your projects.
