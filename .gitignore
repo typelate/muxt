@@ -32,3 +32,5 @@ cmd/muxt/testdata/*/**
 tmp
 
 todos.json
+# Added by goreleaser init:
+dist/
