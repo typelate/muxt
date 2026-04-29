@@ -89,5 +89,4 @@ take_screenshot({})
 
 - [muxt generate](generate.md) — Generate handlers from templates
 - [muxt explore-module](explore-module.md) — Discover all muxt packages in the module
-- [Explore Repo Overview](../../skills/muxt_explore-repo-overview/SKILL.md) — Full exploration workflow
-- [Explore from Route](../../skills/muxt_explore-from-route/SKILL.md) — Trace a specific route
+- [Explore](../../skills/muxt_explore/SKILL.md) — Full exploration workflow (pick an entry point: route, method, error, or fresh repo)

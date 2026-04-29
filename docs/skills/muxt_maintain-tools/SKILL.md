@@ -1,11 +1,11 @@
 ---
 name: muxt-maintain-tools
-description: "Muxt: Use when installing or updating muxt, gofumpt, counterfeiter, domtest, or other tools used in a Muxt codebase."
+description: "Muxt: Use when installing, updating, or upgrading the tools used in a Muxt codebase — muxt itself, gofumpt, counterfeiter, domtest, testify, sqlc, txtar, chromedp."
 ---
 
-# Maintain Tools
+# Maintain muxt-related tools
 
-Install and update the tools used in a Muxt development workflow.
+Install and update the tools used in a Muxt development workflow. Quick-reference list — copy/paste the install commands you need.
 
 ## Required Tools
 
