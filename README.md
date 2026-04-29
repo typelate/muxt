@@ -106,10 +106,7 @@ Claude Code skills for working with Muxt codebases:
 
 | Skill | Use Case |
 |-------|----------|
-| [explore-from-route](docs/skills/muxt_explore-from-route/SKILL.md) | Trace from a URL path to its template and receiver method |
-| [explore-from-method](docs/skills/muxt_explore-from-method/SKILL.md) | Find which routes and templates use a receiver method |
-| [explore-from-error](docs/skills/muxt_explore-from-error/SKILL.md) | Trace an error message back to its handler and template |
-| [explore-repo-overview](docs/skills/muxt_explore-repo-overview/SKILL.md) | Map all routes, templates, and the receiver type |
+| [explore](docs/skills/muxt_explore/SKILL.md) | Trace through the template/method/route chain — pick a starting entry point (route, method, error, or fresh repo) |
 | [test-driven-development](docs/skills/muxt_test-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
 | [forms](docs/skills/muxt_forms/SKILL.md) | Form creation, struct binding, validation, accessible HTML |
 | [debug-generation-errors](docs/skills/muxt_debug-generation-errors/SKILL.md) | Diagnose and fix `muxt generate` / `muxt check` errors |

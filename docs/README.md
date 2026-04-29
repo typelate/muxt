@@ -40,10 +40,7 @@ Type-safe HTTP handlers from Go HTML templates.
 
 Claude Code skills for working with Muxt:
 
-- **[explore-from-route](skills/muxt_explore-from-route/SKILL.md)** - Trace from a URL path to its template and receiver method
-- **[explore-from-method](skills/muxt_explore-from-method/SKILL.md)** - Find which routes and templates use a receiver method
-- **[explore-from-error](skills/muxt_explore-from-error/SKILL.md)** - Trace an error message back to its handler and template
-- **[explore-repo-overview](skills/muxt_explore-repo-overview/SKILL.md)** - Map all routes, templates, and the receiver type
+- **[explore](skills/muxt_explore/SKILL.md)** - Trace through the template/method/route chain — pick a starting entry point (route, method, error, or fresh repo)
 - **[template-driven-development](skills/muxt_test-driven-development/SKILL.md)** - Create new templates and methods using TDD
 - **[forms](skills/muxt_forms/SKILL.md)** - Form creation, struct binding, validation, and accessible form HTML
 - **[debug-generation-errors](skills/muxt_debug-generation-errors/SKILL.md)** - Diagnose and fix `muxt generate` / `muxt check` errors
