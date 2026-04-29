@@ -4,6 +4,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6N
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/crhntr/txtarfmt v0.4.0 h1:SKiTfrXuK7sagQAO5MVzZcqyf9MJH3moo76XzEizEfs=
 github.com/crhntr/txtarfmt v0.4.0/go.mod h1:6mXe3F8cAQtatKyHKTJf05QNP70zkblp1blI1CJTjy4=
+github.com/crhntr/txtarfmt v0.4.3 h1:gJdW1mzu2FzE3Gsl2QGcZkQCVqnw7/zRHO90rHN9bHk=
+github.com/crhntr/txtarfmt v0.4.3/go.mod h1:+rpynyDck9YUnoKkEzQQvXlAHb68JudwOt+B4UpRNDw=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/ettle/strcase v0.2.0 h1:fGNiVF21fHXpX1niBgk0aROov1LagYsOwV/xqKDKR/Q=
