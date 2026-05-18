@@ -1,0 +1,51 @@
+# muxt check -v upgrades each error to the multi-line VerboseError form
+# from github.com/typelate/check: in addition to the single-line summary,
+# verbose mode includes the receiver type's declared-at position and (for
+# named types whose source is readable) the Go source declaration of the
+# type, godoc comment included.
+#
+# Without -v the error stays on one line. See err_check_with_wrong_field.txt
+# for the non-verbose form.
+! muxt check -v
+stderr 'field or method Missing not found on Item'
+stderr 'declared at .*main\.go:'
+stderr 'Item is one row of the catalog\.'
+stderr 'type Item struct'
+stderr 'Title string'
+
+# A plain `muxt check` keeps each error on a single line — verbose-only
+# tokens like the rendered source block must not leak through.
+! muxt check
+! stderr 'type Item struct'
+! stderr 'Item is one row of the catalog\.'
+
+-- template.gohtml --
+{{.Missing}}
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- main.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*"))
+
+// Item is one row of the catalog.
+type Item struct {
+	Title string
+}
+
+func main() {
+	var d Item
+	_ = templates.ExecuteTemplate(io.Discard, "template.gohtml", d)
+}

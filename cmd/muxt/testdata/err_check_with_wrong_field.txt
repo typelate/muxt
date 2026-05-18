@@ -1,8 +1,8 @@
 ! muxt check
-stderr '<\.Missing>: Missing not found on struct\{Field2 int}'
-stderr '<\.Missing>: Missing not found on GlobalType'
-stderr '<\.Missing>: Missing not found on db.Row'
-stderr '<\.Missing>: Missing not found on api.Body'
+stderr '<\.Missing>: field or method Missing not found on struct\{Field2 int}; available: Field2 int'
+stderr '<\.Missing>: field or method Missing not found on GlobalType.* available: Field1 int'
+stderr '<\.Missing>: field or method Missing not found on db.Row.* available: Column3 int'
+stderr '<\.Missing>: field or method Missing not found on api.Body.* available: Field4 int'
 
 -- template.gohtml --
 {{.Missing}}
