@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -56,7 +57,7 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 				qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
 				if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
 					log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
-					log.Println(" - ", err)
+					log.Println(" - ", formatCheckError(err, config.Verbose))
 					log.Println()
 					errs = append(errs, err)
 				}
@@ -85,6 +86,18 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	default:
 		return fmt.Errorf("%d errors", len(errs))
 	}
+}
+
+// formatCheckError renders err using check.VerboseErrorer's multi-line form
+// when verbose is true and the wrapped error supports it.
+func formatCheckError(err error, verbose bool) string {
+	if verbose {
+		var ve check.VerboseErrorer
+		if errors.As(err, &ve) {
+			return ve.VerboseError()
+		}
+	}
+	return err.Error()
 }
 
 // findUnusedTemplates returns a list of template names that are defined but never used.
