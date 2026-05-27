@@ -31,5 +31,5 @@ var templates = template.Must(template.ParseFS(formHTML, "*"))
 
 type T struct{}
 
-func (T) list(_ context.Context) []string  { return nil }
+func (T) list(_ context.Context) []string         { return nil }
 func (T) List(_ context.Context, _ string) string { return "" }
