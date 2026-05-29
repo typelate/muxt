@@ -50,6 +50,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			}
 			form.Value = value
 		}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		defer buf.Reset()
 		if len(td.errList) == 0 {
 			var err error
 			td.result, err = receiver.SubmitFormEditRow(id, form)
@@ -58,10 +62,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 				td.errStatusCode = http.StatusInternalServerError
 			}
 		}
-		buf := bytesBufferPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if err := templates.ExecuteTemplate(buf, "PATCH /fruits/{id} SubmitFormEditRow(id, form)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -87,6 +87,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errStatusCode = http.StatusBadRequest
 		}
 		id := idParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		defer buf.Reset()
 		if len(td.errList) == 0 {
 			var err error
 			td.result, err = receiver.GetFormEditRow(id)
@@ -95,10 +99,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 				td.errStatusCode = http.StatusInternalServerError
 			}
 		}
-		buf := bytesBufferPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if err := templates.ExecuteTemplate(buf, "GET /fruits/{id}/edit GetFormEditRow(id)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -139,14 +139,14 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, []Row]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
-		if len(td.errList) == 0 {
-			td.result = receiver.List(ctx)
-			td.okay = true
-		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		defer buf.Reset()
+		if len(td.errList) == 0 {
+			td.result = receiver.List(ctx)
+			td.okay = true
+		}
 		if err := templates.ExecuteTemplate(buf, "GET /{$} List(ctx)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
