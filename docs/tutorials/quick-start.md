@@ -195,4 +195,4 @@ Visit [http://localhost:8080/about](http://localhost:8080/about).
 
 ## What's next
 
-The templates here use `*http.Request` as data because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial]( add-logging.md) shows how to add structured logging to your generated handlers.
+The templates here use `*http.Request` as data because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.
