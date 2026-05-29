@@ -100,29 +100,6 @@ See the [full documentation index](docs/).
 - [embed](https://pkg.go.dev/embed) — file embedding directives
 - [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements) — pattern syntax Muxt extends
 
-## Using with AI Assistants
-
-Claude Code skills for working with Muxt codebases:
-
-| Skill | Use Case |
-|-------|----------|
-| [explore](docs/skills/muxt_explore/SKILL.md) | Trace through the template/method/route chain — pick a starting entry point (route, method, error, or fresh repo) |
-| [test-driven-development](docs/skills/muxt_test-driven-development/SKILL.md) | Create new templates and receiver methods using TDD |
-| [forms](docs/skills/muxt_forms/SKILL.md) | Form creation, struct binding, validation, accessible HTML |
-| [debug-generation-errors](docs/skills/muxt_debug-generation-errors/SKILL.md) | Diagnose and fix `muxt generate` / `muxt check` errors |
-| [refactoring](docs/skills/muxt_refactoring/SKILL.md) | Rename methods, change patterns, move templates safely |
-| [htmx](docs/skills/muxt_htmx/SKILL.md) | Explore, develop, and test HTMX interactions |
-| [integrate-existing-project](docs/skills/muxt_integrate-existing-project/SKILL.md) | Add Muxt to an existing Go web application |
-| [sqlc](docs/skills/muxt_sqlc/SKILL.md) | Use Muxt with sqlc for type-safe SQL + HTML |
-| [goland-gotype](docs/skills/muxt_goland-gotype/SKILL.md) | Add gotype comments for GoLand IDE support (GoLand-only) |
-| [maintain-tools](docs/skills/muxt_maintain-tools/SKILL.md) | Install and update muxt, gofumpt, counterfeiter, and other tools |
-
-Install as Claude Code skills:
-
-```bash
-for d in docs/skills/*/; do cp -r "$d" ~/.claude/skills/"$(basename "$d")"; done
-```
-
 ## License
 
 Muxt generator: [GNU AGPLv3](LICENSE)

@@ -42,4 +42,3 @@ It verifies:
 
 - [Type Checking](../type-checking.md) — How type checking works
 - [muxt generate](generate.md) — Generate handlers from templates
-- [Debug Generation Errors](../../skills/muxt_debug-generation-errors/SKILL.md) — Error reference table with all error categories and test files

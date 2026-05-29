@@ -55,4 +55,3 @@ muxt explore-module --format=json | jq '.packages[].externalAssets[]'
 
 - [muxt generate](generate.md) — Generate handlers from templates
 - [muxt generate-fake-server](generate-fake-server.md) — Generate a fake server for interactive exploration
-- [Explore](../../skills/muxt_explore/SKILL.md) — Skill for mapping an entire muxt codebase
