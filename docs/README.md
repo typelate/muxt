@@ -29,6 +29,7 @@ Type-safe HTTP handlers from Go HTML templates.
 
 ## Tutorials
 
+- **[Quick Start](tutorials/quick-start.md)** - Your first Muxt server
 - **[Add Logging](tutorials/add-logging.md)** - Structured logging with `log/slog`
 
 ## Examples
