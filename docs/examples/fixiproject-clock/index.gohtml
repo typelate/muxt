@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang='us-en'>
+<head>
+	<meta charset='UTF-8'>
+	<title>fixi ssexi - muxt example</title>
+	<script src="https://cdn.jsdelivr.net/npm/the-fixi-project@0.1.1/dist/the-fixi-project.min.js"
+	        integrity="sha256-aQhU79uUGCZTYXEtsijzqKVynikd1uZqOfGAovLVYOU="
+	        crossorigin="anonymous"></script>
+	<script>
+      document.addEventListener('fx:config', (event) => {
+          event.detail.cfg.sseReconnect = true;
+          event.detail.cfg.ssePauseOnHidden = true;
+      });
+	</script>
+</head>
+<body fx-action='{{.Path.Time}}' fx-trigger="fx:inited" fx-swap='innerHTML'>
+{{block `GET /time Time(ctx, lastEventID, sse)` .}}
+		<time>{{.Result}}</time>
+{{end}}
+</body>
+</html>
+
+{{define "timezone"}}{{.}}{{end}}
+{{- define "GET /{$} Index()"}}{{template "index.gohtml" .}}{{end}}
