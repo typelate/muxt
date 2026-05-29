@@ -49,7 +49,7 @@ func Test(t *testing.T) {
 
 	res := rec.Result()
 
-	if res.StatusCode != http.StatusOK {
-		t.Error("expected OK")
+	if res.StatusCode != http.StatusNoContent {
+		t.Error("expected No Content")
 	}
 }

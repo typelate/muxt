@@ -46,7 +46,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -72,7 +76,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -98,7 +106,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -130,7 +142,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -166,7 +182,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return
@@ -195,7 +215,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, http.StatusOK)
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
 		if td.redirectURL != "" {
 			http.Redirect(response, request, td.redirectURL, statusCode)
 			return

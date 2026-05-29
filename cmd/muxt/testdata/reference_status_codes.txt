@@ -117,7 +117,7 @@ func Test(t *testing.T) {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
-		if got, exp := res.StatusCode, http.StatusOK; got != exp {
+		if got, exp := res.StatusCode, http.StatusNoContent; got != exp {
 			t.Errorf("exp %d, got %d", exp, got)
 		}
 	})

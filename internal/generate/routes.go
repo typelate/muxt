@@ -1737,14 +1737,39 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, resultType types.Typ
 	} else if obj, _, _ := types.LookupFieldOrMethod(resultType, true, file.OutputPackage().Types, "StatusCode"); obj != nil {
 		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
 	}
-	statusCodePriorityList = append(statusCodePriorityList, astgen.HTTPStatusCode(file, fallbackStatusCode))
-	list := []ast.Stmt{
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(statusCode)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{astgen.CmpOr(file, statusCodePriorityList...)},
-		},
+	var list []ast.Stmt
+	if fallbackStatusCode == http.StatusOK {
+		const defaultStatusIdent = "defaultStatusCode"
+		list = append(list,
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(defaultStatusIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
+			},
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{
+					X:  &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Len")}},
+					Op: token.EQL,
+					Y:  astgen.Int(0),
+				},
+				Body: &ast.BlockStmt{List: []ast.Stmt{
+					&ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent(defaultStatusIdent)},
+						Tok: token.ASSIGN,
+						Rhs: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusNoContent)},
+					},
+				}},
+			},
+		)
+		statusCodePriorityList = append(statusCodePriorityList, ast.NewIdent(defaultStatusIdent))
+	} else {
+		statusCodePriorityList = append(statusCodePriorityList, astgen.HTTPStatusCode(file, fallbackStatusCode))
 	}
+	list = append(list, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(statusCode)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{astgen.CmpOr(file, statusCodePriorityList...)},
+	})
 
 	// Only add redirect block if the template can call Redirect
 	if def.MayRedirect() {
