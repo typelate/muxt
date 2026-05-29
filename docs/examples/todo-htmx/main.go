@@ -117,7 +117,7 @@ func (s *Server) listInfo() ListInfo {
 	return info
 }
 
-func (s *Server) ListTodos(filter TodoFilter) TodoPage {
+func (s *Server) ListTodos(filter TodoFilter, execute func(TodoPage) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	info := s.listInfo()
@@ -136,11 +136,11 @@ func (s *Server) ListTodos(filter TodoFilter) TodoPage {
 			filtered = append(filtered, t)
 		}
 	}
-	return TodoPage{
+	return execute(TodoPage{
 		Todos:    filtered,
 		Filter:   filter.Filter,
 		ListInfo: info,
-	}
+	})
 }
 
 func (s *Server) CreateTodo(form NewTodo) TodoChange {

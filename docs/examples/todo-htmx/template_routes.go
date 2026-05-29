@@ -21,7 +21,7 @@ type RoutesReceiver interface {
 	ToggleAll() TodoListChange
 	DeleteTodo(id int) TodoChange
 	ToggleTodo(id int) (TodoChange, error)
-	ListTodos(filter TodoFilter) TodoPage
+	ListTodos(filter TodoFilter, execute func(TodoPage) error) error
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
@@ -207,13 +207,15 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.ListTodos(form)
+			if err := receiver.ListTodos(form, func(data TodoPage) error {
+				td.result = data
+				return templates.ExecuteTemplate(buf, "GET /{$} ListTodos(form, execute)", &td)
+			}); err != nil {
+				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+				http.Error(response, "failed to render page", http.StatusInternalServerError)
+				return
+			}
 			td.okay = true
-		}
-		if err := templates.ExecuteTemplate(buf, "GET /{$} ListTodos(form)", &td); err != nil {
-			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
-			http.Error(response, "failed to render page", http.StatusInternalServerError)
-			return
 		}
 		defaultStatusCode := http.StatusOK
 		if buf.Len() == 0 {

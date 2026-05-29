@@ -262,7 +262,11 @@ func TestPersistence(t *testing.T) {
 	// Create new server, load, verify
 	srv2 := new(Server)
 	srv2.Load(path)
-	page := srv2.ListTodos(TodoFilter{})
+	var page TodoPage
+	require.NoError(t, srv2.ListTodos(TodoFilter{}, func(p TodoPage) error {
+		page = p
+		return nil
+	}))
 	require.Len(t, page.Todos, 1)
 	assert.Equal(t, "Persist me", page.Todos[0].Title)
 	assert.Equal(t, 1, page.Todos[0].ID)
