@@ -41,18 +41,15 @@ func SyncPoolBytesBuffer(im ImportManager) *ast.CompositeLit {
 }
 
 // GetBufferFromPool returns the statements that acquire a *bytes.Buffer from a
-// sync.Pool, reset it for use, and defer returning it to the pool. The deferred
-// reset is stacked after the deferred Put so that, running LIFO, the buffer is
-// reset before it goes back into the pool:
+// sync.Pool, reset it for use, and defer returning it to the pool. Resetting
+// after Get keeps the buffer acquisition self-contained: every buffer is clean
+// regardless of how it entered the pool, so no reset before Put is needed.
 //
 //	buf := builderPool.Get().(*bytes.Buffer)
 //	buf.Reset()
 //	defer builderPool.Put(buf)
-//	defer buf.Reset()
 func GetBufferFromPool(im ImportManager, poolIdent, bufIdent string) []ast.Stmt {
-	resetCall := func() *ast.CallExpr {
-		return &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Reset")}}
-	}
+	resetCall := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Reset")}}
 	return []ast.Stmt{
 		&ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(bufIdent)},
@@ -62,11 +59,10 @@ func GetBufferFromPool(im ImportManager, poolIdent, bufIdent string) []ast.Stmt 
 				Type: &ast.StarExpr{X: ExportedIdentifier(im, "", "bytes", "Buffer")},
 			}},
 		},
-		&ast.ExprStmt{X: resetCall()},
+		&ast.ExprStmt{X: resetCall},
 		&ast.DeferStmt{Call: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(poolIdent), Sel: ast.NewIdent("Put")},
 			Args: []ast.Expr{ast.NewIdent(bufIdent)},
 		}},
-		&ast.DeferStmt{Call: resetCall()},
 	}
 }

@@ -37,7 +37,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			td.result = receiver.CreateTodo(form)
 			td.okay = true
@@ -64,7 +63,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			td.result = receiver.ClearCompleted()
 			td.okay = true
@@ -91,7 +89,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			td.result = receiver.ToggleAll()
 			td.okay = true
@@ -124,7 +121,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			td.result = receiver.DeleteTodo(id)
 			td.okay = true
@@ -157,7 +153,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			var err error
 			td.result, err = receiver.ToggleTodo(id)
@@ -191,7 +186,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		defer buf.Reset()
 		if len(td.errList) == 0 {
 			td.result = receiver.ListTodos(form)
 			td.okay = true
