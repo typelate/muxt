@@ -45,6 +45,8 @@ const (
 
 	pathPrefixPathsStructFieldName = "pathsPrefix"
 
+	bufferPoolIdent = "bytesBufferPool"
+
 	executeTemplateErrorMessage = "failed to render page"
 
 	DefaultRoutesFunctionName         = "TemplateRoutes"
@@ -258,6 +260,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		})
 	}
 
+	// Declare the buffer pool used by the handlers registered directly in this
+	// function. In multiple-files mode the per-file functions declare their own
+	// pool, so only declare it here when this function actually has handlers.
+	if len(parseBasedDefinitions) > 0 {
+		routesFunc.Body.List = append(routesFunc.Body.List, builderPoolDeclaration(file))
+	}
+
 	// Call per-file route functions (only in multiple-files mode)
 	if config.OutputMultipleFiles {
 		for _, sourceFile := range sourceFiles {
@@ -381,6 +390,17 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	return generatedFiles, nil
 }
 
+// builderPoolDeclaration returns the statement declaring the per-function
+// sync.Pool of *bytes.Buffer that handler closures draw their render buffers
+// from: builderPool := sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}.
+func builderPoolDeclaration(file *File) ast.Stmt {
+	return &ast.AssignStmt{
+		Tok: token.DEFINE,
+		Lhs: []ast.Expr{ast.NewIdent(bufferPoolIdent)},
+		Rhs: []ast.Expr{astgen.SyncPoolBytesBuffer(file)},
+	}
+}
+
 func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
 	normalized := def.Pattern()
 	pattern := ast.Expr(astgen.String(normalized))
@@ -450,6 +470,11 @@ func generatePerFileRouteFunction(
 	routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
 		Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
 	})
+
+	// Declare the buffer pool shared by this file's handlers.
+	if len(defs) > 0 {
+		routesFunc.Body.List = append(routesFunc.Body.List, builderPoolDeclaration(file))
+	}
 
 	// Generate handlers for each template
 	sigs := make(map[string]*types.Signature)
@@ -579,14 +604,11 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 						}},
 					},
 				},
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent(bufIdent)},
-					Tok: token.DEFINE,
-					Rhs: []ast.Expr{astgen.BytesNewBuffer(file, astgen.Nil())},
-				},
 			},
 		},
 	}
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 
 	if config.Logger {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
@@ -705,11 +727,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		},
 	})
 
-	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.AssignStmt{
-		Lhs: []ast.Expr{ast.NewIdent(bufIdent)},
-		Tok: token.DEFINE,
-		Rhs: []ast.Expr{astgen.BytesNewBuffer(file, astgen.Nil())},
-	})
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 
 	if config.Logger {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
