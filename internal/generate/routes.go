@@ -263,7 +263,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	// function. In multiple-files mode the per-file functions declare their own
 	// pool, so only declare it here when this function actually has handlers.
 	if len(parseBasedDefinitions) > 0 {
-		routesFunc.Body.List = append(routesFunc.Body.List, builderPoolDeclaration(file))
+		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
 	// Call per-file route functions (only in multiple-files mode)
@@ -389,10 +389,10 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	return generatedFiles, nil
 }
 
-// builderPoolDeclaration returns the statement declaring the per-function
+// bytesBufferPoolDeclaration returns the statement declaring the per-function
 // sync.Pool of *bytes.Buffer that handler closures draw their render buffers
-// from: builderPool := sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}.
-func builderPoolDeclaration(file *File) ast.Stmt {
+// from: bytesBufferPool := sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}.
+func bytesBufferPoolDeclaration(file *File) ast.Stmt {
 	return &ast.AssignStmt{
 		Tok: token.DEFINE,
 		Lhs: []ast.Expr{ast.NewIdent(bufferPoolIdent)},
@@ -472,7 +472,7 @@ func generatePerFileRouteFunction(
 
 	// Declare the buffer pool shared by this file's handlers.
 	if len(defs) > 0 {
-		routesFunc.Body.List = append(routesFunc.Body.List, builderPoolDeclaration(file))
+		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
 	// Generate handlers for each template
