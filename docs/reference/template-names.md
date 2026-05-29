@@ -131,6 +131,7 @@ MethodName(arg1, arg2, ...)
 | `response` | `http.ResponseWriter` | Direct | N/A |
 | `form` | struct or `url.Values` | `request.Form` (after `ParseForm`) | Yes |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` (after `ParseMultipartForm`) | Yes |
+| `execute` | `func(T) error` or `func() error` | render callback (see below) | N/A |
 | Path param | Any parseable | `request.PathValue(name)` | Yes |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes |
 
@@ -143,6 +144,16 @@ In struct-binding mode, `multipart` additionally supports
 is 32 MiB; override with the `--output-multipart-max-memory=<size>` generator
 flag (e.g. `64MB`, `128MiB`). Per `mime/multipart`'s standard semantics,
 upload data exceeding `maxMemory` spills to the OS temp directory.
+
+`execute` is the render callback. Instead of muxt rendering the template after
+the method returns, muxt passes a closure into the method at `execute`'s
+position and the method decides when (and whether) to render. The method param
+must be `func(T) error` — `T` becomes `.Result` in the template — or
+`func() error` (then `T` is `struct{}`). A method using `execute` must return
+only `error`. Because the receiver controls when the closure runs, you can
+render while holding a lock so the template observes a consistent snapshot of
+state. If the callback is never invoked the response body is empty and muxt
+returns `204 No Content`.
 
 **Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
 

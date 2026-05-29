@@ -387,6 +387,7 @@ const (
 	TemplateNameScopeIdentifierMultipart    = "multipart"
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
+	TemplateNameScopeIdentifierExecute      = "execute"
 )
 
 func patternScope() []string {
@@ -396,6 +397,7 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierContext,
 		TemplateNameScopeIdentifierForm,
 		TemplateNameScopeIdentifierMultipart,
+		TemplateNameScopeIdentifierExecute,
 	}
 }
 

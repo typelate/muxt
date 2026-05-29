@@ -1,0 +1,99 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /alone Alone(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /last/{id} Last(ctx, id, execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /first/{id} First(execute, ctx, id)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /middle/{id} Middle(ctx, execute, id)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "POST /form WithForm(form, execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.22
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Alone(execute func(int) error) error { return execute(1) }
+
+func (Server) Last(ctx context.Context, id int, execute func(int) error) error {
+	_ = ctx
+	return execute(id)
+}
+
+func (Server) First(execute func(int) error, ctx context.Context, id int) error {
+	_ = ctx
+	return execute(id)
+}
+
+func (Server) Middle(ctx context.Context, execute func(int) error, id int) error {
+	_ = ctx
+	return execute(id)
+}
+
+type FormData struct {
+	N int `name:"n"`
+}
+
+func (Server) WithForm(form FormData, execute func(int) error) error {
+	return execute(form.N)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func get(t *testing.T, mux *http.ServeMux, path, want string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s status = %d, want 200", path, rec.Code)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, want) {
+		t.Fatalf("%s body = %q, want contains %q", path, got, want)
+	}
+}
+
+func TestArgOrder(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	get(t, mux, "/alone", "<p>1</p>")
+	get(t, mux, "/last/7", "<p>7</p>")
+	get(t, mux, "/first/8", "<p>8</p>")
+	get(t, mux, "/middle/9", "<p>9</p>")
+
+	req := httptest.NewRequest(http.MethodPost, "/form", strings.NewReader(url.Values{"n": {"42"}}.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/form status = %d, want 200", rec.Code)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "<p>42</p>") {
+		t.Fatalf("/form body = %q, want contains <p>42</p>", got)
+	}
+}

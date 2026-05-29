@@ -1,0 +1,84 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /endpoint Endpoint(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.22
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"sync"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct {
+	mu    sync.Mutex
+	value int
+}
+
+// Endpoint renders the template inside the critical section so the template
+// reads s.value while the lock is held.
+func (s *Server) Endpoint(execute func(int) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.value++
+	return execute(s.value)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+)
+
+func TestEndpoint(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, &Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/endpoint", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "<p>1</p>") {
+		t.Fatalf("body = %q, want it to contain <p>1</p>", got)
+	}
+}
+
+func TestEndpoint_concurrent(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, &Server{})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/endpoint", nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+		}()
+	}
+	wg.Wait()
+}

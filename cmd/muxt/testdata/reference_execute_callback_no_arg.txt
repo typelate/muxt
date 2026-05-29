@@ -1,0 +1,59 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /ping Ping(execute)" -}}<p>pong</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.22
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"sync"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct {
+	mu sync.Mutex
+}
+
+func (s *Server) Ping(execute func() error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return execute()
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestPing(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, &Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "pong") {
+		t.Fatalf("body = %q, want it to contain pong", got)
+	}
+}
