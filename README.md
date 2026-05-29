@@ -26,7 +26,9 @@ go install github.com/typelate/muxt@latest
 
 Or as a project tool: `go get -tool github.com/typelate/muxt`. Pre-built binaries are also attached to each [release](https://github.com/typelate/muxt/releases).
 
-## Template Syntax
+## Template Name Syntax
+
+This is what muxt uses to map `Go` `<->` `HTML`.
 
 Standard `http.ServeMux` pattern, optionally with a status code and method call:
 
