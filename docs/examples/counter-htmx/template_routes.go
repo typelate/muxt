@@ -28,14 +28,14 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	}}
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		if len(td.errList) == 0 {
-			td.result = receiver.Count()
-			td.okay = true
-		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		defer buf.Reset()
+		if len(td.errList) == 0 {
+			td.result = receiver.Count()
+			td.okay = true
+		}
 		if err := templates.ExecuteTemplate(buf, "/ Count()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -75,14 +75,14 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	})
 	mux.HandleFunc("/decrement-count", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		if len(td.errList) == 0 {
-			td.result = receiver.Decrement()
-			td.okay = true
-		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		defer buf.Reset()
+		if len(td.errList) == 0 {
+			td.result = receiver.Decrement()
+			td.okay = true
+		}
 		if err := templates.ExecuteTemplate(buf, "/decrement-count Decrement()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
@@ -102,14 +102,14 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	})
 	mux.HandleFunc("/increment-count", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		if len(td.errList) == 0 {
-			td.result = receiver.Increment()
-			td.okay = true
-		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		defer buf.Reset()
+		if len(td.errList) == 0 {
+			td.result = receiver.Increment()
+			td.okay = true
+		}
 		if err := templates.ExecuteTemplate(buf, "/increment-count Increment()", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)

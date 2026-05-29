@@ -259,7 +259,6 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 			Rhs: []ast.Expr{astgen.String("")},
 		})
 	}
-
 	// Declare the buffer pool used by the handlers registered directly in this
 	// function. In multiple-files mode the per-file functions declare their own
 	// pool, so only declare it here when this function actually has handlers.
@@ -703,6 +702,8 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 
 	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
 	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
 		X:   ast.NewIdent(resultDataIdent),
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
@@ -726,8 +727,6 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 			List: receiverCall.Stmts(),
 		},
 	})
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 
 	if config.Logger {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
