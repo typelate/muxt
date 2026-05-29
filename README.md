@@ -1,4 +1,4 @@
-# Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt) [![Go](https://github.com/typelate/muxt/actions/workflows/go.yml/badge.svg)](https://github.com/typelate/muxt/actions/workflows/go.yml)
+# Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt)
 
 **Server-rendered HTML, type-checked at `go generate` time.**
 
