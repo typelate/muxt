@@ -11,6 +11,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
 | `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
+| `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `sse` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Server-Sent Events |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
