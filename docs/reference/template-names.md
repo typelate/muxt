@@ -132,6 +132,8 @@ MethodName(arg1, arg2, ...)
 | `form` | struct or `url.Values` | `request.Form` (after `ParseForm`) | Yes |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` (after `ParseMultipartForm`) | Yes |
 | `execute` | `func(T) error` or `func() error` | render callback (see below) | N/A |
+| `sse` | `func(T) error` or `func() error` | Server-Sent Events render callback (see below) | N/A |
+| `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes |
 | Path param | Any parseable | `request.PathValue(name)` | Yes |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes |
 
@@ -155,6 +157,24 @@ render while holding a lock so the template observes a consistent snapshot of
 state. If the callback is never invoked the response body is empty and muxt
 returns `204 No Content`.
 
+`sse` is the render callback for **Server-Sent Events**. Like `execute`, muxt
+passes a closure into the method at `sse`'s position, but the handler first
+establishes an event stream (`Content-Type: text/event-stream`, initial flush)
+and the method may call the closure many times — once per event. The param must
+be `func(T) error` (`T` becomes `.Result`) or `func() error`. Each call renders
+the template into a pooled buffer and writes one SSE frame, then flushes. The
+method returns nothing or only `error` (a returned error is logged and closes
+the stream). `sse` is mutually exclusive with `execute` and `response`. The
+template data is an `SSETemplateData` value: alongside `.Result`, `.Request`,
+and `.Err` it exposes chainable `.Event`, `.ID`, and `.Retry` setters for the
+SSE frame fields. When the method is not defined on the receiver, muxt
+synthesizes the callback as `func(any) error`.
+
+`lastEventID` reads the `Last-Event-Id` request header — the value a browser
+replays when reconnecting an SSE stream — and parses it to the method param type
+like a path value (`string` by default, or any parseable type). A
+`{lastEventID}` path wildcard takes precedence over the header.
+
 **Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
 
 ### Examples
@@ -165,11 +185,12 @@ returns `204 No Content`.
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
+{{define "GET /events Stream(ctx, lastEventID, sse)"}}{{end}}  <!-- Server-Sent Events -->
 ```
 
 Parameter names in template must match method signature exactly. Case-sensitive.
 
-[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)
+[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 
 ## Host Matching
 

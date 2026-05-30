@@ -11,6 +11,8 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
 | `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
+| `sse` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Server-Sent Events |
+| `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
 
@@ -171,6 +173,46 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
 
+## Server-Sent Events
+
+`sse` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+
+```gotmpl
+{{define "GET /clock Clock(ctx, sse)"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Clock(ctx context.Context, sse func(string) error) {
+    t := time.NewTicker(time.Second)
+    defer t.Stop()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case now := <-t.C:
+            if err := sse(now.Format(time.RFC3339)); err != nil {
+                return // client disconnected
+            }
+        }
+    }
+}
+```
+
+| Rule | Detail |
+|------|--------|
+| Callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
+| Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
+| Mutually exclusive with | `execute` and `response` |
+| Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
+| Undefined method | Synthesized as `func(any) error` |
+
+Pair `sse` with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
+
+```gotmpl
+{{define "GET /events Stream(ctx, lastEventID, sse)"}}{{.Result}}{{end}}
+```
+
+[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
+
 ## Advanced Patterns
 
 **Mixing path, form, and special parameters:**
@@ -258,6 +300,13 @@ Validation errors should return from your method. Display them in templates with
 - [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) — `--output-multipart-max-memory` flag
 - [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt) — Malformed body → 400
 - [err_multipart_with_form.txt](../../cmd/muxt/testdata/err_multipart_with_form.txt) — `form` + `multipart` rejected
+
+**Server-Sent Events:**
+- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse` callback with `lastEventID`
+- [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) — `func() error` callback form
+- [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) — error-returning method
+- [reference_sse_synthesized_method.txt](../../cmd/muxt/testdata/reference_sse_synthesized_method.txt) — synthesized `func(any) error` signature
+- [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) — `lastEventID` header parsing
 
 **Multiple arguments:**
 - [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple params
