@@ -702,34 +702,38 @@ func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bo
 	return 0, nil, false
 }
 
-// validateSSECallback enforces the sse contract and returns the SSETemplateData
-// result type T, whether the callback takes a data argument, and whether the
-// method returns an error (as opposed to nothing).
-//   - method must return nothing or only error
-//   - callback must be func() error (T = struct{}) or func(T) error
-func validateSSECallback(methodName string, method, callback *types.Signature) (types.Type, bool, bool, error) {
+// validateSSEMethodResults checks that an sse method returns nothing or only
+// error, and reports whether it returns an error.
+func validateSSEMethodResults(methodName string, method *types.Signature) (bool, error) {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	methodReturnsErr := false
 	switch method.Results().Len() {
 	case 0:
+		return false, nil
 	case 1:
 		if !types.Implements(method.Results().At(0).Type(), errIface) {
-			return nil, false, false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+			return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
 		}
-		methodReturnsErr = true
+		return true, nil
 	default:
-		return nil, false, false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+		return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
 	}
+}
+
+// validateSSECallbackShape checks that an sse callback parameter is func() error
+// (T = struct{}) or func(T) error, and returns the SSETemplateData result type T
+// and whether the callback takes a data argument.
+func validateSSECallbackShape(methodName string, callback *types.Signature) (types.Type, bool, error) {
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
-		return nil, false, false, fmt.Errorf("sse argument for %s must be a func(...) error", methodName)
+		return nil, false, fmt.Errorf("sse argument for %s must be a func(...) error", methodName)
 	}
 	switch callback.Params().Len() {
 	case 0:
-		return types.NewStruct(nil, nil), false, methodReturnsErr, nil
+		return types.NewStruct(nil, nil), false, nil
 	case 1:
-		return callback.Params().At(0).Type(), true, methodReturnsErr, nil
+		return callback.Params().At(0).Type(), true, nil
 	default:
-		return nil, false, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
+		return nil, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
 	}
 }
 
@@ -737,7 +741,7 @@ func validateSSECallback(methodName string, method, callback *types.Signature) (
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
-func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, sseIdx int, callbackSig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		flusherIdent = "flusher"
 		okIdent      = "ok"
@@ -747,7 +751,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	resultType, hasArg, methodReturnsErr, err := validateSSECallback(def.FunctionIdentifier().Name, sig, callbackSig)
+	methodReturnsErr, err := validateSSEMethodResults(def.FunctionIdentifier().Name, sig)
 	if err != nil {
 		return nil, err
 	}
@@ -801,7 +805,9 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}}
 	}
 	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
-	body, err = appendParseArgumentStatements(body, def, file, resultType, sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	// The result type is per-callback; arg parsing only needs ctx/lastEventID/path
+	// (it ignores the result type), so pass an empty struct here.
+	body, err = appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -834,12 +840,38 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}}}},
 	)
 
-	closure, err := sseClosure(file, config, def, resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
-	if err != nil {
-		return nil, err
-	}
+	// Build a render closure for every sse-prefixed argument. The base "sse"
+	// renders the route's own template; each sse-prefixed callback (sseClock,
+	// sseMetrics, ...) renders a same-named template, whose existence is checked
+	// here. Each closure has its own result type and creates its own
+	// SSETemplateData, so the callbacks need not share a result type.
 	callArgs := slices.Clone(def.CallExpression().Args)
-	callArgs[sseIdx] = closure
+	for i, a := range def.CallExpression().Args {
+		id, ok := a.(*ast.Ident)
+		if !ok || !muxt.IsSSEArgument(id.Name) {
+			continue
+		}
+		var cb *types.Signature
+		if i < sig.Params().Len() {
+			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
+		}
+		resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+		if err != nil {
+			return nil, err
+		}
+		templateName := def.Name()
+		if id.Name != muxt.TemplateNameScopeIdentifierSSE {
+			templateName = id.Name
+			if def.Template() == nil || def.Template().Lookup(templateName) == nil {
+				return nil, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
+			}
+		}
+		closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+		if err != nil {
+			return nil, err
+		}
+		callArgs[i] = closure
+	}
 	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}
 
 	if methodReturnsErr {
@@ -876,7 +908,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
 		tdIdent     = "td"
@@ -929,7 +961,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	body = append(body, &ast.IfStmt{
 		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
 		}}},
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{List: []ast.Stmt{
@@ -1036,14 +1068,14 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	if !ok {
 		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
 	}
-	if sseIdx, sseCallbackSig, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
+	if _, _, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
 		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
 			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierExecute)
 		}
 		if def.HasResponseWriterArg() {
 			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierHTTPResponse)
 		}
-		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, sseIdx, sseCallbackSig, receiverInterfaceName)
+		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	}
 	if sig.Results().Len() == 0 {
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
@@ -1355,9 +1387,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || arg.Name == muxt.TemplateNameScopeIdentifierSSE {
-				// The render callback (execute/sse) is validated and wired into
-				// the call in methodHandlerFunc. It is not parsed from the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) {
+				// The render callback (execute/sse/sse-prefixed) is validated and
+				// wired into the call in methodHandlerFunc. It is not parsed from
+				// the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2115,8 +2148,8 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if arg.Name == muxt.TemplateNameScopeIdentifierSSE {
-				// The sse callback's data type cannot be inferred, so synthesize
+			if muxt.IsSSEArgument(arg.Name) {
+				// An sse callback's data type cannot be inferred, so synthesize
 				// it as func(any) error and stream the result as any. The method
 				// returns nothing, matching the void SSE contract.
 				hasSSE = true

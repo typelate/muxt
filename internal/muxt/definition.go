@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template/parse"
+	"unicode"
 
 	"github.com/typelate/muxt/internal/astgen"
 )
@@ -378,11 +379,23 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 	return false
 }
 
+// IsSSEArgument reports whether name is an SSE render-callback argument: the
+// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
+// sseMetrics, ...). Prefixed callbacks render a same-named template; they are
+// only valid on a route that also has the base "sse" argument.
+func IsSSEArgument(name string) bool {
+	if name == TemplateNameScopeIdentifierSSE {
+		return true
+	}
+	rest, ok := strings.CutPrefix(name, TemplateNameScopeIdentifierSSE)
+	return ok && rest != "" && unicode.IsUpper(rune(rest[0]))
+}
+
 func checkArguments(identifiers []string, call *ast.CallExpr) error {
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok {
+			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 		case *ast.CallExpr:
