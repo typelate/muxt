@@ -1055,7 +1055,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			switch {
 			case slices.Contains(def.PathValueIdentifiers(), arg.Name):
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), templateDataParseErrBlock(file, rdIdent))
 				if err != nil {
 					return nil, err
 				}
@@ -1063,7 +1063,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				def.SetArgumentType(arg.Name, param.Type())
 			case arg.Name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), templateDataParseErrBlock(file, rdIdent))
 				if err != nil {
 					return nil, err
 				}
@@ -1167,7 +1167,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
 			}
@@ -1192,7 +1192,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 			if ok && err != nil {
 				return nil, err
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, rdIdent)
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
 			}
@@ -1396,9 +1396,21 @@ func httpServeMuxField(file *File) *ast.Field {
 	}
 }
 
-func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, rdIdent string) ([]ast.Stmt, error) {
-	errBlock := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
-	errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
+// templateDataParseErrBlock builds the standard scalar-parse failure block used
+// by normal handlers: it appends the error to the template data and sets the
+// error status code to 400.
+func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
+	b := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+	b.List = append(b.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
+	return b
+}
+
+// generateParseValueFromStringStatements emits the statements that parse str
+// into valueType and pass the result to assignment. On a parse failure it runs
+// errBlock, which callers supply so the failure can be handled differently per
+// context (normal handlers accumulate into the template data; SSE handlers
+// respond 400 before establishing the stream).
+func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
 	switch tp := valueType.(type) {
 	case *types.Basic:
 		convert := func(exp ast.Expr) ast.Stmt {
