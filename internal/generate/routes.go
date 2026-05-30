@@ -2072,6 +2072,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 
 func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
+	hasSSE := false
 	for _, a := range call.Args {
 		switch arg := a.(type) {
 		case *ast.Ident:
@@ -2079,7 +2080,12 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
 			if arg.Name == muxt.TemplateNameScopeIdentifierSSE {
-				return nil, fmt.Errorf("method %s using the sse callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
+				// The sse callback's data type cannot be inferred, so synthesize
+				// it as func(any) error and stream the result as any. The method
+				// returns nothing, matching the void SSE contract.
+				hasSSE = true
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				continue
 			}
 			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
@@ -2093,6 +2099,9 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 		}
 	}
 	results := types.NewTuple(types.NewVar(0, nil, "", types.Universe.Lookup("any").Type()))
+	if hasSSE {
+		results = types.NewTuple()
+	}
 	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil
 }
 

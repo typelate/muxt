@@ -3,10 +3,22 @@ package generate
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
 )
+
+// sseCallbackSignature returns the func(any) error type synthesized for an sse
+// argument when the receiver method is not already defined.
+func sseCallbackSignature() *types.Signature {
+	anyType := types.Universe.Lookup("any").Type()
+	errType := types.Universe.Lookup("error").Type()
+	return types.NewSignatureType(nil, nil, nil,
+		types.NewTuple(types.NewVar(0, nil, "", anyType)),
+		types.NewTuple(types.NewVar(0, nil, "", errType)),
+		false)
+}
 
 const (
 	sseTemplateDataReceiverName = "m"

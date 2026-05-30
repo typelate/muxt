@@ -1,0 +1,60 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+# An sse method that is not defined on the receiver gets a synthesized
+# signature: the callback becomes func(any) error and the method returns
+# nothing, matching the void SSE contract.
+grep 'Stream\(ctx context.Context, lastEventID string, sse func\(any\) error\)' template_routes.go
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events Stream(ctx, lastEventID, sse)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream implements the synthesized interface method signature. The callback
+// accepts any; the template renders it as .Result.
+func (Server) Stream(ctx context.Context, lastEventID string, sse func(any) error) {
+	_ = sse("hi-" + lastEventID)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	req.Header.Set("Last-Event-Id", "7")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got := rec.Body.String(); !strings.Contains(got, "data: hi-7\n\n") {
+		t.Fatalf("body = %q, want it to contain %q", got, "data: hi-7\n\n")
+	}
+}
