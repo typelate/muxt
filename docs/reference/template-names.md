@@ -170,6 +170,13 @@ and `.Err` it exposes chainable `.Event`, `.ID`, and `.Retry` setters for the
 SSE frame fields. When the method is not defined on the receiver, muxt
 synthesizes the callback as `func(any) error`.
 
+The `execute` and `sse` callback parameter may be a **named or aliased func
+type** — `type RenderFunc func(T) error` or `type RenderFunc = func(T) error` —
+not only an inline `func(T) error`. Muxt resolves the underlying signature, so
+`T` is read from it the same way.
+
+[reference_callback_named_func_type.txt](../../cmd/muxt/testdata/reference_callback_named_func_type.txt)
+
 `lastEventID` reads the `Last-Event-Id` request header — the value a browser
 replays when reconnecting an SSE stream — and parses it to the method param type
 like a path value (`string` by default, or any parseable type). A
