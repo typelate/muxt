@@ -1,0 +1,66 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /render Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// RenderInt is a named func type used as the execute callback.
+type RenderInt func(int) error
+
+// EmitString is an aliased func type used as the sse callback.
+type EmitString = func(string) error
+
+type Server struct{}
+
+func (Server) Render(execute RenderInt) error { return execute(7) }
+
+func (Server) Stream(ctx context.Context, sse EmitString) { _ = sse("hi") }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func get(t *testing.T, mux *http.ServeMux, path string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec.Body.String()
+}
+
+func TestNamedFuncCallbacks(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	if got := get(t, mux, "/render"); !strings.Contains(got, "<p>7</p>") {
+		t.Fatalf("execute (named RenderInt) body = %q, want <p>7</p>", got)
+	}
+	if got := get(t, mux, "/events"); !strings.Contains(got, "data: hi\n\n") {
+		t.Fatalf("sse (aliased EmitString) body = %q, want data: hi frame", got)
+	}
+}

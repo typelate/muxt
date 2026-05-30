@@ -651,7 +651,9 @@ func executeArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature
 		}
 		var cb *types.Signature
 		if i < sig.Params().Len() {
-			cb, _ = sig.Params().At(i).Type().(*types.Signature)
+			// Underlying unwraps named and aliased func types so the callback
+			// param may be declared as e.g. `type RenderFunc func(T) error`.
+			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
 		}
 		return i, cb, true
 	}
@@ -691,7 +693,9 @@ func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bo
 		}
 		var cb *types.Signature
 		if i < sig.Params().Len() {
-			cb, _ = sig.Params().At(i).Type().(*types.Signature)
+			// Underlying unwraps named and aliased func types so the callback
+			// param may be declared as e.g. `type RenderFunc func(T) error`.
+			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
 		}
 		return i, cb, true
 	}
