@@ -68,6 +68,7 @@ type RoutesFileConfiguration struct {
 	ReceiverPackage,
 	ReceiverInterface,
 	TemplateDataType,
+	SSETemplateDataType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
@@ -109,6 +110,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
+	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {
@@ -370,6 +372,11 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
 			decls = append(decls, method)
 		}
+	}
+	// The SSETemplateData type and its methods are only needed when a route uses
+	// the sse render callback, so emit them conditionally to avoid unused imports.
+	if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) {
+		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{
@@ -673,6 +680,290 @@ func validateExecuteCallback(methodName string, method, callback *types.Signatur
 	}
 }
 
+// sseArg finds the reserved "sse" render-callback argument in call. It returns
+// its index, the receiver method's parameter at that index as a *types.Signature
+// (nil if the param is not a func), and whether it is present.
+func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bool) {
+	for i, a := range call.Args {
+		id, ok := a.(*ast.Ident)
+		if !ok || id.Name != muxt.TemplateNameScopeIdentifierSSE {
+			continue
+		}
+		var cb *types.Signature
+		if i < sig.Params().Len() {
+			cb, _ = sig.Params().At(i).Type().(*types.Signature)
+		}
+		return i, cb, true
+	}
+	return 0, nil, false
+}
+
+// validateSSECallback enforces the sse contract and returns the SSETemplateData
+// result type T, whether the callback takes a data argument, and whether the
+// method returns an error (as opposed to nothing).
+//   - method must return nothing or only error
+//   - callback must be func() error (T = struct{}) or func(T) error
+func validateSSECallback(methodName string, method, callback *types.Signature) (types.Type, bool, bool, error) {
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	methodReturnsErr := false
+	switch method.Results().Len() {
+	case 0:
+	case 1:
+		if !types.Implements(method.Results().At(0).Type(), errIface) {
+			return nil, false, false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+		}
+		methodReturnsErr = true
+	default:
+		return nil, false, false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+	}
+	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
+		return nil, false, false, fmt.Errorf("sse argument for %s must be a func(...) error", methodName)
+	}
+	switch callback.Params().Len() {
+	case 0:
+		return types.NewStruct(nil, nil), false, methodReturnsErr, nil
+	case 1:
+		return callback.Params().At(0).Type(), true, methodReturnsErr, nil
+	default:
+		return nil, false, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
+	}
+}
+
+// sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
+// Server-Sent Events. Unlike a normal handler it establishes an event stream
+// (Content-Type text/event-stream, flush) and invokes the receiver method with
+// a callback closure that renders and writes one SSE frame per call.
+func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, sseIdx int, callbackSig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+	const (
+		flusherIdent = "flusher"
+		okIdent      = "ok"
+		mutexIdent   = "mut"
+		headerIdent  = "h"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	resultType, hasArg, methodReturnsErr, err := validateSSECallback(def.FunctionIdentifier().Name, sig, callbackSig)
+	if err != nil {
+		return nil, err
+	}
+
+	var callFun ast.Expr
+	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name); obj != nil {
+		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(def.FunctionIdentifier().Name)}
+	} else {
+		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
+	}
+
+	handlerFunc := &ast.FuncLit{
+		Type: astgen.HTTPHandlerFuncType(file, response, request),
+		Body: &ast.BlockStmt{},
+	}
+	body := []ast.Stmt{
+		// defer func() { _ = request.Body.Close() }()
+		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.FuncLit{
+			Type: &ast.FuncType{Params: &ast.FieldList{}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("_")},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{
+					X:   &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent("Body")},
+					Sel: ast.NewIdent("Close"),
+				}}},
+			}}},
+		}}},
+		// flusher, ok := response.(http.Flusher)
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(flusherIdent), ast.NewIdent(okIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(response), Type: astgen.ExportedIdentifier(file, "", "net/http", "Flusher")}},
+		},
+		// if !ok { http.Error(response, "streaming unsupported", 500); return }
+		&ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.String("streaming unsupported"), http.StatusInternalServerError)},
+				&ast.ReturnStmt{},
+			}},
+		},
+	}
+
+	// Parse ctx, lastEventID and any path params into locals. A typed parse
+	// failure responds 400 and returns before the stream is established.
+	parseErrBlock := func() *ast.BlockStmt {
+		return &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.CallError(errIdent), http.StatusBadRequest)},
+			&ast.ReturnStmt{},
+		}}
+	}
+	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
+	body, err = appendParseArgumentStatements(body, def, file, resultType, sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	// h := response.Header(); set the SSE headers; WriteHeader(200); flush.
+	headerSet := func(key, value string) ast.Stmt {
+		return &ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(headerIdent), Sel: ast.NewIdent("Set")},
+			Args: []ast.Expr{astgen.String(key), astgen.String(value)},
+		}}
+	}
+	body = append(body,
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(headerIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("Header")}}},
+		},
+		headerSet("Content-Type", "text/event-stream"),
+		headerSet("Connection", "keep-alive"),
+		headerSet("Cache-Control", "no-cache"),
+		&ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("WriteHeader")},
+			Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
+		}},
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+		// var mut sync.Mutex
+		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+			Names: []*ast.Ident{ast.NewIdent(mutexIdent)},
+			Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
+		}}}},
+	)
+
+	closure, err := sseClosure(file, config, def, resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+	if err != nil {
+		return nil, err
+	}
+	callArgs := slices.Clone(def.CallExpression().Args)
+	callArgs[sseIdx] = closure
+	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}
+
+	if methodReturnsErr {
+		body = append(body, &ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
+		})
+	} else {
+		body = append(body, &ast.ExprStmt{X: callExpr})
+	}
+
+	handlerFunc.Body.List = body
+	return handlerFunc, nil
+}
+
+// sseClosure builds the callback passed to the receiver method. Each call
+// acquires a pooled buffer, renders the template into it, then writes one SSE
+// frame to the response under a mutex and flushes:
+//
+//	func(result T) error {
+//		if err := request.Context().Err(); err != nil { return err }
+//		buf := bytesBufferPool.Get().(*bytes.Buffer)
+//		buf.Reset()
+//		defer bytesBufferPool.Put(buf)
+//		td := SSETemplateData[Recv, T]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+//		if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
+//		td.data = buf
+//		mut.Lock()
+//		defer mut.Unlock()
+//		if _, err := td.WriteTo(response); err != nil { return err }
+//		flusher.Flush()
+//		return nil
+//	}
+//
+// For the zero-arg form it omits the parameter and the result field.
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+	const (
+		bufIdent    = "buf"
+		tdIdent     = "td"
+		resultIdent = "result"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
+	}
+
+	var params []*ast.Field
+	tdElts := []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(receiverIdent)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(request), Value: ast.NewIdent(request)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+	}
+	if hasArg {
+		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr})
+		tdElts = append(tdElts, &ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierResult), Value: ast.NewIdent(resultIdent)})
+	}
+
+	body := []ast.Stmt{
+		// if err := request.Context().Err(); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+				&ast.CallExpr{Fun: &ast.SelectorExpr{
+					X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
+					Sel: ast.NewIdent("Err"),
+				}},
+			}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+	}
+	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
+	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+	// td := SSETemplateData[Recv, T]{...}
+	body = append(body, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CompositeLit{
+			Type: &ast.IndexListExpr{X: ast.NewIdent(config.SSETemplateDataType), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
+			Elts: tdElts,
+		}},
+	})
+	// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
+	body = append(body, &ast.IfStmt{
+		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(def.Name())}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
+		}}},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
+		}},
+	})
+	body = append(body,
+		// td.data = buf
+		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
+		// mut.Lock()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
+		// defer mut.Unlock()
+		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
+		// if _, err := td.WriteTo(response); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
+				Args: []ast.Expr{ast.NewIdent(response)},
+			}}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+		// flusher.Flush()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+		// return nil
+		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
+	)
+
+	return &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: params},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
+		},
+		Body: &ast.BlockStmt{List: body},
+	}, nil
+}
+
 // executeClosure builds: func(data T) error { td.result = data; return templates.ExecuteTemplate(buf, name, &td) }
 // For the zero-arg form it omits the parameter and the td.result assignment.
 func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent string, resultType types.Type, hasArg bool) (*ast.FuncLit, error) {
@@ -716,6 +1007,15 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	sig, ok := sigs[def.FunctionIdentifier().Name]
 	if !ok {
 		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
+	}
+	if sseIdx, sseCallbackSig, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
+		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
+			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierExecute)
+		}
+		if def.HasResponseWriterArg() {
+			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierHTTPResponse)
+		}
+		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, sseIdx, sseCallbackSig, receiverInterfaceName)
 	}
 	if sig.Results().Len() == 0 {
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
@@ -778,7 +1078,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
-	}); err != nil {
+	}, nil); err != nil {
 		return nil, err
 	}
 
@@ -937,7 +1237,13 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+	if parseErrBlock == nil {
+		// Normal handlers accumulate scalar-parse failures into the template
+		// data (and respond with the recorded error status). SSE handlers pass
+		// their own factory to respond 400 before opening the event stream.
+		parseErrBlock = func() *ast.BlockStmt { return templateDataParseErrBlock(file, rdIdent) }
+	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -976,7 +1282,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
-			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock)
+			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -1055,7 +1361,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			switch {
 			case slices.Contains(def.PathValueIdentifiers(), arg.Name):
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), templateDataParseErrBlock(file, rdIdent))
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
@@ -1063,7 +1369,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				def.SetArgumentType(arg.Name, param.Type())
 			case arg.Name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), templateDataParseErrBlock(file, rdIdent))
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
@@ -1771,6 +2077,9 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 		case *ast.Ident:
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
+			}
+			if arg.Name == muxt.TemplateNameScopeIdentifierSSE {
+				return nil, fmt.Errorf("method %s using the sse callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
 			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {

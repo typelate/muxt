@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type=clock
+
 //go:embed *.gohtml
 var source embed.FS
 

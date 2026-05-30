@@ -1,0 +1,28 @@
+! muxt generate --use-receiver-type=Server
+stderr 'method Endpoint using the sse callback must return nothing or only error'
+
+-- template.gohtml --
+{{- define "GET /x Endpoint(sse)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Endpoint(sse func(string) error) (int, error) {
+	_ = sse
+	return 0, nil
+}
