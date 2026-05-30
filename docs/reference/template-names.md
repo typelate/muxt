@@ -170,6 +170,16 @@ and `.Err` it exposes chainable `.Event`, `.ID`, and `.Retry` setters for the
 SSE frame fields. When the method is not defined on the receiver, muxt
 synthesizes the callback as `func(any) error`.
 
+A route with a base `sse` argument may take **additional `sse`-prefixed
+callbacks** — `Events(sse, sseClock, sseMetrics)`. Each gets its own closure in
+the method call and renders a different template: the base `sse` renders the
+route's own template, while a prefixed callback renders the template named
+exactly after the argument (`sseClock` renders `{{define "sseClock"}}`). Those
+templates must exist at generate time. Each callback has its own result type and
+builds its own `SSETemplateData`, so they need not share a `T`.
+
+[reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)
+
 The `execute` and `sse` callback parameter may be a **named or aliased func
 type** — `type RenderFunc func(T) error` or `type RenderFunc = func(T) error` —
 not only an inline `func(T) error`. Muxt resolves the underlying signature, so
