@@ -1,0 +1,88 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /echo Echo(lastEventID)" -}}id={{- .Result -}}{{- end -}}
+{{- define "GET /num Num(lastEventID)" -}}n={{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.22
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Echo returns the Last-Event-Id header verbatim (default string type).
+func (Server) Echo(lastEventID string) string { return lastEventID }
+
+// Num parses the Last-Event-Id header to an int based on the method signature.
+func (Server) Num(lastEventID int) int { return lastEventID }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestEcho(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/echo", nil)
+	req.Header.Set("Last-Event-Id", "abc123")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); got != "id=abc123" {
+		t.Fatalf("body = %q, want %q", got, "id=abc123")
+	}
+}
+
+func TestNum(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/num", nil)
+	req.Header.Set("Last-Event-Id", "42")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); got != "n=42" {
+		t.Fatalf("body = %q, want %q", got, "n=42")
+	}
+}
+
+func TestNum_badHeader(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/num", nil)
+	req.Header.Set("Last-Event-Id", "not-an-int")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}

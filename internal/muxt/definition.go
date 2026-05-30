@@ -138,8 +138,23 @@ func (def Definition) Template() *template.Template   { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
-func (def Definition) Identifier() string             { return def.identifier }
-func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
+
+// UsesSSE reports whether the handler call uses the reserved "sse" render
+// callback argument. It scans only the top-level call arguments because the sse
+// callback, like execute, must be a direct argument to the receiver method.
+func (def Definition) UsesSSE() bool {
+	if def.call == nil {
+		return false
+	}
+	for _, a := range def.call.Args {
+		if id, ok := a.(*ast.Ident); ok && id.Name == TemplateNameScopeIdentifierSSE {
+			return true
+		}
+	}
+	return false
+}
+func (def Definition) Identifier() string        { return def.identifier }
+func (def Definition) TemplatesVariable() string { return def.templatesVariable }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -388,6 +403,8 @@ const (
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierExecute      = "execute"
+	TemplateNameScopeIdentifierSSE          = "sse"
+	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 )
 
 func patternScope() []string {
@@ -398,6 +415,8 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierForm,
 		TemplateNameScopeIdentifierMultipart,
 		TemplateNameScopeIdentifierExecute,
+		TemplateNameScopeIdentifierSSE,
+		TemplateNameScopeIdentifierLastEventID,
 	}
 }
 

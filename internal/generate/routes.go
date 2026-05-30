@@ -1013,22 +1013,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
-				// The render callback is validated and wired into the call in
-				// methodHandlerFunc. It is not parsed from the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || arg.Name == muxt.TemplateNameScopeIdentifierSSE {
+				// The render callback (execute/sse) is validated and wired into
+				// the call in methodHandlerFunc. It is not parsed from the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("failed to determine type for %s", arg.Name)
 			}
-			src := &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-					Sel: ast.NewIdent(requestPathValue),
-				},
-				Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(arg.Name)}},
-			}
+			src := requestArgumentSource(def, arg.Name)
 			if types.AssignableTo(argType, param.Type()) {
 				if _, ok := parsed[arg.Name]; !ok {
 					parsed[arg.Name] = struct{}{}
@@ -1048,7 +1042,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					case muxt.TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
 					default:
-						if slices.Contains(def.PathValueIdentifiers(), arg.Name) {
+						if slices.Contains(def.PathValueIdentifiers(), arg.Name) || arg.Name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 						}
 					}
@@ -1060,6 +1054,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			}
 			switch {
 			case slices.Contains(def.PathValueIdentifiers(), arg.Name):
+				parsed[arg.Name] = struct{}{}
+				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
+				if err != nil {
+					return nil, err
+				}
+				statements = append(statements, s...)
+				def.SetArgumentType(arg.Name, param.Type())
+			case arg.Name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[arg.Name] = struct{}{}
 				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), rdIdent)
 				if err != nil {
@@ -1647,11 +1649,42 @@ func defaultTemplateNameScope(file *File, def muxt.Definition, argumentIdentifie
 		}
 		t := types.NewPointer(pkg.Scope().Lookup("Form").Type())
 		return t, true
+	case muxt.TemplateNameScopeIdentifierLastEventID:
+		// lastEventID defaults to string (sourced from the Last-Event-Id header);
+		// a non-string receiver param triggers typed parsing like a path value.
+		return types.Universe.Lookup("string").Type(), true
 	default:
 		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
+	}
+}
+
+// lastEventIDHeader is the canonical request header the lastEventID argument is
+// sourced from. http.Header.Get canonicalizes lookups, so this matches a
+// client's "Last-Event-ID" as well.
+const lastEventIDHeader = "Last-Event-Id"
+
+// requestArgumentSource returns the expression a scalar argument is parsed from.
+// lastEventID reads request.Header.Get("Last-Event-Id") unless it is also a path
+// wildcard, in which case the path value wins (request.PathValue(name)).
+func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
+	if name == muxt.TemplateNameScopeIdentifierLastEventID && !slices.Contains(def.PathValueIdentifiers(), name) {
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Header")},
+				Sel: ast.NewIdent("Get"),
+			},
+			Args: []ast.Expr{astgen.String(lastEventIDHeader)},
+		}
+	}
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+			Sel: ast.NewIdent(requestPathValue),
+		},
+		Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name)}},
 	}
 }
 
