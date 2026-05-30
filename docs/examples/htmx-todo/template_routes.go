@@ -13,6 +13,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"sync/atomic"
 )
 
 type RoutesReceiver interface {
@@ -206,8 +207,12 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
+		var executed atomic.Bool
 		if len(td.errList) == 0 {
 			if err := receiver.ListTodos(form, func(data TodoPage) error {
+				if !executed.CompareAndSwap(false, true) {
+					return errors.New("execute callback called more than once")
+				}
 				td.result = data
 				return templates.ExecuteTemplate(buf, "GET /{$} ListTodos(form, execute)", &td)
 			}); err != nil {

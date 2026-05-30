@@ -964,12 +964,36 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	}, nil
 }
 
-// executeClosure builds: func(data T) error { td.result = data; return templates.ExecuteTemplate(buf, name, &td) }
-// For the zero-arg form it omits the parameter and the td.result assignment.
-func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent string, resultType types.Type, hasArg bool) (*ast.FuncLit, error) {
+// executeClosure builds:
+//
+//	func(data T) error {
+//		if !executed.CompareAndSwap(false, true) {
+//			return errors.New("execute callback called more than once")
+//		}
+//		td.result = data
+//		return templates.ExecuteTemplate(buf, name, &td)
+//	}
+//
+// For the zero-arg form it omits the parameter and the td.result assignment. The
+// guard renders at most once: ExecuteTemplate mutates the shared template data
+// (status code, response headers), so a method that invokes the callback more
+// than once gets an error on the later calls rather than a second render. The
+// guard is an atomic.Bool compared-and-swapped so a callback invoked from
+// another goroutine still renders exactly once.
+func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIdent string, resultType types.Type, hasArg bool) (*ast.FuncLit, error) {
 	const dataIdent = "data"
 	var params []*ast.Field
-	var body []ast.Stmt
+	body := []ast.Stmt{
+		&ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: &ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(guardIdent), Sel: ast.NewIdent("CompareAndSwap")},
+				Args: []ast.Expr{astgen.Bool(false), astgen.Bool(true)},
+			}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+				astgen.ErrorsNew(file, astgen.String("execute callback called more than once")),
+			}}}},
+		},
+	}
 	if hasArg {
 		tExpr, err := file.TypeASTExpression(resultType)
 		if err != nil {
@@ -1129,10 +1153,18 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 
 		handlerFunc.Body.List = append(handlerFunc.Body.List, execTemplates)
 	} else {
-		closure, err := executeClosure(file, def, resultDataIdent, bufIdent, resultType, execHasArg)
+		const guardIdent = "executed"
+		closure, err := executeClosure(file, def, resultDataIdent, bufIdent, guardIdent, resultType, execHasArg)
 		if err != nil {
 			return nil, err
 		}
+		// The render callback may be invoked more than once (possibly from
+		// another goroutine); guard with an atomic.Bool so it renders at most
+		// once (see executeClosure).
+		handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.DeclStmt{Decl: &ast.GenDecl{
+			Tok:   token.VAR,
+			Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(guardIdent)}, Type: astgen.ExportedIdentifier(file, "", "sync/atomic", "Bool")}},
+		}})
 		callArgs := slices.Clone(def.CallExpression().Args)
 		callArgs[execIdx] = closure
 		if config.Logger {

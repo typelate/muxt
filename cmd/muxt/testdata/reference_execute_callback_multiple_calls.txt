@@ -1,0 +1,64 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /endpoint Endpoint(execute)" -}}[{{- .Result -}}]{{- end -}}
+-- go.mod --
+module server
+
+go 1.22
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// secondCallErr records the error returned by the second callback invocation so
+// the test can assert the callback rejects being called more than once.
+var secondCallErr error
+
+// Endpoint invokes the render callback twice. The callback renders at most once:
+// the first call renders, the second returns an error (ExecuteTemplate must not
+// re-mutate the shared template data).
+func (Server) Endpoint(execute func(string) error) error {
+	if err := execute("first"); err != nil {
+		return err
+	}
+	secondCallErr = execute("second")
+	return nil
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestEndpoint(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/endpoint", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Body.String(), "[first]"; got != want {
+		t.Fatalf("body = %q, want %q (callback must render at most once)", got, want)
+	}
+	if secondCallErr == nil {
+		t.Fatal("second execute call should return an error")
+	}
+}
