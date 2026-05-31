@@ -37,7 +37,6 @@ var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 - [`template.Must`](https://pkg.go.dev/html/template#Must)
 - [`template.New`](https://pkg.go.dev/html/template#New)
 - [`template.ParseFS`](https://pkg.go.dev/html/template#ParseFS)
-- [`template.Parse`](https://pkg.go.dev/html/template#Parse)
 
 **Template methods:**
 - [`Template.ParseFS`](https://pkg.go.dev/html/template#Template.ParseFS)
@@ -105,7 +104,7 @@ Each generated handler calls `ExecuteTemplate` on its own variable, so each vari
 - **Template name namespace** — `{{define "header"}}` in `adminTemplates` does not collide with `{{define "header"}}` in `publicTemplates`. `*template.Template` has a global namespace; later definitions silently overwrite earlier ones, so without separate variables every name in the app must be globally unique.
 - **`Funcs` map** — register admin-only template functions on `adminTemplates` without exposing them to public pages.
 - **Template `Option`s** — e.g. `Option("missingkey=error")` can apply to one set without forcing the same on the other.
-- **`embed.FS`** — each variable can pull from a different filesystem, including filesystems exported by separate Go packages.
+- **`embed.FS`** — each variable parses from its own filesystem, so two variables can embed and serve different directories.
 
 This is what makes templates portable across projects: a reusable admin component can ship its own template variable with its own names and helpers, and a consumer can mount it without worrying about name collisions in their own template set.
 

@@ -34,12 +34,14 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 
 func main() {
 	mux := http.NewServeMux()
-	TemplateRoutes(mux)
+	TemplateRoutes(mux, nil)
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
 ```
 
 This is all the Go you need. The `//go:generate` comment is how you invoke Muxt. The `templates` variable must be package-level, because Muxt finds it via static analysis. From here, every new route is just a new template.
+
+`TemplateRoutes` takes a receiver — the value whose methods your routes call. None of the routes in this tutorial call a method, so the generated `RoutesReceiver` interface is empty and `nil` satisfies it. Once a template name includes a call like `GetArticle(ctx, id)`, the receiver gains that method and you pass a real value.
 
 ## Step 3: Create a template
 
@@ -109,9 +111,9 @@ No Go code changed, only the template. Muxt updated the route registration autom
 
 While you're in `template_routes.go`, search for `ReadHelloByName`. Muxt generated a type-safe URL builder from the route pattern. You can use `{{$.Path.ReadHelloByName "world"}}` in any template instead of a hardcoded string — if you rename the route, the compiler tells you everywhere that reference breaks.
 
-## Step 6: Make it interactive with htmz    
+## Step 6: Make it interactive with htmz
 
-We could have used fixi, HTMX, or data-star for this example, but I thought it would be cool to highlight this nifty one-liner.
+We could have used fixi, HTMX, or Datastar for this example, but I thought it would be cool to highlight this nifty one-liner.
 
 [htmz](https://leanrada.com/htmz/) is a tiny HTML snippet that lets you load server responses into any element on the page. Its entire source is one `<iframe>`:
 

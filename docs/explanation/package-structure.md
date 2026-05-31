@@ -7,7 +7,7 @@ Understanding how to organize templates and the package-level requirements for M
 Muxt requires a **package-level variable** of type `*html/template.Template` to discover and analyze your templates.
 This variable can be initialized in two ways:
 1. Using `template.ParseFS` with an `embed.FS` for file-based templates
-2. Using `template.Parse` for inline string templates
+2. Using `template.New(name).Parse` for inline string templates
 
 ### Why Package-Level?
 
@@ -77,12 +77,12 @@ var templatesDir embed.FS
 var templates = template.Must(template.ParseFS(templatesDir, "*/*.gohtml"))
 ```
 
-Or simpler:
+`ParseFS` uses `path.Match`, which has no recursive wildcard — `**` matches exactly one path segment, the same as `*`. List one glob per directory depth:
 ```go
-//go:embed */*.gohtml *.gohtml
+//go:embed *.gohtml */*.gohtml
 var templatesDir embed.FS
 
-var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml", "*.gohtml"))
+var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml", "*/*.gohtml"))
 ```
 
 ## Common Patterns
@@ -141,29 +141,35 @@ var templates = template.Must(template.ParseFS(templatesDir,
 
 **Use when:** Templates are organized into logical subdirectories
 
-### Pattern 4: All Templates Recursively
+### Pattern 4: Nested Directories
+
+`go:embed` and `ParseFS` have no recursive glob, so list one pattern per depth. `go:embed all:templates` embeds the tree, but `ParseFS` still needs an explicit glob for each level:
 
 ```go
-//go:embed **/*.gohtml
+//go:embed all:templates
 var templatesDir embed.FS
 
 //go:generate muxt generate --use-receiver-type=App
-var templates = template.Must(template.ParseFS(templatesDir, "**/*.gohtml"))
+var templates = template.Must(template.ParseFS(templatesDir,
+    "templates/*.gohtml",
+    "templates/*/*.gohtml",
+    "templates/*/*/*.gohtml",
+))
 ```
 
-**Use when:** Deep directory structure with many nested template directories
+**Use when:** Templates are nested a known, small number of levels deep.
 
 ### Pattern 5: Custom Parsing with Template Functions
 
 ```go
-//go:embed **/*.gohtml
+//go:embed pages/*.gohtml components/*.gohtml
 var templatesDir embed.FS
 
 //go:generate muxt generate --use-receiver-type=App
 var templates = template.Must(
     template.New("").
         Funcs(customFuncs).
-        ParseFS(templatesDir, "**/*.gohtml"),
+        ParseFS(templatesDir, "pages/*.gohtml", "components/*.gohtml"),
 )
 
 var customFuncs = template.FuncMap{

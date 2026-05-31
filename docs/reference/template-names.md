@@ -100,15 +100,13 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 {{define "GET /error 400"}}{{end}}                             <!-- Integer -->
 ```
 
-**Status code precedence:**
-1. Template name (shown above)
-2. Result type with `StatusCode()` method
-3. Result type with `StatusCode` field
-4. Error with `StatusCode()` method
-5. Template `.StatusCode(int)` call
-6. Default (200 for success, 500 for errors)
+**Status code precedence** (first non-zero wins, highest to lowest):
+1. Template `.StatusCode(int)` call
+2. Error status: `400` on a parse/path/form error, `500` when the method returns a non-nil error
+3. Result type `StatusCode()` method, else result type `StatusCode` field
+4. Template-name code (shown above), else `200` — or `204` when the rendered body is empty
 
-Use template name for static codes (201 for POST), methods for dynamic codes (404 from errors).
+A returned error is always `500`; the error's own methods are not consulted. To return another code for a failure, set it in the template with `.StatusCode`. Use the template name for static codes (`201` for POST). Full precedence and examples: [Call Results](call-results.md#status-code-control).
 
 [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
@@ -266,7 +264,7 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 <method>       ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 <host>         ::= <hostname> | <ipv4>
 <path>         ::= "/" [<segment> [<path>] ["/"]]
-<status>       ::= <integer> | <identifier> "." <identifier>
+<status>       ::= <integer> | "http.Status" <identifier>
 <call>         ::= <identifier> "(" [<identifier> {"," <identifier>}] ")"
 <identifier>   ::= <letter> {<letter> | <digit> | "_"}
 ```

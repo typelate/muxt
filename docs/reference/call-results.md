@@ -109,10 +109,12 @@ Templates receive `TemplateData[T]` where `T` is the method's first return value
 |--------------|------|-------------|
 | `.Result` | `T` | Returned value (zero value if error) |
 | `.Err` | `error` | Returned error (nil if success) |
+| `.Ok()` | `bool` | True unless a `(T, bool)` method returned false |
 | `.Request()` | `*http.Request` | HTTP request |
-| `.Path(name)` | `string` | Path parameter value |
-| `.StatusCode(code)` | `int` | Set HTTP status (returns code for chaining) |
-| `.Header(key, val)` | `string` | Set response header (returns val for chaining) |
+| `.Receiver()` | `R` | The receiver passed to `TemplateRoutes` |
+| `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument |
+| `.StatusCode(code)` | `*TemplateData` | Set HTTP status (returns the data for chaining) |
+| `.Header(key, val)` | `*TemplateData` | Set response header (returns the data for chaining) |
 | `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code |
 | `.RedirectMultipleChoices(url)` | `*TemplateData, error` | Redirect with 300 status |
 | `.RedirectMovedPermanently(url)` | `*TemplateData, error` | Redirect with 301 status |
@@ -141,33 +143,20 @@ To access the receiver method's return value, use `{{.Result}}` explicitly.
 {{end}}
 ```
 
-`.Result` and `.Err` are fields (no parens). `.Request()`, `.Path()`, `.StatusCode()`, `.Header()` are methods (need parens).
+Every entry is a method. In templates, call the zero-argument ones without arguments (`{{.Result}}`, `{{.Err}}`, `{{.Request}}`); pass arguments to the rest (`{{.StatusCode 404}}`, `{{.Header "X-Error" "not-found"}}`).
 
 ## Status Code Control
 
-**Precedence (highest to lowest):**
-1. Template name: `{{define "POST /user 201 ..."}}`
-2. Result type `StatusCode()` method
-3. Result type `StatusCode` field
-4. Error type `StatusCode()` method
-5. Template `.StatusCode(int)` call
-6. Default (200 success, 500 error)
+The generated handler resolves the status with `cmp.Or` — the first non-zero value in this list wins, highest to lowest:
 
-**Error with StatusCode() method:**
-```go
-type NotFoundError struct{ Message string }
+| Priority | Source | Set by |
+|----------|--------|--------|
+| 1 | `.StatusCode(int)` template call | `{{.StatusCode 404}}` in the template |
+| 2 | Error status | `400` on a parse/path/form error, `500` when the method returns a non-nil error |
+| 3 | Result `StatusCode()` method, else result `StatusCode` field | the return type |
+| 4 | Template-name code, else `200` — or `204` when the body is empty | `{{define "POST /user 201 ..."}}` |
 
-func (e NotFoundError) Error() string { return e.Message }
-func (e NotFoundError) StatusCode() int { return 404 }
-
-func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-    user, err := s.db.FindUser(ctx, id)
-    if err != nil {
-        return User{}, NotFoundError{Message: "user not found"}
-    }
-    return user, nil
-}
-```
+There is no error-`StatusCode()` hook: a returned error is always `500`, regardless of the error's own methods. To return a status other than `500` for a failure, set it in the template with `.StatusCode`.
 
 **Result with StatusCode() method:**
 ```go
@@ -187,7 +176,7 @@ type UserResult struct {
 }
 ```
 
-**Template status override:**
+**Template status override** (priority 1 — overrides everything, including the `500` from an error):
 ```gotmpl
 {{if .Err}}
   {{with .StatusCode 404}}
@@ -196,7 +185,9 @@ type UserResult struct {
 {{end}}
 ```
 
-Prefer template name for static codes (201 for POST). Use error/result types for dynamic codes (404 when not found, 422 for validation).
+Prefer the template-name code for static codes (`201` for POST). Use a result `StatusCode` field or method for dynamic success codes, and `.StatusCode` in the template for dynamic error codes (`404` when not found, `422` for validation).
+
+[reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
 ## Request Access in Templates
 
@@ -211,13 +202,15 @@ Prefer template name for static codes (201 for POST). Use error/result types for
 {{end}}
 ```
 
-**Path parameters:**
+**Path parameters:** the parsed value reaches the method as an argument, so read it from `.Result`. To read the raw string in the template, use `.Request.PathValue`:
 ```gotmpl
 {{define "GET /user/{id} GetUser(ctx, id)"}}
-<p>User ID from path: {{.Path "id"}}</p>
+<p>User ID from path: {{.Request.PathValue "id"}}</p>
 <h1>{{.Result.Name}}</h1>
 {{end}}
 ```
+
+`.Path` is unrelated: it takes no argument and returns the generated route URL builders (e.g. `{{.Path.GetUser .Result.ID}}` to build a link).
 
 ## Type Safety Requirements
 

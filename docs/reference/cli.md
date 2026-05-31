@@ -8,9 +8,10 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 |---------|---------|--------------|
 | `generate` | Generate HTTP handlers from templates | `--use-receiver-type`, `--output-routes-func-with-logger-param`, `--output-file` |
 | `check` | Type-check templates without generating | `--use-templates-variable`, `--verbose` |
-| `documentation` | Generate markdown docs from templates | Same as `generate` |
 | `list-template-callers` | List callers of a template | `--match`, `--format` |
 | `list-template-calls` | List templates called by a template | `--match`, `--format` |
+| `explore-module` | List every muxt package in the module | `--format` |
+| `generate-fake-server` | Generate a fake-server `main.go` for exploring routes | `--output` |
 | `version` | Print muxt version | `-v, --verbose` |
 
 ## Flag Categories
@@ -78,7 +79,10 @@ These flags control the names of generated types and functions:
 | `--output-routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
+| `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
+| `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
+| `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
@@ -161,29 +165,6 @@ OK
 
 ---
 
-### `muxt documentation`
-
-Generate markdown API documentation from templates.
-
-**Aliases:** `docs`, `d`
-
-```bash
-muxt documentation --use-receiver-type=App
-```
-
-#### Flags
-
-Supports the same **Use Flags** as `muxt generate`:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--use-receiver-type` | string | _(none)_ | Type name for method lookup. |
-| `--use-receiver-type-package` | string | _(current pkg)_ | Package path for receiver type. |
-| `--use-templates-variable` | string[] | `templates` | Template variable name(s). Same as in `generate`. |
-| `--verbose`, `-v` | bool | `false` | Enable verbose output. |
-
----
-
 ### `muxt version`
 
 Print muxt version. Use `-v` for verbose output including Go version.
@@ -207,7 +188,7 @@ muxt version -v  # Shows Go version used to compile muxt
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-C` | string | _(current dir)_ | Change directory before running command. |
+| `-C, --change-directory` | string | _(current dir)_ | Change directory before running command. |
 
 ```bash
 muxt -C ./web generate --use-receiver-type=Server
@@ -279,6 +260,8 @@ Routes(mux, app, "/api/v1")
 - [`muxt check`](commands/check.md) — Full check command reference
 - [`muxt list-template-callers`](commands/list-template-callers.md) — List template callers
 - [`muxt list-template-calls`](commands/list-template-calls.md) — List template call sites
+- [`muxt explore-module`](commands/explore-module.md) — List every muxt package in the module
+- [`muxt generate-fake-server`](commands/generate-fake-server.md) — Generate a fake server for exploring routes
 - [`muxt version`](commands/version.md) — Version command reference
 
 ## Related

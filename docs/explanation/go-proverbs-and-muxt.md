@@ -11,12 +11,13 @@ Muxt generates straightforward code. Open `template_routes.go` and you'll see re
 **Example:** Instead of a clever registration system, you get:
 
 ```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
   mux.HandleFunc("GET /article/{id}", func(response http.ResponseWriter, request *http.Request) {
     id := request.PathValue("id")
     result := receiver.GetArticle(request.Context(), id)
     // ... execute template with result
   })
+  // ... register the rest, then return the URL helpers
 }
 ```
 

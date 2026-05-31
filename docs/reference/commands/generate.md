@@ -53,6 +53,7 @@ These flags control the names of generated types and functions:
 | `--output-routes-func` | string | `TemplateRoutes` | Generated route registration function name. |
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
+| `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |

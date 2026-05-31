@@ -4,7 +4,7 @@
 
 I'm not a huge fan of TypeScript or modern frontend frameworks. Partly it's a skill gap—I haven't invested the time to learn them deeply. But also, I don't want to.
 
-I want to ship features. I want polished UIs. I don't want an entire extra layer in my stack.
+I want to ship features. I don't want to write boilerplate. I don't want an entire extra hand-rolled layer in my stack.
 
 After years in regulated environments where every dependency update triggers compliance reviews, I've developed strong opinions about dependencies. Specifically: fewer is better.
 

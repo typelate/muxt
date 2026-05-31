@@ -35,9 +35,9 @@ Template names define routes and method calls:
 
 | Template Name | Method | Purpose |
 |---|---|---|
-| `GET /{$} ListTodos(form)` | `ListTodos(TodoFilter) TodoPage` | Full page with filter |
+| `GET /{$} ListTodos(form, execute)` | `ListTodos(TodoFilter, func(TodoPage) error) error` | Full page with filter |
 | `POST /todos CreateTodo(form)` | `CreateTodo(NewTodo) TodoChange` | Add todo |
-| `PATCH /todos/{id} ToggleTodo(id)` | `ToggleTodo(int) TodoChange` | Toggle todo |
+| `PATCH /todos/{id} ToggleTodo(id)` | `ToggleTodo(int) (TodoChange, error)` | Toggle todo |
 | `DELETE /todos/{id} DeleteTodo(id)` | `DeleteTodo(int) TodoChange` | Delete todo |
 | `POST /todos/toggle-all ToggleAll()` | `ToggleAll() TodoListChange` | Toggle all |
 | `POST /todos/clear-completed ClearCompleted()` | `ClearCompleted() TodoListChange` | Clear completed |

@@ -17,6 +17,8 @@ muxt version -v  # Shows Go version used to compile muxt
 
 ## Example Output
 
+A released binary prints its module version; a build from source prints `(devel)`:
+
 ```
 v0.17.0
 ```

@@ -46,7 +46,6 @@ func (s Server) GetData(ctx context.Context) (any, error) {
 **Not supported:**
 - `any` / `interface{}` fields — Type checking disabled
 - Dynamic template names — `ExecuteTemplate(w, getTemplateName(), data)`
-- Complex pipeline expressions — May produce false negatives
 - JetBrains GoLand `gotype` comments — Not consulted
 
 **Partially supported:**
@@ -120,9 +119,8 @@ func (s Server) GetPost(ctx context.Context, id int) (Post, error) {
 
 **Check output:**
 ```
-Error: template action references undefined field: PublishedAt
-  Template: GET /posts/{id} GetPost(ctx, id)
-  Type: Post
+index.gohtml:4:15: executing "GET /posts/{id} GetPost(ctx, id)" at <.Result.PublishedAt>: field or method PublishedAt not found on app.Post
+Error: fail: 1 error
 ```
 
 ## Related

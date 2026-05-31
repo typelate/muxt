@@ -2,36 +2,25 @@
 
 Current limitations and workarounds for Muxt.
 
-## HTML Validity Requirement
+## Form Validation Reads Static Attributes Only
 
-**Issue:** Template HTML must be valid for form validation generation.
+**Issue:** Muxt generates parse-time validation (`min`, `max`, `pattern`) by reading those attributes off `<input>` elements bound to a form field. It parses the literal attribute string against the field's Go type, so the value must be a constant.
 
-**Not allowed (invalid HTML):**
+**Static value — validation generated:**
 ```gotmpl
-<details {{if .Open}}open{{end}}>
-    <p>Content</p>
-</details>
+<input type="number" name="age" min="0" max="120">
 ```
+Muxt parses `0` and `120` against the field type and emits bounds checks in the handler (a request with `age=200` fails before your method runs).
 
-**Workaround:**
+**Templated value — not a constant:**
 ```gotmpl
-{{define "content"}}<p>Content</p>{{end}}
-
-{{if .Open}}
-<details open>{{template "content"}}</details>
-{{else}}
-<details>{{template "content"}}</details>
-{{end}}
+<input type="number" name="age" min="{{.MinAge}}">
 ```
+Muxt has only the literal `{{.MinAge}}` at generate time, not a number, so it cannot emit a bounds check for that attribute.
 
-**Allowed (actions in attribute values):**
-```gotmpl
-<div title="{{.HelpText}}" class="{{.ClassName}}">
-    <p>Content</p>
-</div>
-```
+**Workaround:** Use constant `min`/`max`/`pattern` values for fields you want muxt to validate.
 
-**Warning:** Muxt warns if template source contains invalid HTML.
+[reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt) · [reference_validation_pattern.txt](../../cmd/muxt/testdata/reference_validation_pattern.txt)
 
 ## Type Checking Limitations
 
@@ -40,7 +29,6 @@ Current limitations and workarounds for Muxt.
 **Known limitations:**
 - `any` / `interface{}` fields disable type checking for that field
 - GoLand `gotype` comments not consulted
-- Complex pipeline expressions may produce false negatives
 - Dynamic template names cannot be checked
 
 **Example of unchecked case:**
@@ -81,23 +69,6 @@ var templates = template.Must(
 
 If functions are added after `ParseFS`, type checking won't recognize them.
 
-## Nested Template Contexts
-
-**Issue:** Nested `{{template}}` or `{{block}}` calls may not preserve full type context.
-
-**Example:**
-```gotmpl
-{{define "user"}}
-<div>{{.Name}}</div>  <!-- Type checking depends on caller context -->
-{{end}}
-
-{{define "GET /profile Profile(ctx)"}}
-{{template "user" .Result}}  <!-- Context passed explicitly -->
-{{end}}
-```
-
-**Workaround:** Pass data explicitly and ensure subtemplates don't assume specific types.
-
 ## TemplateRoutePaths Method Name Collision
 
 **Issue:** `TemplateRoutePaths` methods are always exported so they can be called from templates. This has two consequences:
@@ -106,12 +77,12 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 2. **Unexportable identifiers:** Handler methods starting with `_` (e.g., `_list`) cannot be exported, so generation fails.
 
 **Errors:**
-- `TemplateRoutePaths method name collision: handlers list and List both produce method List`
+- `TemplateRoutePaths method name collision: handlers "list" (lowercase) and "List" both produce method name "List"`
 - `cannot export identifier "_list" for TemplateRoutePaths method: first character '_' has no uppercase form`
 
 **Fix:** Rename the handler method to start with a letter.
 
-**Test files:** `err_path_method_collision.txt`, `err_path_method_unexportable.txt`
+**Test file:** [err_path_method_collision.txt](../../cmd/muxt/testdata/err_path_method_collision.txt)
 
 ## Reporting Issues
 

@@ -10,6 +10,8 @@ Type-safe HTTP handlers from Go HTML templates.
   - [`muxt version`](reference/commands/version.md) - Print version
   - [`muxt list-template-callers`](reference/commands/list-template-callers.md) - List callers
   - [`muxt list-template-calls`](reference/commands/list-template-calls.md) - List call sites
+  - [`muxt explore-module`](reference/commands/explore-module.md) - List muxt packages
+  - [`muxt generate-fake-server`](reference/commands/generate-fake-server.md) - Fake server for exploring routes
 - **[Template Name Syntax](reference/template-names.md)** - Route naming syntax
 - **[Call Parameters](reference/call-parameters.md)** - Method parameter parsing
 - **[Call Results](reference/call-results.md)** - Return value handling
