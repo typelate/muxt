@@ -77,7 +77,7 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 2. **Unexportable identifiers:** Handler methods starting with `_` (e.g., `_list`) cannot be exported, so generation fails.
 
 **Errors:**
-- `TemplateRoutePaths method name collision: handlers "list" (lowercase) and "List" both produce method name "List"`
+- `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`
 - `cannot export identifier "_list" for TemplateRoutePaths method: first character '_' has no uppercase form`
 
 **Fix:** Rename the handler method to start with a letter.

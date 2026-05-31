@@ -35,10 +35,16 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 		if err != nil {
 			return nil, err
 		}
-		if prev, ok := seen[exported]; ok {
-			return nil, fmt.Errorf("TemplateRoutePaths method name collision: handlers %s and %s both produce method %s", prev, t.Identifier(), exported)
+		// Report the original handler names (e.g. "list" and "List"), not the
+		// exported identifier they collide on, so the difference is visible.
+		handler := t.Call()
+		if handler == "" {
+			handler = t.Identifier()
 		}
-		seen[exported] = t.Identifier()
+		if prev, ok := seen[exported]; ok {
+			return nil, fmt.Errorf("TemplateRoutePaths method name collision: handlers %q and %q both produce method %q", prev, handler, exported)
+		}
+		seen[exported] = handler
 		decl, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
