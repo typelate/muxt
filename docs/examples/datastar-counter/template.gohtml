@@ -2,34 +2,100 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8">
-	<title>Datastar + muxt</title>
+	<title>muxt + Datastar showcase</title>
 	<script type="module"
 	        src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.1/bundles/datastar.js"
 	        integrity="sha384-dWn5jta+MrFAhwrzi4llarDQkaQE0zW2lreXrV0yK15W0A7TrtfGyIyji04PLUY7"
 	        crossorigin="anonymous"></script>
+	<style>
+		body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; }
+		section { border: 1px solid #ddd; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+		.highlight { background: gold; }
+		[hidden] { display: none; }
+	</style>
 </head>
-<body>
-	<h1>Datastar + muxt</h1>
+<body data-signals="{count: 0, name: '', status: '', fetching: false}">
+	<h1>muxt + Datastar</h1>
+	<p>Page rendered at {{.Result}} · <a href="{{.Path.Index}}">home</a> (Path helper: <code>{{.Path.Index}}</code>)</p>
 
-	{{- /* data-on:* event attributes are a JavaScript context, so the action
-	       needs .JS (template.JS); a plain string would render as a quoted JS
-	       literal that Datastar will not execute. */}}
-	<section data-signals="{count: 0}">
-		<p>Count: <span id="count" data-text="$count">0</span></p>
-		<button id="increment" data-on:click="{{(.Actions.Increment).JS}}">Increment</button>
+	<section>
+		<h2>Signals across HTTP verbs</h2>
+		{{- /* data-computed (colon) derives a signal; data-text reads signals. */}}
+		<div data-computed:doubled="$count * 2"></div>
+		<p>Count: <strong id="count" data-text="$count">0</strong> · doubled: <span data-text="$doubled"></span></p>
+		{{- /* data-on:* event attributes are a JS context, so actions need .JS */}}
+		<button data-on:click="{{(.Actions.Increment).JS}}">+1 <small>@post</small></button>
+		<button data-on:click="{{(.Actions.Decrement).JS}}">-1 <small>@post</small></button>
+		<button data-on:click="{{(.Actions.Adjust 5).JS}}">+5 <small>@patch /count/{delta}</small></button>
+		<button data-on:click="{{(.Actions.Reset).JS}}">reset <small>@put</small></button>
+		<button data-on:click="{{(.Actions.Clear).JS}}">clear <small>@delete</small></button>
+		<p data-show="$count > 3">data-show: count &gt; 3</p>
+		<p data-class:highlight="$count > 5">data-class: gold when count &gt; 5</p>
 	</section>
 
-	{{- /* data-init is not an event handler, so String() (the default) is fine. */}}
-	<p>Clock: <span id="clock">--:--:--</span></p>
-	<div data-init="{{.Actions.Clock}}"></div>
+	<section>
+		<h2>Elements stream — clock</h2>
+		{{- /* data-init is not an event handler, so String() (default) is fine. */}}
+		<div data-init="{{.Actions.Clock}}"></div>
+		<p>Clock (patch-elements, inner mode, view transition): <span id="clock">--:--:--</span></p>
+	</section>
 
-	<button id="hello" data-on:click="{{(.Actions.Hello).JS}}">Run script</button>
+	<section>
+		<h2>Append mode + inline signals — feed</h2>
+		<button data-on:click="{{(.Actions.Feed).JS}}" data-indicator:fetching>Load feed</button>
+		<span data-show="$fetching">loading…</span>
+		<p>Status (inline patch-signals): <span data-text="$status"></span></p>
+		<ul id="feed-list"></ul>
+	</section>
+
+	<section>
+		<h2>Form binding — contentType: 'form'</h2>
+		{{- /* datastar serializes the form fields and POSTs them as a form;
+		       __prevent stops the native navigation. */}}
+		<form data-on:submit__prevent="{{(.Actions.Greet.ContentType "form").JS}}">
+			<input name="name" placeholder="your name" data-bind="name">
+			<button type="submit">Greet</button>
+		</form>
+		<div id="greeting">no greeting yet</div>
+		<p>data-bind echo: <span data-text="$name"></span></p>
+	</section>
+
+	<section>
+		<h2>Script — text/javascript with JSON body</h2>
+		<button data-on:click="{{(.Actions.Config).JS}}">Run config script</button>
+		<p><small>sets <code>window.__APP_CONFIG</code> (see console)</small></p>
+	</section>
+
+	<section>
+		<h2>Fragment — text/html + status code</h2>
+		<button data-on:click="{{(.Actions.Fragment).JS}}">Load fragment</button>
+		{{template "fragment-target" ""}}
+	</section>
 </body>
 </html>
 {{end}}
 
-{{define "POST /increment Increment(ctx, signal)"}}{{end}}
+{{- /* Signal routes marshal JSON; they need no template body. */ -}}
+{{define "POST /count/increment Increment(ctx, signal)"}}{{end}}
+{{define "POST /count/decrement Decrement(ctx, signal)"}}{{end}}
+{{define "PUT /count Reset(ctx, signal)"}}{{end}}
+{{define "DELETE /count Clear(ctx, signal)"}}{{end}}
+{{define "PATCH /count/{delta} Adjust(ctx, delta, signal)"}}{{end}}
 
-{{define "GET /clock Clock(ctx, elements)"}}{{.Selector "#clock"}}{{.Mode "inner"}}{{- .Result -}}{{end}}
+{{- /* Elements stream: inner-mode patch into #clock with a view transition. */ -}}
+{{define "GET /clock Clock(ctx, lastEventID, elements)"}}{{.Selector "#clock"}}{{.Mode "inner"}}{{.UseViewTransition true}}{{- .Result -}}{{end}}
 
-{{define "GET /hello.js Hello(ctx, script)"}}console.log("datastar script executed");{{end}}
+{{- /* Append-mode patch: each call adds one <li> to #feed-list. */ -}}
+{{define "GET /feed Feed(ctx, elements, signalStatus)"}}{{.Selector "#feed-list"}}{{.Mode "append"}}<li>{{.Result}}</li>{{end}}
+
+{{- /* Form route: inner-mode patch into #greeting. */ -}}
+{{define "POST /greet Greet(ctx, form, elements)"}}{{.Selector "#greeting"}}{{.Mode "inner"}}Hello, {{.Result}}!{{end}}
+
+{{- /* Script route: embed server data as JSON inside the JavaScript body. */ -}}
+{{define "GET /config.js Config(ctx, script)"}}window.__APP_CONFIG = {{.Result | json}};
+console.log("config loaded", window.__APP_CONFIG);{{end}}
+
+{{- /* Fragment route (default text/html), 200 status; Datastar morphs by id. */ -}}
+{{define "GET /fragment 200 Fragment(ctx, request)"}}{{template "fragment-target" .Result}}{{end}}
+
+{{define "fragment-target"}}<div id="fragment-target">{{if .}}{{.}}{{else}}not loaded{{end}}</div>{{end}}

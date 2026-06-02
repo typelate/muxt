@@ -1,7 +1,8 @@
-# Datastar Counter Example
+# Datastar Showcase Example
 
-A minimal [Datastar](https://data-star.dev) app generated with `muxt --use-datastar`,
-exercising all four Datastar response representations.
+A [Datastar](https://data-star.dev) app generated with `muxt --use-datastar`,
+exercising every Datastar response representation and most muxt features on one
+page.
 
 ```sh
 go generate ./...
@@ -9,23 +10,34 @@ go run .
 # open http://localhost:8000
 ```
 
-## What it demonstrates
+## Datastar / muxt features covered
 
-| Feature | Route | Datastar |
-|---|---|---|
-| **Signals** (`application/json`) | `POST /increment Increment(ctx, signal)` | `@post('/increment')` merges `{"count":N}` into `$count` |
-| **Element patch** (SSE) | `GET /clock Clock(ctx, elements)` | `data-init="@get('/clock')"` streams `datastar-patch-elements` into `#clock` |
-| **Script** (`text/javascript`) | `GET /hello.js Hello(ctx, script)` | `@get('/hello.js')` executes the rendered JS |
-| **Actions** | — | `{{ (.Actions.Increment).JS }}` renders the `@post(...)` expression |
+| Area | Where |
+|---|---|
+| **Signals** (`application/json`) over `@post`/`@put`/`@patch`/`@delete` | `Increment`, `Decrement`, `Reset`, `Clear`, `Adjust` |
+| **Path parameter** (typed `int`) | `PATCH /count/{delta} Adjust` → `@patch('/count/5')` |
+| **Element patch** (SSE, inner mode + view transition) | `GET /clock Clock(ctx, lastEventID, elements)` |
+| **lastEventID** (SSE resume wiring) | `Clock` |
+| **Append mode + multiple callbacks + inline patch-signals + onlyIfMissing** | `GET /feed Feed(ctx, elements, signalStatus)` |
+| **Form binding** + action option `contentType: 'form'` | `POST /greet Greet(ctx, form, elements)` |
+| **Script** (`text/javascript`) with a JSON body via the `json` func | `GET /config.js Config(ctx, script)` |
+| **Fragment** (`text/html`) + status code + `request` | `GET /fragment 200 Fragment(ctx, request)` |
+| **`.Actions()`** for every verb, fluent options, `.JS` / `String()` | the `Index` template |
+| **`.Path()`** helper | the `Index` template |
+
+Client attributes used: `data-signals`, `data-text`, `data-bind`,
+`data-computed`, `data-show`, `data-class`, `data-indicator`, `data-init`,
+`data-on:*` (and `data-on:submit__prevent`).
 
 ## Notes
 
-- Datastar v1 event attributes use a **colon**: `data-on:click` (not `data-on-click`).
-- Render Datastar action expressions with `.JS` (returns `template.JS`) inside
-  `data-on:*` attributes; `html/template` parses those as a JavaScript context
-  and would otherwise JSON-wrap a plain string.
-- The committed `template_routes.go` marshals signals with `encoding/json`. When
-  generated under `GOEXPERIMENT=jsonv2` it uses `encoding/json/v2` `MarshalWrite`
-  instead (requires a `go 1.25`+ module).
+- Datastar v1 events use a **colon**: `data-on:click`. Render actions there with
+  `.JS` (`template.JS`); `String()` (the default `{{ .Actions.X }}`) is correct
+  everywhere else (`data-init`, plain attributes, text).
+- The `json` template func returns `template.HTML` so the `script` route can
+  embed server data as JSON (`encoding/json` already escapes `<>&`).
+- The committed `template_routes.go` marshals signals with `encoding/json`; under
+  `GOEXPERIMENT=jsonv2` regeneration switches to `encoding/json/v2` `MarshalWrite`
+  (requires a `go 1.25`+ module).
 
-See [docs/reference/datastar.md](../../reference/datastar.md) for the full reference.
+See [docs/reference/datastar.md](../../reference/datastar.md) for the reference.

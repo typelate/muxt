@@ -21,10 +21,17 @@ import (
 )
 
 type RoutesReceiver interface {
-	Index() any
-	Clock(ctx context.Context, elements func(string) error)
-	Hello(ctx context.Context, script func() error)
+	Index() string
+	Clock(ctx context.Context, lastEventID string, elements func(string) error)
+	Config(ctx context.Context, script func(AppConfig) error)
+	Clear(ctx context.Context, signal func(Count, bool) error)
+	Reset(ctx context.Context, signal func(Count, bool) error)
+	Decrement(ctx context.Context, signal func(Count, bool) error)
 	Increment(ctx context.Context, signal func(Count, bool) error)
+	Adjust(ctx context.Context, delta int, signal func(Count, bool) error)
+	Feed(ctx context.Context, elements func(string) error, signalStatus func(Status, bool) error)
+	Fragment(ctx context.Context, request *http.Request) string
+	Greet(ctx context.Context, form GreetForm, elements func(string) error)
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
@@ -33,7 +40,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		return bytes.NewBuffer(nil)
 	}}
 	mux.HandleFunc("GET /", func(response http.ResponseWriter, request *http.Request) {
-		var td = DatastarTemplateData[RoutesReceiver, any]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = DatastarTemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
@@ -51,6 +58,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			defaultStatusCode = http.StatusNoContent
 		}
 		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if td.redirectURL != "" {
+			http.Redirect(response, request, td.redirectURL, statusCode)
+			return
+		}
 		if contentType := response.Header().Get("content-type"); contentType == "" {
 			response.Header().Set("content-type", "text/html; charset=utf-8")
 		}
@@ -68,6 +79,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return
 		}
 		ctx := request.Context()
+		lastEventID := request.Header.Get("Last-Event-Id")
 		h := response.Header()
 		h.Set("Content-Type", "text/event-stream")
 		h.Set("Connection", "keep-alive")
@@ -75,7 +87,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(http.StatusOK)
 		flusher.Flush()
 		var mut sync.Mutex
-		receiver.Clock(ctx, func(result string) error {
+		receiver.Clock(ctx, lastEventID, func(result string) error {
 			if err := request.Context().Err(); err != nil {
 				return err
 			}
@@ -83,7 +95,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			buf.Reset()
 			defer bytesBufferPool.Put(buf)
 			td := DatastarEventTemplateData[RoutesReceiver, string]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
-			if err := templates.ExecuteTemplate(buf, "GET /clock Clock(ctx, elements)", &td); err != nil {
+			if err := templates.ExecuteTemplate(buf, "GET /clock Clock(ctx, lastEventID, elements)", &td); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 				return err
 			}
@@ -97,18 +109,18 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return nil
 		})
 	})
-	mux.HandleFunc("GET /hello.js", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET /config.js", func(response http.ResponseWriter, request *http.Request) {
 		defer func() {
 			_ = request.Body.Close()
 		}()
 		ctx := request.Context()
 		response.Header().Set("Content-Type", "text/javascript")
-		receiver.Hello(ctx, func() error {
+		receiver.Config(ctx, func(result AppConfig) error {
 			buf := bytesBufferPool.Get().(*bytes.Buffer)
 			buf.Reset()
 			defer bytesBufferPool.Put(buf)
-			td := DatastarTemplateData[RoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-			if err := templates.ExecuteTemplate(buf, "GET /hello.js Hello(ctx, script)", &td); err != nil {
+			td := DatastarTemplateData[RoutesReceiver, AppConfig]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix, result: result}
+			if err := templates.ExecuteTemplate(buf, "GET /config.js Config(ctx, script)", &td); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 				return err
 			}
@@ -116,7 +128,61 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return err
 		})
 	})
-	mux.HandleFunc("POST /increment", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("DELETE /count", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		ctx := request.Context()
+		response.Header().Set("Content-Type", "application/json")
+		receiver.Clear(ctx, func(result Count, onlyIfMissing bool) error {
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			_ = onlyIfMissing
+			if err := datastarMarshalSignals(buf, result); err != nil {
+				return err
+			}
+			_, err := response.Write(buf.Bytes())
+			return err
+		})
+	})
+	mux.HandleFunc("PUT /count", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		ctx := request.Context()
+		response.Header().Set("Content-Type", "application/json")
+		receiver.Reset(ctx, func(result Count, onlyIfMissing bool) error {
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			_ = onlyIfMissing
+			if err := datastarMarshalSignals(buf, result); err != nil {
+				return err
+			}
+			_, err := response.Write(buf.Bytes())
+			return err
+		})
+	})
+	mux.HandleFunc("POST /count/decrement", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		ctx := request.Context()
+		response.Header().Set("Content-Type", "application/json")
+		receiver.Decrement(ctx, func(result Count, onlyIfMissing bool) error {
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			_ = onlyIfMissing
+			if err := datastarMarshalSignals(buf, result); err != nil {
+				return err
+			}
+			_, err := response.Write(buf.Bytes())
+			return err
+		})
+	})
+	mux.HandleFunc("POST /count/increment", func(response http.ResponseWriter, request *http.Request) {
 		defer func() {
 			_ = request.Body.Close()
 		}()
@@ -132,6 +198,169 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			}
 			_, err := response.Write(buf.Bytes())
 			return err
+		})
+	})
+	mux.HandleFunc("PATCH /count/{delta}", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		ctx := request.Context()
+		deltaParsed, err := strconv.Atoi(request.PathValue("delta"))
+		if err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		delta := deltaParsed
+		response.Header().Set("Content-Type", "application/json")
+		receiver.Adjust(ctx, delta, func(result Count, onlyIfMissing bool) error {
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			_ = onlyIfMissing
+			if err := datastarMarshalSignals(buf, result); err != nil {
+				return err
+			}
+			_, err := response.Write(buf.Bytes())
+			return err
+		})
+	})
+	mux.HandleFunc("GET /feed", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		flusher, ok := response.(http.Flusher)
+		if !ok {
+			http.Error(response, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		ctx := request.Context()
+		h := response.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Connection", "keep-alive")
+		h.Set("Cache-Control", "no-cache")
+		response.WriteHeader(http.StatusOK)
+		flusher.Flush()
+		var mut sync.Mutex
+		receiver.Feed(ctx, func(result string) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			td := DatastarEventTemplateData[RoutesReceiver, string]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+			if err := templates.ExecuteTemplate(buf, "GET /feed Feed(ctx, elements, signalStatus)", &td); err != nil {
+				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+				return err
+			}
+			td.data = buf
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := td.WriteTo(response); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
+		}, func(result Status, onlyIfMissing bool) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			if err := datastarMarshalSignals(buf, result); err != nil {
+				return err
+			}
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := io.WriteString(response, "event: datastar-patch-signals\ndata: signals "); err != nil {
+				return err
+			}
+			if _, err := response.Write(buf.Bytes()); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(response, "\n"); err != nil {
+				return err
+			}
+			if onlyIfMissing {
+				if _, err := io.WriteString(response, "data: onlyIfMissing true\n"); err != nil {
+					return err
+				}
+			}
+			if _, err := io.WriteString(response, "\n"); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
+		})
+	})
+	mux.HandleFunc("GET /fragment", func(response http.ResponseWriter, request *http.Request) {
+		var td = DatastarTemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		ctx := request.Context()
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Fragment(ctx, request)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /fragment 200 Fragment(ctx, request)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("POST /greet", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		flusher, ok := response.(http.Flusher)
+		if !ok {
+			http.Error(response, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		ctx := request.Context()
+		request.ParseForm()
+		var form GreetForm
+		form.Name = request.FormValue("name")
+		h := response.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Connection", "keep-alive")
+		h.Set("Cache-Control", "no-cache")
+		response.WriteHeader(http.StatusOK)
+		flusher.Flush()
+		var mut sync.Mutex
+		receiver.Greet(ctx, form, func(result string) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			td := DatastarEventTemplateData[RoutesReceiver, string]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+			if err := templates.ExecuteTemplate(buf, "POST /greet Greet(ctx, form, elements)", &td); err != nil {
+				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+				return err
+			}
+			td.data = buf
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := td.WriteTo(response); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
 		})
 	})
 	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
@@ -233,12 +462,40 @@ func (routeActions DatastarActions) Clock() DatastarAction {
 	return newDatastarAction("@get", TemplateRoutePaths(routeActions).Clock())
 }
 
-func (routeActions DatastarActions) Hello() DatastarAction {
-	return newDatastarAction("@get", TemplateRoutePaths(routeActions).Hello())
+func (routeActions DatastarActions) Config() DatastarAction {
+	return newDatastarAction("@get", TemplateRoutePaths(routeActions).Config())
+}
+
+func (routeActions DatastarActions) Clear() DatastarAction {
+	return newDatastarAction("@delete", TemplateRoutePaths(routeActions).Clear())
+}
+
+func (routeActions DatastarActions) Reset() DatastarAction {
+	return newDatastarAction("@put", TemplateRoutePaths(routeActions).Reset())
+}
+
+func (routeActions DatastarActions) Decrement() DatastarAction {
+	return newDatastarAction("@post", TemplateRoutePaths(routeActions).Decrement())
 }
 
 func (routeActions DatastarActions) Increment() DatastarAction {
 	return newDatastarAction("@post", TemplateRoutePaths(routeActions).Increment())
+}
+
+func (routeActions DatastarActions) Adjust(delta int) DatastarAction {
+	return newDatastarAction("@patch", TemplateRoutePaths(routeActions).Adjust(delta))
+}
+
+func (routeActions DatastarActions) Feed() DatastarAction {
+	return newDatastarAction("@get", TemplateRoutePaths(routeActions).Feed())
+}
+
+func (routeActions DatastarActions) Fragment() DatastarAction {
+	return newDatastarAction("@get", TemplateRoutePaths(routeActions).Fragment())
+}
+
+func (routeActions DatastarActions) Greet() DatastarAction {
+	return newDatastarAction("@post", TemplateRoutePaths(routeActions).Greet())
 }
 
 type DatastarAction struct {
@@ -497,10 +754,38 @@ func (routePaths TemplateRoutePaths) Clock() string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "clock")
 }
 
-func (routePaths TemplateRoutePaths) Hello() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "hello.js")
+func (routePaths TemplateRoutePaths) Config() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "config.js")
+}
+
+func (routePaths TemplateRoutePaths) Clear() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
+}
+
+func (routePaths TemplateRoutePaths) Reset() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
+}
+
+func (routePaths TemplateRoutePaths) Decrement() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count/decrement")
 }
 
 func (routePaths TemplateRoutePaths) Increment() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment")
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count/increment")
+}
+
+func (routePaths TemplateRoutePaths) Adjust(delta int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count", strconv.Itoa(delta))
+}
+
+func (routePaths TemplateRoutePaths) Feed() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "feed")
+}
+
+func (routePaths TemplateRoutePaths) Fragment() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fragment")
+}
+
+func (routePaths TemplateRoutePaths) Greet() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "greet")
 }
