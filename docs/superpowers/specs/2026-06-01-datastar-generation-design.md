@@ -29,8 +29,8 @@ This is one spec implemented as a single sequenced plan / PR.
   `datastar-patch-elements` SSE event, with chainable metadata setters.
 - Context-sensitive `signal` behavior: standalone JSON body vs inline
   `datastar-patch-signals` event when the route streams.
-- `signal` JSON marshaling that uses `encoding/json/v2` `MarshalWrite` + a buffer
-  pool when the generator runs under `GOEXPERIMENT=jsonv2`.
+- `signal` JSON marshaling that defaults to `encoding/json` and opts into
+  `encoding/json/v2` `MarshalWrite` (into the pooled buffer) via `--output-jsonv2`.
 - A `.Actions()` template accessor (Datastar mode only) rendering
   `@verb('/path', {options})` with a fluent builder.
 - `check` honors the mode flag and type-checks templates against the correct
@@ -57,7 +57,7 @@ This is one spec implemented as a single sequenced plan / PR.
 | Script arg | `script` / `scriptX`. |
 | Representation selection | **Fixed per route by declared args** (no runtime Accept negotiation). |
 | `.Actions()` | Datastar mode only; htmx mode keeps `Path()`-only. |
-| jsonv2 | Detected at generate time via `go env GOEXPERIMENT`. |
+| jsonv2 | Opt-in via `--output-jsonv2` (off by default → `encoding/json`); no GOEXPERIMENT auto-detection. |
 | Scope | One spec, one sequenced plan / PR. |
 | check scope | Mode-awareness (type-checking) only. |
 
@@ -222,22 +222,27 @@ attribute / text contexts and debugging.
 - `DatastarTemplateData` + `.Actions()` types: emitted when `--use-datastar` is set.
 - Signal JSON helper + buffer pool: emitted when a route uses a `signal` arg.
 
-## signal JSON marshaling + jsonv2 detection
+## signal JSON marshaling + the --output-jsonv2 flag
 
-At generate time the CLI reads `go env GOEXPERIMENT`. If it contains `jsonv2`,
-the generated `datastarMarshalSignals(buf *bytes.Buffer, v any) error` helper
-imports `encoding/json/v2` and marshals via `json.MarshalWrite(buf, v)` directly
-into the buffer the callback already obtained from the existing
-`bytesBufferPool` (no separate pool is introduced). Otherwise it imports
-`encoding/json` and uses `json.Marshal` + `buf.Write`. The generated file
-reflects the generating machine's `GOEXPERIMENT` (deterministic per generation;
-the chosen trade-off over build-tagged dual output).
+By default the generated `datastarMarshalSignals(buf *bytes.Buffer, v any) error`
+helper imports the standard library `encoding/json` and uses `json.Marshal` +
+`buf.Write`. The `--output-jsonv2` flag (opt-in, off by default) switches it to
+import `encoding/json/v2` and marshal via `json.MarshalWrite(buf, v)` directly
+into the buffer the callback already obtained from the existing `bytesBufferPool`
+(no separate pool is introduced).
 
-**Toolchain note:** the `encoding/json/v2` form requires the *consuming* module's
-go directive to be `go 1.25`+ (and a toolchain with the experiment). Because
-`astgen.FormatFile` runs goimports, the late-registered import must be present
-*before* goimports runs — see the import-ordering note below — otherwise
-goimports substitutes a backport module for the bare `json.MarshalWrite`.
+**No GOEXPERIMENT auto-detection.** An earlier draft read `go env GOEXPERIMENT`
+at generation time, but on a machine where jsonv2 is globally enabled that
+emitted `encoding/json/v2` for *every* codebase — including ones not built with
+the experiment — and the dropped-import bug then let goimports substitute the
+`go-json-experiment` backport. The flag makes the default always `encoding/json`;
+`go-json-experiment` is never referenced.
+
+**Toolchain note:** `--output-jsonv2` requires the *consuming* module's go
+directive to be `go 1.25`+ and a toolchain with `GOEXPERIMENT=jsonv2`. Because
+`astgen.FormatFile` runs goimports, the import must be registered *before*
+goimports runs (see the import-ordering note below), otherwise goimports cannot
+resolve the bare `json.MarshalWrite`.
 
 ## Generated handler behavior
 

@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"cmp"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -13,7 +12,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -230,9 +228,6 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.HTMXHelpers && config.Datastar {
 				return fmt.Errorf("--%s and --%s are mutually exclusive", useHTMX, useDatastar)
 			}
-			if config.Datastar {
-				config.JSONV2 = goExperimentEnabled(cmd.Context(), "jsonv2")
-			}
 
 			if v, ok := cliVersion(); ok {
 				config.MuxtVersion = v
@@ -383,6 +378,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.Datastar {
 		args = append(args, "--"+useDatastar)
+	}
+	if config.JSONV2 {
+		args = append(args, "--"+outputJSONV2)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -548,24 +546,6 @@ func versionCommand() *cobra.Command {
 	return cmd
 }
 
-// goExperimentEnabled reports whether the named GOEXPERIMENT is active in the
-// toolchain that will build the generated code. It shells out to `go env
-// GOEXPERIMENT` so the result matches what `go build`/`go test` will see,
-// including settings from the go env file. Detection happens at generation time;
-// the generated file therefore reflects the generating machine's GOEXPERIMENT.
-func goExperimentEnabled(ctx context.Context, name string) bool {
-	out, err := exec.CommandContext(ctx, "go", "env", "GOEXPERIMENT").Output()
-	if err != nil {
-		return false
-	}
-	for _, exp := range strings.Split(strings.TrimSpace(string(out)), ",") {
-		if strings.TrimSpace(exp) == name {
-			return true
-		}
-	}
-	return false
-}
-
 func cliVersion() (string, bool) {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok || bi.Main.Version == "" {
@@ -590,6 +570,7 @@ const (
 	outputMultipleFiles              = "output-multiple-files"
 	useHTMX                          = "use-htmx"
 	useDatastar                      = "use-datastar"
+	outputJSONV2                     = "output-jsonv2"
 	outputHTMXHelpers                = "output-htmx-helpers"
 	outputExportedDefaultIdentifiers = "output-exported-default-identifiers"
 	outputMultipartMaxMemory         = "output-multipart-max-memory"
@@ -628,6 +609,7 @@ This function also receives an argument with a type matching the name given by o
 	outputMultipleFilesHelp              = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 	useHTMXHelp                          = `Enables HTMX mode: adds HTMX helper methods to the template data type for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). Mutually exclusive with --use-datastar.`
 	useDatastarHelp                      = `Enables Datastar mode: generates Datastar template data types (DatastarTemplateData, DatastarEventTemplateData), an Actions() accessor for backend-action expressions, and recognizes the elements/signal/script render-callback arguments. Mutually exclusive with --use-htmx.`
+	outputJSONV2Help                     = `Marshal Datastar signal responses with encoding/json/v2 MarshalWrite instead of encoding/json Marshal. Off by default; the generated code uses the standard library encoding/json. Only enable this for modules built with GOEXPERIMENT=jsonv2 (requires a go 1.25+ module).`
 	outputHTMXHelpersHelp                = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp         = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
@@ -730,6 +712,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 	flagSet.BoolVar(&g.HTMXHelpers, useHTMX, false, useHTMXHelp)
 	flagSet.BoolVar(&g.Datastar, useDatastar, false, useDatastarHelp)
+	flagSet.BoolVar(&g.JSONV2, outputJSONV2, false, outputJSONV2Help)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }

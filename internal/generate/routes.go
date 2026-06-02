@@ -83,9 +83,9 @@ type RoutesFileConfiguration struct {
 	OutputMultipleFiles bool
 	HTMXHelpers         bool
 	Datastar            bool
-	// JSONV2 is set when the generator runs under GOEXPERIMENT=jsonv2. When
-	// true, signal marshaling emits encoding/json/v2 MarshalWrite calls backed
-	// by a buffer pool instead of encoding/json Marshal.
+	// JSONV2 is set by the --output-jsonv2 flag (opt-in; off by default). When
+	// true, signal marshaling emits encoding/json/v2 MarshalWrite into the
+	// pooled buffer; otherwise it uses encoding/json Marshal.
 	JSONV2                           bool
 	OutputExportedDefaultIdentifiers bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.

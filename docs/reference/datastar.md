@@ -67,7 +67,7 @@ func (s Server) Increment(ctx context.Context, signal func(Count, bool) error) {
 }
 ```
 
-When `muxt generate` runs under `GOEXPERIMENT=jsonv2`, the marshal helper uses `encoding/json/v2` `MarshalWrite`; otherwise it uses `encoding/json` `Marshal`. The `encoding/json/v2` form requires the consuming module's go directive to be `go 1.25`+.
+By default the marshal helper uses the standard library `encoding/json` `Marshal`. Pass `--output-jsonv2` to emit `encoding/json/v2` `MarshalWrite` (into the pooled buffer) instead — only do this for modules built with `GOEXPERIMENT=jsonv2` (requires a `go 1.25`+ module). The generator never references the `go-json-experiment` backport.
 
 ### script
 

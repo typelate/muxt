@@ -20,9 +20,9 @@ func datastarSignalsDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 // datastarMarshalSignalsFunc builds:
 //
 //	func datastarMarshalSignals(buf *bytes.Buffer, v any) error {
-//		// under GOEXPERIMENT=jsonv2:
+//		// with --output-jsonv2:
 //		return json.MarshalWrite(buf, v) // encoding/json/v2
-//		// otherwise:
+//		// by default:
 //		b, err := json.Marshal(v)
 //		if err != nil {
 //			return err
@@ -31,8 +31,8 @@ func datastarSignalsDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 //		return err
 //	}
 //
-// The jsonv2 form streams directly into the pooled buffer with MarshalWrite; the
-// fallback marshals to a slice and copies it in.
+// The default uses the standard library encoding/json. The opt-in jsonv2 form
+// streams directly into the pooled buffer with MarshalWrite.
 func datastarMarshalSignalsFunc(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
 	const (
 		bufIdent = "buf"

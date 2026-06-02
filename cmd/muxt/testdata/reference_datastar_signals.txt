@@ -1,6 +1,11 @@
 muxt generate --use-receiver-type=Server --use-datastar
 muxt check
 
+# Default signal marshaling uses the standard library encoding/json, never the
+# go-json-experiment backport (jsonv2 is opt-in via --json-v2).
+grep '"encoding/json"' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+
 exec go test -race -count=1
 
 -- template.gohtml --

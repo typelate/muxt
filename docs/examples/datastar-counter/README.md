@@ -36,8 +36,8 @@ Client attributes used: `data-signals`, `data-text`, `data-bind`,
   everywhere else (`data-init`, plain attributes, text).
 - The `json` template func returns `template.HTML` so the `script` route can
   embed server data as JSON (`encoding/json` already escapes `<>&`).
-- The committed `template_routes.go` marshals signals with `encoding/json`; under
-  `GOEXPERIMENT=jsonv2` regeneration switches to `encoding/json/v2` `MarshalWrite`
-  (requires a `go 1.25`+ module).
+- Signals marshal with the standard library `encoding/json`. Pass
+  `--output-jsonv2` to `muxt generate` to use `encoding/json/v2` `MarshalWrite`
+  instead (only for modules built with `GOEXPERIMENT=jsonv2`).
 
 See [docs/reference/datastar.md](../../reference/datastar.md) for the reference.
