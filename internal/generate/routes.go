@@ -1117,17 +1117,17 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	if err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg); err != nil {
+	if err := ensureMethodSignature(file, config, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg); err != nil {
 		return nil, err
 	}
 	sig, ok := sigs[def.FunctionIdentifier().Name]
 	if !ok {
 		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
 	}
-	if def.UsesDatastar() {
-		if !config.Datastar {
-			return nil, fmt.Errorf("call %s uses a Datastar render callback (elements/signal/script) which requires --%s", def.FunctionIdentifier().Name, "use-datastar")
-		}
+	// elements/signal/script are only reserved render callbacks under
+	// --use-datastar. Without it they are ordinary arguments (a path value or
+	// method parameter named "signal", "script", or "elements" works normally).
+	if config.Datastar && def.UsesDatastar() {
 		return datastarMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	}
 	if config.Datastar && def.UsesSSE() {
@@ -1452,10 +1452,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || muxt.IsDatastarArgument(arg.Name) {
-				// The render callback (execute/sse/elements/signal/script) is
-				// validated and wired into the call in methodHandlerFunc. It is
-				// not parsed from the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) {
+				// The render callback (execute/sse, and elements/signal/script
+				// under --use-datastar) is validated and wired into the call in
+				// methodHandlerFunc. It is not parsed from the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2155,7 +2155,7 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	return obj, true
 }
 
-func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
+func ensureMethodSignature(file *File, config RoutesFileConfiguration, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		isMethod := true
@@ -2165,7 +2165,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 				mo = m
 				isMethod = false
 			} else {
-				ms, err := createMethodSignature(file, signatures, def, receiver, receiverInterface, call, templatesPackage)
+				ms, err := createMethodSignature(file, config, signatures, def, receiver, receiverInterface, call, templatesPackage)
 				if err != nil {
 					return err
 				}
@@ -2177,7 +2177,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 			for _, a := range call.Args {
 				switch arg := a.(type) {
 				case *ast.CallExpr:
-					if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
+					if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 						return err
 					}
 				}
@@ -2204,7 +2204,7 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 	}
 }
 
-func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
+func createMethodSignature(file *File, config RoutesFileConfiguration, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
 	voidResults := false
 	for _, a := range call.Args {
@@ -2213,17 +2213,18 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if muxt.IsSSEArgument(arg.Name) || muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name) {
+			if muxt.IsSSEArgument(arg.Name) || (config.Datastar && (muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name))) {
 				// A render callback's data type cannot be inferred, so synthesize
 				// it as func(any) error and stream the result as any. The method
 				// returns nothing, matching the void streaming contract.
+				// elements/script are only render callbacks under --use-datastar.
 				voidResults = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
 				continue
 			}
-			if muxt.IsSignalArgument(arg.Name) {
+			if config.Datastar && muxt.IsSignalArgument(arg.Name) {
 				// A signal callback adds an onlyIfMissing bool parameter:
-				// func(any, bool) error.
+				// func(any, bool) error. Only under --use-datastar.
 				voidResults = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, signalCallbackSignature()))
 				continue
@@ -2234,7 +2235,7 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
-			if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
+			if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
 		}

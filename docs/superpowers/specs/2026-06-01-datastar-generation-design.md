@@ -119,10 +119,14 @@ Template name (route + method call with reserved args)
 
 ### Reserved args and representation selection
 
-Recognized **only when `--use-datastar` is set** (otherwise the parser reports an
-unknown identifier, mirroring how unknown call args fail today). Like `sse`,
-each family supports prefixed variants (`elementsClock`, `signalCount`) and may
-appear multiple times.
+Treated as render callbacks **only when `--use-datastar` is set**. Without the
+flag the names are not reserved — they are ordinary arguments, so a path value or
+method parameter named `elements`/`signal`/`script` works normally (an
+unresolvable one fails like any other unknown argument). The flag is threaded
+into `ensureMethodSignature`/`createMethodSignature` and the parse/dispatch paths
+so the datastar meaning is gated on `config.Datastar`. Like `sse`, each family
+supports prefixed variants (`elementsClock`, `signalCount`) and may appear
+multiple times.
 
 Representation is **fixed at generation time** from the declared args:
 
@@ -302,4 +306,9 @@ convention and asserting the SSE wire bytes via `go test` like `reference_sse.tx
    declarations (including the conditionally-appended Datastar signal helper) so
    the late `encoding/json/v2` import survives goimports.
 7. **Actions in `data-on-*` need `template.JS`.** See the `.JS()` note above.
+8. **`elements`/`signal`/`script` are reserved only under `--use-datastar`.**
+   Without the flag they are ordinary arguments (the datastar meaning is gated on
+   `config.Datastar` in `methodHandlerFunc`, `createMethodSignature`, and the
+   parse path), so a path value or method parameter with one of those names works
+   normally. jsonv2 is opt-in via `--output-jsonv2` (no GOEXPERIMENT detection).
 ```

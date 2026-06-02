@@ -1,0 +1,58 @@
+# Without --use-datastar, elements/signal/script are NOT reserved: they are
+# ordinary arguments. Here they are path values bound as plain strings.
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /a/{elements}/{signal}/{script} Demo(ctx, elements, signal, script)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Demo takes elements, signal, and script as ordinary string path values
+// because --use-datastar is not set, so the names are not reserved callbacks.
+func (Server) Demo(ctx context.Context, elements, signal, script string) string {
+	return elements + "-" + signal + "-" + script
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestDemo(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/a/e/s/c", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Body.String(); got != "e-s-c" {
+		t.Fatalf("body = %q, want %q", got, "e-s-c")
+	}
+}
