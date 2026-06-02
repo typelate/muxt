@@ -1,0 +1,67 @@
+muxt generate --use-receiver-type=Server --use-datastar
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET / Index()" -}}
+<button data-on-click="{{ (.Actions.UpdateUser 42).JS }}">save</button>
+<a data-on-click="{{ ((.Actions.UpdateUser 7).OpenWhenHidden true).JS }}">defer</a>
+{{- end -}}
+{{- define "PATCH /users/{id} UpdateUser(ctx, id)" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index() any { return nil }
+
+func (Server) UpdateUser(ctx context.Context, id int) any { return nil }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestActions(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	// &#39; is the html-escaped single quote; the browser decodes it back to '
+	// so the DOM attribute value is @patch('/users/42').
+	for _, want := range []string{
+		`data-on-click="@patch(&#39;/users/42&#39;)"`,
+		`@patch(&#39;/users/7&#39;, {openWhenHidden: true})`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want it to contain %q", body, want)
+		}
+	}
+}

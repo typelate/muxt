@@ -13,6 +13,9 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `sse` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Server-Sent Events |
+| `elements` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Datastar `datastar-patch-elements` events (requires `--use-datastar`) |
+| `signal` | `func(T, bool) error` | marshal callback | N/A | Emit Datastar `datastar-patch-signals` JSON (requires `--use-datastar`) |
+| `script` | `func(T) error` or `func() error` | render callback | N/A | Respond `text/javascript` from the same-named template (requires `--use-datastar`) |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |

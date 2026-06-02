@@ -1,0 +1,66 @@
+muxt generate --use-receiver-type=Server --use-datastar
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events Stream(ctx, elements, elementsClock)" -}}<main id="main">{{- .Result -}}</main>{{- end -}}
+{{- define "elementsClock" -}}<time id="clock">{{- .Result -}}</time>{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream patches two different elements over one event stream: the base
+// elements callback renders the route template; the elementsClock callback
+// renders the same-named template. Each is its own patch-elements frame.
+func (Server) Stream(ctx context.Context, elements func(string) error, elementsClock func(string) error) {
+	_ = elements("hello")
+	_ = elementsClock("12:00")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	got := rec.Body.String()
+	for _, want := range []string{
+		"data: elements <main id=\"main\">hello</main>\n",
+		"data: elements <time id=\"clock\">12:00</time>\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("body = %q, want it to contain %q", got, want)
+		}
+	}
+}

@@ -47,6 +47,11 @@ const (
 
 	bufferPoolIdent = "bytesBufferPool"
 
+	// Shared identifiers for the streaming (SSE / Datastar) handler scaffold so
+	// the per-callback closures and the scaffold agree on the flusher and mutex.
+	streamFlusherIdent = "flusher"
+	streamMutexIdent   = "mut"
+
 	executeTemplateErrorMessage = "failed to render page"
 
 	DefaultRoutesFunctionName         = "TemplateRoutes"
@@ -70,13 +75,18 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	SSETemplateDataType,
 	TemplateRoutePathsTypeName string
-	TemplatesVariables               []string
-	OutputFileName                   string
-	PathPrefix                       bool
-	Logger                           bool
-	Verbose                          bool
-	OutputMultipleFiles              bool
-	HTMXHelpers                      bool
+	TemplatesVariables  []string
+	OutputFileName      string
+	PathPrefix          bool
+	Logger              bool
+	Verbose             bool
+	OutputMultipleFiles bool
+	HTMXHelpers         bool
+	Datastar            bool
+	// JSONV2 is set when the generator runs under GOEXPERIMENT=jsonv2. When
+	// true, signal marshaling emits encoding/json/v2 MarshalWrite calls backed
+	// by a buffer pool instead of encoding/json Marshal.
+	JSONV2                           bool
 	OutputExportedDefaultIdentifiers bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
@@ -327,17 +337,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		},
 	})
 
-	is := file.ImportSpecs()
-	importSpecs := make([]ast.Spec, 0, len(is))
-	for _, s := range is {
-		importSpecs = append(importSpecs, s)
-	}
+	// importDecl's Specs are populated after every declaration is generated so
+	// that imports registered by conditionally-appended declarations (e.g. the
+	// Datastar signal marshal helper) are included.
+	importDecl := &ast.GenDecl{Tok: token.IMPORT}
 	decls := []ast.Decl{
 		// import
-		&ast.GenDecl{
-			Tok:   token.IMPORT,
-			Specs: importSpecs,
-		},
+		importDecl,
 
 		// type
 		&ast.GenDecl{
@@ -375,10 +381,31 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	}
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
-	if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) {
+	// In Datastar mode the SSE type slot is occupied by DatastarEventTemplateData
+	// (patch-elements framing) instead, emitted when a route uses an elements
+	// render callback.
+	if config.Datastar {
+		actionDecls, err := datastarActionsDecls(file, config, routeDefinitions)
+		if err != nil {
+			return nil, err
+		}
+		decls = append(decls, actionDecls...)
+		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesElements) {
+			decls = append(decls, datastarEventTemplateDataDecls(file, config)...)
+		}
+		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSignal) {
+			decls = append(decls, datastarSignalsDecls(file, config)...)
+		}
+	} else if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
+
+	// Collect imports after all declarations are generated so late additions
+	// (e.g. encoding/json/v2 from the Datastar signal marshal helper) are kept.
+	for _, s := range file.ImportSpecs() {
+		importDecl.Specs = append(importDecl.Specs, s)
+	}
 	outputFile := &ast.File{
 		Name:  ast.NewIdent(config.PackageName),
 		Decls: decls,
@@ -702,21 +729,28 @@ func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bo
 	return 0, nil, false
 }
 
-// validateSSEMethodResults checks that an sse method returns nothing or only
-// error, and reports whether it returns an error.
-func validateSSEMethodResults(methodName string, method *types.Signature) (bool, error) {
+// validateStreamMethodResults checks that a streaming (SSE / Datastar) method
+// returns nothing or only error, and reports whether it returns an error.
+// callbackLabel names the callback family for diagnostics (e.g. "sse").
+func validateStreamMethodResults(methodName string, method *types.Signature, callbackLabel string) (bool, error) {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	switch method.Results().Len() {
 	case 0:
 		return false, nil
 	case 1:
 		if !types.Implements(method.Results().At(0).Type(), errIface) {
-			return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+			return false, fmt.Errorf("method %s using the %s callback must return nothing or only error", methodName, callbackLabel)
 		}
 		return true, nil
 	default:
-		return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+		return false, fmt.Errorf("method %s using the %s callback must return nothing or only error", methodName, callbackLabel)
 	}
+}
+
+// validateSSEMethodResults checks that an sse method returns nothing or only
+// error, and reports whether it returns an error.
+func validateSSEMethodResults(methodName string, method *types.Signature) (bool, error) {
+	return validateStreamMethodResults(methodName, method, muxt.TemplateNameScopeIdentifierSSE)
 }
 
 // validateSSECallbackShape checks that an sse callback parameter is func() error
@@ -741,17 +775,23 @@ func validateSSECallbackShape(methodName string, callback *types.Signature) (typ
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
-func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+// streamMethodHandlerFunc builds the http.HandlerFunc for a route that streams
+// events (Server-Sent Events or Datastar). It establishes the event stream
+// (Content-Type text/event-stream, flush), parses ctx/lastEventID/path params,
+// and invokes the receiver method, replacing each render-callback argument with
+// a closure produced by buildClosure. buildClosure returns (replacement, true,
+// nil) for arguments it handles and (nil, false, nil) for arguments to leave
+// unchanged. callbackLabel names the callback family for diagnostics and
+// callbackErrorLogMessage is logged when the method returns a non-nil error.
+func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
 	const (
-		flusherIdent = "flusher"
-		okIdent      = "ok"
-		mutexIdent   = "mut"
-		headerIdent  = "h"
+		okIdent     = "ok"
+		headerIdent = "h"
 	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	methodReturnsErr, err := validateSSEMethodResults(def.FunctionIdentifier().Name, sig)
+	methodReturnsErr, err := validateStreamMethodResults(def.FunctionIdentifier().Name, sig, callbackLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -782,7 +822,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}}},
 		// flusher, ok := response.(http.Flusher)
 		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(flusherIdent), ast.NewIdent(okIdent)},
+			Lhs: []ast.Expr{ast.NewIdent(streamFlusherIdent), ast.NewIdent(okIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(response), Type: astgen.ExportedIdentifier(file, "", "net/http", "Flusher")}},
 		},
@@ -832,45 +872,36 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("WriteHeader")},
 			Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
 		}},
-		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(streamFlusherIdent), Sel: ast.NewIdent("Flush")}}},
 		// var mut sync.Mutex
 		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
-			Names: []*ast.Ident{ast.NewIdent(mutexIdent)},
+			Names: []*ast.Ident{ast.NewIdent(streamMutexIdent)},
 			Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
 		}}}},
 	)
 
-	// Build a render closure for every sse-prefixed argument. The base "sse"
-	// renders the route's own template; each sse-prefixed callback (sseClock,
-	// sseMetrics, ...) renders a same-named template, whose existence is checked
-	// here. Each closure has its own result type and creates its own
-	// SSETemplateData, so the callbacks need not share a result type.
+	// Replace each render-callback argument with a closure. Each closure has its
+	// own result type and creates its own template data, so the callbacks need
+	// not share a result type.
 	callArgs := slices.Clone(def.CallExpression().Args)
 	for i, a := range def.CallExpression().Args {
 		id, ok := a.(*ast.Ident)
-		if !ok || !muxt.IsSSEArgument(id.Name) {
+		if !ok {
 			continue
 		}
 		var cb *types.Signature
 		if i < sig.Params().Len() {
+			// Underlying unwraps named and aliased func types so the callback
+			// param may be declared as e.g. `type RenderFunc func(T) error`.
 			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
 		}
-		resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+		replacement, matched, err := buildClosure(i, id, cb)
 		if err != nil {
 			return nil, err
 		}
-		templateName := def.Name()
-		if id.Name != muxt.TemplateNameScopeIdentifierSSE {
-			templateName = id.Name
-			if def.Template() == nil || def.Template().Lookup(templateName) == nil {
-				return nil, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
-			}
+		if matched {
+			callArgs[i] = replacement
 		}
-		closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
-		if err != nil {
-			return nil, err
-		}
-		callArgs[i] = closure
 	}
 	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}
 
@@ -878,7 +909,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		body = append(body, &ast.IfStmt{
 			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, callbackErrorLogMessage, errIdent)}}},
 		})
 	} else {
 		body = append(body, &ast.ExprStmt{X: callExpr})
@@ -886,6 +917,31 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 
 	handlerFunc.Body.List = body
 	return handlerFunc, nil
+}
+
+// sseMethodHandlerFunc builds the streaming handler for a route that uses the
+// sse render callback. Each sse-prefixed argument is replaced with a closure
+// that renders a same-named template into an SSETemplateData frame.
+func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSSE, "sse handler returned an error",
+		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+			if !muxt.IsSSEArgument(id.Name) {
+				return nil, false, nil
+			}
+			resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+			if err != nil {
+				return nil, false, err
+			}
+			templateName := def.Name()
+			if id.Name != muxt.TemplateNameScopeIdentifierSSE {
+				templateName = id.Name
+				if def.Template() == nil || def.Template().Lookup(templateName) == nil {
+					return nil, false, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
+				}
+			}
+			closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+			return closure, true, err
+		})
 }
 
 // sseClosure builds the callback passed to the receiver method. Each call
@@ -1067,6 +1123,15 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	sig, ok := sigs[def.FunctionIdentifier().Name]
 	if !ok {
 		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
+	}
+	if def.UsesDatastar() {
+		if !config.Datastar {
+			return nil, fmt.Errorf("call %s uses a Datastar render callback (elements/signal/script) which requires --%s", def.FunctionIdentifier().Name, "use-datastar")
+		}
+		return datastarMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+	}
+	if config.Datastar && def.UsesSSE() {
+		return nil, fmt.Errorf("call %s uses the %q argument which is not supported in Datastar mode; use the %q argument instead", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierElements)
 	}
 	if _, _, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
 		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
@@ -1387,10 +1452,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) {
-				// The render callback (execute/sse/sse-prefixed) is validated and
-				// wired into the call in methodHandlerFunc. It is not parsed from
-				// the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || muxt.IsDatastarArgument(arg.Name) {
+				// The render callback (execute/sse/elements/signal/script) is
+				// validated and wired into the call in methodHandlerFunc. It is
+				// not parsed from the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2141,19 +2206,26 @@ func ensureMethodSignature(file *File, signatures map[string]*types.Signature, d
 
 func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
 	var params []*types.Var
-	hasSSE := false
+	voidResults := false
 	for _, a := range call.Args {
 		switch arg := a.(type) {
 		case *ast.Ident:
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if muxt.IsSSEArgument(arg.Name) {
-				// An sse callback's data type cannot be inferred, so synthesize
+			if muxt.IsSSEArgument(arg.Name) || muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name) {
+				// A render callback's data type cannot be inferred, so synthesize
 				// it as func(any) error and stream the result as any. The method
-				// returns nothing, matching the void SSE contract.
-				hasSSE = true
+				// returns nothing, matching the void streaming contract.
+				voidResults = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				continue
+			}
+			if muxt.IsSignalArgument(arg.Name) {
+				// A signal callback adds an onlyIfMissing bool parameter:
+				// func(any, bool) error.
+				voidResults = true
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, signalCallbackSignature()))
 				continue
 			}
 			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2168,7 +2240,7 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 		}
 	}
 	results := types.NewTuple(types.NewVar(0, nil, "", types.Universe.Lookup("any").Type()))
-	if hasSSE {
+	if voidResults {
 		results = types.NewTuple()
 	}
 	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil

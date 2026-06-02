@@ -1,0 +1,25 @@
+! muxt generate --use-htmx --use-datastar
+stderr 'use-htmx and --use-datastar are mutually exclusive'
+
+-- template.gohtml --
+{{- define "GET / Index()" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index() any { return nil }

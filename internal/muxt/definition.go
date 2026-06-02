@@ -140,19 +140,50 @@ func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
 
-// UsesSSE reports whether the handler call uses the reserved "sse" render
-// callback argument. It scans only the top-level call arguments because the sse
-// callback, like execute, must be a direct argument to the receiver method.
-func (def Definition) UsesSSE() bool {
+// usesArgument reports whether any top-level call argument identifier satisfies
+// pred. It scans only the top-level call arguments because render-callback
+// arguments, like execute, must be direct arguments to the receiver method.
+func (def Definition) usesArgument(pred func(string) bool) bool {
 	if def.call == nil {
 		return false
 	}
 	for _, a := range def.call.Args {
-		if id, ok := a.(*ast.Ident); ok && id.Name == TemplateNameScopeIdentifierSSE {
+		if id, ok := a.(*ast.Ident); ok && pred(id.Name) {
 			return true
 		}
 	}
 	return false
+}
+
+// UsesSSE reports whether the handler call uses the reserved "sse" render
+// callback argument.
+func (def Definition) UsesSSE() bool {
+	return def.usesArgument(func(name string) bool { return name == TemplateNameScopeIdentifierSSE })
+}
+
+// UsesElements reports whether the handler call uses any Datastar patch-elements
+// render callback (elements or an elements-prefixed argument). A route that uses
+// elements streams a text/event-stream response.
+func (def Definition) UsesElements() bool {
+	return def.usesArgument(IsElementsArgument)
+}
+
+// UsesSignal reports whether the handler call uses any Datastar patch-signals
+// render callback (signal or a signal-prefixed argument).
+func (def Definition) UsesSignal() bool {
+	return def.usesArgument(IsSignalArgument)
+}
+
+// UsesScript reports whether the handler call uses any Datastar script render
+// callback (script or a script-prefixed argument).
+func (def Definition) UsesScript() bool {
+	return def.usesArgument(IsScriptArgument)
+}
+
+// UsesDatastar reports whether the handler call uses any Datastar render-callback
+// family (elements, signal, or script).
+func (def Definition) UsesDatastar() bool {
+	return def.UsesElements() || def.UsesSignal() || def.UsesScript()
 }
 func (def Definition) Identifier() string        { return def.identifier }
 func (def Definition) TemplatesVariable() string { return def.templatesVariable }
@@ -379,23 +410,54 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 	return false
 }
 
-// IsSSEArgument reports whether name is an SSE render-callback argument: the
-// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
-// sseMetrics, ...). Prefixed callbacks render a same-named template; they are
-// only valid on a route that also has the base "sse" argument.
-func IsSSEArgument(name string) bool {
-	if name == TemplateNameScopeIdentifierSSE {
+// isReservedOrPrefixed reports whether name is the reserved base identifier or a
+// camelCase base-prefixed name (e.g. base "sse" matches "sse", "sseClock"). The
+// prefixed forms render a same-named template; they are only valid on a route
+// that also declares the base argument.
+func isReservedOrPrefixed(name, base string) bool {
+	if name == base {
 		return true
 	}
-	rest, ok := strings.CutPrefix(name, TemplateNameScopeIdentifierSSE)
+	rest, ok := strings.CutPrefix(name, base)
 	return ok && rest != "" && unicode.IsUpper(rune(rest[0]))
+}
+
+// IsSSEArgument reports whether name is an SSE render-callback argument: the
+// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
+// sseMetrics, ...).
+func IsSSEArgument(name string) bool {
+	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierSSE)
+}
+
+// IsElementsArgument reports whether name is a Datastar patch-elements
+// render-callback argument: "elements" or a camelCase "elements"-prefixed name.
+func IsElementsArgument(name string) bool {
+	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierElements)
+}
+
+// IsSignalArgument reports whether name is a Datastar patch-signals
+// render-callback argument: "signal" or a camelCase "signal"-prefixed name.
+func IsSignalArgument(name string) bool {
+	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierSignal)
+}
+
+// IsScriptArgument reports whether name is a Datastar script render-callback
+// argument: "script" or a camelCase "script"-prefixed name.
+func IsScriptArgument(name string) bool {
+	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierScript)
+}
+
+// IsDatastarArgument reports whether name belongs to any Datastar
+// render-callback family (elements, signal, or script).
+func IsDatastarArgument(name string) bool {
+	return IsElementsArgument(name) || IsSignalArgument(name) || IsScriptArgument(name)
 }
 
 func checkArguments(identifiers []string, call *ast.CallExpr) error {
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) {
+			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) && !IsDatastarArgument(exp.Name) {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 		case *ast.CallExpr:
@@ -418,6 +480,10 @@ const (
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierSSE          = "sse"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
+	// Datastar render-callback argument families (usable only under --use-datastar).
+	TemplateNameScopeIdentifierElements = "elements"
+	TemplateNameScopeIdentifierSignal   = "signal"
+	TemplateNameScopeIdentifierScript   = "script"
 )
 
 func patternScope() []string {

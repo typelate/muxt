@@ -1,0 +1,35 @@
+{{define "GET / Index()"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Datastar + muxt</title>
+	<script type="module"
+	        src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.1/bundles/datastar.js"
+	        integrity="sha384-dWn5jta+MrFAhwrzi4llarDQkaQE0zW2lreXrV0yK15W0A7TrtfGyIyji04PLUY7"
+	        crossorigin="anonymous"></script>
+</head>
+<body>
+	<h1>Datastar + muxt</h1>
+
+	{{- /* data-on:* event attributes are a JavaScript context, so the action
+	       needs .JS (template.JS); a plain string would render as a quoted JS
+	       literal that Datastar will not execute. */}}
+	<section data-signals="{count: 0}">
+		<p>Count: <span id="count" data-text="$count">0</span></p>
+		<button id="increment" data-on:click="{{(.Actions.Increment).JS}}">Increment</button>
+	</section>
+
+	{{- /* data-init is not an event handler, so String() (the default) is fine. */}}
+	<p>Clock: <span id="clock">--:--:--</span></p>
+	<div data-init="{{.Actions.Clock}}"></div>
+
+	<button id="hello" data-on:click="{{(.Actions.Hello).JS}}">Run script</button>
+</body>
+</html>
+{{end}}
+
+{{define "POST /increment Increment(ctx, signal)"}}{{end}}
+
+{{define "GET /clock Clock(ctx, elements)"}}{{.Selector "#clock"}}{{.Mode "inner"}}{{- .Result -}}{{end}}
+
+{{define "GET /hello.js Hello(ctx, script)"}}console.log("datastar script executed");{{end}}

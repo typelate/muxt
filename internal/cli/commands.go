@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"cmp"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -225,6 +227,13 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 				return fmt.Errorf("output filename must use .go extension")
 			}
 
+			if config.HTMXHelpers && config.Datastar {
+				return fmt.Errorf("--%s and --%s are mutually exclusive", useHTMX, useDatastar)
+			}
+			if config.Datastar {
+				config.JSONV2 = goExperimentEnabled(cmd.Context(), "jsonv2")
+			}
+
 			if v, ok := cliVersion(); ok {
 				config.MuxtVersion = v
 			}
@@ -343,10 +352,16 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.RoutesFunction != defaultRoutesFunctionName {
 		args = append(args, "--"+outputRoutesFunc+"="+config.RoutesFunction)
 	}
-	if config.TemplateDataType != defaultTemplateDataTypeName {
+	templateDataTypeDefault := defaultTemplateDataTypeName
+	sseTemplateDataTypeDefault := defaultSSETemplateDataTypeName
+	if config.Datastar {
+		templateDataTypeDefault = defaultDatastarTemplateDataTypeName
+		sseTemplateDataTypeDefault = defaultDatastarEventTemplateDataTypeName
+	}
+	if config.TemplateDataType != templateDataTypeDefault {
 		args = append(args, "--"+outputTemplateDataType+"="+config.TemplateDataType)
 	}
-	if config.SSETemplateDataType != defaultSSETemplateDataTypeName {
+	if config.SSETemplateDataType != sseTemplateDataTypeDefault {
 		args = append(args, "--"+outputSSETemplateDataType+"="+config.SSETemplateDataType)
 	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
@@ -364,7 +379,10 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 		args = append(args, "--"+outputMultipleFiles)
 	}
 	if config.HTMXHelpers {
-		args = append(args, "--"+outputHTMXHelpers)
+		args = append(args, "--"+useHTMX)
+	}
+	if config.Datastar {
+		args = append(args, "--"+useDatastar)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -530,6 +548,24 @@ func versionCommand() *cobra.Command {
 	return cmd
 }
 
+// goExperimentEnabled reports whether the named GOEXPERIMENT is active in the
+// toolchain that will build the generated code. It shells out to `go env
+// GOEXPERIMENT` so the result matches what `go build`/`go test` will see,
+// including settings from the go env file. Detection happens at generation time;
+// the generated file therefore reflects the generating machine's GOEXPERIMENT.
+func goExperimentEnabled(ctx context.Context, name string) bool {
+	out, err := exec.CommandContext(ctx, "go", "env", "GOEXPERIMENT").Output()
+	if err != nil {
+		return false
+	}
+	for _, exp := range strings.Split(strings.TrimSpace(string(out)), ",") {
+		if strings.TrimSpace(exp) == name {
+			return true
+		}
+	}
+	return false
+}
+
 func cliVersion() (string, bool) {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok || bi.Main.Version == "" {
@@ -552,6 +588,8 @@ const (
 	outputRoutesFuncWithLoggerParam  = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix   = "output-routes-func-with-path-prefix-param"
 	outputMultipleFiles              = "output-multiple-files"
+	useHTMX                          = "use-htmx"
+	useDatastar                      = "use-datastar"
 	outputHTMXHelpers                = "output-htmx-helpers"
 	outputExportedDefaultIdentifiers = "output-exported-default-identifiers"
 	outputMultipartMaxMemory         = "output-multipart-max-memory"
@@ -588,6 +626,8 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithLoggerParamHelp  = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp   = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputMultipleFilesHelp              = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
+	useHTMXHelp                          = `Enables HTMX mode: adds HTMX helper methods to the template data type for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). Mutually exclusive with --use-datastar.`
+	useDatastarHelp                      = `Enables Datastar mode: generates Datastar template data types (DatastarTemplateData, DatastarEventTemplateData), an Actions() accessor for backend-action expressions, and recognizes the elements/signal/script render-callback arguments. Mutually exclusive with --use-htmx.`
 	outputHTMXHelpersHelp                = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp         = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
@@ -603,7 +643,11 @@ const (
 	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
-	defaultPackageName                = "main"
+	// Datastar mode swaps the default template data type names; both remain
+	// overridable via --output-template-data-type / --output-sse-template-data-type.
+	defaultDatastarTemplateDataTypeName      = "DatastarTemplateData"
+	defaultDatastarEventTemplateDataTypeName = "DatastarEventTemplateData"
+	defaultPackageName                       = "main"
 )
 
 func isDefaultTemplatesVariable(in *[]string) bool {
@@ -612,6 +656,24 @@ func isDefaultTemplatesVariable(in *[]string) bool {
 
 func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
+
+	// Datastar mode swaps the default template data type names.
+	templateDataTypeDefault := defaultTemplateDataTypeName
+	sseTemplateDataTypeDefault := defaultSSETemplateDataTypeName
+	if config.Datastar {
+		templateDataTypeDefault = defaultDatastarTemplateDataTypeName
+		sseTemplateDataTypeDefault = defaultDatastarEventTemplateDataTypeName
+
+		// The type-name flags default to "TemplateData"/"SSETemplateData", which
+		// would otherwise mask the Datastar defaults below. Clear the unchanged
+		// flag values so the Datastar defaults apply.
+		if !flagSet.Changed(outputTemplateDataType) && !flagSet.Changed(deprecatedTemplateDataType) {
+			config.TemplateDataType = ""
+		}
+		if !flagSet.Changed(outputSSETemplateDataType) {
+			config.SSETemplateDataType = ""
+		}
+	}
 
 	// Apply defaults and convert to private if --output-exported-default-identifiers=false
 	if !config.OutputExportedDefaultIdentifiers {
@@ -622,10 +684,10 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 			config.ReceiverInterface = strcase.ToGoCamel(defaultReceiverInterfaceName)
 		}
 		if !flagSet.Changed(outputTemplateDataType) {
-			config.TemplateDataType = strcase.ToGoCamel(defaultTemplateDataTypeName)
+			config.TemplateDataType = strcase.ToGoCamel(templateDataTypeDefault)
 		}
 		if !flagSet.Changed(outputSSETemplateDataType) {
-			config.SSETemplateDataType = strcase.ToGoCamel(defaultSSETemplateDataTypeName)
+			config.SSETemplateDataType = strcase.ToGoCamel(sseTemplateDataTypeDefault)
 		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
@@ -634,8 +696,8 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		// Normal defaults when exported identifiers are enabled
 		config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
 		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
-		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
-		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
+		config.TemplateDataType = cmp.Or(config.TemplateDataType, templateDataTypeDefault)
+		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, sseTemplateDataTypeDefault)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -666,7 +728,8 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
-	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.HTMXHelpers, useHTMX, false, useHTMXHelp)
+	flagSet.BoolVar(&g.Datastar, useDatastar, false, useDatastarHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }
@@ -734,6 +797,7 @@ func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.Route
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
+	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, "DEPRECATED: use --"+useHTMX+" instead. "+outputHTMXHelpersHelp)
 
 	markDeprecated(flagSet, deprecatedReceiverInterface, outputReceiverInterface)
 	markDeprecated(flagSet, deprecatedRoutesFunc, outputRoutesFunc)
@@ -741,6 +805,7 @@ func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.Route
 	markDeprecated(flagSet, deprecatedTemplateRoutePathsType, outputTemplateRoutePathsType)
 	markDeprecated(flagSet, deprecatedLogger, outputRoutesFuncWithLoggerParam)
 	markDeprecated(flagSet, deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
+	markDeprecated(flagSet, outputHTMXHelpers, useHTMX)
 }
 
 func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
