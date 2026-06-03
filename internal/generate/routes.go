@@ -1481,6 +1481,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 						statements = append(statements, callParseMultipartForm(file, config, rdIdent), declareMultipartVar)
 					case muxt.TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
+					case muxt.TemplateNameScopeIdentifierBody:
+						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(muxt.TemplateNameScopeIdentifierBody))(
+							&ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Body")},
+						))
 					default:
 						if slices.Contains(def.PathValueIdentifiers(), arg.Name) || arg.Name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
@@ -2101,6 +2105,12 @@ func defaultTemplateNameScope(file *File, def muxt.Definition, argumentIdentifie
 		}
 		t := types.NewPointer(pkg.Scope().Lookup("Form").Type())
 		return t, true
+	case muxt.TemplateNameScopeIdentifierBody:
+		pkg, ok := file.Types("io")
+		if !ok {
+			return nil, false
+		}
+		return pkg.Scope().Lookup("Reader").Type(), true
 	case muxt.TemplateNameScopeIdentifierLastEventID:
 		// lastEventID defaults to string (sourced from the Last-Event-Id header);
 		// a non-string receiver param triggers typed parsing like a path value.

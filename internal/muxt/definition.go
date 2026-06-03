@@ -480,6 +480,7 @@ const (
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierSSE          = "sse"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
+	TemplateNameScopeIdentifierBody         = "body"
 	// Datastar render-callback argument families (usable only under --use-datastar).
 	TemplateNameScopeIdentifierElements = "elements"
 	TemplateNameScopeIdentifierSignal   = "signal"
@@ -496,6 +497,7 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierExecute,
 		TemplateNameScopeIdentifierSSE,
 		TemplateNameScopeIdentifierLastEventID,
+		TemplateNameScopeIdentifierBody,
 	}
 }
 
