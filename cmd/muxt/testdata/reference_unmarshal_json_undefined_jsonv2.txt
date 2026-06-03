@@ -1,0 +1,28 @@
+# Undefined-method pass-through under --output-jsonv2 binds a *jsontext.Decoder
+# and constructs it with jsontext.NewDecoder(body) instead of decoding.
+# Generation-only (no go test / muxt check): building the output needs a
+# GOEXPERIMENT=jsonv2 toolchain. The assertions confirm jsontext.NewDecoder is
+# emitted and the go-json-experiment backport is never referenced.
+muxt generate --output-jsonv2
+
+grep 'jsontext.NewDecoder' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+
+-- template.gohtml --
+{{- define "POST /raw Lookup(unmarshalJSON(body))" -}}{{- printf "%s" .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))

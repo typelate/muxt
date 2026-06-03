@@ -2268,6 +2268,15 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
 			if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
+				if id.Name != muxt.InputWrapperUnmarshalJSON {
+					// unmarshalForm target synthesis lands with its statement generator (Task 5)
+					continue
+				}
+				tp, err := inputWrapperTargetType(file, config, id.Name)
+				if err != nil {
+					return nil, err
+				}
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), "", tp))
 				continue
 			}
 			if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {

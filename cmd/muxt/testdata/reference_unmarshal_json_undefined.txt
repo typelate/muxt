@@ -1,0 +1,52 @@
+muxt generate
+
+grep 'json.RawMessage' template_routes.go
+grep 'json\.RawMessage\(' template_routes.go
+! grep 'json.Unmarshal' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /raw Lookup(unmarshalJSON(body))" -}}{{- printf "%s" .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- server_test.go --
+package server
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+type server struct{}
+
+func (server) Lookup(raw json.RawMessage) any { return raw }
+
+func TestRaw(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, server{})
+	req := httptest.NewRequest(http.MethodPost, "/raw", strings.NewReader(`{"x":1}`))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if got := rec.Body.String(); got != `{&#34;x&#34;:1}` {
+		t.Fatalf("body = %q", got)
+	}
+}
