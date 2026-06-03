@@ -1425,7 +1425,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				case muxt.InputWrapperUnmarshalJSON:
 					s, err = unmarshalJSONStatements(file, config, varIdent, param.Type(), bodyExpr, parseErrBlock())
 				case muxt.InputWrapperUnmarshalForm:
-					// implemented in a later task; leave empty for now
+					formIdent := ast.NewIdent(varIdent)
+					if _, isStruct := param.Type().Underlying().(*types.Struct); isStruct {
+						s, err = appendParseFormToStructStatements(nil, def, file, resultType, formIdent, types.NewVar(0, nil, varIdent, param.Type()), validationFailureBlock, rdIdent)
+					} else {
+						var declareFormVar *ast.DeclStmt
+						declareFormVar, err = formVariableAssignment(file, formIdent, param.Type())
+						if err == nil {
+							s = []ast.Stmt{callParseForm(), declareFormVar}
+						}
+					}
 				}
 				if err != nil {
 					return nil, err
@@ -2268,10 +2277,6 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
 			if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
-				if id.Name != muxt.InputWrapperUnmarshalJSON {
-					// unmarshalForm target synthesis lands with its statement generator (Task 5)
-					continue
-				}
 				tp, err := inputWrapperTargetType(file, config, id.Name)
 				if err != nil {
 					return nil, err
