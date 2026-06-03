@@ -1,0 +1,40 @@
+# --output-jsonv2 makes unmarshalJSON(body) use encoding/json/v2 UnmarshalRead.
+# Generation-only (no go test / muxt check) because building the output needs a
+# GOEXPERIMENT=jsonv2 toolchain; the assertions confirm the standard library
+# encoding/json/v2 is used and the go-json-experiment backport is never referenced.
+muxt generate --use-receiver-type=Server --output-jsonv2
+
+grep 'json "encoding/json/v2"' template_routes.go
+grep 'json.UnmarshalRead' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+! grep '"encoding/json"' template_routes.go
+
+-- template.gohtml --
+{{- define "POST /add Add(ctx, unmarshalJSON(body))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Pair struct {
+	A int `json:"a"`
+	B int `json:"b"`
+}
+
+func (Server) Add(ctx context.Context, in Pair) string { return strconv.Itoa(in.A + in.B) }
