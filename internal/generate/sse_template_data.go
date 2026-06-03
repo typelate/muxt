@@ -157,6 +157,7 @@ func sseTemplateDataErrMethod(file *File, typeIdent string) *ast.FuncDecl {
 
 // sseTemplateDataErrorMethod exposes the raw error slice so a define body can
 // range over .Error (for example to render each iter.Seq2 error value).
+// It returns []error (not string) so SSETemplateData does not satisfy the error interface.
 func sseTemplateDataErrorMethod(typeIdent string) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Recv: sseTemplateDataMethodReceiver(typeIdent),

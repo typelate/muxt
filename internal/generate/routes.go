@@ -879,6 +879,9 @@ func classifySSEReturn(sig *types.Signature) (sseReturnKind, types.Type) {
 	}
 	rt := sig.Results().At(0).Type()
 	if ch, ok := rt.Underlying().(*types.Chan); ok {
+		if ch.Dir() == types.SendOnly {
+			return sseReturnNone, nil
+		}
 		return sseReturnChan, ch.Elem()
 	}
 	named, ok := types.Unalias(rt).(*types.Named)
