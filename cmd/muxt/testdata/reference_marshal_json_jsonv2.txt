@@ -1,0 +1,40 @@
+# --output-jsonv2 opts into encoding/json/v2 MarshalWrite for marshalJSON marshaling.
+# This is generation-only (no go test / muxt check) because building the output
+# requires a toolchain with GOEXPERIMENT=jsonv2; the assertions confirm the
+# standard library encoding/json/v2 is used and the go-json-experiment backport
+# is never referenced.
+muxt generate --use-receiver-type=Server --output-jsonv2
+
+grep 'json.MarshalWrite' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+grep 'encoding/json/v2' template_routes.go
+
+-- template.gohtml --
+{{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type User struct {
+	Name string `json:"name"`
+}
+
+func (Server) GetUser(ctx context.Context) (User, error) {
+	return User{Name: "Ada"}, nil
+}

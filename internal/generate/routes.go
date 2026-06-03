@@ -273,8 +273,10 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	}
 	// Declare the buffer pool used by the handlers registered directly in this
 	// function. In multiple-files mode the per-file functions declare their own
-	// pool, so only declare it here when this function actually has handlers.
-	if len(parseBasedDefinitions) > 0 {
+	// pool, so only declare it here when this function actually has handlers that
+	// use it. marshalJSON handlers use a local buffer (or no buffer at all) and
+	// do not consume the pool.
+	if slices.ContainsFunc(parseBasedDefinitions, definitionUsesBytesBufferPool) {
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
@@ -400,6 +402,9 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
+	if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationMarshalJSON }) {
+		decls = append(decls, marshalJSONResponseDecls(file, config)...)
+	}
 	decls = append(decls, routePathDecls...)
 
 	// Collect imports after all declarations are generated so late additions
@@ -505,8 +510,9 @@ func generatePerFileRouteFunction(
 		Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
 	})
 
-	// Declare the buffer pool shared by this file's handlers.
-	if len(defs) > 0 {
+	// Declare the buffer pool shared by this file's handlers. marshalJSON handlers
+	// do not use the pool, so only emit it when at least one other handler needs it.
+	if slices.ContainsFunc(defs, definitionUsesBytesBufferPool) {
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
@@ -2849,10 +2855,4 @@ func sseReturnClosure(file *File, config RoutesFileConfiguration, def muxt.Defin
 		},
 		Body: &ast.BlockStmt{List: body},
 	}, nil
-}
-
-// marshalJSONHandlerFunc is implemented in a later task; the stub keeps the
-// Representation switch exhaustive. No fixture exercises it yet.
-func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
-	return nil, fmt.Errorf("marshalJSON representation wrapper not yet implemented")
 }
