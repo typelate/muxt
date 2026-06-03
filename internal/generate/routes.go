@@ -772,19 +772,13 @@ func validateSSECallbackShape(methodName string, callback *types.Signature) (typ
 	}
 }
 
-// sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
-// Server-Sent Events. Unlike a normal handler it establishes an event stream
-// (Content-Type text/event-stream, flush) and invokes the receiver method with
-// a callback closure that renders and writes one SSE frame per call.
-// streamMethodHandlerFunc builds the http.HandlerFunc for a route that streams
-// events (Server-Sent Events or Datastar). It establishes the event stream
-// (Content-Type text/event-stream, flush), parses ctx/lastEventID/path params,
-// and invokes the receiver method, replacing each render-callback argument with
-// a closure produced by buildClosure. buildClosure returns (replacement, true,
-// nil) for arguments it handles and (nil, false, nil) for arguments to leave
-// unchanged. callbackLabel names the callback family for diagnostics and
-// callbackErrorLogMessage is logged when the method returns a non-nil error.
-func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
+// streamHandlerPrologue builds the shared prologue statements for a streaming
+// handler: defer request.Body.Close(), the http.Flusher type assertion with a
+// 500 guard, parsing of ctx/lastEventID/path params, the SSE response headers,
+// WriteHeader(200), the initial flush, and the var mut sync.Mutex declaration.
+// Both streamMethodHandlerFunc (callback mode) and sseReturnHandlerFunc (return
+// mode) start from these statements.
+func streamHandlerPrologue(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named) ([]ast.Stmt, error) {
 	const (
 		okIdent     = "ok"
 		headerIdent = "h"
@@ -792,22 +786,6 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	methodReturnsErr, err := validateStreamMethodResults(def.FunctionIdentifier().Name, sig, callbackLabel)
-	if err != nil {
-		return nil, err
-	}
-
-	var callFun ast.Expr
-	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name); obj != nil {
-		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(def.FunctionIdentifier().Name)}
-	} else {
-		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
-	}
-
-	handlerFunc := &ast.FuncLit{
-		Type: astgen.HTTPHandlerFuncType(file, response, request),
-		Body: &ast.BlockStmt{},
-	}
 	body := []ast.Stmt{
 		// defer func() { _ = request.Body.Close() }()
 		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.FuncLit{
@@ -848,7 +826,7 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
 	// The result type is per-callback; arg parsing only needs ctx/lastEventID/path
 	// (it ignores the result type), so pass an empty struct here.
-	body, err = appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -880,6 +858,90 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 			Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
 		}}}},
 	)
+	return body, nil
+}
+
+// sseReturnKind classifies an sse() method result type as a stream source.
+type sseReturnKind int
+
+const (
+	sseReturnNone sseReturnKind = iota // not a stream (error/nothing -> callback mode)
+	sseReturnChan                      // <-chan T or chan T
+	sseReturnSeq                       // iter.Seq[T]
+	sseReturnSeq2                      // iter.Seq2[T, error]
+)
+
+// classifySSEReturn inspects sig's single result (if any) and returns the stream
+// kind plus the element/value type T.
+func classifySSEReturn(sig *types.Signature) (sseReturnKind, types.Type) {
+	if sig.Results().Len() != 1 {
+		return sseReturnNone, nil
+	}
+	rt := sig.Results().At(0).Type()
+	if ch, ok := rt.Underlying().(*types.Chan); ok {
+		return sseReturnChan, ch.Elem()
+	}
+	named, ok := types.Unalias(rt).(*types.Named)
+	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != "iter" {
+		return sseReturnNone, nil
+	}
+	args := named.TypeArgs()
+	switch named.Obj().Name() {
+	case "Seq":
+		if args != nil && args.Len() == 1 {
+			return sseReturnSeq, args.At(0)
+		}
+	case "Seq2":
+		// Only iter.Seq2[T, error] is an SSE stream: the second value seeds the
+		// template-data error list. iter.Seq2[T, U] with a non-error second type
+		// (for example iter.Seq2[int, float64]) is an ordinary template result a
+		// define body can range over, so it stays sseReturnNone.
+		if args != nil && args.Len() == 2 {
+			errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+			if types.Implements(args.At(1), errIface) {
+				return sseReturnSeq2, args.At(0)
+			}
+		}
+	}
+	return sseReturnNone, nil
+}
+
+// sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
+// Server-Sent Events. Unlike a normal handler it establishes an event stream
+// (Content-Type text/event-stream, flush) and invokes the receiver method with
+// a callback closure that renders and writes one SSE frame per call.
+// streamMethodHandlerFunc builds the http.HandlerFunc for a route that streams
+// events (Server-Sent Events or Datastar). It establishes the event stream
+// (Content-Type text/event-stream, flush), parses ctx/lastEventID/path params,
+// and invokes the receiver method, replacing each render-callback argument with
+// a closure produced by buildClosure. buildClosure returns (replacement, true,
+// nil) for arguments it handles and (nil, false, nil) for arguments to leave
+// unchanged. callbackLabel names the callback family for diagnostics and
+// callbackErrorLogMessage is logged when the method returns a non-nil error.
+func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	methodReturnsErr, err := validateStreamMethodResults(def.FunctionIdentifier().Name, sig, callbackLabel)
+	if err != nil {
+		return nil, err
+	}
+
+	var callFun ast.Expr
+	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name); obj != nil {
+		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(def.FunctionIdentifier().Name)}
+	} else {
+		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
+	}
+
+	handlerFunc := &ast.FuncLit{
+		Type: astgen.HTTPHandlerFuncType(file, response, request),
+		Body: &ast.BlockStmt{},
+	}
+	body, err := streamHandlerPrologue(file, config, def, sigs, receiver)
+	if err != nil {
+		return nil, err
+	}
 
 	// Replace each render-callback argument with a closure. Each closure has its
 	// own result type and creates its own template data, so the callbacks need
@@ -1130,6 +1192,11 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		return sseWrapperHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	case muxt.RepresentationMarshalJSON:
 		return marshalJSONHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+	}
+	if def.Representation() == muxt.RepresentationNone {
+		if kind, _ := classifySSEReturn(sig); kind != sseReturnNone {
+			return nil, fmt.Errorf("call %s returns an iterator or channel; wrap the call in sse(...)", def.FunctionIdentifier().Name)
+		}
 	}
 	// elements/signal/script are only reserved render callbacks under
 	// --use-datastar. Without it they are ordinary arguments (a path value or
@@ -2566,6 +2633,13 @@ func assignTemplateDataErrStatusCode(file *File, rdIdent string, code int) *ast.
 // renders the route's define body, and a `sendX` name renders template `X`
 // (the remainder after the "send" prefix, verbatim).
 func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+	kind, elem := classifySSEReturn(sig)
+	if kind != sseReturnNone {
+		if def.UsesSend() {
+			return nil, fmt.Errorf("call %s cannot use both a send callback and an iterator or channel return", def.FunctionIdentifier().Name)
+		}
+		return sseReturnHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName, kind, elem)
+	}
 	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSend, "sse handler returned an error",
 		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
 			if !muxt.IsSendArgument(id.Name) {
@@ -2585,6 +2659,193 @@ func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.
 			closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
 			return closure, true, err
 		})
+}
+
+// sseReturnHandlerFunc builds the streaming handler for an sse() route whose
+// method returns a stream (<-chan T, iter.Seq[T], or iter.Seq2[T, error])
+// instead of taking a send callback. It reuses the shared stream prologue and
+// then ranges over the returned stream, rendering one SSE event per value via
+// the route's define body.
+func sseReturnHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string, kind sseReturnKind, elem types.Type) (*ast.FuncLit, error) {
+	const (
+		renderIdent  = "sseRender"
+		valueIdent   = "v"
+		iterErrIdent = "iterErr"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	body, err := streamHandlerPrologue(file, config, def, sigs, receiver)
+	if err != nil {
+		return nil, err
+	}
+
+	// sseRender := func(v T[, iterErr error]) error { ... }
+	render, err := sseReturnClosure(file, config, def, def.Name(), elem, receiverInterfaceName, kind == sseReturnSeq2)
+	if err != nil {
+		return nil, err
+	}
+	body = append(body, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(renderIdent)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{render},
+	})
+
+	// callExpr: receiver.Method(parsedArgs...). Return mode has no callback args
+	// to replace, so use the parsed call arguments directly.
+	var callFun ast.Expr
+	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name); obj != nil {
+		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(def.FunctionIdentifier().Name)}
+	} else {
+		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
+	}
+	callExpr := &ast.CallExpr{Fun: callFun, Args: slices.Clone(def.CallExpression().Args)}
+
+	// for v[, iterErr] := range receiver.Method(args...) {
+	//     if err := sseRender(v[, iterErr]); err != nil { log; return }
+	// }
+	var rangeKey, rangeValue ast.Expr
+	renderArgs := []ast.Expr{ast.NewIdent(valueIdent)}
+	rangeKey = ast.NewIdent(valueIdent)
+	if kind == sseReturnSeq2 {
+		rangeValue = ast.NewIdent(iterErrIdent)
+		renderArgs = append(renderArgs, ast.NewIdent(iterErrIdent))
+	}
+	body = append(body, &ast.RangeStmt{
+		Key:   rangeKey,
+		Value: rangeValue,
+		Tok:   token.DEFINE,
+		X:     callExpr,
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.IfStmt{
+				Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+					&ast.CallExpr{Fun: ast.NewIdent(renderIdent), Args: renderArgs},
+				}},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: &ast.BlockStmt{List: []ast.Stmt{
+					&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)},
+					&ast.ReturnStmt{},
+				}},
+			},
+		}},
+	})
+
+	return &ast.FuncLit{
+		Type: astgen.HTTPHandlerFuncType(file, response, request),
+		Body: &ast.BlockStmt{List: body},
+	}, nil
+}
+
+// sseReturnClosure builds the per-value render closure for sse() return mode. It
+// mirrors sseClosure (pooled buffer, ExecuteTemplate, mutex-guarded WriteTo,
+// flush) but always takes the value argument. When withErr is true it also takes
+// an iterErr error parameter and seeds the template data error list with it when
+// non-nil so the define body can render .Error for iter.Seq2 error values.
+func sseReturnClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, receiverInterfaceName string, withErr bool) (*ast.FuncLit, error) {
+	const (
+		bufIdent     = "buf"
+		tdIdent      = "td"
+		resultIdent  = "result"
+		iterErrIdent = "iterErr"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
+	}
+
+	params := []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr}}
+	if withErr {
+		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(iterErrIdent)}, Type: ast.NewIdent("error")})
+	}
+	tdElts := []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(receiverIdent)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(request), Value: ast.NewIdent(request)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierResult), Value: ast.NewIdent(resultIdent)},
+	}
+
+	body := []ast.Stmt{
+		// if err := request.Context().Err(); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+				&ast.CallExpr{Fun: &ast.SelectorExpr{
+					X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
+					Sel: ast.NewIdent("Err"),
+				}},
+			}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+	}
+	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
+	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+	// td := SSETemplateData[Recv, T]{...}
+	body = append(body, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CompositeLit{
+			Type: &ast.IndexListExpr{X: ast.NewIdent(config.SSETemplateDataType), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
+			Elts: tdElts,
+		}},
+	})
+	if withErr {
+		// if iterErr != nil { td.errList = []error{iterErr} }
+		body = append(body, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(iterErrIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.CompositeLit{
+					Type: &ast.ArrayType{Elt: ast.NewIdent("error")},
+					Elts: []ast.Expr{ast.NewIdent(iterErrIdent)},
+				}},
+			}}},
+		})
+	}
+	// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
+	body = append(body, &ast.IfStmt{
+		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
+			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
+		}}},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
+		}},
+	})
+	body = append(body,
+		// td.data = buf
+		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
+		// mut.Lock()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(streamMutexIdent), Sel: ast.NewIdent("Lock")}}},
+		// defer mut.Unlock()
+		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(streamMutexIdent), Sel: ast.NewIdent("Unlock")}}},
+		// if _, err := td.WriteTo(response); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
+				Args: []ast.Expr{ast.NewIdent(response)},
+			}}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+		// flusher.Flush()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(streamFlusherIdent), Sel: ast.NewIdent("Flush")}}},
+		// return nil
+		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
+	)
+
+	return &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: params},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
+		},
+		Body: &ast.BlockStmt{List: body},
+	}, nil
 }
 
 // marshalJSONHandlerFunc is implemented in a later task; the stub keeps the

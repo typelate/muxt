@@ -43,6 +43,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataRequestMethod(file, typeIdent),
 		sseTemplateDataResultMethod(typeIdent),
 		sseTemplateDataErrMethod(file, typeIdent),
+		sseTemplateDataErrorMethod(typeIdent),
 		sseTemplateDataEventMethod(typeIdent),
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
@@ -151,6 +152,19 @@ func sseTemplateDataErrMethod(file *File, typeIdent string) *ast.FuncDecl {
 		Name: ast.NewIdent("Err"),
 		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}},
 		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{join}}}},
+	}
+}
+
+// sseTemplateDataErrorMethod exposes the raw error slice so a define body can
+// range over .Error (for example to render each iter.Seq2 error value).
+func sseTemplateDataErrorMethod(typeIdent string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: sseTemplateDataMethodReceiver(typeIdent),
+		Name: ast.NewIdent("Error"),
+		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: &ast.ArrayType{Elt: ast.NewIdent("error")}}}}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+			&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)},
+		}}}},
 	}
 }
 

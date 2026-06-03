@@ -1,0 +1,29 @@
+! muxt generate --use-receiver-type=Server
+stderr 'returns an iterator or channel; wrap the call in sse\(...\)'
+
+-- template.gohtml --
+{{- define "GET /events Ticks(ctx)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"iter"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Ticks(ctx context.Context) iter.Seq[string] {
+	return func(yield func(string) bool) {}
+}

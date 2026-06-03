@@ -1,0 +1,61 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Ticks(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"iter"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Ticks yields three values; each is rendered as one SSE event via the define body.
+func (Server) Ticks(ctx context.Context) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, v := range []string{"a", "b", "c"} {
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestTicks(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
+	}
+	want := "data: a\n\ndata: b\n\ndata: c\n\n"
+	if got := rec.Body.String(); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}

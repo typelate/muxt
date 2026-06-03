@@ -1,0 +1,55 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Ticks(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Ticks returns a channel that yields two values then closes.
+func (Server) Ticks(ctx context.Context) <-chan string {
+	ch := make(chan string, 2)
+	ch <- "x"
+	ch <- "y"
+	close(ch)
+	return ch
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestTicksChan(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	want := "data: x\n\ndata: y\n\n"
+	if got := rec.Body.String(); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}

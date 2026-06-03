@@ -1,0 +1,62 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Ticks(ctx))" -}}{{- if .Error -}}err:{{- range .Error -}}{{- . -}}{{- end -}}{{- else -}}ok:{{- .Result -}}{{- end -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"html/template"
+	"iter"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Ticks yields one good value and then an error.
+func (Server) Ticks(ctx context.Context) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		if !yield("good", nil) {
+			return
+		}
+		yield("", errors.New("boom"))
+	}
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestTicksSeq2(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	got := rec.Body.String()
+	if !strings.Contains(got, "data: ok:good\n\n") {
+		t.Fatalf("body = %q, want it to contain %q", got, "data: ok:good\n\n")
+	}
+	if !strings.Contains(got, "data: err:boom\n\n") {
+		t.Fatalf("body = %q, want it to contain %q", got, "data: err:boom\n\n")
+	}
+}

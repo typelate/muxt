@@ -165,6 +165,11 @@ func (def Definition) UsesSSE() bool {
 	return def.usesArgument(func(name string) bool { return name == TemplateNameScopeIdentifierSSE })
 }
 
+// UsesSend reports whether the sse() call uses a send/sendX render callback.
+func (def Definition) UsesSend() bool {
+	return def.usesArgument(IsSendArgument)
+}
+
 // UsesElements reports whether the handler call uses any Datastar patch-elements
 // render callback (elements or an elements-prefixed argument). A route that uses
 // elements streams a text/event-stream response.
