@@ -171,6 +171,136 @@ func marshalJSONResponseFunc(file *File, config RoutesFileConfiguration) *ast.Fu
 	}
 }
 
+// appendMarshalIntoBuffer appends the statements that marshal valueIdent into the
+// *bytes.Buffer named bufIdent as JSON, returning err on failure. With
+// --output-jsonv2 it uses encoding/json/v2 MarshalWrite; otherwise it uses
+// encoding/json Marshal followed by buf.Write.
+func appendMarshalIntoBuffer(file *File, config RoutesFileConfiguration, bufIdent, valueIdent string) []ast.Stmt {
+	const bIdent = "b"
+	if config.JSONV2 {
+		// if err := json.MarshalWrite(buf, value); err != nil { return err }
+		return []ast.Stmt{&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+				astgen.Call(file, "json", "encoding/json/v2", "MarshalWrite", ast.NewIdent(bufIdent), ast.NewIdent(valueIdent)),
+			}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		}}
+	}
+	return []ast.Stmt{
+		// b, err := json.Marshal(value)
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(bIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+			astgen.Call(file, "", "encoding/json", "Marshal", ast.NewIdent(valueIdent)),
+		}},
+		// if err != nil { return err }
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+		// _, _ = buf.Write(b)
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: []ast.Expr{
+			&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Write")}, Args: []ast.Expr{ast.NewIdent(bIdent)}},
+		}},
+	}
+}
+
+// marshalSendClosure builds the callback passed to the receiver method for a
+// marshalJSON(sendX) wrapped send argument. It mirrors sseClosure but, instead of
+// executing a template, marshals the result value as JSON into the pooled buffer.
+// The JSON bytes still flow through SSETemplateData.WriteTo so they are framed as
+// SSE data: lines:
+//
+//	func(result T) error {
+//		if err := request.Context().Err(); err != nil { return err }
+//		buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
+//		td := SSETemplateData[Recv, T]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+//		// marshal result into buf
+//		td.data = buf
+//		mut.Lock()
+//		defer mut.Unlock()
+//		if _, err := td.WriteTo(response); err != nil { return err }
+//		flusher.Flush()
+//		return nil
+//	}
+func marshalSendClosure(file *File, config RoutesFileConfiguration, resultType types.Type, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+	const (
+		bufIdent    = "buf"
+		tdIdent     = "td"
+		resultIdent = "result"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
+	}
+
+	params := []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr}}
+	tdElts := []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(receiverIdent)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(request), Value: ast.NewIdent(request)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierResult), Value: ast.NewIdent(resultIdent)},
+	}
+
+	body := []ast.Stmt{
+		// if err := request.Context().Err(); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+				&ast.CallExpr{Fun: &ast.SelectorExpr{
+					X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
+					Sel: ast.NewIdent("Err"),
+				}},
+			}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+	}
+	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
+	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+	// td := SSETemplateData[Recv, T]{...}
+	body = append(body, &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CompositeLit{
+			Type: &ast.IndexListExpr{X: ast.NewIdent(config.SSETemplateDataType), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
+			Elts: tdElts,
+		}},
+	})
+	// marshal result into buf
+	body = append(body, appendMarshalIntoBuffer(file, config, bufIdent, resultIdent)...)
+	body = append(body,
+		// td.data = buf
+		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
+		// mut.Lock()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
+		// defer mut.Unlock()
+		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
+		// if _, err := td.WriteTo(response); err != nil { return err }
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
+				Args: []ast.Expr{ast.NewIdent(response)},
+			}}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+		// flusher.Flush()
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+		// return nil
+		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
+	)
+
+	return &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: params},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
+		},
+		Body: &ast.BlockStmt{List: body},
+	}, nil
+}
+
 // marshalJSONHandlerFunc builds the http.HandlerFunc for a route wrapped in
 // marshalJSON(...). The inner method returns (T) or (T, error). T is marshaled
 // to the response as application/json with status 200. A non-nil method error,

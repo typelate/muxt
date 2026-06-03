@@ -927,7 +927,7 @@ func classifySSEReturn(sig *types.Signature) (sseReturnKind, types.Type) {
 // nil) for arguments it handles and (nil, false, nil) for arguments to leave
 // unchanged. callbackLabel names the callback family for diagnostics and
 // callbackErrorLogMessage is logged when the method returns a non-nil error.
-func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
+func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -957,17 +957,13 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 	// not share a result type.
 	callArgs := slices.Clone(def.CallExpression().Args)
 	for i, a := range def.CallExpression().Args {
-		id, ok := a.(*ast.Ident)
-		if !ok {
-			continue
-		}
 		var cb *types.Signature
 		if i < sig.Params().Len() {
 			// Underlying unwraps named and aliased func types so the callback
 			// param may be declared as e.g. `type RenderFunc func(T) error`.
 			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
 		}
-		replacement, matched, err := buildClosure(i, id, cb)
+		replacement, matched, err := buildClosure(i, a, cb)
 		if err != nil {
 			return nil, err
 		}
@@ -996,7 +992,11 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 // that renders a same-named template into an SSETemplateData frame.
 func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSSE, "sse handler returned an error",
-		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
+			id, ok := arg.(*ast.Ident)
+			if !ok {
+				return nil, false, nil
+			}
 			if !muxt.IsSSEArgument(id.Name) {
 				return nil, false, nil
 			}
@@ -1498,6 +1498,12 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
+			if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON && def.Representation() == muxt.RepresentationSSE {
+				// marshalJSON(sendX) is a render-callback wrapper, not a parsed
+				// argument; it is wired into the call as a closure in
+				// streamMethodHandlerFunc.
+				continue
+			}
 			if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
 				varIdent := "input" + strconv.Itoa(resultCount)
 				resultCount++
@@ -2302,6 +2308,12 @@ func ensureMethodSignature(file *File, config RoutesFileConfiguration, signature
 					if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
 						continue
 					}
+					// marshalJSON(sendX) wraps a send callback whose type comes
+					// from the already-defined method, so there is no nested
+					// method signature to synthesize.
+					if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON {
+						continue
+					}
 					if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 						return err
 					}
@@ -2650,23 +2662,49 @@ func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.
 		return sseReturnHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName, kind, elem)
 	}
 	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSend, "sse handler returned an error",
-		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
-			if !muxt.IsSendArgument(id.Name) {
+		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
+			switch a := arg.(type) {
+			case *ast.Ident:
+				if !muxt.IsSendArgument(a.Name) {
+					return nil, false, nil
+				}
+				resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+				if err != nil {
+					return nil, false, err
+				}
+				templateName := def.Name()
+				if a.Name != muxt.TemplateNameScopeIdentifierSend {
+					templateName = strings.TrimPrefix(a.Name, muxt.TemplateNameScopeIdentifierSend)
+					if def.Template() == nil || def.Template().Lookup(templateName) == nil {
+						return nil, false, fmt.Errorf("no template %q for send argument %s", templateName, a.Name)
+					}
+				}
+				closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+				return closure, true, err
+			case *ast.CallExpr:
+				id, ok := a.Fun.(*ast.Ident)
+				if !ok || id.Name != muxt.RepresentationWrapperMarshalJSON {
+					return nil, false, nil
+				}
+				if len(a.Args) != 1 {
+					return nil, false, nil
+				}
+				inner, ok := a.Args[0].(*ast.Ident)
+				if !ok || !muxt.IsSendArgument(inner.Name) {
+					return nil, false, nil
+				}
+				resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+				if err != nil {
+					return nil, false, err
+				}
+				if !hasArg {
+					return nil, false, fmt.Errorf("marshalJSON send wrapper for %s requires a callback that takes a value to marshal", def.FunctionIdentifier().Name)
+				}
+				closure, err := marshalSendClosure(file, config, resultType, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+				return closure, true, err
+			default:
 				return nil, false, nil
 			}
-			resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
-			if err != nil {
-				return nil, false, err
-			}
-			templateName := def.Name()
-			if id.Name != muxt.TemplateNameScopeIdentifierSend {
-				templateName = strings.TrimPrefix(id.Name, muxt.TemplateNameScopeIdentifierSend)
-				if def.Template() == nil || def.Template().Lookup(templateName) == nil {
-					return nil, false, fmt.Errorf("no template %q for send argument %s", templateName, id.Name)
-				}
-			}
-			closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
-			return closure, true, err
 		})
 }
 

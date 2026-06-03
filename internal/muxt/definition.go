@@ -514,15 +514,25 @@ func checkArguments(identifiers []string, call *ast.CallExpr, allowSend bool) er
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 		case *ast.CallExpr:
-			if id, ok := exp.Fun.(*ast.Ident); ok && IsInputWrapper(id.Name) {
-				if len(exp.Args) != 1 {
-					return fmt.Errorf("%s takes exactly one argument", id.Name)
+			if id, ok := exp.Fun.(*ast.Ident); ok {
+				if allowSend && id.Name == RepresentationWrapperMarshalJSON {
+					if len(exp.Args) == 1 {
+						if inner, ok := exp.Args[0].(*ast.Ident); ok && IsSendArgument(inner.Name) {
+							continue
+						}
+					}
+					return fmt.Errorf("marshalJSON send wrapper takes exactly one send callback argument")
 				}
-				inner, ok := exp.Args[0].(*ast.Ident)
-				if !ok || inner.Name != TemplateNameScopeIdentifierBody {
-					return fmt.Errorf("%s argument must be %s", id.Name, TemplateNameScopeIdentifierBody)
+				if IsInputWrapper(id.Name) {
+					if len(exp.Args) != 1 {
+						return fmt.Errorf("%s takes exactly one argument", id.Name)
+					}
+					inner, ok := exp.Args[0].(*ast.Ident)
+					if !ok || inner.Name != TemplateNameScopeIdentifierBody {
+						return fmt.Errorf("%s argument must be %s", id.Name, TemplateNameScopeIdentifierBody)
+					}
+					continue
 				}
-				continue
 			}
 			if err := checkArguments(identifiers, exp, allowSend); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)

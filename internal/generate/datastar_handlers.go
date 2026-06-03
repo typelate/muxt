@@ -76,7 +76,11 @@ func validateSignalCallbackShape(methodName string, callback *types.Signature) (
 func datastarStreamHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	methodName := def.FunctionIdentifier().Name
 	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, "datastar", "datastar handler returned an error",
-		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
+			id, ok := arg.(*ast.Ident)
+			if !ok {
+				return nil, false, nil
+			}
 			switch {
 			case muxt.IsElementsArgument(id.Name):
 				resultType, hasArg, err := validateSSECallbackShape(methodName, cb)
@@ -189,7 +193,7 @@ func signalEventClosure(file *File, resultType types.Type) (*ast.FuncLit, error)
 // datastarResponseHandlerFunc builds a non-streaming Datastar handler: it parses
 // arguments, sets the response Content-Type, then invokes the receiver method
 // with a single-shot render callback produced by buildClosure.
-func datastarResponseHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, contentType, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
+func datastarResponseHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, contentType, callbackLabel, callbackErrorLogMessage string, buildClosure func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error)) (*ast.FuncLit, error) {
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -247,15 +251,11 @@ func datastarResponseHandlerFunc(file *File, config RoutesFileConfiguration, def
 
 	callArgs := append([]ast.Expr(nil), def.CallExpression().Args...)
 	for i, a := range def.CallExpression().Args {
-		id, ok := a.(*ast.Ident)
-		if !ok {
-			continue
-		}
 		var cb *types.Signature
 		if i < sig.Params().Len() {
 			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
 		}
-		replacement, matched, err := buildClosure(i, id, cb)
+		replacement, matched, err := buildClosure(i, a, cb)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +288,11 @@ func datastarResponseHandlerFunc(file *File, config RoutesFileConfiguration, def
 func datastarSignalHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature) (*ast.FuncLit, error) {
 	methodName := def.FunctionIdentifier().Name
 	return datastarResponseHandlerFunc(file, config, def, sigs, receiver, sig, "application/json", "signal", "datastar signal handler returned an error",
-		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
+			id, ok := arg.(*ast.Ident)
+			if !ok {
+				return nil, false, nil
+			}
 			if !muxt.IsSignalArgument(id.Name) {
 				return nil, false, nil
 			}
@@ -358,7 +362,11 @@ func signalResponseClosure(file *File, resultType types.Type) (*ast.FuncLit, err
 func datastarScriptHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	methodName := def.FunctionIdentifier().Name
 	return datastarResponseHandlerFunc(file, config, def, sigs, receiver, sig, "text/javascript", "script", "datastar script handler returned an error",
-		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
+			id, ok := arg.(*ast.Ident)
+			if !ok {
+				return nil, false, nil
+			}
 			if !muxt.IsScriptArgument(id.Name) {
 				return nil, false, nil
 			}
