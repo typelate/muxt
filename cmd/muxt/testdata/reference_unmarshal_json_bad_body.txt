@@ -1,0 +1,59 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /add Add(ctx, unmarshalJSON(body))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Pair struct {
+	A int `json:"a"`
+	B int `json:"b"`
+}
+
+func (Server) Add(ctx context.Context, in Pair) string { return strconv.Itoa(in.A + in.B) }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestBadBody(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodPost, "/add", strings.NewReader("{not json"))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	// On a JSON decode failure the receiver method is not called, so no result
+	// is rendered.
+	if got := rec.Body.String(); got != "" {
+		t.Fatalf("body = %q, want empty", got)
+	}
+}
