@@ -396,7 +396,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSignal) {
 			decls = append(decls, datastarSignalsDecls(file, config)...)
 		}
-	} else if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) {
+	} else if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) ||
+		slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
@@ -1124,6 +1125,12 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	if !ok {
 		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
 	}
+	switch def.Representation() {
+	case muxt.RepresentationSSE:
+		return sseWrapperHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+	case muxt.RepresentationMarshalJSON:
+		return marshalJSONHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+	}
 	// elements/signal/script are only reserved render callbacks under
 	// --use-datastar. Without it they are ordinary arguments (a path value or
 	// method parameter named "signal", "script", or "elements" works normally).
@@ -1480,10 +1487,11 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) {
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) || (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) {
 				// The render callback (execute/sse, and elements/signal/script
-				// under --use-datastar) is validated and wired into the call in
-				// methodHandlerFunc. It is not parsed from the request.
+				// under --use-datastar, and send/sendX inside sse(...)) is
+				// validated and wired into the call in methodHandlerFunc. It is
+				// not parsed from the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2551,4 +2559,36 @@ func assignTemplateDataErrStatusCode(file *File, rdIdent string, code int) *ast.
 			astgen.HTTPStatusCode(file, code),
 		},
 	}
+}
+
+// sseWrapperHandlerFunc builds the streaming handler for a route wrapped in
+// sse(...). In callback mode the method takes send/sendX callbacks: bare `send`
+// renders the route's define body, and a `sendX` name renders template `X`
+// (the remainder after the "send" prefix, verbatim).
+func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSend, "sse handler returned an error",
+		func(i int, id *ast.Ident, cb *types.Signature) (ast.Expr, bool, error) {
+			if !muxt.IsSendArgument(id.Name) {
+				return nil, false, nil
+			}
+			resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+			if err != nil {
+				return nil, false, err
+			}
+			templateName := def.Name()
+			if id.Name != muxt.TemplateNameScopeIdentifierSend {
+				templateName = strings.TrimPrefix(id.Name, muxt.TemplateNameScopeIdentifierSend)
+				if def.Template() == nil || def.Template().Lookup(templateName) == nil {
+					return nil, false, fmt.Errorf("no template %q for send argument %s", templateName, id.Name)
+				}
+			}
+			closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+			return closure, true, err
+		})
+}
+
+// marshalJSONHandlerFunc is implemented in a later task; the stub keeps the
+// Representation switch exhaustive. No fixture exercises it yet.
+func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+	return nil, fmt.Errorf("marshalJSON representation wrapper not yet implemented")
 }
