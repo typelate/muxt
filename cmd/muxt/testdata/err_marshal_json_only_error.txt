@@ -1,0 +1,26 @@
+! muxt generate --use-receiver-type=Server
+stderr 'marshalJSON method Act must return a value to marshal, not only error'
+
+-- template.gohtml --
+{{- define "GET /api/x marshalJSON(Act(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Act(ctx context.Context) error { return nil }

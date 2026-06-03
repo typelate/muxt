@@ -16,11 +16,16 @@ import (
 // marshals a value as JSON and writes it to the response.
 const marshalJSONResponseFuncName = "marshalJSONResponse"
 
-// definitionUsesBytesBufferPool reports whether the definition's generated
-// handler will use the shared bytes.Buffer pool. marshalJSON handlers use a
-// local buffer (jsonv2) or none at all (stdlib), so they are excluded.
+// definitionUsesBytesBufferPool reports whether a route's generated handler uses
+// the shared bytesBufferPool. marshalJSON handlers marshal into a local buffer, so
+// a file containing only marshalJSON routes must not emit the (then unused) pool.
 func definitionUsesBytesBufferPool(def muxt.Definition) bool {
-	return def.Representation() != muxt.RepresentationMarshalJSON
+	switch def.Representation() {
+	case muxt.RepresentationNone, muxt.RepresentationSSE:
+		return true
+	default:
+		return false
+	}
 }
 
 // marshalJSONResponseDecls returns the marshalJSONResponse helper. It is
@@ -179,12 +184,27 @@ func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	// Validate: the method must return at least one value.
-	if sig.Results().Len() == 0 {
-		return nil, fmt.Errorf("marshalJSON method %s must return a value to marshal", def.FunctionIdentifier().Name)
+	// Validate the result signature: the method must return a value to marshal,
+	// optionally followed by an error.
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	methodName := def.FunctionIdentifier().Name
+	results := sig.Results()
+	var hasErrResult bool
+	switch results.Len() {
+	case 0:
+		return nil, fmt.Errorf("marshalJSON method %s must return a value to marshal", methodName)
+	case 1:
+		if types.Implements(results.At(0).Type(), errIface) {
+			return nil, fmt.Errorf("marshalJSON method %s must return a value to marshal, not only error", methodName)
+		}
+	case 2:
+		if !types.Implements(results.At(1).Type(), errIface) {
+			return nil, fmt.Errorf("marshalJSON method %s second result must be error", methodName)
+		}
+		hasErrResult = true
+	default:
+		return nil, fmt.Errorf("marshalJSON method %s must return one value or a value and an error", methodName)
 	}
-	// Optional second result must be error.
-	hasErrResult := sig.Results().Len() >= 2
 
 	// Determine the callFun expression (selector or bare ident).
 	var callFun ast.Expr
