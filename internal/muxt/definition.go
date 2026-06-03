@@ -104,6 +104,9 @@ type Definition struct {
 	// templatesVariable is the name of the package-level *template.Template
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
+
+	// representation records the outermost call wrapper (none, sse, marshalJSON).
+	representation Representation
 }
 
 func (def Definition) SourceFile() string { return def.sourceFile }
@@ -139,6 +142,7 @@ func (def Definition) Template() *template.Template   { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
+func (def Definition) Representation() Representation { return def.representation }
 
 // usesArgument reports whether any top-level call argument identifier satisfies
 // pred. It scans only the top-level call arguments because render-callback
@@ -359,9 +363,35 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		return fmt.Errorf("unexpected ellipsis")
 	}
 
+	// Recognize an optional outermost representation wrapper: sse(Method(...)) or
+	// marshalJSON(Method(...)). Unwrap it so the rest of the parser and the whole
+	// generator operate on the inner method call unchanged.
+	representation := RepresentationNone
+	switch fun.Name {
+	case RepresentationWrapperSSE:
+		representation = RepresentationSSE
+	case RepresentationWrapperMarshalJSON:
+		representation = RepresentationMarshalJSON
+	}
+	if representation != RepresentationNone {
+		if len(call.Args) != 1 {
+			return fmt.Errorf("%s takes exactly one argument: the method call", fun.Name)
+		}
+		inner, ok := call.Args[0].(*ast.CallExpr)
+		if !ok {
+			return fmt.Errorf("%s argument must be a method call", fun.Name)
+		}
+		innerFun, ok := inner.Fun.(*ast.Ident)
+		if !ok {
+			return fmt.Errorf("expected function identifier, got: %s", astgen.Format(inner.Fun))
+		}
+		call, fun = inner, innerFun
+	}
+	def.representation = representation
+
 	scope := append(patternScope(), pathParameterNames...)
 	slices.Sort(scope)
-	if err := checkArguments(scope, call); err != nil {
+	if err := checkArguments(scope, call, representation == RepresentationSSE); err != nil {
 		return err
 	}
 
@@ -453,11 +483,29 @@ func IsDatastarArgument(name string) bool {
 	return IsElementsArgument(name) || IsSignalArgument(name) || IsScriptArgument(name)
 }
 
-func checkArguments(identifiers []string, call *ast.CallExpr) error {
+// IsSendArgument reports whether name is an SSE send render-callback argument:
+// the reserved "send" identifier, or a camelCase "send"-prefixed name (sendClock,
+// sendStatus, ...). A "send"-prefixed name renders the same-named template
+// (sendClock -> "Clock").
+func IsSendArgument(name string) bool {
+	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierSend)
+}
+
+func checkArguments(identifiers []string, call *ast.CallExpr, allowSend bool) error {
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) && !IsDatastarArgument(exp.Name) {
+			known := false
+			if _, ok := slices.BinarySearch(identifiers, exp.Name); ok {
+				known = true
+			}
+			if IsSSEArgument(exp.Name) || IsDatastarArgument(exp.Name) {
+				known = true
+			}
+			if allowSend && IsSendArgument(exp.Name) {
+				known = true
+			}
+			if !known {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 		case *ast.CallExpr:
@@ -471,7 +519,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 				}
 				continue
 			}
-			if err := checkArguments(identifiers, exp); err != nil {
+			if err := checkArguments(identifiers, exp, allowSend); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
 		default:
@@ -495,6 +543,23 @@ const (
 	TemplateNameScopeIdentifierElements = "elements"
 	TemplateNameScopeIdentifierSignal   = "signal"
 	TemplateNameScopeIdentifierScript   = "script"
+	// Phase 2 SSE send render-callback family, valid only inside sse(...).
+	TemplateNameScopeIdentifierSend = "send"
+)
+
+// Representation names the optional outermost wrapper of a handler call.
+type Representation int
+
+const (
+	RepresentationNone Representation = iota
+	RepresentationSSE
+	RepresentationMarshalJSON
+)
+
+// Reserved outer representation-wrapper function names.
+const (
+	RepresentationWrapperSSE         = "sse"
+	RepresentationWrapperMarshalJSON = "marshalJSON"
 )
 
 const (

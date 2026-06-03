@@ -11,6 +11,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDefinitionRepresentation(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want Representation
+		fun  string
+	}{
+		{name: "GET /a Plain(ctx)", want: RepresentationNone, fun: "Plain"},
+		{name: "GET /b sse(Stream(ctx, send))", want: RepresentationSSE, fun: "Stream"},
+		{name: "GET /c sse(Stream(ctx, send, sendClock))", want: RepresentationSSE, fun: "Stream"},
+		{name: "GET /d marshalJSON(GetUser(ctx))", want: RepresentationMarshalJSON, fun: "GetUser"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			def, err, ok := newDefinition(template.New(tt.name))
+			if !ok || err != nil {
+				t.Fatalf("newDefinition(%q) ok=%v err=%v", tt.name, ok, err)
+			}
+			if got := def.Representation(); got != tt.want {
+				t.Errorf("Representation() = %v, want %v", got, tt.want)
+			}
+			if def.FunctionIdentifier().Name != tt.fun {
+				t.Errorf("FunctionIdentifier() = %q, want %q (wrapper must be unwrapped)", def.FunctionIdentifier().Name, tt.fun)
+			}
+		})
+	}
+}
+
+func TestDefinitionSendOnlyInsideSSE(t *testing.T) {
+	// bare send/sendX outside sse(...) is an unknown argument
+	_, err, _ := newDefinition(template.New("GET /e Plain(ctx, send)"))
+	if err == nil {
+		t.Fatal("want error for send argument outside sse() wrapper")
+	}
+}
+
 func TestTemplateName_ByPathThenMethod(t *testing.T) {
 	for _, tt := range []struct {
 		Name    string
