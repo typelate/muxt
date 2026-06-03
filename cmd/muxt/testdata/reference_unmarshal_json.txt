@@ -1,0 +1,59 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+grep '"encoding/json"' template_routes.go
+! grep 'go-json-experiment' template_routes.go
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /add Add(ctx, unmarshalJSON(body))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Pair struct {
+	A int `json:"a"`
+	B int `json:"b"`
+}
+
+func (Server) Add(ctx context.Context, in Pair) string {
+	return strconv.Itoa(in.A + in.B)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestAdd(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodPost, "/add", strings.NewReader(`{"a":2,"b":3}`))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if got := rec.Body.String(); got != "5" {
+		t.Fatalf("body = %q, want %q", got, "5")
+	}
+}

@@ -461,6 +461,16 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 		case *ast.CallExpr:
+			if id, ok := exp.Fun.(*ast.Ident); ok && IsInputWrapper(id.Name) {
+				if len(exp.Args) != 1 {
+					return fmt.Errorf("%s takes exactly one argument", id.Name)
+				}
+				inner, ok := exp.Args[0].(*ast.Ident)
+				if !ok || inner.Name != TemplateNameScopeIdentifierBody {
+					return fmt.Errorf("%s argument must be %s", id.Name, TemplateNameScopeIdentifierBody)
+				}
+				continue
+			}
 			if err := checkArguments(identifiers, exp); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
@@ -486,6 +496,16 @@ const (
 	TemplateNameScopeIdentifierSignal   = "signal"
 	TemplateNameScopeIdentifierScript   = "script"
 )
+
+const (
+	InputWrapperUnmarshalJSON = "unmarshalJSON"
+	InputWrapperUnmarshalForm = "unmarshalForm"
+)
+
+// IsInputWrapper reports whether name is a recognized request-body decode wrapper.
+func IsInputWrapper(name string) bool {
+	return name == InputWrapperUnmarshalJSON || name == InputWrapperUnmarshalForm
+}
 
 func patternScope() []string {
 	return []string{

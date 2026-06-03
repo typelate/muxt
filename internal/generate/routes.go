@@ -1415,6 +1415,25 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
+			if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
+				varIdent := "input" + strconv.Itoa(resultCount)
+				resultCount++
+				bodyExpr := &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Body")}
+				var s []ast.Stmt
+				var err error
+				switch id.Name {
+				case muxt.InputWrapperUnmarshalJSON:
+					s, err = unmarshalJSONStatements(file, config, varIdent, param.Type(), bodyExpr, parseErrBlock())
+				case muxt.InputWrapperUnmarshalForm:
+					// implemented in a later task; leave empty for now
+				}
+				if err != nil {
+					return nil, err
+				}
+				statements = append(statements, s...)
+				call.Args[i] = ast.NewIdent(varIdent)
+				continue
+			}
 			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
@@ -2187,6 +2206,9 @@ func ensureMethodSignature(file *File, config RoutesFileConfiguration, signature
 			for _, a := range call.Args {
 				switch arg := a.(type) {
 				case *ast.CallExpr:
+					if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
+						continue
+					}
 					if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 						return err
 					}
@@ -2245,6 +2267,9 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
+			if id, ok := arg.Fun.(*ast.Ident); ok && muxt.IsInputWrapper(id.Name) {
+				continue
+			}
 			if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
