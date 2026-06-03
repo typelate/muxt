@@ -17,6 +17,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `signal` | `func(T, bool) error` | marshal callback | N/A | Emit Datastar `datastar-patch-signals` JSON (requires `--use-datastar`) |
 | `script` | `func(T) error` or `func() error` | render callback | N/A | Respond `text/javascript` from the same-named template (requires `--use-datastar`) |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
+| `body` | `io.Reader` | `request.Body` | N/A | Read/decode the raw request body |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
 
@@ -176,6 +177,49 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 **Parse errors:** Malformed multipart bodies are captured into `td.errList` with `td.errStatusCode = http.StatusBadRequest` (unlike `form`, which silently ignores parse errors).
 
 [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
+
+## Request Body
+
+`body` binds the raw request body as an `io.Reader` so your method reads or decodes it directly.
+
+```gotmpl
+{{define "POST /raw Save(ctx, body)"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Save(ctx context.Context, body io.Reader) (Result, error) {
+    data, err := io.ReadAll(body)
+    // ...
+}
+```
+
+`body` is a single-use stream — read it once.
+
+[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [reference_empty_body_status.txt](../../cmd/muxt/testdata/reference_empty_body_status.txt)
+
+### Decode wrappers
+
+Two wrappers decode `body` into the method parameter's type before the call. Their single argument must be the `body` identifier — anything else is an error.
+
+```gotmpl
+{{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) CreateUser(ctx context.Context, u User) (User, error) {
+    // u decoded from the JSON request body
+}
+```
+
+**`unmarshalJSON(body)`** — decodes the JSON request body into the parameter type.
+
+- Uses `encoding/json` by default; under `--output-jsonv2` it uses `encoding/json/v2`'s `UnmarshalRead`.
+- When the method is undefined, the parameter is a raw pass-through: `json.RawMessage` (or `*jsontext.Decoder` under `--output-jsonv2`).
+- Decode errors respond 400 Bad Request.
+
+**`unmarshalForm(body)`** — decodes the form-encoded body into the parameter (a struct via `name:"..."` tags, or `net/url.Values`). The `form` argument on non-GET methods is sugar for `unmarshalForm(body)`.
+
+`body` is a single-use stream, so a wrapper consumes it — don't also take `body` (or another wrapper) in the same call.
+
+[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_jsonv2.txt](../../cmd/muxt/testdata/reference_unmarshal_json_jsonv2.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [reference_unmarshal_json_undefined_jsonv2.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined_jsonv2.txt) · [reference_unmarshal_form.txt](../../cmd/muxt/testdata/reference_unmarshal_form.txt) · [reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
 
 ## Server-Sent Events
 

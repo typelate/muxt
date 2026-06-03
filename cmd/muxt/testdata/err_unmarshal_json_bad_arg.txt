@@ -1,0 +1,26 @@
+! muxt generate --use-receiver-type=Server
+stderr 'unmarshalJSON argument must be body'
+
+-- template.gohtml --
+{{- define "POST /x F(ctx, unmarshalJSON(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) F(ctx context.Context, v any) any { return v }
