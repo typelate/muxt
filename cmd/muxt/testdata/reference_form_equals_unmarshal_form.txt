@@ -1,0 +1,59 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /a A(ctx, form)" -}}{{ .Result.Name }}{{- end -}}
+{{- define "POST /b B(ctx, unmarshalForm(body))" -}}{{ .Result.Name }}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type F struct {
+	Name string `name:"name"`
+}
+
+func (Server) A(ctx context.Context, form F) F { return form }
+func (Server) B(ctx context.Context, form F) F { return form }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func post(t *testing.T, mux *http.ServeMux, path string) string {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("name=Z"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec.Body.String()
+}
+
+func TestFormEquivalence(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	if a, b := post(t, mux, "/a"), post(t, mux, "/b"); a != "Z" || a != b {
+		t.Fatalf("a=%q b=%q", a, b)
+	}
+}
