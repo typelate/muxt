@@ -28,7 +28,7 @@ The response representation is fixed per route by the declared arguments:
 - a lone `script` → `text/javascript`;
 - none → `text/html` fragment (unchanged).
 
-The generic `sse(...)` representation wrapper (see [Call Parameters Reference](call-parameters.md#ssemiddot)) emits plain `data:`-framed SSE events and works regardless of `--use-datastar`; Datastar `patch-elements`/`patch-signals` framing of `sse(...)` arrives in a later phase. For Datastar-framed streaming, use `elements` for now.
+The generic `sse(...)` representation wrapper (see [Call Parameters Reference](call-parameters.md#sse)) emits plain `data:`-framed SSE events and works regardless of `--use-datastar`; Datastar `patch-elements`/`patch-signals` framing of `sse(...)` arrives in a later phase. For Datastar-framed streaming, use `elements` for now.
 
 ### elements
 
