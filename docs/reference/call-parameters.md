@@ -12,7 +12,8 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
-| `sse` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Server-Sent Events |
+| `send` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream one SSE event per call, rendering the route's define body (inside `sse(...)`) |
+| `sendX` | `func(T) error` | render callback (streaming) | N/A | Stream one SSE event per call, rendering the `X`-named template (inside `sse(...)`) |
 | `elements` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Datastar `datastar-patch-elements` events (requires `--use-datastar`) |
 | `signal` | `func(T, bool) error` | marshal callback | N/A | Emit Datastar `datastar-patch-signals` JSON (requires `--use-datastar`) |
 | `script` | `func(T) error` or `func() error` | render callback | N/A | Respond `text/javascript` from the same-named template (requires `--use-datastar`) |
@@ -221,45 +222,185 @@ func (s Server) CreateUser(ctx context.Context, u User) (User, error) {
 
 [reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_jsonv2.txt](../../cmd/muxt/testdata/reference_unmarshal_json_jsonv2.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [reference_unmarshal_json_undefined_jsonv2.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined_jsonv2.txt) · [reference_unmarshal_form.txt](../../cmd/muxt/testdata/reference_unmarshal_form.txt) · [reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
 
-## Server-Sent Events
+## Response Representation Wrappers
 
-`sse` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+A call at the end of a template name may be wrapped in a **representation wrapper** at the outermost position. The wrapper changes how the response is encoded without affecting parameter binding inside the call.
+
+The grammar is:
+```
+frame( representation( Method(args…) ) )
+```
+
+where both `frame` (e.g. `htmx(...)`, `datastar(...)`) and `representation` are optional.
+
+### sse(...)
+
+`sse(...)` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets `Content-Type: text/event-stream` headers, flushes, and then drives the stream. Two mutually exclusive modes are supported: **callback mode** and **return mode**.
+
+#### Callback mode — send / sendX
+
+The wrapped method takes render callbacks and returns `error` or nothing. One event is emitted per callback invocation.
+
+**`send`** — renders the route's own define body:
 
 ```gotmpl
-{{define "GET /clock Clock(ctx, sse)"}}{{.Result}}{{end}}
+{{define "GET /events sse(Stream(ctx, lastEventID, send))"}}{{.Result}}{{end}}
 ```
 ```go
-func (s Server) Clock(ctx context.Context, sse func(string) error) {
-    t := time.NewTicker(time.Second)
-    defer t.Stop()
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case now := <-t.C:
-            if err := sse(now.Format(time.RFC3339)); err != nil {
-                return // client disconnected
+func (s Server) Stream(ctx context.Context, lastEventID string, send func(data string) error) {
+    _ = send("hello-" + lastEventID)
+}
+```
+
+**`sendX`** (camelCase name after `send`) — renders the template named by the remainder (e.g. `sendClock` → template `Clock`; `sendMetrics` → `Metrics`). The referenced template must exist or generation fails. This lets one stream emit multiple named templates:
+
+```gotmpl
+{{define "GET /events sse(Stream(ctx, send, sendClock))"}}body:{{.Result}}{{end}}
+{{define "Clock"}}clock:{{.Result}}{{end}}
+```
+```go
+func (s Server) Stream(ctx context.Context, send func(data string) error, sendClock func(data string) error) {
+    _ = send("hi")
+    _ = sendClock("tick")
+}
+```
+
+A `send` callback with no argument renders the define body without a `.Result` value:
+
+```gotmpl
+{{define "GET /ping sse(Ping(send))"}}pong{{end}}
+```
+```go
+func (s Server) Ping(send func() error) {
+    _ = send()
+}
+```
+
+**`marshalJSON(sendX)`** — wraps a send callback so it marshals its argument as JSON event data instead of rendering a template (uses `encoding/json`; `encoding/json/v2` `MarshalWrite` under `--output-jsonv2`):
+
+```gotmpl
+{{define "GET /events sse(Stream(ctx, marshalJSON(sendStatus)))"}}{{end}}
+```
+```go
+type Status struct {
+    OK bool `json:"ok"`
+}
+
+func (s Server) Stream(ctx context.Context, sendStatus func(Status) error) {
+    _ = sendStatus(Status{OK: true})
+    // event body: data: {"ok":true}
+}
+```
+
+| Rule | Detail |
+|------|--------|
+| `send` callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
+| `sendX` callback shape | `func(T) error` |
+| Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
+| Mutually exclusive with | return mode (see below); cannot mix callbacks and iterator/channel returns |
+| Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
+| Undefined method | Synthesized with `send` as `func(any) error` |
+
+Pair `send` with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens:
+
+```gotmpl
+{{define "GET /events sse(Stream(ctx, lastEventID, send))"}}{{.Result}}{{end}}
+```
+
+[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_wrapper.txt](../../cmd/muxt/testdata/reference_sse_wrapper.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_sendx.txt](../../cmd/muxt/testdata/reference_sse_sendx.txt) · [reference_sse_marshal_send.txt](../../cmd/muxt/testdata/reference_sse_marshal_send.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
+
+#### Return mode — channel and iterator
+
+When the wrapped method returns a stream type, each yielded value renders one SSE event via the define body. No callback arguments are used.
+
+**`<-chan T`:**
+
+```gotmpl
+{{define "GET /events sse(Ticks(ctx))"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Ticks(ctx context.Context) <-chan string {
+    ch := make(chan string, 2)
+    ch <- "x"
+    ch <- "y"
+    close(ch)
+    return ch
+}
+```
+
+**`iter.Seq[T]`:**
+
+```gotmpl
+{{define "GET /events sse(Ticks(ctx))"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Ticks(ctx context.Context) iter.Seq[string] {
+    return func(yield func(string) bool) {
+        for _, v := range []string{"a", "b", "c"} {
+            if !yield(v) {
+                return
             }
         }
     }
 }
 ```
 
-| Rule | Detail |
-|------|--------|
-| Callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
-| Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
-| Mutually exclusive with | `execute` and `response` |
-| Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
-| Undefined method | Synthesized as `func(any) error` |
-
-Pair `sse` with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
+**`iter.Seq2[T, error]`** — a non-nil yielded error is placed on the event template-data error list (`.Error`, a `[]error`); otherwise the value renders via `.Result`:
 
 ```gotmpl
-{{define "GET /events Stream(ctx, lastEventID, sse)"}}{{.Result}}{{end}}
+{{define "GET /events sse(Ticks(ctx))"}}{{if .Error}}err:{{range .Error}}{{.}}{{end}}{{else}}ok:{{.Result}}{{end}}{{end}}
+```
+```go
+func (s Server) Ticks(ctx context.Context) iter.Seq2[string, error] {
+    return func(yield func(string, error) bool) {
+        if !yield("good", nil) {
+            return
+        }
+        yield("", errors.New("boom"))
+    }
+}
 ```
 
-[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
+| Return type | Error surface |
+|-------------|---------------|
+| `<-chan T` | None (values only) |
+| `iter.Seq[T]` | None (values only) |
+| `iter.Seq2[T, error]` | Non-nil error → `.Error []error` on the event template data |
+
+A method returning a channel or iterator that is **not** wrapped in `sse(...)` is a generation error; the error message directs you to add the wrapper.
+
+[reference_sse_chan.txt](../../cmd/muxt/testdata/reference_sse_chan.txt) · [reference_sse_iter_seq.txt](../../cmd/muxt/testdata/reference_sse_iter_seq.txt) · [reference_sse_iter_seq2_error.txt](../../cmd/muxt/testdata/reference_sse_iter_seq2_error.txt)
+
+### marshalJSON(...)
+
+`marshalJSON(...)` makes the route respond `application/json`. The wrapped method returns `(T)` or `(T, error)`; the return value is marshaled as the response body.
+
+```gotmpl
+{{define "GET /api/user marshalJSON(GetUser(ctx))"}}{{end}}
+```
+```go
+type User struct {
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+}
+
+func (s Server) GetUser(ctx context.Context) (User, error) {
+    return User{Name: "Ada", Age: 36}, nil
+}
+```
+
+A method error or marshal error responds 500. The define body is not rendered.
+
+| Rule | Detail |
+|------|--------|
+| Marshal | `encoding/json` by default; `encoding/json/v2` `MarshalWrite` under `--output-jsonv2` |
+| Method results | `(T)` or `(T, error)`; exactly one non-error result required |
+| Error on method error | 500 Internal Server Error |
+| Error on marshal error | 500 Internal Server Error |
+| Invalid shapes | No result, only `error`, non-error second result, or more than two results → generation error |
+| Composition | Composes with `unmarshalJSON(body)`: `marshalJSON(Increment(ctx, unmarshalJSON(body)))` |
+
+[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt)
 
 ## Advanced Patterns
 
@@ -349,11 +490,20 @@ Validation errors should return from your method. Display them in templates with
 - [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt) — Malformed body → 400
 - [err_multipart_with_form.txt](../../cmd/muxt/testdata/err_multipart_with_form.txt) — `form` + `multipart` rejected
 
-**Server-Sent Events:**
-- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse` callback with `lastEventID`
+**Server-Sent Events (`sse(...)` wrapper):**
+- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse(...)` with `send` and `lastEventID`
+- [reference_sse_wrapper.txt](../../cmd/muxt/testdata/reference_sse_wrapper.txt) — `sse(Method(ctx, lastEventID, send))` basic wrapper form
 - [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) — `func() error` callback form
 - [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) — error-returning method
 - [reference_sse_synthesized_method.txt](../../cmd/muxt/testdata/reference_sse_synthesized_method.txt) — synthesized `func(any) error` signature
+- [reference_sse_sendx.txt](../../cmd/muxt/testdata/reference_sse_sendx.txt) — `sendClock` renders the `Clock` template
+- [reference_sse_marshal_send.txt](../../cmd/muxt/testdata/reference_sse_marshal_send.txt) — `marshalJSON(sendStatus)` emits JSON event data
+- [reference_sse_chan.txt](../../cmd/muxt/testdata/reference_sse_chan.txt) — `<-chan T` return mode
+- [reference_sse_iter_seq.txt](../../cmd/muxt/testdata/reference_sse_iter_seq.txt) — `iter.Seq[T]` return mode
+- [reference_sse_iter_seq2_error.txt](../../cmd/muxt/testdata/reference_sse_iter_seq2_error.txt) — `iter.Seq2[T, error]` with `.Error` template data
+
+**JSON response (`marshalJSON(...)` wrapper):**
+- [reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) — `marshalJSON(Method(ctx))` → `application/json`
 - [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) — `lastEventID` header parsing
 
 **Multiple arguments:**

@@ -23,7 +23,7 @@ generic; only the framing is pluggable. Do not collapse framings into one render
 
 ## Status
 
-Decided
+Implemented (Phase 2)
 
 ## Consequences
 

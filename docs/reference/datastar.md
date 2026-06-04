@@ -13,7 +13,7 @@ Both names remain overridable with `--output-template-data-type` / `--output-sse
 
 ## Render-callback arguments
 
-These call arguments are recognized only under `--use-datastar`. Each supports camelCase-prefixed variants (`elementsClock`, `signalCount`) that render a same-named template, exactly like `sse`.
+These call arguments are recognized only under `--use-datastar`. Each supports camelCase-prefixed variants (`elementsClock`, `signalCount`) that render a same-named template.
 
 | Argument | Response | Frame / body |
 |---|---|---|
@@ -28,7 +28,7 @@ The response representation is fixed per route by the declared arguments:
 - a lone `script` → `text/javascript`;
 - none → `text/html` fragment (unchanged).
 
-A plain `sse` argument is not supported under `--use-datastar`; use `elements`.
+The generic `sse(...)` representation wrapper (see [Call Parameters Reference](call-parameters.md#ssemiddot)) emits plain `data:`-framed SSE events and works regardless of `--use-datastar`; Datastar `patch-elements`/`patch-signals` framing of `sse(...)` arrives in a later phase. For Datastar-framed streaming, use `elements` for now.
 
 ### elements
 

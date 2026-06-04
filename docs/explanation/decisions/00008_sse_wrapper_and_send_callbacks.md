@@ -30,7 +30,7 @@ retained unchanged for non-SSE handlers.
 
 ## Status
 
-Decided
+Implemented (Phase 2)
 
 ## Consequences
 
