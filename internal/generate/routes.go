@@ -733,7 +733,7 @@ func validateStreamMethodResults(methodName string, method *types.Signature, cal
 	}
 }
 
-// validateSSECallbackShape checks that an sse callback parameter is func() error
+// validateSSECallbackShape checks that a render callback parameter is func() error
 // (T = struct{}) or func(T) error, and returns the SSETemplateData result type T
 // and whether the callback takes a data argument.
 func validateSSECallbackShape(methodName string, callback *types.Signature) (types.Type, bool, error) {

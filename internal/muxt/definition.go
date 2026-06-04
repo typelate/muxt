@@ -440,7 +440,7 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 }
 
 // isReservedOrPrefixed reports whether name is the reserved base identifier or a
-// camelCase base-prefixed name (e.g. base "sse" matches "sse", "sseClock"). The
+// camelCase base-prefixed name (e.g. base "send" matches "send", "sendClock"). The
 // prefixed forms render a same-named template; they are only valid on a route
 // that also declares the base argument.
 func isReservedOrPrefixed(name, base string) bool {
