@@ -2311,7 +2311,7 @@ func ensureMethodSignature(file *File, config RoutesFileConfiguration, signature
 					// marshalJSON(sendX) wraps a send callback whose type comes
 					// from the already-defined method, so there is no nested
 					// method signature to synthesize.
-					if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON {
+					if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON && def.Representation() == muxt.RepresentationSSE {
 						continue
 					}
 					if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {

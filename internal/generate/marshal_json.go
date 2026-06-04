@@ -237,6 +237,7 @@ func marshalSendClosure(file *File, config RoutesFileConfiguration, resultType t
 	}
 
 	params := []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr}}
+	// marshalJSON(sendX) always has a value argument; sseWrapperHandlerFunc rejects the zero-arg form.
 	tdElts := []ast.Expr{
 		&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(receiverIdent)},
 		&ast.KeyValueExpr{Key: ast.NewIdent(request), Value: ast.NewIdent(request)},
