@@ -1,0 +1,69 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+grep '"encoding/json"' template_routes.go
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /echo marshalJSON(Echo(ctx, unmarshalJSON(body)))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"strings"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Input struct {
+	Message string `json:"message"`
+}
+
+type Output struct {
+	Echoed string `json:"echoed"`
+}
+
+// Echo reads a JSON request body (decoded by unmarshalJSON(body)) and returns a
+// value that marshalJSON encodes as the JSON response body.
+func (Server) Echo(ctx context.Context, in Input) (Output, error) {
+	return Output{Echoed: strings.ToUpper(in.Message)}, nil
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestEcho(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"message":"hi"}`))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("content-type = %q, want application/json", ct)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"echoed":"HI"}` {
+		t.Fatalf("body = %q, want %q", got, `{"echoed":"HI"}`)
+	}
+}

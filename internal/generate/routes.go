@@ -2315,6 +2315,17 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), "", tp))
 				continue
 			}
+			if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON && def.Representation() == muxt.RepresentationSSE && len(arg.Args) == 1 {
+				if inner, ok := arg.Args[0].(*ast.Ident); ok && muxt.IsSendArgument(inner.Name) {
+					// marshalJSON(sendX) wraps a send render callback. Its data
+					// type cannot be inferred, so synthesize it as func(any) error
+					// (the value-arg send form) and stream the result as any. The
+					// method returns nothing, matching the void streaming contract.
+					voidResults = true
+					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, sseCallbackSignature()))
+					continue
+				}
+			}
 			if err := ensureMethodSignature(file, config, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
