@@ -4,9 +4,9 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Events(sseClock, sse, sseMetrics)" -}}main:{{- .Result -}}{{- end -}}
-{{- define "sseClock" -}}clock:{{- .Result -}}{{- end -}}
-{{- define "sseMetrics" -}}metrics:{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Events(sendClock, send, sendMetrics))" -}}main:{{- .Result -}}{{- end -}}
+{{- define "Clock" -}}clock:{{- .Result -}}{{- end -}}
+{{- define "Metrics" -}}metrics:{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -26,14 +26,14 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-// Events receives three SSE callbacks in non-canonical order (the base "sse" is
-// not first) to prove ordering is irrelevant. The "sse" callback renders the
-// route template; sseClock renders the "sseClock" template; sseMetrics renders
-// the "sseMetrics" template.
-func (Server) Events(sseClock, sse, sseMetrics func(data string) error) {
-	_ = sse("main")
-	_ = sseClock("tick")
-	_ = sseMetrics("cpu")
+// Events receives three send callbacks in non-canonical order (the base "send"
+// is not first) to prove ordering is irrelevant. The "send" callback renders the
+// route template; sendClock renders the "Clock" template; sendMetrics renders
+// the "Metrics" template.
+func (Server) Events(sendClock, send, sendMetrics func(data string) error) {
+	_ = send("main")
+	_ = sendClock("tick")
+	_ = sendMetrics("cpu")
 }
 -- server_test.go --
 package server

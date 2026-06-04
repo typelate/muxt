@@ -7,7 +7,7 @@ grep 'type sseTemplateData\[' template_routes.go
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -28,8 +28,8 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-func (Server) Stream(ctx context.Context, sse func(data string) error) {
-	_ = sse("hi")
+func (Server) Stream(ctx context.Context, send func(data string) error) {
+	_ = send("hi")
 }
 -- server_test.go --
 package server

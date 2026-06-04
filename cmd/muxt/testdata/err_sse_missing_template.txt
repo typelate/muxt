@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'no template "sseClock" for sse argument sseClock'
+stderr 'no template "Clock" for send argument sendClock'
 
 -- template.gohtml --
-{{- define "GET /events Events(sse, sseClock)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Events(send, sendClock))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -22,7 +22,7 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-// sseClock has no matching template, so generation fails.
-func (Server) Events(sse, sseClock func(data string) error) {
-	_, _ = sse, sseClock
+// sendClock has no matching "Clock" template, so generation fails.
+func (Server) Events(send, sendClock func(data string) error) {
+	_, _ = send, sendClock
 }

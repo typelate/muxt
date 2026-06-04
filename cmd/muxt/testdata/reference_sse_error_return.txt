@@ -4,7 +4,7 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -26,8 +26,8 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 type Server struct{}
 
 // Stream returns an error after sending; the handler logs it and closes.
-func (Server) Stream(ctx context.Context, sse func(data string) error) error {
-	if err := sse("once"); err != nil {
+func (Server) Stream(ctx context.Context, send func(data string) error) error {
+	if err := send("once"); err != nil {
 		return err
 	}
 	return nil

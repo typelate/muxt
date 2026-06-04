@@ -159,12 +159,6 @@ func (def Definition) usesArgument(pred func(string) bool) bool {
 	return false
 }
 
-// UsesSSE reports whether the handler call uses the reserved "sse" render
-// callback argument.
-func (def Definition) UsesSSE() bool {
-	return def.usesArgument(func(name string) bool { return name == TemplateNameScopeIdentifierSSE })
-}
-
 // UsesSend reports whether the sse() call uses a send/sendX render callback.
 func (def Definition) UsesSend() bool {
 	return def.usesArgument(IsSendArgument)
@@ -457,13 +451,6 @@ func isReservedOrPrefixed(name, base string) bool {
 	return ok && rest != "" && unicode.IsUpper(rune(rest[0]))
 }
 
-// IsSSEArgument reports whether name is an SSE render-callback argument: the
-// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
-// sseMetrics, ...).
-func IsSSEArgument(name string) bool {
-	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierSSE)
-}
-
 // IsElementsArgument reports whether name is a Datastar patch-elements
 // render-callback argument: "elements" or a camelCase "elements"-prefixed name.
 func IsElementsArgument(name string) bool {
@@ -504,7 +491,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr, allowSend bool) er
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); ok {
 				known = true
 			}
-			if IsSSEArgument(exp.Name) || IsDatastarArgument(exp.Name) {
+			if IsDatastarArgument(exp.Name) {
 				known = true
 			}
 			if allowSend && IsSendArgument(exp.Name) {
@@ -551,7 +538,6 @@ const (
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierExecute      = "execute"
-	TemplateNameScopeIdentifierSSE          = "sse"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 	TemplateNameScopeIdentifierBody         = "body"
 	// Datastar render-callback argument families (usable only under --use-datastar).
@@ -595,7 +581,6 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierForm,
 		TemplateNameScopeIdentifierMultipart,
 		TemplateNameScopeIdentifierExecute,
-		TemplateNameScopeIdentifierSSE,
 		TemplateNameScopeIdentifierLastEventID,
 		TemplateNameScopeIdentifierBody,
 	}

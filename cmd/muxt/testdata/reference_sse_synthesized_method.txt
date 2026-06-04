@@ -1,15 +1,15 @@
 muxt generate --use-receiver-type=Server
 muxt check
 
-# An sse method that is not defined on the receiver gets a synthesized
-# signature: the callback becomes func(any) error and the method returns
+# An sse() method that is not defined on the receiver gets a synthesized
+# signature: the send callback becomes func(any) error and the method returns
 # nothing, matching the void SSE contract.
-grep 'Stream\(ctx context.Context, lastEventID string, sse func\(any\) error\)' template_routes.go
+grep 'Stream\(ctx context.Context, lastEventID string, send func\(any\) error\)' template_routes.go
 
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, lastEventID, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, lastEventID, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -32,8 +32,8 @@ type Server struct{}
 
 // Stream implements the synthesized interface method signature. The callback
 // accepts any; the template renders it as .Result.
-func (Server) Stream(ctx context.Context, lastEventID string, sse func(any) error) {
-	_ = sse("hi-" + lastEventID)
+func (Server) Stream(ctx context.Context, lastEventID string, send func(any) error) {
+	_ = send("hi-" + lastEventID)
 }
 -- server_test.go --
 package server

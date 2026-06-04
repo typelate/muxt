@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'cannot use both "sse" and "execute" arguments'
+stderr 'call Endpoint cannot use both an sse stream and the execute callback'
 
 -- template.gohtml --
-{{- define "GET /x Endpoint(sse, execute)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /x sse(Endpoint(send, execute))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -22,7 +22,7 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-func (Server) Endpoint(sse func(string) error, execute func(string) error) error {
-	_, _ = sse, execute
+func (Server) Endpoint(send func(string) error, execute func(string) error) error {
+	_, _ = send, execute
 	return nil
 }

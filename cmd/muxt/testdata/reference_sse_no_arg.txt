@@ -4,7 +4,7 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /ping Ping(sse)" -}}pong{{- end -}}
+{{- define "GET /ping sse(Ping(send))" -}}pong{{- end -}}
 -- go.mod --
 module server
 
@@ -25,8 +25,8 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 type Server struct{}
 
 // Ping uses the zero-argument callback form: func() error.
-func (Server) Ping(sse func() error) {
-	_ = sse()
+func (Server) Ping(send func() error) {
+	_ = send()
 }
 -- server_test.go --
 package server

@@ -462,14 +462,6 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
-			Name:     "sse argument is in scope",
-			In:       "GET / F(sse)",
-			ExpMatch: true,
-			TemplateName: func(t *testing.T, def Definition) {
-				assert.Equal(t, "F(sse)", def.handler)
-			},
-		},
-		{
 			Name:     "lastEventID argument is in scope",
 			In:       "GET / F(lastEventID)",
 			ExpMatch: true,

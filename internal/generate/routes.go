@@ -381,8 +381,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 			decls = append(decls, method)
 		}
 	}
-	// The SSETemplateData type and its methods are only needed when a route uses
-	// the sse render callback, so emit them conditionally to avoid unused imports.
+	// The SSETemplateData type and its methods are only needed when a route is
+	// wrapped in sse(...), so emit them conditionally to avoid unused imports.
 	// In Datastar mode the SSE type slot is occupied by DatastarEventTemplateData
 	// (patch-elements framing) instead, emitted when a route uses an elements
 	// render callback.
@@ -398,8 +398,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSignal) {
 			decls = append(decls, datastarSignalsDecls(file, config)...)
 		}
-	} else if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) ||
-		slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
+	} else if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationMarshalJSON }) {
@@ -716,26 +715,6 @@ func validateExecuteCallback(methodName string, method, callback *types.Signatur
 	}
 }
 
-// sseArg finds the reserved "sse" render-callback argument in call. It returns
-// its index, the receiver method's parameter at that index as a *types.Signature
-// (nil if the param is not a func), and whether it is present.
-func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bool) {
-	for i, a := range call.Args {
-		id, ok := a.(*ast.Ident)
-		if !ok || id.Name != muxt.TemplateNameScopeIdentifierSSE {
-			continue
-		}
-		var cb *types.Signature
-		if i < sig.Params().Len() {
-			// Underlying unwraps named and aliased func types so the callback
-			// param may be declared as e.g. `type RenderFunc func(T) error`.
-			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
-		}
-		return i, cb, true
-	}
-	return 0, nil, false
-}
-
 // validateStreamMethodResults checks that a streaming (SSE / Datastar) method
 // returns nothing or only error, and reports whether it returns an error.
 // callbackLabel names the callback family for diagnostics (e.g. "sse").
@@ -754,19 +733,13 @@ func validateStreamMethodResults(methodName string, method *types.Signature, cal
 	}
 }
 
-// validateSSEMethodResults checks that an sse method returns nothing or only
-// error, and reports whether it returns an error.
-func validateSSEMethodResults(methodName string, method *types.Signature) (bool, error) {
-	return validateStreamMethodResults(methodName, method, muxt.TemplateNameScopeIdentifierSSE)
-}
-
 // validateSSECallbackShape checks that an sse callback parameter is func() error
 // (T = struct{}) or func(T) error, and returns the SSETemplateData result type T
 // and whether the callback takes a data argument.
 func validateSSECallbackShape(methodName string, callback *types.Signature) (types.Type, bool, error) {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
-		return nil, false, fmt.Errorf("sse argument for %s must be a func(...) error", methodName)
+		return nil, false, fmt.Errorf("render callback for %s must be a func(...) error", methodName)
 	}
 	switch callback.Params().Len() {
 	case 0:
@@ -774,7 +747,7 @@ func validateSSECallbackShape(methodName string, callback *types.Signature) (typ
 	case 1:
 		return callback.Params().At(0).Type(), true, nil
 	default:
-		return nil, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
+		return nil, false, fmt.Errorf("render callback must have zero or one parameter; wrap multiple values in a struct")
 	}
 }
 
@@ -915,10 +888,6 @@ func classifySSEReturn(sig *types.Signature) (sseReturnKind, types.Type) {
 	return sseReturnNone, nil
 }
 
-// sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
-// Server-Sent Events. Unlike a normal handler it establishes an event stream
-// (Content-Type text/event-stream, flush) and invokes the receiver method with
-// a callback closure that renders and writes one SSE frame per call.
 // streamMethodHandlerFunc builds the http.HandlerFunc for a route that streams
 // events (Server-Sent Events or Datastar). It establishes the event stream
 // (Content-Type text/event-stream, flush), parses ctx/lastEventID/path params,
@@ -985,35 +954,6 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 
 	handlerFunc.Body.List = body
 	return handlerFunc, nil
-}
-
-// sseMethodHandlerFunc builds the streaming handler for a route that uses the
-// sse render callback. Each sse-prefixed argument is replaced with a closure
-// that renders a same-named template into an SSETemplateData frame.
-func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
-	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSSE, "sse handler returned an error",
-		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
-			id, ok := arg.(*ast.Ident)
-			if !ok {
-				return nil, false, nil
-			}
-			if !muxt.IsSSEArgument(id.Name) {
-				return nil, false, nil
-			}
-			resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
-			if err != nil {
-				return nil, false, err
-			}
-			templateName := def.Name()
-			if id.Name != muxt.TemplateNameScopeIdentifierSSE {
-				templateName = id.Name
-				if def.Template() == nil || def.Template().Lookup(templateName) == nil {
-					return nil, false, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
-				}
-			}
-			closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
-			return closure, true, err
-		})
 }
 
 // sseClosure builds the callback passed to the receiver method. Each call
@@ -1198,6 +1138,12 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	}
 	switch def.Representation() {
 	case muxt.RepresentationSSE:
+		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
+			return nil, fmt.Errorf("call %s cannot use both an sse stream and the execute callback", def.FunctionIdentifier().Name)
+		}
+		if def.HasResponseWriterArg() {
+			return nil, fmt.Errorf("call %s cannot use both an sse stream and the response argument", def.FunctionIdentifier().Name)
+		}
 		return sseWrapperHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	case muxt.RepresentationMarshalJSON:
 		return marshalJSONHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
@@ -1212,18 +1158,6 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	// method parameter named "signal", "script", or "elements" works normally).
 	if config.Datastar && def.UsesDatastar() {
 		return datastarMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
-	}
-	if config.Datastar && def.UsesSSE() {
-		return nil, fmt.Errorf("call %s uses the %q argument which is not supported in Datastar mode; use the %q argument instead", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierElements)
-	}
-	if _, _, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
-		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
-			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierExecute)
-		}
-		if def.HasResponseWriterArg() {
-			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierHTTPResponse)
-		}
-		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	}
 	if sig.Results().Len() == 0 {
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
@@ -1569,11 +1503,11 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) || (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) {
-				// The render callback (execute/sse, and elements/signal/script
-				// under --use-datastar, and send/sendX inside sse(...)) is
-				// validated and wired into the call in methodHandlerFunc. It is
-				// not parsed from the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) || (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) {
+				// The render callback (execute, and elements/signal/script under
+				// --use-datastar, and send/sendX inside sse(...)) is validated and
+				// wired into the call in methodHandlerFunc. It is not parsed from
+				// the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2350,10 +2284,11 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if muxt.IsSSEArgument(arg.Name) || (config.Datastar && (muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name))) {
+			if (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) || (config.Datastar && (muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name))) {
 				// A render callback's data type cannot be inferred, so synthesize
 				// it as func(any) error and stream the result as any. The method
 				// returns nothing, matching the void streaming contract.
+				// send/sendX render callbacks are only valid inside sse(...);
 				// elements/script are only render callbacks under --use-datastar.
 				voidResults = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))

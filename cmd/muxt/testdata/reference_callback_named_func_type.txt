@@ -5,7 +5,7 @@ exec go test -race -count=1
 
 -- template.gohtml --
 {{- define "GET /render Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
-{{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -27,14 +27,14 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 // RenderInt is a named func type used as the execute callback.
 type RenderInt func(int) error
 
-// EmitString is an aliased func type used as the sse callback.
+// EmitString is an aliased func type used as the send callback.
 type EmitString = func(string) error
 
 type Server struct{}
 
 func (Server) Render(execute RenderInt) error { return execute(7) }
 
-func (Server) Stream(ctx context.Context, sse EmitString) { _ = sse("hi") }
+func (Server) Stream(ctx context.Context, send EmitString) { _ = send("hi") }
 -- server_test.go --
 package server
 
@@ -61,6 +61,6 @@ func TestNamedFuncCallbacks(t *testing.T) {
 		t.Fatalf("execute (named RenderInt) body = %q, want <p>7</p>", got)
 	}
 	if got := get(t, mux, "/events"); !strings.Contains(got, "data: hi\n\n") {
-		t.Fatalf("sse (aliased EmitString) body = %q, want data: hi frame", got)
+		t.Fatalf("send (aliased EmitString) body = %q, want data: hi frame", got)
 	}
 }

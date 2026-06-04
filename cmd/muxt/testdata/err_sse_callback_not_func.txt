@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'sse argument for Endpoint must be a func\(...\) error'
+stderr 'render callback for Endpoint must be a func\(...\) error'
 
 -- template.gohtml --
-{{- define "GET /x Endpoint(sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /x sse(Endpoint(send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -22,4 +22,4 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-func (Server) Endpoint(sse int) { _ = sse }
+func (Server) Endpoint(send int) { _ = send }
