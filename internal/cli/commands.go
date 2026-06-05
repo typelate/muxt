@@ -564,6 +564,7 @@ const (
 	outputRoutesFunc                 = "output-routes-func"
 	outputTemplateDataType           = "output-template-data-type"
 	outputSSETemplateDataType        = "output-sse-template-data-type"
+	outputHTMXTemplateDataType       = "output-htmx-template-data-type"
 	outputTemplateRoutePathsType     = "output-template-route-paths-type"
 	outputRoutesFuncWithLoggerParam  = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix   = "output-routes-func-with-path-prefix-param"
@@ -602,6 +603,7 @@ const (
 This function also receives an argument with a type matching the name given by output-receiver-interface.`
 	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
+	outputHTMXTemplateDataTypeHelp   = `the type name for the generated HTMX template data type used by htmx framing`
 	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
 	outputRoutesFuncWithLoggerParamHelp  = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
@@ -625,6 +627,7 @@ const (
 	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
+	defaultHTMXTemplateDataTypeName   = "HTMXTemplateData"
 	// Datastar mode swaps the default template data type names; both remain
 	// overridable via --output-template-data-type / --output-sse-template-data-type.
 	defaultDatastarTemplateDataTypeName      = "DatastarTemplateData"
@@ -671,6 +674,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputSSETemplateDataType) {
 			config.SSETemplateDataType = strcase.ToGoCamel(sseTemplateDataTypeDefault)
 		}
+		if !flagSet.Changed(outputHTMXTemplateDataType) {
+			config.HTMXTemplateDataType = strcase.ToGoCamel(defaultHTMXTemplateDataTypeName)
+		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
@@ -680,6 +686,7 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, templateDataTypeDefault)
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, sseTemplateDataTypeDefault)
+		config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, defaultHTMXTemplateDataTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -706,6 +713,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, defaultRoutesFunctionName, outputRoutesFuncHelp)
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSETemplateDataType, outputSSETemplateDataType, defaultSSETemplateDataTypeName, outputSSETemplateDataTypeHelp)
+	flagSet.StringVar(&g.HTMXTemplateDataType, outputHTMXTemplateDataType, "", outputHTMXTemplateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)

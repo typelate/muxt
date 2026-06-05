@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -108,6 +109,29 @@ func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplyDefaults_HTMXTemplateDataType(t *testing.T) {
+	newFlagSet := func(cfg *generate.RoutesFileConfiguration) *pflag.FlagSet {
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		addOutputFlagsToFlagSet(fs, cfg)
+		return fs
+	}
+
+	t.Run("defaults to HTMXTemplateData when not set", func(t *testing.T) {
+		cfg := generate.RoutesFileConfiguration{OutputExportedDefaultIdentifiers: true}
+		fs := newFlagSet(&cfg)
+		applyDefaults(&cfg, fs)
+		assert.Equal(t, defaultHTMXTemplateDataTypeName, cfg.HTMXTemplateDataType)
+	})
+
+	t.Run("explicit flag value is preserved", func(t *testing.T) {
+		cfg := generate.RoutesFileConfiguration{OutputExportedDefaultIdentifiers: true}
+		fs := newFlagSet(&cfg)
+		require.NoError(t, fs.Set(outputHTMXTemplateDataType, "Widget"))
+		applyDefaults(&cfg, fs)
+		assert.Equal(t, "Widget", cfg.HTMXTemplateDataType)
+	})
 }
 
 func TestMultipartMaxMemoryFlag_String(t *testing.T) {

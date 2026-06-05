@@ -74,6 +74,7 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	SSETemplateDataType,
+	HTMXTemplateDataType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables  []string
 	OutputFileName      string
