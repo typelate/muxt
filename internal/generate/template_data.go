@@ -113,20 +113,20 @@ func templateDataReceiver(receiverType ast.Expr, templateDataTypeIdent string) *
 	}
 }
 
-func templateRedirect(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
+func templateRedirect(file *File, config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
 	const (
 		codeParamIdent = "code"
 		urlParamIdent  = "url"
 	)
 	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent("Redirect"),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent(urlParamIdent)}, Type: ast.NewIdent("string")},
 				{Names: []*ast.Ident{ast.NewIdent(codeParamIdent)}, Type: ast.NewIdent("int")},
 			}},
-			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(config.TemplateDataType), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
+			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(typeName), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
 		},
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
@@ -173,16 +173,16 @@ func templateRedirect(file *File, config RoutesFileConfiguration) *ast.FuncDecl 
 	}
 }
 
-func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, methodName string, statusCode int) *ast.FuncDecl {
+func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, typeName, methodName string, statusCode int) *ast.FuncDecl {
 	const urlParamIdent = "url"
 	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent(methodName),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent(urlParamIdent)}, Type: ast.NewIdent("string")},
 			}},
-			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(config.TemplateDataType), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
+			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(typeName), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
 		},
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
@@ -200,19 +200,19 @@ func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, me
 	}
 }
 
-func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration) []*ast.FuncDecl {
+func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration, typeName string) []*ast.FuncDecl {
 	return []*ast.FuncDecl{
-		templateRedirectHelperMethod(file, config, "RedirectMultipleChoices", 300),
-		templateRedirectHelperMethod(file, config, "RedirectMovedPermanently", 301),
-		templateRedirectHelperMethod(file, config, "RedirectFound", 302),
-		templateRedirectHelperMethod(file, config, "RedirectSeeOther", 303),
+		templateRedirectHelperMethod(file, config, typeName, "RedirectMultipleChoices", 300),
+		templateRedirectHelperMethod(file, config, typeName, "RedirectMovedPermanently", 301),
+		templateRedirectHelperMethod(file, config, typeName, "RedirectFound", 302),
+		templateRedirectHelperMethod(file, config, typeName, "RedirectSeeOther", 303),
 	}
 }
 
-func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+func templateDataMuxtVersionMethod(config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
 	const versionIdent = "muxtVersion"
 	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent("MuxtVersion"),
 		Type: &ast.FuncType{
 			Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent("string")}}},
@@ -235,9 +235,9 @@ func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl
 	}
 }
 
-func templateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+func templateDataPathMethod(config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
 	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent("Path"),
 		Type: &ast.FuncType{
 			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)}}},
@@ -565,6 +565,35 @@ func templateDataStringMethod(templateDataTypeIdent string) *ast.FuncDecl {
 			},
 		},
 	}
+}
+
+// templateDataDecls returns the base template-data type named typeName and its
+// methods. When withHTMX is true the HX* helper methods are included (the
+// HTMXTemplateData variant); otherwise the type is the minimal base.
+func templateDataDecls(file *File, config RoutesFileConfiguration, typeName string, withHTMX bool) []ast.Decl {
+	decls := []ast.Decl{
+		templateDataType(file, typeName, ast.NewIdent(config.ReceiverInterface)),
+		templateDataMuxtVersionMethod(config, typeName),
+		templateDataPathMethod(config, typeName),
+		templateDataResultMethod(typeName),
+		templateDataRequestMethod(file, typeName),
+		templateDataStatusCodeMethod(typeName),
+		templateDataHeaderMethod(typeName),
+		templateDataOkay(typeName),
+		templateDataError(file, typeName),
+		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), typeName),
+		templateRedirect(file, config, typeName),
+	}
+	for _, m := range templateRedirectHelperMethods(file, config, typeName) {
+		decls = append(decls, m)
+	}
+	decls = append(decls, templateDataStringMethod(typeName))
+	if withHTMX {
+		for _, m := range templateDataHTMXHelperMethods(typeName) {
+			decls = append(decls, m)
+		}
+	}
+	return decls
 }
 
 func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl {

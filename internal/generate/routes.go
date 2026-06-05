@@ -357,30 +357,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 
 		// func routes
 		routesFunc,
-
-		templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
-		templateDataMuxtVersionMethod(config),
-		templateDataPathMethod(config),
-		templateDataResultMethod(config.TemplateDataType),
-		templateDataRequestMethod(file, config.TemplateDataType),
-		templateDataStatusCodeMethod(config.TemplateDataType),
-		templateDataHeaderMethod(config.TemplateDataType),
-		templateDataOkay(config.TemplateDataType),
-		templateDataError(file, config.TemplateDataType),
-		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
-		templateRedirect(file, config),
 	}
-	for _, method := range templateRedirectHelperMethods(file, config) {
-		decls = append(decls, method)
-	}
-	decls = append(decls,
-		templateDataStringMethod(config.TemplateDataType),
-	)
-	if config.HTMXHelpers {
-		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
-			decls = append(decls, method)
-		}
-	}
+	decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, config.HTMXHelpers)...)
 	// The SSETemplateData type and its methods are only needed when a route is
 	// wrapped in sse(...), so emit them conditionally to avoid unused imports.
 	// In Datastar mode the SSE type slot is occupied by DatastarEventTemplateData
