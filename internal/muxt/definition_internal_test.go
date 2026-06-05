@@ -11,6 +11,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDefinitionFraming(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want Framing
+		rep  Representation
+		fun  string
+	}{
+		{name: "GET /a Plain(ctx)", want: FramingNone, rep: RepresentationNone, fun: "Plain"},
+		{name: "GET /b htmx(Index(ctx))", want: FramingHTMX, rep: RepresentationNone, fun: "Index"},
+		{name: "GET /c htmx(sse(Stream(ctx, send)))", want: FramingHTMX, rep: RepresentationSSE, fun: "Stream"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			def, err, ok := newDefinition(template.New(tt.name))
+			if !ok || err != nil {
+				t.Fatalf("newDefinition(%q) ok=%v err=%v", tt.name, ok, err)
+			}
+			if got := def.Framing(); got != tt.want {
+				t.Errorf("Framing() = %v, want %v", got, tt.want)
+			}
+			if got := def.Representation(); got != tt.rep {
+				t.Errorf("Representation() = %v, want %v", got, tt.rep)
+			}
+			if def.FunctionIdentifier().Name != tt.fun {
+				t.Errorf("FunctionIdentifier() = %q, want %q", def.FunctionIdentifier().Name, tt.fun)
+			}
+		})
+	}
+}
+
+func TestDefinitionHTMXBadArity(t *testing.T) {
+	for _, in := range []string{"GET /a htmx()", "GET /b htmx(Index(ctx), Other(ctx))"} {
+		if _, err, _ := newDefinition(template.New(in)); err == nil {
+			t.Fatalf("newDefinition(%q): want error for bad htmx arity", in)
+		}
+	}
+}
+
 func TestDefinitionRepresentation(t *testing.T) {
 	for _, tt := range []struct {
 		name string

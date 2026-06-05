@@ -107,6 +107,9 @@ type Definition struct {
 
 	// representation records the outermost call wrapper (none, sse, marshalJSON).
 	representation Representation
+
+	// framing records the outermost frontend wrapper (none, htmx).
+	framing Framing
 }
 
 func (def Definition) SourceFile() string { return def.sourceFile }
@@ -143,6 +146,7 @@ func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
 func (def Definition) Representation() Representation { return def.representation }
+func (def Definition) Framing() Framing               { return def.framing }
 
 // usesArgument reports whether any top-level call argument identifier satisfies
 // pred. It scans only the top-level call arguments because render-callback
@@ -362,6 +366,26 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		return fmt.Errorf("unexpected ellipsis")
 	}
 
+	// Strip the optional outermost framing wrapper (htmx(...)) first, so the
+	// representation wrapper and method call are detected on what remains.
+	framing := FramingNone
+	if fun.Name == FramingWrapperHTMX {
+		framing = FramingHTMX
+		if len(call.Args) != 1 {
+			return fmt.Errorf("%s takes exactly one argument: the wrapped call", fun.Name)
+		}
+		inner, ok := call.Args[0].(*ast.CallExpr)
+		if !ok {
+			return fmt.Errorf("%s argument must be a call", fun.Name)
+		}
+		innerFun, ok := inner.Fun.(*ast.Ident)
+		if !ok {
+			return fmt.Errorf("expected function identifier, got: %s", astgen.Format(inner.Fun))
+		}
+		call, fun = inner, innerFun
+	}
+	def.framing = framing
+
 	// Recognize an optional outermost representation wrapper: sse(Method(...)) or
 	// marshalJSON(Method(...)). Unwrap it so the rest of the parser and the whole
 	// generator operate on the inner method call unchanged.
@@ -547,6 +571,17 @@ const (
 	// Phase 2 SSE send render-callback family, valid only inside sse(...).
 	TemplateNameScopeIdentifierSend = "send"
 )
+
+// Framing names the optional outermost frontend wrapper of a handler call.
+type Framing int
+
+const (
+	FramingNone Framing = iota
+	FramingHTMX
+)
+
+// FramingWrapperHTMX is the reserved outer framing-wrapper function name.
+const FramingWrapperHTMX = "htmx"
 
 // Representation names the optional outermost wrapper of a handler call.
 type Representation int
