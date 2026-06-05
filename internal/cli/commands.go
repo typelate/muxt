@@ -603,7 +603,7 @@ const (
 This function also receives an argument with a type matching the name given by output-receiver-interface.`
 	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
-	outputHTMXTemplateDataTypeHelp   = `the type name for the generated HTMX template data type used by htmx framing`
+	outputHTMXTemplateDataTypeHelp   = `The type name for the template data passed to HTMX-framed route templates.`
 	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
 	outputRoutesFuncWithLoggerParamHelp  = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
