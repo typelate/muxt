@@ -113,7 +113,7 @@ func templateDataReceiver(receiverType ast.Expr, templateDataTypeIdent string) *
 	}
 }
 
-func templateRedirect(file *File, config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
+func templateRedirect(file *File, typeName string) *ast.FuncDecl {
 	const (
 		codeParamIdent = "code"
 		urlParamIdent  = "url"
@@ -173,7 +173,7 @@ func templateRedirect(file *File, config RoutesFileConfiguration, typeName strin
 	}
 }
 
-func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, typeName, methodName string, statusCode int) *ast.FuncDecl {
+func templateRedirectHelperMethod(file *File, typeName, methodName string, statusCode int) *ast.FuncDecl {
 	const urlParamIdent = "url"
 	return &ast.FuncDecl{
 		Recv: templateDataMethodReceiver(typeName),
@@ -200,12 +200,12 @@ func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, ty
 	}
 }
 
-func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration, typeName string) []*ast.FuncDecl {
+func templateRedirectHelperMethods(file *File, typeName string) []*ast.FuncDecl {
 	return []*ast.FuncDecl{
-		templateRedirectHelperMethod(file, config, typeName, "RedirectMultipleChoices", 300),
-		templateRedirectHelperMethod(file, config, typeName, "RedirectMovedPermanently", 301),
-		templateRedirectHelperMethod(file, config, typeName, "RedirectFound", 302),
-		templateRedirectHelperMethod(file, config, typeName, "RedirectSeeOther", 303),
+		templateRedirectHelperMethod(file, typeName, "RedirectMultipleChoices", 300),
+		templateRedirectHelperMethod(file, typeName, "RedirectMovedPermanently", 301),
+		templateRedirectHelperMethod(file, typeName, "RedirectFound", 302),
+		templateRedirectHelperMethod(file, typeName, "RedirectSeeOther", 303),
 	}
 }
 
@@ -582,9 +582,9 @@ func templateDataDecls(file *File, config RoutesFileConfiguration, typeName stri
 		templateDataOkay(typeName),
 		templateDataError(file, typeName),
 		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), typeName),
-		templateRedirect(file, config, typeName),
+		templateRedirect(file, typeName),
 	}
-	for _, m := range templateRedirectHelperMethods(file, config, typeName) {
+	for _, m := range templateRedirectHelperMethods(file, typeName) {
 		decls = append(decls, m)
 	}
 	decls = append(decls, templateDataStringMethod(typeName))
