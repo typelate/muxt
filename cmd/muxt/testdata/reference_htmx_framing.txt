@@ -1,0 +1,47 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /set htmx(Set(ctx))" -}}{{- .HXRedirect "/next" -}}done{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Set(ctx context.Context) string { return "" }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestHTMXFraming(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodGet, "/set", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if got := rec.Header().Get("HX-Redirect"); got != "/next" {
+		t.Fatalf("HX-Redirect = %q, want /next", got)
+	}
+}

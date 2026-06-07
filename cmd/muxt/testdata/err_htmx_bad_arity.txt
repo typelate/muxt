@@ -1,0 +1,26 @@
+! muxt generate --use-receiver-type=Server
+stderr 'htmx takes exactly one argument'
+
+-- template.gohtml --
+{{- define "GET / htmx()" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index(ctx context.Context) string { return "" }

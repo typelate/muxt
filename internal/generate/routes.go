@@ -359,7 +359,18 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		// func routes
 		routesFunc,
 	}
-	decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, config.HTMXHelpers)...)
+	if config.Datastar {
+		decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, false)...)
+	} else {
+		usesNone := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingNone })
+		usesHTMX := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingHTMX })
+		if usesNone {
+			decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, false)...)
+		}
+		if usesHTMX {
+			decls = append(decls, templateDataDecls(file, config, config.HTMXTemplateDataType, true)...)
+		}
+	}
 	// The SSETemplateData type and its methods are only needed when a route is
 	// wrapped in sse(...), so emit them conditionally to avoid unused imports.
 	// In Datastar mode the SSE type slot is occupied by DatastarEventTemplateData
@@ -595,12 +606,34 @@ func generatePerFileAST(
 	return outputFile, nil
 }
 
+// effectiveFraming is a route's framing after applying the --use-htmx flag, which
+// auto-wraps every otherwise-unframed route (no per-route opt-out).
+func effectiveFraming(config RoutesFileConfiguration, def muxt.Definition) muxt.Framing {
+	if def.Framing() != muxt.FramingNone {
+		return def.Framing()
+	}
+	if config.HTMXHelpers {
+		return muxt.FramingHTMX
+	}
+	return muxt.FramingNone
+}
+
+// renderTemplateDataType is the non-SSE render template-data type name for a
+// framing: HTMXTemplateData for htmx, the configured base type otherwise.
+func renderTemplateDataType(config RoutesFileConfiguration, framing muxt.Framing) string {
+	if framing == muxt.FramingHTMX {
+		return config.HTMXTemplateDataType
+	}
+	return config.TemplateDataType
+}
+
 func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
 	const (
 		bufIdent             = "buf"
 		statusCodeIdent      = "statusCode"
 		templateDataVarIdent = "td"
 	)
+	renderType := renderTemplateDataType(config, effectiveFraming(config, def))
 	handlerFunc := &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
@@ -611,7 +644,7 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 						Specs: []ast.Spec{&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(templateDataVarIdent)},
 							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexListExpr{
-								X:       ast.NewIdent(config.TemplateDataType),
+								X:       ast.NewIdent(renderType),
 								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), astgen.EmptyStructType()},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
@@ -1169,6 +1202,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 	if err != nil {
 		return nil, err
 	}
+	renderType := renderTemplateDataType(config, effectiveFraming(config, def))
 
 	handlerFunc := &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
@@ -1180,7 +1214,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 						Specs: []ast.Spec{&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(resultDataIdent)},
 							Values: []ast.Expr{&ast.CompositeLit{Type: &ast.IndexListExpr{
-								X:       ast.NewIdent(config.TemplateDataType),
+								X:       ast.NewIdent(renderType),
 								Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), typeExpr},
 							}, Elts: []ast.Expr{
 								&ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierReceiver), Value: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
