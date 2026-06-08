@@ -1,0 +1,55 @@
+# Under --use-htmx every route auto-wraps to htmx framing.
+#
+# A plain route (no htmx() wrapper in its template name) renders with
+# HTMXTemplateData and can call .HXRedirect. Because no route is effectively
+# unframed, the minimal TemplateData type is NOT emitted.
+
+muxt generate --use-receiver-type=Server --use-htmx
+muxt check
+
+exec go test -race -count=1
+
+grep 'type HTMXTemplateData\[' template_routes.go
+! grep 'type TemplateData\[' template_routes.go
+
+-- template.gohtml --
+{{- define "GET /go Go(ctx)" -}}{{- .HXRedirect "/done" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Go(ctx context.Context) string { return "" }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestAutoWrap(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/go", nil))
+	if got := rec.Header().Get("HX-Redirect"); got != "/done" {
+		t.Fatalf("HX-Redirect = %q, want /done", got)
+	}
+}

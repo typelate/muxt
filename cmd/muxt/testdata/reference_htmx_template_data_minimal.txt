@@ -1,0 +1,34 @@
+# HX* helpers no longer live on the minimal TemplateData.
+#
+# An unframed route (no --use-htmx flag, no htmx() wrapper) renders with the
+# minimal TemplateData, which has the base Redirect* helpers but NOT the HX*
+# helpers. muxt generate succeeds, but muxt check fails because the template
+# calls .HXRedirect, which is not a method on TemplateData.
+
+muxt generate --use-receiver-type=Server
+! muxt check
+stderr 'HXRedirect not found on TemplateData'
+
+-- template.gohtml --
+{{- define "GET / Index(ctx)" -}}{{- .HXRedirect "/x" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index(ctx context.Context) string { return "" }
