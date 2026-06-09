@@ -62,6 +62,8 @@ These flags tell muxt what existing code to look for and use:
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Can be specified multiple times to generate routes from multiple template sets. |
+| `--use-htmx` | bool | `false` | Wrap every route in `htmx(...)`: renders with `HTMXTemplateData`, which carries the HTMX helper methods (response headers `HX-Redirect`, `HX-Location`, `HX-Trigger`, …; request reads `HX-Request`, `HX-Boosted`, …). Mutually exclusive with `--use-datastar`. |
+| `--use-datastar` | bool | `false` | Enable Datastar mode: generates `DatastarTemplateData`/`DatastarEventTemplateData` and an `Actions()` accessor. Mutually exclusive with `--use-htmx`. |
 
 **Type resolution:**
 - **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`
@@ -80,8 +82,8 @@ These flags control the names of generated types and functions:
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
+| `--output-htmx-template-data-type` | string | `HTMXTemplateData` | Template data type name for HTMX-framed route templates (`--use-htmx` or `htmx(...)`). |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
-| `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
@@ -97,6 +99,7 @@ These flags still work but are deprecated. Use the new names above:
 | `--templates-variable` | `--use-templates-variable` |
 | `--receiver-type` | `--use-receiver-type` |
 | `--receiver-type-package` | `--use-receiver-type-package` |
+| `--output-htmx-helpers` | `--use-htmx` |
 | `--receiver-interface` | `--output-receiver-interface` |
 | `--routes-func` | `--output-routes-func` |
 | `--template-data-type` | `--output-template-data-type` |
