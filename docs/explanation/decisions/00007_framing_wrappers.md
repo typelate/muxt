@@ -25,7 +25,7 @@ per route.
 
 ## Status
 
-Decided
+Decided. Implemented (Phase 3a: `htmx`; `datastar` framing in 3b).
 
 ## Consequences
 

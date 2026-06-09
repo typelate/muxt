@@ -402,6 +402,54 @@ A method error or marshal error responds 500. The define body is not rendered.
 
 [reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt)
 
+## Frontend Framing
+
+A **framing wrapper** is the outermost layer of a call: `frame( representation( Method(args…) ) )`. It selects which **render template-data type** the handler uses — and with it, which frontend helper methods the template may call.
+
+### htmx(...)
+
+`htmx(Method(...))` renders with a dedicated `HTMXTemplateData` type. The HX* helpers (`.HXRedirect`, `.HXTrigger`, etc.) live on `HTMXTemplateData`, **not** on the plain `TemplateData`.
+
+```gotmpl
+{{define "GET /set htmx(Set(ctx))"}}{{.HXRedirect "/next"}}done{{end}}
+```
+
+The minimal (unframed) `TemplateData` carries the base helpers (`.Result`, `.Request`, `.StatusCode`, `.Header`, `.Redirect`, `.RedirectSeeOther`, …) but no HX* helpers. An unframed route that calls `.HXRedirect` fails `muxt check`:
+
+```gotmpl
+{{define "GET / Index(ctx)"}}{{.HXRedirect "/x"}}{{end}}
+```
+```
+field or method HXRedirect not found on TemplateData[...]
+```
+
+[reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt)
+
+### --use-htmx auto-wraps every route
+
+`--use-htmx` wraps **every** route's call in `htmx(...)` — there is no per-route opt-out under the flag. Every route renders with `HTMXTemplateData`, so a plain (unwrapped) template name may still call `.HXRedirect`. Because no route is unframed, the minimal `TemplateData` type is not emitted.
+
+```gotmpl
+{{define "GET /go Go(ctx)"}}{{.HXRedirect "/done"}}ok{{end}}
+```
+
+To mix htmx and non-htmx routes in one file, **omit the flag** and write `htmx(...)` explicitly only on the routes that need it:
+
+```gotmpl
+{{define "GET /plain Plain(ctx)"}}<p>{{.Result}}</p>{{end}}
+{{define "GET /framed htmx(Framed(ctx))"}}<p>{{.Result}}</p>{{end}}
+```
+
+[reference_htmx_auto_wrap.txt](../../cmd/muxt/testdata/reference_htmx_auto_wrap.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt)
+
+### Options and composition
+
+| Topic | Detail |
+|-------|--------|
+| Render type name | Defaults to `HTMXTemplateData`; override with `--output-htmx-template-data-type=Name`. |
+| Composition with `sse(...)` | `htmx(sse(Stream(ctx, send)))` keeps the **generic** SSE event marshaler (plain `data:` lines). Framing only changes the non-SSE render type, not the SSE wire format. |
+| `datastar(...)` | Reserved for a later phase; not yet available as a framing wrapper. |
+
 ## Advanced Patterns
 
 **Mixing path, form, and special parameters:**
@@ -505,6 +553,12 @@ Validation errors should return from your method. Display them in templates with
 **JSON response (`marshalJSON(...)` wrapper):**
 - [reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) — `marshalJSON(Method(ctx))` → `application/json`
 - [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) — `lastEventID` header parsing
+
+**Frontend framing (`htmx(...)` wrapper):**
+- [reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) — `htmx(Method(ctx))` renders with `HTMXTemplateData`
+- [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt) — unframed `TemplateData` has no HX* helpers
+- [reference_htmx_auto_wrap.txt](../../cmd/muxt/testdata/reference_htmx_auto_wrap.txt) — `--use-htmx` auto-wraps every route
+- [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) — mix framed and unframed routes by omitting the flag
 
 **Multiple arguments:**
 - [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple params
