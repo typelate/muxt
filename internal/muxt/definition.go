@@ -366,11 +366,17 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		return fmt.Errorf("unexpected ellipsis")
 	}
 
-	// Strip the optional outermost framing wrapper (htmx(...)) first, so the
-	// representation wrapper and method call are detected on what remains.
+	// Strip the optional outermost framing wrapper (htmx(...) or datastar(...))
+	// first, so the representation wrapper and method call are detected on what
+	// remains.
 	framing := FramingNone
-	if fun.Name == FramingWrapperHTMX {
+	switch fun.Name {
+	case FramingWrapperHTMX:
 		framing = FramingHTMX
+	case FramingWrapperDatastar:
+		framing = FramingDatastar
+	}
+	if framing != FramingNone {
 		if len(call.Args) != 1 {
 			return fmt.Errorf("%s takes exactly one argument: the wrapped call", fun.Name)
 		}
@@ -578,10 +584,14 @@ type Framing int
 const (
 	FramingNone Framing = iota
 	FramingHTMX
+	FramingDatastar
 )
 
 // FramingWrapperHTMX is the reserved outer framing-wrapper function name.
 const FramingWrapperHTMX = "htmx"
+
+// FramingWrapperDatastar is the reserved outer framing-wrapper function name for datastar.
+const FramingWrapperDatastar = "datastar"
 
 // Representation names the optional outermost wrapper of a handler call.
 type Representation int

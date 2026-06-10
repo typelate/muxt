@@ -48,6 +48,43 @@ func TestDefinitionHTMXBadArity(t *testing.T) {
 	}
 }
 
+func TestDefinitionFramingDatastar(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want Framing
+		rep  Representation
+		fun  string
+	}{
+		{name: "GET /a datastar(Index(ctx))", want: FramingDatastar, rep: RepresentationNone, fun: "Index"},
+		{name: "GET /b datastar(sse(Stream(ctx, send)))", want: FramingDatastar, rep: RepresentationSSE, fun: "Stream"},
+		{name: "GET /c datastar(marshalJSON(Signals(ctx)))", want: FramingDatastar, rep: RepresentationMarshalJSON, fun: "Signals"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			def, err, ok := newDefinition(template.New(tt.name))
+			if !ok || err != nil {
+				t.Fatalf("newDefinition(%q) ok=%v err=%v", tt.name, ok, err)
+			}
+			if got := def.Framing(); got != tt.want {
+				t.Errorf("Framing() = %v, want %v", got, tt.want)
+			}
+			if got := def.Representation(); got != tt.rep {
+				t.Errorf("Representation() = %v, want %v", got, tt.rep)
+			}
+			if def.FunctionIdentifier().Name != tt.fun {
+				t.Errorf("FunctionIdentifier() = %q, want %q", def.FunctionIdentifier().Name, tt.fun)
+			}
+		})
+	}
+}
+
+func TestDefinitionDatastarBadArity(t *testing.T) {
+	for _, in := range []string{"GET /a datastar()", "GET /b datastar(Index(ctx), Other(ctx))"} {
+		if _, err, _ := newDefinition(template.New(in)); err == nil {
+			t.Fatalf("newDefinition(%q): want error for bad datastar arity", in)
+		}
+	}
+}
+
 func TestDefinitionRepresentation(t *testing.T) {
 	for _, tt := range []struct {
 		name string
