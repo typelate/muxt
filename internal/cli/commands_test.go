@@ -134,6 +134,18 @@ func TestApplyDefaults_HTMXTemplateDataType(t *testing.T) {
 	})
 }
 
+func TestConfigToArgs_HTMXTemplateDataType(t *testing.T) {
+	t.Run("default is not forwarded", func(t *testing.T) {
+		args := configToArgs(generate.RoutesFileConfiguration{HTMXTemplateDataType: defaultHTMXTemplateDataTypeName})
+		assert.NotContains(t, args, "--"+outputHTMXTemplateDataType+"="+defaultHTMXTemplateDataTypeName)
+	})
+
+	t.Run("custom value is forwarded so go generate round-trips", func(t *testing.T) {
+		args := configToArgs(generate.RoutesFileConfiguration{HTMXTemplateDataType: "Widget"})
+		assert.Contains(t, args, "--"+outputHTMXTemplateDataType+"=Widget")
+	})
+}
+
 func TestMultipartMaxMemoryFlag_String(t *testing.T) {
 	t.Run("zero shows default", func(t *testing.T) {
 		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}

@@ -218,6 +218,9 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.SSETemplateDataType != "" && !token.IsIdentifier(config.SSETemplateDataType) {
 				return fmt.Errorf(outputSSETemplateDataType + errIdentSuffix)
 			}
+			if config.HTMXTemplateDataType != "" && !token.IsIdentifier(config.HTMXTemplateDataType) {
+				return fmt.Errorf(outputHTMXTemplateDataType + errIdentSuffix)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -358,6 +361,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.SSETemplateDataType != sseTemplateDataTypeDefault {
 		args = append(args, "--"+outputSSETemplateDataType+"="+config.SSETemplateDataType)
+	}
+	if config.HTMXTemplateDataType != defaultHTMXTemplateDataTypeName {
+		args = append(args, "--"+outputHTMXTemplateDataType+"="+config.HTMXTemplateDataType)
 	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
