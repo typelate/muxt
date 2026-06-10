@@ -1,32 +1,17 @@
-# Tests --output-htmx-helpers flag generates HTMX response header setters and request header readers
+# Tests --output-htmx-helpers (a deprecated alias of --use-htmx) generates the
+# HTMX response-header setters and request-header readers on the template data.
 #
-# Grep assertions verify all HTMX helper function names exist in generated code.
-# Integration tests exercise representative behavior: HXRequest (request reader),
-# HXTrigger and HXRetarget (response header setters).
+# Coverage is behavioral, not structural:
+#   - muxt check statically typechecks every .HX* call in the templates against
+#     the generated methods, so it fails if any helper is missing or has the
+#     wrong signature (this replaces grepping for `func ... HXFoo`).
+#   - the Go test drives each helper at runtime and asserts the response headers
+#     it sets and the request headers it reads.
 
 muxt generate --output-htmx-helpers
+muxt check
 
-grep 'func.*HXLocation' template_routes.go
-grep 'func.*HXPushURL' template_routes.go
-grep 'func.*HXRedirect' template_routes.go
-grep 'func.*HXRefresh' template_routes.go
-grep 'func.*HXReplaceURL' template_routes.go
-grep 'func.*HXReswap' template_routes.go
-grep 'func.*HXRetarget' template_routes.go
-grep 'func.*HXReselect' template_routes.go
-grep 'func.*HXTrigger\b' template_routes.go
-grep 'func.*HXTriggerAfterSettle' template_routes.go
-grep 'func.*HXTriggerAfterSwap' template_routes.go
-grep 'func.*HXRequest' template_routes.go
-grep 'func.*HXBoosted' template_routes.go
-grep 'func.*HXCurrentURL' template_routes.go
-grep 'func.*HXHistoryRestoreRequest' template_routes.go
-grep 'func.*HXPrompt' template_routes.go
-grep 'func.*HXTargetElementID' template_routes.go
-grep 'func.*HXTriggerName' template_routes.go
-grep 'func.*HXTriggerElementID' template_routes.go
-
-exec go test -v
+exec go test -count=1
 
 -- go.mod --
 module example.com
@@ -60,11 +45,9 @@ var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
 {{end}}
 {{end}}
 
-{{define "POST /trigger 200"}}
-{{.HXTrigger "itemCreated"}}
-{{.HXRetarget "#item-list"}}
-<div>Created</div>
-{{end}}
+{{define "POST /set 200"}}{{.HXLocation "/loc"}}{{.HXPushURL "/push"}}{{.HXRedirect "/redir"}}{{.HXRefresh}}{{.HXReplaceURL "/replace"}}{{.HXReswap "outerHTML"}}{{.HXRetarget "#target"}}{{.HXReselect "#select"}}{{.HXTrigger "evt"}}{{.HXTriggerAfterSettle "settle"}}{{.HXTriggerAfterSwap "swap"}}set{{end}}
+
+{{define "GET /read 200"}}boosted={{.HXBoosted}};current={{.HXCurrentURL}};restore={{.HXHistoryRestoreRequest}};prompt={{.HXPrompt}};request={{.HXRequest}};target={{.HXTargetElementID}};trigname={{.HXTriggerName}};trigid={{.HXTriggerElementID}}{{end}}
 -- template_test.go --
 package main
 
@@ -79,16 +62,14 @@ func TestFullPage(t *testing.T) {
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
-	if want := "Full page"; !strings.Contains(body, want) {
-		t.Errorf("expected body to contain %q, got %q", want, body)
+	if body := rec.Body.String(); !strings.Contains(body, "Full page") {
+		t.Errorf("body = %q, want it to contain %q", body, "Full page")
 	}
 }
 
@@ -102,30 +83,67 @@ func TestHTMXFragment(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
-	if want := "HTMX fragment"; !strings.Contains(body, want) {
-		t.Errorf("expected body to contain %q, got %q", want, body)
+	if body := rec.Body.String(); !strings.Contains(body, "HTMX fragment") {
+		t.Errorf("body = %q, want it to contain %q", body, "HTMX fragment")
 	}
 }
 
-func TestHTMXResponseHeaders(t *testing.T) {
+// TestResponseSetters drives every HX* response-header setter and asserts the
+// header each one writes.
+func TestResponseSetters(t *testing.T) {
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/trigger", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/set", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	for header, want := range map[string]string{
+		"HX-Location":             "/loc",
+		"HX-Push-Url":             "/push",
+		"HX-Redirect":             "/redir",
+		"HX-Refresh":              "true",
+		"HX-Replace-Url":          "/replace",
+		"HX-Reswap":               "outerHTML",
+		"HX-Retarget":             "#target",
+		"HX-Reselect":             "#select",
+		"HX-Trigger":              "evt",
+		"HX-Trigger-After-Settle": "settle",
+		"HX-Trigger-After-Swap":   "swap",
+	} {
+		if got := rec.Header().Get(header); got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+}
+
+// TestRequestReaders drives every HX* request-header reader and asserts the
+// rendered value each one reads back.
+func TestRequestReaders(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/read", nil)
+	req.Header.Set("HX-Boosted", "true")
+	req.Header.Set("HX-Current-Url", "http://example.com/page")
+	req.Header.Set("HX-History-Restore-Request", "true")
+	req.Header.Set("HX-Prompt", "hello")
 	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "#tgt")
+	req.Header.Set("HX-Trigger-Name", "myname")
+	req.Header.Set("HX-Trigger", "myid")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if got := rec.Header().Get("HX-Trigger"); got != "itemCreated" {
-		t.Errorf("expected HX-Trigger 'itemCreated', got %q", got)
-	}
-	if got := rec.Header().Get("HX-Retarget"); got != "#item-list" {
-		t.Errorf("expected HX-Retarget '#item-list', got %q", got)
+	want := "boosted=true;current=http://example.com/page;restore=true;prompt=hello;request=true;target=#tgt;trigname=myname;trigid=myid"
+	if body := strings.TrimSpace(rec.Body.String()); body != want {
+		t.Errorf("body = %q, want %q", body, want)
 	}
 }

@@ -1,0 +1,79 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events htmx(sse(Stream(ctx, lastEventID, send)))" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /go htmx(Go(ctx))" -}}{{- .HXRedirect "/done" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream sends one event echoing the Last-Event-Id, then returns. Wrapped in
+// htmx(sse(...)): the framing strips first, so the stream still uses the generic
+// SSE marshaler (plain data: lines), not a datastar patch frame.
+func (Server) Stream(ctx context.Context, lastEventID string, send func(data string) error) {
+	_ = send("hi-" + lastEventID)
+}
+
+// Go is an htmx-framed non-SSE route; it renders with HTMXTemplateData and so
+// can call .HXRedirect.
+func (Server) Go(ctx context.Context) string { return "" }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHTMXSSEStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	req.Header.Set("Last-Event-Id", "42")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	req.Body.Close()
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "data: hi-42\n\n") {
+		t.Fatalf("body = %q, want it to contain %q", got, "data: hi-42\n\n")
+	}
+}
+
+func TestHTMXFramedRedirect(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/go", nil))
+	if got := rec.Header().Get("HX-Redirect"); got != "/done" {
+		t.Fatalf("HX-Redirect = %q, want /done", got)
+	}
+}

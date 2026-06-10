@@ -1,13 +1,16 @@
+# A single file mixing one unframed route and one htmx(...)-framed route (no
+# flag). Behavior proves the split: the framed route renders with a type that
+# carries .HXRedirect, the unframed route renders normally. muxt check passing
+# proves both routes' template-data types exist and typecheck.
+
 muxt generate --use-receiver-type=Server
 muxt check
 
 exec go test -race -count=1
-grep 'type TemplateData\[' template_routes.go
-grep 'type HTMXTemplateData\[' template_routes.go
 
 -- template.gohtml --
 {{- define "GET /plain Plain(ctx)" -}}<p>{{- .Result -}}</p>{{- end -}}
-{{- define "GET /framed htmx(Framed(ctx))" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /framed htmx(Framed(ctx))" -}}{{- .HXRedirect "/done" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --
 module server
 
@@ -40,14 +43,30 @@ import (
 	"testing"
 )
 
-func TestMixed(t *testing.T) {
+func TestPlainRouteRendersNormally(t *testing.T) {
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, Server{})
-	for _, tc := range []struct{ path, want string }{{"/plain", "plain"}, {"/framed", "framed"}} {
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
-		if got := rec.Body.String(); !strings.Contains(got, tc.want) {
-			t.Fatalf("%s body = %q, want contains %q", tc.path, got, tc.want)
-		}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/plain", nil))
+	if got := rec.Body.String(); !strings.Contains(got, "plain") {
+		t.Fatalf("/plain body = %q, want it to contain %q", got, "plain")
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("/plain set HX-Redirect = %q, want none", got)
+	}
+}
+
+func TestFramedRouteUsesHTMXHelpers(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/framed", nil))
+	if got := rec.Header().Get("HX-Redirect"); got != "/done" {
+		t.Fatalf("/framed HX-Redirect = %q, want /done", got)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "framed") {
+		t.Fatalf("/framed body = %q, want it to contain %q", got, "framed")
 	}
 }
