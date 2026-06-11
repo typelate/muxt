@@ -75,6 +75,9 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	SSETemplateDataType,
 	HTMXTemplateDataType,
+	DatastarTemplateDataType,
+	DatastarEventTemplateDataType,
+	DatastarSignalsTemplateDataType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables  []string
 	OutputFileName      string

@@ -221,6 +221,15 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.HTMXTemplateDataType != "" && !token.IsIdentifier(config.HTMXTemplateDataType) {
 				return fmt.Errorf(outputHTMXTemplateDataType + errIdentSuffix)
 			}
+			if config.DatastarTemplateDataType != "" && !token.IsIdentifier(config.DatastarTemplateDataType) {
+				return fmt.Errorf(outputDatastarTemplateDataType + errIdentSuffix)
+			}
+			if config.DatastarEventTemplateDataType != "" && !token.IsIdentifier(config.DatastarEventTemplateDataType) {
+				return fmt.Errorf(outputDatastarEventTemplateDataType + errIdentSuffix)
+			}
+			if config.DatastarSignalsTemplateDataType != "" && !token.IsIdentifier(config.DatastarSignalsTemplateDataType) {
+				return fmt.Errorf(outputDatastarSignalsTemplateDataType + errIdentSuffix)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -364,6 +373,15 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.HTMXTemplateDataType != defaultHTMXTemplateDataTypeName {
 		args = append(args, "--"+outputHTMXTemplateDataType+"="+config.HTMXTemplateDataType)
+	}
+	if config.DatastarTemplateDataType != defaultDatastarTemplateDataTypeName {
+		args = append(args, "--"+outputDatastarTemplateDataType+"="+config.DatastarTemplateDataType)
+	}
+	if config.DatastarEventTemplateDataType != defaultDatastarEventTemplateDataTypeName {
+		args = append(args, "--"+outputDatastarEventTemplateDataType+"="+config.DatastarEventTemplateDataType)
+	}
+	if config.DatastarSignalsTemplateDataType != defaultDatastarSignalsTemplateDataTypeName {
+		args = append(args, "--"+outputDatastarSignalsTemplateDataType+"="+config.DatastarSignalsTemplateDataType)
 	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
@@ -562,25 +580,29 @@ func cliVersion() (string, bool) {
 
 const (
 	// New flag names with clear prefixes
-	useTemplatesVariable             = "use-templates-variable"
-	useReceiverType                  = "use-receiver-type"
-	useReceiverTypePackage           = "use-receiver-type-package"
-	outputFile                       = "output-file"
-	outputReceiverInterface          = "output-receiver-interface"
-	outputRoutesFunc                 = "output-routes-func"
-	outputTemplateDataType           = "output-template-data-type"
-	outputSSETemplateDataType        = "output-sse-template-data-type"
-	outputHTMXTemplateDataType       = "output-htmx-template-data-type"
-	outputTemplateRoutePathsType     = "output-template-route-paths-type"
-	outputRoutesFuncWithLoggerParam  = "output-routes-func-with-logger-param"
-	outputRoutesFuncWithPathPrefix   = "output-routes-func-with-path-prefix-param"
-	outputMultipleFiles              = "output-multiple-files"
-	useHTMX                          = "use-htmx"
-	useDatastar                      = "use-datastar"
-	outputJSONV2                     = "output-jsonv2"
-	outputHTMXHelpers                = "output-htmx-helpers"
-	outputExportedDefaultIdentifiers = "output-exported-default-identifiers"
-	outputMultipartMaxMemory         = "output-multipart-max-memory"
+	useTemplatesVariable       = "use-templates-variable"
+	useReceiverType            = "use-receiver-type"
+	useReceiverTypePackage     = "use-receiver-type-package"
+	outputFile                 = "output-file"
+	outputReceiverInterface    = "output-receiver-interface"
+	outputRoutesFunc           = "output-routes-func"
+	outputTemplateDataType     = "output-template-data-type"
+	outputSSETemplateDataType  = "output-sse-template-data-type"
+	outputHTMXTemplateDataType = "output-htmx-template-data-type"
+
+	outputDatastarTemplateDataType        = "output-datastar-template-data-type"
+	outputDatastarEventTemplateDataType   = "output-datastar-event-template-data-type"
+	outputDatastarSignalsTemplateDataType = "output-datastar-signals-template-data-type"
+	outputTemplateRoutePathsType          = "output-template-route-paths-type"
+	outputRoutesFuncWithLoggerParam       = "output-routes-func-with-logger-param"
+	outputRoutesFuncWithPathPrefix        = "output-routes-func-with-path-prefix-param"
+	outputMultipleFiles                   = "output-multiple-files"
+	useHTMX                               = "use-htmx"
+	useDatastar                           = "use-datastar"
+	outputJSONV2                          = "output-jsonv2"
+	outputHTMXHelpers                     = "output-htmx-helpers"
+	outputExportedDefaultIdentifiers      = "output-exported-default-identifiers"
+	outputMultipartMaxMemory              = "output-multipart-max-memory"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -607,10 +629,14 @@ const (
 	outputReceiverInterfaceHelp = `The interface name in the generated output file listing the methods used by handler routes in the routes function.`
 	outputRoutesFuncHelp        = `The function name for the package registering handler functions on an *"net/http".ServeMux.
 This function also receives an argument with a type matching the name given by output-receiver-interface.`
-	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
-	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
-	outputHTMXTemplateDataTypeHelp   = `The type name for the template data passed to HTMX-framed route templates.`
-	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
+	outputTemplateDataTypeHelp     = `The type name for the template data passed to root route templates.`
+	outputSSETemplateDataTypeHelp  = `The type name for the template data passed to Server-Sent Events route templates.`
+	outputHTMXTemplateDataTypeHelp = `The type name for the template data passed to HTMX-framed route templates.`
+
+	outputDatastarTemplateDataTypeHelp        = `The type name for the template data passed to datastar-framed (text/html) route templates.`
+	outputDatastarEventTemplateDataTypeHelp   = `The type name for the per-event template data in datastar(sse(...)) patch-elements streams.`
+	outputDatastarSignalsTemplateDataTypeHelp = `The type name for the template data in non-streaming datastar(marshalJSON(...)) routes.`
+	outputTemplateRoutePathsTypeHelp          = `The type name for the type with path constructor helper methods.`
 
 	outputRoutesFuncWithLoggerParamHelp  = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp   = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
@@ -636,9 +662,10 @@ const (
 	defaultHTMXTemplateDataTypeName   = "HTMXTemplateData"
 	// Datastar mode swaps the default template data type names; both remain
 	// overridable via --output-template-data-type / --output-sse-template-data-type.
-	defaultDatastarTemplateDataTypeName      = "DatastarTemplateData"
-	defaultDatastarEventTemplateDataTypeName = "DatastarEventTemplateData"
-	defaultPackageName                       = "main"
+	defaultDatastarTemplateDataTypeName        = "DatastarTemplateData"
+	defaultDatastarEventTemplateDataTypeName   = "DatastarEventTemplateData"
+	defaultDatastarSignalsTemplateDataTypeName = "DatastarSignalsTemplateData"
+	defaultPackageName                         = "main"
 )
 
 func isDefaultTemplatesVariable(in *[]string) bool {
@@ -683,6 +710,15 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputHTMXTemplateDataType) {
 			config.HTMXTemplateDataType = strcase.ToGoCamel(defaultHTMXTemplateDataTypeName)
 		}
+		if !flagSet.Changed(outputDatastarTemplateDataType) {
+			config.DatastarTemplateDataType = strcase.ToGoCamel(defaultDatastarTemplateDataTypeName)
+		}
+		if !flagSet.Changed(outputDatastarEventTemplateDataType) {
+			config.DatastarEventTemplateDataType = strcase.ToGoCamel(defaultDatastarEventTemplateDataTypeName)
+		}
+		if !flagSet.Changed(outputDatastarSignalsTemplateDataType) {
+			config.DatastarSignalsTemplateDataType = strcase.ToGoCamel(defaultDatastarSignalsTemplateDataTypeName)
+		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
@@ -693,6 +729,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, templateDataTypeDefault)
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, sseTemplateDataTypeDefault)
 		config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, defaultHTMXTemplateDataTypeName)
+		config.DatastarTemplateDataType = cmp.Or(config.DatastarTemplateDataType, defaultDatastarTemplateDataTypeName)
+		config.DatastarEventTemplateDataType = cmp.Or(config.DatastarEventTemplateDataType, defaultDatastarEventTemplateDataTypeName)
+		config.DatastarSignalsTemplateDataType = cmp.Or(config.DatastarSignalsTemplateDataType, defaultDatastarSignalsTemplateDataTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -720,6 +759,9 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSETemplateDataType, outputSSETemplateDataType, defaultSSETemplateDataTypeName, outputSSETemplateDataTypeHelp)
 	flagSet.StringVar(&g.HTMXTemplateDataType, outputHTMXTemplateDataType, "", outputHTMXTemplateDataTypeHelp)
+	flagSet.StringVar(&g.DatastarTemplateDataType, outputDatastarTemplateDataType, "", outputDatastarTemplateDataTypeHelp)
+	flagSet.StringVar(&g.DatastarEventTemplateDataType, outputDatastarEventTemplateDataType, "", outputDatastarEventTemplateDataTypeHelp)
+	flagSet.StringVar(&g.DatastarSignalsTemplateDataType, outputDatastarSignalsTemplateDataType, "", outputDatastarSignalsTemplateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)

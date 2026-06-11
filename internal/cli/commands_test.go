@@ -146,6 +146,30 @@ func TestConfigToArgs_HTMXTemplateDataType(t *testing.T) {
 	})
 }
 
+func TestApplyDefaults_DatastarTemplateDataTypes(t *testing.T) {
+	newFlagSet := func(cfg *generate.RoutesFileConfiguration) *pflag.FlagSet {
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		addOutputFlagsToFlagSet(fs, cfg)
+		return fs
+	}
+	t.Run("defaults", func(t *testing.T) {
+		cfg := generate.RoutesFileConfiguration{OutputExportedDefaultIdentifiers: true}
+		fs := newFlagSet(&cfg)
+		applyDefaults(&cfg, fs)
+		assert.Equal(t, defaultDatastarTemplateDataTypeName, cfg.DatastarTemplateDataType)
+		assert.Equal(t, defaultDatastarEventTemplateDataTypeName, cfg.DatastarEventTemplateDataType)
+		assert.Equal(t, defaultDatastarSignalsTemplateDataTypeName, cfg.DatastarSignalsTemplateDataType)
+	})
+	t.Run("round-trip forwards non-default", func(t *testing.T) {
+		args := configToArgs(generate.RoutesFileConfiguration{
+			DatastarSignalsTemplateDataType: "Sig",
+			DatastarTemplateDataType:        defaultDatastarTemplateDataTypeName,
+			DatastarEventTemplateDataType:   defaultDatastarEventTemplateDataTypeName,
+		})
+		assert.Contains(t, args, "--"+outputDatastarSignalsTemplateDataType+"=Sig")
+	})
+}
+
 func TestMultipartMaxMemoryFlag_String(t *testing.T) {
 	t.Run("zero shows default", func(t *testing.T) {
 		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}
