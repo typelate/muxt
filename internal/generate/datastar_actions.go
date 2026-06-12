@@ -27,7 +27,7 @@ func datastarActionsDecls(file *File, config RoutesFileConfiguration, defs []mux
 	if err != nil {
 		return nil, err
 	}
-	decls := append([]ast.Decl{datastarActionsAccessorMethod(config, config.TemplateDataType)}, support...)
+	decls := append([]ast.Decl{datastarActionsAccessorMethod(config.TemplateDataType)}, support...)
 	return decls, nil
 }
 
@@ -70,7 +70,7 @@ func datastarActionsSupportDecls(file *File, config RoutesFileConfiguration, def
 
 // datastarActionsAccessorMethod builds the Actions() method on the template data
 // type named typeName returning a DatastarActions carrying the path prefix.
-func datastarActionsAccessorMethod(config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
+func datastarActionsAccessorMethod(typeName string) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent("Actions"),

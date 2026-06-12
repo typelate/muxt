@@ -15,7 +15,7 @@ import (
 func datastarTemplateDataDecls(file *File, config RoutesFileConfiguration, typeName string) []ast.Decl {
 	decls := templateDataDecls(file, config, typeName, false)
 	decls = append(decls,
-		datastarActionsAccessorMethod(config, typeName),
+		datastarActionsAccessorMethod(typeName),
 		datastarRenderHeaderSetterMethod(typeName, "Selector", "datastar-selector", "selector"),
 		datastarRenderHeaderSetterMethod(typeName, "Mode", "datastar-mode", "mode"),
 		datastarRenderUseViewTransitionMethod(file, typeName),
