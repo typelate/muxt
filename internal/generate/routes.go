@@ -367,11 +367,20 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	} else {
 		usesNone := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingNone })
 		usesHTMX := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingHTMX })
+		usesDatastar := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingDatastar })
 		if usesNone {
 			decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, false)...)
 		}
 		if usesHTMX {
 			decls = append(decls, templateDataDecls(file, config, config.HTMXTemplateDataType, true)...)
+		}
+		if usesDatastar {
+			decls = append(decls, datastarTemplateDataDecls(file, config, config.DatastarTemplateDataType)...)
+			support, err := datastarActionsSupportDecls(file, config, routeDefinitions)
+			if err != nil {
+				return nil, err
+			}
+			decls = append(decls, support...)
 		}
 	}
 	// The SSETemplateData type and its methods are only needed when a route is
@@ -618,6 +627,9 @@ func effectiveFraming(config RoutesFileConfiguration, def muxt.Definition) muxt.
 	if config.HTMXHelpers {
 		return muxt.FramingHTMX
 	}
+	// NOTE: a config.Datastar branch (mapping the old --use-datastar arg-driven
+	// path to FramingDatastar) is deferred to Task 6. Until then only explicit
+	// datastar(...) wrappers reach FramingDatastar.
 	return muxt.FramingNone
 }
 
@@ -626,6 +638,9 @@ func effectiveFraming(config RoutesFileConfiguration, def muxt.Definition) muxt.
 func renderTemplateDataType(config RoutesFileConfiguration, framing muxt.Framing) string {
 	if framing == muxt.FramingHTMX {
 		return config.HTMXTemplateDataType
+	}
+	if framing == muxt.FramingDatastar {
+		return config.DatastarTemplateDataType
 	}
 	return config.TemplateDataType
 }

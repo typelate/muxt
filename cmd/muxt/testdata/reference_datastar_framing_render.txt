@@ -1,0 +1,61 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /widget datastar(Widget(ctx))" -}}{{- .Selector "#target" -}}{{- .Mode "inner" -}}{{- .UseViewTransition true -}}<div>{{- .Result -}}</div>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Widget(ctx context.Context) string { return "hi" }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestDatastarRenderHeaders(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/widget", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("datastar-selector"); got != "#target" {
+		t.Errorf("datastar-selector = %q, want %q", got, "#target")
+	}
+	if got := rec.Header().Get("datastar-mode"); got != "inner" {
+		t.Errorf("datastar-mode = %q, want %q", got, "inner")
+	}
+	if got := rec.Header().Get("datastar-use-view-transition"); got != "true" {
+		t.Errorf("datastar-use-view-transition = %q, want %q", got, "true")
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "hi") {
+		t.Errorf("body = %q, want it to contain %q", body, "hi")
+	}
+}

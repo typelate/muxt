@@ -23,8 +23,20 @@ const (
 // with one method per route, and the fixed DatastarAction fluent builder. It is
 // emitted in Datastar mode.
 func datastarActionsDecls(file *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
+	support, err := datastarActionsSupportDecls(file, config, defs)
+	if err != nil {
+		return nil, err
+	}
+	decls := append([]ast.Decl{datastarActionsAccessorMethod(config, config.TemplateDataType)}, support...)
+	return decls, nil
+}
+
+// datastarActionsSupportDecls returns the DatastarActions type, one method per
+// route, and the fixed DatastarAction fluent builder — everything the Actions()
+// accessor depends on, minus the accessor itself. The accessor is emitted
+// separately on each render template-data type that exposes Actions().
+func datastarActionsSupportDecls(file *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
 	decls := []ast.Decl{
-		datastarActionsAccessorMethod(config),
 		&ast.GenDecl{
 			Tok: token.TYPE,
 			Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(datastarActionsTypeName), Type: &ast.StructType{Fields: &ast.FieldList{
@@ -57,10 +69,10 @@ func datastarActionsDecls(file *File, config RoutesFileConfiguration, defs []mux
 }
 
 // datastarActionsAccessorMethod builds the Actions() method on the template data
-// type returning a DatastarActions carrying the path prefix.
-func datastarActionsAccessorMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+// type named typeName returning a DatastarActions carrying the path prefix.
+func datastarActionsAccessorMethod(config RoutesFileConfiguration, typeName string) *ast.FuncDecl {
 	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
+		Recv: templateDataMethodReceiver(typeName),
 		Name: ast.NewIdent("Actions"),
 		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(datastarActionsTypeName)}}}},
 		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
