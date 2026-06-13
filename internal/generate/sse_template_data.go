@@ -47,7 +47,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataEventMethod(typeIdent),
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
-		sseTemplateDataPathMethod(config),
+		sseTemplateDataPathMethod(config, typeIdent),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
 }
@@ -207,9 +207,9 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 	return sseTemplateDataPointerSetterMethod(typeIdent, "Retry", "retryMilliseconds", "int", sseTemplateDataFieldRetry)
 }
 
-func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+func sseTemplateDataPathMethod(config RoutesFileConfiguration, typeIdent string) *ast.FuncDecl {
 	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(config.SSETemplateDataType),
+		Recv: sseTemplateDataMethodReceiver(typeIdent),
 		Name: ast.NewIdent("Path"),
 		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)}}}},
 		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{

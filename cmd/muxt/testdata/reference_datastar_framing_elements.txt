@@ -1,0 +1,62 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /stream datastar(sse(Stream(ctx, send)))" -}}{{- .Selector "#list" -}}{{- .Mode "append" -}}<li>{{- .Result -}}</li>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Stream(ctx context.Context, send func(item string) error) {
+	_ = send("a")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestDatastarElementsStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/stream", nil))
+
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"event: datastar-patch-elements",
+		"data: selector #list",
+		"data: mode append",
+		"data: elements <li>a</li>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want it to contain %q", body, want)
+		}
+	}
+}

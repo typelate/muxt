@@ -95,7 +95,7 @@ func datastarStreamHandlerFunc(file *File, config RoutesFileConfiguration, def m
 						return nil, false, fmt.Errorf("no template %q for elements argument %s", templateName, id.Name)
 					}
 				}
-				closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+				closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, config.SSETemplateDataType, streamFlusherIdent, streamMutexIdent)
 				return closure, true, err
 			case muxt.IsSignalArgument(id.Name):
 				resultType, err := validateSignalCallbackShape(methodName, cb)

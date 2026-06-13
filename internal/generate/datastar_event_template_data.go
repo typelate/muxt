@@ -24,10 +24,10 @@ const (
 // least one route uses an elements render callback. The type mirrors
 // SSETemplateData but renders a datastar-patch-elements SSE frame: methods set
 // the selector/mode/namespace/useViewTransition metadata and WriteTo serializes
-// the buffered template output as `data: elements` lines. The type name is
-// config.SSETemplateDataType (DatastarEventTemplateData by default).
-func datastarEventTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
-	typeIdent := config.SSETemplateDataType
+// the buffered template output as `data: elements` lines. typeIdent names the
+// generated type: the old --use-datastar arg path passes config.SSETemplateDataType;
+// the datastar(sse(...)) framing path passes config.DatastarEventTemplateDataType.
+func datastarEventTemplateDataDecls(file *File, config RoutesFileConfiguration, typeIdent string) []ast.Decl {
 	return []ast.Decl{
 		datastarEventTemplateDataType(file, typeIdent),
 		sseTemplateDataStringMethod(typeIdent),
@@ -39,7 +39,7 @@ func datastarEventTemplateDataDecls(file *File, config RoutesFileConfiguration) 
 		sseTemplateDataPointerSetterMethod(typeIdent, "Mode", datastarEventFieldMode, "string", datastarEventFieldMode),
 		sseTemplateDataPointerSetterMethod(typeIdent, "Namespace", datastarEventFieldNamespace, "string", datastarEventFieldNamespace),
 		sseTemplateDataPointerSetterMethod(typeIdent, "UseViewTransition", datastarEventFieldUseViewTransition, "bool", datastarEventFieldUseViewTransition),
-		sseTemplateDataPathMethod(config),
+		sseTemplateDataPathMethod(config, typeIdent),
 		datastarEventTemplateDataWriteToMethod(file, typeIdent),
 	}
 }

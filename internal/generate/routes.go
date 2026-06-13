@@ -125,6 +125,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
+	config.DatastarEventTemplateDataType = cmp.Or(config.DatastarEventTemplateDataType, "DatastarEventTemplateData")
+	config.DatastarSignalsTemplateDataType = cmp.Or(config.DatastarSignalsTemplateDataType, "DatastarSignalsTemplateData")
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {
@@ -401,13 +403,29 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		}
 		decls = append(decls, actionDecls...)
 		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesElements) {
-			decls = append(decls, datastarEventTemplateDataDecls(file, config)...)
+			decls = append(decls, datastarEventTemplateDataDecls(file, config, config.SSETemplateDataType)...)
 		}
 		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSignal) {
 			decls = append(decls, datastarSignalsDecls(file, config)...)
 		}
 	} else if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
-		decls = append(decls, sseTemplateDataDecls(file, config)...)
+		// A datastar(sse(...)) route streams patch-elements frames via
+		// DatastarEventTemplateData and may carry inline patch-signals frames; a
+		// generic sse(...) route streams via SSETemplateData. Emit the type that
+		// matches each framing present.
+		usesDatastarStream := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
+			return effectiveFraming(config, d) == muxt.FramingDatastar && d.Representation() == muxt.RepresentationSSE
+		})
+		usesGenericStream := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
+			return effectiveFraming(config, d) != muxt.FramingDatastar && d.Representation() == muxt.RepresentationSSE
+		})
+		if usesGenericStream {
+			decls = append(decls, sseTemplateDataDecls(file, config)...)
+		}
+		if usesDatastarStream {
+			decls = append(decls, datastarEventTemplateDataDecls(file, config, config.DatastarEventTemplateDataType)...)
+			decls = append(decls, datastarSignalsDecls(file, config)...)
+		}
 	}
 	if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationMarshalJSON }) {
 		decls = append(decls, marshalJSONResponseDecls(file, config)...)
@@ -1012,7 +1030,7 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, eventTypeName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
 		tdIdent     = "td"
@@ -1052,12 +1070,12 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	}
 	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
 	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
-	// td := SSETemplateData[Recv, T]{...}
+	// td := <eventTypeName>[Recv, T]{...}
 	body = append(body, &ast.AssignStmt{
 		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CompositeLit{
-			Type: &ast.IndexListExpr{X: ast.NewIdent(config.SSETemplateDataType), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
+			Type: &ast.IndexListExpr{X: ast.NewIdent(eventTypeName), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
 			Elts: tdElts,
 		}},
 	})
@@ -2358,11 +2376,17 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			if id, ok := arg.Fun.(*ast.Ident); ok && id.Name == muxt.RepresentationWrapperMarshalJSON && def.Representation() == muxt.RepresentationSSE && len(arg.Args) == 1 {
 				if inner, ok := arg.Args[0].(*ast.Ident); ok && muxt.IsSendArgument(inner.Name) {
 					// marshalJSON(sendX) wraps a send render callback. Its data
-					// type cannot be inferred, so synthesize it as func(any) error
-					// (the value-arg send form) and stream the result as any. The
-					// method returns nothing, matching the void streaming contract.
+					// type cannot be inferred, so synthesize it and stream the
+					// result as any. The method returns nothing, matching the void
+					// streaming contract. Under datastar(sse(...)) framing the
+					// callback carries an onlyIfMissing bool (func(any, bool) error)
+					// for the patch-signals frame; otherwise it is func(any) error.
 					voidResults = true
-					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, sseCallbackSignature()))
+					cbSig := sseCallbackSignature()
+					if effectiveFraming(config, def) == muxt.FramingDatastar {
+						cbSig = signalCallbackSignature()
+					}
+					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, cbSig))
 					continue
 				}
 			}
@@ -2647,6 +2671,16 @@ func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.
 		}
 		return sseReturnHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName, kind, elem)
 	}
+	// Under datastar(sse(...)) framing the per-event template-data type is
+	// DatastarEventTemplateData (patch-elements frames) and a marshalJSON(sendX)
+	// send emits inline patch-signals frames; the generic sse(...) path uses
+	// SSETemplateData (plain data: lines) and marshalJSON(sendX) frames the JSON
+	// through that type unchanged.
+	isDatastar := effectiveFraming(config, def) == muxt.FramingDatastar
+	eventTypeName := config.SSETemplateDataType
+	if isDatastar {
+		eventTypeName = config.DatastarEventTemplateDataType
+	}
 	return streamMethodHandlerFunc(file, config, def, sigs, receiver, sig, muxt.TemplateNameScopeIdentifierSend, "sse handler returned an error",
 		func(i int, arg ast.Expr, cb *types.Signature) (ast.Expr, bool, error) {
 			switch a := arg.(type) {
@@ -2665,7 +2699,7 @@ func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.
 						return nil, false, fmt.Errorf("no template %q for send argument %s", templateName, a.Name)
 					}
 				}
-				closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, streamFlusherIdent, streamMutexIdent)
+				closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, eventTypeName, streamFlusherIdent, streamMutexIdent)
 				return closure, true, err
 			case *ast.CallExpr:
 				id, ok := a.Fun.(*ast.Ident)
@@ -2678,6 +2712,17 @@ func sseWrapperHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.
 				inner, ok := a.Args[0].(*ast.Ident)
 				if !ok || !muxt.IsSendArgument(inner.Name) {
 					return nil, false, nil
+				}
+				if isDatastar {
+					// marshalJSON(sendX) under datastar framing emits a
+					// datastar-patch-signals frame: the callback is
+					// func(T, onlyIfMissing bool) error.
+					resultType, err := validateSignalCallbackShape(def.FunctionIdentifier().Name, cb)
+					if err != nil {
+						return nil, false, err
+					}
+					closure, err := signalEventClosure(file, resultType)
+					return closure, true, err
 				}
 				resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
 				if err != nil {

@@ -1,0 +1,65 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /mixed datastar(sse(Mixed(ctx, send, marshalJSON(sendSignals))))" -}}<li>{{- .Result -}}</li>{{- end -}}
+{{- define "sendSignals" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Sig struct {
+	Count int `json:"count"`
+}
+
+func (Server) Mixed(ctx context.Context, send func(item string) error, sendSignals func(v Sig, onlyIfMissing bool) error) {
+	_ = send("x")
+	_ = sendSignals(Sig{Count: 1}, true)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestDatastarMixedStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/mixed", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"event: datastar-patch-elements",
+		"data: elements <li>x</li>",
+		"event: datastar-patch-signals",
+		`data: signals {"count":1}`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want it to contain %q", body, want)
+		}
+	}
+}
