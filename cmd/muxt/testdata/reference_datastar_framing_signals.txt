@@ -1,0 +1,62 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /signals datastar(marshalJSON(Signals(ctx)))" -}}{{- .OnlyIfMissing -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+type Counts struct {
+	N int `json:"n"`
+}
+
+func (Server) Signals(ctx context.Context) Counts { return Counts{N: 7} }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestDatastarSignals(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/signals", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("content-type = %q, want application/json", ct)
+	}
+	if got := rec.Header().Get("datastar-only-if-missing"); got != "true" {
+		t.Fatalf("datastar-only-if-missing = %q, want true", got)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != `{"n":7}` {
+		t.Fatalf("body = %q, want %q", body, `{"n":7}`)
+	}
+}

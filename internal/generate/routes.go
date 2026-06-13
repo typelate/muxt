@@ -382,6 +382,12 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 			}
 			decls = append(decls, support...)
 		}
+		usesDatastarSignals := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
+			return effectiveFraming(config, d) == muxt.FramingDatastar && d.Representation() == muxt.RepresentationMarshalJSON
+		})
+		if usesDatastarSignals {
+			decls = append(decls, datastarSignalsTemplateDataDecls(file, config, config.DatastarSignalsTemplateDataType)...)
+		}
 	}
 	// The SSETemplateData type and its methods are only needed when a route is
 	// wrapped in sse(...), so emit them conditionally to avoid unused imports.
@@ -1176,6 +1182,9 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		}
 		return sseWrapperHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	case muxt.RepresentationMarshalJSON:
+		if effectiveFraming(config, def) == muxt.FramingDatastar {
+			return datastarSignalsHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+		}
 		return marshalJSONHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	}
 	if def.Representation() == muxt.RepresentationNone {

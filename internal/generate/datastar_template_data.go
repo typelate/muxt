@@ -23,6 +23,46 @@ func datastarTemplateDataDecls(file *File, config RoutesFileConfiguration, typeN
 	return decls
 }
 
+// datastarSignalsTemplateDataDecls returns the DatastarSignalsTemplateData type
+// named typeName and its methods. It is the template-data type used to evaluate a
+// datastar(marshalJSON(...)) route's define body for response-header side effects
+// (the rendered output is discarded; the JSON body is the response). It is the
+// base template-data type plus the OnlyIfMissing setter, which sets the
+// datastar-only-if-missing response header.
+func datastarSignalsTemplateDataDecls(file *File, config RoutesFileConfiguration, typeName string) []ast.Decl {
+	decls := templateDataDecls(file, config, typeName, false)
+	return append(decls, datastarOnlyIfMissingMethod(typeName))
+}
+
+// datastarOnlyIfMissingMethod builds a nullary chainable setter that sets the
+// datastar-only-if-missing response header to "true" via the base Header method
+// and returns the receiver pointer. It mirrors htmxRefreshMethod. Because it
+// returns the receiver pointer it renders as "" via the type's String method.
+func datastarOnlyIfMissingMethod(templateDataTypeIdent string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(templateDataTypeIdent),
+		Name: ast.NewIdent("OnlyIfMissing"),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{
+				Type: &ast.StarExpr{X: &ast.IndexListExpr{
+					X:       ast.NewIdent(templateDataTypeIdent),
+					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
+				}},
+			}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{&ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Header")},
+						Args: []ast.Expr{astgen.String("datastar-only-if-missing"), astgen.String("true")},
+					}},
+				},
+			},
+		},
+	}
+}
+
 // datastarRenderHeaderSetterMethod builds a chainable string-arg setter that
 // sets headerName on the response via the base Header method and returns the
 // receiver pointer. It mirrors htmxHeaderSetterMethod but is named neutrally so
