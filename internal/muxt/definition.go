@@ -192,6 +192,28 @@ func (def Definition) UsesScript() bool {
 func (def Definition) UsesDatastar() bool {
 	return def.UsesElements() || def.UsesSignal() || def.UsesScript()
 }
+
+// SendsMarshalJSON reports whether the handler call has a marshalJSON(send...)
+// argument: a marshalJSON(...) call wrapping a single send/sendX identifier.
+func (def Definition) SendsMarshalJSON() bool {
+	if def.call == nil {
+		return false
+	}
+	for _, a := range def.call.Args {
+		call, ok := a.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		id, ok := call.Fun.(*ast.Ident)
+		if !ok || id.Name != RepresentationWrapperMarshalJSON || len(call.Args) != 1 {
+			continue
+		}
+		if inner, ok := call.Args[0].(*ast.Ident); ok && IsSendArgument(inner.Name) {
+			return true
+		}
+	}
+	return false
+}
 func (def Definition) Identifier() string        { return def.identifier }
 func (def Definition) TemplatesVariable() string { return def.templatesVariable }
 

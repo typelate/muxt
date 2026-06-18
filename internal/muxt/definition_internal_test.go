@@ -111,6 +111,31 @@ func TestDefinitionRepresentation(t *testing.T) {
 	}
 }
 
+func TestDefinitionSendsMarshalJSON(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		// bare send: an elements-only stream, no marshalJSON-wrapped send
+		{name: "GET /a datastar(sse(Stream(ctx, send)))", want: false},
+		// marshalJSON(sendSig) send callback: emits inline patch-signals frames
+		{name: "GET /b datastar(sse(Stream(ctx, send, marshalJSON(sendSig))))", want: true},
+		// marshalJSON here is the representation wrapper (stripped by the parser),
+		// not a send callback argument, so the inner call has no marshalJSON(send)
+		{name: "GET /c datastar(marshalJSON(Signals(ctx)))", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			def, err, ok := newDefinition(template.New(tt.name))
+			if !ok || err != nil {
+				t.Fatalf("newDefinition(%q) ok=%v err=%v", tt.name, ok, err)
+			}
+			if got := def.SendsMarshalJSON(); got != tt.want {
+				t.Errorf("SendsMarshalJSON() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDefinitionSendOnlyInsideSSE(t *testing.T) {
 	// bare send/sendX outside sse(...) is an unknown argument
 	_, err, _ := newDefinition(template.New("GET /e Plain(ctx, send)"))

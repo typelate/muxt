@@ -424,7 +424,11 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		}
 		if usesDatastarStream {
 			decls = append(decls, datastarEventTemplateDataDecls(file, config, config.DatastarEventTemplateDataType)...)
-			decls = append(decls, datastarSignalsDecls(file, config)...)
+			if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
+				return effectiveFraming(config, d) == muxt.FramingDatastar && d.SendsMarshalJSON()
+			}) {
+				decls = append(decls, datastarSignalsDecls(file, config)...)
+			}
 		}
 	}
 	if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationMarshalJSON }) {
@@ -1030,7 +1034,7 @@ func streamMethodHandlerFunc(file *File, config RoutesFileConfiguration, def mux
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, eventTypeName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, typeIdent, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
 		tdIdent     = "td"
@@ -1070,12 +1074,12 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	}
 	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
 	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
-	// td := <eventTypeName>[Recv, T]{...}
+	// td := <typeIdent>[Recv, T]{...}
 	body = append(body, &ast.AssignStmt{
 		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{&ast.CompositeLit{
-			Type: &ast.IndexListExpr{X: ast.NewIdent(eventTypeName), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
+			Type: &ast.IndexListExpr{X: ast.NewIdent(typeIdent), Indices: []ast.Expr{ast.NewIdent(receiverInterfaceName), resultTypeExpr}},
 			Elts: tdElts,
 		}},
 	})
