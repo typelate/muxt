@@ -364,51 +364,35 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		// func routes
 		routesFunc,
 	}
-	if config.Datastar {
+	usesNone := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingNone })
+	usesHTMX := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingHTMX })
+	usesDatastar := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingDatastar })
+	if usesNone {
 		decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, false)...)
-	} else {
-		usesNone := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingNone })
-		usesHTMX := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingHTMX })
-		usesDatastar := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return effectiveFraming(config, d) == muxt.FramingDatastar })
-		if usesNone {
-			decls = append(decls, templateDataDecls(file, config, config.TemplateDataType, false)...)
+	}
+	if usesHTMX {
+		decls = append(decls, templateDataDecls(file, config, config.HTMXTemplateDataType, true)...)
+	}
+	if usesDatastar {
+		decls = append(decls, datastarTemplateDataDecls(file, config, config.DatastarTemplateDataType)...)
+		support, err := datastarActionsSupportDecls(file, config, routeDefinitions)
+		if err != nil {
+			return nil, err
 		}
-		if usesHTMX {
-			decls = append(decls, templateDataDecls(file, config, config.HTMXTemplateDataType, true)...)
-		}
-		if usesDatastar {
-			decls = append(decls, datastarTemplateDataDecls(file, config, config.DatastarTemplateDataType)...)
-			support, err := datastarActionsSupportDecls(file, config, routeDefinitions)
-			if err != nil {
-				return nil, err
-			}
-			decls = append(decls, support...)
-		}
-		usesDatastarSignals := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
-			return effectiveFraming(config, d) == muxt.FramingDatastar && d.Representation() == muxt.RepresentationMarshalJSON
-		})
-		if usesDatastarSignals {
-			decls = append(decls, datastarSignalsTemplateDataDecls(file, config, config.DatastarSignalsTemplateDataType)...)
-		}
+		decls = append(decls, support...)
+	}
+	usesDatastarSignals := slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool {
+		return effectiveFraming(config, d) == muxt.FramingDatastar && d.Representation() == muxt.RepresentationMarshalJSON
+	})
+	if usesDatastarSignals {
+		decls = append(decls, datastarSignalsTemplateDataDecls(file, config, config.DatastarSignalsTemplateDataType)...)
 	}
 	// The SSETemplateData type and its methods are only needed when a route is
 	// wrapped in sse(...), so emit them conditionally to avoid unused imports.
 	// In Datastar mode the SSE type slot is occupied by DatastarEventTemplateData
 	// (patch-elements framing) instead, emitted when a route uses an elements
 	// render callback.
-	if config.Datastar {
-		actionDecls, err := datastarActionsDecls(file, config, routeDefinitions)
-		if err != nil {
-			return nil, err
-		}
-		decls = append(decls, actionDecls...)
-		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesElements) {
-			decls = append(decls, datastarEventTemplateDataDecls(file, config, config.SSETemplateDataType)...)
-		}
-		if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSignal) {
-			decls = append(decls, datastarSignalsDecls(file, config)...)
-		}
-	} else if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
+	if slices.ContainsFunc(routeDefinitions, func(d muxt.Definition) bool { return d.Representation() == muxt.RepresentationSSE }) {
 		// A datastar(sse(...)) route streams patch-elements frames via
 		// DatastarEventTemplateData and may carry inline patch-signals frames; a
 		// generic sse(...) route streams via SSETemplateData. Emit the type that
@@ -655,9 +639,9 @@ func effectiveFraming(config RoutesFileConfiguration, def muxt.Definition) muxt.
 	if config.HTMXHelpers {
 		return muxt.FramingHTMX
 	}
-	// NOTE: a config.Datastar branch (mapping the old --use-datastar arg-driven
-	// path to FramingDatastar) is deferred to Task 6. Until then only explicit
-	// datastar(...) wrappers reach FramingDatastar.
+	if config.Datastar {
+		return muxt.FramingDatastar
+	}
 	return muxt.FramingNone
 }
 
@@ -1214,12 +1198,6 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 			return nil, fmt.Errorf("call %s returns an iterator or channel; wrap the call in sse(...)", def.FunctionIdentifier().Name)
 		}
 	}
-	// elements/signal/script are only reserved render callbacks under
-	// --use-datastar. Without it they are ordinary arguments (a path value or
-	// method parameter named "signal", "script", or "elements" works normally).
-	if config.Datastar && def.UsesDatastar() {
-		return datastarMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
-	}
 	if sig.Results().Len() == 0 {
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
 	}
@@ -1565,11 +1543,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || (config.Datastar && muxt.IsDatastarArgument(arg.Name)) || (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) {
-				// The render callback (execute, and elements/signal/script under
-				// --use-datastar, and send/sendX inside sse(...)) is validated and
-				// wired into the call in methodHandlerFunc. It is not parsed from
-				// the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) {
+				// The render callback (execute, and send/sendX inside sse(...)) is
+				// validated and wired into the call in methodHandlerFunc. It is not
+				// parsed from the request.
 				continue
 			}
 			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
@@ -2346,21 +2323,13 @@ func createMethodSignature(file *File, config RoutesFileConfiguration, signature
 			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if (def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name)) || (config.Datastar && (muxt.IsElementsArgument(arg.Name) || muxt.IsScriptArgument(arg.Name))) {
+			if def.Representation() == muxt.RepresentationSSE && muxt.IsSendArgument(arg.Name) {
 				// A render callback's data type cannot be inferred, so synthesize
 				// it as func(any) error and stream the result as any. The method
 				// returns nothing, matching the void streaming contract.
-				// send/sendX render callbacks are only valid inside sse(...);
-				// elements/script are only render callbacks under --use-datastar.
+				// send/sendX render callbacks are only valid inside sse(...).
 				voidResults = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
-				continue
-			}
-			if config.Datastar && muxt.IsSignalArgument(arg.Name) {
-				// A signal callback adds an onlyIfMissing bool parameter:
-				// func(any, bool) error. Only under --use-datastar.
-				voidResults = true
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, signalCallbackSignature()))
 				continue
 			}
 			tp, ok := defaultTemplateNameScope(file, def, arg.Name)

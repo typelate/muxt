@@ -4,7 +4,7 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, lastEventID, elements)" -}}{{ .Selector "#target" }}{{ .Mode "inner" }}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, lastEventID, send))" -}}{{ .Selector "#target" }}{{ .Mode "inner" }}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -26,11 +26,11 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 type Server struct{}
 
 // Stream sends a single datastar-patch-elements event echoing the Last-Event-Id
-// and returns. The elements callback renders the template with the passed value
-// as .Result, framed as a patch-elements event with the selector and mode set in
-// the template.
-func (Server) Stream(ctx context.Context, lastEventID string, elements func(data string) error) {
-	_ = elements("hello-" + lastEventID)
+// and returns. Under --use-datastar every route auto-wraps in datastar(...); the
+// send callback renders the template with the passed value as .Result, framed as
+// a patch-elements event with the selector and mode set in the template.
+func (Server) Stream(ctx context.Context, lastEventID string, send func(data string) error) {
+	_ = send("hello-" + lastEventID)
 }
 -- server_test.go --
 package server

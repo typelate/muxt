@@ -11,7 +11,7 @@ grep 'json.MarshalWrite' template_routes.go
 ! grep 'json.Marshal\(' template_routes.go
 
 -- template.gohtml --
-{{- define "POST /count Increment(ctx, signal)" -}}{{- end -}}
+{{- define "POST /count datastar(marshalJSON(Increment(ctx)))" -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -36,6 +36,6 @@ type Count struct {
 	Count int `json:"count"`
 }
 
-func (Server) Increment(ctx context.Context, signal func(data Count, onlyIfMissing bool) error) {
-	_ = signal(Count{Count: 5}, false)
+func (Server) Increment(ctx context.Context) Count {
+	return Count{Count: 5}
 }

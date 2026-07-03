@@ -4,7 +4,8 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, elements, signal)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send, marshalJSON(sendSignals)))" -}}{{- .Result -}}{{- end -}}
+{{- define "sendSignals" -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -29,13 +30,14 @@ type Count struct {
 	Count int `json:"count"`
 }
 
-// Stream patches elements and signals over one event stream: the elements
-// callback renders the template as a datastar-patch-elements frame; the signal
+// Stream patches elements and signals over one event stream: the send callback
+// renders the template as a datastar-patch-elements frame; the marshalJSON(sendSignals)
 // callback marshals the result as an inline datastar-patch-signals frame, with
-// onlyIfMissing emitted because the second argument is true.
-func (Server) Stream(ctx context.Context, elements func(data string) error, signal func(data Count, onlyIfMissing bool) error) {
-	_ = elements("hi")
-	_ = signal(Count{Count: 5}, true)
+// onlyIfMissing emitted because the second argument is true. Under --use-datastar
+// the route auto-wraps in datastar(...).
+func (Server) Stream(ctx context.Context, send func(data string) error, sendSignals func(data Count, onlyIfMissing bool) error) {
+	_ = send("hi")
+	_ = sendSignals(Count{Count: 5}, true)
 }
 -- server_test.go --
 package server

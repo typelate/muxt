@@ -19,18 +19,6 @@ const (
 	datastarActionsReceiver   = "routeActions"
 )
 
-// datastarActionsDecls returns the Actions() accessor, the DatastarActions type
-// with one method per route, and the fixed DatastarAction fluent builder. It is
-// emitted in Datastar mode.
-func datastarActionsDecls(file *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
-	support, err := datastarActionsSupportDecls(file, config, defs)
-	if err != nil {
-		return nil, err
-	}
-	decls := append([]ast.Decl{datastarActionsAccessorMethod(config.TemplateDataType)}, support...)
-	return decls, nil
-}
-
 // datastarActionsSupportDecls returns the DatastarActions type, one method per
 // route, and the fixed DatastarAction fluent builder — everything the Actions()
 // accessor depends on, minus the accessor itself. The accessor is emitted

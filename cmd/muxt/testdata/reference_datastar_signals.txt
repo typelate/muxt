@@ -9,7 +9,7 @@ grep '"encoding/json"' template_routes.go
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "POST /count Increment(ctx, signal)" -}}{{- end -}}
+{{- define "POST /count datastar(marshalJSON(Increment(ctx)))" -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -34,11 +34,11 @@ type Count struct {
 	Count int `json:"count"`
 }
 
-// Increment responds with a datastar-patch-signals JSON body. The signal
-// callback marshals the result; the second argument is onlyIfMissing, which has
-// no representation in a plain application/json body and is ignored.
-func (Server) Increment(ctx context.Context, signal func(data Count, onlyIfMissing bool) error) {
-	_ = signal(Count{Count: 5}, false)
+// Increment responds with a datastar-patch-signals JSON body. Under
+// --use-datastar every route auto-wraps in datastar(...); marshalJSON(...)
+// serializes the returned value as the application/json response body.
+func (Server) Increment(ctx context.Context) Count {
+	return Count{Count: 5}
 }
 -- server_test.go --
 package server
@@ -61,7 +61,7 @@ func TestIncrement(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		t.Fatalf("content-type = %q, want application/json", ct)
 	}
 	if got := strings.TrimSpace(rec.Body.String()); got != `{"count":5}` {

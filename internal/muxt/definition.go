@@ -168,31 +168,6 @@ func (def Definition) UsesSend() bool {
 	return def.usesArgument(IsSendArgument)
 }
 
-// UsesElements reports whether the handler call uses any Datastar patch-elements
-// render callback (elements or an elements-prefixed argument). A route that uses
-// elements streams a text/event-stream response.
-func (def Definition) UsesElements() bool {
-	return def.usesArgument(IsElementsArgument)
-}
-
-// UsesSignal reports whether the handler call uses any Datastar patch-signals
-// render callback (signal or a signal-prefixed argument).
-func (def Definition) UsesSignal() bool {
-	return def.usesArgument(IsSignalArgument)
-}
-
-// UsesScript reports whether the handler call uses any Datastar script render
-// callback (script or a script-prefixed argument).
-func (def Definition) UsesScript() bool {
-	return def.usesArgument(IsScriptArgument)
-}
-
-// UsesDatastar reports whether the handler call uses any Datastar render-callback
-// family (elements, signal, or script).
-func (def Definition) UsesDatastar() bool {
-	return def.UsesElements() || def.UsesSignal() || def.UsesScript()
-}
-
 // SendsMarshalJSON reports whether the handler call has a marshalJSON(send...)
 // argument: a marshalJSON(...) call wrapping a single send/sendX identifier.
 func (def Definition) SendsMarshalJSON() bool {
@@ -503,30 +478,6 @@ func isReservedOrPrefixed(name, base string) bool {
 	return ok && rest != "" && unicode.IsUpper(rune(rest[0]))
 }
 
-// IsElementsArgument reports whether name is a Datastar patch-elements
-// render-callback argument: "elements" or a camelCase "elements"-prefixed name.
-func IsElementsArgument(name string) bool {
-	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierElements)
-}
-
-// IsSignalArgument reports whether name is a Datastar patch-signals
-// render-callback argument: "signal" or a camelCase "signal"-prefixed name.
-func IsSignalArgument(name string) bool {
-	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierSignal)
-}
-
-// IsScriptArgument reports whether name is a Datastar script render-callback
-// argument: "script" or a camelCase "script"-prefixed name.
-func IsScriptArgument(name string) bool {
-	return isReservedOrPrefixed(name, TemplateNameScopeIdentifierScript)
-}
-
-// IsDatastarArgument reports whether name belongs to any Datastar
-// render-callback family (elements, signal, or script).
-func IsDatastarArgument(name string) bool {
-	return IsElementsArgument(name) || IsSignalArgument(name) || IsScriptArgument(name)
-}
-
 // IsSendArgument reports whether name is an SSE send render-callback argument:
 // the reserved "send" identifier, or a camelCase "send"-prefixed name (sendClock,
 // sendStatus, ...). A "send"-prefixed name renders the same-named template
@@ -541,9 +492,6 @@ func checkArguments(identifiers []string, call *ast.CallExpr, allowSend bool) er
 		case *ast.Ident:
 			known := false
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); ok {
-				known = true
-			}
-			if IsDatastarArgument(exp.Name) {
 				known = true
 			}
 			if allowSend && IsSendArgument(exp.Name) {
@@ -592,10 +540,6 @@ const (
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 	TemplateNameScopeIdentifierBody         = "body"
-	// Datastar render-callback argument families (usable only under --use-datastar).
-	TemplateNameScopeIdentifierElements = "elements"
-	TemplateNameScopeIdentifierSignal   = "signal"
-	TemplateNameScopeIdentifierScript   = "script"
 	// Phase 2 SSE send render-callback family, valid only inside sse(...).
 	TemplateNameScopeIdentifierSend = "send"
 )

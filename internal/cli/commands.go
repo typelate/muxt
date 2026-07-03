@@ -361,10 +361,6 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	templateDataTypeDefault := defaultTemplateDataTypeName
 	sseTemplateDataTypeDefault := defaultSSETemplateDataTypeName
-	if config.Datastar {
-		templateDataTypeDefault = defaultDatastarTemplateDataTypeName
-		sseTemplateDataTypeDefault = defaultDatastarEventTemplateDataTypeName
-	}
 	if config.TemplateDataType != templateDataTypeDefault {
 		args = append(args, "--"+outputTemplateDataType+"="+config.TemplateDataType)
 	}
@@ -642,7 +638,7 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithPathPrefixHelp   = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputMultipleFilesHelp              = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 	useHTMXHelp                          = `Enables HTMX mode: adds HTMX helper methods to the template data type for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). Mutually exclusive with --use-datastar.`
-	useDatastarHelp                      = `Enables Datastar mode: generates Datastar template data types (DatastarTemplateData, DatastarEventTemplateData), an Actions() accessor for backend-action expressions, and recognizes the elements/signal/script render-callback arguments. Mutually exclusive with --use-htmx.`
+	useDatastarHelp                      = `Enables Datastar mode: auto-wraps every route in datastar(...), generating Datastar template data types (DatastarTemplateData, DatastarEventTemplateData, DatastarSignalsTemplateData) and an Actions() accessor for backend-action expressions. Use sse(...) and marshalJSON(...) wrappers to stream patch-elements/patch-signals frames or return JSON signals. Mutually exclusive with --use-htmx.`
 	outputJSONV2Help                     = `Marshal Datastar signal responses with encoding/json/v2 MarshalWrite instead of encoding/json Marshal. Off by default; the generated code uses the standard library encoding/json. Only enable this for modules built with GOEXPERIMENT=jsonv2 (requires a go 1.25+ module).`
 	outputHTMXHelpersHelp                = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
@@ -675,23 +671,11 @@ func isDefaultTemplatesVariable(in *[]string) bool {
 func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 
-	// Datastar mode swaps the default template data type names.
+	// Datastar routes render via DatastarTemplateData/DatastarEventTemplateData/
+	// DatastarSignalsTemplateData (their own type-name flags), so the generic
+	// TemplateData/SSETemplateData defaults apply uniformly.
 	templateDataTypeDefault := defaultTemplateDataTypeName
 	sseTemplateDataTypeDefault := defaultSSETemplateDataTypeName
-	if config.Datastar {
-		templateDataTypeDefault = defaultDatastarTemplateDataTypeName
-		sseTemplateDataTypeDefault = defaultDatastarEventTemplateDataTypeName
-
-		// The type-name flags default to "TemplateData"/"SSETemplateData", which
-		// would otherwise mask the Datastar defaults below. Clear the unchanged
-		// flag values so the Datastar defaults apply.
-		if !flagSet.Changed(outputTemplateDataType) && !flagSet.Changed(deprecatedTemplateDataType) {
-			config.TemplateDataType = ""
-		}
-		if !flagSet.Changed(outputSSETemplateDataType) {
-			config.SSETemplateDataType = ""
-		}
-	}
 
 	// Apply defaults and convert to private if --output-exported-default-identifiers=false
 	if !config.OutputExportedDefaultIdentifiers {

@@ -1,5 +1,5 @@
-# Without --use-datastar, elements/signal/script are NOT reserved: they are
-# ordinary arguments. Here they are path values bound as plain strings.
+# elements/signal/script are ordinary arguments, never reserved render-callback
+# families. Here they are path values bound as plain strings.
 muxt generate --use-receiver-type=Server
 muxt check
 
@@ -27,8 +27,8 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-// Demo takes elements, signal, and script as ordinary string path values
-// because --use-datastar is not set, so the names are not reserved callbacks.
+// Demo takes elements, signal, and script as ordinary string path values; these
+// names carry no special render-callback meaning.
 func (Server) Demo(ctx context.Context, elements, signal, script string) string {
 	return elements + "-" + signal + "-" + script
 }

@@ -4,8 +4,8 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, elements, elementsClock)" -}}<main id="main">{{- .Result -}}</main>{{- end -}}
-{{- define "elementsClock" -}}<time id="clock">{{- .Result -}}</time>{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send, sendClock))" -}}<main id="main">{{- .Result -}}</main>{{- end -}}
+{{- define "Clock" -}}<time id="clock">{{- .Result -}}</time>{{- end -}}
 -- go.mod --
 module server
 
@@ -26,12 +26,13 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type Server struct{}
 
-// Stream patches two different elements over one event stream: the base
-// elements callback renders the route template; the elementsClock callback
-// renders the same-named template. Each is its own patch-elements frame.
-func (Server) Stream(ctx context.Context, elements func(string) error, elementsClock func(string) error) {
-	_ = elements("hello")
-	_ = elementsClock("12:00")
+// Stream patches two different elements over one event stream: the base send
+// callback renders the route template; the sendClock callback renders the
+// "Clock" template (the send-prefix is trimmed). Each is its own
+// patch-elements frame. Under --use-datastar the route auto-wraps in datastar(...).
+func (Server) Stream(ctx context.Context, send func(string) error, sendClock func(string) error) {
+	_ = send("hello")
+	_ = sendClock("12:00")
 }
 -- server_test.go --
 package server

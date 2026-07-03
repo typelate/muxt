@@ -1,0 +1,31 @@
+# script is no longer a reserved Datastar render-callback family. As an ordinary
+# argument it must resolve to a path value or a method parameter; here it does
+# neither, so generation fails with an unknown-argument error.
+! muxt generate --use-receiver-type=Server --use-datastar
+stderr 'unknown argument script at index 1'
+
+-- template.gohtml --
+{{- define "GET /script.js Widget(ctx, script)" -}}console.log("{{- .Result -}}");{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Widget(ctx context.Context, script func(msg string) error) {
+	_ = script("hi")
+}
