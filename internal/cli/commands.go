@@ -234,7 +234,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			files, err := generate.TemplateRoutesFile(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
+			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
 				return err
 			}

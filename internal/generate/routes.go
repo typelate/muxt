@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"html/template"
 	"log"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"reflect"
@@ -96,7 +97,7 @@ func groupTemplatesBySourceFile(groups map[string][]muxt.Definition, defs []muxt
 	}
 }
 
-func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
@@ -122,55 +123,26 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		}
 	}
 
-	var (
-		definitionGroups = make(map[string][]muxt.Definition)
-		routeDefinitions []muxt.Definition
-	)
-	for _, tv := range config.TemplatesVariables {
-		ts, _, err := asteval.Templates(wd, tv, routesPkg)
-		if err != nil {
-			return nil, err
-		}
-
-		defs, err := muxt.Definitions(ts, tv)
-		if err != nil {
-			return nil, err
-		}
-
-		groupTemplatesBySourceFile(definitionGroups, defs)
-		routeDefinitions = append(routeDefinitions, defs...)
-	}
-
-	parseBasedDefinitions := definitionGroups[""]
-	delete(definitionGroups, "")
-
-	if err := muxt.CheckForDuplicatePatterns(routeDefinitions); err != nil {
+	groups, err := groupTemplates(wd, config, routesPkg)
+	if err != nil {
 		return nil, err
 	}
 
-	// Separate valid file paths from non-file-path source names
-	// Non-file-path sources (containing spaces, slashes, etc.) should be treated like Parse-based templates
-	var sourceFiles []string
-	for sourceFile := range definitionGroups {
-		// Check if sourceFile is a valid file path (no spaces, path separators in basename)
-		baseName := filepath.Base(sourceFile)
-		if strings.ContainsAny(baseName, " /\\()") {
-			parseBasedDefinitions = append(parseBasedDefinitions, definitionGroups[sourceFile]...)
-			delete(definitionGroups, sourceFile)
-		} else {
-			sourceFiles = append(sourceFiles, sourceFile)
-		}
-	}
-	slices.Sort(sourceFiles)
-
 	var (
-		generatedFiles    []GeneratedFile
-		receiverInterface *ast.InterfaceType
+		generatedFiles      []GeneratedFile
+		receiverInterface   *ast.InterfaceType
+		templateSourceFiles = slices.Collect(maps.Keys(groups.byFile))
 	)
+	slices.Sort(templateSourceFiles)
 	if config.OutputMultipleFiles {
 		// Generate per-file route files (original behavior)
-		for _, sourceFile := range sourceFiles {
-			definitions := definitionGroups[sourceFile]
+
+		receiverInterface = &ast.InterfaceType{
+			Methods: new(ast.FieldList),
+		}
+
+		for _, sourceFile := range templateSourceFiles {
+			definitions := groups.byFile[sourceFile]
 			if config.Verbose {
 				logger.Printf("generating routes for %s (%d templates)", sourceFile, len(definitions))
 			}
@@ -195,15 +167,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 				Path:    outputFilePath,
 				Content: content,
 			})
-		}
 
-		// Build main receiver interface that combines all file-based interfaces
-		receiverInterface = &ast.InterfaceType{
-			Methods: new(ast.FieldList),
-		}
-
-		// Embed all file-scoped receiver interfaces
-		for _, sourceFile := range sourceFiles {
 			fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 			receiverInterfaceName := fileIdentifier + "RoutesReceiver"
 			receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
@@ -217,8 +181,8 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		}
 
 		// Add all file-based templates to parseBasedDefinitions for processing in one place
-		for _, sourceFile := range sourceFiles {
-			parseBasedDefinitions = append(parseBasedDefinitions, definitionGroups[sourceFile]...)
+		for _, sourceFile := range templateSourceFiles {
+			groups.noFile = append(groups.noFile, groups.byFile[sourceFile]...)
 		}
 	}
 
@@ -263,13 +227,13 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	// Declare the buffer pool used by the handlers registered directly in this
 	// function. In multiple-files mode the per-file functions declare their own
 	// pool, so only declare it here when this function actually has handlers.
-	if len(parseBasedDefinitions) > 0 {
+	if len(groups.noFile) > 0 {
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
 	// Call per-file route functions (only in multiple-files mode)
 	if config.OutputMultipleFiles {
-		for _, sourceFile := range sourceFiles {
+		for _, sourceFile := range templateSourceFiles {
 			fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
 			funcName := fileIdentifier + config.RoutesFunction
 
@@ -291,8 +255,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 
 	// Generate handlers for parse-based templates (empty sourceFile)
 	sigs := make(map[string]*types.Signature)
-	for i := range parseBasedDefinitions {
-		def := parseBasedDefinitions[i]
+	for _, def := range groups.noFile {
 		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s", def.RawPattern())
@@ -311,7 +274,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 		routesFunc.Body.List = append(routesFunc.Body.List, call)
 	}
 
-	routePathDecls, err := routePathTypeAndMethods(file, config, routeDefinitions)
+	routePathDecls, err := routePathTypeAndMethods(file, config, groups.all)
 	if err != nil {
 		return nil, err
 	}
@@ -364,9 +327,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	for _, method := range templateRedirectHelperMethods(file, config) {
 		decls = append(decls, method)
 	}
-	decls = append(decls,
-		templateDataStringMethod(config.TemplateDataType),
-	)
+	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
 	if config.HTMXHelpers {
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
 			decls = append(decls, method)
@@ -374,7 +335,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	}
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
-	if slices.ContainsFunc(routeDefinitions, muxt.Definition.UsesSSE) {
+	if slices.ContainsFunc(groups.all, muxt.Definition.UsesSSE) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
@@ -393,6 +354,48 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content})
 
 	return generatedFiles, nil
+}
+
+type templateGroups struct {
+	byFile map[string][]muxt.Definition
+	noFile []muxt.Definition
+	all    []muxt.Definition
+}
+
+func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packages.Package) (templateGroups, error) {
+	result := templateGroups{
+		byFile: make(map[string][]muxt.Definition),
+	}
+	for _, tv := range config.TemplatesVariables {
+		ts, _, err := asteval.Templates(wd, tv, routesPkg)
+		if err != nil {
+			return result, err
+		}
+
+		defs, err := muxt.Definitions(ts, tv)
+		if err != nil {
+			return result, err
+		}
+
+		groupTemplatesBySourceFile(result.byFile, defs)
+		result.all = append(result.all, defs...)
+	}
+
+	if err := muxt.CheckForDuplicatePatterns(result.all); err != nil {
+		return result, err
+	}
+
+	result.noFile = result.byFile[""]
+	delete(result.byFile, "")
+
+	for sourceFile := range result.byFile {
+		baseName := filepath.Base(sourceFile)
+		if strings.ContainsAny(baseName, " /\\()") {
+			result.noFile = append(result.noFile, result.byFile[sourceFile]...)
+			delete(result.byFile, sourceFile)
+		}
+	}
+	return result, nil
 }
 
 // bytesBufferPoolDeclaration returns the statement declaring the per-function
