@@ -88,16 +88,6 @@ type RoutesFileConfiguration struct {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
-// groupTemplatesBySourceFile groups templates by their sourceFile field.
-// Returns a map where keys are source filenames and values are template slices.
-// Templates with empty sourceFile (Parse-based) are grouped under "".
-func groupTemplatesBySourceFile(groups map[string][]muxt.Definition, defs []muxt.Definition) {
-	for _, d := range defs {
-		key := d.SourceFile()
-		groups[key] = append(groups[key], d)
-	}
-}
-
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
@@ -350,48 +340,6 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		})
 	}
 	return generatedFiles, nil
-}
-
-type templateGroups struct {
-	byFile map[string][]muxt.Definition
-	noFile []muxt.Definition
-	all    []muxt.Definition
-}
-
-func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packages.Package) (templateGroups, error) {
-	result := templateGroups{
-		byFile: make(map[string][]muxt.Definition),
-	}
-	for _, tv := range config.TemplatesVariables {
-		ts, _, err := asteval.Templates(wd, tv, routesPkg)
-		if err != nil {
-			return result, err
-		}
-
-		defs, err := muxt.Definitions(ts, tv)
-		if err != nil {
-			return result, err
-		}
-
-		groupTemplatesBySourceFile(result.byFile, defs)
-		result.all = append(result.all, defs...)
-	}
-
-	if err := muxt.CheckForDuplicatePatterns(result.all); err != nil {
-		return result, err
-	}
-
-	result.noFile = result.byFile[""]
-	delete(result.byFile, "")
-
-	for sourceFile := range result.byFile {
-		baseName := filepath.Base(sourceFile)
-		if strings.ContainsAny(baseName, " /\\()") {
-			result.noFile = append(result.noFile, result.byFile[sourceFile]...)
-			delete(result.byFile, sourceFile)
-		}
-	}
-	return result, nil
 }
 
 // bytesBufferPoolDeclaration returns the statement declaring the per-function
