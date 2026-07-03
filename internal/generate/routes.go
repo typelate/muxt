@@ -304,7 +304,7 @@ func TemplateRoutesFile(wd string, config RoutesFileConfiguration, fileSet *toke
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, config, def, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
+		handlerFunc, err := callHandlerFunc(file, config, def, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
 		if err != nil {
 			return nil, err
 		}
@@ -496,7 +496,7 @@ func generatePerFileRouteFunction(
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := methodHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, receiverInterfaceName)
+		handlerFunc, err := callHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, receiverInterfaceName)
 		if err != nil {
 			return nil, err
 		}
@@ -1055,18 +1055,15 @@ func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIde
 	}, nil
 }
 
-func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
+func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	if err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg); err != nil {
+	sig, err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg)
+	if err != nil {
 		return nil, err
-	}
-	sig, ok := sigs[def.FunctionIdentifier().Name]
-	if !ok {
-		return nil, fmt.Errorf("failed to determine call signature %s", def.FunctionIdentifier().Name)
 	}
 	if _, _, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
 		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
@@ -1081,8 +1078,7 @@ func methodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defi
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
 	}
 	var callFun ast.Expr
-	obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name)
-	isMethodCall := obj != nil
+	isMethodCall := sig.Recv() != nil
 	if isMethodCall {
 		callFun = &ast.SelectorExpr{
 			X:   ast.NewIdent(receiverIdent),
@@ -2090,53 +2086,54 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	return obj, true
 }
 
-func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) error {
-	switch fun := call.Fun.(type) {
-	case *ast.Ident:
-		isMethod := true
-		mo, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
-		if mo == nil {
-			if m, ok := packageScopeFunc(templatesPackage, fun); ok {
-				mo = m
-				isMethod = false
-			} else {
-				ms, err := createMethodSignature(file, signatures, def, receiver, receiverInterface, call, templatesPackage)
-				if err != nil {
-					return err
-				}
-				fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
-				receiver.AddMethod(fn)
-				mo = fn
-			}
-		} else {
-			for _, a := range call.Args {
-				switch arg := a.(type) {
-				case *ast.CallExpr:
-					if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if _, ok := signatures[fun.Name]; ok {
-			return nil
-		}
-		signatures[fun.Name] = mo.Type().(*types.Signature)
-		if !isMethod {
-			return nil
-		}
-		exp, err := file.TypeASTExpression(mo.Type())
-		if err != nil {
-			return err
-		}
-		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(fun.Name)},
-			Type:  exp,
-		})
-		return nil
-	default:
-		return fmt.Errorf("expected a method identifier")
+func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
+	fun, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return nil, fmt.Errorf("expected a method identifier")
 	}
+
+	isMethod := true
+	mo, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
+	if mo == nil {
+		if m, ok := packageScopeFunc(templatesPackage, fun); ok {
+			mo = m
+			isMethod = false
+		} else {
+			ms, err := createMethodSignature(file, signatures, def, receiver, receiverInterface, call, templatesPackage)
+			if err != nil {
+				return nil, err
+			}
+			fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
+			receiver.AddMethod(fn)
+			mo = fn
+		}
+	} else {
+		for _, a := range call.Args {
+			switch arg := a.(type) {
+			case *ast.CallExpr:
+				if _, err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	if sig, ok := signatures[fun.Name]; ok {
+		return sig, nil
+	}
+	sig := mo.Type().(*types.Signature)
+	signatures[fun.Name] = sig
+	if !isMethod {
+		return sig, nil
+	}
+	exp, err := file.TypeASTExpression(mo.Type())
+	if err != nil {
+		return sig, err
+	}
+	receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
+		Names: []*ast.Ident{ast.NewIdent(fun.Name)},
+		Type:  exp,
+	})
+	return sig, nil
 }
 
 func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
@@ -2162,7 +2159,7 @@ func createMethodSignature(file *File, signatures map[string]*types.Signature, d
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
-			if err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
+			if _, err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
 				return nil, err
 			}
 		}

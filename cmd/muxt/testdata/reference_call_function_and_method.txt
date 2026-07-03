@@ -1,0 +1,106 @@
+muxt generate
+muxt check
+
+exec go test -cover
+
+cat template_routes.go
+
+-- template.gohtml --
+{{define "GET / M()" -}}
+	{{template "page" . -}}
+{{- end}}
+
+{{define "GET /f F()" -}}
+	{{template "page" . -}}
+{{- end}}
+
+{{define "page" -}}
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'/>
+    <title>Hello!</title>
+</head>
+<body>
+<h1>Number {{.Result}}</h1>
+</body>
+</html>
+{{end}}
+
+-- go.mod --
+module example.com
+
+go 1.26
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+type T struct{}
+
+func F() any { return 32 }
+
+func (T) M() any { return F() }
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestM(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	TemplateRoutes(mux, service)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	checkResult(t, rec)
+}
+
+func TestF(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var service T
+	TemplateRoutes(mux, service)
+
+	req := httptest.NewRequest(http.MethodGet, "/f", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	checkResult(t, rec)
+}
+
+func checkResult(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("expected OK")
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Number 32") {
+		t.Errorf("missing %q", "Number 32")
+	}
+	if t.Failed() {
+		t.Log(body)
+	}
+}
