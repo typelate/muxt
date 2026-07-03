@@ -130,7 +130,6 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	var (
-		generatedFiles      []GeneratedFile
 		receiverInterface   = &ast.InterfaceType{Methods: new(ast.FieldList)}
 		templateSourceFiles = slices.Collect(maps.Keys(groups.byFile))
 	)
@@ -175,73 +174,30 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		})
 	}
 
+	var (
+		topLevelTemplateRoutes []muxt.Definition
+		generatedFiles         []GeneratedFile
+	)
 	if config.OutputMultipleFiles {
-		for _, sourceFile := range templateSourceFiles {
-			definitions := groups.byFile[sourceFile]
-			if config.Verbose {
-				logger.Printf("generating routes for %s (%d templates)", sourceFile, len(definitions))
-			}
-
-			fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
-			receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
-			routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
-
-			perFileAST, err := generatePerFileAST(sourceFile, definitions, file, routesFuncName, receiverInterfaceName, logger, config, receiver, routesPkg)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
-			}
-
-			// Generate filename: strip .gohtml extension, add _template_routes_gen.go
-			// sourceFile may be an absolute path, so extract just the base filename
-			baseFileName := strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile))
-			outputFileName := baseFileName + "_template_routes_gen.go"
-			outputFilePath := filepath.Join(wd, outputFileName)
-
-			content, err := astgen.FormatFile(outputFilePath, perFileAST)
-			if err != nil {
-				return nil, fmt.Errorf("failed to format %s: %w", outputFileName, err)
-			}
-
-			generatedFiles = append(generatedFiles, GeneratedFile{
-				Path:    outputFilePath,
-				Content: content,
-			})
-
-			receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
-				Type: ast.NewIdent(receiverInterfaceName),
-			})
-
-			callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
-			if config.Logger {
-				callArgs = append(callArgs, ast.NewIdent("logger"))
-			}
-			// Always pass pathsPrefix to per-file functions
-			callArgs = append(callArgs, ast.NewIdent(pathPrefixPathsStructFieldName))
-
-			routesFunc.Body.List = append(routesFunc.Body.List, &ast.ExprStmt{
-				X: &ast.CallExpr{
-					Fun:  ast.NewIdent(routesFuncName),
-					Args: callArgs,
-				},
-			})
+		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiver, routesPkg, receiverInterface, routesFunc)
+		if err != nil {
+			return files, err
 		}
+		generatedFiles = append(generatedFiles, files...)
+		topLevelTemplateRoutes = groups.noFile
 	} else {
-		// Add all file-based templates to parseBasedDefinitions for processing in one place
 		for _, sourceFile := range templateSourceFiles {
-			groups.noFile = append(groups.noFile, groups.byFile[sourceFile]...)
+			topLevelTemplateRoutes = append(topLevelTemplateRoutes, groups.byFile[sourceFile]...)
 		}
 	}
 
-	// Declare the buffer pool used by the handlers registered directly in this
-	// function. In multiple-files mode the per-file functions declare their own
-	// pool, so only declare it here when this function actually has handlers.
-	if len(groups.noFile) > 0 {
+	if len(topLevelTemplateRoutes) > 0 {
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
 	sigs := make(map[string]*types.Signature)
-	for _, def := range groups.noFile {
+	for _, def := range topLevelTemplateRoutes {
 		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s", def.RawPattern())
@@ -339,6 +295,60 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	// Append main file to generated files
 	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content})
 
+	return generatedFiles, nil
+}
+
+func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, routesPkg *packages.Package, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
+	var generatedFiles []GeneratedFile
+	for _, sourceFile := range templateSourceFiles {
+		definitions := groups.byFile[sourceFile]
+		if config.Verbose {
+			logger.Printf("generating routes for %s (%d templates)", sourceFile, len(definitions))
+		}
+
+		fileIdentifier := muxt.FileNameToPrivateIdentifier(filepath.Base(sourceFile))
+		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
+		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
+
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, file, routesFuncName, receiverInterfaceName, logger, config, receiver, routesPkg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
+		}
+
+		// Generate filename: strip .gohtml extension, add _template_routes_gen.go
+		// sourceFile may be an absolute path, so extract just the base filename
+		baseFileName := strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile))
+		outputFileName := baseFileName + "_template_routes_gen.go"
+		outputFilePath := filepath.Join(wd, outputFileName)
+
+		content, err := astgen.FormatFile(outputFilePath, perFileAST)
+		if err != nil {
+			return nil, fmt.Errorf("failed to format %s: %w", outputFileName, err)
+		}
+
+		generatedFiles = append(generatedFiles, GeneratedFile{
+			Path:    outputFilePath,
+			Content: content,
+		})
+
+		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
+			Type: ast.NewIdent(receiverInterfaceName),
+		})
+
+		callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
+		if config.Logger {
+			callArgs = append(callArgs, ast.NewIdent("logger"))
+		}
+		// Always pass pathsPrefix to per-file functions
+		callArgs = append(callArgs, ast.NewIdent(pathPrefixPathsStructFieldName))
+
+		routesFunc.Body.List = append(routesFunc.Body.List, &ast.ExprStmt{
+			X: &ast.CallExpr{
+				Fun:  ast.NewIdent(routesFuncName),
+				Args: callArgs,
+			},
+		})
+	}
 	return generatedFiles, nil
 }
 
