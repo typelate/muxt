@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"text/template/parse"
-	"unicode"
 
 	"github.com/typelate/muxt/internal/astgen"
 )
@@ -104,7 +103,17 @@ type Definition struct {
 	// templatesVariable is the name of the package-level *template.Template
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
+
+	Representation Representation
 }
+
+type Representation string
+
+const (
+	// RepresentationTextHTML Representation = ""
+
+	RepresentationSSE Representation = "sse"
+)
 
 func (def Definition) SourceFile() string { return def.sourceFile }
 func (def Definition) RawPattern() string { return def.pattern }
@@ -139,23 +148,8 @@ func (def Definition) Template() *template.Template   { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
-
-// UsesSSE reports whether the handler call uses the reserved "sse" render
-// callback argument. It scans only the top-level call arguments because the sse
-// callback, like execute, must be a direct argument to the receiver method.
-func (def Definition) UsesSSE() bool {
-	if def.call == nil {
-		return false
-	}
-	for _, a := range def.call.Args {
-		if id, ok := a.(*ast.Ident); ok && id.Name == TemplateNameScopeIdentifierSSE {
-			return true
-		}
-	}
-	return false
-}
-func (def Definition) Identifier() string        { return def.identifier }
-func (def Definition) TemplatesVariable() string { return def.templatesVariable }
+func (def Definition) Identifier() string             { return def.identifier }
+func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -324,6 +318,17 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if !ok {
 		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
 	}
+	if fun.Name == string(RepresentationSSE) && len(call.Args) == 1 {
+		actualCall, ok := call.Args[0].(*ast.CallExpr)
+		if ok {
+			actualFun, ok := actualCall.Fun.(*ast.Ident)
+			if ok {
+				def.Representation = RepresentationSSE
+				call = actualCall
+				fun = actualFun
+			}
+		}
+	}
 	if call.Ellipsis != token.NoPos {
 		return fmt.Errorf("unexpected ellipsis")
 	}
@@ -384,11 +389,11 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 // sseMetrics, ...). Prefixed callbacks render a same-named template; they are
 // only valid on a route that also has the base "sse" argument.
 func IsSSEArgument(name string) bool {
-	if name == TemplateNameScopeIdentifierSSE {
+	if name == TemplateNameScopeIdentifierExecute {
 		return true
 	}
-	rest, ok := strings.CutPrefix(name, TemplateNameScopeIdentifierSSE)
-	return ok && rest != "" && unicode.IsUpper(rune(rest[0]))
+	rest, ok := strings.CutPrefix(name, "sse")
+	return ok && rest != "" && token.IsIdentifier(rest)
 }
 
 func checkArguments(identifiers []string, call *ast.CallExpr) error {
@@ -416,7 +421,6 @@ const (
 	TemplateNameScopeIdentifierHTTPRequest  = "request"
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierExecute      = "execute"
-	TemplateNameScopeIdentifierSSE          = "sse"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 )
 
@@ -428,7 +432,6 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierForm,
 		TemplateNameScopeIdentifierMultipart,
 		TemplateNameScopeIdentifierExecute,
-		TemplateNameScopeIdentifierSSE,
 		TemplateNameScopeIdentifierLastEventID,
 	}
 }

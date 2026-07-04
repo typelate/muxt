@@ -4,7 +4,7 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Events(sseClock, sse, sseMetrics)" -}}main:{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Events(sseClock, execute, sseMetrics))" -}}main:{{- .Result -}}{{- end -}}
 {{- define "sseClock" -}}clock:{{- .Result -}}{{- end -}}
 {{- define "sseMetrics" -}}metrics:{{- .Result -}}{{- end -}}
 -- go.mod --
@@ -30,8 +30,8 @@ type Server struct{}
 // not first) to prove ordering is irrelevant. The "sse" callback renders the
 // route template; sseClock renders the "sseClock" template; sseMetrics renders
 // the "sseMetrics" template.
-func (Server) Events(sseClock, sse, sseMetrics func(data string) error) {
-	_ = sse("main")
+func (Server) Events(sseClock, execute, sseMetrics func(data string) error) {
+	_ = execute("main")
 	_ = sseClock("tick")
 	_ = sseMetrics("cpu")
 }

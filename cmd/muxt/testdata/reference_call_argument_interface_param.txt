@@ -1,5 +1,7 @@
 muxt generate --use-receiver-type=Server
 
+cat template_routes.go
+
 exec go test
 
 -- go.mod --
@@ -25,7 +27,7 @@ func (Server) CountCookies(request CookiesLister) int {
 }
 
 var templates = template.Must(template.New("").Parse(`
-{{define "GET /{$} CountCookies(request)"}}Count: {{.Result}}{{end}}
+{{- define "GET / CountCookies(request)"}}Count: {{.Result}}{{end}}
 `))
 -- hypertext_test.go --
 package hypertext
@@ -47,11 +49,11 @@ func Test(t *testing.T) {
 
 	mux.ServeHTTP(rec, req)
 
-	if rec.Result().StatusCode != http.StatusOK {
-		t.Error("wrong status code")
+	if got, exp := rec.Result().StatusCode, http.StatusOK; got != exp {
+		t.Errorf("wrong status code got %d exp %d", got, exp)
 	}
 
-	if got := rec.Body.Bytes(); !bytes.Contains(got, []byte("Count: 0")) {
-		t.Errorf("wrong body %q", string(got))
+	if got, exp := rec.Body.Bytes(), "Count: 0"; !bytes.Contains(got, []byte(exp)) {
+		t.Errorf("wrong body %q expected %q", string(got), exp)
 	}
 }
