@@ -9,7 +9,7 @@ grep 'Stream\(ctx context.Context, lastEventID string, sse func\(any\) error\)' 
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, lastEventID, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, lastEventID, execute))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 

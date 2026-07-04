@@ -32,9 +32,11 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		return nil, err
 	}
 
+	functionIdent := def.FunctionIdentifier().Name
+
 	var callFun ast.Expr
-	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), def.FunctionIdentifier().Name); obj != nil {
-		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(def.FunctionIdentifier().Name)}
+	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), functionIdent); obj != nil {
+		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(functionIdent)}
 	} else {
 		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
 	}
@@ -136,7 +138,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			return nil, err
 		}
 		templateName := def.Name()
-		if id.Name != muxt.TemplateNameScopeIdentifierSSE {
+		if id.Name != muxt.TemplateNameScopeIdentifierExecute {
 			templateName = id.Name
 			if def.Template() == nil || def.Template().Lookup(templateName) == nil {
 				return nil, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
@@ -285,11 +287,11 @@ func validateSSEMethodResults(methodName string, method *types.Signature) (bool,
 		return false, nil
 	case 1:
 		if !types.Implements(method.Results().At(0).Type(), errIface) {
-			return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+			return false, fmt.Errorf("method %s using the sse callback must return nothing or an error", methodName)
 		}
 		return true, nil
 	default:
-		return false, fmt.Errorf("method %s using the sse callback must return nothing or only error", methodName)
+		return false, fmt.Errorf("method %s using the sse callback must return nothing or an error", methodName)
 	}
 }
 
@@ -299,7 +301,7 @@ func validateSSEMethodResults(methodName string, method *types.Signature) (bool,
 func validateSSECallbackShape(methodName string, callback *types.Signature) (types.Type, bool, error) {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
-		return nil, false, fmt.Errorf("sse argument for %s must be a func(...) error", methodName)
+		return nil, false, fmt.Errorf("execute parameter for %s must be a function", methodName)
 	}
 	switch callback.Params().Len() {
 	case 0:
@@ -309,24 +311,4 @@ func validateSSECallbackShape(methodName string, callback *types.Signature) (typ
 	default:
 		return nil, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
 	}
-}
-
-// sseArg finds the reserved "sse" render-callback argument in call. It returns
-// its index, the receiver method's parameter at that index as a *types.Signature
-// (nil if the param is not a func), and whether it is present.
-func sseArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bool) {
-	for i, a := range call.Args {
-		id, ok := a.(*ast.Ident)
-		if !ok || id.Name != muxt.TemplateNameScopeIdentifierSSE {
-			continue
-		}
-		var cb *types.Signature
-		if i < sig.Params().Len() {
-			// Underlying unwraps named and aliased func types so the callback
-			// param may be declared as e.g. `type RenderFunc func(T) error`.
-			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
-		}
-		return i, cb, true
-	}
-	return 0, nil, false
 }

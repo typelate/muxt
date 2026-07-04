@@ -428,11 +428,12 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
-			Name:     "sse argument is in scope",
-			In:       "GET / F(sse)",
+			Name:     "execute argument with sse representation",
+			In:       "GET / sse(F(execute))",
 			ExpMatch: true,
 			TemplateName: func(t *testing.T, def Definition) {
-				assert.Equal(t, "F(sse)", def.handler)
+				assert.Equal(t, "sse(F(execute))", def.handler)
+				assert.Equal(t, RepresentationSSE, def.Representation)
 			},
 		},
 		{

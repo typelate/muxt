@@ -4,7 +4,8 @@ muxt check
 exec go test -race -count=1
 
 -- template.gohtml --
-{{- define "GET /events Stream(ctx, lastEventID, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, lastEventID, execute))" -}}{{- .Result -}}{{- end -}}
+{{define "GET /seventy sse()"}}{{.Result}}{{end}}
 -- go.mod --
 module server
 
@@ -23,13 +24,16 @@ var templatesFS embed.FS
 
 var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
+// sse is a function that can be called directly, this is for backwards support
+func sse() int { return 70 }
+
 type Server struct{}
 
 // Stream sends a single event echoing the Last-Event-Id and returns, so the
 // handler completes for the test. The sse callback renders the template with
 // the passed value as .Result.
-func (Server) Stream(ctx context.Context, lastEventID string, sse func(data string) error) {
-	_ = sse("hello-" + lastEventID)
+func (Server) Stream(ctx context.Context, lastEventID string, execute func(data string) error) {
+	_ = execute("hello-" + lastEventID)
 }
 -- server_test.go --
 package server
@@ -56,7 +60,26 @@ func TestStream(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("content-type = %q, want text/event-stream", ct)
 	}
-	if got := rec.Body.String(); !strings.Contains(got, "data: hello-42\n\n") {
-		t.Fatalf("body = %q, want it to contain %q", got, "data: hello-42\n\n")
+	if got, exp := rec.Body.String(), "data: hello-42\n\n"; !strings.Contains(got, exp) {
+		t.Fatalf("body = %q, want it to contain %q", got, exp)
+	}
+}
+
+func TestNonServerSentEventFuncCall(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/seventy", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct, exp := rec.Header().Get("Content-Type"), "text/html; charset=utf-8"; ct != exp {
+		t.Fatalf("content-type = %q, want %q", ct, exp)
+	}
+	if got, exp := rec.Body.String(), "70"; !strings.Contains(got, exp) {
+		t.Fatalf("body = %q, want it to contain %q", got, exp)
 	}
 }

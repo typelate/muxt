@@ -5,7 +5,7 @@ exec go test -race -count=1
 
 -- template.gohtml --
 {{- define "GET /render Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
-{{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, execute))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -34,7 +34,7 @@ type Server struct{}
 
 func (Server) Render(execute RenderInt) error { return execute(7) }
 
-func (Server) Stream(ctx context.Context, sse EmitString) { _ = sse("hi") }
+func (Server) Stream(ctx context.Context, send EmitString) { _ = send("hi") }
 -- server_test.go --
 package server
 
