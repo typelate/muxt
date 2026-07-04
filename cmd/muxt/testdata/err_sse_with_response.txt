@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'cannot use both "sse" and "response" arguments'
+stderr 'sse handler cannot use a "response" argument'
 
 -- template.gohtml --
-{{- define "GET /x Endpoint(response, sse)" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /x sse(Endpoint(response))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 

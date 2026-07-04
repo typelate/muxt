@@ -176,9 +176,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		generatedFiles = append(generatedFiles, files...)
 		topLevelTemplateRoutes = groups.noFile
 	} else {
-		for _, sourceFile := range templateSourceFiles {
-			topLevelTemplateRoutes = append(topLevelTemplateRoutes, groups.byFile[sourceFile]...)
-		}
+		topLevelTemplateRoutes = groups.all
 	}
 
 	if len(topLevelTemplateRoutes) > 0 {
@@ -267,7 +265,9 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
-	if slices.ContainsFunc(groups.all, muxt.Definition.UsesSSE) {
+	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Representation == muxt.RepresentationSSE
+	}) {
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
@@ -682,12 +682,9 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 	if err != nil {
 		return nil, err
 	}
-	if _, _, hasSSE := sseArg(def.CallExpression(), sig); hasSSE {
-		if _, _, hasExecute := executeArg(def.CallExpression(), sig); hasExecute {
-			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierExecute)
-		}
+	if def.Representation == muxt.RepresentationSSE {
 		if def.HasResponseWriterArg() {
-			return nil, fmt.Errorf("call %s cannot use both %q and %q arguments", def.FunctionIdentifier().Name, muxt.TemplateNameScopeIdentifierSSE, muxt.TemplateNameScopeIdentifierHTTPResponse)
+			return nil, fmt.Errorf("sse handler cannot use a %q argument", muxt.TemplateNameScopeIdentifierHTTPResponse)
 		}
 		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
 	}
