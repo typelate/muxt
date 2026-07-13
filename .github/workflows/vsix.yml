@@ -1,0 +1,34 @@
+# Packages the VSCode extension in highlight/ and uploads the .vsix as a build artifact.
+
+name: VSIX
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths: [ "highlight/**" ]
+  push:
+    branches: [ "main" ]
+    paths: [ "highlight/**" ]
+
+jobs:
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: "lts/*"
+
+    - name: Package
+      working-directory: highlight
+      run: npx --yes @vscode/vsce package
+
+    - name: Upload vsix
+      uses: actions/upload-artifact@v7
+      with:
+        name: muxt-template-syntax-vsix
+        path: highlight/*.vsix
+        if-no-files-found: error
