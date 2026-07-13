@@ -31,7 +31,7 @@ See [`examples/example.gohtml`](examples/example.gohtml) for a file exercising e
 ### Option 1: symlink into your extensions directory (development)
 
 ```bash
-ln -s "$(pwd)/highlight" ~/.vscode/extensions/typelate.muxt-template-syntax-0.1.0
+ln -s "$(pwd)/vscode-plugin" ~/.vscode/extensions/typelate.muxt-template-syntax-0.1.1
 ```
 
 Then run **Developer: Reload Window** in VSCode (`Cmd+Shift+P` → "Reload Window").
@@ -40,9 +40,9 @@ Then run **Developer: Reload Window** in VSCode (`Cmd+Shift+P` → "Reload Windo
 
 ```bash
 npm install -g @vscode/vsce
-cd highlight
+cd vscode-plugin
 vsce package
-code --install-extension muxt-template-syntax-0.1.0.vsix
+code --install-extension muxt-template-syntax-0.1.1.vsix
 ```
 
 ## Configuration
