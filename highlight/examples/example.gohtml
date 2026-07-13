@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Muxt Highlighting Example</title>
+</head>
+<body>
+
+{{/* a template comment */}}
+{{- /* a comment with trim markers */ -}}
+
+{{define "GET /articles/{id} 200 GetArticle(ctx, id)"}}
+	<article>
+		<h1>{{.Article.Title}}</h1>
+		{{if .Article.Draft}}
+			<p class="draft">Draft</p>
+		{{else}}
+			<time datetime="{{.Article.PublishedAt}}">{{.Article.PublishedAt}}</time>
+		{{end}}
+		{{range $i, $section := .Article.Sections}}
+			<section id="section-{{$i}}">{{$section.Body}}</section>
+		{{end}}
+		<a href="{{.Article.EditURL}}" hx-get="/articles/{{.Article.ID}}/edit">Edit</a>
+	</article>
+{{end}}
+
+{{define "POST /articles http.StatusCreated CreateArticle(ctx, request, form)"}}
+	<p>Created {{printf "%q" .Article.Title}}</p>
+{{end}}
+
+{{define "DELETE /articles/{id} DeleteArticle(ctx, id)"}}
+	<p>Deleted.</p>
+{{end}}
+
+{{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}
+
+{{define "GET example.com/{$}"}}
+	<p>Host-scoped route with no handler call.</p>
+{{end}}
+
+{{define "YOLO /nope 200 Nope(ctx)"}}
+	<p>YOLO is not an allowed method; it is highlighted as invalid.</p>
+{{end}}
+
+{{define "footer"}}
+	{{/* a plain template name gets normal string highlighting */}}
+	<footer>{{block "copyright" .}}&copy; {{.Year}}{{end}}</footer>
+{{end}}
+
+{{template "GET /articles/{id} 200 GetArticle(ctx, id)" .}}
+{{template "footer" .}}
+
+{{with $user := .CurrentUser}}
+	<p>Signed in as {{$user.Name | printf "%s"}} ({{len $user.Roles}} roles)</p>
+{{end}}
+
+</body>
+</html>
