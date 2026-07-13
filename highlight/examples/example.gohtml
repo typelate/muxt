@@ -49,6 +49,13 @@
 {{template "GET /articles/{id} 200 GetArticle(ctx, id)" .}}
 {{template "footer" .}}
 
+{{block `GET /time Time(ctx, lastEventID, sse)` .}}
+	{{/* raw-string (backtick) template names highlight like double-quoted ones */}}
+	<time>{{.Now}}</time>
+{{end}}
+
+{{block `plain raw-string name` .}}{{end}}
+
 {{with $user := .CurrentUser}}
 	<p>Signed in as {{$user.Name | printf "%s"}} ({{len $user.Roles}} roles)</p>
 {{end}}

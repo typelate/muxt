@@ -77,8 +77,52 @@
           }
         },
         {
+          "comment": "Raw-string (backtick) variant of the muxt route name rule.",
+          "name": "string.quoted.raw.template-name.muxt-route.gotemplate",
+          "match": "\\G(`)((([A-Z]+)\\s+)?([^/`]*)(/[^`\\s]*))(\\s+((?:\\d|http\\.Status)[^`\\s]+))?([^`]*)(`)",
+          "captures": {
+            "1": { "name": "punctuation.definition.string.begin.gotemplate" },
+            "4": {
+              "patterns": [
+                {
+                  "match": "\\b(GET|POST|PUT|PATCH|DELETE)\\b",
+                  "name": "keyword.control.http-method.muxt"
+                },
+                {
+                  "match": "[A-Z]+",
+                  "name": "invalid.illegal.http-method.muxt"
+                }
+              ]
+            },
+            "5": { "name": "entity.name.namespace.host.muxt" },
+            "6": { "patterns": [{ "include": "#muxt-path" }] },
+            "8": {
+              "patterns": [
+                {
+                  "match": "http\\.Status[A-Za-z]+",
+                  "name": "support.constant.http-status.muxt"
+                },
+                {
+                  "match": "\\d+",
+                  "name": "constant.numeric.http-status.muxt"
+                }
+              ]
+            },
+            "9": { "patterns": [{ "include": "#muxt-call" }] },
+            "10": { "name": "punctuation.definition.string.end.gotemplate" }
+          }
+        },
+        {
           "name": "string.quoted.double.template-name.gotemplate",
           "match": "\\G(\")([^\"]*)(\")",
+          "captures": {
+            "1": { "name": "punctuation.definition.string.begin.gotemplate" },
+            "3": { "name": "punctuation.definition.string.end.gotemplate" }
+          }
+        },
+        {
+          "name": "string.quoted.raw.template-name.gotemplate",
+          "match": "\\G(`)([^`]*)(`)",
           "captures": {
             "1": { "name": "punctuation.definition.string.begin.gotemplate" },
             "3": { "name": "punctuation.definition.string.end.gotemplate" }

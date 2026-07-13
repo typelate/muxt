@@ -2,7 +2,7 @@
   "name": "muxt-template-syntax",
   "displayName": "Muxt Go Template Syntax",
   "description": "Syntax highlighting for Go html/template files with Muxt route-name highlighting in define/block/template names.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "typelate",
   "license": "AGPL-3.0-only",
   "repository": {
