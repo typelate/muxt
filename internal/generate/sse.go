@@ -17,7 +17,7 @@ import (
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
-func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		flusherIdent = "flusher"
 		okIdent      = "ok"
@@ -35,7 +35,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	functionIdent := def.FunctionIdentifier().Name
 
 	var callFun ast.Expr
-	if obj, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), functionIdent); obj != nil {
+	if def.IsMethod() {
 		callFun = &ast.SelectorExpr{X: ast.NewIdent(receiverIdent), Sel: ast.NewIdent(functionIdent)}
 	} else {
 		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
@@ -85,7 +85,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
 	// The result type is per-callback; arg parsing only needs ctx/lastEventID/path
 	// (it ignores the result type), so pass an empty struct here.
-	body, err = appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sigs, nil, receiver, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	body, err = appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -118,33 +118,20 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}}}},
 	)
 
-	// Build a render closure for every sse-prefixed argument. The base "sse"
-	// renders the route's own template; each sse-prefixed callback (sseClock,
-	// sseMetrics, ...) renders a same-named template, whose existence is checked
-	// here. Each closure has its own result type and creates its own
-	// SSETemplateData, so the callbacks need not share a result type.
 	callArgs := slices.Clone(def.CallExpression().Args)
-	for i, a := range def.CallExpression().Args {
-		id, ok := a.(*ast.Ident)
-		if !ok || !muxt.IsSSEArgument(id.Name) {
+	for i, arg := range def.Arguments {
+		if arg.Type != muxt.ArgumentTypeExecute {
 			continue
 		}
-		var cb *types.Signature
-		if i < sig.Params().Len() {
-			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
-		}
-		resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, cb)
+		resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, arg.CallbackSignature())
 		if err != nil {
 			return nil, err
 		}
-		templateName := def.Name()
-		if id.Name != muxt.TemplateNameScopeIdentifierExecute {
-			templateName = id.Name
-			if def.Template() == nil || def.Template().Lookup(templateName) == nil {
-				return nil, fmt.Errorf("no template %q for sse argument %s", templateName, id.Name)
-			}
+		tmpl := arg.Template()
+		if tmpl == nil {
+			return nil, fmt.Errorf("no template %q for sse argument %s", arg.Identifier, arg.Identifier)
 		}
-		closure, err := sseClosure(file, config, def, templateName, resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+		closure, err := sseClosure(file, config, def, tmpl.Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
 		if err != nil {
 			return nil, err
 		}

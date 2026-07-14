@@ -13,7 +13,7 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string) (*ast.FuncLit, error) {
+func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string) (*ast.FuncLit, error) {
 	if sig.Results().Len() == 0 {
 		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
 	}
@@ -28,7 +28,13 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
 	}
 
-	execIdx, callbackSig, hasExecute := executeArg(def.CallExpression(), sig)
+	execIdx, callbackSig, hasExecute := -1, (*types.Signature)(nil), false
+	for i, arg := range def.Arguments {
+		if arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute {
+			execIdx, callbackSig, hasExecute = i, arg.CallbackSignature(), true
+			break
+		}
+	}
 	var resultType types.Type
 	var execHasArg bool
 	if hasExecute {
@@ -70,7 +76,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		},
 	}
 
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sigs, nil, receiver, resultDataIdent, config, def.CallExpression(), func(s string) *ast.BlockStmt {
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sig, def.Arguments, nil, resultDataIdent, config, def.CallExpression(), func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
@@ -230,26 +236,6 @@ func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIde
 		},
 		Body: &ast.BlockStmt{List: body},
 	}, nil
-}
-
-// executeArg finds the reserved "execute" render-callback argument in call.
-// It returns its index, the receiver method's parameter at that index as a
-// *types.Signature (nil if the param is not a func), and whether it is present.
-func executeArg(call *ast.CallExpr, sig *types.Signature) (int, *types.Signature, bool) {
-	for i, a := range call.Args {
-		id, ok := a.(*ast.Ident)
-		if !ok || id.Name != muxt.TemplateNameScopeIdentifierExecute {
-			continue
-		}
-		var cb *types.Signature
-		if i < sig.Params().Len() {
-			// Underlying unwraps named and aliased func types so the callback
-			// param may be declared as e.g. `type RenderFunc func(T) error`.
-			cb, _ = sig.Params().At(i).Type().Underlying().(*types.Signature)
-		}
-		return i, cb, true
-	}
-	return 0, nil, false
 }
 
 // validateExecuteCallback enforces the execute contract and returns the

@@ -1,0 +1,282 @@
+package muxt
+
+import (
+	"go/token"
+	"go/types"
+	"html/template"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/tools/go/packages"
+)
+
+func TestArgument(t *testing.T) {
+	fileSet := token.NewFileSet()
+	packageList, err := packages.Load(&packages.Config{
+		Fset: fileSet,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
+		Dir:  "testdata/example",
+	}, ".")
+	require.NoError(t, err)
+
+	examplePkg := packageList[0].Types
+	require.NotNil(t, examplePkg)
+
+	httpPkg := findImport(examplePkg, "net/http")
+	require.NotNil(t, httpPkg)
+	httpRequestPtrType := types.NewPointer(httpPkg.Scope().Lookup("Request").Type())
+	require.NotNil(t, httpRequestPtrType)
+	httpResponseWriterType := httpPkg.Scope().Lookup("ResponseWriter").Type()
+	require.NotNil(t, httpResponseWriterType)
+
+	contextPkg := findImport(examplePkg, "context")
+	require.NotNil(t, contextPkg)
+	contextContextType := contextPkg.Scope().Lookup("Context").Type()
+	require.NotNil(t, contextContextType)
+
+	netURLPkg := findImport(examplePkg, "net/url")
+	require.NotNil(t, contextPkg)
+	netURLValuesType := netURLPkg.Scope().Lookup("Values").Type()
+	require.NotNil(t, netURLValuesType)
+
+	mimeMultipartPkg := findImport(examplePkg, "mime/multipart")
+	require.NotNil(t, mimeMultipartPkg)
+	multipartFormType := mimeMultipartPkg.Scope().Lookup("Form").Type()
+	require.NotNil(t, multipartFormType)
+
+	// mime/multipart.Form
+
+	serverType := examplePkg.Scope().Lookup("Server").Type().(*types.Named)
+	emptyStruct := examplePkg.Scope().Lookup("Empty").Type().(*types.Named)
+
+	for _, tc := range []struct {
+		Name     string
+		Receiver *types.Named
+		Template string
+		Expect   func(t *testing.T, defs []Definition, err error)
+	}{
+		{Name: "no args", Receiver: serverType, Template: `{{define "GET / M()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Len(t, defs[0].Arguments, 0)
+			require.Equal(t, "M", defs[0].Identifier())
+			require.NotNil(t, defs[0].sig)
+		}},
+		{Name: "receiver method call", Receiver: serverType, Template: `{{define "GET / M()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "M", defs[0].Identifier())
+			require.Empty(t, defs[0].Arguments)
+			require.True(t, defs[0].isMethod, "M is a method on the receiver")
+		}},
+		{Name: "package function call", Receiver: serverType, Template: `{{define "GET / FunctionContext(ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "FunctionContext", defs[0].Identifier())
+			require.Equal(t, ArgumentTypeRequestContext, defs[0].Arguments[0].Type)
+			require.False(t, defs[0].isMethod, "FunctionContext is a package-scope function, not a receiver method")
+		}},
+		{Name: "request", Receiver: serverType, Template: `{{define "GET / HTTPRequest(request)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.NotNil(t, defs[0].sig)
+			require.Len(t, defs[0].Arguments, 1)
+			require.Equal(t, "HTTPRequest", defs[0].Identifier())
+			require.Equal(t, "request", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequest, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(httpRequestPtrType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "context", Receiver: serverType, Template: `{{define "GET / Context(ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Len(t, defs[0].Arguments, 1)
+			require.Equal(t, "Context", defs[0].Identifier())
+			require.Equal(t, "ctx", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestContext, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(contextContextType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "response writer", Receiver: serverType, Template: `{{define "GET / HTTPResponseWriter(response)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "HTTPResponseWriter", defs[0].Identifier())
+			require.Equal(t, "response", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeResponse, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(httpResponseWriterType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "form", Receiver: serverType, Template: `{{define "GET / URLValues(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "URLValues", defs[0].Identifier())
+			require.Equal(t, "form", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(netURLValuesType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "multipart", Receiver: serverType, Template: `{{define "GET / MultipartForm(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "MultipartForm", defs[0].Identifier())
+			require.Equal(t, "multipart", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestMultipartForm, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(multipartFormType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "multipart raw pointer", Receiver: serverType, Template: `{{define "GET / MultipartFormPtr(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "MultipartFormPtr", defs[0].Identifier())
+			require.Equal(t, ArgumentTypeRequestMultipartForm, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(types.NewPointer(multipartFormType), defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "multipart param neither struct nor pointer", Receiver: serverType, Template: `{{define "GET / String(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "expected multipart parameter type to be a struct")
+		}},
+		{Name: "form struct", Receiver: serverType, Template: `{{define "GET / FormStruct(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "FormStruct", defs[0].Identifier())
+			require.Equal(t, ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+		}},
+		{Name: "form param neither struct nor url.Values", Receiver: serverType, Template: `{{define "GET / String(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "expected form parameter type to be a struct")
+		}},
+		{Name: "path value", Receiver: serverType, Template: `{{define "GET /{id} String(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "String", defs[0].Identifier())
+			require.Equal(t, "id", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestPathValue, defs[0].Arguments[0].Type)
+			basic, ok := defs[0].Arguments[0].ParamType.(*types.Basic)
+			require.True(t, ok)
+			require.Equal(t, types.String, basic.Kind())
+		}},
+		{Name: "last event id", Receiver: serverType, Template: `{{define "GET / String(lastEventID)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+
+			require.Equal(t, "String", defs[0].Identifier())
+			require.Equal(t, "lastEventID", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeLastEventID, defs[0].Arguments[0].Type)
+			basic, ok := defs[0].Arguments[0].ParamType.(*types.Basic)
+			require.True(t, ok)
+			require.Equal(t, types.String, basic.Kind())
+		}},
+		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			// The outer Any(any) receives the result of the inner Context call.
+
+			require.Equal(t, "Any", defs[0].Identifier())
+
+			require.Len(t, defs[0].Arguments, 1)
+
+			require.NotEmpty(t, defs[0].Arguments[0].Identifier)
+			isTypeAny(t, defs[0].Arguments[0].ParamType)
+
+			nested := defs[0].Arguments[0]
+
+			require.Equal(t, "Context", defs[0].Arguments[0].Identifier)
+			require.True(t, nested.isMethod, "Context is a receiver method")
+			require.NotNil(t, nested.sig, "nested call signature")
+
+			require.Equal(t, ArgumentTypeCall, defs[0].Arguments[0].Type)
+			require.Equal(t, "Context", defs[0].Arguments[0].Identifier)
+			isTypeAny(t, defs[0].Arguments[0].ParamType)
+
+			require.Len(t, defs[0].Arguments[0].args, 1)
+			require.Equal(t, ArgumentTypeRequestContext, defs[0].Arguments[0].args[0].Type)
+			require.Equal(t, "ctx", defs[0].Arguments[0].args[0].Identifier)
+			require.Equal(t, contextContextType, defs[0].Arguments[0].args[0].ParamType)
+		}},
+		{Name: "nested package function call", Receiver: serverType, Template: `{{define "GET / Any(FunctionContext(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+
+			isTypeAny(t, defs[0].Arguments[0].ParamType)
+
+			requireArgument(t, defs[0].Arguments, 0, "FunctionContext", ArgumentTypeCall, "any")
+			nested := defs[0].Arguments[0]
+			require.False(t, nested.isMethod, "FunctionContext is a package-scope function")
+			requireArgument(t, nested.args, 0, "ctx", ArgumentTypeRequestContext, "context.Context")
+		}},
+		{Name: "synthesized method", Receiver: emptyStruct, Template: `{{define "GET / DoesNotExist(ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			// The receiver has no DoesNotExist method and it is not a package
+			// function, so its signature is synthesized from the call scope.
+			require.NotNil(t, defs[0].sig)
+			require.True(t, defs[0].isMethod, "a synthesized call becomes a required receiver method")
+
+			require.Equal(t, "ctx", defs[0].Arguments[0].Identifier)
+			require.True(t, types.Identical(contextContextType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "error when argument is not assignable to parameter", Receiver: serverType, Template: `{{define "GET / Context(request)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method expects type context.Context but request is *http.Request")
+		}},
+		{Name: "passing context argument when parameter is a string", Receiver: serverType, Template: `{{define "GET / String(ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method expects type string but ctx is context.Context")
+		}},
+		{Name: "passing request when parameter is a receiver pointer", Receiver: serverType, Template: `{{define "GET / PtrServer(request)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method expects type *Server but request is *http.Request")
+		}},
+		{Name: "passing response when parameter is a string", Receiver: serverType, Template: `{{define "GET / String(response)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method expects type string but response is http.ResponseWriter")
+		}},
+		{Name: "too few arguments", Receiver: serverType, Template: `{{define "GET / String()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, `handler func String(string) any expects 1 arguments but call String() has 0`)
+			require.Len(t, defs, 1)
+		}},
+		{Name: "too many arguments", Receiver: serverType, Template: `{{define "GET /{name} Context(ctx, name)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, `handler func Context(context.Context) any expects 1 arguments but call Context(ctx, name) has 2`)
+		}},
+		{Name: "execute callback when method takes no parameters", Receiver: serverType, Template: `{{define "GET / NoParams(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "execute argument for NoParams must be a func(...) error")
+		}},
+		{Name: "wrong argument type in shared field list", Receiver: serverType, Template: `{{define "GET /post/{postID}/comment/{commentID} FieldList(ctx, request, commentID)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method expects type string but request is *http.Request")
+		}},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(tc.Template))
+			defs, err := Definitions(ts, "templates")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for i := range defs {
+				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList)
+				if err != nil {
+					break
+				}
+			}
+			tc.Expect(t, defs, err)
+		})
+	}
+}
+
+func isTypeAny(t *testing.T, tp types.Type) {
+	t.Helper()
+	anyAliasType, ok := tp.(*types.Alias)
+	require.True(t, ok)
+	require.Equal(t, "any", anyAliasType.Obj().Name())
+}
+
+// requireArgument asserts that the argument at index i has the expected
+// identifier, classification, and parameter type (compared by its type string).
+func requireArgument(t *testing.T, args []Argument, i int, identifier string, argType ArgumentType, paramType string) {
+	t.Helper()
+	require.Greater(t, len(args), i, "argument at index %d does not exist", i)
+	arg := args[i]
+	require.Equal(t, identifier, arg.Identifier, "Argument[%d].Identifier", i)
+	require.Equal(t, argType, arg.Type, "Argument[%d].Type", i)
+	require.NotNil(t, arg.ParamType, "Argument[%d].ParamType", i)
+	require.Equal(t, paramType, arg.ParamType.String(), "Argument[%d].ParamType", i)
+}
+
+func findImport(example *types.Package, pkg string) *types.Package {
+	for _, p := range example.Imports() {
+		if p.Path() == pkg {
+			return p
+		}
+	}
+	return nil
+}

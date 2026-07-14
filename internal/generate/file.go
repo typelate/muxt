@@ -67,6 +67,9 @@ func (file *File) addPackages(packages []*packages.Package) {
 
 func (file *File) OutputPackage() *packages.Package { return file.outPkg }
 
+// Packages returns the loaded package list backing this file's type lookups.
+func (file *File) Packages() []*packages.Package { return file.packages }
+
 func (file *File) SyntaxFile(pos token.Pos) (*ast.File, *token.FileSet, error) {
 	position := file.fileSet.Position(pos)
 	fSet := token.NewFileSet()
