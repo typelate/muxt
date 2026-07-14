@@ -82,7 +82,8 @@ type Definition struct {
 	call *ast.CallExpr
 	sig  *types.Signature
 
-	isMethod bool
+	isMethod    bool
+	resultShape ResultShape
 
 	fileSet *token.FileSet
 
@@ -157,6 +158,7 @@ func (def Definition) Identifier() string             { return def.identifier }
 func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
 func (def Definition) Signature() *types.Signature    { return def.sig }
 func (def Definition) IsMethod() bool                 { return def.isMethod }
+func (def Definition) ResultShape() ResultShape       { return def.resultShape }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -408,11 +410,18 @@ func IsSSEArgument(name string) bool {
 }
 
 func checkArguments(identifiers []string, call *ast.CallExpr) error {
+	hasForm, hasMultipart := false, false
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
+			}
+			switch exp.Name {
+			case TemplateNameScopeIdentifierForm:
+				hasForm = true
+			case TemplateNameScopeIdentifierMultipart:
+				hasMultipart = true
 			}
 		case *ast.CallExpr:
 			if err := checkArguments(identifiers, exp); err != nil {
@@ -421,6 +430,9 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 		default:
 			return fmt.Errorf("expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
 		}
+	}
+	if hasForm && hasMultipart {
+		return fmt.Errorf("call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
 	}
 	return nil
 }

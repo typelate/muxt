@@ -248,7 +248,7 @@ func (s Server) Method() (T, []error)            // Slices unsupported
 func (s Server) Method() (T, map[string]error)   // Maps unsupported
 ```
 
-[err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) · [err_form_unsupported_composite.txt](../../cmd/muxt/testdata/err_form_unsupported_composite.txt)
+[err_form_unsupported_composite.txt](../../cmd/muxt/testdata/err_form_unsupported_composite.txt)
 
 ## Test Files by Category
 
@@ -265,7 +265,6 @@ func (s Server) Method() (T, map[string]error)   // Maps unsupported
 - [reference_call_with_complex_package.txt](../../cmd/muxt/testdata/reference_call_with_complex_package.txt) — Complex package paths
 
 **Unsupported patterns:**
-- [err_form_unsupported_return.txt](../../cmd/muxt/testdata/err_form_unsupported_return.txt) — Unsupported second return
 - [err_form_unsupported_composite.txt](../../cmd/muxt/testdata/err_form_unsupported_composite.txt) — Composite types
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

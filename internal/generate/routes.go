@@ -713,20 +713,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 	if parsed == nil {
 		parsed = make(map[string]struct{})
 	}
-	hasForm, hasMultipart := false, false
-	for _, a := range call.Args {
-		if id, ok := a.(*ast.Ident); ok {
-			switch id.Name {
-			case muxt.TemplateNameScopeIdentifierForm:
-				hasForm = true
-			case muxt.TemplateNameScopeIdentifierMultipart:
-				hasMultipart = true
-			}
-		}
-	}
-	if hasForm && hasMultipart {
-		return nil, fmt.Errorf("call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), muxt.TemplateNameScopeIdentifierForm, muxt.TemplateNameScopeIdentifierMultipart)
-	}
 	resultCount := 0
 	for i, a := range call.Args {
 		param := signature.Params().At(i)

@@ -14,9 +14,6 @@ import (
 )
 
 func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string) (*ast.FuncLit, error) {
-	if sig.Results().Len() == 0 {
-		return nil, fmt.Errorf("method for pattern %q has no results it should have one or two", def.Name())
-	}
 	var callFun ast.Expr
 	isMethodCall := sig.Recv() != nil
 	if isMethodCall {
@@ -39,7 +36,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 	var execHasArg bool
 	if hasExecute {
 		var err error
-		resultType, execHasArg, err = validateExecuteCallback(def.FunctionIdentifier().Name, sig, callbackSig)
+		resultType, execHasArg, err = validateExecuteCallback(def.FunctionIdentifier().Name, callbackSig)
 		if err != nil {
 			return nil, err
 		}
@@ -238,15 +235,13 @@ func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIde
 	}, nil
 }
 
-// validateExecuteCallback enforces the execute contract and returns the
-// TemplateData result type T and whether the callback takes a data argument.
-//   - method must return only error
+// validateExecuteCallback enforces the execute callback contract and returns
+// the TemplateData result type T and whether the callback takes a data
+// argument. The method itself is already validated to return only error by
+// muxt.ResolveCall (ResultShapeError).
 //   - callback must be func() error (T = struct{}) or func(T) error
-func validateExecuteCallback(methodName string, method, callback *types.Signature) (types.Type, bool, error) {
+func validateExecuteCallback(methodName string, callback *types.Signature) (types.Type, bool, error) {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	if method.Results().Len() != 1 || !types.Implements(method.Results().At(0).Type(), errIface) {
-		return nil, false, fmt.Errorf("method %s using the execute callback must return only error", methodName)
-	}
 	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
 		return nil, false, fmt.Errorf("execute argument for %s must be a func(...) error", methodName)
 	}

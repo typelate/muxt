@@ -27,10 +27,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	methodReturnsErr, err := validateSSEMethodResults(def.FunctionIdentifier().Name, sig)
-	if err != nil {
-		return nil, err
-	}
+	methodReturnsErr := def.ResultShape() == muxt.ResultShapeError
 
 	functionIdent := def.FunctionIdentifier().Name
 
@@ -85,7 +82,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
 	// The result type is per-callback; arg parsing only needs ctx/lastEventID/path
 	// (it ignores the result type), so pass an empty struct here.
-	body, err = appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -263,23 +260,6 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		},
 		Body: &ast.BlockStmt{List: body},
 	}, nil
-}
-
-// validateSSEMethodResults checks that an sse method returns nothing or only
-// error, and reports whether it returns an error.
-func validateSSEMethodResults(methodName string, method *types.Signature) (bool, error) {
-	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	switch method.Results().Len() {
-	case 0:
-		return false, nil
-	case 1:
-		if !types.Implements(method.Results().At(0).Type(), errIface) {
-			return false, fmt.Errorf("method %s using the sse callback must return nothing or an error", methodName)
-		}
-		return true, nil
-	default:
-		return false, fmt.Errorf("method %s using the sse callback must return nothing or an error", methodName)
-	}
 }
 
 // validateSSECallbackShape checks that an sse callback parameter is func() error
