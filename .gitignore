@@ -30,6 +30,8 @@ go.work.sum
 cmd/muxt/testdata/*/**
 !cmd/muxt/testdata/*.txt
 
+docs/superpowers
+
 tmp
 
 todos.json
