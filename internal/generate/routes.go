@@ -186,6 +186,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		generatedFiles = append(generatedFiles, files...)
 		topLevelTemplateRoutes = groups.noFile
 	} else {
+		topLevelTemplateRoutes = append(topLevelTemplateRoutes, groups.noFile...)
 		for _, sourceFile := range templateSourceFiles {
 			topLevelTemplateRoutes = append(topLevelTemplateRoutes, groups.byFile[sourceFile]...)
 		}
