@@ -298,6 +298,6 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 - [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Full blog application
 
 **Error cases:**
-- [err_arg_type_mismatch.txt](../../cmd/muxt/testdata/err_arg_type_mismatch.txt) — Type mismatch
+- [err_arg_path_value_type.txt](../../cmd/muxt/testdata/err_arg_path_value_type.txt) — Unsupported path value type
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

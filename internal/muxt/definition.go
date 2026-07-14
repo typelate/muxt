@@ -80,6 +80,9 @@ type Definition struct {
 
 	fun  *ast.Ident
 	call *ast.CallExpr
+	sig  *types.Signature
+
+	isMethod bool
 
 	fileSet *token.FileSet
 
@@ -105,6 +108,8 @@ type Definition struct {
 	templatesVariable string
 
 	Representation Representation
+
+	Arguments []Argument
 }
 
 type Representation string
@@ -150,6 +155,8 @@ func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
 func (def Definition) Identifier() string             { return def.identifier }
 func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
+func (def Definition) Signature() *types.Signature    { return def.sig }
+func (def Definition) IsMethod() bool                 { return def.isMethod }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -344,6 +351,10 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
 
+	if def.Representation == RepresentationSSE && def.hasResponseWriterArg {
+		return fmt.Errorf("sse handler cannot use a %q argument", TemplateNameScopeIdentifierHTTPResponse)
+	}
+
 	return nil
 }
 
@@ -412,28 +423,6 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 		}
 	}
 	return nil
-}
-
-const (
-	TemplateNameScopeIdentifierContext      = "ctx"
-	TemplateNameScopeIdentifierForm         = "form"
-	TemplateNameScopeIdentifierMultipart    = "multipart"
-	TemplateNameScopeIdentifierHTTPRequest  = "request"
-	TemplateNameScopeIdentifierHTTPResponse = "response"
-	TemplateNameScopeIdentifierExecute      = "execute"
-	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
-)
-
-func patternScope() []string {
-	return []string{
-		TemplateNameScopeIdentifierHTTPRequest,
-		TemplateNameScopeIdentifierHTTPResponse,
-		TemplateNameScopeIdentifierContext,
-		TemplateNameScopeIdentifierForm,
-		TemplateNameScopeIdentifierMultipart,
-		TemplateNameScopeIdentifierExecute,
-		TemplateNameScopeIdentifierLastEventID,
-	}
 }
 
 // analyzeRedirectCalls performs static analysis on all templates to determine
