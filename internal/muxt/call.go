@@ -73,6 +73,26 @@ const (
 	ArgumentTypeCall
 )
 
+// ResultShape classifies a handler method's results. It is resolved during
+// ResolveCall so the generate package can emit the matching call statements
+// without re-deriving the contract.
+type ResultShape int
+
+const (
+	ResultShapeInvalid ResultShape = iota
+	// ResultShapeNone is an sse handler method with no results: func(...)
+	ResultShapeNone
+	// ResultShapeData is func(...) T
+	ResultShapeData
+	// ResultShapeDataError is func(...) (T, error)
+	ResultShapeDataError
+	// ResultShapeDataOK is func(...) (T, bool)
+	ResultShapeDataOK
+	// ResultShapeError is func(...) error: required for methods receiving the
+	// execute callback and permitted for sse handler methods.
+	ResultShapeError
+)
+
 func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) error {
 	if def.call == nil || def.fun == nil {
 		return nil
@@ -84,7 +104,78 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
+	shape, err := classifyResultShape(def)
+	if err != nil {
+		return err
+	}
+	def.resultShape = shape
 	return nil
+}
+
+// classifyResultShape validates def's method results against its contract:
+// sse methods return nothing or an error, methods receiving the execute
+// callback return only error, and all other methods return a value plus an
+// optional error or bool.
+func classifyResultShape(def *Definition) (ResultShape, error) {
+	results := def.sig.Results()
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	if def.Representation == RepresentationSSE {
+		switch {
+		case results.Len() == 0:
+			return ResultShapeNone, nil
+		case results.Len() == 1 && types.Implements(results.At(0).Type(), errIface):
+			return ResultShapeError, nil
+		default:
+			return ResultShapeInvalid, fmt.Errorf("method %s using the sse callback must return nothing or an error", def.fun.Name)
+		}
+	}
+	if slices.ContainsFunc(def.Arguments, func(a Argument) bool {
+		return a.Type == ArgumentTypeExecute && a.Identifier == TemplateNameScopeIdentifierExecute
+	}) {
+		if results.Len() != 1 || !types.Implements(results.At(0).Type(), errIface) {
+			return ResultShapeInvalid, fmt.Errorf("method %s using the execute callback must return only error", def.fun.Name)
+		}
+		return ResultShapeError, nil
+	}
+	switch results.Len() {
+	case 1:
+		return ResultShapeData, nil
+	case 2:
+		last := results.At(1).Type()
+		if types.Implements(last, errIface) {
+			return ResultShapeDataError, nil
+		}
+		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
+			return ResultShapeDataOK, nil
+		}
+		return ResultShapeInvalid, errors.New("expected last result to be either an error or a bool")
+	case 0:
+		return ResultShapeInvalid, fmt.Errorf("method for pattern %q has no results it should have one or two", def.name)
+	default:
+		return ResultShapeInvalid, fmt.Errorf("method %s has no results it should have one or two", def.fun.Name)
+	}
+}
+
+// checkNestedCallResultShape validates a nested call's results: one value,
+// optionally followed by an error or bool.
+func checkNestedCallResultShape(name string, sig *types.Signature) error {
+	results := sig.Results()
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	switch results.Len() {
+	case 1:
+		return nil
+	case 2:
+		last := results.At(1).Type()
+		if types.Implements(last, errIface) {
+			return nil
+		}
+		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
+			return nil
+		}
+		return errors.New("expected last result to be either an error or a bool")
+	default:
+		return fmt.Errorf("method %s has no results it should have one or two", name)
+	}
 }
 
 // resolveCall resolves a single call expression (top-level or nested) against
@@ -166,6 +257,9 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			}
 			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl)
 			if err != nil {
+				return nil, false, nil, err
+			}
+			if err := checkNestedCallResultShape(name, nestedSig); err != nil {
 				return nil, false, nil, err
 			}
 			args = append(args, Argument{

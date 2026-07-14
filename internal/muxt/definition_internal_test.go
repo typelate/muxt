@@ -319,6 +319,14 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "form and multipart in the same call",
+			In:       "POST / Upload(form, multipart)",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, `call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`)
+			},
+		},
+		{
 			Name:     "sse handler cannot use response argument",
 			In:       "GET /x sse(Endpoint(response))",
 			ExpMatch: true,

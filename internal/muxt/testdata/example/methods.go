@@ -30,6 +30,14 @@ func (srv *Server) NoParams() error { return nil }
 
 func (srv *Server) FieldList(ctx context.Context, postID, commentID string) any { return nil }
 
+func (srv *Server) NoResults()                                     {}
+func (srv *Server) TwoResultsSecondNotErrorOrBool() (int, float64) { return 0, 0 }
+func (srv *Server) StringOK() (string, bool)                       { return "", false }
+func (srv *Server) StringError() (string, error)                   { return "", nil }
+func (srv *Server) ExecuteReturnsValue(func() error) (int, error)  { return 0, nil }
+func (srv *Server) SSEReturnsValue(func(string) error) int         { return 0 }
+func (srv *Server) SSEEvents(func(string) error)                   {}
+
 func (srv *Server) Function(func() error) any                            { return nil }
 func (srv *Server) AnyFunction(func(any) error) any                      { return nil }
 func (srv *Server) StringFunction(func(string) error) any                { return nil }

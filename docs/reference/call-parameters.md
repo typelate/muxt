@@ -300,7 +300,8 @@ Validation errors should return from your method. Display them in templates with
 - [reference_multipart_with_name_tag.txt](../../cmd/muxt/testdata/reference_multipart_with_name_tag.txt) — `name` tag rebind
 - [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) — `--output-multipart-max-memory` flag
 - [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt) — Malformed body → 400
-- [err_multipart_with_form.txt](../../cmd/muxt/testdata/err_multipart_with_form.txt) — `form` + `multipart` rejected
+
+Using `form` and `multipart` in the same call is rejected (multipart parses url-encoded fields too).
 
 **Server-Sent Events:**
 - [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse` callback with `lastEventID`
