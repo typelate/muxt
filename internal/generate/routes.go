@@ -184,9 +184,10 @@ topLevelTemplateRoutes = groups.all
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	sigs := make(map[string]*types.Signature)
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface); err != nil {
+		return nil, err
+	}
 	for _, def := range topLevelTemplateRoutes {
-		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s", def.RawPattern())
 		}
@@ -196,7 +197,7 @@ topLevelTemplateRoutes = groups.all
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := callHandlerFunc(file, config, def, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, config.ReceiverInterface)
+		handlerFunc, err := callHandlerFunc(file, config, def, config.ReceiverInterface)
 		if err != nil {
 			return nil, err
 		}
@@ -286,6 +287,51 @@ topLevelTemplateRoutes = groups.all
 	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content})
 
 	return generatedFiles, nil
+}
+
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType) error {
+	for i := range defs {
+		if defs[i].FunctionIdentifier() == nil {
+			continue
+		}
+		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages()); err != nil {
+			return err
+		}
+		if err := accumulateReceiverMethods(defs[i].FunctionIdentifier().Name, defs[i].Signature(), defs[i].IsMethod(), defs[i].Arguments, file, receiverInterface); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool, args []muxt.Argument, file *File, receiverInterface *ast.InterfaceType) error {
+	if isMethod {
+		for _, a := range args {
+			if a.Type != muxt.ArgumentTypeCall {
+				continue
+			}
+			if err := accumulateReceiverMethods(a.Identifier, a.Signature(), a.IsMethod(), a.Arguments(), file, receiverInterface); err != nil {
+				return err
+			}
+		}
+	}
+	if !isMethod {
+		return nil
+	}
+	if i := slices.IndexFunc(receiverInterface.Methods.List, func(field *ast.Field) bool {
+		return field.Names[0].Name == name
+	}); i >= 0 {
+		return nil
+	}
+	exp, err := file.TypeASTExpression(sig)
+	if err != nil {
+		return err
+	}
+	receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
+		Names: []*ast.Ident{ast.NewIdent(name)},
+		Type:  exp,
+	})
+	return nil
 }
 
 func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, routesPkg *packages.Package, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
@@ -423,10 +469,11 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	sigs := make(map[string]*types.Signature)
+	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface); err != nil {
+		return nil, err
+	}
 	for i := range defs {
 		t := defs[i]
-		const dataVarIdent = "result"
 		if config.Verbose {
 			logger.Printf("generating handler for pattern %s in %s", t.RawPattern(), sourceFile)
 		}
@@ -436,7 +483,7 @@ func generatePerFileRouteFunction(
 			routesFunc.Body.List = append(routesFunc.Body.List, call)
 			continue
 		}
-		handlerFunc, err := callHandlerFunc(file, config, t, sigs, receiver, receiverInterface, routesPkg.Types, dataVarIdent, receiverInterfaceName)
+		handlerFunc, err := callHandlerFunc(file, config, t, receiverInterfaceName)
 		if err != nil {
 			return nil, err
 		}
@@ -559,21 +606,21 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 	return handlerFunc
 }
 
-func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sigs map[string]*types.Signature, receiver *types.Named, receiverInterface *ast.InterfaceType, outputPkg *types.Package, dataVarIdent string, receiverInterfaceName string) (*ast.FuncLit, error) {
+func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	sig, err := ensureMethodSignature(file, sigs, def, receiver, receiverInterface, def.CallExpression(), outputPkg)
-	if err != nil {
-		return nil, err
+	sig := def.Signature()
+	if sig == nil {
+		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())
 	}
 	switch def.Representation {
 	case muxt.RepresentationSSE:
-		return sseMethodHandlerFunc(file, config, def, sigs, receiver, sig, receiverInterfaceName)
+		return sseMethodHandlerFunc(file, config, def, sig, receiverInterfaceName)
 	default:
-		return executeHTMLTemplateHandler(file, config, def, sigs, receiver, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
+		return executeHTMLTemplateHandler(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	}
 }
 
@@ -644,7 +691,7 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, sigs map[string]*types.Signature, parsed map[string]struct{}, receiver *types.Named, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, signature *types.Signature, args []muxt.Argument, parsed map[string]struct{}, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	if parseErrBlock == nil {
 		// Normal handlers accumulate scalar-parse failures into the template
 		// data (and respond with the recorded error status). SSE handlers pass
@@ -655,9 +702,8 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
 	}
-	signature, ok := sigs[fun.Name]
-	if !ok {
-		return nil, fmt.Errorf("failed to get signature for %s", fun.Name)
+	if signature == nil {
+		return nil, fmt.Errorf("call %s was not resolved to a signature", fun.Name)
 	}
 	// const parsedVariableName = "parsed"
 	if exp := signature.Params().Len(); exp != len(call.Args) { // TODO: (signature.Variadic() && exp > len(call.Args))
@@ -689,7 +735,8 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 		default:
 			// TODO: add error case
 		case *ast.CallExpr:
-			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, sigs, parsed, receiver, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
+			nestedArg := args[i]
+			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, nestedArg.Signature(), nestedArg.Arguments(), parsed, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -699,18 +746,12 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			funcIdent := arg.Fun.(*ast.Ident).Name
 
-			callSig, ok := sigs[funcIdent]
-			if !ok {
-				return nil, fmt.Errorf("failed to get signature for %s", fun.Name)
-			}
-			obj, _, _ := types.LookupFieldOrMethod(receiver.Obj().Type(), true, receiver.Obj().Pkg(), funcIdent)
-			isMethodCall := obj != nil
-
-			if isMethodCall && !types.Identical(callSig, obj.Type()) {
-				log.Panicf("unexpected signature mismatch %s != %s", callSig, obj.Type())
+			callSig := nestedArg.Signature()
+			if callSig == nil {
+				return nil, fmt.Errorf("call %s was not resolved to a signature", funcIdent)
 			}
 
-			if isMethodCall {
+			if nestedArg.IsMethod() {
 				arg.Fun = &ast.SelectorExpr{
 					X:   ast.NewIdent(receiverIdent),
 					Sel: ast.NewIdent(funcIdent),
@@ -734,7 +775,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				// the request.
 				continue
 			}
-			argType, ok := defaultTemplateNameScope(file, def, arg.Name)
+			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("failed to determine type for %s", arg.Name)
 			}
@@ -1329,55 +1370,6 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 	}
 }
 
-func defaultTemplateNameScope(file *File, def muxt.Definition, argumentIdentifier string) (types.Type, bool) {
-	switch argumentIdentifier {
-	case muxt.TemplateNameScopeIdentifierHTTPRequest:
-		pkg, ok := file.Types("net/http")
-		if !ok {
-			return nil, false
-		}
-		t := types.NewPointer(pkg.Scope().Lookup("Request").Type())
-		return t, true
-	case muxt.TemplateNameScopeIdentifierHTTPResponse:
-		pkg, ok := file.Types("net/http")
-		if !ok {
-			return nil, false
-		}
-		t := pkg.Scope().Lookup("ResponseWriter").Type()
-		return t, true
-	case muxt.TemplateNameScopeIdentifierContext:
-		pkg, ok := file.Types("context")
-		if !ok {
-			return nil, false
-		}
-		t := pkg.Scope().Lookup("Context").Type()
-		return t, true
-	case muxt.TemplateNameScopeIdentifierForm:
-		pkg, ok := file.Types("net/url")
-		if !ok {
-			return nil, false
-		}
-		t := pkg.Scope().Lookup("Values").Type()
-		return t, true
-	case muxt.TemplateNameScopeIdentifierMultipart:
-		pkg, ok := file.Types("mime/multipart")
-		if !ok {
-			return nil, false
-		}
-		t := types.NewPointer(pkg.Scope().Lookup("Form").Type())
-		return t, true
-	case muxt.TemplateNameScopeIdentifierLastEventID:
-		// lastEventID defaults to string (sourced from the Last-Event-Id header);
-		// a non-string receiver param triggers typed parsing like a path value.
-		return types.Universe.Lookup("string").Type(), true
-	default:
-		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
-			return types.Universe.Lookup("string").Type(), true
-		}
-		return nil, false
-	}
-}
-
 // lastEventIDHeader is the canonical request header the lastEventID argument is
 // sourced from. http.Header.Get canonicalizes lookups, so this matches a
 // client's "Last-Event-ID" as well.
@@ -1403,106 +1395,6 @@ func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
 		},
 		Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name)}},
 	}
-}
-
-func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
-	obj := pkg.Scope().Lookup(fun.Name)
-	if obj == nil {
-		return nil, false
-	}
-	sig, ok := obj.Type().(*types.Signature)
-	if !ok {
-		return nil, false
-	}
-	if sig.Recv() != nil {
-		return nil, false
-	}
-	return obj, true
-}
-
-func ensureMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
-	fun, ok := call.Fun.(*ast.Ident)
-	if !ok {
-		return nil, fmt.Errorf("expected a method identifier")
-	}
-
-	isMethod := true
-	mo, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
-	if mo == nil {
-		if m, ok := packageScopeFunc(templatesPackage, fun); ok {
-			mo = m
-			isMethod = false
-		} else {
-			ms, err := createMethodSignature(file, signatures, def, receiver, receiverInterface, call, templatesPackage)
-			if err != nil {
-				return nil, err
-			}
-			fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
-			receiver.AddMethod(fn)
-			mo = fn
-		}
-	} else {
-		for _, a := range call.Args {
-			switch arg := a.(type) {
-			case *ast.CallExpr:
-				if _, err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-	if sig, ok := signatures[fun.Name]; ok {
-		return sig, nil
-	}
-	sig := mo.Type().(*types.Signature)
-	signatures[fun.Name] = sig
-	if !isMethod {
-		return sig, nil
-	}
-	exp, err := file.TypeASTExpression(mo.Type())
-	if err != nil {
-		return sig, err
-	}
-	receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
-		Names: []*ast.Ident{ast.NewIdent(fun.Name)},
-		Type:  exp,
-	})
-	return sig, nil
-}
-
-func createMethodSignature(file *File, signatures map[string]*types.Signature, def muxt.Definition, receiver *types.Named, receiverInterface *ast.InterfaceType, call *ast.CallExpr, templatesPackage *types.Package) (*types.Signature, error) {
-	var params []*types.Var
-	hasSSE := false
-	for _, a := range call.Args {
-		switch arg := a.(type) {
-		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute {
-				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
-			}
-			if muxt.IsSSEArgument(arg.Name) {
-				// An sse callback's data type cannot be inferred, so synthesize
-				// it as func(any) error and stream the result as any. The method
-				// returns nothing, matching the void SSE contract.
-				hasSSE = true
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
-				continue
-			}
-			tp, ok := defaultTemplateNameScope(file, def, arg.Name)
-			if !ok {
-				return nil, fmt.Errorf("could not determine a type for %s", arg.Name)
-			}
-			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
-		case *ast.CallExpr:
-			if _, err := ensureMethodSignature(file, signatures, def, receiver, receiverInterface, arg, templatesPackage); err != nil {
-				return nil, err
-			}
-		}
-	}
-	results := types.NewTuple(types.NewVar(0, nil, "", types.Universe.Lookup("any").Type()))
-	if hasSSE {
-		results = types.NewTuple()
-	}
-	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil
 }
 
 func callParseForm() *ast.ExprStmt {

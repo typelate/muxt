@@ -268,7 +268,7 @@ func (s Server) CreateUser(ctx context.Context, email, password string) (User, e
 
 Validation errors should return from your method. Display them in templates with `{{if .Err}}`.
 
-[err_arg_type_mismatch.txt](../../cmd/muxt/testdata/err_arg_type_mismatch.txt)
+[err_arg_path_value_type.txt](../../cmd/muxt/testdata/err_arg_path_value_type.txt)
 
 ## Test Files by Category
 
@@ -317,6 +317,6 @@ Validation errors should return from your method. Display them in templates with
 - [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) — Embedded methods
 
 **Errors:**
-- [err_arg_type_mismatch.txt](../../cmd/muxt/testdata/err_arg_type_mismatch.txt) — Parse errors
+- [err_arg_path_value_type.txt](../../cmd/muxt/testdata/err_arg_path_value_type.txt) — Unsupported path value type
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)

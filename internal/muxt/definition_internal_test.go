@@ -319,6 +319,14 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "sse handler cannot use response argument",
+			In:       "GET /x sse(Endpoint(response))",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, `sse handler cannot use a "response" argument`)
+			},
+		},
+		{
 			Name:     "path parameter is not an identifier",
 			In:       "GET /{123} F(123)",
 			ExpMatch: true,
