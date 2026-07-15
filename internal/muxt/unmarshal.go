@@ -3,6 +3,8 @@ package muxt
 import (
 	"fmt"
 	"go/types"
+	"html/template"
+	"reflect"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -95,27 +97,59 @@ func checkParsedArgument(pl []*packages.Package, paramType types.Type, qual type
 	return checkUnmarshalable(pl, paramType, qual)
 }
 
+const (
+	// InputAttributeNameStructTag renames the form input a struct field binds
+	// to (e.g. `name:"count-input"`).
+	InputAttributeNameStructTag = "name"
+	// InputAttributeTemplateStructTag names the template whose input element
+	// attributes (minlength, maxlength, ...) generate validations for the field.
+	InputAttributeTemplateStructTag = "template"
+)
+
+// FieldBinding describes how one struct field of a form or multipart
+// parameter binds to the request.
+type FieldBinding struct {
+	// Field is the bound struct field.
+	Field *types.Var
+	// InputName is the form input name: the name struct tag or the field name.
+	InputName string
+	// Template is the field's validation template (template struct tag), or
+	// nil when the tag is absent or names an undefined template.
+	Template *template.Template
+	// Elem is the type parsed from one string value: the field type, or the
+	// slice element type when Slice is set. Undefined for FileHeader fields.
+	Elem types.Type
+	// Slice binds every request value for InputName, not just the first.
+	Slice bool
+	// FileHeader binds the field from request.MultipartForm.File instead of a
+	// text value: *multipart.FileHeader or (with Slice) []*multipart.FileHeader.
+	FileHeader bool
+	// Method is how Elem parses from a string. Undefined for FileHeader fields.
+	Method UnmarshalMethod
+}
+
 // checkFormArgument permits a form or multipart parameter to either receive
 // the raw request value (url.Values / *multipart.Form) or be a struct whose
-// fields parse from the submitted form. Struct fields must be a supported
-// scalar or slice of scalars; multipart structs may also bind
-// *multipart.FileHeader and []*multipart.FileHeader fields.
-func checkFormArgument(pl []*packages.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier, allowFileFields bool) error {
+// fields parse from the submitted form, returning one FieldBinding per struct
+// field (nil in raw mode). Struct fields must be a supported scalar or slice
+// of scalars; multipart structs may also bind *multipart.FileHeader and
+// []*multipart.FileHeader fields.
+func checkFormArgument(def *Definition, pl []*packages.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	at, err := stdlibType(pl, packagePath, identifier, pointer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if types.AssignableTo(at, paramType) {
-		return nil
+		return nil, nil
 	}
 	st, ok := paramType.Underlying().(*types.Struct)
 	if !ok {
-		return fmt.Errorf("expected %s parameter type to be a struct", argName)
+		return nil, fmt.Errorf("expected %s parameter type to be a struct", argName)
 	}
-	return checkFormStructFields(pl, st, argName, qual, allowFileFields)
+	return formStructBindings(def, pl, st, argName, qual, allowFileFields)
 }
 
-func checkFormStructFields(pl []*packages.Package, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) error {
+func formStructBindings(def *Definition, pl []*packages.Package, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	var fileHeaderPtr types.Type
 	if allowFileFields {
 		if mp, ok := findPackageTypes(pl, "mime/multipart"); ok {
@@ -124,19 +158,36 @@ func checkFormStructFields(pl []*packages.Package, st *types.Struct, argName str
 			}
 		}
 	}
+	bindings := make([]FieldBinding, 0, st.NumFields())
 	for i := 0; i < st.NumFields(); i++ {
-		field := st.Field(i)
+		field, tags := st.Field(i), reflect.StructTag(st.Tag(i))
+		fb := FieldBinding{
+			Field:     field,
+			InputName: field.Name(),
+		}
+		if name, found := tags.Lookup(InputAttributeNameStructTag); found {
+			fb.InputName = name
+		}
 		ft := field.Type()
 		if fileHeaderPtr != nil && (types.Identical(ft, fileHeaderPtr) || types.Identical(ft, types.NewSlice(fileHeaderPtr))) {
+			fb.FileHeader = true
+			fb.Slice = types.Identical(ft, types.NewSlice(fileHeaderPtr))
+			bindings = append(bindings, fb)
 			continue
 		}
-		elem := ft
+		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
+			fb.Template = def.template.Lookup(name)
+		}
+		fb.Elem = ft
 		if slice, ok := ft.(*types.Slice); ok {
-			elem = slice.Elem()
+			fb.Slice = true
+			fb.Elem = slice.Elem()
 		}
-		if err := checkUnmarshalable(pl, elem, qual); err != nil {
-			return fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
+		if err := checkUnmarshalable(pl, fb.Elem, qual); err != nil {
+			return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
 		}
+		fb.Method = UnmarshalMethodFor(pl, fb.Elem)
+		bindings = append(bindings, fb)
 	}
-	return nil
+	return bindings, nil
 }

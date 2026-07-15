@@ -80,6 +80,13 @@ type BadUploadForm struct{ File multipart.File }
 
 func (srv *Server) BadUpload(BadUploadForm) any { return nil }
 
+type TaggedForm struct {
+	Count int      `name:"count-input" template:"count-template"`
+	Tags  []string `name:"tag"`
+}
+
+func (srv *Server) TaggedForm(TaggedForm) any { return nil }
+
 func (srv *Server) Function(func() error) any                            { return nil }
 func (srv *Server) AnyFunction(func(any) error) any                      { return nil }
 func (srv *Server) StringFunction(func(string) error) any                { return nil }
