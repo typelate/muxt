@@ -5,7 +5,11 @@ import (
 	"go/types"
 	"html/template"
 	"reflect"
+	"strings"
 
+	"github.com/typelate/dom"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -126,6 +130,9 @@ type FieldBinding struct {
 	FileHeader bool
 	// Method is how Elem parses from a string. Undefined for FileHeader fields.
 	Method UnmarshalMethod
+	// Validations are the constraints parsed from the field's <input> element
+	// in Template (the element whose name attribute equals InputName).
+	Validations []InputValidation
 }
 
 // checkFormArgument permits a form or multipart parameter to either receive
@@ -183,6 +190,11 @@ func formStructBindings(def *Definition, pl []*packages.Package, st *types.Struc
 			fb.Slice = true
 			fb.Elem = slice.Elem()
 		}
+		validations, err := fieldTemplateValidations(fb)
+		if err != nil {
+			return nil, err
+		}
+		fb.Validations = validations
 		if err := checkUnmarshalable(pl, fb.Elem, qual); err != nil {
 			return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
 		}
@@ -190,4 +202,23 @@ func formStructBindings(def *Definition, pl []*packages.Package, st *types.Struc
 		bindings = append(bindings, fb)
 	}
 	return bindings, nil
+}
+
+// fieldTemplateValidations parses the constraint attributes of the <input>
+// element bound to fb in its field template. Fields without a template tag or
+// whose template has no matching input have no validations.
+func fieldTemplateValidations(fb FieldBinding) ([]InputValidation, error) {
+	if fb.Template == nil {
+		return nil, nil
+	}
+	nodes, _ := html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
+		Type:     html.ElementNode,
+		DataAtom: atom.Body,
+		Data:     atom.Body.String(),
+	})
+	input := dom.NewDocumentFragment(nodes).QuerySelector(fmt.Sprintf("[name=%q]", fb.InputName))
+	if input == nil {
+		return nil, nil
+	}
+	return ParseInputValidations(fb.InputName, input, fb.Elem)
 }

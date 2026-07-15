@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 func Test_inputValidations(t *testing.T) {
@@ -309,25 +310,27 @@ func Test_inputValidations(t *testing.T) {
 			file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
 			require.NoError(t, err)
 
-			statements, err, ok := GenerateValidations(file, v, tt.Type, `[name="field"]`, "field", "response", fragment, func(s string) *ast.BlockStmt {
-				return &ast.BlockStmt{List: []ast.Stmt{
-					&ast.ExprStmt{X: &ast.CallExpr{
-						Fun: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Error")},
-						Args: []ast.Expr{
-							ast.NewIdent("response"),
-							astgen.String(s),
-							&ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("StatusBadRequest")},
-						},
-					}},
-					&ast.ReturnStmt{},
-				}}
-			})
-			require.True(t, ok)
+			input := fragment.QuerySelector(`[name="field"]`)
+			require.NotNil(t, input)
+			validations, err := muxt.ParseInputValidations("field", input, tt.Type)
 			if tt.Error != "" {
 				require.Error(t, err)
 				assert.Equal(t, tt.Error, err.Error())
 			} else {
 				require.NoError(t, err)
+				statements := renderValidations(file, v, validations, func(s string) *ast.BlockStmt {
+					return &ast.BlockStmt{List: []ast.Stmt{
+						&ast.ExprStmt{X: &ast.CallExpr{
+							Fun: &ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("Error")},
+							Args: []ast.Expr{
+								ast.NewIdent("response"),
+								astgen.String(s),
+								&ast.SelectorExpr{X: ast.NewIdent("http"), Sel: ast.NewIdent("StatusBadRequest")},
+							},
+						}},
+						&ast.ReturnStmt{},
+					}}
+				})
 				require.Equal(t, tt.Result, astgen.Format(&ast.BlockStmt{List: statements}))
 			}
 		})

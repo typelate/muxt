@@ -15,9 +15,6 @@ import (
 	"strings"
 
 	"github.com/ettle/strcase"
-	"github.com/typelate/dom"
-	"golang.org/x/net/html"
-	"golang.org/x/net/html/atom"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
@@ -857,18 +854,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 			continue
 		}
 
-		var templateNodes []*html.Node
-		if fb.Template != nil {
-			templateNodes, _ = html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
-				Type:     html.ElementNode,
-				DataAtom: atom.Body,
-				Data:     atom.Body.String(),
-			})
-		}
-		validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), fb.Elem, fmt.Sprintf("[name=%q]", fb.InputName), fb.InputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
-		if ok && err != nil {
-			return nil, err
-		}
+		validations := renderValidations(file, ast.NewIdent(parsedVariableName), fb.Validations, validationBlock)
 		if fb.Slice {
 			parseResult := func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
