@@ -74,15 +74,13 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 **Issue:** `TemplateRoutePaths` methods are always exported so they can be called from templates. This has two consequences:
 
 1. **Collision:** If a receiver has both an exported and unexported handler method that differ only in the first letter's case (e.g., `List` and `list`), generation fails because both would produce the same `TemplateRoutePaths.List()` method.
-2. **Unexportable identifiers:** Handler methods starting with `_` (e.g., `_list`) cannot be exported, so generation fails.
+2. **Unexportable identifiers:** Handler methods whose first character has no uppercase form (e.g., a name starting with a CJK character) cannot produce an exported method, so generation fails. Leading underscores are stripped during identifier normalization (`_list` produces `List`, which can then collide with a `List` handler).
 
 **Errors:**
 - `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`
-- `cannot export identifier "_list" for TemplateRoutePaths method: first character '_' has no uppercase form`
+- `cannot export identifier "一覧" for TemplateRoutePaths method: first character '一' has no uppercase form`
 
-**Fix:** Rename the handler method to start with a letter.
-
-**Test file:** [err_path_method_collision.txt](../../cmd/muxt/testdata/err_path_method_collision.txt)
+**Fix:** Rename the handler method to start with a cased letter.
 
 ## Reporting Issues
 

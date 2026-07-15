@@ -1,10 +1,14 @@
 package muxt
 
 import (
+	"fmt"
+	"go/token"
 	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ettle/strcase"
 )
@@ -108,6 +112,46 @@ func calculateIdentifiers(in []Definition) {
 		}
 		in[i].identifier = exported
 	}
+}
+
+// ExportedPathIdentifier returns the definition's identifier with its first
+// rune uppercased: the TemplateRoutePaths method name for this route.
+func (def Definition) ExportedPathIdentifier() (string, error) {
+	return exportPathIdentifier(def.identifier)
+}
+
+func exportPathIdentifier(s string) (string, error) {
+	r, size := utf8.DecodeRuneInString(s)
+	exported := string(utf8.AppendRune(nil, unicode.ToUpper(r))) + s[size:]
+	if !token.IsExported(exported) {
+		return "", fmt.Errorf("cannot export identifier %q for TemplateRoutePaths method: first character %q has no uppercase form", s, r)
+	}
+	return exported, nil
+}
+
+// CheckPathMethodCollisions rejects definition sets in which two handlers
+// produce the same TemplateRoutePaths method name (e.g. "list" and "List").
+// Duplicate route patterns also collide here, so check
+// CheckForDuplicatePatterns first for the more precise error.
+func CheckPathMethodCollisions(defs []Definition) error {
+	seen := make(map[string]string, len(defs))
+	for _, t := range defs {
+		exported, err := exportPathIdentifier(t.Identifier())
+		if err != nil {
+			return err
+		}
+		// Report the original handler names (e.g. "list" and "List"), not the
+		// exported identifier they collide on, so the difference is visible.
+		handler := t.Call()
+		if handler == "" {
+			handler = t.Identifier()
+		}
+		if prev, ok := seen[exported]; ok {
+			return fmt.Errorf("TemplateRoutePaths method name collision: handlers %q and %q both produce method %q", prev, handler, exported)
+		}
+		seen[exported] = handler
+	}
+	return nil
 }
 
 // FileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.

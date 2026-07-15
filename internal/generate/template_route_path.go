@@ -9,8 +9,6 @@ import (
 	"go/types"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -29,22 +27,10 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 			},
 		},
 	}
-	seen := make(map[string]string, len(defs))
+	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
+		return nil, err
+	}
 	for _, t := range defs {
-		exported, err := exportIdentifier(t.Identifier())
-		if err != nil {
-			return nil, err
-		}
-		// Report the original handler names (e.g. "list" and "List"), not the
-		// exported identifier they collide on, so the difference is visible.
-		handler := t.Call()
-		if handler == "" {
-			handler = t.Identifier()
-		}
-		if prev, ok := seen[exported]; ok {
-			return nil, fmt.Errorf("TemplateRoutePaths method name collision: handlers %q and %q both produce method %q", prev, handler, exported)
-		}
-		seen[exported] = handler
 		decl, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
@@ -66,7 +52,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	textMarshalerUnderlying := textMarshalerType.Underlying()
 	textMarshalerInterface := textMarshalerUnderlying.(*types.Interface)
 
-	ident, err := exportIdentifier(def.Identifier())
+	ident, err := def.ExportedPathIdentifier()
 	if err != nil {
 		return nil, err
 	}
@@ -252,13 +238,4 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	method.Type.Params.List = fields
 
 	return method, nil
-}
-
-func exportIdentifier(s string) (string, error) {
-	r, size := utf8.DecodeRuneInString(s)
-	exported := string(utf8.AppendRune(nil, unicode.ToUpper(r))) + s[size:]
-	if !token.IsExported(exported) {
-		return "", fmt.Errorf("cannot export identifier %q for TemplateRoutePaths method: first character %q has no uppercase form", s, r)
-	}
-	return exported, nil
 }
