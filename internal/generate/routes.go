@@ -1154,99 +1154,93 @@ func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
 // context (normal handlers accumulate into the template data; SSE handlers
 // respond 400 before establishing the stream).
 func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
-	switch tp := valueType.(type) {
-	case *types.Basic:
-		convert := func(exp ast.Expr) ast.Stmt {
-			return assignment(&ast.CallExpr{
-				Fun:  ast.NewIdent(tp.Name()),
-				Args: []ast.Expr{exp},
-			})
-		}
-		switch tp.Name() {
-		default:
-			return nil, fmt.Errorf("method param type %s not supported", valueType.String())
-		case "bool":
-			return parseBlock(tmp, astgen.StrconvParseBoolCall(file, str), validations, errBlock, assignment), nil
-		case "int":
-			return parseBlock(tmp, astgen.StrconvAtoiCall(file, str), validations, errBlock, assignment), nil
-		case "int8":
-			return parseBlock(tmp, astgen.StrconvParseInt8Call(file, str), validations, errBlock, convert), nil
-		case "int16":
-			return parseBlock(tmp, astgen.StrconvParseInt16Call(file, str), validations, errBlock, convert), nil
-		case "int32":
-			return parseBlock(tmp, astgen.StrconvParseInt32Call(file, str), validations, errBlock, convert), nil
-		case "int64":
-			return parseBlock(tmp, astgen.StrconvParseInt64Call(file, str), validations, errBlock, assignment), nil
-		case "uint":
-			return parseBlock(tmp, astgen.StrconvParseUint0Call(file, str), validations, errBlock, convert), nil
-		case "uint8":
-			return parseBlock(tmp, astgen.StrconvParseUint8Call(file, str), validations, errBlock, convert), nil
-		case "uint16":
-			return parseBlock(tmp, astgen.StrconvParseUint16Call(file, str), validations, errBlock, convert), nil
-		case "uint32":
-			return parseBlock(tmp, astgen.StrconvParseUint32Call(file, str), validations, errBlock, convert), nil
-		case "uint64":
-			return parseBlock(tmp, astgen.StrconvParseUint64Call(file, str), validations, errBlock, assignment), nil
-		case "string":
-			if len(validations) == 0 {
-				assign := assignment(str)
-				statements := slices.Concat(validations, []ast.Stmt{assign})
-				return statements, nil
-			}
-			statements := slices.Concat([]ast.Stmt{&ast.AssignStmt{
-				Lhs: []ast.Expr{ast.NewIdent(tmp)},
-				Tok: token.DEFINE,
-				Rhs: []ast.Expr{str},
-			}}, validations, []ast.Stmt{assignment(ast.NewIdent(tmp))})
+	// convert wraps the parsed value in a conversion to the target basic type
+	// for the strconv functions that return a wider type (ParseInt/ParseUint).
+	convert := func(exp ast.Expr) ast.Stmt {
+		return assignment(&ast.CallExpr{
+			Fun:  ast.NewIdent(valueType.(*types.Basic).Name()),
+			Args: []ast.Expr{exp},
+		})
+	}
+	switch muxt.UnmarshalMethodFor(file.Packages(), valueType) {
+	case muxt.UnmarshalBool:
+		return parseBlock(tmp, astgen.StrconvParseBoolCall(file, str), validations, errBlock, assignment), nil
+	case muxt.UnmarshalInt:
+		return parseBlock(tmp, astgen.StrconvAtoiCall(file, str), validations, errBlock, assignment), nil
+	case muxt.UnmarshalInt8:
+		return parseBlock(tmp, astgen.StrconvParseInt8Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalInt16:
+		return parseBlock(tmp, astgen.StrconvParseInt16Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalInt32:
+		return parseBlock(tmp, astgen.StrconvParseInt32Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalInt64:
+		return parseBlock(tmp, astgen.StrconvParseInt64Call(file, str), validations, errBlock, assignment), nil
+	case muxt.UnmarshalUint:
+		return parseBlock(tmp, astgen.StrconvParseUint0Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalUint8:
+		return parseBlock(tmp, astgen.StrconvParseUint8Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalUint16:
+		return parseBlock(tmp, astgen.StrconvParseUint16Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalUint32:
+		return parseBlock(tmp, astgen.StrconvParseUint32Call(file, str), validations, errBlock, convert), nil
+	case muxt.UnmarshalUint64:
+		return parseBlock(tmp, astgen.StrconvParseUint64Call(file, str), validations, errBlock, assignment), nil
+	case muxt.UnmarshalString:
+		if len(validations) == 0 {
+			assign := assignment(str)
+			statements := slices.Concat(validations, []ast.Stmt{assign})
 			return statements, nil
 		}
-	case *types.Named:
-		if encPkg, ok := file.Types("encoding"); ok {
-			if textUnmarshaler := encPkg.Scope().Lookup("TextUnmarshaler").Type().Underlying().(*types.Interface); types.Implements(types.NewPointer(tp), textUnmarshaler) {
-				tp, _ := file.TypeASTExpression(valueType)
-				return []ast.Stmt{
-					&ast.DeclStmt{
-						Decl: &ast.GenDecl{
-							Tok: token.VAR,
-							Specs: []ast.Spec{
-								&ast.ValueSpec{
-									Names: []*ast.Ident{ast.NewIdent(tmp)},
-									Type:  tp,
-								},
+		statements := slices.Concat([]ast.Stmt{&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(tmp)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{str},
+		}}, validations, []ast.Stmt{assignment(ast.NewIdent(tmp))})
+		return statements, nil
+	case muxt.UnmarshalTextUnmarshaler:
+		tp, _ := file.TypeASTExpression(valueType)
+		return []ast.Stmt{
+			&ast.DeclStmt{
+				Decl: &ast.GenDecl{
+					Tok: token.VAR,
+					Specs: []ast.Spec{
+						&ast.ValueSpec{
+							Names: []*ast.Ident{ast.NewIdent(tmp)},
+							Type:  tp,
+						},
+					},
+				},
+			},
+			&ast.IfStmt{
+				Init: &ast.AssignStmt{
+					Lhs: []ast.Expr{ast.NewIdent(errIdent)},
+					Tok: token.DEFINE,
+					Rhs: []ast.Expr{&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent(tmp),
+							Sel: ast.NewIdent("UnmarshalText"),
+						},
+						Args: []ast.Expr{&ast.CallExpr{
+							Fun: &ast.ArrayType{
+								Elt: ast.NewIdent("byte"),
 							},
-						},
-					},
-					&ast.IfStmt{
-						Init: &ast.AssignStmt{
-							Lhs: []ast.Expr{ast.NewIdent(errIdent)},
-							Tok: token.DEFINE,
-							Rhs: []ast.Expr{&ast.CallExpr{
-								Fun: &ast.SelectorExpr{
-									X:   ast.NewIdent(tmp),
-									Sel: ast.NewIdent("UnmarshalText"),
-								},
-								Args: []ast.Expr{&ast.CallExpr{
-									Fun: &ast.ArrayType{
-										Elt: ast.NewIdent("byte"),
-									},
-									Args: []ast.Expr{str},
-								}},
-							}},
-						},
-						Cond: &ast.BinaryExpr{
-							X:  ast.NewIdent(errIdent),
-							Op: token.NEQ,
-							Y:  ast.NewIdent("nil"),
-						},
-						Body: errBlock,
-					},
-					assignment(ast.NewIdent(tmp)),
-				}, nil
-			}
-		}
+							Args: []ast.Expr{str},
+						}},
+					}},
+				},
+				Cond: &ast.BinaryExpr{
+					X:  ast.NewIdent(errIdent),
+					Op: token.NEQ,
+					Y:  ast.NewIdent("nil"),
+				},
+				Body: errBlock,
+			},
+			assignment(ast.NewIdent(tmp)),
+		}, nil
+	default:
+		tp, _ := file.TypeASTExpression(valueType)
+		return nil, fmt.Errorf("unsupported type: %s", astgen.Format(tp))
 	}
-	tp, _ := file.TypeASTExpression(valueType)
-	return nil, fmt.Errorf("unsupported type: %s", astgen.Format(tp))
 }
 
 func parseBlock(tmpIdent string, parseCall ast.Expr, validations []ast.Stmt, errBlock *ast.BlockStmt, handleResult func(out ast.Expr) ast.Stmt) []ast.Stmt {

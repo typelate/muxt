@@ -162,6 +162,9 @@ func resolveCallbackShapes(def *Definition) error {
 			}
 			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}
+		if def.Representation == RepresentationSSE && a.template == nil {
+			return fmt.Errorf("no template %q for sse argument %s", a.Identifier, a.Identifier)
+		}
 	}
 	return nil
 }
@@ -462,12 +465,12 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 		}
 	case TemplateNameScopeIdentifierForm:
 		a.Type = ArgumentTypeRequestForm
-		if err := isAssignableOrStruct(pl, param, arg.Name, "net/url", "Values", false); err != nil {
+		if err := checkFormArgument(pl, param, arg.Name, "net/url", "Values", false, qual, false); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierMultipart:
 		a.Type = ArgumentTypeRequestMultipartForm
-		if err := isAssignableOrStruct(pl, param, arg.Name, "mime/multipart", "Form", true); err != nil {
+		if err := checkFormArgument(pl, param, arg.Name, "mime/multipart", "Form", true, qual, true); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierHTTPRequest:
@@ -482,18 +485,24 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 		}
 	case TemplateNameScopeIdentifierLastEventID:
 		a.Type = ArgumentTypeLastEventID
+		if err := checkParsedArgument(pl, param, qual); err != nil {
+			return a, err
+		}
 	case TemplateNameScopeIdentifierExecute:
 		a.Type = ArgumentTypeExecute
 		a.template = def.template
 	default:
 		if slices.Contains(def.pathValueNames, arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
+			if err := checkParsedArgument(pl, param, qual); err != nil {
+				return a, err
+			}
 			return a, nil
 		}
 		if IsSSEArgument(arg.Name) {
 			// An sse-prefixed render callback (sseClock, sseMetrics, ...) renders
-			// the same-named template. Template existence is validated during
-			// generation, so a missing template is not an error here.
+			// the same-named template. Template existence is validated in
+			// resolveCallbackShapes once all arguments are hydrated.
 			a.Type = ArgumentTypeExecute
 			a.template = def.template.Lookup(arg.Name)
 			return a, nil
@@ -535,23 +544,6 @@ func isAssignable(pl []*packages.Package, paramType types.Type, argName, package
 		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(paramType, qual), argName, types.TypeString(at, qual))
 	}
 	return nil
-}
-
-// isAssignableOrStruct permits a form or multipart parameter to either receive
-// the raw request value (url.Values / *multipart.Form) or be a struct whose
-// fields are parsed from the submitted form.
-func isAssignableOrStruct(pl []*packages.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool) error {
-	at, err := stdlibType(pl, packagePath, identifier, pointer)
-	if err != nil {
-		return err
-	}
-	if types.AssignableTo(at, paramType) {
-		return nil
-	}
-	if _, ok := paramType.Underlying().(*types.Struct); ok {
-		return nil
-	}
-	return fmt.Errorf("expected %s parameter type to be a struct", argName)
 }
 
 func isSendMessage(def *Definition, arg *ast.Ident) bool {

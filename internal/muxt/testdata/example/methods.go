@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+	"encoding"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -46,6 +47,38 @@ func (srv *Server) ExecuteNotFunc(string) error                { return nil }
 func (srv *Server) ExecuteMultiArg(func(int, int) error) error { return nil }
 func (srv *Server) SSECallbackNotFunc(string)                  {}
 func (srv *Server) SSECallbackMultiArg(func(int, int) error)   {}
+
+func (srv *Server) SSETwoCallbacks(func(string) error, func(string) error) {}
+
+func (srv *Server) Float64(float64) any  { return nil }
+func (srv *Server) URLParam(url.URL) any { return nil }
+
+// ID implements encoding.TextUnmarshaler; the interface assertion also keeps
+// the encoding package in the load graph for classification.
+type ID [16]byte
+
+func (id *ID) UnmarshalText([]byte) error { return nil }
+
+var _ encoding.TextUnmarshaler = (*ID)(nil)
+
+func (srv *Server) TextUnmarshalerParam(ID) any { return nil }
+
+type FormWithURL struct{ href url.URL }
+
+func (srv *Server) FormUnsupportedField(FormWithURL) any { return nil }
+
+type UploadForm struct {
+	Name  string
+	Tags  []string
+	File  *multipart.FileHeader
+	Files []*multipart.FileHeader
+}
+
+func (srv *Server) Upload(UploadForm) any { return nil }
+
+type BadUploadForm struct{ File multipart.File }
+
+func (srv *Server) BadUpload(BadUploadForm) any { return nil }
 
 func (srv *Server) Function(func() error) any                            { return nil }
 func (srv *Server) AnyFunction(func(any) error) any                      { return nil }

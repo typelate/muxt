@@ -1,7 +1,6 @@
 package generate
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -120,15 +119,11 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		if arg.Type != muxt.ArgumentTypeExecute {
 			continue
 		}
-		// The callback contract (func() error or func(T) error) is validated
-		// by muxt.ResolveCall, which records T and whether the callback takes
-		// the data argument.
+		// The callback contract (func() error or func(T) error) and template
+		// existence are validated by muxt.ResolveCall, which records T and
+		// whether the callback takes the data argument.
 		resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
-		tmpl := arg.Template()
-		if tmpl == nil {
-			return nil, fmt.Errorf("no template %q for sse argument %s", arg.Identifier, arg.Identifier)
-		}
-		closure, err := sseClosure(file, config, def, tmpl.Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+		closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
 		if err != nil {
 			return nil, err
 		}
