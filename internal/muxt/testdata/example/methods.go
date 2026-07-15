@@ -38,6 +38,15 @@ func (srv *Server) ExecuteReturnsValue(func() error) (int, error)  { return 0, n
 func (srv *Server) SSEReturnsValue(func(string) error) int         { return 0 }
 func (srv *Server) SSEEvents(func(string) error)                   {}
 
+type TD struct{ Value int }
+
+func (srv *Server) ExecuteTD(func(TD) error) error             { return nil }
+func (srv *Server) ExecuteNoArg(func() error) error            { return nil }
+func (srv *Server) ExecuteNotFunc(string) error                { return nil }
+func (srv *Server) ExecuteMultiArg(func(int, int) error) error { return nil }
+func (srv *Server) SSECallbackNotFunc(string)                  {}
+func (srv *Server) SSECallbackMultiArg(func(int, int) error)   {}
+
 func (srv *Server) Function(func() error) any                            { return nil }
 func (srv *Server) AnyFunction(func(any) error) any                      { return nil }
 func (srv *Server) StringFunction(func(string) error) any                { return nil }

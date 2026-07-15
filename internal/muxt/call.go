@@ -28,6 +28,13 @@ type Argument struct {
 	sig      *types.Signature
 	args     []Argument
 	isMethod bool
+
+	// callbackResult and callbackHasArg describe a validated render-callback
+	// argument (Type == ArgumentTypeExecute): the template data type T the
+	// callback receives and whether the callback takes that data argument
+	// (func(T) error vs func() error, where T = struct{}).
+	callbackResult types.Type
+	callbackHasArg bool
 }
 
 // Signature returns the resolved signature of a nested call argument
@@ -55,6 +62,14 @@ func (a Argument) CallbackSignature() *types.Signature {
 	sig, _ := a.ParamType.Underlying().(*types.Signature)
 	return sig
 }
+
+// CallbackResultType returns the template data type T a validated
+// render-callback argument receives (struct{} for a func() error callback).
+func (a Argument) CallbackResultType() types.Type { return a.callbackResult }
+
+// CallbackHasArg reports whether a validated render-callback argument's
+// callback takes the template data argument (func(T) error vs func() error).
+func (a Argument) CallbackHasArg() bool { return a.callbackHasArg }
 
 type ArgumentType int
 
@@ -109,6 +124,45 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 		return err
 	}
 	def.resultShape = shape
+	return resolveCallbackShapes(def)
+}
+
+// resolveCallbackShapes validates each render-callback argument against the
+// callback contract — func() error (T = struct{}) or func(T) error — and
+// records T and whether the callback takes the data argument. On sse routes
+// every callback argument is checked; on html routes only the base execute
+// argument is (sse-prefixed callbacks are inert there).
+func resolveCallbackShapes(def *Definition) error {
+	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	for i := range def.Arguments {
+		a := &def.Arguments[i]
+		if a.Type != ArgumentTypeExecute {
+			continue
+		}
+		if def.Representation != RepresentationSSE && a.Identifier != TemplateNameScopeIdentifierExecute {
+			continue
+		}
+		callback := a.CallbackSignature()
+		if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
+			if def.Representation == RepresentationSSE {
+				return fmt.Errorf("execute parameter for %s must be a function", def.fun.Name)
+			}
+			return fmt.Errorf("execute argument for %s must be a func(...) error", def.fun.Name)
+		}
+		switch callback.Params().Len() {
+		case 0:
+			a.callbackResult = types.NewStruct(nil, nil)
+			a.callbackHasArg = false
+		case 1:
+			a.callbackResult = callback.Params().At(0).Type()
+			a.callbackHasArg = true
+		default:
+			if def.Representation == RepresentationSSE {
+				return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+			}
+			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
+		}
+	}
 	return nil
 }
 

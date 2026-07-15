@@ -1,7 +1,6 @@
 package generate
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -25,22 +24,20 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
 	}
 
-	execIdx, callbackSig, hasExecute := -1, (*types.Signature)(nil), false
+	execIdx, hasExecute := -1, false
+	var resultType types.Type
+	var execHasArg bool
 	for i, arg := range def.Arguments {
 		if arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute {
-			execIdx, callbackSig, hasExecute = i, arg.CallbackSignature(), true
+			// The callback contract (func() error or func(T) error) is
+			// validated by muxt.ResolveCall, which records T and whether the
+			// callback takes the data argument.
+			execIdx, hasExecute = i, true
+			resultType, execHasArg = arg.CallbackResultType(), arg.CallbackHasArg()
 			break
 		}
 	}
-	var resultType types.Type
-	var execHasArg bool
-	if hasExecute {
-		var err error
-		resultType, execHasArg, err = validateExecuteCallback(def.FunctionIdentifier().Name, callbackSig)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if !hasExecute {
 		resultType = sig.Results().At(0).Type()
 	}
 	typeExpr, err := file.TypeASTExpression(resultType)
@@ -233,24 +230,4 @@ func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIde
 		},
 		Body: &ast.BlockStmt{List: body},
 	}, nil
-}
-
-// validateExecuteCallback enforces the execute callback contract and returns
-// the TemplateData result type T and whether the callback takes a data
-// argument. The method itself is already validated to return only error by
-// muxt.ResolveCall (ResultShapeError).
-//   - callback must be func() error (T = struct{}) or func(T) error
-func validateExecuteCallback(methodName string, callback *types.Signature) (types.Type, bool, error) {
-	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
-		return nil, false, fmt.Errorf("execute argument for %s must be a func(...) error", methodName)
-	}
-	switch callback.Params().Len() {
-	case 0:
-		return types.NewStruct(nil, nil), false, nil
-	case 1:
-		return callback.Params().At(0).Type(), true, nil
-	default:
-		return nil, false, fmt.Errorf("execute callback must have zero or one parameter; wrap multiple values in a struct")
-	}
 }
