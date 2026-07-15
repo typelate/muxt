@@ -120,10 +120,10 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		if arg.Type != muxt.ArgumentTypeExecute {
 			continue
 		}
-		resultType, hasArg, err := validateSSECallbackShape(def.FunctionIdentifier().Name, arg.CallbackSignature())
-		if err != nil {
-			return nil, err
-		}
+		// The callback contract (func() error or func(T) error) is validated
+		// by muxt.ResolveCall, which records T and whether the callback takes
+		// the data argument.
+		resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
 		tmpl := arg.Template()
 		if tmpl == nil {
 			return nil, fmt.Errorf("no template %q for sse argument %s", arg.Identifier, arg.Identifier)
@@ -260,22 +260,4 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		},
 		Body: &ast.BlockStmt{List: body},
 	}, nil
-}
-
-// validateSSECallbackShape checks that an sse callback parameter is func() error
-// (T = struct{}) or func(T) error, and returns the SSETemplateData result type T
-// and whether the callback takes a data argument.
-func validateSSECallbackShape(methodName string, callback *types.Signature) (types.Type, bool, error) {
-	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
-		return nil, false, fmt.Errorf("execute parameter for %s must be a function", methodName)
-	}
-	switch callback.Params().Len() {
-	case 0:
-		return types.NewStruct(nil, nil), false, nil
-	case 1:
-		return callback.Params().At(0).Type(), true, nil
-	default:
-		return nil, false, fmt.Errorf("sse callback must have zero or one parameter; wrap multiple values in a struct")
-	}
 }
