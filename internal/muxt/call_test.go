@@ -340,6 +340,11 @@ func TestArgument(t *testing.T) {
 			require.False(t, count.Slice)
 			require.False(t, count.FileHeader)
 			require.Equal(t, UnmarshalInt, count.Method)
+			require.Len(t, count.Validations, 1)
+			minLength, ok := count.Validations[0].(MinLengthValidation)
+			require.True(t, ok)
+			require.Equal(t, "count-input", minLength.Name)
+			require.Equal(t, 1, minLength.MinLength)
 
 			tags := fields[1]
 			require.Equal(t, "Tags", tags.Field.Name())
@@ -350,6 +355,9 @@ func TestArgument(t *testing.T) {
 			basic, ok := tags.Elem.(*types.Basic)
 			require.True(t, ok)
 			require.Equal(t, types.String, basic.Kind())
+		}},
+		{Name: "form field validation attribute is invalid", Receiver: serverType, Template: `{{define "GET / TaggedForm(form)"}}{{end}}{{define "count-template"}}<input name="count-input" minlength="abc">{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "minlength must be an integer")
 		}},
 		{Name: "multipart struct field bindings", Receiver: serverType, Template: `{{define "POST / Upload(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
