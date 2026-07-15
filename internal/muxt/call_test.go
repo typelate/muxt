@@ -111,13 +111,11 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
 			require.True(t, types.Identical(netURLValuesType, defs[0].Arguments[0].ParamType))
 		}},
-		{Name: "multipart", Receiver: serverType, Template: `{{define "GET / MultipartForm(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.NoError(t, err)
-			require.Len(t, defs, 1)
-			require.Equal(t, "MultipartForm", defs[0].Identifier())
-			require.Equal(t, "multipart", defs[0].Arguments[0].Identifier)
-			require.Equal(t, ArgumentTypeRequestMultipartForm, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(multipartFormType, defs[0].Arguments[0].ParamType))
+		{Name: "multipart value form param is parsed as a field struct and rejected", Receiver: serverType, Template: `{{define "GET / MultipartForm(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			// A non-pointer multipart.Form falls into struct field-binding mode,
+			// where its map fields are not parseable; raw mode requires
+			// *multipart.Form (see "multipart raw pointer").
+			require.ErrorContains(t, err, "failed to generate parse statements for multipart field Value: unsupported type: map[string][]string")
 		}},
 		{Name: "multipart raw pointer", Receiver: serverType, Template: `{{define "GET / MultipartFormPtr(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
@@ -293,6 +291,41 @@ func TestArgument(t *testing.T) {
 		}},
 		{Name: "execute callback method not defined on receiver", Receiver: emptyStruct, Template: `{{define "GET / NotDefined(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method NotDefined using the execute callback must be defined on the receiver type")
+		}},
+		{Name: "sse prefixed callback template missing", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(execute, sseClock))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, `no template "sseClock" for sse argument sseClock`)
+		}},
+		{Name: "sse prefixed callback template defined", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(execute, sseClock))"}}{{end}}{{define "sseClock"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs[0].Arguments, 2)
+			require.NotNil(t, defs[0].Arguments[1].Template())
+			require.Equal(t, "sseClock", defs[0].Arguments[1].Template().Name())
+		}},
+		{Name: "path value with unsupported basic type", Receiver: serverType, Template: `{{define "GET /{id} Float64(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method param type float64 not supported")
+		}},
+		{Name: "path value with unsupported named type", Receiver: serverType, Template: `{{define "GET /{id} URLParam(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "unsupported type: url.URL")
+		}},
+		{Name: "path value with text unmarshaler", Receiver: serverType, Template: `{{define "GET /{id} TextUnmarshalerParam(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, ArgumentTypeRequestPathValue, defs[0].Arguments[0].Type)
+		}},
+		{Name: "last event id with unsupported basic type", Receiver: serverType, Template: `{{define "GET / Float64(lastEventID)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method param type float64 not supported")
+		}},
+		{Name: "form struct with unsupported field type", Receiver: serverType, Template: `{{define "GET / FormUnsupportedField(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "failed to generate parse statements for form field href: unsupported type: url.URL")
+		}},
+		{Name: "multipart struct with file header fields", Receiver: serverType, Template: `{{define "POST / Upload(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, ArgumentTypeRequestMultipartForm, defs[0].Arguments[0].Type)
+		}},
+		{Name: "multipart struct with unsupported field type", Receiver: serverType, Template: `{{define "POST / BadUpload(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "failed to generate parse statements for multipart field File: unsupported type: multipart.File")
+		}},
+		{Name: "form struct with file header field is unsupported", Receiver: serverType, Template: `{{define "GET / Upload(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "failed to generate parse statements for form field File: unsupported type: *multipart.FileHeader")
 		}},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {

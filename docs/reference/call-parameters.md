@@ -268,7 +268,7 @@ func (s Server) CreateUser(ctx context.Context, email, password string) (User, e
 
 Validation errors should return from your method. Display them in templates with `{{if .Err}}`.
 
-[err_arg_path_value_type.txt](../../cmd/muxt/testdata/err_arg_path_value_type.txt)
+[reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
 
 ## Test Files by Category
 
@@ -289,7 +289,6 @@ Validation errors should return from your method. Display them in templates with
 - [howto_form_with_slice.txt](../../cmd/muxt/testdata/howto_form_with_slice.txt) — Form slices
 - [reference_form_field_types.txt](../../cmd/muxt/testdata/reference_form_field_types.txt) — All supported field types
 - [reference_form_with_empty_struct.txt](../../cmd/muxt/testdata/reference_form_with_empty_struct.txt) — Empty struct edge case
-- [err_form_unsupported_field_type.txt](../../cmd/muxt/testdata/err_form_unsupported_field_type.txt) — Unsupported types
 
 **Multipart (`multipart/form-data`, file uploads):**
 - [howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) — End-to-end file upload walkthrough
@@ -316,8 +315,5 @@ Using `form` and `multipart` in the same call is rejected (multipart parses url-
 **Receiver types:**
 - [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt) — Pointer receivers
 - [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) — Embedded methods
-
-**Errors:**
-- [err_arg_path_value_type.txt](../../cmd/muxt/testdata/err_arg_path_value_type.txt) — Unsupported path value type
 
 **Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
