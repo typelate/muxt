@@ -301,6 +301,21 @@ func TestArgument(t *testing.T) {
 			require.NotNil(t, defs[0].Arguments[1].Template())
 			require.Equal(t, "sseClock", defs[0].Arguments[1].Template().Name())
 		}},
+		{Name: "sse message template missing", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(fooMessage))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, `no template "fooMessage" for sse message argument fooMessage`)
+		}},
+		{Name: "sse message template defined", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, ArgumentTypeSendMessage, defs[0].Arguments[0].Type)
+			require.NotNil(t, defs[0].Arguments[0].Template())
+			require.Equal(t, "fooMessage", defs[0].Arguments[0].Template().Name())
+		}},
+		{Name: "method with three results", Receiver: serverType, Template: `{{define "GET / ThreeResults()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method ThreeResults has 3 results it should have one or two")
+		}},
+		{Name: "nested call with three results", Receiver: serverType, Template: `{{define "GET / Any(ThreeResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "method ThreeResults has 3 results it should have one or two")
+		}},
 		{Name: "path value with unsupported basic type", Receiver: serverType, Template: `{{define "GET /{id} Float64(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method param type float64 not supported")
 		}},

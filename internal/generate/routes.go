@@ -168,7 +168,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		generatedFiles = append(generatedFiles, files...)
 		topLevelTemplateRoutes = groups.noFile
 	} else {
-topLevelTemplateRoutes = groups.all
+		topLevelTemplateRoutes = groups.all
 	}
 
 	if len(topLevelTemplateRoutes) > 0 {
@@ -297,14 +297,15 @@ func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, tem
 }
 
 func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool, args []muxt.Argument, file *File, receiverInterface *ast.InterfaceType) error {
-	if isMethod {
-		for _, a := range args {
-			if a.Type != muxt.ArgumentTypeCall {
-				continue
-			}
-			if err := accumulateReceiverMethods(a.Identifier, a.Signature(), a.IsMethod(), a.Arguments(), file, receiverInterface); err != nil {
-				return err
-			}
+	// Recurse into nested call arguments regardless of whether this call is a
+	// receiver method: a package-scope function may receive nested receiver
+	// method calls that must appear in the interface.
+	for _, a := range args {
+		if a.Type != muxt.ArgumentTypeCall {
+			continue
+		}
+		if err := accumulateReceiverMethods(a.Identifier, a.Signature(), a.IsMethod(), a.Arguments(), file, receiverInterface); err != nil {
+			return err
 		}
 	}
 	if !isMethod {

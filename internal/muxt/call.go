@@ -218,7 +218,7 @@ func classifyResultShape(def *Definition) (ResultShape, error) {
 	case 0:
 		return ResultShapeInvalid, fmt.Errorf("method for pattern %q has no results it should have one or two", def.name)
 	default:
-		return ResultShapeInvalid, fmt.Errorf("method %s has no results it should have one or two", def.fun.Name)
+		return ResultShapeInvalid, fmt.Errorf("method %s has %d results it should have one or two", def.fun.Name, results.Len())
 	}
 }
 
@@ -239,8 +239,10 @@ func checkNestedCallResultShape(name string, sig *types.Signature) error {
 			return nil
 		}
 		return errors.New("expected last result to be either an error or a bool")
-	default:
+	case 0:
 		return fmt.Errorf("method %s has no results it should have one or two", name)
+	default:
+		return fmt.Errorf("method %s has %d results it should have one or two", name, results.Len())
 	}
 }
 
@@ -525,7 +527,7 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 
 			t := def.template.Lookup(arg.Name)
 			if t == nil {
-				return Argument{}, fmt.Errorf("template %q was not found for execute argument", def.pathValueNames)
+				return Argument{}, fmt.Errorf("no template %q for sse message argument %s", arg.Name, arg.Name)
 			}
 			a.template = t
 
@@ -560,7 +562,14 @@ func isAssignable(pl []*packages.Package, paramType types.Type, argName, package
 }
 
 func isSendMessage(def *Definition, arg *ast.Ident) bool {
-	return def.Representation == RepresentationSSE && strings.HasSuffix(arg.Name, "Message") && token.IsIdentifier(arg.Name)
+	return def.Representation == RepresentationSSE && IsSSEMessageArgument(arg.Name)
+}
+
+// IsSSEMessageArgument reports whether name is an sse send-message template
+// argument: a Message-suffixed identifier (fooMessage) naming the template the
+// message renders with. Only valid on sse routes.
+func IsSSEMessageArgument(name string) bool {
+	return strings.HasSuffix(name, "Message") && token.IsIdentifier(name)
 }
 
 func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
