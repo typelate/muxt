@@ -327,6 +327,49 @@ func TestArgument(t *testing.T) {
 		{Name: "form struct with file header field is unsupported", Receiver: serverType, Template: `{{define "GET / Upload(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "failed to generate parse statements for form field File: unsupported type: *multipart.FileHeader")
 		}},
+		{Name: "form struct field bindings", Receiver: serverType, Template: `{{define "GET / TaggedForm(form)"}}{{end}}{{define "count-template"}}<input name="count-input" minlength="1">{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			fields := defs[0].Arguments[0].FormFields()
+			require.Len(t, fields, 2)
+
+			count := fields[0]
+			require.Equal(t, "Count", count.Field.Name())
+			require.Equal(t, "count-input", count.InputName)
+			require.NotNil(t, count.Template)
+			require.Equal(t, "count-template", count.Template.Name())
+			require.False(t, count.Slice)
+			require.False(t, count.FileHeader)
+			require.Equal(t, UnmarshalInt, count.Method)
+
+			tags := fields[1]
+			require.Equal(t, "Tags", tags.Field.Name())
+			require.Equal(t, "tag", tags.InputName)
+			require.Nil(t, tags.Template)
+			require.True(t, tags.Slice)
+			require.Equal(t, UnmarshalString, tags.Method)
+			basic, ok := tags.Elem.(*types.Basic)
+			require.True(t, ok)
+			require.Equal(t, types.String, basic.Kind())
+		}},
+		{Name: "multipart struct field bindings", Receiver: serverType, Template: `{{define "POST / Upload(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			fields := defs[0].Arguments[0].FormFields()
+			require.Len(t, fields, 4)
+			require.Equal(t, "Name", fields[0].Field.Name())
+			require.False(t, fields[0].FileHeader)
+			require.Equal(t, "Tags", fields[1].Field.Name())
+			require.True(t, fields[1].Slice)
+			require.Equal(t, "File", fields[2].Field.Name())
+			require.True(t, fields[2].FileHeader)
+			require.False(t, fields[2].Slice)
+			require.Equal(t, "Files", fields[3].Field.Name())
+			require.True(t, fields[3].FileHeader)
+			require.True(t, fields[3].Slice)
+		}},
+		{Name: "raw form param has no field bindings", Receiver: serverType, Template: `{{define "GET / URLValues(form)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Empty(t, defs[0].Arguments[0].FormFields())
+		}},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))

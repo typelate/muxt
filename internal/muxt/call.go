@@ -35,6 +35,11 @@ type Argument struct {
 	// (func(T) error vs func() error, where T = struct{}).
 	callbackResult types.Type
 	callbackHasArg bool
+
+	// formFields describes how each struct field of a form or multipart
+	// argument binds to the request (nil for the raw url.Values /
+	// *multipart.Form mode).
+	formFields []FieldBinding
 }
 
 // Signature returns the resolved signature of a nested call argument
@@ -70,6 +75,10 @@ func (a Argument) CallbackResultType() types.Type { return a.callbackResult }
 // CallbackHasArg reports whether a validated render-callback argument's
 // callback takes the template data argument (func(T) error vs func() error).
 func (a Argument) CallbackHasArg() bool { return a.callbackHasArg }
+
+// FormFields returns the field bindings of a form or multipart argument in
+// struct mode, or nil when the parameter receives the raw request value.
+func (a Argument) FormFields() []FieldBinding { return a.formFields }
 
 type ArgumentType int
 
@@ -465,14 +474,18 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 		}
 	case TemplateNameScopeIdentifierForm:
 		a.Type = ArgumentTypeRequestForm
-		if err := checkFormArgument(pl, param, arg.Name, "net/url", "Values", false, qual, false); err != nil {
+		bindings, err := checkFormArgument(def, pl, param, arg.Name, "net/url", "Values", false, qual, false)
+		if err != nil {
 			return a, err
 		}
+		a.formFields = bindings
 	case TemplateNameScopeIdentifierMultipart:
 		a.Type = ArgumentTypeRequestMultipartForm
-		if err := checkFormArgument(pl, param, arg.Name, "mime/multipart", "Form", true, qual, true); err != nil {
+		bindings, err := checkFormArgument(def, pl, param, arg.Name, "mime/multipart", "Form", true, qual, true)
+		if err != nil {
 			return a, err
 		}
+		a.formFields = bindings
 	case TemplateNameScopeIdentifierHTTPRequest:
 		a.Type = ArgumentTypeRequest
 		if err := isAssignable(pl, param, arg.Name, "net/http", "Request", true, qual); err != nil {

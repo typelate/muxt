@@ -6,12 +6,10 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"html/template"
 	"log"
 	"maps"
 	"net/http"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,9 +33,6 @@ const (
 	requestPathValue         = "PathValue"
 	httpRequestContextMethod = "Context"
 	httpHandleFuncIdent      = "HandleFunc"
-
-	InputAttributeNameStructTag     = "name"
-	InputAttributeTemplateStructTag = "template"
 
 	muxParamName = "mux"
 
@@ -813,13 +808,13 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				statements = append(statements, s...)
 				def.SetArgumentType(arg.Name, param.Type())
 			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
-				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, param, validationFailureBlock, rdIdent)
+				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, args[i], validationFailureBlock, rdIdent)
 				if err != nil {
 					return nil, err
 				}
 				statements = s
 			case arg.Name == muxt.TemplateNameScopeIdentifierMultipart:
-				s, err := appendParseMultipartFormToStructStatements(statements, def, file, resultType, arg, param, validationFailureBlock, rdIdent, config)
+				s, err := appendParseMultipartFormToStructStatements(statements, def, file, resultType, arg, args[i], validationFailureBlock, rdIdent, config)
 				if err != nil {
 					return nil, err
 				}
@@ -834,110 +829,77 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 	return statements, nil
 }
 
-func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
-	return appendStructFieldParseStatements(statements, def, file, resultType, arg, param, validationBlock, rdIdent, callParseForm(), nil)
+func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
+	return appendStructFieldParseStatements(statements, def, file, resultType, arg, argument, validationBlock, rdIdent, callParseForm())
 }
 
-// fileFieldHandler binds a struct field by name from a non-form-encoded source
-// (e.g. request.MultipartForm.File). It returns the assignment statement and
-// true if it handled the field, or (nil, false) to fall through to text-field
-// parsing. Pass nil to disable file-field handling.
-type fileFieldHandler func(arg *ast.Ident, field *types.Var, inputName string) (ast.Stmt, bool)
-
-// appendStructFieldParseStatements emits per-field parse statements for a
-// receiver method param that is a struct bound to form fields. Used by both
-// `form` (with parseCall = callParseForm() and fileField = nil) and
-// `multipart` (with parseCall = callParseMultipartForm(...) and a fileField
-// closure that recognizes *multipart.FileHeader / []*multipart.FileHeader).
-func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string, parseCall ast.Stmt, fileField fileFieldHandler) ([]ast.Stmt, error) {
+// appendStructFieldParseStatements renders the per-field parse statements for
+// a form or multipart struct parameter from the field bindings resolved by
+// muxt.ResolveCall. Used by both `form` (parseCall = callParseForm()) and
+// `multipart` (parseCall = callParseMultipartForm(...)).
+func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, rdIdent string, parseCall ast.Stmt) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
 	statements = append(statements, parseCall)
 
-	declareVar, err := formVariableDeclaration(file, arg, param.Type())
+	declareVar, err := formVariableDeclaration(file, arg, argument.ParamType)
 	if err != nil {
 		return nil, err
 	}
 	statements = append(statements, declareVar)
 
-	form, ok := param.Type().Underlying().(*types.Struct)
-	if !ok {
-		return nil, fmt.Errorf("expected %s parameter type to be a struct", arg.Name)
-	}
-
-	for i := 0; i < form.NumFields(); i++ {
-		field, tags := form.Field(i), reflect.StructTag(form.Tag(i))
-		inputName := field.Name()
-		if name, found := tags.Lookup(InputAttributeNameStructTag); found {
-			inputName = name
-		}
-
-		if fileField != nil {
-			if stmt, handled := fileField(arg, field, inputName); handled {
-				statements = append(statements, stmt)
-				continue
+	for _, fb := range argument.FormFields() {
+		if fb.FileHeader {
+			if fb.Slice {
+				statements = append(statements, fileHeaderSliceAssignment(arg, fb.Field.Name(), fb.InputName))
+			} else {
+				statements = append(statements, fileHeaderSingleAssignment(arg, fb.Field.Name(), fb.InputName))
 			}
+			continue
 		}
 
-		var fieldTemplate *template.Template
-		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
-			fieldTemplate = def.Template().Lookup(name)
-		}
 		var templateNodes []*html.Node
-		if fieldTemplate != nil {
-			templateNodes, _ = html.ParseFragment(strings.NewReader(fieldTemplate.Tree.Root.String()), &html.Node{
+		if fb.Template != nil {
+			templateNodes, _ = html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
 				Type:     html.ElementNode,
 				DataAtom: atom.Body,
 				Data:     atom.Body.String(),
 			})
 		}
-		var (
-			parseResult func(expr ast.Expr) ast.Stmt
-			str         ast.Expr
-			elemType    types.Type
-		)
-		switch ft := field.Type().(type) {
-		case *types.Slice:
-			parseResult = func(expr ast.Expr) ast.Stmt {
+		validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), fb.Elem, fmt.Sprintf("[name=%q]", fb.InputName), fb.InputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
+		if ok && err != nil {
+			return nil, err
+		}
+		if fb.Slice {
+			parseResult := func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}},
 					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}, expr)},
+					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}, expr)},
 				}
 			}
-			str = ast.NewIdent("val")
-			elemType = ft.Elem()
-			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
-			if ok && err != nil {
-				return nil, err
-			}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, ast.NewIdent("val"), fb.Elem, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
 			}
 			statements = append(statements, &ast.RangeStmt{
 				Key:   ast.NewIdent("_"),
 				Value: ast.NewIdent("val"),
 				Tok:   token.DEFINE,
-				X:     &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Form")}, Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}},
+				X:     &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Form")}, Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}},
 				Body:  &ast.BlockStmt{List: parseStatements},
 			})
-		default:
-			parseResult = func(expr ast.Expr) ast.Stmt {
+		} else {
+			parseResult := func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}},
 					Tok: token.ASSIGN,
 					Rhs: []ast.Expr{expr},
 				}
 			}
-			str = &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(inputName)}}}
-			elemType = field.Type()
-			validations, err, ok := GenerateValidations(file, ast.NewIdent(parsedVariableName), elemType, fmt.Sprintf("[name=%q]", inputName), inputName, muxt.TemplateNameScopeIdentifierHTTPResponse, dom.NewDocumentFragment(templateNodes), validationBlock)
-			if ok && err != nil {
-				return nil, err
-			}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, elemType, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
+			str := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}}}
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, fb.Elem, validations, parseResult, templateDataParseErrBlock(file, rdIdent))
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
 			}
 			if len(parseStatements) > 1 {
 				statements = append(statements, &ast.BlockStmt{
@@ -953,70 +915,12 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 }
 
 // appendParseMultipartFormToStructStatements is a thin wrapper over
-// appendStructFieldParseStatements that emits a ParseMultipartForm call and a
-// file-field handler recognizing *multipart.FileHeader and
-// []*multipart.FileHeader fields (sourced from request.MultipartForm.File).
-// All other field-binding behavior is shared with the form codepath.
-func appendParseMultipartFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, param types.Object, validationBlock ValidationErrorBlock, rdIdent string, config RoutesFileConfiguration) ([]ast.Stmt, error) {
-	return appendStructFieldParseStatements(statements, def, file, resultType, arg, param, validationBlock, rdIdent, callParseMultipartForm(file, config, rdIdent), multipartFileFieldHandler(file))
-}
-
-// multipartFileFieldHandler returns a fileFieldHandler that binds
-// *multipart.FileHeader and []*multipart.FileHeader struct fields from
-// request.MultipartForm.File. Returns nil if mime/multipart isn't in scope, in
-// which case all fields fall through to text-field parsing.
-func multipartFileFieldHandler(file *File) fileFieldHandler {
-	fileHeaderType, ok := lookupMultipartFileHeaderType(file)
-	if !ok {
-		return nil
-	}
-	return func(arg *ast.Ident, field *types.Var, inputName string) (ast.Stmt, bool) {
-		if isPointerToNamed(field.Type(), fileHeaderType) {
-			return fileHeaderSingleAssignment(arg, field.Name(), inputName), true
-		}
-		if isSliceOfPointerToNamed(field.Type(), fileHeaderType) {
-			return fileHeaderSliceAssignment(arg, field.Name(), inputName), true
-		}
-		return nil, false
-	}
-}
-
-// lookupMultipartFileHeaderType returns the *types.Named for
-// mime/multipart.FileHeader and whether the package was found.
-func lookupMultipartFileHeaderType(file *File) (*types.Named, bool) {
-	pkg, ok := file.Types("mime/multipart")
-	if !ok {
-		return nil, false
-	}
-	obj := pkg.Scope().Lookup("FileHeader")
-	if obj == nil {
-		return nil, false
-	}
-	named, ok := obj.Type().(*types.Named)
-	if !ok {
-		return nil, false
-	}
-	return named, true
-}
-
-func isPointerToNamed(t types.Type, target *types.Named) bool {
-	ptr, ok := t.(*types.Pointer)
-	if !ok {
-		return false
-	}
-	named, ok := ptr.Elem().(*types.Named)
-	if !ok {
-		return false
-	}
-	return named.Obj() == target.Obj()
-}
-
-func isSliceOfPointerToNamed(t types.Type, target *types.Named) bool {
-	s, ok := t.(*types.Slice)
-	if !ok {
-		return false
-	}
-	return isPointerToNamed(s.Elem(), target)
+// appendStructFieldParseStatements that emits a ParseMultipartForm call.
+// FileHeader field bindings (from request.MultipartForm.File) are resolved by
+// muxt.ResolveCall; all other field-binding behavior is shared with the form
+// codepath.
+func appendParseMultipartFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, rdIdent string, config RoutesFileConfiguration) ([]ast.Stmt, error) {
+	return appendStructFieldParseStatements(statements, def, file, resultType, arg, argument, validationBlock, rdIdent, callParseMultipartForm(file, config, rdIdent))
 }
 
 // fileHeaderSingleAssignment emits:
