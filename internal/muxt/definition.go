@@ -344,7 +344,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 
 	scope := append(patternScope(), pathParameterNames...)
 	slices.Sort(scope)
-	if err := checkArguments(scope, call); err != nil {
+	if err := checkArguments(scope, call, def.Representation == RepresentationSSE); err != nil {
 		return err
 	}
 
@@ -409,12 +409,15 @@ func IsSSEArgument(name string) bool {
 	return ok && rest != "" && token.IsIdentifier(rest)
 }
 
-func checkArguments(identifiers []string, call *ast.CallExpr) error {
+func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 	hasForm, hasMultipart := false, false
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !IsSSEArgument(exp.Name) {
+			// sse-prefixed render callbacks and Message-suffixed send-message
+			// templates are only in scope on sse routes.
+			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name))
+			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 			switch exp.Name {
@@ -424,7 +427,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr) error {
 				hasMultipart = true
 			}
 		case *ast.CallExpr:
-			if err := checkArguments(identifiers, exp); err != nil {
+			if err := checkArguments(identifiers, exp, sse); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
 		default:

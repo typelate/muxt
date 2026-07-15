@@ -327,6 +327,14 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "sse prefixed argument on a non-sse route",
+			In:       "GET / F(sseClock)",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "unknown argument sseClock at index 0")
+			},
+		},
+		{
 			Name:     "sse handler cannot use response argument",
 			In:       "GET /x sse(Endpoint(response))",
 			ExpMatch: true,
