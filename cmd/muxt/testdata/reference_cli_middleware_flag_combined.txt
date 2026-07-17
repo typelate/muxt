@@ -1,0 +1,59 @@
+# middleware flag combined with logger and path-prefix flags:
+# parameter order is (mux, receiver, logger, pathsPrefix, middleware)
+
+muxt generate --output-routes-func-with-logger-param --output-routes-func-with-path-prefix-param --output-routes-func-with-middleware-param
+
+grep 'func TemplateRoutes\(mux \*http\.ServeMux, receiver RoutesReceiver, logger \*slog\.Logger, pathsPrefix string, middleware func\(next http\.Handler\) http\.Handler\) TemplateRoutePaths' template_routes.go
+
+exec go test -count=1
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}Hello, world!{{end}}
+-- template_test.go --
+package server
+
+import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestAllParams(t *testing.T) {
+	mux := http.NewServeMux()
+
+	paths := TemplateRoutes(mux, nil, slog.Default(), "/prefix", func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			res.Header().Set("x-middleware", "applied")
+			next.ServeHTTP(res, req)
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex(), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("status =", res.StatusCode, "want", http.StatusOK)
+	}
+	if got := res.Header.Get("x-middleware"); got != "applied" {
+		t.Errorf("x-middleware header = %q, want %q", got, "applied")
+	}
+}
