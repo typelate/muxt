@@ -57,6 +57,7 @@ These flags control the names of generated types and functions:
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
+| `--output-routes-func-with-middleware-param` | bool | `false` | Add `middleware func(next http.Handler) http.Handler` parameter; every registered handler is wrapped with it. `nil` disables wrapping. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
 | `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
 | `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). |
@@ -83,6 +84,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix stri
 ```go
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathPrefix string) TemplateRoutePaths
 ```
+
+**With `--output-routes-func-with-middleware-param`:**
+```go
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, middleware func(next http.Handler) http.Handler) TemplateRoutePaths
+```
+
+Each handler is registered as `mux.Handle(pattern, middleware(http.HandlerFunc(handler)))`. Pass `nil` to register handlers unwrapped. Middleware can read the matched route via `request.Pattern`. This lets one template set back multiple entrypoints registered on a shared mux with different middleware (auth, logging) per entrypoint. When combined with the other parameter flags, the order is `(mux, receiver, logger, pathsPrefix, middleware)`.
 
 ### Logging Behavior
 
