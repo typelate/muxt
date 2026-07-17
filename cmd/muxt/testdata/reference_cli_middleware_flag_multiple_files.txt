@@ -1,0 +1,76 @@
+# middleware flag with --output-multiple-files: per-file route functions
+# receive the middleware and wrap their handlers
+
+muxt generate --output-multiple-files --output-routes-func-with-middleware-param
+
+exists index_template_routes_gen.go
+exists about_template_routes_gen.go
+
+exec go test -count=1
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+-- index.gohtml --
+{{define "GET /{$}"}}<h1>Hello</h1>{{end}}
+-- about.gohtml --
+{{define "GET /about"}}<h1>About</h1>{{end}}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestMiddlewareAppliesToAllTemplateFiles(t *testing.T) {
+	mux := http.NewServeMux()
+
+	var patterns []string
+	TemplateRoutes(mux, nil, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			patterns = append(patterns, req.Pattern)
+			next.ServeHTTP(res, req)
+		})
+	})
+
+	for _, path := range []string{"/", "/about"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want %d", path, got, http.StatusOK)
+		}
+	}
+	if len(patterns) != 2 {
+		t.Errorf("middleware saw %d requests, want 2: %q", len(patterns), patterns)
+	}
+}
+
+func TestNilMiddlewareMultipleFiles(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/about", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Error("status with nil middleware =", got, "want", http.StatusOK)
+	}
+}

@@ -380,6 +380,9 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		}
 		// Always pass pathsPrefix to per-file functions
 		callArgs = append(callArgs, ast.NewIdent(pathPrefixPathsStructFieldName))
+		if config.Middleware {
+			callArgs = append(callArgs, ast.NewIdent(middlewareParamName))
+		}
 
 		routesFunc.Body.List = append(routesFunc.Body.List, &ast.ExprStmt{
 			X: &ast.CallExpr{
@@ -498,6 +501,13 @@ func generatePerFileRouteFunction(
 	routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
 		Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
 	})
+
+	if config.Middleware {
+		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(middlewareParamName)},
+			Type:  astgen.HTTPMiddlewareFuncType(file),
+		})
+	}
 
 	// Declare the buffer pool shared by this file's handlers.
 	if len(defs) > 0 {
