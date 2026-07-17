@@ -137,3 +137,16 @@ func HTTPRequestField(im ImportManager, ident string) *ast.Field {
 func HTTPHandlerFuncType(file ImportManager, res, req string) *ast.FuncType {
 	return &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{HTTPResponseField(file, res), HTTPRequestField(file, req)}}}
 }
+
+// HTTPHandler creates an http.Handler type expression
+func HTTPHandler(im ImportManager) *ast.SelectorExpr {
+	return ExportedIdentifier(im, "http", "net/http", "Handler")
+}
+
+// HTTPMiddlewareFuncType creates the type expression func(next http.Handler) http.Handler
+func HTTPMiddlewareFuncType(im ImportManager) *ast.FuncType {
+	return &ast.FuncType{
+		Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("next")}, Type: HTTPHandler(im)}}},
+		Results: &ast.FieldList{List: []*ast.Field{{Type: HTTPHandler(im)}}},
+	}
+}

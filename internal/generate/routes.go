@@ -30,8 +30,10 @@ const (
 	requestPathValue         = "PathValue"
 	httpRequestContextMethod = "Context"
 	httpHandleFuncIdent      = "HandleFunc"
+	httpHandleIdent          = "Handle"
 
-	muxParamName = "mux"
+	muxParamName        = "mux"
+	middlewareParamName = "middleware"
 
 	errIdent                    = "err"
 	templateDataFieldStatusCode = "statusCode"
@@ -67,6 +69,7 @@ type RoutesFileConfiguration struct {
 	OutputFileName                   string
 	PathPrefix                       bool
 	Logger                           bool
+	Middleware                       bool
 	Verbose                          bool
 	OutputMultipleFiles              bool
 	HTMXHelpers                      bool
@@ -154,6 +157,13 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 			Lhs: []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName)},
 			Rhs: []ast.Expr{astgen.String("")},
 		})
+	}
+	if config.Middleware {
+		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(middlewareParamName)},
+			Type:  astgen.HTTPMiddlewareFuncType(file),
+		})
+		routesFunc.Body.List = append(routesFunc.Body.List, middlewareNilGuard(file))
 	}
 
 	var (
@@ -392,6 +402,28 @@ func bytesBufferPoolDeclaration(file *File) ast.Stmt {
 	}
 }
 
+// middlewareNilGuard emits the statement that makes a nil middleware argument
+// a no-op:
+//
+//	if middleware == nil {
+//		middleware = func(next http.Handler) http.Handler { return next }
+//	}
+func middlewareNilGuard(file *File) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(middlewareParamName), Op: token.EQL, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(middlewareParamName)},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.FuncLit{
+					Type: astgen.HTTPMiddlewareFuncType(file),
+					Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent("next")}}}},
+				}},
+			},
+		}},
+	}
+}
+
 func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit, config RoutesFileConfiguration) *ast.ExprStmt {
 	normalized := def.Pattern()
 	pattern := ast.Expr(astgen.String(normalized))
@@ -403,12 +435,23 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(normalized[i:])),
 		}
 	}
+	method, handler := httpHandleFuncIdent, ast.Expr(handlerFuncLit)
+	if config.Middleware {
+		method = httpHandleIdent
+		handler = &ast.CallExpr{
+			Fun: ast.NewIdent(middlewareParamName),
+			Args: []ast.Expr{&ast.CallExpr{
+				Fun:  astgen.ExportedIdentifier(file, "http", "net/http", "HandlerFunc"),
+				Args: []ast.Expr{handlerFuncLit},
+			}},
+		}
+	}
 	return &ast.ExprStmt{X: &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
 			X:   ast.NewIdent(muxVarIdent),
-			Sel: ast.NewIdent(httpHandleFuncIdent),
+			Sel: ast.NewIdent(method),
 		},
-		Args: []ast.Expr{pattern, handlerFuncLit},
+		Args: []ast.Expr{pattern, handler},
 	}}
 }
 

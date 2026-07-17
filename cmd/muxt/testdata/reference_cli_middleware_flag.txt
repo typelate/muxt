@@ -1,0 +1,77 @@
+# middleware flag: routes function takes func(next http.Handler) http.Handler
+# and wraps every registered handler; nil middleware means no wrapping
+
+muxt generate --output-routes-func-with-middleware-param
+muxt check
+
+exec go test -count=1
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+-- template.gohtml --
+{{define "GET /"}}Hello, world!{{end}}
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestMiddlewareWrapsHandlers(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			res.Header().Set("x-middleware", req.Pattern)
+			next.ServeHTTP(res, req)
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	res := rec.Result()
+
+	if res.StatusCode != http.StatusOK {
+		t.Error("status =", res.StatusCode, "want", http.StatusOK)
+	}
+	if got, want := res.Header.Get("x-middleware"), "GET /"; got != want {
+		t.Errorf("x-middleware header = %q, want %q", got, want)
+	}
+	body, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(body), "Hello, world!") {
+		t.Errorf("body %q does not contain greeting", body)
+	}
+}
+
+func TestNilMiddleware(t *testing.T) {
+	mux := http.NewServeMux()
+
+	TemplateRoutes(mux, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Error("status with nil middleware =", got, "want", http.StatusOK)
+	}
+}
