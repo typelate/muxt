@@ -18,6 +18,7 @@ type FakeServerConfig struct {
 	ReceiverInterface string // e.g. "RoutesReceiver"
 	Logger            bool   // whether RoutesFunction takes *slog.Logger
 	PathPrefix        bool   // whether RoutesFunction takes pathPrefix string
+	Middleware        bool   // whether RoutesFunction takes middleware func(next http.Handler) http.Handler
 	FakeImportPath    string // import path of the generated fake package
 }
 
@@ -135,7 +136,7 @@ func main() {
 	receiver := new(fake.{{.ReceiverInterface}})
 
 	mux := http.NewServeMux()
-	{{.PackageName}}.{{.RoutesFunction}}(mux, receiver{{if .Logger}}, slog.Default(){{end}}{{if .PathPrefix}}, ""{{end}})
+	{{.PackageName}}.{{.RoutesFunction}}(mux, receiver{{if .Logger}}, slog.Default(){{end}}{{if .PathPrefix}}, ""{{end}}{{if .Middleware}}, nil{{end}})
 
 	server := httptest.NewServer(mux)
 	defer server.Close()

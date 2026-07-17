@@ -41,6 +41,7 @@ type PackageConfig struct {
 	HTMXHelpers            bool   `json:"htmxHelpers,omitempty"`
 	Logger                 bool   `json:"logger,omitempty"`
 	PathPrefix             bool   `json:"pathPrefix,omitempty"`
+	Middleware             bool   `json:"middleware,omitempty"`
 }
 
 type PackageCommands struct {
@@ -216,6 +217,7 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 				HTMXHelpers:            config.HTMXHelpers,
 				Logger:                 config.Logger,
 				PathPrefix:             config.PathPrefix,
+				Middleware:             config.Middleware,
 			},
 			Commands:       commands,
 			ExternalAssets: assets,

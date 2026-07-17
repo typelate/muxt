@@ -842,6 +842,7 @@ This command is intended for exploratory use only.`,
 					ReceiverInterface: pkg.Config.ReceiverInterface,
 					Logger:            pkg.Config.Logger,
 					PathPrefix:        pkg.Config.PathPrefix,
+					Middleware:        pkg.Config.Middleware,
 					FakeImportPath:    fakeImportPath,
 				}
 
