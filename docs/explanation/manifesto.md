@@ -1,6 +1,6 @@
 # The Muxt Manifesto
 
-## Force no dependencies on users
+## Impose no dependencies on users
 
 The standard library should be the only **required** library in generated code (besides types received or returned by your methods).
 
@@ -12,7 +12,7 @@ Your generated code won't break when some npm package gets unpublished or a Go m
 
 ## Generate simple, readable code
 
-Code should use useful identifiers where possible and inline aggressively.
+Generated code should use meaningful identifiers and inline logic rather than hiding it behind helpers.
 
 Go proverb: "Clear is better than clever."
 

@@ -18,6 +18,8 @@ Superseded. Muxt now generates HTMX helper methods, opt-in via the `--output-htm
 
 ## Consequences
 
+*(Written before the flag shipped — see Update below.)*
+
 Once I learn about how to properly interact with HTMX headers from templates, I might add a `--htmx` flag to add the
 existing documented `htmx*.go` files to the target package.
 

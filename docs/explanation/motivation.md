@@ -34,7 +34,7 @@ func handleGetArticle(w http.ResponseWriter, r *http.Request) {
 
 Multiply this by 50 routes and you're drowning in nearly identical functions.
 
-**sqlc** showed me the pattern: declare what you want (SQL queries), generate the boring (easy to read) Go code. SQLC-generated Go code is quite readable.
+**sqlc** showed me the pattern: declare what you want (SQL queries), generate the boring, easy-to-read Go code.
 
 Why not the same for HTTP handlers? Declare what you want (routes in templates), generate the boring code (handlers).
 
@@ -55,14 +55,12 @@ Go proverb: "Clear is better than clever."
 
 I've experimented with LLM prompts to generate handler boilerplate. It works for one-off generation.
 
-But it doesn't scale across a team. Everyone has their own prompts. 
-Everyone generates slightly different code.
+But it doesn't scale across a team.
+Claude Code is great — I've used it since early in muxt's development — but in team code reviews I noticed each of us interacts with the agent differently.
+Different prompts, different allow/ask settings, different iteration cycles, different generated code.
 There's no shared contract.
-Claude Code is great (I started using it around `v0.18.0-dev.2` while creating `muxt`);
-however, in code reviews in my team, I noticed differences in how we interact with the agent.
-Preferences about what we put in our "allow" or "ask" claude settings can lead to very different iteration cycles and output.
-How do you keep 50 handlers consistent when they were all generated separately by ChatGPT?
-A tool to standardize an important interface in a piece of software is not a bad idea.
+How do you keep 50 handlers consistent when they were all generated separately by an LLM?
+A tool that standardizes an important interface in a piece of software is not a bad idea.
 
 Code generation from templates gives you consistency. Improve the generator, regenerate everything, done.
 
@@ -70,7 +68,7 @@ Code generation from templates gives you consistency. Improve the generator, reg
 
 I **love** writing Go. It's a straightforward language that compiles to a single binary.
 
-Minimal developer facing runtime complexity. No package manager that downloads the internet. Just a binary that runs.
+It exposes developers to minimal runtime complexity. No package manager that downloads the internet. Just a binary that runs.
 
 Muxt generates boring Go code. No framework. No magic. Just functions that match templates to HTTP routes.
 

@@ -1,16 +1,16 @@
 # Advanced Patterns
 
-Production patterns for Muxt applications, extracted from production web services. Each pattern addresses specific architectural concerns in server-rendered applications.
+Patterns extracted from production Muxt web services. Each pattern addresses a specific architectural concern in server-rendered applications.
 
 ## Extending TemplateData: Domain-Specific Template Logic
 
 **Problem:** Templates need domain logic (authorization checks, conditional rendering) without coupling domain types to HTTP concerns. Standard approach mixes business rules into templates or pollutes domain models with presentation logic.
 
-**Solution:** Extend generated `TemplateData[T]` with methods that operate on request context and result data. These methods access both HTTP primitives (request headers, context values) and domain data (result types, errors) without requiring domain types to know about HTTP.
+**Solution:** Extend generated `TemplateData[R, T]` with methods that operate on request context and result data. These methods access both HTTP primitives (request headers, context values) and domain data (result types, errors) without requiring domain types to know about HTTP.
 
 ```go
 // Authorization using request context and domain data
-func (data TemplateData[T]) CanEditPortfolio(p Portfolio) bool {
+func (data *TemplateData[R, T]) CanEditPortfolio(p Portfolio) bool {
     ctx := data.Request().Context()
     session, ok := user.SessionFromContext(ctx)
     if !ok || session.UserID == "" || p.AuthorID == "" {
@@ -20,21 +20,21 @@ func (data TemplateData[T]) CanEditPortfolio(p Portfolio) bool {
 }
 
 // Protocol detection for progressive enhancement
-func (data TemplateData[T]) IsHXRequest() bool {
+func (data *TemplateData[R, T]) IsHXRequest() bool {
     return data.Request().Header.Get("HX-Request") == "true"
 }
 
-// Automatic error status codes from domain errors
-func (data *TemplateData[T]) ErrorStatusCode() *TemplateData[T] {
-    if data.Err == nil {
-        return data
-    }
-    if sc, ok := data.Err.(interface{ StatusCode() int }); ok {
+// Map domain-error status codes onto the response (see the next pattern)
+func (data *TemplateData[R, T]) ErrorStatusCode() *TemplateData[R, T] {
+    var sc interface{ StatusCode() int }
+    if errors.As(data.Err(), &sc) {
         return data.StatusCode(sc.StatusCode())
     }
     return data
 }
 ```
+
+**Note:** the `--output-htmx-helpers` flag generates an `HXRequest` method (plus the other `HX*` header helpers), so only hand-write `IsHXRequest` if you don't use that flag.
 
 **Usage in templates:**
 ```gotmpl
@@ -51,7 +51,7 @@ func (data *TemplateData[T]) ErrorStatusCode() *TemplateData[T] {
 {{end}}
 ```
 
-**Why this works:** `TemplateData[T]` methods have access to request context (authentication, headers) and domain data (result values, errors). Domain types stay pure. Templates get domain-aware helpers. No coupling between layers.
+**Why this works:** `TemplateData[R, T]` methods have access to request context (authentication, headers) and domain data (result values, errors). Domain types stay pure. Templates get domain-aware helpers. No coupling between layers.
 
 **When to use:** Authorization checks, protocol detection (HTMX vs browser), feature flags from context, locale-aware rendering. Any logic that requires both HTTP primitives and domain data.
 
@@ -59,7 +59,7 @@ func (data *TemplateData[T]) ErrorStatusCode() *TemplateData[T] {
 
 **Problem:** Domain errors need HTTP status codes without domain layer knowing about HTTP. Standard approach either couples domain to `net/http` or forces handlers to maintain error-to-status mappings.
 
-**Solution:** Domain errors implement `StatusCode() int`. Muxt inspects error for method presence. Domain layer defines semantic errors, HTTP layer uses status codes automatically.
+**Solution:** Domain errors implement `StatusCode() int`. Muxt itself never inspects a returned error — generated handlers respond 500 for any method error — so the route template applies the mapping through the `ErrorStatusCode` extension from the previous pattern. Domain layer defines semantic errors; the presentation layer translates them to HTTP status codes.
 
 ```go
 type ReadSecurityError struct {
@@ -104,7 +104,16 @@ func (s *Server) ReadSecurity(ctx context.Context, id string) (security.Document
 }
 ```
 
-**Why this works:** Error type encapsulates domain semantics (not found, unauthorized, validation failure). `StatusCode()` method maps domain error to HTTP status. Muxt generated handlers call `StatusCode()` if present, fall back to defaults otherwise. Domain code never imports `net/http`.
+**Usage in the route template:** invoke the extension where the error is rendered — `TemplateData.String` returns an empty string, so the call renders nothing and only sets the status:
+
+```gotmpl
+{{define "GET /security/{id} ReadSecurity(ctx, id)"}}
+{{- .ErrorStatusCode -}}
+{{if .Err}}<p class="error">{{.Err}}</p>{{else}}...{{end}}
+{{end}}
+```
+
+**Why this works:** Error type encapsulates domain semantics (not found, unauthorized, validation failure). `StatusCode()` method maps domain error to HTTP status. The `ErrorStatusCode` extension applies it during rendering — without it, generated handlers respond 500 for every method error. Domain code never imports `net/http`.
 
 **Pattern:** Wrap database/service errors at domain boundary. Error constructors return `nil` for `nil` input (ergonomic unwrapping). Error messages are user-facing (logged separately with context). Status codes map domain states to HTTP semantics. Be careful not to leak errors that might expose app internals.
 
@@ -128,10 +137,10 @@ import (
 //go:embed admin/ public/ shared/
 var templateSource embed.FS
 
-//go:generate muxt generate --use-templates-variable=publicTmpl --output-routes-func=PublicRoutes --output-file=routes_public.go --output-receiver-interface=PublicHandler
+//go:generate muxt generate --use-templates-variable=publicTmpl --output-routes-func=PublicRoutes --output-file=routes_public.go --output-receiver-interface=PublicHandler --output-template-data-type=PublicData --output-template-route-paths-type=PublicPaths
 var publicTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "public/*.gohtml"))
 
-//go:generate muxt generate --use-templates-variable=adminTmpl --output-routes-func=AdminRoutes --output-file=routes_admin.go --output-receiver-interface=AdminHandler
+//go:generate muxt generate --use-templates-variable=adminTmpl --output-routes-func=AdminRoutes --output-file=routes_admin.go --output-receiver-interface=AdminHandler --output-template-data-type=AdminData --output-template-route-paths-type=AdminPaths
 var adminTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "admin/*.gohtml"))
 ```
 
@@ -152,7 +161,7 @@ func main() {
 }
 ```
 
-**Why this works:** Separate template sets produce separate generated code. Each receiver interface lists only methods required for that route set. Type system enforces separation. Middleware wraps different handler sets independently.
+**Why this works:** Separate template sets produce separate generated code. Each receiver interface lists only methods required for that route set. Type system enforces separation. Middleware wraps different handler sets independently. Both generated files live in one package, so every default identifier that would collide — data type, route-paths type, routes function, receiver interface, output file — must be renamed with its `--output-*` flag, as above.
 
 **Architecture implications:** Public handler might embed read-only services. Admin handler embeds write services. Different logging levels, different authentication, different databases (read replicas vs primary). Compile-time enforcement of capability separation.
 
@@ -208,7 +217,7 @@ func TestGetPortfolio(t *testing.T) {
 }
 ```
 
-**Why this works:** Mocking service interfaces (Database, SecuritiesProvider) instead of RoutesReceiver creates a thicker testable application layer. Tests exercise receiver methods, TemplateData[T] extensions, and error handling logic—more business logic per test. Mocking RoutesReceiver creates a thin boundary that only tests generated handler code (routing, parameter parsing), which already has some coverage from Muxt's own tests.
+**Why this works:** Mocking service interfaces (Database, SecuritiesProvider) instead of RoutesReceiver creates a thicker testable application layer. Tests exercise receiver methods, TemplateData extensions, and error handling logic—more business logic per test. Mocking RoutesReceiver creates a thin boundary that only tests generated handler code (routing, parameter parsing), which already has some coverage from Muxt's own tests.
 
 **Test layer thickness tradeoffs:**
 
@@ -281,13 +290,13 @@ internal/hypertext/
 ├── server.go                     # Server type, interface definitions
 ├── template.go                   # Template config, custom functions, go:generate directive
 ├── functions.go                  # Template function implementations
-├── template_data.go              # TemplateData[T] method extensions
+├── template_data.go              # TemplateData method extensions
 ├── errors.go                     # Domain errors with StatusCode() methods
 ├── {domain}_*.go                 # Receiver method implementations (portfolio.go, security.go)
 ├── {domain}_*.gohtml             # Route templates grouped by domain
 ├── _*.gohtml                     # Shared partials (prefix convention)
 ├── template_routes.go            # Generated: main orchestration, shared types
-├── *_template_routes_gen.go      # Generated: per-source-file handlers
+├── *_template_routes_gen.go      # Generated with --output-multiple-files: per-source-file handlers
 ├── *_test.go                     # Table-driven tests using counterfeiter fakes
 └── internal/fake/                # Generated: counterfeiter test doubles
     ├── database.go
@@ -300,7 +309,7 @@ internal/hypertext/
 - `portfolio.go` — Receiver methods for portfolio routes
 - `portfolio_test.go` — Tests for portfolio receivers
 
-**Generated code:** Muxt produces `template_routes.go` (shared types, route registration orchestration) and one `*_template_routes_gen.go` per source template file. Check these into version control. Review during code review. They're your code.
+**Generated code:** Muxt produces `template_routes.go` (shared types, route registration orchestration); with `--output-multiple-files` it additionally splits handlers into one `*_template_routes_gen.go` per source template file. Check these into version control. Review during code review. They're your code.
 
 **Separation of concerns:**
 - Domain methods (`{domain}.go`) — Business logic, return domain types

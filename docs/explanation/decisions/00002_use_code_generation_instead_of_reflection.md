@@ -19,6 +19,6 @@ Decided
 I won't be able to use [jba/templatecheck](https://github.com/jba/templatecheck),
 so I will need to write my own template checker to get the safety of pre-execution template validation.
 
-While reflection is not clear, code generation code can be much more convoluted so muxt will get much more difficult to iterate on.
+Reflection is unclear to read, but code that generates code can be even more convoluted — so muxt itself will become harder to iterate on.
 
 Testing `muxt` requires tests that run `go test` or `go build` and cannot just test an `http.Handler`.

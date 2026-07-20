@@ -13,8 +13,9 @@ This variable can be initialized in two ways:
 
 Muxt uses Go's static analysis to find your templates at generation time. It searches for:
 1. A package-level variable declaration
-2. Of type `*html/template.Template`
-3. Initialized with `template.ParseFS`, `template.Parse`, or wrapped with `template.Must(...)`
+2. Named `templates` (or the name passed via `--use-templates-variable`)
+3. Of type `*html/template.Template`
+4. Initialized with `template.ParseFS` or `template.New(name).Parse`, optionally wrapped with `template.Must(...)`
 
 **This works:**
 ```go
@@ -188,6 +189,7 @@ var customFuncs = template.FuncMap{
 
 **Fix:**
 - Ensure the variable is package-level (not in a function)
+- Ensure the variable is named `templates`, or pass its name with `--use-templates-variable`
 - Verify it's type `*template.Template`
 - Check that it uses `template.ParseFS` or `template.Must(template.ParseFS(...))`
 
@@ -204,8 +206,7 @@ var customFuncs = template.FuncMap{
 **Cause:** The glob pattern in `ParseFS` doesn't match your file structure.
 
 **Fix:**
-- Use `**/*.gohtml` for recursive matching
-- List patterns explicitly if you want specific subdirectories
+- List one glob per directory depth (`*.gohtml`, `*/*.gohtml`) — `path.Match` has no recursive wildcard, so `**` matches exactly one segment
 - Ensure the pattern matches the actual file locations relative to the embed.FS root
 
 ## Related

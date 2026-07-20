@@ -92,13 +92,13 @@ The architecture is in the name. The implementation is in the method. The render
 
 ## Don't panic
 
-Muxt panics during template parsing (at startup) if templates are malformed. This is appropriate - bad templates mean the application can't work.
+Your `template.Must` call panics at startup if templates are malformed — appropriate, since bad templates mean the application can't work. Muxt catches most template problems even earlier, at generation time.
 
 But during request handling? Panics are rare. Mostly you'll just get errors. Errors you can handle in templates. Errors you can log. Errors you can show to users.
 
 ## Make the zero value useful
 
-The generated code initializes cleanly. You can start small and add fields as needed.
+A route template with no method call still works: the generated handler builds a `TemplateData` whose zero `.Result` is an empty struct, and the template renders from `.Request` alone. Add a receiver method only when the route needs data.
 
 ## Accept interfaces, return structs
 
@@ -149,11 +149,12 @@ Muxt leaves out:
 - Runtime reflection
 - Complex configuration files
 - Plugin systems
-- Middleware chains
+- Middleware chains (opt-in: `--output-routes-func-with-middleware-param` adds a single middleware parameter you compose yourself)
 - "Magic" dependency injection
-- Automatic validation
 - Database integrations
 - Authentication systems
+
+(Validation is a partial exception: muxt generates request checks from static `<input>` attributes like `min` and `max` — but only what the HTML already declares, never a separate validation framework.)
 
 Not because these things are bad, but because they're not Muxt's job.
 
