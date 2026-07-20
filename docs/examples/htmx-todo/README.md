@@ -16,7 +16,7 @@ go generate ./...
 go run .
 ```
 
-Open `http://localhost:8000`.
+Open [http://localhost:8000](http://localhost:8000).
 
 ### Flags
 

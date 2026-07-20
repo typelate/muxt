@@ -4,7 +4,7 @@ Build a small server-rendered site with Muxt. By the end you will have a running
 
 ## Prerequisites
 
-- Go 1.22 or later
+- Go 1.26 or later
 - `muxt` installed: `go install github.com/typelate/muxt@latest`
 
 ## Step 1: Create the module
@@ -59,7 +59,7 @@ Create `index.gohtml`:
 {{end}}
 ```
 
-The template name `"GET /"` is the route. Muxt generates a handler for it that renders this template with the incoming `*http.Request` as data.
+The template name `"GET /"` is the route. Muxt generates a handler for it that renders this template with data that carries the incoming `*http.Request`.
 
 ## Step 4: Generate and run
 
@@ -113,7 +113,7 @@ While you're in `template_routes.go`, search for `ReadHelloByName`. Muxt generat
 
 ## Step 6: Make it interactive with htmz
 
-We could have used fixi, HTMX, or Datastar for this example, but I thought it would be cool to highlight this nifty one-liner.
+This tutorial uses htmz because its entire implementation fits on one line below. (htmx, fixi, or Datastar would serve the same role.)
 
 [htmz](https://leanrada.com/htmz/) is a tiny HTML snippet that lets you load server responses into any element on the page. Its entire source is one `<iframe>`:
 
@@ -197,4 +197,4 @@ Visit [http://localhost:8080/about](http://localhost:8080/about).
 
 ## What's next
 
-The templates here use `*http.Request` as data because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.
+The templates here read from `.Request` because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.

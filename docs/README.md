@@ -38,7 +38,9 @@ Type-safe HTTP handlers from Go HTML templates.
 
 - **[Hypertext Example](examples/simple)** - Full application with tests
 - **[HTMX Helpers](examples/htmx-counter)** - HTMX integration code
+- **[HTMX TodoMVC](examples/htmx-todo)** - TodoMVC with JSON persistence
+- **[fixi + SSE Clock](examples/fixiproject-clock)** - Server-Sent Events streaming
 
 ---
 
-Organized by [Diátaxis](https://diataxis.fr/): Reference (specs), Explanation (concepts). Task-oriented workflows are in AI Assistant Skills.
+Organized by [Diátaxis](https://diataxis.fr/): Reference (specs), Explanation (concepts), Tutorials (walkthroughs), Examples (how-to code). Task-oriented workflows are in the repository's AI assistant skills (`.claude/skills/`).

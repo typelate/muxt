@@ -4,7 +4,9 @@ Add structured logging to your generated HTTP handlers using Go's `log/slog`.
 
 ## Prerequisites
 
-- A working Muxt project with `muxt generate`
+- A working Muxt project (one where `muxt generate` already runs cleanly)
+
+Examples below assume a receiver type named `Server` and an instance `server`; substitute your own.
 
 ## Step 1: Enable the Logger Parameter
 
@@ -111,7 +113,7 @@ The flag adds:
 - An explicit `*slog.Logger` parameter (instead of the global default)
 - Debug-level request logging for every request
 
-## Step 3: Test Logging Output
+## Testing Logging Output
 
 Parse log output as JSON in tests to assert on structured fields:
 
@@ -152,7 +154,7 @@ func TestRequestLogging(t *testing.T) {
 }
 ```
 
-To test that errors at INFO level produce no debug output:
+To verify that INFO level suppresses the per-request debug logs:
 
 ```go
 func TestNoDebugLogsAtInfoLevel(t *testing.T) {

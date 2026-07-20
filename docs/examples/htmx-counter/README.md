@@ -19,10 +19,14 @@ Open [http://localhost:8000](http://localhost:8000). Set `PORT` to use a differe
 //go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-htmx-helpers
 ```
 
-`--output-htmx-helpers` adds methods to the generated `TemplateData`: response-header setters (`HXLocation`, `HXPushURL`, `HXRedirect`, `HXReswap`, `HXRetarget`, `HXTrigger`, …) and request-header readers (`HXRequest`, `HXBoosted`, `HXCurrentURL`, …). You call them from a template:
+`--output-htmx-helpers` adds methods to the generated `TemplateData`: response-header setters (`HXLocation`, `HXPushURL`, `HXRedirect`, `HXReswap`, `HXRetarget`, `HXTrigger`, …) and request-header readers (`HXRequest`, `HXBoosted`, `HXTriggerElementID`, …). This example's `POST /count` template calls one:
 
 ```gotmpl
-{{.HXTrigger "count-changed"}}
+{{- if eq .HXTriggerElementID "decrement"}}
+  {{- template "count" .Receiver.Decrement}}
+{{- else if eq .HXTriggerElementID "increment"}}
+  {{- template "count" .Receiver.Increment}}
+{{- end}}
 ```
 
 `htmx_test.go` exercises each one against the generated type. Earlier muxt versions had no flag — you copied these methods in by hand; the flag replaces that.
@@ -34,6 +38,6 @@ Open [http://localhost:8000](http://localhost:8000). Set `PORT` to use a differe
 | `/ Count()` | `Count() int64` |
 | `/increment-count Increment()` | `Increment() int64` |
 | `/decrement-count Decrement()` | `Decrement() int64` |
-| `POST /count` | none (renders the `count` fragment) |
+| `POST /count` | none — the template dispatches on `.HXTriggerElementID` to `.Receiver.Increment`, `.Receiver.Decrement`, or `.Receiver.Count` |
 
-The `Server` holds the count in an `int64` it reads and updates with `sync/atomic`. Increment and decrement return the new value, which the route template renders back into the page.
+Both page buttons post to `/count`; the template reads which button triggered the request from the `HX-Trigger` header helper and calls the matching receiver method — that dispatch is the point of the example. The `/increment-count` and `/decrement-count` routes expose the same operations as standalone endpoints. The `Server` holds the count in an `int64` it reads and updates with `sync/atomic`.
