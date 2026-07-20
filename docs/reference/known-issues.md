@@ -4,21 +4,33 @@ Current limitations and workarounds for Muxt.
 
 ## Form Validation Reads Static Attributes Only
 
-**Issue:** Muxt generates parse-time validation (`min`, `max`, `pattern`) by reading those attributes off `<input>` elements bound to a form field. It parses the literal attribute string against the field's Go type, so the value must be a constant.
+**Issue:** Muxt generates parse-time validation (`min`, `max`, `minlength`,
+`maxlength`, `pattern`) by reading those attributes off the `<input>` element
+bound to a form field. The binding is opt-in: the form struct field must carry
+a `template:"name"` tag naming the template that contains the matching
+`<input name=...>`. Fields without the tag (or whose template has no matching
+input) get no generated validation. `min`/`max` apply only to numeric and
+temporal input types (`number`, `range`, `date`, `time`, ...); `pattern` only
+to textual ones (`text`, `email`, `password`, ...).
 
 **Static value — validation generated:**
 ```gotmpl
-<input type="number" name="age" min="0" max="120">
+{{define "age-field"}}<input type="number" name="age" min="0" max="120">{{end}}
+```
+```go
+type SignupForm struct {
+    Age int `template:"age-field"`
+}
 ```
 Muxt parses `0` and `120` against the field type and emits bounds checks in the handler (a request with `age=200` fails before your method runs).
 
-**Templated value — not a constant:**
+**Templated value — generation fails:**
 ```gotmpl
 <input type="number" name="age" min="{{.MinAge}}">
 ```
-Muxt has only the literal `{{.MinAge}}` at generate time, not a number, so it cannot emit a bounds check for that attribute.
+Muxt has only the literal `{{.MinAge}}` at generate time. It cannot parse that as the field's type, so `muxt generate` fails with an error for the attribute — it is not silently skipped.
 
-**Workaround:** Use constant `min`/`max`/`pattern` values for fields you want muxt to validate.
+**Workaround:** Use constant `min`/`max`/`pattern` values for fields you want muxt to validate, and remove the `template` tag from fields whose attributes must stay dynamic.
 
 [reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt) · [reference_validation_pattern.txt](../../cmd/muxt/testdata/reference_validation_pattern.txt)
 

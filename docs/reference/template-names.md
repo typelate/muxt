@@ -72,7 +72,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 }
 ```
 
-**Note:** Path param names must match method param names exactly. Type conversion is automatic based on method signature.
+**Note:** Call arguments must use the path wildcard names; they bind to method parameters by position. Type conversion is automatic based on the method signature.
 
 [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)
 
@@ -132,11 +132,16 @@ MethodName(arg1, arg2, ...)
 | `execute` | `func(T) error` or `func() error` | render callback (see below) | N/A |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes |
 | Path param | Any parseable | `request.PathValue(name)` | Yes |
-| Form field | Any parseable | `request.Form.Get(name)` | Yes |
 
-`form` and `multipart` are mutually exclusive in the same call site. Use
-`form` for routes that handle `application/x-www-form-urlencoded` bodies and
-`multipart` for routes that handle `multipart/form-data` (file uploads, etc.).
+These names (plus path parameters) are the only identifiers allowed as call
+arguments — anything else fails generation with `unknown argument`. Individual
+form fields cannot be passed as arguments; bind them through `form` or
+`multipart`.
+
+`form` and `multipart` are mutually exclusive in the same call site. `form`
+binds `request.Form`: URL query parameters and, on POST/PUT/PATCH, the
+`application/x-www-form-urlencoded` body. Use `multipart` for routes that
+handle `multipart/form-data` (file uploads, etc.).
 In struct-binding mode, `multipart` additionally supports
 `*multipart.FileHeader` and `[]*multipart.FileHeader` fields, sourced from
 `request.MultipartForm.File`. The default `maxMemory` for `ParseMultipartForm`
@@ -205,14 +210,16 @@ like a path value (`string` by default, or any parseable type). A
 
 ```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{end}}
-{{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form fields -->
+{{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form binding -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
 {{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{end}}  <!-- Server-Sent Events -->
 ```
 
-Parameter names in template must match method signature exactly. Case-sensitive.
+Call arguments bind to method parameters by position. Argument names must be
+reserved identifiers or path parameter names (case-sensitive); the method's own
+parameter names don't need to match them.
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 

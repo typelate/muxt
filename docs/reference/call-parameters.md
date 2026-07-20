@@ -9,14 +9,17 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `ctx` | `context.Context` | `request.Context()` | N/A | Need request context (always recommended first param) |
 | `request` | `*http.Request` | Direct | N/A | Need headers, cookies, or full request |
 | `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
-| `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
+| `form` | struct or `url.Values` | `request.Form` | Yes | Bind query parameters and, on POST/PUT/PATCH, the `application/x-www-form-urlencoded` body |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
-| Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
 
-Parameter names in template call must match method signature exactly.
+These names (plus path parameters) are the only identifiers allowed as call
+arguments — anything else fails generation with `unknown argument`. Individual
+form fields cannot be passed as arguments; bind them through `form` or
+`multipart`. Arguments bind to method parameters by position; the method's own
+parameter names don't need to match.
 
 [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt) · [howto_arg_response.txt](../../cmd/muxt/testdata/howto_arg_response.txt)
 
@@ -251,11 +254,16 @@ type Server struct {
 **Muxt handles type parsing. Your methods handle validation:**
 
 ```go
-func (s Server) CreateUser(ctx context.Context, email, password string) (User, error) {
-    if !isValidEmail(email) {
+type CreateUserForm struct {
+    Email    string
+    Password string
+}
+
+func (s Server) CreateUser(ctx context.Context, form CreateUserForm) (User, error) {
+    if !isValidEmail(form.Email) {
         return User{}, errors.New("invalid email")
     }
-    if len(password) < 8 {
+    if len(form.Password) < 8 {
         return User{}, errors.New("password too short")
     }
     // ...
@@ -264,7 +272,7 @@ func (s Server) CreateUser(ctx context.Context, email, password string) (User, e
 
 **Parse errors return 400 automatically:**
 - Request to `/user/abc` with `GetUser(ctx, id int)` → 400 Bad Request
-- Form field "age=xyz" with `age int` param → 400 Bad Request
+- Form field "age=xyz" bound to an `Age int` form struct field → 400 Bad Request
 
 Validation errors should return from your method. Display them in templates with `{{if .Err}}`.
 
