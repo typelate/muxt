@@ -14,7 +14,7 @@
 	</script>
 </head>
 <body fx-action='{{.Path.Time}}' fx-trigger="fx:inited" fx-swap='innerHTML'>
-{{block `GET /time Time(ctx, lastEventID, sse)` .}}
+{{block `GET /time sse(Time(ctx, lastEventID, execute))` .}}
 		<time>{{.Result}}</time>
 {{end}}
 </body>

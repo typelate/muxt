@@ -82,6 +82,16 @@ If functions are added after `ParseFS`, type checking won't recognize them.
 
 **Fix:** Rename the handler method to start with a cased letter.
 
+## Removed: `sse` as a Call Argument
+
+**Issue:** Older muxt versions accepted `sse` as a reserved call argument
+(`GET /events Stream(ctx, lastEventID, sse)`). That syntax was removed; current
+versions fail with `unknown argument sse`.
+
+**Fix:** Wrap the call instead and use `execute` for the callback:
+`GET /events sse(Stream(ctx, lastEventID, execute))`. See
+[Template Names](template-names.md).
+
 ## Reporting Issues
 
 Found a limitation not listed here? [Open an issue](https://github.com/typelate/muxt/issues/new) with:

@@ -12,7 +12,6 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `form` | struct or `url.Values` | `request.Form` | Yes | Bind all form fields at once (`application/x-www-form-urlencoded`) |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
-| `sse` | `func(T) error` or `func() error` | render callback (streaming) | N/A | Stream Server-Sent Events |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 | Form field | Any parseable | `request.Form.Get(name)` | Yes | Individual form field |
@@ -176,13 +175,13 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 ## Server-Sent Events
 
-`sse` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+Wrapping the method call in `sse(...)` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback at the `execute` argument's position. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
 
 ```gotmpl
-{{define "GET /clock Clock(ctx, sse)"}}{{.Result}}{{end}}
+{{define "GET /clock sse(Clock(ctx, execute))"}}{{.Result}}{{end}}
 ```
 ```go
-func (s Server) Clock(ctx context.Context, sse func(string) error) {
+func (s Server) Clock(ctx context.Context, execute func(string) error) {
     t := time.NewTicker(time.Second)
     defer t.Stop()
     for {
@@ -190,7 +189,7 @@ func (s Server) Clock(ctx context.Context, sse func(string) error) {
         case <-ctx.Done():
             return
         case now := <-t.C:
-            if err := sse(now.Format(time.RFC3339)); err != nil {
+            if err := execute(now.Format(time.RFC3339)); err != nil {
                 return // client disconnected
             }
         }
@@ -202,17 +201,18 @@ func (s Server) Clock(ctx context.Context, sse func(string) error) {
 |------|--------|
 | Callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
 | Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
-| Mutually exclusive with | `execute` and `response` |
+| Not allowed | a `response` argument |
 | Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
 | Undefined method | Synthesized as `func(any) error` |
+| Extra callbacks | `sse`-prefixed arguments (`sse(Events(sseClock, execute, sseMetrics))`) each render the same-named template |
 
-Pair `sse` with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
+Pair the wrapper with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
 
 ```gotmpl
-{{define "GET /events Stream(ctx, lastEventID, sse)"}}{{.Result}}{{end}}
+{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
 ```
 
-[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
+[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 
 ## Advanced Patterns
 
@@ -303,7 +303,7 @@ Validation errors should return from your method. Display them in templates with
 Using `form` and `multipart` in the same call is rejected (multipart parses url-encoded fields too).
 
 **Server-Sent Events:**
-- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse` callback with `lastEventID`
+- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse(...)` wrapper with `lastEventID`
 - [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) — `func() error` callback form
 - [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) — error-returning method
 - [reference_sse_synthesized_method.txt](../../cmd/muxt/testdata/reference_sse_synthesized_method.txt) — synthesized `func(any) error` signature

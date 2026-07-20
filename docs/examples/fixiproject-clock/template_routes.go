@@ -54,7 +54,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			buf.Reset()
 			defer bytesBufferPool.Put(buf)
 			td := SSETemplateData[RoutesReceiver, string]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
-			if err := templates.ExecuteTemplate(buf, "GET /time Time(ctx, lastEventID, sse)", &td); err != nil {
+			if err := templates.ExecuteTemplate(buf, "GET /time sse(Time(ctx, lastEventID, execute))", &td); err != nil {
 				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 				return err
 			}
