@@ -72,13 +72,9 @@ The server prints `Explore at: http://127.0.0.1:<port>` and waits for Ctrl-C.
 
 ### 4. Browse
 
-Use Chrome DevTools MCP to explore the rendered pages:
+Open the printed URL in a browser to explore the rendered pages.
 
-```
-navigate_page({"url": "http://127.0.0.1:<port>/"})
-take_snapshot({})
-take_screenshot({})
-```
+If an AI agent is driving the exploration, a browser automation tool (for example Chrome DevTools MCP) can navigate, snapshot, and screenshot the pages instead.
 
 ## Requirements
 

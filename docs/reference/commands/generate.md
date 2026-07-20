@@ -43,7 +43,7 @@ These flags tell muxt what existing code to look for and use:
 
 [templates-variable.md](../templates-variable.md) — Template variable requirements
 
-## Output Flags (Generated Code Names)
+## Output Flags (Generated Code)
 
 These flags control the names of generated types and functions:
 
@@ -56,7 +56,7 @@ These flags control the names of generated types and functions:
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
-| `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
+| `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathsPrefix string` parameter for mounting under subpaths. |
 | `--output-routes-func-with-middleware-param` | bool | `false` | Add `middleware func(next http.Handler) http.Handler` parameter; every registered handler is wrapped with it. `nil` disables wrapping. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
 | `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
@@ -77,12 +77,12 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Lo
 
 **With `--output-routes-func-with-path-prefix-param`:**
 ```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix string) TemplateRoutePaths
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathsPrefix string) TemplateRoutePaths
 ```
 
 **With both:**
 ```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathPrefix string) TemplateRoutePaths
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathsPrefix string) TemplateRoutePaths
 ```
 
 **With `--output-routes-func-with-middleware-param`:**
@@ -90,7 +90,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Lo
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, middleware func(next http.Handler) http.Handler) TemplateRoutePaths
 ```
 
-Each handler is registered as `mux.Handle(pattern, middleware(http.HandlerFunc(handler)))`. Pass `nil` to register handlers unwrapped. Middleware can read the matched route via `request.Pattern`. This lets one template set back multiple entrypoints registered on a shared mux with different middleware (auth, logging) per entrypoint. When combined with the other parameter flags, the order is `(mux, receiver, logger, pathsPrefix, middleware)`.
+Each handler is registered as `mux.Handle(pattern, middleware(http.HandlerFunc(handler)))`. Pass `nil` to register handlers unwrapped. Middleware can read the matched route via `request.Pattern`. This lets you register one template set multiple times on a shared mux, each registration with its own middleware (auth, logging). When combined with the other parameter flags, the order is `(mux, receiver, logger, pathsPrefix, middleware)`.
 
 ### Logging Behavior
 
@@ -158,7 +158,7 @@ muxt generate --use-receiver-type=App --output-routes-func-with-path-prefix-para
 
 Then use:
 ```go
-Routes(mux, app, "/docs")
+TemplateRoutes(mux, app, "/docs")
 ```
 
 ## Related

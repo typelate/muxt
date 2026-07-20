@@ -20,7 +20,7 @@ muxt explore-module --format=json
 For each muxt-generated package, shows:
 
 - **Package path** and directory
-- **Configuration** — routes function, receiver interface, receiver type, HTMX helpers, logger, path prefix
+- **Configuration** — routes function, receiver interface, receiver type and package, route paths type, HTMX helpers (the JSON format additionally includes the logger, path prefix, and middleware settings)
 - **Commands** — ready-to-run `muxt` commands for listing routes, calls, callers, checking, and generating
 - **External assets** — URLs found in `.gohtml` files (CDN links, external scripts)
 
@@ -48,7 +48,7 @@ muxt explore-module --format=json | jq -r '.packages[] | select(.config.htmxHelp
 
 **List external CDN assets:**
 ```bash
-muxt explore-module --format=json | jq '.packages[].externalAssets[]'
+muxt explore-module --format=json | jq '.packages[].externalAssets[]?'
 ```
 
 ## Related

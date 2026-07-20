@@ -8,10 +8,13 @@ How `muxt check` validates template actions at compile time.
 
 ## How It Works
 
-1. **Find templates:** Scan for `ExecuteTemplate` calls with string literal names
-2. **Extract data types:** Infer data type from call site (second parameter)
-3. **Parse template:** Parse template source to AST
-4. **Type check actions:** Validate field accesses, method calls, function calls against Go types
+1. **Resolve the templates variable:** `muxt check` fails if the configured variable (default `templates`) isn't found
+2. **Find templates:** Scan for `ExecuteTemplate` calls with string literal names
+3. **Extract data types:** Infer data type from call site (the third `ExecuteTemplate` argument)
+4. **Parse template:** Parse template source to AST
+5. **Type check actions:** Validate field accesses, method calls, function calls against Go types
+
+`muxt check` also reports **unused templates** as errors: a defined template that no route or `ExecuteTemplate` call renders fails the check (empty helper templates outside `{{define}}` blocks are exempt).
 
 ## Type Resolution
 

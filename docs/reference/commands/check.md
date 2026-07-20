@@ -1,6 +1,6 @@
 # muxt check
 
-Type-check templates without running them. Use in CI or during development to catch template errors early.
+Type-check templates without running them.
 
 **Aliases:** `c`
 
@@ -17,9 +17,11 @@ muxt check --use-templates-variable=templates --verbose
 
 ## Verbose Output
 
+Each line prints the full template name, including any method call:
+
 ```
-checking endpoint GET /users/{id}
-checking endpoint POST /users
+checking endpoint GET /users/{id} GetUser(ctx, id)
+checking endpoint POST /users CreateUser(ctx, form)
 OK
 ```
 

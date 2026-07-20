@@ -1,6 +1,6 @@
 # muxt list-template-calls
 
-For a given template (or all templates), list all other templates called. It shows `{{template "Y" .}}` actions within each template.
+List the `{{template "Y" .}}` calls made within each template. Filter templates with `--match`.
 
 **Aliases:** `calls`
 

@@ -1,6 +1,6 @@
 # muxt list-template-callers
 
-For a given template, list all places that call it. Shows both Go code call sites (`ExecuteTemplate`) and template call sites (`{{template "X" .}}`).
+List the places that call each template — Go call sites (`ExecuteTemplate`) and template call sites (`{{template "X" .}}`). Filter templates with `--match`.
 
 **Aliases:** `callers`
 

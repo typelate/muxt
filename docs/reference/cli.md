@@ -13,14 +13,14 @@ Complete specification for `muxt` command-line interface. Use during setup and C
 | `explore-module` | List every muxt package in the module | `--format` |
 | `generate-fake-server` | Generate a fake-server `main.go` for exploring routes | `--output` |
 | `version` | Print muxt version | `-v, --verbose` |
+| _(no subcommand)_ | Print a routes overview for the working directory | `--format`, `--use-templates-variable`, `--use-receiver-type` |
 
 ## Flag Categories
 
-Muxt flags are organized into three clear categories:
+Muxt flags fall into two categories:
 
 - **Use Flags** (`--use-*`) — Specify what to use from your existing code
-- **Output Flags** (`--output-*`) — Control names in generated code
-- **Feature Flags** — Enable optional features
+- **Output Flags** (`--output-*`) — Control the generated code
 
 ## Commands
 
@@ -69,7 +69,7 @@ These flags tell muxt what existing code to look for and use:
 
 [templates-variable.md](templates-variable.md) — Template variable requirements
 
-#### Output Flags (Generated Code Names)
+#### Output Flags (Generated Code)
 
 These flags control the names of generated types and functions:
 
@@ -84,7 +84,7 @@ These flags control the names of generated types and functions:
 | `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
-| `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathPrefix string` parameter for mounting under subpaths. |
+| `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathsPrefix string` parameter for mounting under subpaths. |
 | `--output-routes-func-with-middleware-param` | bool | `false` | Add `middleware func(next http.Handler) http.Handler` parameter; every registered handler is wrapped with it. `nil` disables wrapping. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
 | `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
@@ -115,12 +115,12 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Lo
 
 **With `--output-routes-func-with-path-prefix-param`:**
 ```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathPrefix string) TemplateRoutePaths
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathsPrefix string) TemplateRoutePaths
 ```
 
 **With both:**
 ```go
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathPrefix string) TemplateRoutePaths
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathsPrefix string) TemplateRoutePaths
 ```
 
 **With `--output-routes-func-with-middleware-param`:**
@@ -128,7 +128,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Lo
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, middleware func(next http.Handler) http.Handler) TemplateRoutePaths
 ```
 
-Each handler is registered as `mux.Handle(pattern, middleware(http.HandlerFunc(handler)))`. Pass `nil` to register handlers unwrapped. Middleware can read the matched route via `request.Pattern`. This lets one template set back multiple entrypoints registered on a shared mux with different middleware (auth, logging) per entrypoint. When combined with the other parameter flags, the order is `(mux, receiver, logger, pathsPrefix, middleware)`.
+Each handler is registered as `mux.Handle(pattern, middleware(http.HandlerFunc(handler)))`. Pass `nil` to register handlers unwrapped. Middleware can read the matched route via `request.Pattern`. This lets you register one template set multiple times on a shared mux, each registration with its own middleware (auth, logging). When combined with the other parameter flags, the order is `(mux, receiver, logger, pathsPrefix, middleware)`.
 
 #### Logging Behavior
 
@@ -162,10 +162,10 @@ muxt check --verbose
 | `--use-templates-variable` | string[] | `templates` | Template variable name(s). Same as in `generate`. |
 | `--verbose`, `-v` | bool | `false` | Show each endpoint checked and success message. |
 
-**Verbose output:**
+**Verbose output** (each line prints the full template name, including any method call):
 ```
-checking endpoint GET /users/{id}
-checking endpoint POST /users
+checking endpoint GET /users/{id} GetUser(ctx, id)
+checking endpoint POST /users CreateUser(ctx, form)
 OK
 ```
 
@@ -177,7 +177,7 @@ OK
 
 Print muxt version. Use `-v` for verbose output including Go version.
 
-**Alias:** `v`
+**Aliases:** `v`
 
 ```bash
 muxt version
@@ -189,6 +189,28 @@ muxt version -v  # Shows Go version used to compile muxt
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `-v, --verbose` | bool | `false` | Show Go version used to compile muxt. |
+
+---
+
+### `muxt` (no subcommand)
+
+Prints an overview of the working directory's package: its template routes (with method calls) and the registered template functions.
+
+```bash
+muxt
+muxt --format json
+```
+
+**Flags:** `--format` (`text` or `json`), `--use-templates-variable`, `--use-receiver-type`, `--use-receiver-type-package`, `-v, --verbose`.
+
+```
+Template Routes:
+  - GET /fruits/{id}/edit GetFormEditRow(id)
+  - GET /{$} List(ctx)
+
+Template Functions:
+  - func printf(format string, a ...any) string
+```
 
 ---
 
@@ -248,7 +270,7 @@ muxt generate --use-receiver-type=App --output-routes-func-with-path-prefix-para
 
 Then use:
 ```go
-Routes(mux, app, "/api/v1")
+TemplateRoutes(mux, app, "/api/v1")
 ```
 
 ---

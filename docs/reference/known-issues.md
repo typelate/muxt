@@ -68,7 +68,7 @@ See [type-checking.md](type-checking.md) for details.
 
 ## Template Function Registration
 
-**Issue:** Custom template functions must be registered before `muxt check` runs.
+**Issue:** Custom template functions must appear in the templates variable's initialization chain — the `Funcs` call has to come before `Parse`/`ParseFS`.
 
 **Example:**
 ```go
@@ -79,7 +79,7 @@ var templates = template.Must(
 )
 ```
 
-If functions are added after `ParseFS`, type checking won't recognize them.
+If functions are added after `ParseFS`, or outside the variable's initialization expression, type checking won't recognize them.
 
 ## TemplateRoutePaths Method Name Collision
 

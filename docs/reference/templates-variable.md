@@ -116,9 +116,10 @@ Routes from all variables are combined into a single generated `TemplateRoutes` 
 ## How Muxt Uses This
 
 **`muxt check`:**
+- Resolves each configured templates variable first — fails with `variable <name> not found` if it's missing
 - Scans for `ExecuteTemplate` calls with string literals
 - Maps template names to data types
-- Works without finding template variable
+- Reports unused templates as errors
 
 **`muxt generate`:**
 - Finds template variable by name (`--use-templates-variable` flag)
