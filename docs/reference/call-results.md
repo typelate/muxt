@@ -5,14 +5,21 @@ Use this reference when designing method signatures with team members.
 
 ## Return Patterns Quick Reference
 
-| Pattern | `.Result` Type | `.Err` Type | Use When |
-|---------|----------------|-------------|----------|
-| `T` | `T` | Always `nil` | Infallible operations (static pages) |
+| Pattern | `.Result` Type | `.Err` from method | Use When |
+|---------|----------------|--------------------|----------|
+| `T` | `T` | Never | Infallible operations (static pages) |
 | `(T, error)` | `T` (zero if error) | `error` or `nil` | Most endpoints (can fail) |
-| `(T, bool)` | `T` | Always `nil` | Early exit/redirect (bool=false skips template) |
-| `error` | `struct{}` | `error` or `nil` | No data needed (health checks) |
+| `(T, bool)` | `T` | Never | Early exit/redirect (bool=false skips template) |
+| `error` (with `execute` callback) | callback's `T` (`struct{}` for `func() error`) | Never (a returned error becomes a plain `500`) | No data needed (health checks) |
 
 Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
+
+Two caveats apply to every shape. First, request parse and validation failures
+populate `.Err` (with status 400) before the method is called, so `.Err` can be
+non-nil even for shapes whose methods never return an error. Second, a method
+whose only result is `error` on a route *without* an `execute` callback is
+treated as the single-value pattern: the error value itself becomes `.Result`
+and `.Err` stays nil.
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
 
@@ -85,37 +92,47 @@ func (s Server) Download(response http.ResponseWriter, request *http.Request, id
 
 **Use:** Health checks, webhooks, operations that return no data
 
+A method may return only `error` when it takes the `execute` render callback —
+the callback controls rendering, and the returned error reports failure:
+
 ```go
-func (s Server) Healthcheck() error {
+func (s Server) Healthcheck(execute func() error) error {
     if err := s.db.Ping(); err != nil {
-        return err
+        return err // logged; the client gets a plain 500 "failed to render page"
     }
-    return nil
+    return execute() // renders the template
 }
 ```
 ```gotmpl
-{{define "GET /health Healthcheck()"}}
-{{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK{{end}}
-{{end}}
+{{define "GET /health Healthcheck(execute)"}}OK{{end}}
 ```
 
-**Behavior:** `.Result` = `struct{}` (empty), `.Err` = error (nil if healthy)
+**Behavior:** calling `execute` renders the template with `.Result` =
+`struct{}` (200 OK). Returning a non-nil error instead sends a plain
+`500 Internal Server Error` — the template does not run, so it never sees the
+error through `.Err`. Returning nil without ever calling `execute` responds
+`204 No Content`.
 
-## TemplateData[T] API
+**Warning:** without `execute` in the call, a bare `error` result is treated as
+Pattern 1 — the error value lands in `.Result` and `.Err` stays nil.
 
-Templates receive `TemplateData[T]` where `T` is the method's first return value:
+## TemplateData API
 
-| Method/Field | Type | Description |
-|--------------|------|-------------|
+Templates receive `TemplateData[R, T]` where `R` is the receiver interface and
+`T` is the method's first return value:
+
+| Method | Type | Description |
+|--------|------|-------------|
 | `.Result` | `T` | Returned value (zero value if error) |
-| `.Err` | `error` | Returned error (nil if success) |
-| `.Ok()` | `bool` | True unless a `(T, bool)` method returned false |
+| `.Err` | `error` | Returned error, joined with any parse/validation errors (nil if none) |
+| `.Ok()` | `bool` | True after a single-value method, a `(T, bool)` method returning true, or a successful `execute` call. Never true for `(T, error)` methods — branch on `.Err` instead |
 | `.Request()` | `*http.Request` | HTTP request |
 | `.Receiver()` | `R` | The receiver passed to `TemplateRoutes` |
 | `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument |
+| `.MuxtVersion()` | `string` | The muxt version that generated the code |
 | `.StatusCode(code)` | `*TemplateData` | Set HTTP status (returns the data for chaining) |
 | `.Header(key, val)` | `*TemplateData` | Set response header (returns the data for chaining) |
-| `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code |
+| `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code; the code must be in 300–399 or an error is returned |
 | `.RedirectMultipleChoices(url)` | `*TemplateData, error` | Redirect with 300 status |
 | `.RedirectMovedPermanently(url)` | `*TemplateData, error` | Redirect with 301 status |
 | `.RedirectFound(url)` | `*TemplateData, error` | Redirect with 302 status |

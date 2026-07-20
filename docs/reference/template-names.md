@@ -19,7 +19,7 @@ Complete specification for Muxt template naming. Use when pair programming to va
 ```
 
 **Key rules:**
-- Templates without matching names are ignored (not an error)
+- Templates without matching names are ignored (not an error) — except `HEAD`, which matches the pattern but is rejected with `HEAD method not allowed`
 - Path is required, all other components optional
 - Space-separated components, order matters
 - Uses Go 1.22+ `http.ServeMux` pattern matching
@@ -100,6 +100,10 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
 {{define "GET /error 400"}}{{end}}                             <!-- Integer -->
 ```
 
+A template-name status code cannot be combined with a `response` argument —
+when your method writes the response itself, muxt cannot also set the status,
+and generation fails.
+
 **Status code precedence** (first non-zero wins, highest to lowest):
 1. Template `.StatusCode(int)` call
 2. Error status: `400` on a parse/path/form error, `500` when the method returns a non-nil error
@@ -118,7 +122,8 @@ A returned error is always `500`; the error's own methods are not consulted. To 
 MethodName(arg1, arg2, ...)
 ```
 
-**No spaces allowed** between method name and parentheses. Arguments are comma-separated identifiers.
+Arguments are comma-separated identifiers or nested calls (the call is parsed
+with Go's expression parser, so Go spacing rules apply).
 
 ### Parameter Sources
 
@@ -201,8 +206,9 @@ not only an inline `func(T) error`. Muxt resolves the underlying signature, so
 
 `lastEventID` reads the `Last-Event-Id` request header — the value a browser
 replays when reconnecting an SSE stream — and parses it to the method param type
-like a path value (`string` by default, or any parseable type). A
-`{lastEventID}` path wildcard takes precedence over the header.
+like a path value (`string` by default, or any parseable type). Because
+`lastEventID` is a reserved identifier, it cannot be used as a path wildcard
+name.
 
 **Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
 
@@ -276,12 +282,14 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 ## Formal Grammar (BNF)
 
 ```bnf
-<route>        ::= [<method> " "] [<host>] <path> [" " <status>] [" " <call>]
+<route>        ::= [<method> " "] [<host>] <path> [" " <status>] [" " <call-expr>]
 <method>       ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 <host>         ::= <hostname> | <ipv4>
 <path>         ::= "/" [<segment> [<path>] ["/"]]
 <status>       ::= <integer> | "http.Status" <identifier>
-<call>         ::= <identifier> "(" [<identifier> {"," <identifier>}] ")"
+<call-expr>    ::= <call> | "sse(" <call> ")"
+<call>         ::= <identifier> "(" [<arg> {"," <arg>}] ")"
+<arg>          ::= <identifier> | <call>
 <identifier>   ::= <letter> {<letter> | <digit> | "_"}
 ```
 

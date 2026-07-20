@@ -65,7 +65,7 @@ Muxt auto-parses path and form parameters to these types:
 |---------------|-------|--------|-------|
 | **Integers** | `int`, `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt` | Base 10 |
 | **Unsigned** | `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint` | Base 10 |
-| **Boolean** | `bool` | `strconv.ParseBool` | Accepts: `1`/`t`/`true`, `0`/`f`/`false` (case-insensitive) |
+| **Boolean** | `bool` | `strconv.ParseBool` | Accepts: `1`, `t`, `T`, `true`, `True`, `TRUE` and the `0`/`f`/`false` equivalents |
 | **String** | `string` | None | Passed through |
 | **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing |
 
@@ -172,7 +172,7 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 **Max upload size:** Defaults to 32 MiB. Override with `--output-multipart-max-memory=<size>` (e.g. `64MB`, `128MiB`). Data exceeding this limit spills to the OS temp directory per the standard `mime/multipart` semantics.
 
-**Parse errors:** Malformed multipart bodies are captured into `td.errList` with `td.errStatusCode = http.StatusBadRequest` (unlike `form`, which silently ignores parse errors).
+**Parse errors:** A malformed multipart body sets `.Err` and responds `400 Bad Request` (unlike `form`, which silently ignores body parse errors).
 
 [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
 
