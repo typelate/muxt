@@ -169,17 +169,17 @@ var templatesDir embed.FS
 //go:generate muxt generate --use-receiver-type=App
 var templates = template.Must(
     template.New("").
-        Funcs(customFuncs).
+        Funcs(template.FuncMap{
+            "upper":      strings.ToUpper,
+            "formatDate": formatDate,
+        }).
         ParseFS(templatesDir, "pages/*.gohtml", "components/*.gohtml"),
 )
-
-var customFuncs = template.FuncMap{
-    "upper":      strings.ToUpper,
-    "formatDate": formatDate,
-}
 ```
 
 **Use when:** Templates need custom functions or configuration
+
+**Note:** The `template.FuncMap` composite literal must be written inline in the `Funcs` call. Muxt evaluates the `templates` expression statically and does not resolve a variable passed to `Funcs` — `Funcs(customFuncs)` fails with `expected a composite literal with type template.FuncMap`. The map values may be identifiers (`strings.ToUpper`, `formatDate`); only the map literal itself must be inline.
 
 ## Troubleshooting
 

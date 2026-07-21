@@ -42,7 +42,7 @@ var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 - [`Template.ParseFS`](https://pkg.go.dev/html/template#Template.ParseFS)
 - [`Template.Parse`](https://pkg.go.dev/html/template#Template.Parse)
 - [`Template.New`](https://pkg.go.dev/html/template#Template.New)
-- [`Template.Funcs`](https://pkg.go.dev/html/template#Template.Funcs)
+- [`Template.Funcs`](https://pkg.go.dev/html/template#Template.Funcs) — the argument must be an inline `template.FuncMap` composite literal, not a variable; map values may be identifiers
 - [`Template.Delims`](https://pkg.go.dev/html/template#Template.Delims)
 - [`Template.Option`](https://pkg.go.dev/html/template#Template.Option)
 
