@@ -349,7 +349,9 @@ func embeddedFilesMatchingTemplateNameList(dir string, set *token.FileSet, comme
 	var matches []string
 	for _, fp := range embeddedFiles {
 		for _, pattern := range templateNames {
-			pat := filepath.FromSlash(pattern)
+			// the all: prefix only changes which files cmd/go embeds
+			// (pkg.EmbedFiles already reflects that); match on the path part
+			pat := filepath.FromSlash(strings.TrimPrefix(pattern, "all:"))
 			if !strings.ContainsAny(pat, "*[]") {
 				prefix := filepath.FromSlash(pat + "/")
 				if strings.HasPrefix(fp, prefix) {

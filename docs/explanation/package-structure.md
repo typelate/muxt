@@ -160,6 +160,8 @@ var templates = template.Must(template.ParseFS(templatesDir,
 
 **Use when:** Templates are nested a known, small number of levels deep.
 
+**Note:** If a template file name starts with `.` or `_`, a bare directory pattern skips it; use `//go:embed all:templates` to include it. Prefer the bare pattern otherwise — `all:` embeds every hidden file in the tree.
+
 ### Pattern 5: Custom Parsing with Template Functions
 
 ```go

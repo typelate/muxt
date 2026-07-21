@@ -1,0 +1,28 @@
+muxt generate -v
+stdout 'generating handler for pattern GET /'
+stdout 'generating handler for pattern GET /hidden'
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed all:templates
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "templates/*/*.gohtml"))
+-- templates/pages/index.gohtml --
+{{define "GET /" }}
+	<h1>Hello, world!</h1>
+{{end}}
+-- templates/pages/_hidden.gohtml --
+{{define "GET /hidden" }}
+	<h1>Hello, from a file the all: prefix embedded!</h1>
+{{end}}
