@@ -144,10 +144,10 @@ var templates = template.Must(template.ParseFS(templatesDir,
 
 ### Pattern 4: Nested Directories
 
-`go:embed` and `ParseFS` have no recursive glob, so list one pattern per depth. `go:embed all:templates` embeds the tree, but `ParseFS` still needs an explicit glob for each level:
+`go:embed` and `ParseFS` have no recursive glob, so list one pattern per depth. A bare directory name like `go:embed templates` embeds the tree recursively (excluding files that start with `.` or `_`), but `ParseFS` still needs an explicit glob for each level:
 
 ```go
-//go:embed all:templates
+//go:embed templates
 var templatesDir embed.FS
 
 //go:generate muxt generate --use-receiver-type=App
