@@ -3,6 +3,8 @@ stderr '<\.Missing>: field or method Missing not found on struct\{Field2 int}'
 stderr '<\.Missing>: field or method Missing not found on GlobalType'
 stderr '<\.Missing>: field or method Missing not found on db.Row'
 stderr '<\.Missing>: field or method Missing not found on api.Body'
+stderr 'GlobalType has:'
+stderr 'Field1 int'
 
 -- template.gohtml --
 {{.Missing}}

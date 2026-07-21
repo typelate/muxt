@@ -1,6 +1,6 @@
 module github.com/typelate/muxt
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1
@@ -9,7 +9,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	github.com/typelate/check v0.2.3
+	github.com/typelate/check v0.3.0
 	github.com/typelate/dom v0.7.8
 	golang.org/x/net v0.57.0
 	golang.org/x/tools v0.48.0
