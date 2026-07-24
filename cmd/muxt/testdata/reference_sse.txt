@@ -60,6 +60,9 @@ func TestStream(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("content-type = %q, want text/event-stream", ct)
 	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("cache-control = %q, want no-store", cc)
+	}
 	if got, exp := rec.Body.String(), "data: hello-42\n\n"; !strings.Contains(got, exp) {
 		t.Fatalf("body = %q, want it to contain %q", got, exp)
 	}
