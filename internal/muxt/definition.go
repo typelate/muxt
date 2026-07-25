@@ -108,6 +108,8 @@ type Definition struct {
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
 
+	Framing Framing
+
 	Representation Representation
 
 	Arguments []Argument
@@ -327,17 +329,11 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if !ok {
 		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
 	}
-	if fun.Name == string(RepresentationSSE) && len(call.Args) == 1 {
-		actualCall, ok := call.Args[0].(*ast.CallExpr)
-		if ok {
-			actualFun, ok := actualCall.Fun.(*ast.Ident)
-			if ok {
-				def.Representation = RepresentationSSE
-				call = actualCall
-				fun = actualFun
-			}
-		}
-	}
+	normalized := normalizeCall(call)
+	def.Framing = normalized.framing
+	def.Representation = normalized.representation
+	call = normalized.call
+	fun = normalized.fun
 	if call.Ellipsis != token.NoPos {
 		return fmt.Errorf("unexpected ellipsis")
 	}
