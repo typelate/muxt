@@ -227,6 +227,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	for _, s := range is {
 		importSpecs = append(importSpecs, s)
 	}
+	spec := framingFor(muxt.FramingNone)
 	decls := []ast.Decl{
 		// import
 		&ast.GenDecl{
@@ -244,34 +245,14 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 
 		// func routes
 		routesFunc,
-
-		templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
-		templateDataMuxtVersionMethod(config),
-		templateDataPathMethod(config),
-		templateDataResultMethod(config.TemplateDataType),
-		templateDataRequestMethod(file, config.TemplateDataType),
-		templateDataStatusCodeMethod(config.TemplateDataType),
-		templateDataHeaderMethod(config.TemplateDataType),
-		templateDataOkay(config.TemplateDataType),
-		templateDataError(file, config.TemplateDataType),
-		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
-		templateRedirect(file, config),
 	}
-	for _, method := range templateRedirectHelperMethods(file, config) {
-		decls = append(decls, method)
-	}
-	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
-	if config.HTMXHelpers {
-		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
-			decls = append(decls, method)
-		}
-	}
-	// The SSETemplateData type and its methods are only needed when a route uses
-	// the sse render callback, so emit them conditionally to avoid unused imports.
+	decls = append(decls, spec.templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	// The SSE event template-data type and its methods are only needed when a
+	// route streams events, so emit them conditionally to avoid unused imports.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
 		return definition.Representation == muxt.RepresentationSSE
 	}) {
-		decls = append(decls, sseTemplateDataDecls(file, config)...)
+		decls = append(decls, spec.sseEventDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{
