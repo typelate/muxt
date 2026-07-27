@@ -633,6 +633,12 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 	return handlerFunc
 }
 
+// callHandlerFunc is the single dispatch point for representation-specific
+// handler assembly. Each case builds a complete handler func for one
+// representation (HTML render, SSE stream, ...); all cases share the same
+// input-binding prologue via appendParseArgumentStatements. Adding a
+// representation means adding a case with its own assembler — never
+// branching on representation inside an existing assembler.
 func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		bufIdent        = "buf"
