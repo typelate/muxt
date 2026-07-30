@@ -1,0 +1,66 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /mixed sse(Mixed(ctx, send, marshalJSON(sendStatus)))" -}}html:{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Status struct {
+	OK   bool     `json:"ok"`
+	Tags []string `json:"tags"`
+}
+
+type Server struct{}
+
+// Mixed interleaves a rendered HTML fragment with a machine-readable JSON
+// event in one stream; a JS chart consumes the JSON while the fragment swaps
+// into the page. The nil Tags slice pins encoding/json v1 semantics (null)
+// for the jsonv2 sibling archive to contrast ([]).
+func (Server) Mixed(ctx context.Context, send func(string) error, sendStatus func(Status) error) {
+	_ = send("frag")
+	_ = sendStatus(Status{OK: true})
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/mixed", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "data: html:frag\n\n"; !strings.Contains(body, want) {
+		t.Fatalf("body = %q, want the rendered event %q", body, want)
+	}
+	if want := "data: {\"ok\":true,\"tags\":null}\n\n"; !strings.Contains(body, want) {
+		t.Fatalf("body = %q, want the JSON event %q", body, want)
+	}
+}

@@ -90,6 +90,10 @@ const (
 	ArgumentTypeRequestForm
 	ArgumentTypeRequestMultipartForm
 	ArgumentTypeExecute
+	// ArgumentTypeSendJSON is a marshalJSON-wrapped send callback on an sse
+	// route: the callback marshals its argument as the event's JSON data
+	// instead of rendering a template.
+	ArgumentTypeSendJSON
 	ArgumentTypeLastEventID
 	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
@@ -187,7 +191,7 @@ func resolveCallbackShapes(def *Definition) error {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	for i := range def.Arguments {
 		a := &def.Arguments[i]
-		if a.Type != ArgumentTypeExecute {
+		if a.Type != ArgumentTypeExecute && a.Type != ArgumentTypeSendJSON {
 			continue
 		}
 		if def.Representation != RepresentationSSE && a.Identifier != TemplateNameScopeIdentifierExecute {
@@ -213,7 +217,7 @@ func resolveCallbackShapes(def *Definition) error {
 			}
 			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}
-		if def.Representation == RepresentationSSE && a.template == nil {
+		if def.Representation == RepresentationSSE && a.Type == ArgumentTypeExecute && a.template == nil {
 			return fmt.Errorf("no template %q for sse send callback %s", strings.TrimPrefix(a.Identifier, TemplateNameScopeIdentifierSend), a.Identifier)
 		}
 	}
@@ -251,7 +255,7 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 	if def.Representation == RepresentationSSE {
 		if results.Len() == 1 {
 			if shape, _, ok := StreamResultShape(results.At(0).Type()); ok {
-				if slices.ContainsFunc(def.Arguments, func(a Argument) bool { return a.Type == ArgumentTypeExecute }) {
+				if slices.ContainsFunc(def.Arguments, func(a Argument) bool { return a.Type == ArgumentTypeExecute || a.Type == ArgumentTypeSendJSON }) {
 					return ResultShapeInvalid, fmt.Errorf("method %s mixes send callbacks with a stream result; use send callbacks or return a stream, not both", def.fun.Name)
 				}
 				return shape, nil
@@ -399,6 +403,18 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				args = append(args, Argument{Identifier: name})
 				continue
 			}
+			if def.Representation == RepresentationSSE && name == string(RepresentationMarshalJSON) {
+				inner, ok := singleSendArgument(argument)
+				if !ok {
+					return nil, false, nil, fmt.Errorf("marshalJSON inside sse(...) must wrap a single send callback, for example marshalJSON(sendStatus)")
+				}
+				args = append(args, Argument{
+					Identifier: inner.Name,
+					Type:       ArgumentTypeSendJSON,
+					ParamType:  paramType,
+				})
+				continue
+			}
 			if name == callWrapperUnmarshalJSON {
 				// The decode target is the method parameter's type; any type
 				// encoding/json can unmarshal into is permitted, so there is
@@ -454,6 +470,13 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
+			if fn, ok := arg.Fun.(*ast.Ident); ok && def.Representation == RepresentationSSE && fn.Name == string(RepresentationMarshalJSON) {
+				if inner, ok := singleSendArgument(arg); ok {
+					hasSSE = true
+					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, sseCallbackSignature()))
+					continue
+				}
+			}
 			if fn, ok := arg.Fun.(*ast.Ident); ok && fn.Name == callWrapperUnmarshalJSON {
 				// Template-first iteration: without a defined method the decode
 				// target is unknown, so pass the raw payload through.
@@ -552,6 +575,19 @@ func sseCallbackSignature() *types.Signature {
 		types.NewTuple(types.NewVar(0, nil, "", anyType)),
 		types.NewTuple(types.NewVar(0, nil, "", errType)),
 		false)
+}
+
+// singleSendArgument returns the send-callback identifier when call has
+// exactly one argument and it is a send-family name.
+func singleSendArgument(call *ast.CallExpr) (*ast.Ident, bool) {
+	if len(call.Args) != 1 {
+		return nil, false
+	}
+	inner, ok := call.Args[0].(*ast.Ident)
+	if !ok || !IsSendArgument(inner.Name) {
+		return nil, false
+	}
+	return inner, true
 }
 
 // typeQualifier renders types the way they read in the receiver's package:

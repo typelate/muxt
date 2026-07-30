@@ -1,0 +1,64 @@
+env GOEXPERIMENT=jsonv2
+
+muxt generate --output-jsonv2 --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /mixed sse(Mixed(ctx, send, marshalJSON(sendStatus)))" -}}html:{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Status struct {
+	OK   bool     `json:"ok"`
+	Tags []string `json:"tags"`
+}
+
+type Server struct{}
+
+// Mixed sends a JSON event whose nil slice renders as [] under
+// encoding/json/v2 — the v1 archive (reference_sse_marshal_send.txt) pins
+// null for the same shape, proving which library the generated event uses.
+func (Server) Mixed(ctx context.Context, send func(string) error, sendStatus func(Status) error) {
+	_ = send("frag")
+	_ = sendStatus(Status{OK: true})
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/mixed", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "data: {\"ok\":true,\"tags\":[]}\n\n"; !strings.Contains(body, want) {
+		t.Fatalf("body = %q, want the jsonv2 JSON event %q", body, want)
+	}
+}

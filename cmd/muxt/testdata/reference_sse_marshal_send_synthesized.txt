@@ -1,0 +1,63 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /mixed sse(Mixed(ctx, send, marshalJSON(sendStatus)))" -}}html:{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server does not define Mixed: muxt synthesizes both send callbacks as
+// func(any) error so template-first iteration exposes the full surface.
+type Server struct{}
+-- server_test.go --
+package server
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// impl implements the generated receiver interface by hand; compiling this
+// method against TemplateRoutes proves both synthesized callback types.
+type impl struct{}
+
+func (impl) Mixed(_ context.Context, send func(any) error, sendStatus func(any) error) {
+	_ = send("frag")
+	_ = sendStatus(map[string]bool{"ok": true})
+}
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, impl{})
+
+	req := httptest.NewRequest(http.MethodGet, "/mixed", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "data: html:frag\n\n"; !strings.Contains(body, want) {
+		t.Fatalf("body = %q, want the rendered event %q", body, want)
+	}
+	if want := "data: {\"ok\":true}\n\n"; !strings.Contains(body, want) {
+		t.Fatalf("body = %q, want the JSON event %q", body, want)
+	}
+}

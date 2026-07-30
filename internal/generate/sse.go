@@ -117,14 +117,21 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 
 	callArgs := slices.Clone(def.CallExpression().Args)
 	for i, arg := range def.Arguments {
-		if arg.Type != muxt.ArgumentTypeExecute {
+		if arg.Type != muxt.ArgumentTypeExecute && arg.Type != muxt.ArgumentTypeSendJSON {
 			continue
 		}
 		// The callback contract (func() error or func(T) error) and template
 		// existence are validated by muxt.ResolveCall, which records T and
 		// whether the callback takes the data argument.
-		resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
-		closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent, false)
+		cc := sseClosureConfig{
+			resultType:  arg.CallbackResultType(),
+			hasArg:      arg.CallbackHasArg(),
+			marshalJSON: arg.Type == muxt.ArgumentTypeSendJSON,
+		}
+		if !cc.marshalJSON {
+			cc.templateName = arg.Template().Name()
+		}
+		closure, err := sseClosure(file, config, def, cc, receiverInterfaceName, flusherIdent, mutexIdent)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +147,12 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}
 		// emit renders one event per stream value; a render or write error
 		// ends the stream (the error is logged inside the closure).
-		emit, err := sseClosure(file, config, def, def.Name(), elemType, true, receiverInterfaceName, flusherIdent, mutexIdent, shape == muxt.ResultShapeSSESeq2)
+		emit, err := sseClosure(file, config, def, sseClosureConfig{
+			templateName: def.Name(),
+			resultType:   elemType,
+			hasArg:       true,
+			withIterErr:  shape == muxt.ResultShapeSSESeq2,
+		}, receiverInterfaceName, flusherIdent, mutexIdent)
 		if err != nil {
 			return nil, err
 		}
@@ -260,13 +272,25 @@ func streamReceiveLoop(shape muxt.ResultShape, callExpr ast.Expr, emit *ast.Func
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string, withIterErr bool) (*ast.FuncLit, error) {
+// sseClosureConfig selects how one send closure produces its event data:
+// rendering templateName (the default) or marshaling the callback argument as
+// JSON (marshalJSON); withIterErr adds the iter.Seq2 error parameter.
+type sseClosureConfig struct {
+	templateName string
+	resultType   types.Type
+	hasArg       bool
+	withIterErr  bool
+	marshalJSON  bool
+}
+
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, cc sseClosureConfig, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent     = "buf"
 		tdIdent      = "td"
 		resultIdent  = "result"
 		iterErrIdent = "iterErr"
 	)
+	templateName, resultType, hasArg, withIterErr := cc.templateName, cc.resultType, cc.hasArg, cc.withIterErr
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -327,18 +351,53 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 			}}},
 		})
 	}
-	// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
-	body = append(body, &ast.IfStmt{
-		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
-			Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
-		}}},
-		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-		Body: &ast.BlockStmt{List: []ast.Stmt{
-			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
-			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
-		}},
-	})
+	if cc.marshalJSON {
+		// jsonBody, err := json.Marshal(result); on failure log and return;
+		// otherwise the marshaled bytes are the event's data payload.
+		const jsonBodyIdent = "jsonBody"
+		jsonPkgPath := "encoding/json"
+		if config.JSONV2 {
+			jsonPkgPath = "encoding/json/v2"
+		}
+		var marshalArg ast.Expr = ast.NewIdent(resultIdent)
+		if !hasArg {
+			marshalArg = &ast.CompositeLit{Type: &ast.StructType{Fields: &ast.FieldList{}}}
+		}
+		body = append(body,
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(jsonBodyIdent), ast.NewIdent(errIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun:  astgen.ExportedIdentifier(file, "json", jsonPkgPath, "Marshal"),
+					Args: []ast.Expr{marshalArg},
+				}},
+			},
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: &ast.BlockStmt{List: []ast.Stmt{
+					&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "failed to marshal sse event data", errIdent)},
+					&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
+				}},
+			},
+			&ast.ExprStmt{X: &ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Write")},
+				Args: []ast.Expr{ast.NewIdent(jsonBodyIdent)},
+			}},
+		)
+	} else {
+		// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
+		body = append(body, &ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
+				Args: []ast.Expr{ast.NewIdent(bufIdent), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(templateName)}, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
+			}}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+				&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
+			}},
+		})
+	}
 	body = append(body,
 		// td.data = buf
 		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},

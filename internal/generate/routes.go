@@ -761,6 +761,11 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			// TODO: add error case
 		case *ast.CallExpr:
 			nestedArg := args[i]
+			if nestedArg.Type == muxt.ArgumentTypeSendJSON {
+				// A marshalJSON-wrapped send callback is wired as a closure in
+				// the SSE assembler; it is not parsed from the request.
+				continue
+			}
 			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
 				const bodyValueIdent = "bodyValue"
 				requestBody := &ast.SelectorExpr{
