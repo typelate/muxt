@@ -226,6 +226,7 @@ names.
 {{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form binding -->
 {{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{end}}  <!-- JSON body binding -->
 {{define "POST /hooks Save(ctx, body)"}}{{end}}  <!-- Raw body stream -->
+{{define "GET /api/user marshalJSON(GetUser(ctx))"}}{{end}}  <!-- JSON response -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
