@@ -118,11 +118,11 @@ const (
 	ResultShapeError
 )
 
-func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) error {
+func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) error {
 	if def.call == nil || def.fun == nil {
 		return nil
 	}
-	sig, isMethod, args, err := resolveCall(def, def.call, templatesPackage, receiver, pl)
+	sig, isMethod, args, err := resolveCall(def, def.call, templatesPackage, receiver, pl, jsonV2)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func checkNestedCallResultShape(name string, sig *types.Signature) error {
 // When the call identifier is neither a receiver method nor a package-scope
 // function, its signature is synthesized from the call scope and attached to
 // the receiver so it appears in the generated RoutesReceiver interface.
-func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) (*types.Signature, bool, []Argument, error) {
+func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) (*types.Signature, bool, []Argument, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, false, nil, fmt.Errorf("expected call to be a function identifier")
@@ -267,7 +267,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			object = m
 			isMethod = false
 		} else {
-			ms, err := synthesizeCallSignature(def, call, templatesPackage, receiver, pl)
+			ms, err := synthesizeCallSignature(def, call, templatesPackage, receiver, pl, jsonV2)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -335,7 +335,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				})
 				continue
 			}
-			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl)
+			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl, jsonV2)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -359,7 +359,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 // defined on the receiver, inferring each parameter type from the argument
 // scope. Nested calls are resolved (so their own methods are synthesized too)
 // but do not contribute a parameter, mirroring the pre-hydration generator.
-func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) (*types.Signature, error) {
+func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) (*types.Signature, error) {
 	var params []*types.Var
 	hasSSE := false
 	for _, a := range call.Args {
@@ -382,14 +382,18 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			if fn, ok := arg.Fun.(*ast.Ident); ok && fn.Name == callWrapperUnmarshalJSON {
 				// Template-first iteration: without a defined method the decode
 				// target is unknown, so pass the raw payload through.
-				tp, err := stdlibType(pl, "encoding/json", "RawMessage", false)
+				pkgPath, typeName, pointer := "encoding/json", "RawMessage", false
+				if jsonV2 {
+					pkgPath, typeName, pointer = "encoding/json/jsontext", "Decoder", true
+				}
+				tp, err := stdlibType(pl, pkgPath, typeName, pointer)
 				if err != nil {
 					return nil, err
 				}
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
 				continue
 			}
-			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl); err != nil {
+			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl, jsonV2); err != nil {
 				return nil, err
 			}
 		}

@@ -402,7 +402,7 @@ func TestArgument(t *testing.T) {
 			}
 
 			for i := range defs {
-				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList)
+				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList, false)
 				if err != nil {
 					break
 				}

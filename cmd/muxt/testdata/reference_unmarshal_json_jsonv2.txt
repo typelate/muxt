@@ -1,0 +1,88 @@
+env GOEXPERIMENT=jsonv2
+
+muxt generate --output-jsonv2 --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /users CreateUser(ctx, unmarshalJSON(body))" -}}<p>{{- .Result.Name -}}:{{- .Result.Age -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type T struct{}
+
+// createUserCalls lets the test prove the method is not invoked when the
+// request body fails to decode.
+var createUserCalls int
+
+func (T) CreateUser(_ context.Context, u User) (User, error) {
+	createUserCalls++
+	return u, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	post := func(t *testing.T, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("valid JSON decodes into the parameter", func(t *testing.T) {
+		rec := post(t, `{"name":"Ada","age":36}`)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if want := "<p>Ada:36</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	// encoding/json/v2 rejects duplicate member names where v1 silently takes
+	// the last value; this wire-visible difference proves which library the
+	// generated handler uses (the v1 archive pins the 200 acceptance).
+	t.Run("duplicate keys are rejected under jsonv2", func(t *testing.T) {
+		before := createUserCalls
+		rec := post(t, `{"name":"a","name":"b"}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if createUserCalls != before {
+			t.Errorf("createUserCalls = %d, want %d (method must not run)", createUserCalls, before)
+		}
+	})
+}

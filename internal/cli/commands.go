@@ -369,6 +369,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.HTMXHelpers {
 		args = append(args, "--"+outputHTMXHelpers)
 	}
+	if config.JSONV2 {
+		args = append(args, "--"+outputJSONV2)
+	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
 	if !config.OutputExportedDefaultIdentifiers {
@@ -557,6 +560,7 @@ const (
 	outputRoutesFuncWithMiddlewareParam = "output-routes-func-with-middleware-param"
 	outputMultipleFiles                 = "output-multiple-files"
 	outputHTMXHelpers                   = "output-htmx-helpers"
+	outputJSONV2                        = "output-jsonv2"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 
@@ -594,6 +598,7 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithMiddlewareParamHelp = `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`
 	outputMultipleFilesHelp                 = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 	outputHTMXHelpersHelp                   = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputJSONV2Help                        = `Generates JSON encoding and decoding with encoding/json/v2 instead of encoding/json. Requires a go 1.25+ module built with GOEXPERIMENT=jsonv2.`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 
@@ -673,6 +678,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.Middleware, outputRoutesFuncWithMiddlewareParam, false, outputRoutesFuncWithMiddlewareParamHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.JSONV2, outputJSONV2, false, outputJSONV2Help)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }

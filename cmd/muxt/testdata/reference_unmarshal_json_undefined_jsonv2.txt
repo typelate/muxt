@@ -1,0 +1,77 @@
+env GOEXPERIMENT=jsonv2
+
+muxt generate --output-jsonv2 --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /notes CreateNote(ctx, unmarshalJSON(body))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// T does not define CreateNote: under --output-jsonv2 muxt synthesizes the
+// unmarshalJSON(body) parameter as *jsontext.Decoder so template-first
+// iteration can decode the payload itself.
+type T struct{}
+-- template_test.go --
+package server
+
+import (
+	"context"
+	"encoding/json/jsontext"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// impl implements the generated receiver interface by hand; compiling this
+// method against TemplateRoutes proves the synthesized parameter type is
+// *jsontext.Decoder.
+type impl struct {
+	got *string
+}
+
+func (m impl) CreateNote(_ context.Context, dec *jsontext.Decoder) any {
+	v, err := dec.ReadValue()
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	*m.got = string(v)
+	return len(v)
+}
+
+func Test(t *testing.T) {
+	var got string
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, impl{got: &got})
+
+	req := httptest.NewRequest(http.MethodPost, "/notes", strings.NewReader(`{"x":1}`))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if want := `{"x":1}`; got != want {
+		t.Errorf("method saw body %q, want %q", got, want)
+	}
+	if want := "<p>7</p>"; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}

@@ -74,6 +74,10 @@ type RoutesFileConfiguration struct {
 	OutputMultipleFiles              bool
 	HTMXHelpers                      bool
 	OutputExportedDefaultIdentifiers bool
+	// JSONV2 switches generated JSON encoding and decoding to
+	// encoding/json/v2. It requires a go 1.25+ module built with
+	// GOEXPERIMENT=jsonv2.
+	JSONV2 bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
@@ -186,7 +190,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, config.JSONV2); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -272,12 +276,12 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	return generatedFiles, nil
 }
 
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType) error {
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, jsonV2 bool) error {
 	for i := range defs {
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
-		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages()); err != nil {
+		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages(), jsonV2); err != nil {
 			return err
 		}
 		if err := accumulateReceiverMethods(defs[i].FunctionIdentifier().Name, defs[i].Signature(), defs[i].IsMethod(), defs[i].Arguments, file, receiverInterface); err != nil {
@@ -496,7 +500,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface); err != nil {
+	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, config.JSONV2); err != nil {
 		return nil, err
 	}
 	for i := range defs {
@@ -757,6 +761,23 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			nestedArg := args[i]
 			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
 				const bodyValueIdent = "bodyValue"
+				requestBody := &ast.SelectorExpr{
+					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+					Sel: ast.NewIdent("Body"),
+				}
+				if config.JSONV2 && types.TypeString(nestedArg.ParamType, nil) == "*encoding/json/jsontext.Decoder" {
+					// Synthesized pass-through: bodyValue := jsontext.NewDecoder(request.Body)
+					statements = append(statements, &ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent(bodyValueIdent)},
+						Tok: token.DEFINE,
+						Rhs: []ast.Expr{&ast.CallExpr{
+							Fun:  astgen.ExportedIdentifier(file, "jsontext", "encoding/json/jsontext", "NewDecoder"),
+							Args: []ast.Expr{requestBody},
+						}},
+					})
+					call.Args[i] = ast.NewIdent(bodyValueIdent)
+					continue
+				}
 				typeExpr, err := file.TypeASTExpression(nestedArg.ParamType)
 				if err != nil {
 					return nil, err
@@ -766,19 +787,25 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					Tok:   token.VAR,
 					Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(bodyValueIdent)}, Type: typeExpr}},
 				}})
-				// if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { ... }
-				decode := &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X: &ast.CallExpr{
-							Fun: astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
-							Args: []ast.Expr{&ast.SelectorExpr{
-								X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-								Sel: ast.NewIdent("Body"),
-							}},
+				// v1: if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { ... }
+				// v2: if err := json.UnmarshalRead(request.Body, &bodyValue); err != nil { ... }
+				var decode ast.Expr
+				if config.JSONV2 {
+					decode = &ast.CallExpr{
+						Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json/v2", "UnmarshalRead"),
+						Args: []ast.Expr{requestBody, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(bodyValueIdent)}},
+					}
+				} else {
+					decode = &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.CallExpr{
+								Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
+								Args: []ast.Expr{requestBody},
+							},
+							Sel: ast.NewIdent("Decode"),
 						},
-						Sel: ast.NewIdent("Decode"),
-					},
-					Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(bodyValueIdent)}},
+						Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(bodyValueIdent)}},
+					}
 				}
 				statements = append(statements, &ast.IfStmt{
 					Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{decode}},
