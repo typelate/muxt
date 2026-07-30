@@ -121,6 +121,10 @@ const (
 	// RepresentationTextHTML Representation = ""
 
 	RepresentationSSE Representation = "sse"
+
+	// RepresentationMarshalJSON responds application/json with the marshaled
+	// method result; the define body executes only for its side effects.
+	RepresentationMarshalJSON Representation = "marshalJSON"
 )
 
 func (def Definition) SourceFile() string { return def.sourceFile }
@@ -353,8 +357,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
 
-	if def.Representation == RepresentationSSE && def.hasResponseWriterArg {
-		return fmt.Errorf("sse handler cannot use a %q argument", TemplateNameScopeIdentifierHTTPResponse)
+	if (def.Representation == RepresentationSSE || def.Representation == RepresentationMarshalJSON) && def.hasResponseWriterArg {
+		return fmt.Errorf("%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 	}
 
 	return nil

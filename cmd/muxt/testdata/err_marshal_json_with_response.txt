@@ -1,0 +1,27 @@
+! muxt generate --use-receiver-type=T
+stderr 'marshalJSON handler cannot use a "response" argument'
+
+-- template.gohtml --
+{{- define "POST /api/save marshalJSON(Save(ctx, response))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Save(_ context.Context, _ http.ResponseWriter) (string, error) { return "", nil }

@@ -1,0 +1,27 @@
+! muxt generate --use-receiver-type=T
+stderr 'marshalJSON requires a result to marshal'
+stderr 'Ping'
+
+-- template.gohtml --
+{{- define "GET /api/ping marshalJSON(Ping(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Ping(_ context.Context) {}

@@ -101,14 +101,18 @@ func normalizeCall(call *ast.CallExpr) normalizedCall {
 		fun:     call.Fun.(*ast.Ident),
 		call:    call,
 	}
-	if n.fun.Name == string(RepresentationSSE) && len(call.Args) == 1 {
+	for _, representation := range []Representation{RepresentationSSE, RepresentationMarshalJSON} {
+		if n.fun.Name != string(representation) || len(call.Args) != 1 {
+			continue
+		}
 		if inner, ok := call.Args[0].(*ast.CallExpr); ok {
 			if innerFun, ok := inner.Fun.(*ast.Ident); ok {
-				n.representation = RepresentationSSE
+				n.representation = representation
 				n.call = inner
 				n.fun = innerFun
 			}
 		}
+		break
 	}
 	return n
 }

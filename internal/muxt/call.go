@@ -129,7 +129,7 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
-	shape, err := classifyResultShape(def)
+	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		return err
 	}
@@ -183,9 +183,30 @@ func resolveCallbackShapes(def *Definition) error {
 // sse methods return nothing or an error, methods receiving the execute
 // callback return only error, and all other methods return a value plus an
 // optional error or bool.
-func classifyResultShape(def *Definition) (ResultShape, error) {
+func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, error) {
 	results := def.sig.Results()
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	if def.Representation == RepresentationMarshalJSON {
+		// The wrapped method must produce exactly one non-error value to
+		// marshal, optionally followed by an error.
+		sigStr := def.fun.Name + strings.TrimPrefix(types.TypeString(def.sig, qual), "func")
+		switch results.Len() {
+		case 0:
+			return ResultShapeInvalid, fmt.Errorf("marshalJSON requires a result to marshal but %s returns nothing", sigStr)
+		case 1:
+			if types.Implements(results.At(0).Type(), errIface) {
+				return ResultShapeInvalid, fmt.Errorf("marshalJSON requires a non-error result but %s only returns an error", sigStr)
+			}
+			return ResultShapeData, nil
+		case 2:
+			if last := results.At(1).Type(); !types.Implements(last, errIface) {
+				return ResultShapeInvalid, fmt.Errorf("marshalJSON requires the second result of %s to be an error, got %s", sigStr, types.TypeString(last, qual))
+			}
+			return ResultShapeDataError, nil
+		default:
+			return ResultShapeInvalid, fmt.Errorf("marshalJSON allows at most two results but %s has %d", sigStr, results.Len())
+		}
+	}
 	if def.Representation == RepresentationSSE {
 		switch {
 		case results.Len() == 0:

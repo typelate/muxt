@@ -1,0 +1,27 @@
+! muxt generate --use-receiver-type=T
+stderr 'marshalJSON requires a non-error result'
+stderr 'Check'
+
+-- template.gohtml --
+{{- define "GET /api/check marshalJSON(Check(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Check(_ context.Context) error { return nil }

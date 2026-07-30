@@ -1,0 +1,33 @@
+! muxt generate --use-receiver-type=T
+stderr 'marshalJSON requires the second result'
+stderr 'to be an error'
+stderr 'bool'
+stderr 'GetUser'
+
+-- template.gohtml --
+{{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type User struct {
+	Name string `json:"name"`
+}
+
+type T struct{}
+
+func (T) GetUser(_ context.Context) (User, bool) { return User{}, true }
