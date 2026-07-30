@@ -1,0 +1,30 @@
+! muxt generate --use-receiver-type=Server
+stderr 'wrap the call in sse\('
+
+-- template.gohtml --
+{{- define "GET /ticks Ticks(ctx)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"iter"
+	"slices"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Ticks(ctx context.Context) iter.Seq[string] {
+	return slices.Values([]string{"t1"})
+}

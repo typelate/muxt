@@ -254,7 +254,7 @@ func TestArgument(t *testing.T) {
 			require.ErrorContains(t, err, "method ExecuteReturnsValue using the execute callback must return only error")
 		}},
 		{Name: "sse method must return nothing or an error", Receiver: serverType, Template: `{{define "GET /x sse(SSEReturnsValue(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method SSEReturnsValue using the sse callback must return nothing or an error")
+			require.ErrorContains(t, err, "method SSEReturnsValue using the sse callback must return nothing, an error, or a stream")
 		}},
 		{Name: "sse method returning nothing", Receiver: serverType, Template: `{{define "GET /x sse(SSEEvents(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)

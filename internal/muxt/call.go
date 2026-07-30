@@ -114,7 +114,50 @@ const (
 	// ResultShapeError is func(...) error: required for methods receiving the
 	// execute callback and permitted for sse handler methods.
 	ResultShapeError
+	// ResultShapeSSEChan is an sse method returning a receivable channel;
+	// each received value renders one event until the channel closes.
+	ResultShapeSSEChan
+	// ResultShapeSSESeq is an sse method returning iter.Seq[T]; each yielded
+	// value renders one event.
+	ResultShapeSSESeq
+	// ResultShapeSSESeq2 is an sse method returning iter.Seq2[T, error]; a
+	// non-nil yielded error is placed on the event data's error list and the
+	// event still renders.
+	ResultShapeSSESeq2
 )
+
+// StreamResultShape reports whether tp is a supported SSE stream result type
+// and returns the stream's element type: a receivable channel's element, an
+// iter.Seq[T]'s T, or an iter.Seq2[T, error]'s T.
+func StreamResultShape(tp types.Type) (ResultShape, types.Type, bool) {
+	switch t := tp.(type) {
+	case *types.Chan:
+		if t.Dir() == types.SendOnly {
+			return ResultShapeInvalid, nil, false
+		}
+		return ResultShapeSSEChan, t.Elem(), true
+	case *types.Named:
+		obj := t.Obj()
+		if obj.Pkg() == nil || obj.Pkg().Path() != "iter" {
+			return ResultShapeInvalid, nil, false
+		}
+		args := t.TypeArgs()
+		switch obj.Name() {
+		case "Seq":
+			if args.Len() == 1 {
+				return ResultShapeSSESeq, args.At(0), true
+			}
+		case "Seq2":
+			if args.Len() == 2 {
+				errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+				if types.Implements(args.At(1), errIface) {
+					return ResultShapeSSESeq2, args.At(0), true
+				}
+			}
+		}
+	}
+	return ResultShapeInvalid, nil, false
+}
 
 func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) error {
 	if def.call == nil || def.fun == nil {
@@ -206,13 +249,26 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 		}
 	}
 	if def.Representation == RepresentationSSE {
+		if results.Len() == 1 {
+			if shape, _, ok := StreamResultShape(results.At(0).Type()); ok {
+				if slices.ContainsFunc(def.Arguments, func(a Argument) bool { return a.Type == ArgumentTypeExecute }) {
+					return ResultShapeInvalid, fmt.Errorf("method %s mixes send callbacks with a stream result; use send callbacks or return a stream, not both", def.fun.Name)
+				}
+				return shape, nil
+			}
+		}
 		switch {
 		case results.Len() == 0:
 			return ResultShapeNone, nil
 		case results.Len() == 1 && types.Implements(results.At(0).Type(), errIface):
 			return ResultShapeError, nil
 		default:
-			return ResultShapeInvalid, fmt.Errorf("method %s using the sse callback must return nothing or an error", def.fun.Name)
+			return ResultShapeInvalid, fmt.Errorf("method %s using the sse callback must return nothing, an error, or a stream (<-chan T, iter.Seq[T], or iter.Seq2[T, error])", def.fun.Name)
+		}
+	}
+	if results.Len() >= 1 {
+		if _, _, ok := StreamResultShape(results.At(0).Type()); ok {
+			return ResultShapeInvalid, fmt.Errorf("method %s returns a stream; wrap the call in sse(...) to stream it as server-sent events", def.fun.Name)
 		}
 	}
 	if slices.ContainsFunc(def.Arguments, func(a Argument) bool {
@@ -418,7 +474,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 		}
 	}
 	results := types.NewTuple(types.NewVar(0, nil, "", types.Universe.Lookup("any").Type()))
-	if hasSSE {
+	if hasSSE || def.Representation == RepresentationSSE {
 		results = types.NewTuple()
 	}
 	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil

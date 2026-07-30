@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -123,7 +124,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		// existence are validated by muxt.ResolveCall, which records T and
 		// whether the callback takes the data argument.
 		resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
-		closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+		closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent, false)
 		if err != nil {
 			return nil, err
 		}
@@ -131,18 +132,112 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	}
 	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}
 
-	if methodReturnsErr {
-		body = append(body, &ast.IfStmt{
-			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
-			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
-		})
-	} else {
-		body = append(body, &ast.ExprStmt{X: callExpr})
+	switch shape := def.ResultShape(); shape {
+	case muxt.ResultShapeSSEChan, muxt.ResultShapeSSESeq, muxt.ResultShapeSSESeq2:
+		_, elemType, ok := muxt.StreamResultShape(sig.Results().At(0).Type())
+		if !ok {
+			return nil, fmt.Errorf("stream result for %s was not resolved", def.FunctionIdentifier().Name)
+		}
+		// emit renders one event per stream value; a render or write error
+		// ends the stream (the error is logged inside the closure).
+		emit, err := sseClosure(file, config, def, def.Name(), elemType, true, receiverInterfaceName, flusherIdent, mutexIdent, shape == muxt.ResultShapeSSESeq2)
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, streamReceiveLoop(shape, callExpr, emit)...)
+	default:
+		if methodReturnsErr {
+			body = append(body, &ast.IfStmt{
+				Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
+			})
+		} else {
+			body = append(body, &ast.ExprStmt{X: callExpr})
+		}
 	}
 
 	handlerFunc.Body.List = body
 	return handlerFunc, nil
+}
+
+// streamReceiveLoop builds the statements driving a return-mode stream:
+//
+//	stream := receiver.Method(args…)
+//	emit := func(result T[, iterErr error]) error { …render one event… }
+//
+// followed by a receive loop matched to the stream kind. Client disconnect
+// (request-context cancellation) ends every loop; a channel loop also ends
+// when the channel closes, and an iterator loop when the sequence finishes.
+func streamReceiveLoop(shape muxt.ResultShape, callExpr ast.Expr, emit *ast.FuncLit) []ast.Stmt {
+	const (
+		streamIdent  = "stream"
+		emitIdent    = "emit"
+		resultIdent  = "result"
+		iterErrIdent = "iterErr"
+		okIdent      = "ok"
+	)
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+	requestContext := func(method string) ast.Expr {
+		return &ast.CallExpr{Fun: &ast.SelectorExpr{
+			X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
+			Sel: ast.NewIdent(method),
+		}}
+	}
+	contextErrReturn := &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: requestContext("Err"), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{}}},
+	}
+	emitReturnOnErr := func(args ...ast.Expr) ast.Stmt {
+		return &ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent(emitIdent), Args: args}}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{}}},
+		}
+	}
+	stmts := []ast.Stmt{
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(streamIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(emitIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{emit}},
+	}
+	switch shape {
+	case muxt.ResultShapeSSEChan:
+		stmts = append(stmts, &ast.ForStmt{Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.SelectStmt{Body: &ast.BlockStmt{List: []ast.Stmt{
+				&ast.CommClause{
+					Comm: &ast.ExprStmt{X: &ast.UnaryExpr{Op: token.ARROW, X: requestContext("Done")}},
+					Body: []ast.Stmt{&ast.ReturnStmt{}},
+				},
+				&ast.CommClause{
+					Comm: &ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent(resultIdent), ast.NewIdent(okIdent)},
+						Tok: token.DEFINE,
+						Rhs: []ast.Expr{&ast.UnaryExpr{Op: token.ARROW, X: ast.NewIdent(streamIdent)}},
+					},
+					Body: []ast.Stmt{
+						&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{}}}},
+						emitReturnOnErr(ast.NewIdent(resultIdent)),
+					},
+				},
+			}}},
+		}}})
+	case muxt.ResultShapeSSESeq:
+		stmts = append(stmts, &ast.RangeStmt{
+			Key: ast.NewIdent(resultIdent), Tok: token.DEFINE, X: ast.NewIdent(streamIdent),
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				contextErrReturn,
+				emitReturnOnErr(ast.NewIdent(resultIdent)),
+			}},
+		})
+	case muxt.ResultShapeSSESeq2:
+		stmts = append(stmts, &ast.RangeStmt{
+			Key: ast.NewIdent(resultIdent), Value: ast.NewIdent(iterErrIdent), Tok: token.DEFINE, X: ast.NewIdent(streamIdent),
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				contextErrReturn,
+				emitReturnOnErr(ast.NewIdent(resultIdent), ast.NewIdent(iterErrIdent)),
+			}},
+		})
+	}
+	return stmts
 }
 
 // sseClosure builds the callback passed to the receiver method. Each call
@@ -165,11 +260,12 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string, withIterErr bool) (*ast.FuncLit, error) {
 	const (
-		bufIdent    = "buf"
-		tdIdent     = "td"
-		resultIdent = "result"
+		bufIdent     = "buf"
+		tdIdent      = "td"
+		resultIdent  = "result"
+		iterErrIdent = "iterErr"
 	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
@@ -188,6 +284,9 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	if hasArg {
 		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr})
 		tdElts = append(tdElts, &ast.KeyValueExpr{Key: ast.NewIdent(TemplateDataFieldIdentifierResult), Value: ast.NewIdent(resultIdent)})
+	}
+	if withIterErr {
+		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(iterErrIdent)}, Type: ast.NewIdent("error")})
 	}
 
 	body := []ast.Stmt{
@@ -214,6 +313,20 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 			Elts: tdElts,
 		}},
 	})
+	if withIterErr {
+		// if iterErr != nil { td.errList = []error{iterErr} }
+		body = append(body, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(iterErrIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.CompositeLit{
+					Type: &ast.ArrayType{Elt: ast.NewIdent("error")},
+					Elts: []ast.Expr{ast.NewIdent(iterErrIdent)},
+				}},
+			}}},
+		})
+	}
 	// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
 	body = append(body, &ast.IfStmt{
 		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{

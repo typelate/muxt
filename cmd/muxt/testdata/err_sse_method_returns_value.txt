@@ -1,0 +1,26 @@
+! muxt generate --use-receiver-type=Server
+stderr 'must return nothing, an error, or a stream'
+
+-- template.gohtml --
+{{- define "GET /bad sse(Bad(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Bad(ctx context.Context) string { return "not a stream" }

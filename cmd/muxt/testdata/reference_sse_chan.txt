@@ -1,0 +1,69 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /jobs sse(Progress(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Progress streams job progress from a worker goroutine; closing the channel
+// ends the stream and completes the response.
+func (Server) Progress(ctx context.Context) <-chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		for _, step := range []string{"queued", "running", "done"} {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- step:
+			}
+		}
+	}()
+	return ch
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
+	}
+	want := "data: queued\n\ndata: running\n\ndata: done\n\n"
+	if got := rec.Body.String(); !strings.Contains(got, want) {
+		t.Fatalf("body = %q, want one event per value in order: %q", got, want)
+	}
+}

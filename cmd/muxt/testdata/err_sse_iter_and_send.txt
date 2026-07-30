@@ -1,0 +1,32 @@
+! muxt generate --use-receiver-type=Server
+stderr 'send callbacks'
+stderr 'stream'
+
+-- template.gohtml --
+{{- define "GET /both sse(Both(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"iter"
+	"slices"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Both(ctx context.Context, send func(string) error) iter.Seq[string] {
+	_ = send("x")
+	return slices.Values([]string{"t1"})
+}
