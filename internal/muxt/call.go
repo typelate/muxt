@@ -93,6 +93,7 @@ const (
 	ArgumentTypeExecute
 	ArgumentTypeSendMessage
 	ArgumentTypeLastEventID
+	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
 	ArgumentTypeCall
 )
@@ -404,6 +405,8 @@ func DefaultScopeType(pl []*packages.Package, def *Definition, argumentIdentifie
 		return stdlibType("mime/multipart", "Form", true)
 	case TemplateNameScopeIdentifierLastEventID:
 		return types.Universe.Lookup("string").Type(), true
+	case TemplateNameScopeIdentifierRequestBody:
+		return stdlibType("io", "Reader", false)
 	default:
 		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
@@ -506,6 +509,17 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 	case TemplateNameScopeIdentifierExecute:
 		a.Type = ArgumentTypeExecute
 		a.template = def.template
+	case TemplateNameScopeIdentifierRequestBody:
+		a.Type = ArgumentTypeRequestBody
+		// The request body is a single-use stream; the parameter must be
+		// exactly io.Reader so the method cannot assume more than one read.
+		readerType, err := stdlibType(pl, "io", "Reader", false)
+		if err != nil {
+			return a, err
+		}
+		if !types.Identical(param, readerType) {
+			return a, fmt.Errorf("%s parameter must have type io.Reader, got %s", arg.Name, types.TypeString(param, qual))
+		}
 	default:
 		if slices.Contains(def.pathValueNames, arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
@@ -595,6 +609,7 @@ const (
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
+	TemplateNameScopeIdentifierRequestBody  = "body"
 )
 
 func patternScope() []string {
@@ -606,5 +621,6 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierMultipart,
 		TemplateNameScopeIdentifierExecute,
 		TemplateNameScopeIdentifierLastEventID,
+		TemplateNameScopeIdentifierRequestBody,
 	}
 }

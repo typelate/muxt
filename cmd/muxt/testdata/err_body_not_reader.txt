@@ -1,0 +1,29 @@
+! muxt generate --use-receiver-type=T
+stderr 'io\.Reader'
+stderr 'string'
+
+-- template.gohtml --
+{{- define "POST /hooks Save(ctx, body)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Save(_ context.Context, body string) (string, error) {
+	return body, nil
+}
