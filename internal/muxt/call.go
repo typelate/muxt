@@ -379,6 +379,16 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
+			if fn, ok := arg.Fun.(*ast.Ident); ok && fn.Name == callWrapperUnmarshalJSON {
+				// Template-first iteration: without a defined method the decode
+				// target is unknown, so pass the raw payload through.
+				tp, err := stdlibType(pl, "encoding/json", "RawMessage", false)
+				if err != nil {
+					return nil, err
+				}
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
+				continue
+			}
 			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl); err != nil {
 				return nil, err
 			}
