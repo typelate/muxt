@@ -5,7 +5,7 @@ exec go test -race -count=1
 
 -- template.gohtml --
 {{- define "GET /render Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
-{{- define "GET /events sse(Stream(ctx, execute))" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -27,7 +27,7 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 // RenderInt is a named func type used as the execute callback.
 type RenderInt func(int) error
 
-// EmitString is an aliased func type used as the sse callback.
+// EmitString is an aliased func type used as the send callback.
 type EmitString = func(string) error
 
 type Server struct{}

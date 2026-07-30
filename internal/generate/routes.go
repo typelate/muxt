@@ -850,10 +850,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) {
-				// The render callback (execute/sse/sse-prefixed) is validated and
-				// wired into the call in methodHandlerFunc. It is not parsed from
-				// the request.
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSendArgument(arg.Name) {
+				// The render callback (execute, or send/send-prefixed on sse
+				// routes) is validated and wired into the call in
+				// methodHandlerFunc. It is not parsed from the request.
 				continue
 			}
 			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, arg.Name)

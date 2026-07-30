@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/token"
 	"go/types"
 	"html/template"
 	"slices"
@@ -91,7 +90,6 @@ const (
 	ArgumentTypeRequestForm
 	ArgumentTypeRequestMultipartForm
 	ArgumentTypeExecute
-	ArgumentTypeSendMessage
 	ArgumentTypeLastEventID
 	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
@@ -155,7 +153,7 @@ func resolveCallbackShapes(def *Definition) error {
 		callback := a.CallbackSignature()
 		if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
 			if def.Representation == RepresentationSSE {
-				return fmt.Errorf("execute parameter for %s must be a function", def.fun.Name)
+				return fmt.Errorf("%s callback for %s must be a function", a.Identifier, def.fun.Name)
 			}
 			return fmt.Errorf("execute argument for %s must be a func(...) error", def.fun.Name)
 		}
@@ -168,12 +166,12 @@ func resolveCallbackShapes(def *Definition) error {
 			a.callbackHasArg = true
 		default:
 			if def.Representation == RepresentationSSE {
-				return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+				return errors.New("send callback must have zero or one parameter; wrap multiple values in a struct")
 			}
 			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}
 		if def.Representation == RepresentationSSE && a.template == nil {
-			return fmt.Errorf("no template %q for sse argument %s", a.Identifier, a.Identifier)
+			return fmt.Errorf("no template %q for sse send callback %s", strings.TrimPrefix(a.Identifier, TemplateNameScopeIdentifierSend), a.Identifier)
 		}
 	}
 	return nil
@@ -327,7 +325,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 		}
 		switch argument := a.(type) {
 		case *ast.Ident:
-			if paramType == nil && !IsSSEArgument(argument.Name) {
+			if paramType == nil && !IsSendArgument(argument.Name) {
 				args = append(args, Argument{Identifier: argument.Name})
 				continue
 			}
@@ -389,7 +387,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			if arg.Name == TemplateNameScopeIdentifierExecute {
 				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if IsSSEArgument(arg.Name) {
+			if IsSendArgument(arg.Name) {
 				hasSSE = true
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
 				continue
@@ -574,23 +572,17 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 			}
 			return a, nil
 		}
-		if IsSSEArgument(arg.Name) {
-			// An sse-prefixed render callback (sseClock, sseMetrics, ...) renders
-			// the same-named template. Template existence is validated in
+		if IsSendArgument(arg.Name) {
+			// The base send callback renders the route's define body; a
+			// send-prefixed callback (sendClock, sendMetrics, ...) renders the
+			// template named by its suffix. Template existence is validated in
 			// resolveCallbackShapes once all arguments are hydrated.
 			a.Type = ArgumentTypeExecute
-			a.template = def.template.Lookup(arg.Name)
-			return a, nil
-		}
-		if isSendMessage(def, arg) {
-			a.Type = ArgumentTypeSendMessage
-
-			t := def.template.Lookup(arg.Name)
-			if t == nil {
-				return Argument{}, fmt.Errorf("no template %q for sse message argument %s", arg.Name, arg.Name)
+			if arg.Name == TemplateNameScopeIdentifierSend {
+				a.template = def.template
+			} else {
+				a.template = def.template.Lookup(strings.TrimPrefix(arg.Name, TemplateNameScopeIdentifierSend))
 			}
-			a.template = t
-
 			return a, nil
 		}
 		return Argument{}, errors.New("unknown argument type")
@@ -621,17 +613,6 @@ func isAssignable(pl []*packages.Package, paramType types.Type, argName, package
 	return nil
 }
 
-func isSendMessage(def *Definition, arg *ast.Ident) bool {
-	return def.Representation == RepresentationSSE && IsSSEMessageArgument(arg.Name)
-}
-
-// IsSSEMessageArgument reports whether name is an sse send-message template
-// argument: a Message-suffixed identifier (fooMessage) naming the template the
-// message renders with. Only valid on sse routes.
-func IsSSEMessageArgument(name string) bool {
-	return strings.HasSuffix(name, "Message") && token.IsIdentifier(name)
-}
-
 func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 	obj := pkg.Scope().Lookup(fun.Name)
 	if obj == nil {
@@ -656,6 +637,7 @@ const (
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 	TemplateNameScopeIdentifierRequestBody  = "body"
+	TemplateNameScopeIdentifierSend         = "send"
 )
 
 func patternScope() []string {

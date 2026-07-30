@@ -331,7 +331,15 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "GET / F(sseClock)",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "unknown argument sseClock at index 0")
+				assert.ErrorContains(t, err, "the sse-prefixed callback sseClock was removed; use sendClock")
+			},
+		},
+		{
+			Name:     "legacy reserved sse argument",
+			In:       "GET / F(ctx, sse)",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "the reserved sse argument was removed; wrap the call and use the send callback instead, for example: sse(F(ctx, send))")
 			},
 		},
 		{
@@ -455,8 +463,16 @@ func TestNewTemplateName(t *testing.T) {
 			Name:     "execute argument with sse representation",
 			In:       "GET / sse(F(execute))",
 			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "the execute callback cannot be used inside sse(...); use the send callback to emit events")
+			},
+		},
+		{
+			Name:     "send argument with sse representation",
+			In:       "GET / sse(F(send))",
+			ExpMatch: true,
 			TemplateName: func(t *testing.T, def Definition) {
-				assert.Equal(t, "sse(F(execute))", def.handler)
+				assert.Equal(t, "sse(F(send))", def.handler)
 				assert.Equal(t, RepresentationSSE, def.Representation)
 			},
 		},

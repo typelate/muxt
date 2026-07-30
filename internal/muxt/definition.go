@@ -401,15 +401,27 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 	return false
 }
 
-// IsSSEArgument reports whether name is an SSE render-callback argument: the
-// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
-// sseMetrics, ...). Prefixed callbacks render a same-named template; they are
-// only valid on a route that also has the base "sse" argument.
-func IsSSEArgument(name string) bool {
-	if name == TemplateNameScopeIdentifierExecute {
+// IsSendArgument reports whether name is an SSE send-callback argument: the
+// reserved "send" identifier (renders the route's define body) or a
+// "send"-prefixed name whose suffix names the template it renders (sendClock
+// renders the "Clock" template). Send callbacks are only in scope inside an
+// sse(...) wrapped call.
+func IsSendArgument(name string) bool {
+	if name == TemplateNameScopeIdentifierSend {
 		return true
 	}
-	rest, ok := strings.CutPrefix(name, "sse")
+	rest, ok := strings.CutPrefix(name, TemplateNameScopeIdentifierSend)
+	return ok && rest != "" && token.IsIdentifier(rest)
+}
+
+// isLegacySSECallbackName matches the pre-release SSE callback spellings — the
+// reserved "sse" argument and "sse"-prefixed callbacks — so their generation
+// errors can point at the send form that replaced them.
+func isLegacySSECallbackName(name string) bool {
+	if name == string(RepresentationSSE) {
+		return true
+	}
+	rest, ok := strings.CutPrefix(name, string(RepresentationSSE))
 	return ok && rest != "" && token.IsIdentifier(rest)
 }
 
@@ -418,11 +430,20 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			// sse-prefixed render callbacks and Message-suffixed send-message
-			// templates are only in scope on sse routes.
-			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name))
+			// send callbacks (send, sendClock, ...) are only in scope on sse
+			// routes.
+			sseScoped := sse && IsSendArgument(exp.Name)
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
+				if isLegacySSECallbackName(exp.Name) {
+					if exp.Name == string(RepresentationSSE) {
+						return fmt.Errorf("the reserved sse argument was removed; wrap the call and use the send callback instead, for example: sse(%s(ctx, send))", astgen.Format(call.Fun))
+					}
+					return fmt.Errorf("the sse-prefixed callback %[1]s was removed; use send%[2]s inside an sse(...) wrapped call to render the %[2]q template", exp.Name, strings.TrimPrefix(exp.Name, string(RepresentationSSE)))
+				}
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
+			}
+			if sse && exp.Name == TemplateNameScopeIdentifierExecute {
+				return fmt.Errorf("the execute callback cannot be used inside sse(...); use the send callback to emit events")
 			}
 			switch exp.Name {
 			case TemplateNameScopeIdentifierForm:

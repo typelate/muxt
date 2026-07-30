@@ -1,0 +1,29 @@
+! muxt generate --use-receiver-type=Server
+stderr 'execute'
+stderr 'send'
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, execute))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Stream(ctx context.Context, send func(data string) error) {
+	_ = send("hi")
+}

@@ -253,10 +253,10 @@ func TestArgument(t *testing.T) {
 		{Name: "execute method must return only error", Receiver: serverType, Template: `{{define "GET / ExecuteReturnsValue(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method ExecuteReturnsValue using the execute callback must return only error")
 		}},
-		{Name: "sse method must return nothing or an error", Receiver: serverType, Template: `{{define "GET /x sse(SSEReturnsValue(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+		{Name: "sse method must return nothing or an error", Receiver: serverType, Template: `{{define "GET /x sse(SSEReturnsValue(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method SSEReturnsValue using the sse callback must return nothing or an error")
 		}},
-		{Name: "sse method returning nothing", Receiver: serverType, Template: `{{define "GET /x sse(SSEEvents(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+		{Name: "sse method returning nothing", Receiver: serverType, Template: `{{define "GET /x sse(SSEEvents(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Equal(t, ResultShapeNone, defs[0].ResultShape())
 		}},
@@ -283,32 +283,23 @@ func TestArgument(t *testing.T) {
 		{Name: "execute callback with too many parameters", Receiver: serverType, Template: `{{define "GET / ExecuteMultiArg(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}},
-		{Name: "sse callback parameter is not a function", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "execute parameter for SSECallbackNotFunc must be a function")
+		{Name: "sse callback parameter is not a function", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "send callback for SSECallbackNotFunc must be a function")
 		}},
-		{Name: "sse callback with too many parameters", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackMultiArg(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "sse callback must have zero or one parameter; wrap multiple values in a struct")
+		{Name: "sse callback with too many parameters", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackMultiArg(send))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "send callback must have zero or one parameter; wrap multiple values in a struct")
 		}},
 		{Name: "execute callback method not defined on receiver", Receiver: emptyStruct, Template: `{{define "GET / NotDefined(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method NotDefined using the execute callback must be defined on the receiver type")
 		}},
-		{Name: "sse prefixed callback template missing", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(execute, sseClock))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, `no template "sseClock" for sse argument sseClock`)
+		{Name: "send prefixed callback template missing", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(send, sendClock))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, `no template "Clock" for sse send callback sendClock`)
 		}},
-		{Name: "sse prefixed callback template defined", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(execute, sseClock))"}}{{end}}{{define "sseClock"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+		{Name: "send prefixed callback template defined", Receiver: serverType, Template: `{{define "GET /events sse(SSETwoCallbacks(send, sendClock))"}}{{end}}{{define "Clock"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs[0].Arguments, 2)
 			require.NotNil(t, defs[0].Arguments[1].Template())
-			require.Equal(t, "sseClock", defs[0].Arguments[1].Template().Name())
-		}},
-		{Name: "sse message template missing", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(fooMessage))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, `no template "fooMessage" for sse message argument fooMessage`)
-		}},
-		{Name: "sse message template defined", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.NoError(t, err)
-			require.Equal(t, ArgumentTypeSendMessage, defs[0].Arguments[0].Type)
-			require.NotNil(t, defs[0].Arguments[0].Template())
-			require.Equal(t, "fooMessage", defs[0].Arguments[0].Template().Name())
+			require.Equal(t, "Clock", defs[0].Arguments[1].Template().Name())
 		}},
 		{Name: "method with three results", Receiver: serverType, Template: `{{define "GET / ThreeResults()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method ThreeResults has 3 results it should have one or two")
