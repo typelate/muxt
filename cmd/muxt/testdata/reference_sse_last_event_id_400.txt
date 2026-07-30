@@ -1,0 +1,72 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, lastEventID, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream resumes from a typed Last-Event-Id: the header parses to int before
+// the stream opens, so a bad value responds 400 with no stream bytes.
+func (Server) Stream(_ context.Context, lastEventID int, send func(int) error) {
+	_ = send(lastEventID + 1)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("typed header parses and resumes", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/events", nil)
+		req.Header.Set("Last-Event-Id", "9")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "data: 10\n\n"; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("non-numeric header is 400 before the stream opens", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/events", nil)
+		req.Header.Set("Last-Event-Id", "abc")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if strings.Contains(rec.Body.String(), "data:") {
+			t.Errorf("body = %q, want no stream bytes", rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); ct == "text/event-stream" {
+			t.Errorf("content-type = %q; the stream must not have been established", ct)
+		}
+	})
+}

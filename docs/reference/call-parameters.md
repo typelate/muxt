@@ -236,13 +236,15 @@ same by construction. On GET the bound values are the query string and the
 
 ## Server-Sent Events
 
-Wrapping the method call in `sse(...)` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback at the `execute` argument's position. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+Wrapping the method call in `sse(...)` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, and drives the stream in one of two mutually exclusive modes.
+
+**Callback mode** — the method takes `send` callbacks and emits one event per invocation:
 
 ```gotmpl
-{{define "GET /clock sse(Clock(ctx, execute))"}}{{.Result}}{{end}}
+{{define "GET /clock sse(Clock(ctx, send))"}}{{.Result}}{{end}}
 ```
 ```go
-func (s Server) Clock(ctx context.Context, execute func(string) error) {
+func (s Server) Clock(ctx context.Context, send func(string) error) {
     t := time.NewTicker(time.Second)
     defer t.Stop()
     for {
@@ -250,30 +252,47 @@ func (s Server) Clock(ctx context.Context, execute func(string) error) {
         case <-ctx.Done():
             return
         case now := <-t.C:
-            if err := execute(now.Format(time.RFC3339)); err != nil {
-                return // client disconnected
+            if err := send(now.Format(time.RFC3339)); err != nil {
+                return // client disconnected or render failed
             }
         }
     }
 }
 ```
 
+**Return mode** — the method returns a stream as its only result; each value renders one event via the define body:
+
+```gotmpl
+{{define "GET /ticks sse(Ticks(ctx))"}}{{.Result}}{{end}}
+```
+
+| Return type | Behavior |
+|---|---|
+| `<-chan T` | one event per received value; the stream ends when the channel closes |
+| `iter.Seq[T]` | one event per yielded value |
+| `iter.Seq2[T, error]` | a non-nil yielded error lands on the event data (`.Err`); the event still renders |
+
+Client disconnect (request-context cancellation) ends both modes.
+
 | Rule | Detail |
 |------|--------|
 | Callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
-| Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
-| Not allowed | a `response` argument |
+| Named callbacks | `send`-prefixed arguments render the template named by the suffix: `sendClock` renders `{{define "Clock"}}` (which stays reusable via `{{template "Clock"}}`); the template must exist |
+| JSON events | `marshalJSON(sendX)` marshals the callback argument as the event's `data:` payload instead of rendering a template (`encoding/json`, or `encoding/json/v2` under `--output-jsonv2`) — one stream can interleave rendered and JSON events |
+| Method results | Nothing, only `error` (logged; the stream closes), or a stream type (return mode; no callbacks allowed) |
+| Not allowed | a `response` argument, the `execute` callback, or mixing send callbacks with a stream result |
 | Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
-| Undefined method | Synthesized as `func(any) error` |
-| Extra callbacks | `sse`-prefixed arguments (`sse(Events(sseClock, execute, sseMetrics))`) each render the same-named template |
+| Undefined method | send callbacks synthesize as `func(any) error` |
 
 Pair the wrapper with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
 
 ```gotmpl
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
+{{define "GET /events sse(Stream(ctx, lastEventID, send))"}}{{.Result}}{{end}}
 ```
 
-[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
+Migrating from earlier releases: the `execute` callback inside `sse(...)`, the reserved `sse` argument, and `sse`-prefixed callbacks (`sseClock`) were replaced by the `send` vocabulary; each old spelling fails generation with an error showing the new form.
+
+[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt) · [reference_sse_marshal_send.txt](../../cmd/muxt/testdata/reference_sse_marshal_send.txt) · [reference_sse_chan.txt](../../cmd/muxt/testdata/reference_sse_chan.txt) · [reference_sse_iter_seq.txt](../../cmd/muxt/testdata/reference_sse_iter_seq.txt) · [reference_sse_iter_seq2_error.txt](../../cmd/muxt/testdata/reference_sse_iter_seq2_error.txt) · [reference_sse_event_fields.txt](../../cmd/muxt/testdata/reference_sse_event_fields.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) · [reference_sse_last_event_id_400.txt](../../cmd/muxt/testdata/reference_sse_last_event_id_400.txt)
 
 ## Advanced Patterns
 

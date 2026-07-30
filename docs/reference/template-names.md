@@ -167,29 +167,35 @@ returns `204 No Content`.
 To stream **Server-Sent Events**, wrap the whole method call in `sse(...)`:
 
 ```gotmpl
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
+{{define "GET /events sse(Stream(ctx, lastEventID, send))"}}{{.Result}}{{end}}
 ```
 
-Inside the wrapper, `execute` is the event-render callback. The handler first
+Inside the wrapper, `send` is the event-render callback. The handler first
 establishes an event stream (`Content-Type: text/event-stream`, initial flush)
 and the method may call the closure many times — once per event. The param must
 be `func(T) error` (`T` becomes `.Result`) or `func() error`. Each call renders
 the route's template into a pooled buffer and writes one SSE frame, then
-flushes. The method returns nothing or only `error` (a returned error is logged
-and closes the stream). An sse route cannot use a `response` argument. The
-template data is an `SSETemplateData` value: alongside `.Result`, `.Request`,
-and `.Err` it exposes chainable `.Event`, `.ID`, and `.Retry` setters for the
-SSE frame fields. When the method is not defined on the receiver, muxt
-synthesizes the callback as `func(any) error`.
+flushes. The method returns nothing, only `error` (a returned error is logged
+and closes the stream), or — instead of taking callbacks — a stream as its
+only result: `<-chan T`, `iter.Seq[T]`, or `iter.Seq2[T, error]`, where each
+value renders one event via the define body. An sse route cannot use a
+`response` argument or the `execute` callback. The template data is an
+`SSETemplateData` value: alongside `.Result`, `.Request`, and `.Err` it
+exposes chainable `.Event`, `.ID`, and `.Retry` setters for the SSE frame
+fields. When the method is not defined on the receiver, muxt synthesizes the
+callback as `func(any) error`.
 
-An sse route may take **additional `sse`-prefixed callbacks** —
-`sse(Events(sseClock, execute, sseMetrics))`. Each gets its own closure in
-the method call and renders a different template: `execute` renders the
-route's own template, while a prefixed callback renders the template named
-exactly after the argument (`sseClock` renders `{{define "sseClock"}}`). Those
-templates must exist at generate time. Each callback has its own result type and
-builds its own `SSETemplateData`, so they need not share a `T`. Argument order
-within the call doesn't matter.
+An sse route may take **additional `send`-prefixed callbacks** —
+`sse(Events(sendClock, send, sendMetrics))`. Each gets its own closure in
+the method call and renders a different template: `send` renders the
+route's own template, while a prefixed callback renders the template named by
+its suffix (`sendClock` renders `{{define "Clock"}}`). Those templates must
+exist at generate time. Each callback has its own result type and builds its
+own `SSETemplateData`, so they need not share a `T`. Argument order within
+the call doesn't matter. Wrapping a send callback name in `marshalJSON(...)`
+— `sse(Mixed(ctx, send, marshalJSON(sendStatus)))` — makes that callback
+marshal its argument as the event's JSON `data:` payload instead of
+rendering a template.
 
 The wrapper form requires exactly one method call inside the parentheses. If
 `sse` names a package-level function in your package, `sse()` as a route's call
@@ -197,8 +203,8 @@ is an ordinary function call, not an event stream.
 
 [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)
 
-The `execute` and SSE callback parameters may be a **named or aliased func
-type** — `type RenderFunc func(T) error` or `type RenderFunc = func(T) error` —
+The `execute` and SSE `send` callback parameters may be a **named or aliased
+func type** — `type RenderFunc func(T) error` or `type RenderFunc = func(T) error` —
 not only an inline `func(T) error`. Muxt resolves the underlying signature, so
 `T` is read from it the same way.
 
@@ -230,7 +236,7 @@ names.
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{end}}  <!-- Server-Sent Events -->
+{{define "GET /events sse(Stream(ctx, lastEventID, send))"}}{{end}}  <!-- Server-Sent Events -->
 ```
 
 Call arguments bind to method parameters by position. Argument names must be

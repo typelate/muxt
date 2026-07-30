@@ -1,0 +1,62 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, send))" -}}
+{{- with .Event "news" -}}{{- end -}}
+{{- with .ID "42" -}}{{- end -}}
+{{- with .Retry 3000 -}}{{- end -}}
+{{- .Result -}}
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream emits one event; the template's .Event/.ID/.Retry setters become the
+// event:, id:, and retry: wire lines an sse-swap style listener selects on.
+func (Server) Stream(ctx context.Context, send func(string) error) {
+	_ = send("hello")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for _, want := range []string{"event: news\n", "id: 42\n", "retry: 3000\n", "data: hello\n\n"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the wire line %q", body, want)
+		}
+	}
+}

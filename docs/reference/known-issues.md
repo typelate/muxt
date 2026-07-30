@@ -98,10 +98,10 @@ If functions are added after `ParseFS`, or outside the variable's initialization
 
 **Issue:** Older muxt versions accepted `sse` as a reserved call argument
 (`GET /events Stream(ctx, lastEventID, sse)`). That syntax was removed; current
-versions fail with `unknown argument sse`.
+versions fail with an error showing the wrapper spelling.
 
-**Fix:** Wrap the call instead and use `execute` for the callback:
-`GET /events sse(Stream(ctx, lastEventID, execute))`. See
+**Fix:** Wrap the call instead and use `send` for the callback:
+`GET /events sse(Stream(ctx, lastEventID, send))`. See
 [Template Names](template-names.md).
 
 ## Reporting Issues
