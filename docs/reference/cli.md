@@ -82,6 +82,7 @@ These flags control the names of generated types and functions:
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
+| `--output-jsonv2` | bool | `false` | Generate JSON encoding/decoding with `encoding/json/v2` instead of `encoding/json`. Requires a go 1.25+ module built with `GOEXPERIMENT=jsonv2`. |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathsPrefix string` parameter for mounting under subpaths. |

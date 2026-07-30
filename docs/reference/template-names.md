@@ -214,9 +214,18 @@ name.
 
 ### Examples
 
+`body` binds `request.Body` as an `io.Reader`; the decode wrappers
+`unmarshalJSON(body)` and `unmarshalForm(body)` decode the request body into
+the method parameter's type (see the
+[call parameters reference](call-parameters.md)). All three names are reserved
+identifiers, so — like `lastEventID` — they cannot be used as path wildcard
+names.
+
 ```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{end}}
 {{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form binding -->
+{{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{end}}  <!-- JSON body binding -->
+{{define "POST /hooks Save(ctx, body)"}}{{end}}  <!-- Raw body stream -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
