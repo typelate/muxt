@@ -1,0 +1,31 @@
+! muxt generate --use-receiver-type=T
+stderr 'request body'
+stderr 'at most once'
+
+-- template.gohtml --
+{{- define "POST /hooks Save(ctx, body, unmarshalJSON(body))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"encoding/json"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Save(_ context.Context, body io.Reader, raw json.RawMessage) (string, error) {
+	return string(raw), nil
+}

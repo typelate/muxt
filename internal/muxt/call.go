@@ -324,6 +324,17 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				args = append(args, Argument{Identifier: name})
 				continue
 			}
+			if name == callWrapperUnmarshalJSON {
+				// The decode target is the method parameter's type; any type
+				// encoding/json can unmarshal into is permitted, so there is
+				// no assignability constraint to check here.
+				args = append(args, Argument{
+					Identifier: TemplateNameScopeIdentifierRequestBody,
+					Type:       ArgumentTypeRequestBodyJSON,
+					ParamType:  paramType,
+				})
+				continue
+			}
 			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl)
 			if err != nil {
 				return nil, false, nil, err
