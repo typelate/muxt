@@ -23,15 +23,37 @@ type normalizedCall struct {
 	call           *ast.CallExpr
 }
 
-// callWrapperUnmarshalJSON is the request-body JSON decode wrapper: at an
-// argument position, unmarshalJSON(body) decodes the JSON request body into
-// the method parameter's type.
-const callWrapperUnmarshalJSON = "unmarshalJSON"
+// Request-body decode wrappers recognized at argument positions:
+// unmarshalJSON(body) decodes the JSON request body into the method
+// parameter's type; unmarshalForm(body) is the explicit spelling of the
+// existing form binding.
+const (
+	callWrapperUnmarshalJSON = "unmarshalJSON"
+	callWrapperUnmarshalForm = "unmarshalForm"
+)
 
 // isBodyUnmarshalWrapper reports whether name is a request-body decode
 // wrapper pseudo-function.
 func isBodyUnmarshalWrapper(name string) bool {
-	return name == callWrapperUnmarshalJSON
+	return name == callWrapperUnmarshalJSON || name == callWrapperUnmarshalForm
+}
+
+// rewriteBodyFormWrappers replaces each unmarshalForm(body) argument with the
+// form identifier. The two spellings are the same request.Form binding by
+// construction: after this rewrite, resolution, checking, and generation all
+// run the form code path.
+func rewriteBodyFormWrappers(call *ast.CallExpr) {
+	for i, a := range call.Args {
+		nested, ok := a.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if fn, ok := nested.Fun.(*ast.Ident); ok && fn.Name == callWrapperUnmarshalForm {
+			call.Args[i] = ast.NewIdent(TemplateNameScopeIdentifierForm)
+			continue
+		}
+		rewriteBodyFormWrappers(nested)
+	}
 }
 
 // checkBodyWrapperArguments enforces the decode-wrapper contract: exactly one
