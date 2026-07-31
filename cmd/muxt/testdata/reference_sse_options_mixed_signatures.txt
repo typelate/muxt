@@ -1,0 +1,69 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /plain sse(Plain(ctx, send))" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /fancy sse(Fancy(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Plain keeps the pre-options callback shape: the variadic is opt-in per
+// method signature, so incremental adoption works route by route.
+func (Server) Plain(_ context.Context, send func(string) error) {
+	_ = send("plain")
+}
+
+func (Server) Fancy(_ context.Context, send func(msg string, opts ...SSEEventOption) error) {
+	_ = send("fancy", WithEvent("styled"))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("plain callback keeps working", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/plain", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "data: plain\n\n"; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("variadic callback takes options", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/fancy", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "event: styled\ndata: fancy\n\n"; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}

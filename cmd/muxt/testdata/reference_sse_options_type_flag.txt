@@ -1,0 +1,54 @@
+muxt generate --use-receiver-type=Server --output-sse-event-option-type=AdminEventOption
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Stream declares its variadic with the renamed option type: the build only
+// passes if generation produced AdminEventOption and its constructors.
+func (Server) Stream(_ context.Context, send func(msg string, opts ...AdminEventOption) error) {
+	_ = send("hello", WithEvent("admin"))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if want := "event: admin\ndata: hello\n\n"; !strings.Contains(rec.Body.String(), want) {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}

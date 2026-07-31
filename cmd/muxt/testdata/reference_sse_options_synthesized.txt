@@ -1,0 +1,59 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// T does not define Stream: the synthesized send callback includes the
+// options variadic so template-first iteration exposes the full surface.
+type T struct{}
+-- template_test.go --
+package server
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// impl implements the generated receiver interface by hand; compiling its
+// method with the options variadic proves the synthesized signature includes
+// it.
+type impl struct{}
+
+func (impl) Stream(_ context.Context, send func(result any, opts ...SSEEventOption) error) {
+	_ = send("hello", WithEvent("news"))
+}
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, impl{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if want := "event: news\ndata: hello\n\n"; !strings.Contains(rec.Body.String(), want) {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}
