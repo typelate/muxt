@@ -387,14 +387,24 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		if !hasArg {
 			marshalArg = &ast.CompositeLit{Type: &ast.StructType{Fields: &ast.FieldList{}}}
 		}
+		marshalCall := &ast.CallExpr{
+			Fun:  astgen.ExportedIdentifier(file, "json", jsonPkgPath, "Marshal"),
+			Args: []ast.Expr{marshalArg},
+		}
+		if config.JSONV2 {
+			// json.Marshal(result, td.jsonOptions...) forwards option-carried
+			// encoder settings to this event's marshal.
+			marshalCall.Args = append(marshalCall.Args, &ast.SelectorExpr{
+				X:   ast.NewIdent(tdIdent),
+				Sel: ast.NewIdent(sseTemplateDataFieldJSONOptions),
+			})
+			marshalCall.Ellipsis = 1
+		}
 		body = append(body,
 			&ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(jsonBodyIdent), ast.NewIdent(errIdent)},
 				Tok: token.DEFINE,
-				Rhs: []ast.Expr{&ast.CallExpr{
-					Fun:  astgen.ExportedIdentifier(file, "json", jsonPkgPath, "Marshal"),
-					Args: []ast.Expr{marshalArg},
-				}},
+				Rhs: []ast.Expr{marshalCall},
 			},
 			&ast.IfStmt{
 				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},

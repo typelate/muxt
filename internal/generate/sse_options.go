@@ -54,6 +54,54 @@ func sseEventOptionDecls(file *File, config RoutesFileConfiguration) []ast.Decl 
 		sseEventSetterMethod(config.SSETemplateDataType, "setEventID", "id", "string", sseTemplateDataFieldID),
 		sseEventSetterMethod(config.SSETemplateDataType, "setRetry", "retry", "int", sseTemplateDataFieldRetry),
 	}
+	if config.JSONV2 {
+		// WithJSONOptions forwards encoding/json/v2 and jsontext options to a
+		// marshalJSON-wrapped sender's Marshal call; it exists only under
+		// --output-jsonv2 and is ignored by render senders.
+		jsonOptionsType := astgen.ExportedIdentifier(file, "json", "encoding/json/v2", "Options")
+		iface := decls[1].(*ast.GenDecl).Specs[0].(*ast.TypeSpec).Type.(*ast.InterfaceType)
+		iface.Methods.List = append(iface.Methods.List, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent("setJSONOptions")},
+			Type:  &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Type: &ast.Ellipsis{Elt: jsonOptionsType}}}}},
+		})
+		decls = append(decls,
+			// func WithJSONOptions(opts ...json.Options) SSEEventOption {
+			//     return func(c sseEventConfigurer) { c.setJSONOptions(opts...) }
+			// }
+			&ast.FuncDecl{
+				Name: ast.NewIdent("WithJSONOptions"),
+				Type: &ast.FuncType{
+					Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("jsonOptions")}, Type: &ast.Ellipsis{Elt: jsonOptionsType}}}},
+					Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(config.SSEEventOptionType)}}},
+				},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{&ast.FuncLit{
+					Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{
+						Names: []*ast.Ident{ast.NewIdent("c")},
+						Type:  ast.NewIdent(sseEventConfigurerIdent),
+					}}}},
+					Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+						Fun:      &ast.SelectorExpr{X: ast.NewIdent("c"), Sel: ast.NewIdent("setJSONOptions")},
+						Args:     []ast.Expr{ast.NewIdent("jsonOptions")},
+						Ellipsis: 1,
+					}}}},
+				}}}}},
+			},
+			// func (data *SSETemplateData[R, T]) setJSONOptions(jsonOptions ...json.Options) { data.jsonOptions = jsonOptions }
+			&ast.FuncDecl{
+				Recv: sseTemplateDataMethodReceiver(config.SSETemplateDataType),
+				Name: ast.NewIdent("setJSONOptions"),
+				Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{
+					Names: []*ast.Ident{ast.NewIdent("jsonOptions")},
+					Type:  &ast.Ellipsis{Elt: jsonOptionsType},
+				}}}},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(sseTemplateDataFieldJSONOptions)}},
+					Tok: token.ASSIGN,
+					Rhs: []ast.Expr{ast.NewIdent("jsonOptions")},
+				}}},
+			},
+		)
+	}
 	return decls
 }
 

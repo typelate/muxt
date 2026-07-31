@@ -1,0 +1,36 @@
+muxt generate --use-receiver-type=Server
+
+# WithJSONOptions only exists under --output-jsonv2: without the flag the
+# constructor is not generated, so a receiver referencing it fails to build.
+! exec go build ./...
+stderr 'undefined: WithJSONOptions'
+
+-- template.gohtml --
+{{- define "GET /events sse(Feed(ctx, marshalJSON(sendStatus)))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Status struct {
+	OK bool `json:"ok"`
+}
+
+type Server struct{}
+
+func (Server) Feed(_ context.Context, sendStatus func(s Status, opts ...SSEEventOption) error) {
+	_ = sendStatus(Status{OK: true}, WithJSONOptions())
+}

@@ -1,0 +1,29 @@
+! muxt generate --use-receiver-type=Server
+stderr 'send callback options variadic must have element type SSEEventOption'
+stderr 'string'
+
+-- template.gohtml --
+{{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Stream(_ context.Context, send func(msg string, opts ...string) error) {
+	_ = send("hello")
+}

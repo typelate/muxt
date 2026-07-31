@@ -11,10 +11,11 @@ import (
 const (
 	sseTemplateDataReceiverName = "m"
 
-	sseTemplateDataFieldEvent = "event"
-	sseTemplateDataFieldID    = "id"
-	sseTemplateDataFieldRetry = "retryMilliseconds"
-	sseTemplateDataFieldData  = "data"
+	sseTemplateDataFieldEvent       = "event"
+	sseTemplateDataFieldID          = "id"
+	sseTemplateDataFieldRetry       = "retryMilliseconds"
+	sseTemplateDataFieldJSONOptions = "jsonOptions"
+	sseTemplateDataFieldData        = "data"
 )
 
 // sseTemplateDataDecls returns the SSETemplateData type declaration and all of
@@ -25,7 +26,7 @@ const (
 func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 	typeIdent := config.SSETemplateDataType
 	decls := []ast.Decl{
-		sseTemplateDataType(file, typeIdent),
+		sseTemplateDataType(file, config, typeIdent),
 		sseTemplateDataStringMethod(typeIdent),
 		sseTemplateDataReceiverMethod(typeIdent),
 		sseTemplateDataRequestMethod(file, typeIdent),
@@ -65,26 +66,31 @@ func sseTemplateDataSelfType(typeIdent string) ast.Expr {
 	}}
 }
 
-func sseTemplateDataType(file *File, typeIdent string) *ast.GenDecl {
+func sseTemplateDataType(file *File, config RoutesFileConfiguration, typeIdent string) *ast.GenDecl {
 	ptrString := &ast.StarExpr{X: ast.NewIdent("string")}
+	fields := []*ast.Field{
+		{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: ast.NewIdent("R")},
+		{Names: []*ast.Ident{ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)}, Type: astgen.HTTPRequestPtr(file)},
+		{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
+		{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
+		{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldEvent), ast.NewIdent(sseTemplateDataFieldID)}, Type: ptrString},
+		{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldRetry)}, Type: &ast.StarExpr{X: ast.NewIdent("int")}},
+		{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: &ast.ArrayType{Elt: ast.NewIdent("error")}},
+		{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldData)}, Type: &ast.StarExpr{X: astgen.ExportedIdentifier(file, "", "bytes", "Buffer")}},
+	}
+	if config.JSONV2 {
+		fields = append(fields, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldJSONOptions)},
+			Type:  &ast.ArrayType{Elt: astgen.ExportedIdentifier(file, "json", "encoding/json/v2", "Options")},
+		})
+	}
 	return &ast.GenDecl{
 		Tok: token.TYPE,
 		Specs: []ast.Spec{
 			&ast.TypeSpec{
 				Name:       ast.NewIdent(typeIdent),
 				TypeParams: sseTemplateDataTypeParams(),
-				Type: &ast.StructType{
-					Fields: &ast.FieldList{List: []*ast.Field{
-						{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierReceiver)}, Type: ast.NewIdent("R")},
-						{Names: []*ast.Ident{ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)}, Type: astgen.HTTPRequestPtr(file)},
-						{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierResult)}, Type: ast.NewIdent("T")},
-						{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
-						{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldEvent), ast.NewIdent(sseTemplateDataFieldID)}, Type: ptrString},
-						{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldRetry)}, Type: &ast.StarExpr{X: ast.NewIdent("int")}},
-						{Names: []*ast.Ident{ast.NewIdent(TemplateDataFieldIdentifierError)}, Type: &ast.ArrayType{Elt: ast.NewIdent("error")}},
-						{Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldData)}, Type: &ast.StarExpr{X: astgen.ExportedIdentifier(file, "", "bytes", "Buffer")}},
-					}},
-				},
+				Type:       &ast.StructType{Fields: &ast.FieldList{List: fields}},
 			},
 		},
 	}

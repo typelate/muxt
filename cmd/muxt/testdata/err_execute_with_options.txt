@@ -1,0 +1,28 @@
+! muxt generate --use-receiver-type=Server
+stderr 'execute callback'
+stderr 'takes no options'
+
+-- template.gohtml --
+{{- define "GET /page Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Render(execute func(msg string, opts ...string) error) error {
+	return execute("hello")
+}
