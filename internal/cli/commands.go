@@ -221,6 +221,9 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.SSEEventOptionType != "" && !token.IsIdentifier(config.SSEEventOptionType) {
 				return fmt.Errorf(outputSSEEventOptionType + errIdentSuffix)
 			}
+			if config.HTMXTemplateDataType != "" && !token.IsIdentifier(config.HTMXTemplateDataType) {
+				return fmt.Errorf(outputHTMXTemplateDataType + errIdentSuffix)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -355,6 +358,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.SSEEventOptionType != defaultSSEEventOptionTypeName {
 		args = append(args, "--"+outputSSEEventOptionType+"="+config.SSEEventOptionType)
 	}
+	if config.HTMXTemplateDataType != defaultHTMXTemplateDataTypeName {
+		args = append(args, "--"+outputHTMXTemplateDataType+"="+config.HTMXTemplateDataType)
+	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
 	}
@@ -372,11 +378,11 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.OutputMultipleFiles {
 		args = append(args, "--"+outputMultipleFiles)
 	}
-	if config.HTMXHelpers {
-		args = append(args, "--"+outputHTMXHelpers)
-	}
 	if config.JSONV2 {
 		args = append(args, "--"+outputJSONV2)
+	}
+	if config.UseHTMX {
+		args = append(args, "--"+useHTMX)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -568,6 +574,8 @@ const (
 	outputMultipleFiles                 = "output-multiple-files"
 	outputHTMXHelpers                   = "output-htmx-helpers"
 	outputJSONV2                        = "output-jsonv2"
+	useHTMX                             = "use-htmx"
+	outputHTMXTemplateDataType          = "output-htmx-template-data-type"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 
@@ -605,8 +613,10 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputRoutesFuncWithMiddlewareParamHelp = `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`
 	outputMultipleFilesHelp                 = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
-	outputHTMXHelpersHelp                   = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputHTMXHelpersHelp                   = `DEPRECATED: use --use-htmx instead. Wraps every route in the htmx(...) framing.`
 	outputJSONV2Help                        = `Generates JSON encoding and decoding with encoding/json/v2 instead of encoding/json. Requires a go 1.25+ module built with GOEXPERIMENT=jsonv2.`
+	useHTMXHelp                             = `Wraps every route's call in the htmx(...) framing so all templates render with the HTMX template data type (HX-Redirect, HX-Trigger, HX-Request, etc.). To mix framed and unframed routes, omit the flag and write htmx(...) explicitly.`
+	outputHTMXTemplateDataTypeHelp          = `The type name for the template data passed to htmx-framed route templates.`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 
@@ -622,6 +632,7 @@ const (
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
 	defaultSSEEventOptionTypeName     = "SSEEventOption"
+	defaultHTMXTemplateDataTypeName   = "HTMXTemplateData"
 	defaultPackageName                = "main"
 )
 
@@ -649,6 +660,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputSSEEventOptionType) {
 			config.SSEEventOptionType = strcase.ToGoCamel(defaultSSEEventOptionTypeName)
 		}
+		if !flagSet.Changed(outputHTMXTemplateDataType) {
+			config.HTMXTemplateDataType = strcase.ToGoCamel(defaultHTMXTemplateDataTypeName)
+		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
@@ -659,6 +673,7 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 		config.SSEEventOptionType = cmp.Or(config.SSEEventOptionType, defaultSSEEventOptionTypeName)
+		config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, defaultHTMXTemplateDataTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -686,12 +701,15 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSETemplateDataType, outputSSETemplateDataType, defaultSSETemplateDataTypeName, outputSSETemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSEEventOptionType, outputSSEEventOptionType, defaultSSEEventOptionTypeName, outputSSEEventOptionTypeHelp)
+	flagSet.StringVar(&g.HTMXTemplateDataType, outputHTMXTemplateDataType, defaultHTMXTemplateDataTypeName, outputHTMXTemplateDataTypeHelp)
+	flagSet.BoolVar(&g.UseHTMX, useHTMX, false, useHTMXHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.Middleware, outputRoutesFuncWithMiddlewareParam, false, outputRoutesFuncWithMiddlewareParamHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
-	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.UseHTMX, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	markDeprecated(flagSet, outputHTMXHelpers, useHTMX)
 	flagSet.BoolVar(&g.JSONV2, outputJSONV2, false, outputJSONV2Help)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)

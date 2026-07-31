@@ -1,0 +1,53 @@
+muxt generate --use-receiver-type=Server --output-htmx-template-data-type=AdminTemplateData
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /admin htmx(Admin(ctx))" -}}{{.HXRetarget "#main"}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Admin(_ context.Context) (string, error) { return "admin", nil }
+
+// The build only passes if generation produced the renamed htmx template
+// data type.
+var _ = AdminTemplateData[RoutesReceiver, string]{}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Header().Get("HX-Retarget"), "#main"; got != want {
+		t.Errorf("HX-Retarget = %q, want %q", got, want)
+	}
+}

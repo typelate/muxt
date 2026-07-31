@@ -1,0 +1,36 @@
+muxt generate --use-receiver-type=Server
+
+# The safety property itself: an unframed template calling an HX* helper
+# fails muxt check with a field-not-found error naming TemplateData — the
+# minimal type no longer carries the htmx surface.
+! muxt check
+stderr 'HXRedirect'
+stderr 'TemplateData'
+
+-- template.gohtml --
+{{- define "GET /oops Oops(ctx)" -}}{{.HXRedirect "/next"}}done{{- end -}}
+{{- define "GET /fine Fine(ctx)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Oops(_ context.Context) (string, error) { return "", nil }
+
+// Fine proves the base helpers still work on unframed routes.
+func (Server) Fine(_ context.Context) (string, error) { return "ok", nil }
