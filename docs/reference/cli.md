@@ -80,6 +80,7 @@ These flags control the names of generated types and functions:
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
+| `--output-sse-event-option-type` | string | `SSEEventOption` | Per-event option type accepted by SSE send callbacks (`WithEvent`, `WithEventID`, `WithRetryDuration`). |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
 | `--output-jsonv2` | bool | `false` | Generate JSON encoding/decoding with `encoding/json/v2` instead of `encoding/json`. Requires a go 1.25+ module built with `GOEXPERIMENT=jsonv2`. |

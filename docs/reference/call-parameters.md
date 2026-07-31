@@ -284,6 +284,33 @@ Client disconnect (request-context cancellation) ends both modes.
 | Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
 | Undefined method | send callbacks synthesize as `func(any) error` |
 
+**Per-event options.** Any send-family callback may declare a trailing
+variadic of the generated `SSEEventOption` type (rename it with
+`--output-sse-event-option-type`); declaring it is opt-in per method
+signature, and `muxt check` verifies the element type:
+
+```go
+func (s Server) Feed(ctx context.Context, send func(msg string, opts ...SSEEventOption) error) {
+    _ = send("hello", WithEvent("news"), WithEventID("42"), WithRetryDuration(3*time.Second))
+}
+```
+
+| Constructor | Wire line |
+|---|---|
+| `WithEvent(string)` | `event: <v>` |
+| `WithEventID(string)` | `id: <v>` |
+| `WithRetryDuration(time.Duration)` | `retry: <ms>` |
+| `WithJSONOptions(...json.Options)` | forwards `encoding/json/v2`/`jsontext` encoder options to that event's marshal — generated only under `--output-jsonv2`, meaningful only on `marshalJSON`-wrapped senders |
+
+**Precedence (deliberate):** the template's chainable setters (`.Event`,
+`.ID`, `.Retry`) run first, call-site options after — so Go-side options
+override template defaults. The template states defaults; the method
+overrides per event when it knows better. The `execute` callback (non-SSE
+render control) takes no options variadic. Undefined-method synthesis
+includes the variadic: `send func(result any, opts ...SSEEventOption) error`.
+
+[reference_sse_send_options.txt](../../cmd/muxt/testdata/reference_sse_send_options.txt) · [reference_sse_options_override.txt](../../cmd/muxt/testdata/reference_sse_options_override.txt) · [reference_sse_options_mixed_signatures.txt](../../cmd/muxt/testdata/reference_sse_options_mixed_signatures.txt) · [reference_sse_options_type_flag.txt](../../cmd/muxt/testdata/reference_sse_options_type_flag.txt) · [reference_sse_marshal_json_options.txt](../../cmd/muxt/testdata/reference_sse_marshal_json_options.txt)
+
 Pair the wrapper with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
 
 ```gotmpl
