@@ -65,6 +65,7 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	SSETemplateDataType,
 	SSEEventOptionType,
+	HTMXTemplateDataType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
@@ -79,6 +80,9 @@ type RoutesFileConfiguration struct {
 	// encoding/json/v2. It requires a go 1.25+ module built with
 	// GOEXPERIMENT=jsonv2.
 	JSONV2 bool
+	// UseHTMX wraps every route's call in the htmx(...) framing; there is no
+	// per-route opt-out under the flag (omit it and wrap explicitly to mix).
+	UseHTMX bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
@@ -110,6 +114,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	config.PackageName = routesPkg.Name
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
 	config.SSEEventOptionType = cmp.Or(config.SSEEventOptionType, "SSEEventOption")
+	config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, "HTMXTemplateData")
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {

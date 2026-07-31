@@ -31,6 +31,16 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 			return result, err
 		}
 
+		if config.UseHTMX {
+			// --use-htmx wraps every route: unframed calls get the htmx
+			// framing; an explicitly written htmx(...) is never double-wrapped.
+			for i := range defs {
+				if defs[i].Framing == muxt.FramingNone {
+					defs[i].Framing = muxt.FramingHTMX
+				}
+			}
+		}
+
 		for _, d := range defs {
 			key := d.SourceFile()
 			result.byFile[key] = append(result.byFile[key], d)

@@ -1,0 +1,29 @@
+! muxt generate --use-receiver-type=Server
+stderr 'htmx'
+stderr 'exactly one method call'
+
+-- template.gohtml --
+{{- define "GET /two htmx(A(ctx), B(ctx))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) A(_ context.Context) string { return "a" }
+
+func (Server) B(_ context.Context) string { return "b" }

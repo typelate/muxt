@@ -34,9 +34,15 @@ func TestNormalizeCall(t *testing.T) {
 		{name: "sse with non-call arg is a user function call", expr: `sse(ctx)`, framing: FramingNone, representation: "", fun: "sse", argCount: 1},
 		{name: "sse with two args is a user function call", expr: `sse(A(ctx), B(ctx))`, framing: FramingNone, representation: "", fun: "sse", argCount: 2},
 		{name: "sse around selector-fun call is a user function call", expr: `sse(pkg.Fn(ctx))`, framing: FramingNone, representation: "", fun: "sse", argCount: 1},
+		{name: "htmx wraps a call", expr: `htmx(Save(ctx, form))`, framing: FramingHTMX, representation: "", fun: "Save", argCount: 2},
+		{name: "htmx wraps a representation", expr: `htmx(sse(Stream(ctx, send)))`, framing: FramingHTMX, representation: RepresentationSSE, fun: "Stream", argCount: 2},
+		{name: "htmx wraps marshalJSON", expr: `htmx(marshalJSON(Save(ctx)))`, framing: FramingHTMX, representation: RepresentationMarshalJSON, fun: "Save", argCount: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			n := normalizeCall(mustParseCall(t, tt.expr))
+			n, err := normalizeCall(mustParseCall(t, tt.expr))
+			if err != nil {
+				t.Fatalf("normalizeCall(%q) = %v", tt.expr, err)
+			}
 			if n.framing != tt.framing {
 				t.Errorf("normalizeCall(%q).framing = %q, want %q", tt.expr, n.framing, tt.framing)
 			}
@@ -48,6 +54,26 @@ func TestNormalizeCall(t *testing.T) {
 			}
 			if got := len(n.call.Args); got != tt.argCount {
 				t.Errorf("normalizeCall(%q) arg count = %d, want %d", tt.expr, got, tt.argCount)
+			}
+		})
+	}
+}
+
+func TestNormalizeCallFramingErrors(t *testing.T) {
+	for _, tt := range []struct {
+		name, expr, wantErr string
+	}{
+		{name: "htmx no args", expr: `htmx()`, wantErr: "the htmx framing wrapper takes exactly one method call argument, got 0 arguments"},
+		{name: "htmx two args", expr: `htmx(A(ctx), B(ctx))`, wantErr: "the htmx framing wrapper takes exactly one method call argument, got 2 arguments"},
+		{name: "htmx non-call arg", expr: `htmx(ctx)`, wantErr: "the htmx framing wrapper takes exactly one method call argument, got ctx"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := normalizeCall(mustParseCall(t, tt.expr))
+			if err == nil {
+				t.Fatalf("normalizeCall(%q) = nil error, want %q", tt.expr, tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Errorf("normalizeCall(%q) error = %q, want %q", tt.expr, err.Error(), tt.wantErr)
 			}
 		})
 	}

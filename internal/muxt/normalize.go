@@ -3,6 +3,8 @@ package muxt
 import (
 	"fmt"
 	"go/ast"
+
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 // Framing identifies the frontend wrapper at the outermost position of a
@@ -12,7 +14,13 @@ import (
 // of re-inspecting the AST.
 type Framing string
 
-const FramingNone Framing = ""
+const (
+	FramingNone Framing = ""
+
+	// FramingHTMX renders the route with the dedicated HTMX template data
+	// type carrying the HX* helpers.
+	FramingHTMX Framing = "htmx"
+)
 
 // normalizedCall is the explicit model a template-name call expression
 // reduces to before any validation or code generation.
@@ -91,21 +99,32 @@ func countBodyConsumers(call *ast.CallExpr) int {
 }
 
 // normalizeCall peels recognized wrapper pseudo-functions off call and
-// records them. A wrapper is only peeled when it has exactly one argument
-// and that argument is a call to a plain identifier; otherwise the name is
-// treated as an ordinary function call (a user function named "sse" keeps
-// working).
-func normalizeCall(call *ast.CallExpr) normalizedCall {
+// records them: frame( representation( Method(args…) ) ). A representation
+// wrapper is only peeled when it has exactly one argument and that argument
+// is a call to a plain identifier; otherwise the name is treated as an
+// ordinary function call (a user function named "sse" keeps working). A
+// framing wrapper is hard-reserved at the outermost position: wrong arity or
+// a non-call argument is an error rather than a fallback.
+func normalizeCall(call *ast.CallExpr) (normalizedCall, error) {
 	n := normalizedCall{
 		framing: FramingNone,
 		fun:     call.Fun.(*ast.Ident),
 		call:    call,
 	}
+	if n.fun.Name == string(FramingHTMX) {
+		inner, err := unwrapFramingCall(n.fun.Name, call)
+		if err != nil {
+			return n, err
+		}
+		n.framing = FramingHTMX
+		n.call = inner
+		n.fun = inner.Fun.(*ast.Ident)
+	}
 	for _, representation := range []Representation{RepresentationSSE, RepresentationMarshalJSON} {
-		if n.fun.Name != string(representation) || len(call.Args) != 1 {
+		if n.fun.Name != string(representation) || len(n.call.Args) != 1 {
 			continue
 		}
-		if inner, ok := call.Args[0].(*ast.CallExpr); ok {
+		if inner, ok := n.call.Args[0].(*ast.CallExpr); ok {
 			if innerFun, ok := inner.Fun.(*ast.Ident); ok {
 				n.representation = representation
 				n.call = inner
@@ -114,5 +133,21 @@ func normalizeCall(call *ast.CallExpr) normalizedCall {
 		}
 		break
 	}
-	return n
+	return n, nil
+}
+
+// unwrapFramingCall enforces the framing-wrapper contract: exactly one
+// argument, and it must be a call to a plain identifier.
+func unwrapFramingCall(name string, call *ast.CallExpr) (*ast.CallExpr, error) {
+	if len(call.Args) != 1 {
+		return nil, fmt.Errorf("the %s framing wrapper takes exactly one method call argument, got %d arguments", name, len(call.Args))
+	}
+	inner, ok := call.Args[0].(*ast.CallExpr)
+	if !ok {
+		return nil, fmt.Errorf("the %s framing wrapper takes exactly one method call argument, got %s", name, astgen.Format(call.Args[0]))
+	}
+	if _, ok := inner.Fun.(*ast.Ident); !ok {
+		return nil, fmt.Errorf("expected function identifier, got: %s", astgen.Format(inner.Fun))
+	}
+	return inner, nil
 }
