@@ -1,0 +1,91 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /save htmx(marshalJSON(Save(ctx, form)))" -}}
+{{- if .Err -}}<p>save failed: {{ .Err }}</p>{{- else -}}{{ .HXTrigger "saved" }}discarded{{- end -}}
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"html/template"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Saved struct {
+	Name string `json:"name"`
+}
+
+type Server struct{}
+
+// Save responds JSON but still steers the htmx client: the define body
+// executes against HTMXTemplateData, so the HX-Trigger header reaches the
+// JSON success response, and a method error falls back to the rendered HTML.
+func (Server) Save(_ context.Context, form url.Values) (Saved, error) {
+	name := form.Get("name")
+	if name == "" {
+		return Saved{}, errors.New("name is required")
+	}
+	return Saved{Name: name}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func post(t *testing.T, mux *http.ServeMux, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/save", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("JSON success carries the HX header", func(t *testing.T) {
+		rec := post(t, mux, "name=ada")
+		if got, want := rec.Header().Get("Content-Type"), "application/json"; got != want {
+			t.Errorf("Content-Type = %q, want %q", got, want)
+		}
+		if got, want := rec.Header().Get("HX-Trigger"), "saved"; got != want {
+			t.Errorf("HX-Trigger = %q, want %q", got, want)
+		}
+		if want := `{"name":"ada"}`; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("method error falls back to rendered HTML", func(t *testing.T) {
+		rec := post(t, mux, "")
+		if !strings.Contains(rec.Body.String(), "save failed: name is required") {
+			t.Errorf("body = %q, want the rendered error branch", rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("Content-Type = %q, want text/html for the fallback", ct)
+		}
+	})
+}

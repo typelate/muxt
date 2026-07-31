@@ -1,0 +1,58 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events htmx(sse(Stream(ctx, send)))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server streams to an htmx page via the SSE extension: the htmx framing
+// changes only the render type, so events keep the generic data:-line
+// framing over the shared transport.
+type Server struct{}
+
+func (Server) Stream(_ context.Context, send func(string) error) {
+	_ = send("tick")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+	if want := "data: tick\n\n"; !strings.Contains(rec.Body.String(), want) {
+		t.Errorf("body = %q, want the plain data line %q (no frontend-specific event framing)", rec.Body.String(), want)
+	}
+}
