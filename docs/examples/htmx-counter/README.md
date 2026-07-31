@@ -1,6 +1,6 @@
 # HTMX Helpers: Counter
 
-A counter you increment and decrement over HTMX. It demonstrates the `--output-htmx-helpers` flag, which generates HTMX header methods on `TemplateData` so you can set and read HTMX headers from inside a template.
+A counter you increment and decrement over HTMX. It demonstrates the `--use-htmx` flag, which wraps every route in the `htmx(...)` framing: templates render with `HTMXTemplateData`, which carries HTMX header methods for setting and reading HTMX headers from inside a template.
 
 ## Run it
 
@@ -16,10 +16,10 @@ Open [http://localhost:8000](http://localhost:8000). Set `PORT` to use a differe
 `main.go` carries the directive:
 
 ```go
-//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-htmx-helpers
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --use-htmx
 ```
 
-`--output-htmx-helpers` adds methods to the generated `TemplateData`: response-header setters (`HXLocation`, `HXPushURL`, `HXRedirect`, `HXReswap`, `HXRetarget`, `HXTrigger`, …) and request-header readers (`HXRequest`, `HXBoosted`, `HXTriggerElementID`, …). This example's `POST /count` template calls one:
+`--use-htmx` renders every route with the generated `HTMXTemplateData`, which carries response-header setters (`HXLocation`, `HXPushURL`, `HXRedirect`, `HXReswap`, `HXRetarget`, `HXTrigger`, …) and request-header readers (`HXRequest`, `HXBoosted`, `HXTriggerElementID`, …). This example's `POST /count` template calls one:
 
 ```gotmpl
 {{- if eq .HXTriggerElementID "decrement"}}

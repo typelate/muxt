@@ -14,7 +14,9 @@ Do not Generate HTMX Helper Methods on TemplateData; document (copyable) helper 
 
 ## Status
 
-Superseded. Muxt now generates HTMX helper methods, opt-in via the `--output-htmx-helpers` flag.
+Superseded. Muxt now generates HTMX helper methods on a dedicated `HTMXTemplateData` rendered by
+`htmx(...)`-framed routes, opt-in per route via the wrapper or globally via `--use-htmx`
+(`--output-htmx-helpers` is a deprecated alias).
 
 ## Consequences
 

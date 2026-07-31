@@ -233,6 +233,7 @@ names.
 {{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{end}}  <!-- JSON body binding -->
 {{define "POST /hooks Save(ctx, body)"}}{{end}}  <!-- Raw body stream -->
 {{define "GET /api/user marshalJSON(GetUser(ctx))"}}{{end}}  <!-- JSON response -->
+{{define "GET /admin htmx(Admin(ctx))"}}{{end}}  <!-- htmx framing: renders with HTMXTemplateData -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
@@ -242,6 +243,16 @@ names.
 Call arguments bind to method parameters by position. Argument names must be
 reserved identifiers or path parameter names (case-sensitive); the method's own
 parameter names don't need to match them.
+
+The outermost position may also carry a **framing wrapper**: `htmx(Method(...))`
+renders the route with `HTMXTemplateData`, which adds the HX* response-header
+setters and request-header readers to the base helper surface — the unframed
+`TemplateData` carries none of them, so calling one there fails `muxt check`.
+The wrapper takes exactly one method call and composes with the representation
+wrappers (`htmx(sse(...))`, `htmx(marshalJSON(...))`). `--use-htmx` wraps every
+route; when every route is framed the minimal `TemplateData` is not emitted.
+
+[reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) · [reference_htmx_auto_wrap.txt](../../cmd/muxt/testdata/reference_htmx_auto_wrap.txt) · [reference_htmx_sse.txt](../../cmd/muxt/testdata/reference_htmx_sse.txt) · [reference_htmx_marshal_json.txt](../../cmd/muxt/testdata/reference_htmx_marshal_json.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt)
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 
