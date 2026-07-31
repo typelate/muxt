@@ -127,6 +127,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			resultType:  arg.CallbackResultType(),
 			hasArg:      arg.CallbackHasArg(),
 			marshalJSON: arg.Type == muxt.ArgumentTypeSendJSON,
+			hasOptions:  arg.CallbackHasOptions(),
 		}
 		if !cc.marshalJSON {
 			cc.templateName = arg.Template().Name()
@@ -281,6 +282,10 @@ type sseClosureConfig struct {
 	hasArg       bool
 	withIterErr  bool
 	marshalJSON  bool
+	// hasOptions adds the trailing per-event options variadic; options apply
+	// after the template executes (render) or before marshaling (marshal), so
+	// call-site options override template setters.
+	hasOptions bool
 }
 
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, cc sseClosureConfig, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
@@ -311,6 +316,20 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	}
 	if withIterErr {
 		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(iterErrIdent)}, Type: ast.NewIdent("error")})
+	}
+	if cc.hasOptions {
+		params = append(params, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent("opts")},
+			Type:  &ast.Ellipsis{Elt: ast.NewIdent(config.SSEEventOptionType)},
+		})
+	}
+	// for _, opt := range opts { opt(&td) }
+	applyOptions := &ast.RangeStmt{
+		Key: ast.NewIdent("_"), Value: ast.NewIdent("opt"), Tok: token.DEFINE, X: ast.NewIdent("opts"),
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  ast.NewIdent("opt"),
+			Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(tdIdent)}},
+		}}}},
 	}
 
 	body := []ast.Stmt{
@@ -352,6 +371,11 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		})
 	}
 	if cc.marshalJSON {
+		if cc.hasOptions {
+			// Options apply before marshaling so option-carried settings can
+			// influence the event and (under jsonv2) the marshal call.
+			body = append(body, applyOptions)
+		}
 		// jsonBody, err := json.Marshal(result); on failure log and return;
 		// otherwise the marshaled bytes are the event's data payload.
 		const jsonBodyIdent = "jsonBody"
@@ -397,6 +421,11 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 				&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
 			}},
 		})
+		if cc.hasOptions {
+			// The template's chainable setters ran during ExecuteTemplate;
+			// applying options after means Go-side options win.
+			body = append(body, applyOptions)
+		}
 	}
 	body = append(body,
 		// td.data = buf

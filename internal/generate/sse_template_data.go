@@ -24,7 +24,7 @@ const (
 // the buffered template output as one or more `data:` lines.
 func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 	typeIdent := config.SSETemplateDataType
-	return []ast.Decl{
+	decls := []ast.Decl{
 		sseTemplateDataType(file, typeIdent),
 		sseTemplateDataStringMethod(typeIdent),
 		sseTemplateDataReceiverMethod(typeIdent),
@@ -37,6 +37,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataPathMethod(config),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
+	return append(decls, sseEventOptionDecls(file, config)...)
 }
 
 func sseTemplateDataTypeParams() *ast.FieldList {

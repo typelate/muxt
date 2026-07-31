@@ -393,7 +393,7 @@ func TestArgument(t *testing.T) {
 			}
 
 			for i := range defs {
-				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList, false)
+				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList, ResolveOptions{SSEEventOptionType: "SSEEventOption"})
 				if err != nil {
 					break
 				}

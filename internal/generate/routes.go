@@ -64,6 +64,7 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	SSETemplateDataType,
+	SSEEventOptionType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
@@ -87,6 +88,13 @@ type RoutesFileConfiguration struct {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
+func (config RoutesFileConfiguration) resolveOptions() muxt.ResolveOptions {
+	return muxt.ResolveOptions{
+		JSONV2:             config.JSONV2,
+		SSEEventOptionType: config.SSEEventOptionType,
+	}
+}
+
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
@@ -101,6 +109,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
+	config.SSEEventOptionType = cmp.Or(config.SSEEventOptionType, "SSEEventOption")
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {
@@ -190,7 +199,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, config.JSONV2); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, config.resolveOptions()); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -276,12 +285,12 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	return generatedFiles, nil
 }
 
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, jsonV2 bool) error {
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, resolveOpts muxt.ResolveOptions) error {
 	for i := range defs {
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
-		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages(), jsonV2); err != nil {
+		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages(), resolveOpts); err != nil {
 			return err
 		}
 		if err := accumulateReceiverMethods(defs[i].FunctionIdentifier().Name, defs[i].Signature(), defs[i].IsMethod(), defs[i].Arguments, file, receiverInterface); err != nil {
@@ -500,7 +509,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, config.JSONV2); err != nil {
+	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, config.resolveOptions()); err != nil {
 		return nil, err
 	}
 	for i := range defs {

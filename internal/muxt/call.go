@@ -35,6 +35,10 @@ type Argument struct {
 	callbackResult types.Type
 	callbackHasArg bool
 
+	// callbackHasOptions reports a send-family callback declaring the
+	// trailing options variadic (func(T, opts ...SSEEventOption) error).
+	callbackHasOptions bool
+
 	// formFields describes how each struct field of a form or multipart
 	// argument binds to the request (nil for the raw url.Values /
 	// *multipart.Form mode).
@@ -74,6 +78,10 @@ func (a Argument) CallbackResultType() types.Type { return a.callbackResult }
 // CallbackHasArg reports whether a validated render-callback argument's
 // callback takes the template data argument (func(T) error vs func() error).
 func (a Argument) CallbackHasArg() bool { return a.callbackHasArg }
+
+// CallbackHasOptions reports whether a send-family callback declares the
+// trailing per-event options variadic.
+func (a Argument) CallbackHasOptions() bool { return a.callbackHasOptions }
 
 // FormFields returns the field bindings of a form or multipart argument in
 // struct mode, or nil when the parameter receives the raw request value.
@@ -163,15 +171,25 @@ func StreamResultShape(tp types.Type) (ResultShape, types.Type, bool) {
 	return ResultShapeInvalid, nil, false
 }
 
-func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) error {
+// ResolveOptions carries the generation settings argument resolution and
+// synthesis depend on.
+type ResolveOptions struct {
+	// JSONV2 selects encoding/json/v2 for generated JSON code paths.
+	JSONV2 bool
+	// SSEEventOptionType is the (possibly flag-renamed) generated per-event
+	// option type send-family callbacks may declare a variadic of.
+	SSEEventOptionType string
+}
+
+func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, opts ResolveOptions) error {
 	if def.call == nil || def.fun == nil {
 		return nil
 	}
-	sig, isMethod, args, err := resolveCall(def, def.call, templatesPackage, receiver, pl, jsonV2)
+	sig, isMethod, args, err := resolveCall(def, def.call, templatesPackage, receiver, pl, opts)
 	if err != nil {
 		return err
 	}
-	def.sig = sig
+	def.sig = sanitizeOptionVariadics(sig, templatesPackage, opts.SSEEventOptionType)
 	def.isMethod = isMethod
 	def.Arguments = args
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
@@ -179,7 +197,7 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 		return err
 	}
 	def.resultShape = shape
-	return resolveCallbackShapes(def)
+	return resolveCallbackShapes(def, templatesPackage, opts)
 }
 
 // resolveCallbackShapes validates each render-callback argument against the
@@ -187,7 +205,7 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 // records T and whether the callback takes the data argument. On sse routes
 // every callback argument is checked; on html routes only the base execute
 // argument is (sse-prefixed callbacks are inert there).
-func resolveCallbackShapes(def *Definition) error {
+func resolveCallbackShapes(def *Definition, templatesPackage *types.Package, opts ResolveOptions) error {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	for i := range def.Arguments {
 		a := &def.Arguments[i]
@@ -204,12 +222,24 @@ func resolveCallbackShapes(def *Definition) error {
 			}
 			return fmt.Errorf("execute argument for %s must be a func(...) error", def.fun.Name)
 		}
-		switch callback.Params().Len() {
+		params, dataParams := callback.Params(), callback.Params().Len()
+		if callback.Variadic() {
+			if def.Representation != RepresentationSSE {
+				return fmt.Errorf("execute callback for %s takes no options; its shape is func(T) error or func() error", def.fun.Name)
+			}
+			elem := params.At(params.Len() - 1).Type().(*types.Slice).Elem()
+			if err := checkSendOptionType(elem, templatesPackage, opts.SSEEventOptionType, typeQualifier(templatesPackage)); err != nil {
+				return err
+			}
+			a.callbackHasOptions = true
+			dataParams--
+		}
+		switch dataParams {
 		case 0:
 			a.callbackResult = types.NewStruct(nil, nil)
 			a.callbackHasArg = false
 		case 1:
-			a.callbackResult = callback.Params().At(0).Type()
+			a.callbackResult = params.At(0).Type()
 			a.callbackHasArg = true
 		default:
 			if def.Representation == RepresentationSSE {
@@ -222,6 +252,24 @@ func resolveCallbackShapes(def *Definition) error {
 		}
 	}
 	return nil
+}
+
+// checkSendOptionType verifies a send callback's variadic element is the
+// generated per-event option type from the routes package.
+func checkSendOptionType(elem types.Type, templatesPackage *types.Package, optionTypeName string, qual types.Qualifier) error {
+	if basic, ok := elem.(*types.Basic); ok && basic.Kind() == types.Invalid {
+		// The referenced type does not resolve yet — the option type is about
+		// to be generated (first run). The Go build after generation enforces
+		// that the name matches.
+		return nil
+	}
+	if named, ok := elem.(*types.Named); ok {
+		obj := named.Obj()
+		if obj.Name() == optionTypeName && obj.Pkg() != nil && obj.Pkg().Path() == templatesPackage.Path() {
+			return nil
+		}
+	}
+	return fmt.Errorf("send callback options variadic must have element type %s, got %s", optionTypeName, types.TypeString(elem, qual))
 }
 
 // classifyResultShape validates def's method results against its contract:
@@ -334,7 +382,7 @@ func checkNestedCallResultShape(name string, sig *types.Signature) error {
 // When the call identifier is neither a receiver method nor a package-scope
 // function, its signature is synthesized from the call scope and attached to
 // the receiver so it appears in the generated RoutesReceiver interface.
-func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) (*types.Signature, bool, []Argument, error) {
+func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, opts ResolveOptions) (*types.Signature, bool, []Argument, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, false, nil, fmt.Errorf("expected call to be a function identifier")
@@ -346,7 +394,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			object = m
 			isMethod = false
 		} else {
-			ms, err := synthesizeCallSignature(def, call, templatesPackage, receiver, pl, jsonV2)
+			ms, err := synthesizeCallSignature(def, call, templatesPackage, receiver, pl, opts)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -426,7 +474,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				})
 				continue
 			}
-			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl, jsonV2)
+			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl, opts)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -450,7 +498,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 // defined on the receiver, inferring each parameter type from the argument
 // scope. Nested calls are resolved (so their own methods are synthesized too)
 // but do not contribute a parameter, mirroring the pre-hydration generator.
-func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, jsonV2 bool) (*types.Signature, error) {
+func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, opts ResolveOptions) (*types.Signature, error) {
 	var params []*types.Var
 	hasSSE := false
 	for _, a := range call.Args {
@@ -461,7 +509,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			if IsSendArgument(arg.Name) {
 				hasSSE = true
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature(templatesPackage, opts.SSEEventOptionType)))
 				continue
 			}
 			tp, ok := DefaultScopeType(pl, def, arg.Name)
@@ -473,7 +521,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			if fn, ok := arg.Fun.(*ast.Ident); ok && def.Representation == RepresentationSSE && fn.Name == string(RepresentationMarshalJSON) {
 				if inner, ok := singleSendArgument(arg); ok {
 					hasSSE = true
-					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, sseCallbackSignature()))
+					params = append(params, types.NewVar(0, receiver.Obj().Pkg(), inner.Name, sseCallbackSignature(templatesPackage, opts.SSEEventOptionType)))
 					continue
 				}
 			}
@@ -481,7 +529,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 				// Template-first iteration: without a defined method the decode
 				// target is unknown, so pass the raw payload through.
 				pkgPath, typeName, pointer := "encoding/json", "RawMessage", false
-				if jsonV2 {
+				if opts.JSONV2 {
 					pkgPath, typeName, pointer = "encoding/json/jsontext", "Decoder", true
 				}
 				tp, err := stdlibType(pl, pkgPath, typeName, pointer)
@@ -491,7 +539,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
 				continue
 			}
-			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl, jsonV2); err != nil {
+			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl, opts); err != nil {
 				return nil, err
 			}
 		}
@@ -566,15 +614,73 @@ func searchImports(pt *types.Package, pkgPath string) (*types.Package, bool) {
 	return nil, false
 }
 
-// sseCallbackSignature is the func(any) error type synthesized for an sse
-// argument when the receiver method is not already defined.
-func sseCallbackSignature() *types.Signature {
+// sseCallbackSignature is the func(any, opts ...SSEEventOption) error type
+// synthesized for a send callback when the receiver method is not already
+// defined, exposing the full per-event options surface for template-first
+// iteration.
+func sseCallbackSignature(templatesPackage *types.Package, optionTypeName string) *types.Signature {
 	anyType := types.Universe.Lookup("any").Type()
 	errType := types.Universe.Lookup("error").Type()
+	// Both parameters are named: mixing named and unnamed parameters would
+	// print an invalid Go func type into the receiver interface.
 	return types.NewSignatureType(nil, nil, nil,
-		types.NewTuple(types.NewVar(0, nil, "", anyType)),
+		types.NewTuple(
+			types.NewVar(0, nil, "result", anyType),
+			types.NewVar(0, nil, "opts", types.NewSlice(sseEventOptionType(templatesPackage, optionTypeName))),
+		),
 		types.NewTuple(types.NewVar(0, nil, "", errType)),
-		false)
+		true)
+}
+
+// sseEventOptionType resolves the generated per-event option type in the
+// routes package, or synthesizes a placeholder named type when generation has
+// not produced it yet (first run) so synthesized signatures print its name.
+func sseEventOptionType(templatesPackage *types.Package, optionTypeName string) types.Type {
+	if obj := templatesPackage.Scope().Lookup(optionTypeName); obj != nil {
+		if tn, ok := obj.(*types.TypeName); ok {
+			return tn.Type()
+		}
+	}
+	tn := types.NewTypeName(0, templatesPackage, optionTypeName, nil)
+	return types.NewNamed(tn, types.NewSignatureType(nil, nil, nil, nil, nil, false), nil)
+}
+
+// sanitizeOptionVariadics rewrites callback parameters whose options-variadic
+// element failed to resolve — the option type is about to be generated on the
+// first run — so the printed receiver interface names the generated type
+// instead of an invalid type.
+func sanitizeOptionVariadics(sig *types.Signature, templatesPackage *types.Package, optionTypeName string) *types.Signature {
+	params := sig.Params()
+	vars := make([]*types.Var, params.Len())
+	changed := false
+	for i := range params.Len() {
+		p := params.At(i)
+		vars[i] = p
+		cb, ok := p.Type().Underlying().(*types.Signature)
+		if !ok || !cb.Variadic() || cb.Params().Len() == 0 {
+			continue
+		}
+		last := cb.Params().At(cb.Params().Len() - 1)
+		slice, ok := last.Type().(*types.Slice)
+		if !ok {
+			continue
+		}
+		basic, ok := slice.Elem().(*types.Basic)
+		if !ok || basic.Kind() != types.Invalid {
+			continue
+		}
+		cbParams := make([]*types.Var, cb.Params().Len())
+		for j := range cb.Params().Len() {
+			cbParams[j] = cb.Params().At(j)
+		}
+		cbParams[len(cbParams)-1] = types.NewVar(0, last.Pkg(), last.Name(), types.NewSlice(sseEventOptionType(templatesPackage, optionTypeName)))
+		vars[i] = types.NewVar(0, p.Pkg(), p.Name(), types.NewSignatureType(nil, nil, nil, types.NewTuple(cbParams...), cb.Results(), true))
+		changed = true
+	}
+	if !changed {
+		return sig
+	}
+	return types.NewSignatureType(sig.Recv(), nil, nil, types.NewTuple(vars...), sig.Results(), sig.Variadic())
 }
 
 // singleSendArgument returns the send-callback identifier when call has

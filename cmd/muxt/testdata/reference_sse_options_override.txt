@@ -1,0 +1,60 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Feed(ctx, send))" -}}{{- with .Event "update" -}}{{- end -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Feed relies on the template's default event name for most events and
+// overrides it for one record: template setters apply first, call-site
+// options after, so the Go-side option wins.
+func (Server) Feed(_ context.Context, send func(msg string, opts ...SSEEventOption) error) {
+	_ = send("a")
+	_ = send("b", WithEvent("delete"))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "event: update\ndata: a\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the template default %q", body, want)
+	}
+	if want := "event: delete\ndata: b\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the overridden event %q", body, want)
+	}
+}

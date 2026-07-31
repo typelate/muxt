@@ -218,6 +218,9 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.SSETemplateDataType != "" && !token.IsIdentifier(config.SSETemplateDataType) {
 				return fmt.Errorf(outputSSETemplateDataType + errIdentSuffix)
 			}
+			if config.SSEEventOptionType != "" && !token.IsIdentifier(config.SSEEventOptionType) {
+				return fmt.Errorf(outputSSEEventOptionType + errIdentSuffix)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -348,6 +351,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.SSETemplateDataType != defaultSSETemplateDataTypeName {
 		args = append(args, "--"+outputSSETemplateDataType+"="+config.SSETemplateDataType)
+	}
+	if config.SSEEventOptionType != defaultSSEEventOptionTypeName {
+		args = append(args, "--"+outputSSEEventOptionType+"="+config.SSEEventOptionType)
 	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
@@ -554,6 +560,7 @@ const (
 	outputRoutesFunc                    = "output-routes-func"
 	outputTemplateDataType              = "output-template-data-type"
 	outputSSETemplateDataType           = "output-sse-template-data-type"
+	outputSSEEventOptionType            = "output-sse-event-option-type"
 	outputTemplateRoutePathsType        = "output-template-route-paths-type"
 	outputRoutesFuncWithLoggerParam     = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix      = "output-routes-func-with-path-prefix-param"
@@ -591,6 +598,7 @@ const (
 This function also receives an argument with a type matching the name given by output-receiver-interface.`
 	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
+	outputSSEEventOptionTypeHelp     = `The type name for the generated per-event option type accepted by SSE send callbacks (WithEvent, WithEventID, WithRetryDuration).`
 	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
 
 	outputRoutesFuncWithLoggerParamHelp     = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
@@ -613,6 +621,7 @@ const (
 	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
+	defaultSSEEventOptionTypeName     = "SSEEventOption"
 	defaultPackageName                = "main"
 )
 
@@ -637,6 +646,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputSSETemplateDataType) {
 			config.SSETemplateDataType = strcase.ToGoCamel(defaultSSETemplateDataTypeName)
 		}
+		if !flagSet.Changed(outputSSEEventOptionType) {
+			config.SSEEventOptionType = strcase.ToGoCamel(defaultSSEEventOptionTypeName)
+		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
@@ -646,6 +658,7 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
+		config.SSEEventOptionType = cmp.Or(config.SSEEventOptionType, defaultSSEEventOptionTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -672,6 +685,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, defaultRoutesFunctionName, outputRoutesFuncHelp)
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSETemplateDataType, outputSSETemplateDataType, defaultSSETemplateDataTypeName, outputSSETemplateDataTypeHelp)
+	flagSet.StringVar(&g.SSEEventOptionType, outputSSEEventOptionType, defaultSSEEventOptionTypeName, outputSSEEventOptionTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)

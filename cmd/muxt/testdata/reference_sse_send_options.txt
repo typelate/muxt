@@ -1,0 +1,65 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events sse(Feed(ctx, send))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"time"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Feed multiplexes named events in one stream: the first event carries all
+// three option-set wire lines so listeners can select on event name and
+// resume from the id; the second carries none, proving options are per-event.
+func (Server) Feed(_ context.Context, send func(msg string, opts ...SSEEventOption) error) {
+	_ = send("first", WithEvent("news"), WithEventID("42"), WithRetryDuration(3*time.Second))
+	_ = send("second")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for _, want := range []string{"event: news\n", "id: 42\n", "retry: 3000\n", "data: first\n\n", "data: second\n\n"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the wire line %q", body, want)
+		}
+	}
+	for _, line := range []string{"event:", "id:", "retry:"} {
+		if got := strings.Count(body, line); got != 1 {
+			t.Errorf("body = %q has %d %q lines, want 1 (options are per-event)", body, got, line)
+		}
+	}
+}

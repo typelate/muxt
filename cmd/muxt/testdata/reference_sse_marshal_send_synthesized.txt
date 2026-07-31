@@ -37,10 +37,11 @@ import (
 )
 
 // impl implements the generated receiver interface by hand; compiling this
-// method against TemplateRoutes proves both synthesized callback types.
+// method against TemplateRoutes proves both synthesized callback types
+// include the per-event options variadic.
 type impl struct{}
 
-func (impl) Mixed(_ context.Context, send func(any) error, sendStatus func(any) error) {
+func (impl) Mixed(_ context.Context, send func(result any, opts ...SSEEventOption) error, sendStatus func(result any, opts ...SSEEventOption) error) {
 	_ = send("frag")
 	_ = sendStatus(map[string]bool{"ok": true})
 }
