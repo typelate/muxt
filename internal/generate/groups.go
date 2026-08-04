@@ -31,12 +31,18 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 			return result, err
 		}
 
-		if config.UseHTMX {
-			// --use-htmx wraps every route: unframed calls get the htmx
-			// framing; an explicitly written htmx(...) is never double-wrapped.
+		if autoFraming := muxt.FramingNone; config.UseHTMX || config.UseDatastar {
+			// --use-htmx / --use-datastar wrap every route: unframed calls get
+			// the framing; an explicitly written wrapper is never
+			// double-wrapped.
+			if config.UseHTMX {
+				autoFraming = muxt.FramingHTMX
+			} else {
+				autoFraming = muxt.FramingDatastar
+			}
 			for i := range defs {
 				if defs[i].Framing == muxt.FramingNone {
-					defs[i].Framing = muxt.FramingHTMX
+					defs[i].Framing = autoFraming
 				}
 			}
 		}

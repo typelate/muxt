@@ -1,0 +1,56 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /d/{datastar} Get(ctx, datastar)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /s/{signals} Show(ctx, signals)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server has parameters named datastar and signals outside the reserved
+// wrapper/argument positions; on unframed routes they stay ordinary path
+// values.
+type Server struct{}
+
+func (Server) Get(_ context.Context, datastar string) (string, error) { return datastar, nil }
+
+func (Server) Show(_ context.Context, signals string) (string, error) { return signals, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for path, want := range map[string]string{"/d/x": "<p>x</p>", "/s/y": "<p>y</p>"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Body.String() != want {
+			t.Errorf("GET %s body = %q, want %q", path, rec.Body.String(), want)
+		}
+	}
+}

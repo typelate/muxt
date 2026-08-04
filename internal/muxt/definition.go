@@ -437,6 +437,12 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 			// routes.
 			sseScoped := sse && IsSendArgument(exp.Name)
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
+				switch exp.Name {
+				case "elements", "signal", "script":
+					// Reserved-argument spellings from earlier Datastar
+					// pre-releases; the wrapper grammar replaced them.
+					return fmt.Errorf("the reserved %s argument was removed; stream events with the wrapper form instead, for example: datastar(sse(%s(ctx, send)))", exp.Name, astgen.Format(call.Fun))
+				}
 				if isLegacySSECallbackName(exp.Name) {
 					if exp.Name == string(RepresentationSSE) {
 						return fmt.Errorf("the reserved sse argument was removed; wrap the call and use the send callback instead, for example: sse(%s(ctx, send))", astgen.Format(call.Fun))

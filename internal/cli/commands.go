@@ -224,6 +224,18 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.HTMXTemplateDataType != "" && !token.IsIdentifier(config.HTMXTemplateDataType) {
 				return fmt.Errorf(outputHTMXTemplateDataType + errIdentSuffix)
 			}
+			if config.DatastarTemplateDataType != "" && !token.IsIdentifier(config.DatastarTemplateDataType) {
+				return fmt.Errorf(outputDatastarTemplateDataType + errIdentSuffix)
+			}
+			if config.DatastarEventTemplateDataType != "" && !token.IsIdentifier(config.DatastarEventTemplateDataType) {
+				return fmt.Errorf(outputDatastarEventTDType + errIdentSuffix)
+			}
+			if config.DatastarSignalsTemplateDataType != "" && !token.IsIdentifier(config.DatastarSignalsTemplateDataType) {
+				return fmt.Errorf(outputDatastarSignalsTDType + errIdentSuffix)
+			}
+			if config.UseHTMX && config.UseDatastar {
+				return fmt.Errorf("--%s and --%s are mutually exclusive; a project selects one frontend framing flag (mix per route by omitting both and writing the wrappers explicitly)", useHTMX, useDatastar)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -361,6 +373,15 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.HTMXTemplateDataType != defaultHTMXTemplateDataTypeName {
 		args = append(args, "--"+outputHTMXTemplateDataType+"="+config.HTMXTemplateDataType)
 	}
+	if config.DatastarTemplateDataType != defaultDatastarTDTypeName {
+		args = append(args, "--"+outputDatastarTemplateDataType+"="+config.DatastarTemplateDataType)
+	}
+	if config.DatastarEventTemplateDataType != defaultDatastarEventTDTypeName {
+		args = append(args, "--"+outputDatastarEventTDType+"="+config.DatastarEventTemplateDataType)
+	}
+	if config.DatastarSignalsTemplateDataType != defaultDatastarSignalsTDTypeName {
+		args = append(args, "--"+outputDatastarSignalsTDType+"="+config.DatastarSignalsTemplateDataType)
+	}
 	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
 	}
@@ -383,6 +404,9 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	}
 	if config.UseHTMX {
 		args = append(args, "--"+useHTMX)
+	}
+	if config.UseDatastar {
+		args = append(args, "--"+useDatastar)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -576,6 +600,10 @@ const (
 	outputJSONV2                        = "output-jsonv2"
 	useHTMX                             = "use-htmx"
 	outputHTMXTemplateDataType          = "output-htmx-template-data-type"
+	useDatastar                         = "use-datastar"
+	outputDatastarTemplateDataType      = "output-datastar-template-data-type"
+	outputDatastarEventTDType           = "output-datastar-event-template-data-type"
+	outputDatastarSignalsTDType         = "output-datastar-signals-template-data-type"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 
@@ -617,6 +645,10 @@ This function also receives an argument with a type matching the name given by o
 	outputJSONV2Help                        = `Generates JSON encoding and decoding with encoding/json/v2 instead of encoding/json. Requires a go 1.25+ module built with GOEXPERIMENT=jsonv2.`
 	useHTMXHelp                             = `Wraps every route's call in the htmx(...) framing so all templates render with the HTMX template data type (HX-Redirect, HX-Trigger, HX-Request, etc.). To mix framed and unframed routes, omit the flag and write htmx(...) explicitly.`
 	outputHTMXTemplateDataTypeHelp          = `The type name for the template data passed to htmx-framed route templates.`
+	useDatastarHelp                         = `Wraps every route's call in the datastar(...) framing so templates render with the Datastar template data types and streams use the Datastar patch protocol. Mutually exclusive with --use-htmx.`
+	outputDatastarTemplateDataTypeHelp      = `The type name for the template data passed to non-streaming datastar-framed route templates.`
+	outputDatastarEventTDTypeHelp           = `The type name for the template data passed to datastar-framed stream event templates.`
+	outputDatastarSignalsTDTypeHelp         = `The type name for the template data passed to datastar-framed standalone signals response templates.`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 
@@ -633,6 +665,9 @@ const (
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
 	defaultSSEEventOptionTypeName     = "SSEEventOption"
 	defaultHTMXTemplateDataTypeName   = "HTMXTemplateData"
+	defaultDatastarTDTypeName         = "DatastarTemplateData"
+	defaultDatastarEventTDTypeName    = "DatastarEventTemplateData"
+	defaultDatastarSignalsTDTypeName  = "DatastarSignalsTemplateData"
 	defaultPackageName                = "main"
 )
 
@@ -663,6 +698,15 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputHTMXTemplateDataType) {
 			config.HTMXTemplateDataType = strcase.ToGoCamel(defaultHTMXTemplateDataTypeName)
 		}
+		if !flagSet.Changed(outputDatastarTemplateDataType) {
+			config.DatastarTemplateDataType = strcase.ToGoCamel(defaultDatastarTDTypeName)
+		}
+		if !flagSet.Changed(outputDatastarEventTDType) {
+			config.DatastarEventTemplateDataType = strcase.ToGoCamel(defaultDatastarEventTDTypeName)
+		}
+		if !flagSet.Changed(outputDatastarSignalsTDType) {
+			config.DatastarSignalsTemplateDataType = strcase.ToGoCamel(defaultDatastarSignalsTDTypeName)
+		}
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
@@ -674,6 +718,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 		config.SSEEventOptionType = cmp.Or(config.SSEEventOptionType, defaultSSEEventOptionTypeName)
 		config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, defaultHTMXTemplateDataTypeName)
+		config.DatastarTemplateDataType = cmp.Or(config.DatastarTemplateDataType, defaultDatastarTDTypeName)
+		config.DatastarEventTemplateDataType = cmp.Or(config.DatastarEventTemplateDataType, defaultDatastarEventTDTypeName)
+		config.DatastarSignalsTemplateDataType = cmp.Or(config.DatastarSignalsTemplateDataType, defaultDatastarSignalsTDTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	}
 }
@@ -703,6 +750,10 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.StringVar(&g.SSEEventOptionType, outputSSEEventOptionType, defaultSSEEventOptionTypeName, outputSSEEventOptionTypeHelp)
 	flagSet.StringVar(&g.HTMXTemplateDataType, outputHTMXTemplateDataType, defaultHTMXTemplateDataTypeName, outputHTMXTemplateDataTypeHelp)
 	flagSet.BoolVar(&g.UseHTMX, useHTMX, false, useHTMXHelp)
+	flagSet.StringVar(&g.DatastarTemplateDataType, outputDatastarTemplateDataType, defaultDatastarTDTypeName, outputDatastarTemplateDataTypeHelp)
+	flagSet.StringVar(&g.DatastarEventTemplateDataType, outputDatastarEventTDType, defaultDatastarEventTDTypeName, outputDatastarEventTDTypeHelp)
+	flagSet.StringVar(&g.DatastarSignalsTemplateDataType, outputDatastarSignalsTDType, defaultDatastarSignalsTDTypeName, outputDatastarSignalsTDTypeHelp)
+	flagSet.BoolVar(&g.UseDatastar, useDatastar, false, useDatastarHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, outputTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)

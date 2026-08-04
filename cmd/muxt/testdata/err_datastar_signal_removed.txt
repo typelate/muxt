@@ -1,0 +1,30 @@
+! muxt generate --use-datastar --use-receiver-type=Server
+stderr 'signal'
+stderr 'sse\('
+stderr 'send'
+
+-- template.gohtml --
+{{- define "GET /events datastar(Stream(ctx, signal))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Stream(_ context.Context, send func(string) error) {
+	_ = send("hi")
+}

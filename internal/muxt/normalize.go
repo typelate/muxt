@@ -20,6 +20,10 @@ const (
 	// FramingHTMX renders the route with the dedicated HTMX template data
 	// type carrying the HX* helpers.
 	FramingHTMX Framing = "htmx"
+
+	// FramingDatastar renders the route with the Datastar template data
+	// types and frames streamed events with the Datastar patch protocol.
+	FramingDatastar Framing = "datastar"
 )
 
 // normalizedCall is the explicit model a template-name call expression
@@ -111,14 +115,18 @@ func normalizeCall(call *ast.CallExpr) (normalizedCall, error) {
 		fun:     call.Fun.(*ast.Ident),
 		call:    call,
 	}
-	if n.fun.Name == string(FramingHTMX) {
+	for _, framing := range []Framing{FramingHTMX, FramingDatastar} {
+		if n.fun.Name != string(framing) {
+			continue
+		}
 		inner, err := unwrapFramingCall(n.fun.Name, call)
 		if err != nil {
 			return n, err
 		}
-		n.framing = FramingHTMX
+		n.framing = framing
 		n.call = inner
 		n.fun = inner.Fun.(*ast.Ident)
+		break
 	}
 	for _, representation := range []Representation{RepresentationSSE, RepresentationMarshalJSON} {
 		if n.fun.Name != string(representation) || len(n.call.Args) != 1 {
