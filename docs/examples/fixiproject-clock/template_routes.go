@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type RoutesReceiver interface {
@@ -318,6 +319,43 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 		bytesWritten += n
 	}
 	return int64(bytesWritten), nil
+}
+
+type SSEEventOption func(sseEventConfigurer)
+type sseEventConfigurer interface {
+	setEvent(string)
+	setEventID(string)
+	setRetry(int)
+}
+
+func WithEvent(event string) SSEEventOption {
+	return func(c sseEventConfigurer) {
+		c.setEvent(event)
+	}
+}
+
+func WithEventID(id string) SSEEventOption {
+	return func(c sseEventConfigurer) {
+		c.setEventID(id)
+	}
+}
+
+func WithRetryDuration(retryDuration time.Duration) SSEEventOption {
+	return func(c sseEventConfigurer) {
+		c.setRetry(int(retryDuration.Milliseconds()))
+	}
+}
+
+func (m *SSETemplateData[R, T]) setEvent(event string) {
+	m.event = &event
+}
+
+func (m *SSETemplateData[R, T]) setEventID(id string) {
+	m.id = &id
+}
+
+func (m *SSETemplateData[R, T]) setRetry(retry int) {
+	m.retryMilliseconds = &retry
 }
 
 type TemplateRoutePaths struct {
