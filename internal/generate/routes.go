@@ -300,9 +300,14 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		decls = append(decls, framingFor(muxt.FramingHTMX).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
-		return definition.Framing == muxt.FramingDatastar
+		return definition.Framing == muxt.FramingDatastar && definition.Representation != muxt.RepresentationMarshalJSON
 	}) {
 		decls = append(decls, framingFor(muxt.FramingDatastar).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	}
+	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Framing == muxt.FramingDatastar && definition.Representation == muxt.RepresentationMarshalJSON
+	}) {
+		decls = append(decls, datastarSignalsTemplateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
 	// Stream-event template-data types and their methods are only needed when
 	// a route streams events, so emit them conditionally to avoid unused
@@ -928,6 +933,15 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				// The render callback (execute, or send/send-prefixed on sse
 				// routes) is validated and wired into the call in
 				// methodHandlerFunc. It is not parsed from the request.
+				continue
+			}
+			if i < len(args) && args[i].Type == muxt.ArgumentTypeSignals {
+				signalsStmts, err := signalsBindingStatements(file, def, config, args[i].ParamType, parseErrBlock)
+				if err != nil {
+					return nil, err
+				}
+				statements = append(statements, signalsStmts...)
+				call.Args[i] = ast.NewIdent(signalsValueIdent)
 				continue
 			}
 			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, arg.Name)

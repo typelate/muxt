@@ -1,0 +1,119 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /filter datastar(Filter(ctx, signals))" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "POST /filter datastar(Update(ctx, signals))" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "DELETE /filter datastar(Clear(ctx, signals))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"fmt"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Filter struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+// Server binds a filter form to Datastar signals: GET and DELETE carry the
+// signals JSON in the datastar query parameter, POST carries a JSON body,
+// and absent signals leave the parameter zero-valued.
+type Server struct{}
+
+func format(f Filter) string { return fmt.Sprintf("%s:%d", f.Query, f.Limit) }
+
+func (Server) Filter(_ context.Context, f Filter) (string, error) { return "get " + format(f), nil }
+
+func (Server) Update(_ context.Context, f Filter) (string, error) { return "post " + format(f), nil }
+
+func (Server) Clear(_ context.Context, f Filter) (string, error) { return "delete " + format(f), nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("GET reads the datastar query parameter", func(t *testing.T) {
+		target := "/filter?datastar=" + url.QueryEscape(`{"query":"go","limit":3}`)
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>get go:3</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("DELETE reads the datastar query parameter", func(t *testing.T) {
+		target := "/filter?datastar=" + url.QueryEscape(`{"query":"x","limit":1}`)
+		req := httptest.NewRequest(http.MethodDelete, target, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>delete x:1</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("POST reads the JSON body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/filter", strings.NewReader(`{"query":"rust","limit":9}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>post rust:9</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("absent signals leave the parameter zero-valued", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/filter", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if want := "<p>get :0</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("malformed JSON is 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/filter", strings.NewReader(`{"query":`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("duplicate keys take the last value under encoding/json v1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/filter", strings.NewReader(`{"query":"a","query":"b"}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>post b:0</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}

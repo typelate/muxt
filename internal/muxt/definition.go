@@ -346,6 +346,9 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 
 	scope := append(patternScope(), pathParameterNames...)
+	if def.Framing == FramingDatastar {
+		scope = append(scope, TemplateNameScopeIdentifierSignals)
+	}
 	slices.Sort(scope)
 	if err := checkArguments(scope, call, def.Representation == RepresentationSSE); err != nil {
 		return err

@@ -70,6 +70,11 @@ func configForFraming(config RoutesFileConfiguration, def muxt.Definition) Route
 		config.TemplateDataType = config.HTMXTemplateDataType
 	case muxt.FramingDatastar:
 		config.TemplateDataType = config.DatastarTemplateDataType
+		if def.Representation == muxt.RepresentationMarshalJSON {
+			// A standalone signals response executes the define body against
+			// the signals template data.
+			config.TemplateDataType = config.DatastarSignalsTemplateDataType
+		}
 		config.SSETemplateDataType = config.DatastarEventTemplateDataType
 	}
 	return config

@@ -105,6 +105,9 @@ const (
 	ArgumentTypeLastEventID
 	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
+	// ArgumentTypeSignals binds Datastar client-sent signals to the method
+	// parameter's type on datastar-framed routes.
+	ArgumentTypeSignals
 	ArgumentTypeCall
 )
 
@@ -784,6 +787,12 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 			return a, fmt.Errorf("%s parameter must have type io.Reader, got %s", arg.Name, types.TypeString(param, qual))
 		}
 	default:
+		if def.Framing == FramingDatastar && arg.Name == TemplateNameScopeIdentifierSignals {
+			// The decode target is the method parameter's type; absence of
+			// signals leaves it zero-valued, so no shape constraint applies.
+			a.Type = ArgumentTypeSignals
+			return a, nil
+		}
 		if slices.Contains(def.pathValueNames, arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
 			if err := checkParsedArgument(pl, param, qual); err != nil {
@@ -857,6 +866,11 @@ const (
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 	TemplateNameScopeIdentifierRequestBody  = "body"
 	TemplateNameScopeIdentifierSend         = "send"
+	// TemplateNameScopeIdentifierSignals binds Datastar's client-sent signals
+	// (the datastar query parameter on GET and DELETE, the JSON body
+	// otherwise) to the method parameter's type; recognized only on
+	// datastar-framed routes.
+	TemplateNameScopeIdentifierSignals = "signals"
 )
 
 func patternScope() []string {

@@ -3,8 +3,10 @@ package generate
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 const (
@@ -26,6 +28,39 @@ func datastarTemplateDataDecls(file *File, config RoutesFileConfiguration, recei
 	dsConfig := config
 	dsConfig.TemplateDataType = config.DatastarTemplateDataType
 	return defaultTemplateDataDecls(file, dsConfig, receiverInterface)
+}
+
+// datastarSignalsTemplateDataDecls emits the template data for standalone
+// signals responses (datastar(marshalJSON(...)) on a non-streaming route):
+// the base helper surface plus a chainable OnlyIfMissing setter. A plain JSON
+// body cannot carry onlyIfMissing, so the setter is a documented no-op on
+// standalone responses; on streams the send option carries it.
+func datastarSignalsTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
+	dsConfig := config
+	dsConfig.TemplateDataType = config.DatastarSignalsTemplateDataType
+	decls := defaultTemplateDataDecls(file, dsConfig, receiverInterface)
+	return append(decls, datastarSignalsOnlyIfMissingMethod(dsConfig.TemplateDataType))
+}
+
+// datastarSignalsOnlyIfMissingMethod builds the chainable no-op:
+//
+//	func (data *DatastarSignalsTemplateData[R, T]) OnlyIfMissing(bool) *DatastarSignalsTemplateData[R, T] {
+//		return data
+//	}
+func datastarSignalsOnlyIfMissingMethod(typeIdent string) *ast.FuncDecl {
+	selfType := &ast.StarExpr{X: &ast.IndexListExpr{
+		X:       ast.NewIdent(typeIdent),
+		Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
+	}}
+	return &ast.FuncDecl{
+		Recv: templateDataMethodReceiver(typeIdent),
+		Name: ast.NewIdent("OnlyIfMissing"),
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: selfType}}},
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(templateDataReceiverName)}}}},
+	}
 }
 
 // datastarEventTemplateDataDecls emits the stream-event template data for
@@ -99,6 +134,101 @@ func datastarEventBoolSetterMethod(typeIdent, methodName, field string) *ast.Fun
 			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(sseTemplateDataReceiverName)}},
 		}},
 	}
+}
+
+const signalsValueIdent = "signalsValue"
+
+// signalsBindingStatements emits the statements decoding Datastar's
+// client-sent signals into the method parameter's type. Following Datastar's
+// convention, GET and DELETE requests carry the signals JSON in the datastar
+// query parameter and other methods carry a JSON body; the branch is decided
+// statically from the route's method. Absent signals are not an error — the
+// value stays zero — while malformed JSON runs the caller's 400 block.
+func signalsBindingStatements(file *File, def muxt.Definition, config RoutesFileConfiguration, paramType types.Type, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+	const rawIdent = "signalsRaw"
+	typeExpr, err := file.TypeASTExpression(paramType)
+	if err != nil {
+		return nil, err
+	}
+	stmts := []ast.Stmt{&ast.DeclStmt{Decl: &ast.GenDecl{
+		Tok:   token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(signalsValueIdent)}, Type: typeExpr}},
+	}}}
+	jsonPkgPath := "encoding/json"
+	if config.JSONV2 {
+		jsonPkgPath = "encoding/json/v2"
+	}
+	switch def.HTTPMethod() {
+	case "GET", "DELETE":
+		// if signalsRaw := request.URL.Query().Get("datastar"); signalsRaw != "" {
+		//     if err := json.Unmarshal([]byte(signalsRaw), &signalsValue); err != nil { <400>; return }
+		// }
+		unmarshal := &ast.CallExpr{
+			Fun: astgen.ExportedIdentifier(file, "json", jsonPkgPath, "Unmarshal"),
+			Args: []ast.Expr{
+				&ast.CallExpr{Fun: &ast.ArrayType{Elt: ast.NewIdent("byte")}, Args: []ast.Expr{ast.NewIdent(rawIdent)}},
+				&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(signalsValueIdent)},
+			},
+		}
+		stmts = append(stmts, &ast.IfStmt{
+			Init: &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(rawIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X: &ast.CallExpr{Fun: &ast.SelectorExpr{
+							X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("URL")},
+							Sel: ast.NewIdent("Query"),
+						}},
+						Sel: ast.NewIdent("Get"),
+					},
+					Args: []ast.Expr{astgen.String("datastar")},
+				}},
+			},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(rawIdent), Op: token.NEQ, Y: astgen.String("")},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.IfStmt{
+				Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{unmarshal}},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: parseErrBlock(),
+			}}},
+		})
+	default:
+		// if err := json.NewDecoder(request.Body).Decode(&signalsValue); err != nil && !errors.Is(err, io.EOF) { <400>; return }
+		// An empty body is absent signals, not malformed JSON.
+		requestBody := &ast.SelectorExpr{
+			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+			Sel: ast.NewIdent("Body"),
+		}
+		var decode ast.Expr
+		if config.JSONV2 {
+			decode = &ast.CallExpr{
+				Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json/v2", "UnmarshalRead"),
+				Args: []ast.Expr{requestBody, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(signalsValueIdent)}},
+			}
+		} else {
+			decode = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X: &ast.CallExpr{
+						Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
+						Args: []ast.Expr{requestBody},
+					},
+					Sel: ast.NewIdent("Decode"),
+				},
+				Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(signalsValueIdent)}},
+			}
+		}
+		stmts = append(stmts, &ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{decode}},
+			Cond: &ast.BinaryExpr{
+				X:  &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Op: token.LAND,
+				Y: &ast.UnaryExpr{Op: token.NOT, X: astgen.Call(file, "", "errors", "Is",
+					ast.NewIdent(errIdent), astgen.ExportedIdentifier(file, "", "io", "EOF"))},
+			},
+			Body: parseErrBlock(),
+		})
+	}
+	return stmts, nil
 }
 
 // datastarEventWriteToMethod builds the Datastar patch-protocol event

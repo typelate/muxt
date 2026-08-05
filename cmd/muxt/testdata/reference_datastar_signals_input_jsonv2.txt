@@ -1,0 +1,69 @@
+env GOEXPERIMENT=jsonv2
+
+muxt generate --output-jsonv2 --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /filter datastar(Update(ctx, signals))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Filter struct {
+	Query string `json:"query"`
+}
+
+type Server struct{}
+
+func (Server) Update(_ context.Context, f Filter) (string, error) { return f.Query, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("valid signals decode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/filter", strings.NewReader(`{"query":"go"}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>go</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	// encoding/json/v2 rejects duplicate member names where v1 takes the
+	// last value; the wire-visible difference proves which library decoded
+	// the signals (the v1 archive pins the acceptance).
+	t.Run("duplicate keys are rejected under jsonv2", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/filter", strings.NewReader(`{"query":"a","query":"b"}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+}

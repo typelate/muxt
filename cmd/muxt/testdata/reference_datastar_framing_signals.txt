@@ -1,0 +1,71 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /signals datastar(marshalJSON(Signals(ctx)))" -}}
+{{- with .Header "X-Side" "effect" -}}{{- end -}}
+rendered-output-to-discard
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	Count int `json:"count"`
+}
+
+// Signals is a non-streaming action that only updates client signals: the
+// route responds application/json with the marshaled result as the Datastar
+// signals body, and the define body executes for its side effects only.
+type Server struct{}
+
+func (Server) Signals(_ context.Context) (Sig, error) {
+	return Sig{Count: 7}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodPost, "/signals", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Header().Get("Content-Type"), "application/json"; got != want {
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+	if got, want := rec.Header().Get("X-Side"), "effect"; got != want {
+		t.Errorf("X-Side = %q, want %q (define body must execute for side effects)", got, want)
+	}
+	if want := `{"count":7}`; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+	if strings.Contains(rec.Body.String(), "rendered-output-to-discard") {
+		t.Errorf("body = %q; rendered output must be discarded on success", rec.Body.String())
+	}
+}
