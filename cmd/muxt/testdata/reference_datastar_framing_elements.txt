@@ -1,0 +1,74 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /stream datastar(sse(Stream(ctx, send)))" -}}
+{{- with .Selector "#list" -}}{{- end -}}
+{{- with .Mode "append" -}}{{- end -}}
+<li>{{ .Result }}</li>
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server appends rows to a live list: each rendered event becomes a
+// datastar-patch-elements frame whose selector and mode come from the
+// template's chainable setters.
+type Server struct{}
+
+func (Server) Stream(_ context.Context, send func(string) error) {
+	_ = send("one")
+	_ = send("two")
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
+	}
+	body := rec.Body.String()
+	if got := strings.Count(body, "event: datastar-patch-elements\n"); got != 2 {
+		t.Errorf("body = %q has %d datastar-patch-elements events, want 2", body, got)
+	}
+	for _, want := range []string{
+		"data: selector #list\n",
+		"data: mode append\n",
+		"data: elements <li>one</li>\n",
+		"data: elements <li>two</li>\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the wire line %q", body, want)
+		}
+	}
+}

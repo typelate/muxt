@@ -286,13 +286,24 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}) {
 		decls = append(decls, framingFor(muxt.FramingHTMX).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
-	// The SSE event template-data type and its methods are only needed when a
-	// route streams events, so emit them conditionally to avoid unused
-	// imports. The event framing is shared across the current framings.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
-		return definition.Representation == muxt.RepresentationSSE
+		return definition.Framing == muxt.FramingDatastar
+	}) {
+		decls = append(decls, framingFor(muxt.FramingDatastar).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	}
+	// Stream-event template-data types and their methods are only needed when
+	// a route streams events, so emit them conditionally to avoid unused
+	// imports. The htmx framing shares the generic event type; the datastar
+	// framing supplies its own patch-protocol marshaler.
+	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Representation == muxt.RepresentationSSE && definition.Framing != muxt.FramingDatastar
 	}) {
 		decls = append(decls, framingFor(muxt.FramingNone).sseEventDecls(file, config)...)
+	}
+	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Representation == muxt.RepresentationSSE && definition.Framing == muxt.FramingDatastar
+	}) {
+		decls = append(decls, framingFor(muxt.FramingDatastar).sseEventDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{

@@ -22,9 +22,19 @@ func framingFor(f muxt.Framing) framingSpec {
 	switch f {
 	case muxt.FramingHTMX:
 		return htmxFraming
+	case muxt.FramingDatastar:
+		return datastarFraming
 	default:
 		return defaultFraming
 	}
+}
+
+// datastarFraming renders routes with the Datastar template-data types and
+// swaps the stream event marshaler for the Datastar patch protocol; the SSE
+// transport itself stays shared.
+var datastarFraming = framingSpec{
+	templateDataDecls: datastarTemplateDataDecls,
+	sseEventDecls:     datastarEventTemplateDataDecls,
 }
 
 var defaultFraming = framingSpec{
@@ -50,12 +60,17 @@ func htmxTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverI
 	return decls
 }
 
-// configForFraming returns config with the render template-data type swapped
-// for the definition's framing, so handler assembly and template execution
-// reference the framing's type without any assembler changes.
+// configForFraming returns config with the render and stream-event
+// template-data types swapped for the definition's framing, so handler
+// assembly and template execution reference the framing's types without any
+// assembler changes.
 func configForFraming(config RoutesFileConfiguration, def muxt.Definition) RoutesFileConfiguration {
-	if def.Framing == muxt.FramingHTMX {
+	switch def.Framing {
+	case muxt.FramingHTMX:
 		config.TemplateDataType = config.HTMXTemplateDataType
+	case muxt.FramingDatastar:
+		config.TemplateDataType = config.DatastarTemplateDataType
+		config.SSETemplateDataType = config.DatastarEventTemplateDataType
 	}
 	return config
 }
