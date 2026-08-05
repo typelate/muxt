@@ -1,0 +1,90 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /users Page(ctx)" -}}
+<div data-init="{{ .Actions.Refresh | .JS }}"></div>
+<button data-on:click="{{ .Actions.CreateUser | .JS }}">create</button>
+<button data-on:click="{{ .Actions.UpdateUser 42 | .JS }}">save</button>
+<button data-on:click="{{ .Actions.ReplaceUser 42 | .JS }}">replace</button>
+<button data-on:click="{{ .Actions.DeleteUser 42 | .JS }}">delete</button>
+{{- end -}}
+{{- define "GET /refresh Refresh(ctx)" -}}ok{{- end -}}
+{{- define "POST /users CreateUser(ctx)" -}}ok{{- end -}}
+{{- define "PATCH /users/{id} UpdateUser(ctx, id)" -}}ok{{- end -}}
+{{- define "PUT /users/{id} ReplaceUser(ctx, id)" -}}ok{{- end -}}
+{{- define "DELETE /users/{id} DeleteUser(ctx, id)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server wires a page's buttons to its own routes: each action renders a
+// verb-correct Datastar backend-action expression from what muxt knows
+// statically, so markup cannot drift from the route table.
+type Server struct{}
+
+func (Server) Page(_ context.Context) (string, error) { return "", nil }
+
+func (Server) Refresh(_ context.Context) (string, error) { return "", nil }
+
+func (Server) CreateUser(_ context.Context) (string, error) { return "", nil }
+
+func (Server) UpdateUser(_ context.Context, id int) (string, error) { return "", nil }
+
+func (Server) ReplaceUser(_ context.Context, id int) (string, error) { return "", nil }
+
+func (Server) DeleteUser(_ context.Context, id int) (string, error) { return "", nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/users", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	// The expression is unquoted (template.JS — a plain string would render
+	// JSON-quoted and Datastar would not execute it) and the apostrophes
+	// carry standard HTML attribute escaping, which the browser decodes
+	// before Datastar reads the attribute; verb inferred per route.
+	for _, want := range []string{
+		`data-init="@get(&#39;/refresh&#39;)"`,
+		`data-on:click="@post(&#39;/users&#39;)"`,
+		`data-on:click="@patch(&#39;/users/42&#39;)"`,
+		`data-on:click="@put(&#39;/users/42&#39;)"`,
+		`data-on:click="@delete(&#39;/users/42&#39;)"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want it to contain %q", body, want)
+		}
+	}
+	if strings.Contains(body, `"&#34;@`) || strings.Contains(body, `="\"@`) {
+		t.Errorf("body = %q; the action must not render as a quoted JS string literal", body)
+	}
+}

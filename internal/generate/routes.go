@@ -299,14 +299,16 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}) {
 		decls = append(decls, framingFor(muxt.FramingHTMX).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
-	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+	hasDatastarRender := slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
 		return definition.Framing == muxt.FramingDatastar && definition.Representation != muxt.RepresentationMarshalJSON
-	}) {
+	})
+	hasDatastarSignals := slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Framing == muxt.FramingDatastar && definition.Representation == muxt.RepresentationMarshalJSON
+	})
+	if hasDatastarRender {
 		decls = append(decls, framingFor(muxt.FramingDatastar).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
-	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
-		return definition.Framing == muxt.FramingDatastar && definition.Representation == muxt.RepresentationMarshalJSON
-	}) {
+	if hasDatastarSignals {
 		decls = append(decls, datastarSignalsTemplateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	}
 	// Stream-event template-data types and their methods are only needed when
@@ -329,6 +331,25 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 	if optionConfig.genericEventTD || optionConfig.datastarEventTD {
 		decls = append(decls, sseEventOptionDecls(file, config, optionConfig)...)
+	}
+	// The .Actions() surface exists in datastar mode: one URL-building method
+	// per route (any representation) plus the accessor and .JS render helper
+	// on each emitted datastar template-data type.
+	if hasDatastarRender || hasDatastarSignals || optionConfig.datastarEventTD {
+		actionDecls, err := datastarActionsDecls(file, config, groups.all)
+		if err != nil {
+			return nil, err
+		}
+		decls = append(decls, actionDecls...)
+		if hasDatastarRender {
+			decls = append(decls, datastarActionAccessorDecls(file, config.DatastarTemplateDataType, false)...)
+		}
+		if hasDatastarSignals {
+			decls = append(decls, datastarActionAccessorDecls(file, config.DatastarSignalsTemplateDataType, false)...)
+		}
+		if optionConfig.datastarEventTD {
+			decls = append(decls, datastarActionAccessorDecls(file, config.DatastarEventTemplateDataType, true)...)
+		}
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{
