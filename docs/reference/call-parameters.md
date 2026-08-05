@@ -357,6 +357,43 @@ GET and DELETE read the `datastar` query parameter, other methods read the
 JSON body. Absent signals leave the parameter zero-valued; malformed JSON
 responds 400. Elsewhere `signals` remains an ordinary identifier.
 
+**Backend actions: `.Actions()`.** The datastar template-data types carry an
+`.Actions()` accessor — a parallel to `.Path()` — with one method per route
+(any representation), taking the route's typed path parameters and returning
+an action that renders a Datastar backend-action expression with the verb
+inferred from the route (`GET`→`@get`, `POST`→`@post`, …):
+
+```gotmpl
+<button data-on:click="{{ .Actions.UpdateUser .ID | .JS }}">save</button>
+<div data-init="{{ .Actions.Refresh | .JS }}"></div>
+<a data-on:click="{{ (.Actions.UpdateUser .ID).OpenWhenHidden true | .JS }}">defer</a>
+```
+
+`.JS` renders the action as `template.JS` — required because Datastar's
+colon-form event attributes (`data-on:click`) put the value in a JavaScript
+context where a plain string would render as a quoted literal Datastar cannot
+execute. The value is **safe by construction**: the builder percent-encodes
+each interpolated path segment (`url.PathEscape` — a value like `a/b?c=d`
+stays one segment and round-trips through `request.PathValue`) and JS-string
+escapes the whole URL and every string option value at render time. Inputs
+are taken raw — do not pre-escape — and no method accepts raw JS.
+
+Options are fluent copy-on-write setters (each returns a modified copy, so a
+base action can be reused): `.ContentType`, `.OpenWhenHidden`, `.Selector`,
+`.Retry`, `.RequestCancellation`, `.RetryInterval`, `.RetryScaler`,
+`.RetryMaxWait`, `.RetryMaxCount`, rendering as the Datastar options object
+(`@patch('/users/42', {openWhenHidden: true})`).
+
+The safe path never traps you: an action is a JS *expression* that composes
+with author-written JS (`data-on:click="$saving = true; {{ .Actions.Save .ID | .JS }}"`);
+query strings are out of the builder's vocabulary — interpolate `.URL` (the
+encoded path) or a `.Path` helper inside a hand-written expression, where
+`html/template`'s own JS-string escaping protects the interpolation; and a
+fully manual `@post('/literal')` remains ordinary template text under normal
+contextual autoescaping.
+
+[reference_datastar_actions.txt](../../cmd/muxt/testdata/reference_datastar_actions.txt) · [reference_datastar_actions_options.txt](../../cmd/muxt/testdata/reference_datastar_actions_options.txt) · [reference_datastar_actions_injection.txt](../../cmd/muxt/testdata/reference_datastar_actions_injection.txt) · [reference_datastar_actions_roundtrip.txt](../../cmd/muxt/testdata/reference_datastar_actions_roundtrip.txt) · [reference_datastar_actions_text_marshaler.txt](../../cmd/muxt/testdata/reference_datastar_actions_text_marshaler.txt) · [reference_datastar_actions_compose.txt](../../cmd/muxt/testdata/reference_datastar_actions_compose.txt)
+
 **Flags.** `--use-datastar` wraps every route (mutually exclusive with
 `--use-htmx`); `--output-datastar-template-data-type`,
 `--output-datastar-event-template-data-type`, and
