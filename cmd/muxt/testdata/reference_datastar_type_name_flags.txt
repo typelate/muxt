@@ -1,0 +1,86 @@
+muxt generate --use-receiver-type=Server --output-datastar-template-data-type=PageData --output-datastar-event-template-data-type=EventData --output-datastar-signals-template-data-type=SignalsData
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /page datastar(Page(ctx))" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "GET /stream datastar(sse(Stream(ctx, send)))" -}}<li>{{- .Result -}}</li>{{- end -}}
+{{- define "POST /signals datastar(marshalJSON(Signals(ctx)))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	OK bool `json:"ok"`
+}
+
+type Server struct{}
+
+func (Server) Page(_ context.Context) (string, error) { return "page", nil }
+
+func (Server) Stream(_ context.Context, send func(string) error) { _ = send("row") }
+
+func (Server) Signals(_ context.Context) (Sig, error) { return Sig{OK: true}, nil }
+
+// The build only passes if generation produced all three renamed types.
+var (
+	_ = PageData[RoutesReceiver, string]{}
+	_ = EventData[RoutesReceiver, string]{}
+	_ = SignalsData[RoutesReceiver, Sig]{}
+)
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("render route", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/page", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>page</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("stream route", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "event: datastar-patch-elements\ndata: elements <li>row</li>\n"; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("signals route", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/signals", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := `{"ok":true}`; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}

@@ -1,0 +1,80 @@
+# Staying honest against the ecosystem: this archive's test module (and only
+# this one) requires datastar-go, the wire-conformance reference. The Go test
+# emits the same element and signal events through the generated handler and
+# through datastar.NewSSE and compares the two bodies byte for byte.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go mod tidy
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /stream datastar(sse(Mixed(ctx, send, marshalJSON(sendSignals))))" -}}
+{{- with .Selector "#list" -}}{{- end -}}
+{{- with .Mode "append" -}}{{- end -}}
+<li>{{ .Result }}</li>
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+
+require github.com/starfederation/datastar-go v1.2.2
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	Count int `json:"count"`
+}
+
+type Server struct{}
+
+func (Server) Mixed(_ context.Context, send func(string) error, sendSignals func(Sig) error) {
+	_ = send("one")
+	_ = sendSignals(Sig{Count: 1})
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/starfederation/datastar-go/datastar"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	sdkRec := httptest.NewRecorder()
+	sdkReq := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	sse := datastar.NewSSE(sdkRec, sdkReq)
+	if err := sse.PatchElements("<li>one</li>", datastar.WithSelector("#list"), datastar.WithModeAppend()); err != nil {
+		t.Fatal(err)
+	}
+	if err := sse.MarshalAndPatchSignals(Sig{Count: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := rec.Body.String(), sdkRec.Body.String(); got != want {
+		t.Errorf("generated handler body and datastar-go body differ\ngenerated: %q\nsdk:       %q", got, want)
+	}
+}

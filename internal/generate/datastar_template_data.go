@@ -402,7 +402,12 @@ func datastarEventWriteToMethod(file *File, typeIdent string) *ast.FuncDecl {
 				writeAndCount(wWrite(newline())),
 			}},
 		},
-		writeAndCount(wWrite(newline())),
+		// datastar-go terminates each event with two trailing newlines; match
+		// it so conformance holds byte for byte.
+		writeAndCount(wWrite(byteSlice(
+			&ast.BasicLit{Kind: token.CHAR, Value: `'\n'`},
+			&ast.BasicLit{Kind: token.CHAR, Value: `'\n'`},
+		))),
 		&ast.ReturnStmt{Results: []ast.Expr{
 			&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{ast.NewIdent(countIdent)}},
 			astgen.Nil(),
