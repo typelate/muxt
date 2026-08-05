@@ -19,9 +19,18 @@ import (
 )
 
 func Definitions(ts *template.Template, templatesVariable string) ([]Definition, error) {
+	return DefinitionsWithDefaultFraming(ts, templatesVariable, FramingNone)
+}
+
+// DefinitionsWithDefaultFraming parses route definitions applying
+// defaultFraming to every call without an explicit framing wrapper — the
+// --use-htmx / --use-datastar auto-wrap. The default must apply during
+// parsing (not after) because framing-scoped argument names like signals are
+// validated as the call is parsed.
+func DefinitionsWithDefaultFraming(ts *template.Template, templatesVariable string, defaultFraming Framing) ([]Definition, error) {
 	var defs []Definition
 	for _, t := range ts.Templates() {
-		mt, err, ok := newDefinition(t)
+		mt, err, ok := newDefinition(t, defaultFraming)
 		if !ok {
 			continue
 		}
@@ -181,13 +190,14 @@ func (def Definition) Call() string {
 	return def.fun.Name
 }
 
-func newDefinition(t *template.Template) (Definition, error, bool) {
+func newDefinition(t *template.Template, defaultFraming Framing) (Definition, error, bool) {
 	in := t.Name()
 	if !templateNameMux.MatchString(in) {
 		return Definition{}, nil, false
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
 	def := Definition{
+		Framing:           defaultFraming,
 		name:              in,
 		method:            matches[templateNameMux.SubexpIndex("METHOD")],
 		host:              matches[templateNameMux.SubexpIndex("HOST")],
@@ -337,7 +347,11 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if err != nil {
 		return err
 	}
-	def.Framing = normalized.framing
+	// An explicit framing wrapper wins; otherwise the pre-set default framing
+	// (--use-htmx / --use-datastar auto-wrap) stands.
+	if normalized.framing != FramingNone {
+		def.Framing = normalized.framing
+	}
 	def.Representation = normalized.representation
 	call = normalized.call
 	fun = normalized.fun

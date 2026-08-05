@@ -1,0 +1,71 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}<button data-on:click="{{ .Actions.Update | .JS }}">go</button>{{- end -}}
+{{- define "POST /update Update(ctx, signals)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	Name string `json:"name"`
+}
+
+// Server relies on --use-datastar auto-wrap: plain (unwrapped) template
+// names must accept datastar-scoped arguments like signals and render with
+// the datastar template data (regression: the default framing must apply
+// during parsing, before argument validation).
+type Server struct{}
+
+func (Server) Page(_ context.Context) (string, error) { return "", nil }
+
+func (Server) Update(_ context.Context, s Sig) (string, error) { return s.Name, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("signals bind on an auto-wrapped route", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(`{"name":"ada"}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "<p>ada</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("actions render on an auto-wrapped route", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/page", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := `data-on:click="@post(&#39;/update&#39;)"`; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}

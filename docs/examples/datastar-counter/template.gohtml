@@ -1,0 +1,29 @@
+{{define "GET / Home(ctx)"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Datastar Example</title>
+	<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0/bundles/datastar.js"
+	        integrity="sha384-LGcfj7EQR2KZk4GdiKJsUD4nFWrKrLCk/gZXLnPBBf2p/QmoaYYFuyitCwDqhgW1"
+	        crossorigin="anonymous"></script>
+</head>
+<body>
+	<h1>Datastar Counter</h1>
+	{{template "Count" .}}
+	<button id="increment" data-on:click="{{ .Actions.Increment | .JS }}">Increment</button>
+
+	<h1>Greeter</h1>
+	<input id="name" data-bind:name placeholder="Your name">
+	<button id="greet" data-on:click="{{ .Actions.Greet | .JS }}">Greet</button>
+	<p id="greeting">…</p>
+</body>
+</html>
+{{end}}
+
+{{define "Count"}}<output id="count">{{ .Result }}</output>{{end}}
+
+{{define "Greeting"}}<p id="greeting">Hello, {{ .Result }}!</p>{{end}}
+
+{{define "POST /increment sse(Increment(ctx, sendCount))"}}{{end}}
+
+{{define "POST /greet sse(Greet(ctx, signals, sendGreeting))"}}{{end}}

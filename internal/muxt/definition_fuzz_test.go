@@ -34,7 +34,7 @@ func FuzzNewDefinition(f *testing.F) {
 		if err != nil {
 			t.Skip()
 		}
-		def, err, matched := newDefinition(tmpl)
+		def, err, matched := newDefinition(tmpl, FramingNone)
 		if !matched {
 			return
 		}

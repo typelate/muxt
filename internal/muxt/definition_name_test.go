@@ -88,7 +88,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Out, func(t *testing.T) {
-			pat, err, match := newDefinition(template.Must(template.New(tt.In).Parse(``)))
+			pat, err, match := newDefinition(template.Must(template.New(tt.In).Parse(``)), FramingNone)
 			require.True(t, match)
 			require.NoError(t, err)
 			require.Equal(t, tt.Out, pat.generateEndpointPatternIdentifier(nil))

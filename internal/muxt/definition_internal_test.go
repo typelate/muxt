@@ -106,7 +106,7 @@ func stringList[T fmt.Stringer](in []T) []string {
 func mustNewTemplateName(in ...string) []Definition {
 	var result []Definition
 	for _, n := range in {
-		p, err, _ := newDefinition(template.New(n))
+		p, err, _ := newDefinition(template.New(n), FramingNone)
 		if err != nil {
 			panic(err)
 		}
@@ -634,7 +634,7 @@ func TestNewTemplateName(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			def, err, match := newDefinition(template.Must(template.New("definition_internal_test.gohtml").Parse(fmt.Sprintf("{{define %q}}{{end}}", tt.In))).Lookup(tt.In))
+			def, err, match := newDefinition(template.Must(template.New("definition_internal_test.gohtml").Parse(fmt.Sprintf("{{define %q}}{{end}}", tt.In))).Lookup(tt.In), FramingNone)
 			require.Equal(t, tt.ExpMatch, match)
 			if tt.Error != nil {
 				tt.Error(t, err)

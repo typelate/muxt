@@ -328,19 +328,19 @@ type sseEventConfigurer interface {
 	setRetry(int)
 }
 
-func WithEvent(event string) SSEEventOption {
+func WithEvent(event string) func(sseEventConfigurer) {
 	return func(c sseEventConfigurer) {
 		c.setEvent(event)
 	}
 }
 
-func WithEventID(id string) SSEEventOption {
+func WithEventID(id string) func(sseEventConfigurer) {
 	return func(c sseEventConfigurer) {
 		c.setEventID(id)
 	}
 }
 
-func WithRetryDuration(retryDuration time.Duration) SSEEventOption {
+func WithRetryDuration(retryDuration time.Duration) func(sseEventConfigurer) {
 	return func(c sseEventConfigurer) {
 		c.setRetry(int(retryDuration.Milliseconds()))
 	}
