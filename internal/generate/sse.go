@@ -124,10 +124,19 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		// existence are validated by muxt.ResolveCall, which records T and
 		// whether the callback takes the data argument.
 		cc := sseClosureConfig{
-			resultType:  arg.CallbackResultType(),
-			hasArg:      arg.CallbackHasArg(),
-			marshalJSON: arg.Type == muxt.ArgumentTypeSendJSON,
-			hasOptions:  arg.CallbackHasOptions(),
+			resultType:      arg.CallbackResultType(),
+			hasArg:          arg.CallbackHasArg(),
+			marshalJSON:     arg.Type == muxt.ArgumentTypeSendJSON,
+			hasOptions:      arg.CallbackHasOptions(),
+			optionTypeIdent: config.SSEEventOptionType,
+		}
+		if def.Framing == muxt.FramingDatastar {
+			cc.signalsEvent = cc.marshalJSON
+			if cc.marshalJSON {
+				cc.optionTypeIdent = config.DatastarPatchSignalsOptionType()
+			} else {
+				cc.optionTypeIdent = config.DatastarPatchElementOptionType()
+			}
 		}
 		if !cc.marshalJSON {
 			cc.templateName = arg.Template().Name()
@@ -284,8 +293,13 @@ type sseClosureConfig struct {
 	marshalJSON  bool
 	// hasOptions adds the trailing per-event options variadic; options apply
 	// after the template executes (render) or before marshaling (marshal), so
-	// call-site options override template setters.
-	hasOptions bool
+	// call-site options override template setters. optionTypeIdent names the
+	// variadic's element type (per framing and callback kind).
+	hasOptions      bool
+	optionTypeIdent string
+	// signalsEvent marks a datastar marshaled sender: the composite sets
+	// isSignals so WriteTo frames the event as datastar-patch-signals.
+	signalsEvent bool
 }
 
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, cc sseClosureConfig, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
@@ -317,10 +331,13 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	if withIterErr {
 		params = append(params, &ast.Field{Names: []*ast.Ident{ast.NewIdent(iterErrIdent)}, Type: ast.NewIdent("error")})
 	}
+	if cc.signalsEvent {
+		tdElts = append(tdElts, &ast.KeyValueExpr{Key: ast.NewIdent(datastarEventFieldIsSignals), Value: astgen.Bool(true)})
+	}
 	if cc.hasOptions {
 		params = append(params, &ast.Field{
 			Names: []*ast.Ident{ast.NewIdent("opts")},
-			Type:  &ast.Ellipsis{Elt: ast.NewIdent(config.SSEEventOptionType)},
+			Type:  &ast.Ellipsis{Elt: ast.NewIdent(cc.optionTypeIdent)},
 		})
 	}
 	// for _, opt := range opts { opt(&td) }

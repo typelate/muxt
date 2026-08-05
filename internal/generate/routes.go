@@ -97,10 +97,23 @@ type RoutesFileConfiguration struct {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
+// The Datastar per-event option type names are fixed: unlike the template
+// data types they never appear in receiver method signatures muxt did not
+// synthesize, so no rename flag exists for them.
+func (config RoutesFileConfiguration) DatastarPatchElementOptionType() string {
+	return "DatastarPatchElementOption"
+}
+
+func (config RoutesFileConfiguration) DatastarPatchSignalsOptionType() string {
+	return "DatastarPatchSignalsOption"
+}
+
 func (config RoutesFileConfiguration) resolveOptions() muxt.ResolveOptions {
 	return muxt.ResolveOptions{
-		JSONV2:             config.JSONV2,
-		SSEEventOptionType: config.SSEEventOptionType,
+		JSONV2:                         config.JSONV2,
+		SSEEventOptionType:             config.SSEEventOptionType,
+		DatastarPatchElementOptionType: config.DatastarPatchElementOptionType(),
+		DatastarPatchSignalsOptionType: config.DatastarPatchSignalsOptionType(),
 	}
 }
 
@@ -295,15 +308,22 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	// a route streams events, so emit them conditionally to avoid unused
 	// imports. The htmx framing shares the generic event type; the datastar
 	// framing supplies its own patch-protocol marshaler.
-	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
-		return definition.Representation == muxt.RepresentationSSE && definition.Framing != muxt.FramingDatastar
-	}) {
+	optionConfig := sseEventOptionConfig{
+		genericEventTD: slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+			return definition.Representation == muxt.RepresentationSSE && definition.Framing != muxt.FramingDatastar
+		}),
+		datastarEventTD: slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+			return definition.Representation == muxt.RepresentationSSE && definition.Framing == muxt.FramingDatastar
+		}),
+	}
+	if optionConfig.genericEventTD {
 		decls = append(decls, framingFor(muxt.FramingNone).sseEventDecls(file, config)...)
 	}
-	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
-		return definition.Representation == muxt.RepresentationSSE && definition.Framing == muxt.FramingDatastar
-	}) {
+	if optionConfig.datastarEventTD {
 		decls = append(decls, framingFor(muxt.FramingDatastar).sseEventDecls(file, config)...)
+	}
+	if optionConfig.genericEventTD || optionConfig.datastarEventTD {
+		decls = append(decls, sseEventOptionDecls(file, config, optionConfig)...)
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{

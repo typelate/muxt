@@ -1,0 +1,66 @@
+env GOEXPERIMENT=jsonv2
+
+muxt generate --output-jsonv2 --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /signals datastar(sse(Feed(ctx, marshalJSON(sendSignals))))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.25
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"encoding/json/jsontext"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	OK bool `json:"ok"`
+}
+
+// Feed sends one compact and one indented signals event: WithJSONOptions
+// forwards jsontext encoder options to that event's marshal only.
+type Server struct{}
+
+func (Server) Feed(_ context.Context, sendSignals func(s Sig, opts ...DatastarPatchSignalsOption) error) {
+	_ = sendSignals(Sig{OK: true})
+	_ = sendSignals(Sig{OK: true}, WithJSONOptions(jsontext.WithIndent("  ")))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/signals", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "data: signals {\"ok\":true}\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the compact signals event %q", body, want)
+	}
+	if want := "data: signals {\ndata: signals   \"ok\": true\ndata: signals }\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the indented signals event %q", body, want)
+	}
+}

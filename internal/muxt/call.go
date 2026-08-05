@@ -179,6 +179,23 @@ type ResolveOptions struct {
 	// SSEEventOptionType is the (possibly flag-renamed) generated per-event
 	// option type send-family callbacks may declare a variadic of.
 	SSEEventOptionType string
+	// DatastarPatchElementOptionType and DatastarPatchSignalsOptionType are
+	// the per-event option types for datastar-framed render and marshaled
+	// senders respectively.
+	DatastarPatchElementOptionType string
+	DatastarPatchSignalsOptionType string
+}
+
+// sendOptionTypeName returns the option type a send callback's variadic must
+// use for the definition's framing and the callback's kind.
+func (opts ResolveOptions) sendOptionTypeName(def *Definition, a *Argument) string {
+	if def.Framing == FramingDatastar {
+		if a.Type == ArgumentTypeSendJSON {
+			return opts.DatastarPatchSignalsOptionType
+		}
+		return opts.DatastarPatchElementOptionType
+	}
+	return opts.SSEEventOptionType
 }
 
 func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package, opts ResolveOptions) error {
@@ -189,7 +206,7 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 	if err != nil {
 		return err
 	}
-	def.sig = sanitizeOptionVariadics(sig, templatesPackage, opts.SSEEventOptionType)
+	def.sig = sanitizeOptionVariadics(def, sig, args, templatesPackage, opts)
 	def.isMethod = isMethod
 	def.Arguments = args
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
@@ -228,7 +245,7 @@ func resolveCallbackShapes(def *Definition, templatesPackage *types.Package, opt
 				return fmt.Errorf("execute callback for %s takes no options; its shape is func(T) error or func() error", def.fun.Name)
 			}
 			elem := params.At(params.Len() - 1).Type().(*types.Slice).Elem()
-			if err := checkSendOptionType(elem, templatesPackage, opts.SSEEventOptionType, typeQualifier(templatesPackage)); err != nil {
+			if err := checkSendOptionType(elem, templatesPackage, opts.sendOptionTypeName(def, a), typeQualifier(templatesPackage)); err != nil {
 				return err
 			}
 			a.callbackHasOptions = true
@@ -648,8 +665,8 @@ func sseEventOptionType(templatesPackage *types.Package, optionTypeName string) 
 // sanitizeOptionVariadics rewrites callback parameters whose options-variadic
 // element failed to resolve — the option type is about to be generated on the
 // first run — so the printed receiver interface names the generated type
-// instead of an invalid type.
-func sanitizeOptionVariadics(sig *types.Signature, templatesPackage *types.Package, optionTypeName string) *types.Signature {
+// (per framing and callback kind) instead of an invalid type.
+func sanitizeOptionVariadics(def *Definition, sig *types.Signature, args []Argument, templatesPackage *types.Package, opts ResolveOptions) *types.Signature {
 	params := sig.Params()
 	vars := make([]*types.Var, params.Len())
 	changed := false
@@ -668,6 +685,10 @@ func sanitizeOptionVariadics(sig *types.Signature, templatesPackage *types.Packa
 		basic, ok := slice.Elem().(*types.Basic)
 		if !ok || basic.Kind() != types.Invalid {
 			continue
+		}
+		optionTypeName := opts.SSEEventOptionType
+		if i < len(args) {
+			optionTypeName = opts.sendOptionTypeName(def, &args[i])
 		}
 		cbParams := make([]*types.Var, cb.Params().Len())
 		for j := range cb.Params().Len() {

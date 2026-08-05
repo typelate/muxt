@@ -1,0 +1,74 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /stream datastar(sse(Stream(ctx, send, marshalJSON(sendSignals))))" -}}
+{{- with .Mode "inner" -}}{{- end -}}
+<li>{{ .Result }}</li>
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	OK bool `json:"ok"`
+}
+
+// Server overrides the template's default patch target per event: the
+// template sets mode inner; the method overrides one send with append and a
+// selector derived from a record ID, and marks a signals patch onlyIfMissing.
+type Server struct{}
+
+func (Server) Stream(_ context.Context,
+	send func(item string, opts ...DatastarPatchElementOption) error,
+	sendSignals func(s Sig, opts ...DatastarPatchSignalsOption) error,
+) {
+	_ = send("a")
+	_ = send("b", WithMode("append"), WithSelectorID("row-42"))
+	_ = sendSignals(Sig{OK: true}, WithOnlyIfMissing(true))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := "data: mode inner\ndata: elements <li>a</li>\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the template-default event %q", body, want)
+	}
+	if want := "data: selector #row-42\ndata: mode append\ndata: elements <li>b</li>\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the overridden event %q", body, want)
+	}
+	if want := "event: datastar-patch-signals\ndata: onlyIfMissing true\ndata: signals {\"ok\":true}\n\n"; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the onlyIfMissing signals frame %q", body, want)
+	}
+}

@@ -38,7 +38,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataPathMethod(config),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
-	return append(decls, sseEventOptionDecls(file, config)...)
+	return decls
 }
 
 func sseTemplateDataTypeParams() *ast.FieldList {

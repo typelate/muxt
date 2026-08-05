@@ -1,0 +1,69 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /counter datastar(sse(Mixed(ctx, send, marshalJSON(sendSignals))))" -}}<li>{{ .Result }}</li>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Sig struct {
+	Count int `json:"count"`
+}
+
+// Server patches the DOM and updates client signals in one response: a
+// counter increments an element and pushes the new count into the signal
+// store, in method-call order.
+type Server struct{}
+
+func (Server) Mixed(_ context.Context, send func(string) error, sendSignals func(Sig) error) {
+	_ = send("x")
+	_ = sendSignals(Sig{Count: 1})
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/counter", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	elements := strings.Index(body, "event: datastar-patch-elements\ndata: elements <li>x</li>\n\n")
+	signals := strings.Index(body, "event: datastar-patch-signals\ndata: signals {\"count\":1}\n\n")
+	if elements < 0 {
+		t.Fatalf("body = %q, want a patch-elements frame", body)
+	}
+	if signals < 0 {
+		t.Fatalf("body = %q, want a patch-signals frame", body)
+	}
+	if !(elements < signals) {
+		t.Errorf("body = %q: frames must appear in method-call order (elements before signals)", body)
+	}
+}
