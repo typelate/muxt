@@ -74,8 +74,27 @@ func datastarActionsDecls(file *File, config RoutesFileConfiguration, defs []mux
 	for _, opt := range datastarActionOptions {
 		decls = append(decls, datastarActionSetter(opt.Method, opt.Field, opt.GoType))
 	}
-	decls = append(decls, datastarActionJSMethod(file), datastarActionOptionsObjectMethod(file))
+	decls = append(decls, datastarActionURLMethod(), datastarActionJSMethod(file), datastarActionOptionsObjectMethod(file))
 	return decls, nil
+}
+
+// datastarActionURLMethod exposes the percent-encoded URL as a plain string:
+// useful for hand-written expressions and tests, and safe because a string
+// stays under normal contextual autoescaping (this is not a raw-JS bypass).
+func datastarActionURLMethod() *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: &ast.FieldList{List: []*ast.Field{{
+			Names: []*ast.Ident{ast.NewIdent(datastarActionValueReceiver)},
+			Type:  ast.NewIdent(datastarActionTypeIdent),
+		}}},
+		Name: ast.NewIdent("URL"),
+		Type: &ast.FuncType{
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+			&ast.SelectorExpr{X: ast.NewIdent(datastarActionValueReceiver), Sel: ast.NewIdent(datastarActionFieldURL)},
+		}}}},
+	}
 }
 
 // datastarActionType declares the action value: the verb and pre-encoded URL

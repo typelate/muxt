@@ -1,0 +1,91 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}
+{{- range .Result -}}
+<button data-on:click="{{ $.Actions.Show . | $.JS }}">x</button>
+<script>let action = {{ $.Actions.Show . | $.JS }};</script>
+{{- end -}}
+{{- end -}}
+{{- define "GET /records/{slug} Show(ctx, slug)" -}}{{ .Result }}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server echoes user-influenced record slugs back into the page as action
+// path arguments: the builder must keep every hostile value inside a single
+// percent-encoded path segment and inside the JS string literal.
+type Server struct{}
+
+func (Server) Page(_ context.Context) ([]string, error) {
+	return []string{
+		`quote'quote`,
+		`double"double`,
+		`back\slash`,
+		`angle<angle>`,
+		`</script>`,
+		"new\nline",
+		`a/b?c=d`,
+	}, nil
+}
+
+func (Server) Show(_ context.Context, slug string) (string, error) { return slug, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	// No raw hostile substring may survive into the markup (the literal
+	// </script> closing the intentional script elements is asserted by count
+	// below instead).
+	for _, hostile := range []string{
+		`'quote`, `"double`, `\slash`, `<angle`, `/records/</script>`, "new\nline", `a/b?c=d`, "?c=d",
+	} {
+		if strings.Contains(body, hostile) {
+			t.Errorf("body = %q contains the raw hostile substring %q", body, hostile)
+		}
+	}
+	// The enclosing script and attributes stay well-formed: exactly the two
+	// intentional script tags, and every action stays a single expression.
+	if got := strings.Count(body, "<script>"); got != 7 {
+		t.Errorf("body = %q has %d <script> openings, want 7 (one per record)", body, got)
+	}
+	if got := strings.Count(body, "</script>"); got != 7 {
+		t.Errorf("body = %q has %d </script> closings, want 7 (a premature terminator escaped)", body, got)
+	}
+	// Every URL is a single percent-encoded path segment under /records/.
+	if strings.Contains(body, "/records//") {
+		t.Errorf("body = %q; an encoded slug must not add path segments", body)
+	}
+}

@@ -1,0 +1,69 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}
+{{- $base := .Actions.Save 7 -}}
+<i data-on:click="{{ $base | .JS }}"></i>
+<b data-on:click="{{ $base.OpenWhenHidden true | .JS }}"></b>
+<u data-on:click="{{ ($base.Selector "#out").RetryInterval 500 | .JS }}"></u>
+<s data-on:click="{{ $base | .JS }}"></s>
+{{- end -}}
+{{- define "POST /save/{id} Save(ctx, id)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server reuses one base action with different delivery options: the setters
+// are copy-on-write, so option chains never mutate the base.
+type Server struct{}
+
+func (Server) Page(_ context.Context) (string, error) { return "", nil }
+
+func (Server) Save(_ context.Context, id int) (string, error) { return "", nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for tag, want := range map[string]string{
+		"i": `<i data-on:click="@post(&#39;/save/7&#39;)"></i>`,
+		"b": `<b data-on:click="@post(&#39;/save/7&#39;, {openWhenHidden: true})"></b>`,
+		"u": `<u data-on:click="@post(&#39;/save/7&#39;, {selector: &#39;#out&#39;, retryInterval: 500})"></u>`,
+		"s": `<s data-on:click="@post(&#39;/save/7&#39;)"></s>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the %s render %q", body, tag, want)
+		}
+	}
+}

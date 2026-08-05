@@ -1,0 +1,81 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}
+<button data-on:click="{{ .Actions.Show .Result | .JS }}">hostile</button>
+<a data-on:click="{{ .Actions.Toggle 42 true | .JS }}">bare</a>
+{{- end -}}
+{{- define "GET /records/{slug} Show(ctx, slug)" -}}{{ .Result }}{{- end -}}
+{{- define "GET /toggle/{id}/{on} Toggle(ctx, id, on)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Slug implements encoding.TextMarshaler with hostile output: attacker
+// influence can flow through marshaled types too, so they get the same
+// two-layer sanitization as plain strings.
+type Slug struct{}
+
+func (Slug) MarshalText() ([]byte, error) {
+	return []byte("</script>'\"<&?/x"), nil
+}
+
+func (Slug) UnmarshalText([]byte) error { return nil }
+
+type Server struct{}
+
+func (Server) Page(_ context.Context) (Slug, error) { return Slug{}, nil }
+
+func (Server) Show(_ context.Context, slug Slug) (string, error) { return "ok", nil }
+
+// Toggle pins that int and bool parameters render bare, with no quoting
+// artifacts.
+func (Server) Toggle(_ context.Context, id int, on bool) (string, error) { return "ok", nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for _, hostile := range []string{`</script>`, `'"`, `<&`, `?/x`} {
+		if strings.Contains(body, hostile) {
+			t.Errorf("body = %q contains the raw hostile substring %q", body, hostile)
+		}
+	}
+	if !strings.Contains(body, "/records/%3C%2Fscript%3E") {
+		t.Errorf("body = %q, want the marshaled slug percent-encoded into a single segment", body)
+	}
+	if want := `data-on:click="@get(&#39;/toggle/42/true&#39;)"`; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want bare int and bool segments %q", body, want)
+	}
+}

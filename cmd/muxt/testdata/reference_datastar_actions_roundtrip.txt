@@ -1,0 +1,68 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}{{ (.Actions.Show .Result).URL }}{{- end -}}
+{{- define "GET /records/{slug} Show(ctx, slug)" -}}{{ .Result }}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Page emits the encoded URL for a hostile slug so the test can request it
+// back through the generated mux.
+func (Server) Page(_ context.Context) (string, error) {
+	return "a/b?c=d 'x'", nil
+}
+
+func (Server) Show(_ context.Context, slug string) (string, error) { return slug, nil }
+-- template_test.go --
+package server
+
+import (
+	"html"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	encodedURL := html.UnescapeString(strings.TrimSpace(rec.Body.String()))
+	if strings.Contains(encodedURL, "?") || strings.Count(strings.TrimPrefix(encodedURL, "/"), "/") != 1 {
+		t.Fatalf("encoded URL %q must be /records/<one-encoded-segment>", encodedURL)
+	}
+
+	// Requesting the encoded URL proves encode/decode symmetry end to end:
+	// the handler's request.PathValue sees the original decoded value.
+	req = httptest.NewRequest(http.MethodGet, encodedURL, nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if want := "a/b?c=d &#39;x&#39;"; rec.Body.String() != want {
+		t.Errorf("round-tripped body = %q, want the HTML-escaped original %q", rec.Body.String(), want)
+	}
+}

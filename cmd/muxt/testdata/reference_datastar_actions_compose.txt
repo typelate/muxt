@@ -1,0 +1,58 @@
+muxt generate --use-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /page Page(ctx)" -}}
+<button data-on:click="$saving = true; {{ .Actions.Save 7 | .JS }}">save</button>
+{{- end -}}
+{{- define "POST /save/{id} Save(ctx, id)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server mixes an action with author-written JS: an action is an expression,
+// not a whole attribute, so it composes after the author's statement.
+type Server struct{}
+
+func (Server) Page(_ context.Context) (string, error) { return "", nil }
+
+func (Server) Save(_ context.Context, id int) (string, error) { return "", nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if want := `data-on:click="$saving = true; @post(&#39;/save/7&#39;)"`; !strings.Contains(body, want) {
+		t.Errorf("body = %q, want the author JS untouched with the action after the semicolon: %q", body, want)
+	}
+}
