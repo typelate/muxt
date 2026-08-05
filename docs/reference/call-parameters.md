@@ -321,6 +321,51 @@ Migrating from earlier releases: the `execute` callback inside `sse(...)`, the r
 
 [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt) · [reference_sse_marshal_send.txt](../../cmd/muxt/testdata/reference_sse_marshal_send.txt) · [reference_sse_chan.txt](../../cmd/muxt/testdata/reference_sse_chan.txt) · [reference_sse_iter_seq.txt](../../cmd/muxt/testdata/reference_sse_iter_seq.txt) · [reference_sse_iter_seq2_error.txt](../../cmd/muxt/testdata/reference_sse_iter_seq2_error.txt) · [reference_sse_event_fields.txt](../../cmd/muxt/testdata/reference_sse_event_fields.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) · [reference_sse_last_event_id_400.txt](../../cmd/muxt/testdata/reference_sse_last_event_id_400.txt)
 
+## Datastar Framing
+
+`datastar(Method(...))` at the outermost call position gives Datastar apps the
+template-first workflow: templates render with Datastar-specific data types,
+and streams speak the `datastar-patch-elements` / `datastar-patch-signals`
+protocol over the shared SSE transport. Generated code is stdlib-only —
+datastar-go is used only as a test-time wire-conformance reference.
+
+| Route shape | Template data | Behavior |
+|---|---|---|
+| `datastar(Method(...))` | `DatastarTemplateData` | plain render with base helpers |
+| `datastar(sse(Method(...)))` | `DatastarEventTemplateData` per event | render senders emit `datastar-patch-elements`; `marshalJSON(sendX)` senders emit `datastar-patch-signals` — one stream interleaves both in call order |
+| `datastar(marshalJSON(Method(...)))` | `DatastarSignalsTemplateData` | standalone `application/json` signals response, `marshalJSON` execute-then-discard semantics |
+
+**Event setters** (chainable, callable from inside the template) each become a
+wire line: `.Selector(string)` → `data: selector <v>`, `.Mode(string)` →
+`data: mode <v>` (values pass through unvalidated; Datastar's modes are
+`outer`, `inner`, `remove`, `replace`, `prepend`, `append`, `before`,
+`after`), `.Namespace(string)` → `data: namespace <v>`,
+`.UseViewTransition(true)` → `data: useViewTransition true`. `.ID` and
+`.Retry` work as on generic SSE events.
+
+**Send options** reuse the SSE option machinery (opt-in trailing variadic,
+template setters first, Go-side options win): render senders take
+`DatastarPatchElementOption` (`WithSelector`, `WithSelectorID`, `WithMode`,
+`WithNamespace`, `WithUseViewTransition`, plus the shared `WithEventID` and
+`WithRetryDuration`); marshaled senders take `DatastarPatchSignalsOption`
+(`WithOnlyIfMissing`, the shared constructors, and `WithJSONOptions` under
+`--output-jsonv2`).
+
+**`signals` input.** On datastar-framed routes the reserved `signals`
+argument binds Datastar's client-sent signals to the method parameter's type:
+GET and DELETE read the `datastar` query parameter, other methods read the
+JSON body. Absent signals leave the parameter zero-valued; malformed JSON
+responds 400. Elsewhere `signals` remains an ordinary identifier.
+
+**Flags.** `--use-datastar` wraps every route (mutually exclusive with
+`--use-htmx`); `--output-datastar-template-data-type`,
+`--output-datastar-event-template-data-type`, and
+`--output-datastar-signals-template-data-type` rename the generated types.
+The pre-release reserved arguments `elements`, `signal`, and `script` were
+removed; each fails generation with an error showing the wrapper form.
+
+[reference_datastar_framing_elements.txt](../../cmd/muxt/testdata/reference_datastar_framing_elements.txt) · [reference_datastar_mixed_stream.txt](../../cmd/muxt/testdata/reference_datastar_mixed_stream.txt) · [reference_datastar_send_options.txt](../../cmd/muxt/testdata/reference_datastar_send_options.txt) · [reference_datastar_framing_signals.txt](../../cmd/muxt/testdata/reference_datastar_framing_signals.txt) · [reference_datastar_signals_input.txt](../../cmd/muxt/testdata/reference_datastar_signals_input.txt) · [reference_datastar_conformance.txt](../../cmd/muxt/testdata/reference_datastar_conformance.txt) · [reference_datastar_type_name_flags.txt](../../cmd/muxt/testdata/reference_datastar_type_name_flags.txt)
+
 ## Advanced Patterns
 
 **Mixing path, form, and special parameters:**

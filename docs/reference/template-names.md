@@ -252,6 +252,15 @@ The wrapper takes exactly one method call and composes with the representation
 wrappers (`htmx(sse(...))`, `htmx(marshalJSON(...))`). `--use-htmx` wraps every
 route; when every route is framed the minimal `TemplateData` is not emitted.
 
+`datastar(Method(...))` renders the route with the Datastar template-data
+types and frames streamed events with [Datastar](https://data-star.dev)'s
+patch protocol; see the
+[call parameters reference](call-parameters.md#datastar-framing) for the
+setter and option vocabulary. `--use-datastar` wraps every route and is
+mutually exclusive with `--use-htmx`; the `signals` argument binds Datastar's
+client-sent signals on datastar-framed routes. Generated code stays
+stdlib-only.
+
 [reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) · [reference_htmx_auto_wrap.txt](../../cmd/muxt/testdata/reference_htmx_auto_wrap.txt) · [reference_htmx_sse.txt](../../cmd/muxt/testdata/reference_htmx_sse.txt) · [reference_htmx_marshal_json.txt](../../cmd/muxt/testdata/reference_htmx_marshal_json.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt)
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)

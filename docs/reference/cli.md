@@ -84,6 +84,10 @@ These flags control the names of generated types and functions:
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--use-htmx` | bool | `false` | Wrap every route in the `htmx(...)` framing so all templates render with `HTMXTemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). `--output-htmx-helpers` is a deprecated alias. |
 | `--output-htmx-template-data-type` | string | `HTMXTemplateData` | Template data type name for htmx-framed route templates. |
+| `--use-datastar` | bool | `false` | Wrap every route in the `datastar(...)` framing. Mutually exclusive with `--use-htmx`. |
+| `--output-datastar-template-data-type` | string | `DatastarTemplateData` | Template data type name for non-streaming datastar-framed route templates. |
+| `--output-datastar-event-template-data-type` | string | `DatastarEventTemplateData` | Template data type name for datastar stream event templates. |
+| `--output-datastar-signals-template-data-type` | string | `DatastarSignalsTemplateData` | Template data type name for standalone datastar signals responses. |
 | `--output-jsonv2` | bool | `false` | Generate JSON encoding/decoding with `encoding/json/v2` instead of `encoding/json`. Requires a go 1.25+ module built with `GOEXPERIMENT=jsonv2`. |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
