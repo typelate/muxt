@@ -1,41 +1,67 @@
 ---
 name: manual-hypermedia-testing
-description: Use when manually verifying muxt-generated handlers against a hypermedia frontend in a real browser — running a docs/examples app, exploring htmx or datastar behavior with the chrome-devtools MCP, or reproducing a frontend-integration bug the txtar archives can't.
+description: Use when manually verifying muxt-generated handlers against a hypermedia frontend in a real browser — reviewing a docs/examples app's integration, exploring htmx or datastar behavior with the chrome-devtools MCP, varying generate/check flags, or reproducing a frontend-integration bug the txtar archives can't.
 ---
 
 # Manual Hypermedia Testing
 
-The apps in `docs/examples/` are the acceptance surface between muxt-generated
-handlers and the frontend libraries. txtar archives prove the wire; a browser
-proves the library actually interprets it. Acceptance checklists per framework:
+Systematically review the integration between muxt-generated handlers and the
+frontend library using the apps in `docs/examples/`. The per-framework
+references are orientation, not scripts — spend the context window exploring
+the actual generated code, templates, and wire traffic.
 
-- **htmx** (htmx-counter :8000, htmx-todo :8002) → [references/htmx.md](references/htmx.md)
-- **datastar** (datastar-counter :8001) → [references/datastar.md](references/datastar.md)
+| Example | Port | Framework | Reference |
+|---|---|---|---|
+| htmx-counter, htmx-todo | 8000, 8002 | `--use-htmx` | [references/htmx.md](references/htmx.md) |
+| datastar-counter | 8001 | `--use-datastar` | [references/datastar.md](references/datastar.md) |
 
-## Process
+## Review method
 
-1. `cd docs/examples/<app> && PORT=<port> go run .` via Bash with
-   `run_in_background: true`. If templates changed, `go generate ./...` first.
-2. Load tools: `ToolSearch "select:mcp__chrome-devtools__new_page,...take_snapshot,...click,...fill,...press_key,...list_network_requests,...get_network_request,...list_console_messages"`.
-3. `new_page` at `http://localhost:<port>/` → `take_snapshot` → interact (`click`/`fill`/`press_key`) →
-   re-snapshot → assert against the framework checklist: DOM (snapshot),
-   wire (`get_network_request`), console (`list_console_messages`).
-4. Stop servers with `TaskStop` (and `pkill -f` the compiled binary if `go run`
-   leaves a child).
+Work each seam from both ends until they meet at the wire:
 
-## Chrome MCP tips
+1. **Read both halves.** The example's template names + `template_routes.go`
+   (what muxt generated) against its templates' `hx-*` / `data-*` attributes
+   (what the library will do) — the reference's map orients you.
+2. **Run and follow loops.** Start the app, then for each seam you touched:
+   trigger it in the browser → inspect the request/response with
+   `get_network_request` → re-snapshot to confirm the DOM effect. One loop
+   per template branch.
+3. **Vary the flags.** Copy the example into a scratch module and regenerate
+   with different flag combinations (axes suggested per reference); re-check,
+   re-run, re-verify the loops that the flag should (or should not) change.
+
+## Flag-variation scratch copy
+
+Examples are packages in the muxt module; a scratch copy needs its own
+`go.mod` (they are stdlib-only), and muxt must run **from this repo** (its
+module path resolves nowhere else) with `-C` pointing at the copy:
+
+```bash
+cp -r docs/examples/<app> /tmp/<app>
+(cd /tmp/<app> && go mod init scratch)
+# from the repo root:
+go run github.com/typelate/muxt -C /tmp/<app> generate <flags…>
+go run github.com/typelate/muxt -C /tmp/<app> check
+go vet -C /tmp/<app> . && PORT=<port> go run /tmp/<app>   # then browser-verify
+```
+
+## Mechanics
+
+- Servers: Bash with `run_in_background: true`, one per task; stop with
+  `TaskStop` (+ `pkill -f` the binary if `go run` leaves a child).
+- Browser: `ToolSearch "select:mcp__chrome-devtools__new_page,...take_snapshot,...click,...fill,...press_key,...list_network_requests,...get_network_request,...list_console_messages"`,
+  then `new_page` at `http://localhost:<port>/`.
 
 | Pitfall | Fix |
 |---|---|
-| Element uids go stale after every swap | Pass `includeSnapshot: true` on the interacting call; never reuse pre-swap uids |
-| `fill` + Enter submits nothing (Enter goes to the native autocomplete popup) | Click the input, press `Escape`, then `Enter` |
-| SSE response body truncated/absent inline | `get_network_request` with `responseFilePath:` then Read the file |
-| Streaming request looks "stuck" | Normal — SSE holds the connection; assert on the captured body |
-| `/favicon.ico` 404 in console/network | Noise; ignore |
-| `cd` inside a backgrounded command doesn't carry over to later Bash calls | One `cd <dir> && go run .` server per background task; absolute paths everywhere else |
+| Element uids go stale after every swap | `includeSnapshot: true` on the interacting call |
+| `fill` + Enter submits nothing (native autocomplete popup ate it) | Click input, `Escape`, then `Enter` |
+| SSE body absent inline / request looks "stuck" | `get_network_request` with `responseFilePath:`, Read the file; SSE holds the connection |
+| `/favicon.ico` 404 | Noise |
+| `cd` in a backgrounded command doesn't persist | Absolute paths in later commands |
 
 ## Escalation
 
-A behavior difference between an archive's assertions and the browser is a
-bug in muxt or in the archive — reproduce it as a txtar archive
-(see the testscript-error-assertions skill) before fixing.
+A difference between archive assertions and browser behavior is a bug in
+muxt or the archive — reproduce it as a txtar archive (see
+testscript-error-assertions) before fixing.
