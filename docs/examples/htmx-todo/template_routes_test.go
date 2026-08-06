@@ -114,6 +114,9 @@ func TestToggleTodoNotFound(t *testing.T) {
 	errMsg := fragment.QuerySelector(".error-banner")
 	require.NotNil(t, errMsg, "error message should be rendered")
 	assert.Contains(t, errMsg.TextContent(), "not found")
+	// The remove-me extension dismisses the banner after this interval; the
+	// response-targets extension swaps it into #error because of the 4xx.
+	assert.Equal(t, "5s", errMsg.GetAttribute("data-remove-me"))
 }
 
 func TestDeleteTodoNotFound(t *testing.T) {
