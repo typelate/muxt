@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'sse'
-stderr 'sse\(Stream\('
-stderr 'send'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the reserved sse argument was removed; wrap the call and use the send callback instead, for example: sse(Stream(ctx, send))
 -- template.gohtml --
 {{- define "GET /events Stream(ctx, sse)" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

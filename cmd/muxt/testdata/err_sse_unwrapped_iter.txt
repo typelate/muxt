@@ -1,6 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'wrap the call in sse\('
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: method Ticks returns a stream; wrap the call in sse(...) to stream it as server-sent events
 -- template.gohtml --
 {{- define "GET /ticks Ticks(ctx)" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

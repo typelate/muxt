@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'send callback options variadic must have element type SSEEventOption'
-stderr 'string'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: send callback options variadic must have element type SSEEventOption, got string
 -- template.gohtml --
 {{- define "GET /events sse(Stream(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

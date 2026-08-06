@@ -1,6 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'no template "Clock" for sse send callback sendClock'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: no template "Clock" for sse send callback sendClock
 -- template.gohtml --
 {{- define "GET /events sse(Stream(ctx, sendClock))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

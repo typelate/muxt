@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=T
-stderr 'marshalJSON requires a result to marshal'
-stderr 'Ping'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: marshalJSON requires a result to marshal but Ping(_ context.Context) returns nothing
 -- template.gohtml --
 {{- define "GET /api/ping marshalJSON(Ping(ctx))" -}}{{- end -}}
 -- go.mod --

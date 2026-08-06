@@ -1,8 +1,8 @@
 ! muxt generate --use-datastar --use-receiver-type=Server
-stderr 'signal'
-stderr 'sse\('
-stderr 'send'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the reserved signal argument was removed; stream events with the wrapper form instead, for example: datastar(sse(Stream(ctx, send)))
 -- template.gohtml --
 {{- define "GET /events datastar(Stream(ctx, signal))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

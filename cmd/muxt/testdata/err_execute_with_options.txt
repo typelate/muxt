@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'execute callback'
-stderr 'takes no options'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: execute callback for Render takes no options; its shape is func(T) error or func() error
 -- template.gohtml --
 {{- define "GET /page Render(execute)" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --

@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=T
-stderr 'marshalJSON requires a non-error result'
-stderr 'Check'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: marshalJSON requires a non-error result but Check(_ context.Context) error only returns an error
 -- template.gohtml --
 {{- define "GET /api/check marshalJSON(Check(ctx))" -}}{{- end -}}
 -- go.mod --

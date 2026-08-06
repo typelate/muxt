@@ -1,8 +1,8 @@
 ! muxt generate --use-receiver-type=T
-stderr 'marshalJSON allows at most two results'
-stderr 'has 3'
-stderr 'GetUser'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: marshalJSON allows at most two results but GetUser(_ context.Context) (User, int, error) has 3
 -- template.gohtml --
 {{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}{{- end -}}
 -- go.mod --

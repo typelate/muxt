@@ -1,9 +1,8 @@
 ! muxt generate --use-receiver-type=T
-stderr 'marshalJSON requires the second result'
-stderr 'to be an error'
-stderr 'bool'
-stderr 'GetUser'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: marshalJSON requires the second result of GetUser(_ context.Context) (User, bool) to be an error, got bool
 -- template.gohtml --
 {{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}{{- end -}}
 -- go.mod --

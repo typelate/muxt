@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'send callbacks'
-stderr 'stream'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: method Both mixes send callbacks with a stream result; use send callbacks or return a stream, not both
 -- template.gohtml --
 {{- define "GET /both sse(Both(ctx, send))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

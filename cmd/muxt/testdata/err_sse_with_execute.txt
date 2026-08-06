@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'execute'
-stderr 'send'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the execute callback cannot be used inside sse(...); use the send callback to emit events
 -- template.gohtml --
 {{- define "GET /events sse(Stream(ctx, execute))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

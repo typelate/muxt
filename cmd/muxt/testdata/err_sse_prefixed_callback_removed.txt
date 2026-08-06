@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'sseClock'
-stderr 'sendClock'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the sse-prefixed callback sseClock was removed; use sendClock inside an sse(...) wrapped call to render the "Clock" template
 -- template.gohtml --
 {{- define "GET /events sse(Stream(ctx, sseClock))" -}}{{- .Result -}}{{- end -}}
 {{- define "Clock" -}}clock:{{- .Result -}}{{- end -}}
