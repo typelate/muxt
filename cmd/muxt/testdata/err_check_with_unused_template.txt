@@ -4,15 +4,13 @@
 muxt generate --use-receiver-type=T
 
 ! muxt check
-stderr 'Unused templates'
-stderr 'unused-partial'
-stderr 'orphan-partial'
-! stderr '"used-partial"'
-! stderr '"nested-partial"'
-! stderr '"if-partial"'
-! stderr '"range-partial"'
-! stderr '"with-partial"'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Unused templates:
+  - $WORK/index.gohtml:5:27: "orphan-partial"
+  - $WORK/template.gohtml:36:27: "unused-partial"
+Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Endpoint()" }}
 Hello
