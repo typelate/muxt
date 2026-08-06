@@ -117,6 +117,14 @@ func TestToggleTodoNotFound(t *testing.T) {
 	// The remove-me extension dismisses the banner after this interval; the
 	// response-targets extension swaps it into #error because of the 4xx.
 	assert.Equal(t, "5s", errMsg.GetAttribute("data-remove-me"))
+	// The banner is swapped into the page's #error container with innerHTML,
+	// so carrying its own id="error" would nest a duplicate id.
+	assert.Empty(t, errMsg.GetAttribute("id"))
+	// A 404 means the client's row is stale (another client removed the
+	// todo); the response removes it out-of-band so the page reconciles.
+	stale := fragment.QuerySelector(`li[hx-swap-oob="delete"]`)
+	require.NotNil(t, stale, "response should remove the stale row out-of-band")
+	assert.Equal(t, "todo-999", stale.GetAttribute("id"))
 }
 
 func TestDeleteTodoNotFound(t *testing.T) {
