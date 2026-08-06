@@ -101,7 +101,10 @@ func TestDeleteTodo(t *testing.T) {
 }
 
 func TestToggleTodoNotFound(t *testing.T) {
-	mux, _ := newTestServer()
+	mux, srv := newTestServer()
+
+	// Seed a surviving todo so the reconciled footer has a live count.
+	srv.CreateTodo(NewTodo{Title: "survivor"})
 
 	req := httptest.NewRequest(http.MethodPatch, "/todos/999", nil)
 	rec := httptest.NewRecorder()
@@ -125,6 +128,12 @@ func TestToggleTodoNotFound(t *testing.T) {
 	stale := fragment.QuerySelector(`li[hx-swap-oob="delete"]`)
 	require.NotNil(t, stale, "response should remove the stale row out-of-band")
 	assert.Equal(t, "todo-999", stale.GetAttribute("id"))
+	// The footer swaps out-of-band with the server's live count, so the page
+	// fully reconciles from one 404 response.
+	footer := fragment.QuerySelector("#footer")
+	require.NotNil(t, footer, "response should update the footer out-of-band")
+	assert.Equal(t, "true", footer.GetAttribute("hx-swap-oob"))
+	assert.Contains(t, footer.TextContent(), "1 item left")
 }
 
 func TestDeleteTodoNotFound(t *testing.T) {

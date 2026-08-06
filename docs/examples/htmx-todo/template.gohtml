@@ -85,8 +85,10 @@ banner must not carry its own id="error". remove-me dismisses it. */ -}}
 {{define "PATCH /todos/{id} ToggleTodo(id)"}}
 {{- if .Err}}{{.StatusCode 404}}{{template "error" .Err}}
 {{- /* The client's row is stale (another client removed the todo):
-remove it out-of-band so the page reconciles with the server. */}}
+remove it out-of-band and refresh the footer count so the page
+reconciles with the server. */}}
 <li id="todo-{{.Request.PathValue "id"}}" hx-swap-oob="delete"></li>
+{{template "footer" .Result}}
 {{- else}}
 {{template "todo-item" .Result.Todo}}
 {{template "footer" .Result}}

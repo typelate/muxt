@@ -161,7 +161,10 @@ func (s *Server) ToggleTodo(id int) (TodoChange, error) {
 			return TodoChange{Todo: &s.todos[i], ListInfo: s.listInfo()}, nil
 		}
 	}
-	return TodoChange{}, fmt.Errorf("todo %d not found", id)
+	// Returned alongside the error: the handler still assigns the result to
+	// the template data, so the error branch can reconcile the page (stale
+	// row removal, live footer count) with out-of-band swaps.
+	return TodoChange{ListInfo: s.listInfo()}, fmt.Errorf("todo %d not found", id)
 }
 
 func (s *Server) DeleteTodo(id int) TodoChange {
