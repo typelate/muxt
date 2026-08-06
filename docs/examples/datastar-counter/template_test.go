@@ -52,6 +52,17 @@ func TestHome(t *testing.T) {
 	increment := doc.QuerySelector("#increment")
 	require.NotNil(t, increment)
 	assert.Equal(t, "@post('/increment')", increment.GetAttribute("data-on:click"))
+
+	greet := doc.QuerySelector("#greet")
+	require.NotNil(t, greet)
+	assert.Equal(t, "@post('/greet')", greet.GetAttribute("data-on:click"))
+
+	// The signal name Datastar binds must agree with the GreetSignals JSON tag,
+	// and the page must contain the morph target ids the SSE fragments patch.
+	name := doc.QuerySelector("#name")
+	require.NotNil(t, name)
+	assert.True(t, name.HasAttribute("data-bind:name"))
+	require.NotNil(t, doc.QuerySelector("#greeting"))
 }
 
 func TestIncrement(t *testing.T) {
@@ -67,6 +78,18 @@ func TestIncrement(t *testing.T) {
 
 	// One datastar-patch-elements frame; Datastar swaps it in by element id.
 	assert.Equal(t, "event: datastar-patch-elements\ndata: elements <output id=\"count\">1</output>\n\n\n", rec.Body.String())
+
+	t.Run("the signal store a browser attaches is ignored", func(t *testing.T) {
+		// Datastar posts the whole signal store with every action, even to
+		// routes that declare no signals parameter.
+		req := httptest.NewRequest(http.MethodPost, "/increment", strings.NewReader(`{"name":""}`))
+		req.Header.Set("Datastar-Request", "true")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, "event: datastar-patch-elements\ndata: elements <output id=\"count\">2</output>\n\n\n", rec.Body.String())
+	})
 }
 
 func TestGreet(t *testing.T) {
@@ -78,6 +101,15 @@ func TestGreet(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, "event: datastar-patch-elements\ndata: elements <p id=\"greeting\">Hello, Ada!</p>\n\n\n", rec.Body.String())
+	})
+
+	t.Run("an empty bound input falls back", func(t *testing.T) {
+		// A browser with a blank input sends {"name":""}, not an absent body.
+		req := httptest.NewRequest(http.MethodPost, "/greet", strings.NewReader(`{"name":""}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Contains(t, rec.Body.String(), "Hello, stranger!")
 	})
 
 	t.Run("absent signals leave the parameter zero-valued", func(t *testing.T) {
