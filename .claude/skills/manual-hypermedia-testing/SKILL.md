@@ -42,13 +42,14 @@ cp -r docs/examples/<app> /tmp/<app>
 # from the repo root:
 go run github.com/typelate/muxt -C /tmp/<app> generate <flags…>
 go run github.com/typelate/muxt -C /tmp/<app> check
-go vet -C /tmp/<app> . && PORT=<port> go run /tmp/<app>   # then browser-verify
+go build -C /tmp/<app> -o build . && PORT=<port> /tmp/<app>/build   # then browser-verify
 ```
 
 ## Mechanics
 
-- Servers: Bash with `run_in_background: true`, one per task; stop with
-  `TaskStop` (+ `pkill -f` the binary if `go run` leaves a child).
+- Servers: build then run the binary (`go build -o build ./docs/examples/<app> && PORT=<port> ./build`)
+  in Bash with `run_in_background: true`, one per task — `TaskStop` then
+  kills the server directly (`go run` leaves an orphaned child).
 - Browser: `ToolSearch "select:mcp__chrome-devtools__new_page,...take_snapshot,...click,...fill,...press_key,...list_network_requests,...get_network_request,...list_console_messages"`,
   then `new_page` at `http://localhost:<port>/`.
 
