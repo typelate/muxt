@@ -29,6 +29,13 @@ Work each seam from both ends until they meet at the wire:
 3. **Vary the flags.** Copy the example into a scratch module and regenerate
    with different flag combinations (axes suggested per reference); re-check,
    re-run, re-verify the loops that the flag should (or should not) change.
+4. **Lock findings into example tests.** A behavior that would matter in an
+   end-user app gets asserted in the example's `*_test.go`, in the examples'
+   style: `newTestServer` + `httptest` against `TemplateRoutes`, `domtest`
+   for DOM assertions, exact-string assertions for SSE frames, and a
+   `TestTemplates` running `muxt check`. Example tests are as important as
+   the example code — they are the documentation for how muxt users test
+   their own apps.
 
 ## Flag-variation scratch copy
 
