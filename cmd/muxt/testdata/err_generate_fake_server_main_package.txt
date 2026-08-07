@@ -3,9 +3,10 @@
 muxt generate
 
 ! muxt generate-fake-server .
+cmpenv stderr want-err.txt
 
-stderr 'package is main'
-
+-- want-err.txt --
+Error: cannot generate fake server for package "example.com": package is main (the target package must be a library)
 -- go.mod --
 module example.com
 

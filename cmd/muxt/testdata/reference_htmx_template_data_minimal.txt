@@ -4,9 +4,30 @@ muxt generate --use-receiver-type=Server
 # fails muxt check with a field-not-found error naming TemplateData — the
 # minimal type no longer carries the htmx surface.
 ! muxt check
-stderr 'HXRedirect'
-stderr 'TemplateData'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+$WORK/template_routes.go:74:13 ExecuteTemplate "GET /oops Oops(ctx)" *TemplateData[RoutesReceiver, string]
+$WORK/template.gohtml:1:38: executing "GET /oops Oops(ctx)" at <.HXRedirect>: field or method HXRedirect not found on TemplateData[RoutesReceiver, string]
+
+TemplateData[RoutesReceiver, string] has:
+  Err() error
+  Header(string, string) *TemplateData[RoutesReceiver, string]
+  MuxtVersion() string
+  Ok() bool
+  Path() TemplateRoutePaths
+  Receiver() RoutesReceiver
+  Redirect(string, int) (*TemplateData[RoutesReceiver, string], error)
+  RedirectFound(url string) (*TemplateData[RoutesReceiver, string], error)
+  RedirectMovedPermanently(url string) (*TemplateData[RoutesReceiver, string], error)
+  RedirectMultipleChoices(url string) (*TemplateData[RoutesReceiver, string], error)
+  RedirectSeeOther(url string) (*TemplateData[RoutesReceiver, string], error)
+  Request() *http.Request
+  Result() string
+  StatusCode(statusCode int) *TemplateData[RoutesReceiver, string]
+  String() string
+
+Error: fail: 1 error
 -- template.gohtml --
 {{- define "GET /oops Oops(ctx)" -}}{{.HXRedirect "/next"}}done{{- end -}}
 {{- define "GET /fine Fine(ctx)" -}}<p>{{- .Result -}}</p>{{- end -}}

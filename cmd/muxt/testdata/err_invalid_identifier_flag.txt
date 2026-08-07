@@ -1,9 +1,10 @@
 # Tests error when flag value is not a valid Go identifier
 
 ! muxt generate --output-routes-func="not-an-identifier"
+cmpenv stderr want-err.txt
 
-stderr 'value must be a well-formed Go identifier'
-
+-- want-err.txt --
+Error: output-routes-func value must be a well-formed Go identifier
 -- go.mod --
 module example.com
 

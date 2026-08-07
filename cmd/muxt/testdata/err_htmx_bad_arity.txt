@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'htmx'
-stderr 'exactly one method call'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the htmx framing wrapper takes exactly one method call argument, got 2 arguments
 -- template.gohtml --
 {{- define "GET /two htmx(A(ctx), B(ctx))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
