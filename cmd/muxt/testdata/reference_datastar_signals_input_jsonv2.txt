@@ -1,3 +1,5 @@
+[!hasJSONV2] skip 'encoding/json/v2 requires a go1.26 or later toolchain in PATH'
+
 env GOEXPERIMENT=jsonv2
 
 muxt generate --output-jsonv2 --use-receiver-type=Server

@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/version"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,6 +58,20 @@ func Test(t *testing.T) {
 	e.Cmds = scripttest.DefaultCmds()
 	e.Cmds["muxt"] = scriptCommand()
 	e.Cmds["count-matches"] = countRedirectBlocksCommand()
+	e.Conds["hasJSONV2"] = script.OnceCondition("the go command in PATH supports encoding/json/v2 (go1.26 or later)", func() (bool, error) {
+		// Scripts run `exec go` against the go binary in PATH, which may be older
+		// than the toolchain that compiled this test binary (go.mod's toolchain
+		// directive triggers automatic switching). Query the PATH binary directly,
+		// outside any module, so neither mechanism masks its version.
+		cmd := exec.Command("go", "env", "GOVERSION")
+		cmd.Dir = t.TempDir()
+		cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+		out, err := cmd.Output()
+		if err != nil {
+			return false, fmt.Errorf("go env GOVERSION: %w", err)
+		}
+		return version.Compare(strings.TrimSpace(string(out)), "go1.26") >= 0, nil
+	})
 	ctx := t.Context()
 	scripttest.Test(t, ctx, e, nil, filepath.FromSlash("testdata/*.txt"))
 }
