@@ -1,4 +1,6 @@
-# F is not defined and a form field is passed
+# A template may call a method the receiver does not define: muxt derives the
+# signature from the call (here a form argument) and declares it on the
+# generated RoutesReceiver interface.
 
 muxt generate --use-receiver-type=T
 muxt check

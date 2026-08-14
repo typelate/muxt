@@ -1,4 +1,5 @@
-# F returns a value and a boolean
+# A method with a (T, bool) result form is valid: the handler renders the
+# value when the boolean is true.
 
 muxt generate --use-receiver-type=T
 muxt check
