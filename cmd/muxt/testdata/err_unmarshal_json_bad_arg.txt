@@ -1,7 +1,8 @@
 ! muxt generate --use-receiver-type=T
-stderr 'unmarshalJSON'
-stderr 'body'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)
 -- template.gohtml --
 {{- define "POST /users CreateUser(ctx, unmarshalJSON(form))" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --

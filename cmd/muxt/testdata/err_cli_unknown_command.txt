@@ -1,2 +1,6 @@
 ! muxt byte-lemon
-stderr 'unknown command'
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: unknown command "byte-lemon" for "muxt"
+Run 'muxt --help' for usage.

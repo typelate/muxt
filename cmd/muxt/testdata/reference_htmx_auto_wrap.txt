@@ -6,7 +6,7 @@ exec go test -count=1
 # When every route is framed the minimal TemplateData type is not emitted:
 # a probe package referencing the identifier must fail to build.
 ! exec go build ./probe
-stderr 'TemplateData'
+stderr '(?m)^probe'${/}'probe\.go:[0-9]+:[0-9]+: undefined: server\.TemplateData$'
 
 -- template.gohtml --
 {{- define "GET /save Save(ctx)" -}}{{.HXTrigger "saved"}}<p>{{- .Result -}}</p>{{- end -}}

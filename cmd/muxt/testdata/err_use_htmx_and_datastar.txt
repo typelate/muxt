@@ -1,8 +1,8 @@
 ! muxt generate --use-htmx --use-datastar --use-receiver-type=Server
-stderr 'use-htmx'
-stderr 'use-datastar'
-stderr 'mutually exclusive'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: --use-htmx and --use-datastar are mutually exclusive; a project selects one frontend framing flag (mix per route by omitting both and writing the wrappers explicitly)
 -- template.gohtml --
 {{- define "GET / Home(ctx)" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --

@@ -2,11 +2,12 @@
 
 muxt generate --receiver-type=App
 
-stderr 'has been deprecated'
-stderr 'use --use-receiver-type instead'
+cmpenv stderr want-warning.txt
 
 exists template_routes.go
 
+-- want-warning.txt --
+Flag --receiver-type has been deprecated, use --use-receiver-type instead
 -- go.mod --
 module example.com
 
