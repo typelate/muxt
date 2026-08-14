@@ -25,6 +25,8 @@ jobs:
       run: go build ./...
 
     - name: Test
+      env:
+        GOEXPERIMENT: 'jsonv2'
       run: |
         go install ./cmd/muxt
         go test -race -shuffle=on ./...
