@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -56,7 +57,13 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 				qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
 				if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
 					log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
-					log.Println(" - ", err)
+					if checkErr, ok := errors.AsType[*check.Error](err); ok {
+						var sb strings.Builder
+						_ = checkErr.DetailedError(&sb, qualifier)
+						log.Println(sb.String())
+					} else {
+						log.Println(" - ", err)
+					}
 					log.Println()
 					errs = append(errs, err)
 				}
