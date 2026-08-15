@@ -1,9 +1,10 @@
 # Tests error when output filename does not have .go extension
 
 ! muxt generate --output-file=routes.txt
+cmpenv stderr want-err.txt
 
-stderr 'must use .go extension'
-
+-- want-err.txt --
+Error: output filename must use .go extension
 -- go.mod --
 module example.com
 

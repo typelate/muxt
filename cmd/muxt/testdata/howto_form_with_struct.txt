@@ -4,15 +4,16 @@ muxt generate --use-receiver-type=T
 muxt check
 
 muxt check --verbose
-stderr 'checking endpoint'
-stderr 'OK'
+cmpenv stderr want-check.txt
 
 muxt check -v
-stderr 'checking endpoint'
-stderr 'OK'
+cmpenv stderr want-check.txt
 
 exec go build -o build
 
+-- want-check.txt --
+checking endpoint GET / F(form)
+OK
 -- in.go --
 package main
 

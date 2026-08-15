@@ -4,9 +4,12 @@
 muxt generate --use-receiver-type=T
 
 ! muxt check
-stderr 'Unused templates'
-stderr '"template.gohtml"'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Unused templates:
+  - $WORK/template.gohtml:1:30: "template.gohtml"
+Error: fail: 1 error
 -- template.gohtml --
 {{/* This comment is fine */}}
 

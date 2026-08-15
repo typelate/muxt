@@ -12,20 +12,28 @@
 muxt generate --use-templates-variable templatesA --use-templates-variable templatesB
 
 ! muxt check --use-templates-variable templatesA
-stderr 'Unused templates'
-stderr '"for b"'
-! stderr '"for a"'
+cmpenv stderr want-err-a.txt
 
 ! muxt check --use-templates-variable templatesB
-stderr 'Unused templates'
-! stderr '"for b"'
-stderr '"for a"'
+cmpenv stderr want-err-b.txt
 
 ! muxt check --use-templates-variable templatesA --use-templates-variable templatesB
-stderr 'Unused templates'
-stderr '"for b"'
-stderr '"for a"'
+cmpenv stderr want-err-both.txt
 
+-- want-err-a.txt --
+Unused templates:
+  - $WORK/shared.gohtml:3:18: "for b"
+Error: fail: 1 error
+-- want-err-b.txt --
+Unused templates:
+  - $WORK/shared.gohtml:2:18: "for a"
+Error: fail: 1 error
+-- want-err-both.txt --
+Unused templates:
+  - $WORK/shared.gohtml:3:18: "for b"
+Unused templates:
+  - $WORK/shared.gohtml:2:18: "for a"
+Error: fail: 2 errors
 -- a.gohtml --
 {{define "GET /a"}}{{template "for a"}}{{end}}
 -- b.gohtml --

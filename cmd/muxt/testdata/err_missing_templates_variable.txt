@@ -1,12 +1,16 @@
 # Tests error when templates variable is not found
 
 ! muxt generate --use-templates-variable=nonexistent
-stderr 'variable nonexistent not found'
+cmpenv stderr want-err.txt
 
 # Also test when one of multiple variables is missing
 ! muxt generate --use-templates-variable=templates --use-templates-variable=nonexistent
-stderr 'variable nonexistent not found'
+cmpenv stderr want-err-multi.txt
 
+-- want-err.txt --
+Error: variable nonexistent not found
+-- want-err-multi.txt --
+Error: variable nonexistent not found
 -- go.mod --
 module example.com
 

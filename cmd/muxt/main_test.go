@@ -71,9 +71,6 @@ func scriptCommand() script.Cmd {
 				e, _ := state.LookupEnv(s)
 				return e
 			}, &stdout, &stderr)
-			if err != nil {
-				stderr.WriteString(err.Error())
-			}
 			return stdout.String(), stderr.String(), err
 		}, nil
 	})
