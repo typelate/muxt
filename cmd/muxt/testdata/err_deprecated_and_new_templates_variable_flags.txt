@@ -4,8 +4,11 @@
 # would silently lose information.
 
 ! muxt generate --templates-variable=legacy --use-templates-variable=adminTemplates
-stderr 'deprecated flag templates-variable not permitted along with use-templates-variable'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Flag --templates-variable has been deprecated, use --use-templates-variable instead
+Error: deprecated flag templates-variable not permitted along with use-templates-variable
 -- go.mod --
 module example.com
 

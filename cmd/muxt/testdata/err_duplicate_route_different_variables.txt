@@ -1,6 +1,8 @@
 ! muxt generate --use-templates-variable=adminTemplates --use-templates-variable=publicTemplates
-stderr 'duplicate route pattern "GET /'"
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: duplicate template in $WORK/public/index.gohtml and $WORK/admin/index.gohtml: duplicate route pattern "GET /"
 -- go.mod --
 module example.com
 

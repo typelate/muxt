@@ -1,6 +1,8 @@
 ! muxt generate --unknown
-stderr '^unknown flag: --unknown$'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: unknown flag: --unknown
 -- template.gohtml --
 {{printf "Hello, %s!", "world"}}
 -- go.mod --

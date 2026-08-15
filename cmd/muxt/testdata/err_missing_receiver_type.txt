@@ -1,9 +1,10 @@
 # Tests error when receiver type is not found
 
 ! muxt generate --use-receiver-type=NonExistentType
+cmpenv stderr want-err.txt
 
-stderr 'could not find receiver type'
-
+-- want-err.txt --
+Error: could not find receiver type NonExistentType in example.com
 -- go.mod --
 module example.com
 

@@ -1,6 +1,8 @@
 ! muxt generate --use-receiver-type=Server
-stderr 'sse handler cannot use a "response" argument'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error: sse handler cannot use a "response" argument
 -- template.gohtml --
 {{- define "GET /x sse(Endpoint(response))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --

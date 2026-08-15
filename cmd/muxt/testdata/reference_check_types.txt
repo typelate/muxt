@@ -3,9 +3,18 @@
 muxt generate --use-receiver-type=T
 
 ! muxt check  -v
-stderr 'checking endpoint GET / Endpoint\(\)'
-stderr 'argument 0 has type int32 expected int64'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+checking endpoint GET / Endpoint()
+$WORK/template_routes.go:35:13 ExecuteTemplate "GET / Endpoint()" *TemplateData[RoutesReceiver, Data]
+$WORK/template.gohtml:1:63: executing "GET / Endpoint()" at <.Result.Square>: argument 0 has type int32 expected int64
+
+  signature: Square(n int64) int64
+  arguments:
+    [0] int32
+
+Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Endpoint()" }}Number {{.Result.Number | .Result.Square}}{{end}}
 

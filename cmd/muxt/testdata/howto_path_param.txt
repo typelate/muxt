@@ -3,12 +3,18 @@ muxt generate
 cat template_routes.go
 
 ! muxt check  -v
-stderr 'checking endpoint GET /fruits/\{name\}/tree ToUpper\(name\)'
-stderr 'template\.gohtml:2:20: executing "GET /fruits/\{name\}/tree ToUpper\(name\)" at <.Result\.Name>: field or method Name not found on any'
-stderr 'any has no exported fields or methods'
+cmpenv stderr want-err.txt
 
 exec go test -cover
 
+-- want-err.txt --
+checking endpoint GET /fruits/{name}/tree ToUpper(name)
+$WORK/template_routes.go:37:13 ExecuteTemplate "GET /fruits/{name}/tree ToUpper(name)" *TemplateData[RoutesReceiver, any]
+$WORK/template.gohtml:2:20: executing "GET /fruits/{name}/tree ToUpper(name)" at <.Result.Name>: field or method Name not found on any
+
+any has no exported fields or methods
+
+Error: fail: 1 error
 -- template.gohtml --
 {{define "GET /fruits/{name}/tree ToUpper(name)" }}
 	<h1>Fruit {{.Result.Name}}</h1>

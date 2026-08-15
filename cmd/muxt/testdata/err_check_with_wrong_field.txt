@@ -1,11 +1,36 @@
 ! muxt check
-stderr '<\.Missing>: field or method Missing not found on struct\{Field2 int}'
-stderr '<\.Missing>: field or method Missing not found on GlobalType'
-stderr '<\.Missing>: field or method Missing not found on db.Row'
-stderr '<\.Missing>: field or method Missing not found on api.Body'
-stderr 'type GlobalType struct \{'
-stderr 'Field1 int'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+$WORK/main.go:26:6 ExecuteTemplate "template.gohtml" struct{Field2 int}
+$WORK/template.gohtml:1:2: executing "template.gohtml" at <.Missing>: field or method Missing not found on struct{Field2 int}
+
+  struct {
+    Field2 int
+  }
+
+$WORK/main.go:30:6 ExecuteTemplate "template.gohtml" GlobalType
+$WORK/template.gohtml:1:2: executing "template.gohtml" at <.Missing>: field or method Missing not found on GlobalType
+
+  type GlobalType struct {
+    Field1 int
+  }
+
+$WORK/main.go:34:6 ExecuteTemplate "template.gohtml" db.Row
+$WORK/template.gohtml:1:2: executing "template.gohtml" at <.Missing>: field or method Missing not found on db.Row
+
+  type Row struct {
+    Column3 int
+  }
+
+$WORK/main.go:39:6 ExecuteTemplate "template.gohtml" api.Body
+$WORK/template.gohtml:1:2: executing "template.gohtml" at <.Missing>: field or method Missing not found on api.Body
+
+  type Body struct {
+    Field4 int
+  }
+
+Error: fail: 4 errors
 -- template.gohtml --
 {{.Missing}}
 -- go.mod --
