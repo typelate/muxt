@@ -271,7 +271,7 @@ func (s Server) Method() (T, map[string]error)   // Maps unsupported
 - [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt) — `(T, error)` pattern
 - [reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt) — Error handling
 - [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt) — Early exit with bool
-- [err_form_bool_return.txt](../../cmd/muxt/testdata/err_form_bool_return.txt) — Boolean returns
+- [reference_path_param_with_bool_return.txt](../../cmd/muxt/testdata/reference_path_param_with_bool_return.txt) — Boolean returns
 
 **Result types:**
 - [reference_result_with_import_type.txt](../../cmd/muxt/testdata/reference_result_with_import_type.txt) — Imported result types
