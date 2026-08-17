@@ -93,6 +93,7 @@ const (
 	ArgumentTypeExecute
 	ArgumentTypeSendMessage
 	ArgumentTypeLastEventID
+	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
 	ArgumentTypeCall
 )
@@ -323,6 +324,17 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				args = append(args, Argument{Identifier: name})
 				continue
 			}
+			if name == callWrapperUnmarshalJSON {
+				// The decode target is the method parameter's type; any type
+				// encoding/json can unmarshal into is permitted, so there is
+				// no assignability constraint to check here.
+				args = append(args, Argument{
+					Identifier: TemplateNameScopeIdentifierRequestBody,
+					Type:       ArgumentTypeRequestBodyJSON,
+					ParamType:  paramType,
+				})
+				continue
+			}
 			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl)
 			if err != nil {
 				return nil, false, nil, err
@@ -367,6 +379,16 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
+			if fn, ok := arg.Fun.(*ast.Ident); ok && fn.Name == callWrapperUnmarshalJSON {
+				// Template-first iteration: without a defined method the decode
+				// target is unknown, so pass the raw payload through.
+				tp, err := stdlibType(pl, "encoding/json", "RawMessage", false)
+				if err != nil {
+					return nil, err
+				}
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
+				continue
+			}
 			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl); err != nil {
 				return nil, err
 			}
@@ -404,6 +426,8 @@ func DefaultScopeType(pl []*packages.Package, def *Definition, argumentIdentifie
 		return stdlibType("mime/multipart", "Form", true)
 	case TemplateNameScopeIdentifierLastEventID:
 		return types.Universe.Lookup("string").Type(), true
+	case TemplateNameScopeIdentifierRequestBody:
+		return stdlibType("io", "Reader", false)
 	default:
 		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
@@ -506,6 +530,17 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 	case TemplateNameScopeIdentifierExecute:
 		a.Type = ArgumentTypeExecute
 		a.template = def.template
+	case TemplateNameScopeIdentifierRequestBody:
+		a.Type = ArgumentTypeRequestBody
+		// The request body is a single-use stream; the parameter must be
+		// exactly io.Reader so the method cannot assume more than one read.
+		readerType, err := stdlibType(pl, "io", "Reader", false)
+		if err != nil {
+			return a, err
+		}
+		if !types.Identical(param, readerType) {
+			return a, fmt.Errorf("%s parameter must have type io.Reader, got %s", arg.Name, types.TypeString(param, qual))
+		}
 	default:
 		if slices.Contains(def.pathValueNames, arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
@@ -595,6 +630,7 @@ const (
 	TemplateNameScopeIdentifierHTTPResponse = "response"
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
+	TemplateNameScopeIdentifierRequestBody  = "body"
 )
 
 func patternScope() []string {
@@ -606,5 +642,6 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierMultipart,
 		TemplateNameScopeIdentifierExecute,
 		TemplateNameScopeIdentifierLastEventID,
+		TemplateNameScopeIdentifierRequestBody,
 	}
 }

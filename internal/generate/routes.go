@@ -749,6 +749,39 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			// TODO: add error case
 		case *ast.CallExpr:
 			nestedArg := args[i]
+			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
+				const bodyValueIdent = "bodyValue"
+				typeExpr, err := file.TypeASTExpression(nestedArg.ParamType)
+				if err != nil {
+					return nil, err
+				}
+				// var bodyValue T
+				statements = append(statements, &ast.DeclStmt{Decl: &ast.GenDecl{
+					Tok:   token.VAR,
+					Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(bodyValueIdent)}, Type: typeExpr}},
+				}})
+				// if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { ... }
+				decode := &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X: &ast.CallExpr{
+							Fun: astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
+							Args: []ast.Expr{&ast.SelectorExpr{
+								X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+								Sel: ast.NewIdent("Body"),
+							}},
+						},
+						Sel: ast.NewIdent("Decode"),
+					},
+					Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(bodyValueIdent)}},
+				}
+				statements = append(statements, &ast.IfStmt{
+					Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{decode}},
+					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: ast.NewIdent("nil")},
+					Body: parseErrBlock(),
+				})
+				call.Args[i] = ast.NewIdent(bodyValueIdent)
+				continue
+			}
 			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, nestedArg.Signature(), nestedArg.Arguments(), parsed, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
@@ -811,6 +844,8 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 						statements = append(statements, callParseMultipartForm(file, config, rdIdent), declareMultipartVar)
 					case muxt.TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
+					case muxt.TemplateNameScopeIdentifierRequestBody:
+						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 					default:
 						if slices.Contains(def.PathValueIdentifiers(), arg.Name) || arg.Name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
@@ -1284,6 +1319,12 @@ const lastEventIDHeader = "Last-Event-Id"
 // lastEventID reads request.Header.Get("Last-Event-Id") unless it is also a path
 // wildcard, in which case the path value wins (request.PathValue(name)).
 func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
+	if name == muxt.TemplateNameScopeIdentifierRequestBody && !slices.Contains(def.PathValueIdentifiers(), name) {
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+			Sel: ast.NewIdent("Body"),
+		}
+	}
 	if name == muxt.TemplateNameScopeIdentifierLastEventID && !slices.Contains(def.PathValueIdentifiers(), name) {
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{

@@ -1,0 +1,93 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /login Login(ctx, unmarshalForm(body))" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "POST /query Query(ctx, unmarshalForm(body))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"fmt"
+	"html/template"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type LoginForm struct {
+	Username string `name:"user-name"`
+	Attempts int    `name:"attempts"`
+}
+
+type T struct{}
+
+func (T) Login(_ context.Context, f LoginForm) (string, error) {
+	return fmt.Sprintf("%s:%d", f.Username, f.Attempts), nil
+}
+
+func (T) Query(_ context.Context, v url.Values) (string, error) {
+	return v.Get("q"), nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	postForm := func(t *testing.T, target string, form url.Values) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("struct fields bind by name tag", func(t *testing.T) {
+		rec := postForm(t, "/login", url.Values{"user-name": []string{"ada"}, "attempts": []string{"2"}})
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if want := "<p>ada:2</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("typed field with a bad value is 400", func(t *testing.T) {
+		rec := postForm(t, "/login", url.Values{"user-name": []string{"ada"}, "attempts": []string{"lots"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("url.Values binds the whole form", func(t *testing.T) {
+		rec := postForm(t, "/query", url.Values{"q": []string{"muxt"}})
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if want := "<p>muxt</p>"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}

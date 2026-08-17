@@ -13,6 +13,9 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
+| `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
+| `unmarshalJSON(body)` | Any JSON-unmarshalable | `request.Body` | Yes | Decode a JSON request body into a struct parameter |
+| `unmarshalForm(body)` | struct or `url.Values` | `request.Form` | Yes | Explicit spelling of `form`; same binding |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 
 These names (plus path parameters) are the only identifiers allowed as call
@@ -175,6 +178,58 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 **Parse errors:** A malformed multipart body sets `.Err` and responds `400 Bad Request` (unlike `form`, which silently ignores body parse errors).
 
 [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
+
+## Request Body
+
+The request body is a **single-use stream**: at most one of `body`,
+`unmarshalJSON(body)`, or `unmarshalForm(body)` may appear in a call —
+using two fails generation.
+
+### `body`
+
+Binds `request.Body` as an `io.Reader`. The method parameter must be exactly
+`io.Reader`; any other type fails generation. Use it for payloads the handler
+must not reinterpret (webhooks, proxied uploads).
+
+```gotmpl
+{{define "POST /hooks Save(ctx, body)"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Save(ctx context.Context, body io.Reader) (string, error)
+```
+
+[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt)
+
+### `unmarshalJSON(body)`
+
+Decodes the JSON request body into the Go type of the method parameter at that
+position. The wrapper's only valid argument is `body`. The decode target comes
+from the receiver method signature, so `muxt check` verifies it.
+
+```gotmpl
+{{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{.Result.Name}}{{end}}
+```
+```go
+func (s Server) CreateUser(ctx context.Context, u User) (User, error)
+```
+
+- A malformed (or empty) body responds 400 Bad Request and the method is not
+  called. The wrapper does not check the request `Content-Type`.
+- Decodes with `encoding/json`.
+- If the receiver method is not yet defined, the parameter synthesizes as
+  `json.RawMessage` so template-first iteration passes the raw payload through.
+
+[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
+
+### `unmarshalForm(body)`
+
+The explicit spelling of the existing `form` binding — **not** a separate body
+decoder. Both spellings generate the identical `request.Form` binding
+(`request.ParseForm` semantics, URL query merge included), so behavior is the
+same by construction. On GET the bound values are the query string and the
+`(body)` spelling is misleading; prefer `form` there.
+
+[reference_unmarshal_form.txt](../../cmd/muxt/testdata/reference_unmarshal_form.txt) · [reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)
 
 ## Server-Sent Events
 
