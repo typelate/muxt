@@ -35,6 +35,12 @@ func TestCountBodyConsumers(t *testing.T) {
 		{expr: `Outer(Inner(ctx, body))`, want: 1},
 		{expr: `Save(ctx, unmarshalForm(body))`, want: 1},
 		{expr: `Save(ctx, unmarshalForm(body), unmarshalJSON(body))`, want: 2},
+		{expr: `Save(ctx, form)`, want: 1},
+		{expr: `Save(ctx, form, form)`, want: 1},
+		{expr: `Save(ctx, form, unmarshalForm(body))`, want: 1},
+		{expr: `Save(ctx, form, body)`, want: 2},
+		{expr: `Save(ctx, multipart, unmarshalJSON(body))`, want: 2},
+		{expr: `Outer(Inner(form), body)`, want: 2},
 	} {
 		t.Run(tt.expr, func(t *testing.T) {
 			if got := countBodyConsumers(mustParseCall(t, tt.expr)); got != tt.want {
@@ -52,6 +58,8 @@ func TestDefinitionsBodyArgumentErrors(t *testing.T) {
 		{name: "unmarshalJSON requires exactly one argument", template: `{{define "POST / Save(unmarshalJSON(body, ctx))"}}{{end}}`, wantErr: "the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)"},
 		{name: "request body may be consumed at most once", template: `{{define "POST / Save(ctx, body, unmarshalJSON(body))"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
 		{name: "unmarshalForm requires the body identifier", template: `{{define "POST / Save(unmarshalForm(form))"}}{{end}}`, wantErr: "the unmarshalForm wrapper requires exactly one argument, the reserved body identifier: unmarshalForm(body)"},
+		{name: "form parses the request body", template: `{{define "POST / Save(ctx, form, body)"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
+		{name: "multipart parses the request body", template: `{{define "POST / Save(ctx, multipart, unmarshalJSON(body))"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
 		{name: "unmarshalForm conflicts with multipart like form does", template: `{{define "POST / Save(unmarshalForm(body), multipart)"}}{{end}}`, wantErr: `call Save has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1,0 +1,33 @@
+# form parses the request body through request.ParseForm, so binding form and
+# body in the same call would read the single-use stream twice.
+
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once
+-- template.gohtml --
+{{- define "POST /hooks Save(ctx, form, body)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"io"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Save(_ context.Context, _ url.Values, _ io.Reader) (string, error) { return "", nil }
