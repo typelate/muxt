@@ -641,10 +641,38 @@ func checkRequestBodyParameter(pl []*packages.Package, param types.Type, qual ty
 	return nil
 }
 
-// callWrapperUnmarshalJSON is the request-body decode wrapper recognized at
-// argument positions: unmarshalJSON(body) decodes the JSON request body into
-// the method parameter's type.
-const callWrapperUnmarshalJSON = "unmarshalJSON"
+// Request-body decode wrappers recognized at argument positions:
+// unmarshalJSON(body) decodes the JSON request body into the method
+// parameter's type; unmarshalForm(body) is the explicit spelling of the
+// existing form binding.
+const (
+	callWrapperUnmarshalJSON = "unmarshalJSON"
+	callWrapperUnmarshalForm = "unmarshalForm"
+)
+
+// isBodyUnmarshalCall reports whether call invokes one of the request-body
+// decode wrappers.
+func isBodyUnmarshalCall(call *ast.CallExpr) bool {
+	return isCallTo(call, callWrapperUnmarshalJSON) || isCallTo(call, callWrapperUnmarshalForm)
+}
+
+// rewriteBodyFormWrappers replaces each unmarshalForm(body) argument with the
+// form identifier. The two spellings are the same request.Form binding by
+// construction: after this rewrite, resolution, checking, and generation all
+// run the form code path.
+func rewriteBodyFormWrappers(call *ast.CallExpr) {
+	for i, a := range call.Args {
+		nested, ok := a.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if isCallTo(nested, callWrapperUnmarshalForm) {
+			call.Args[i] = ast.NewIdent(TemplateNameScopeIdentifierForm)
+			continue
+		}
+		rewriteBodyFormWrappers(nested)
+	}
+}
 
 // isCallTo reports whether call invokes the plain identifier name.
 func isCallTo(call *ast.CallExpr, name string) bool {
@@ -676,7 +704,7 @@ func countBodyConsumers(call *ast.CallExpr) int {
 				n++
 			}
 		case *ast.CallExpr:
-			if isCallTo(exp, callWrapperUnmarshalJSON) {
+			if isBodyUnmarshalCall(exp) {
 				n++
 				continue
 			}

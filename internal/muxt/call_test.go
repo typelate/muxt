@@ -191,6 +191,13 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, ArgumentTypeRequestBodyJSON, defs[0].Arguments[0].Type)
 			require.Equal(t, "encoding/json.RawMessage", types.TypeString(defs[0].Arguments[0].ParamType, nil))
 		}},
+		{Name: "unmarshalForm body is the form binding", Receiver: serverType, Template: `{{define "POST / FormStruct(unmarshalForm(body))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "form", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+		}},
 		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)

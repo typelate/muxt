@@ -15,6 +15,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
 | `unmarshalJSON(body)` | Any JSON-unmarshalable | `request.Body` | Yes | Decode a JSON request body into a struct parameter |
+| `unmarshalForm(body)` | struct or `url.Values` | `request.Form` | Yes | Explicit spelling of `form`; same binding |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 
 These names (plus path parameters) are the only identifiers allowed as call
@@ -180,8 +181,9 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 ## Request Body
 
-The request body is a **single-use stream**: at most one of `body` or
-`unmarshalJSON(body)` may appear in a call — using two fails generation.
+The request body is a **single-use stream**: at most one of `body`,
+`unmarshalJSON(body)`, or `unmarshalForm(body)` may appear in a call —
+using two fails generation.
 
 ### `body`
 
@@ -219,6 +221,16 @@ func (s Server) CreateUser(ctx context.Context, u User) (User, error)
   `json.RawMessage` so template-first iteration passes the raw payload through.
 
 [reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
+
+### `unmarshalForm(body)`
+
+The explicit spelling of the existing `form` binding — **not** a separate body
+decoder. Both spellings generate the identical `request.Form` binding
+(`request.ParseForm` semantics, URL query merge included), so behavior is the
+same by construction. On GET the bound values are the query string and the
+`(body)` spelling is misleading; prefer `form` there.
+
+[reference_unmarshal_form.txt](../../cmd/muxt/testdata/reference_unmarshal_form.txt) · [reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)
 
 ## Server-Sent Events
 
