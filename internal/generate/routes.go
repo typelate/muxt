@@ -830,6 +830,8 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 						statements = append(statements, callParseMultipartForm(file, config, rdIdent), declareMultipartVar)
 					case muxt.TemplateNameScopeIdentifierContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
+					case muxt.TemplateNameScopeIdentifierRequestBody:
+						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 					default:
 						if slices.Contains(def.PathValueIdentifiers(), arg.Name) || arg.Name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
@@ -1300,9 +1302,16 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 const lastEventIDHeader = "Last-Event-Id"
 
 // requestArgumentSource returns the expression a scalar argument is parsed from.
-// lastEventID reads request.Header.Get("Last-Event-Id") unless it is also a path
-// wildcard, in which case the path value wins (request.PathValue(name)).
+// body is request.Body. lastEventID reads request.Header.Get("Last-Event-Id")
+// unless it is also a path wildcard, in which case the path value wins
+// (request.PathValue(name)).
 func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
+	if name == muxt.TemplateNameScopeIdentifierRequestBody {
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+			Sel: ast.NewIdent("Body"),
+		}
+	}
 	if name == muxt.TemplateNameScopeIdentifierLastEventID && !slices.Contains(def.PathValueIdentifiers(), name) {
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{

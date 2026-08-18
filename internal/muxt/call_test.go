@@ -44,7 +44,10 @@ func TestArgument(t *testing.T) {
 	multipartFormType := mimeMultipartPkg.Scope().Lookup("Form").Type()
 	require.NotNil(t, multipartFormType)
 
-	// mime/multipart.Form
+	ioPkg := findImport(examplePkg, "io")
+	require.NotNil(t, ioPkg)
+	ioReaderType := ioPkg.Scope().Lookup("Reader").Type()
+	require.NotNil(t, ioReaderType)
 
 	serverType := examplePkg.Scope().Lookup("Server").Type().(*types.Named)
 	emptyStruct := examplePkg.Scope().Lookup("Empty").Type().(*types.Named)
@@ -157,6 +160,23 @@ func TestArgument(t *testing.T) {
 			basic, ok := defs[0].Arguments[0].ParamType.(*types.Basic)
 			require.True(t, ok)
 			require.Equal(t, types.String, basic.Kind())
+		}},
+		{Name: "body", Receiver: serverType, Template: `{{define "POST / Reader(body)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "Reader", defs[0].Identifier())
+			require.Equal(t, "body", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestBody, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(ioReaderType, defs[0].Arguments[0].ParamType))
+		}},
+		{Name: "body param must be exactly io.Reader", Receiver: serverType, Template: `{{define "POST / String(body)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "body parameter must have type io.Reader, got string")
+		}},
+		{Name: "body on a synthesized method is io.Reader", Receiver: emptyStruct, Template: `{{define "POST / SaveBody(body)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, ArgumentTypeRequestBody, defs[0].Arguments[0].Type)
+			require.True(t, types.Identical(ioReaderType, defs[0].Arguments[0].ParamType))
 		}},
 		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)

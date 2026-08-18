@@ -3,6 +3,7 @@ package example
 import (
 	"context"
 	"encoding"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ func (srv *Server) URLValues(url.Values) any                   { return nil }
 func (srv *Server) MultipartForm(multipart.Form) any           { return nil }
 func (srv *Server) MultipartFormPtr(*multipart.Form) any       { return nil }
 func (srv *Server) PtrServer(*Server) any                      { return nil }
+func (srv *Server) Reader(io.Reader) any                       { return nil }
 
 type In struct{ Name string }
 
