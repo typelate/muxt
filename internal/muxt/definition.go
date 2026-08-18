@@ -350,6 +350,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if n := countBodyConsumers(call); n > 1 {
 		return fmt.Errorf("call %s reads the request body %d times; the request body is a single-use stream and may be consumed at most once", astgen.Format(call.Fun), n)
 	}
+	rewriteBodyFormWrappers(call)
 
 	def.fun = fun
 	def.call = call
@@ -430,9 +431,14 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 				hasMultipart = true
 			}
 		case *ast.CallExpr:
-			if isCallTo(exp, callWrapperUnmarshalJSON) {
-				if err := checkBodyWrapperArguments(callWrapperUnmarshalJSON, exp); err != nil {
+			if isBodyUnmarshalCall(exp) {
+				if err := checkBodyWrapperArguments(exp.Fun.(*ast.Ident).Name, exp); err != nil {
 					return err
+				}
+				if isCallTo(exp, callWrapperUnmarshalForm) {
+					// unmarshalForm(body) is the form binding; it conflicts
+					// with multipart the same way the form identifier does.
+					hasForm = true
 				}
 				continue
 			}

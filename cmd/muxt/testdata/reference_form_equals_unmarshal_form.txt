@@ -1,0 +1,72 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /spelled-form Submit(ctx, form)" -}}<p>{{- .Result -}}</p>{{- end -}}
+{{- define "POST /spelled-wrapper Submit(ctx, unmarshalForm(body))" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+// Submit echoes the full merged form so the test can pin that both spellings
+// share request.Form semantics, URL query merge included.
+func (T) Submit(_ context.Context, v url.Values) (string, error) {
+	return v.Encode(), nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	post := func(t *testing.T, target string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader("user=ada"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// The URL query parameter must merge into the form under both spellings:
+	// they are the same request.Form binding.
+	a := post(t, "/spelled-form?extra=q")
+	b := post(t, "/spelled-wrapper?extra=q")
+
+	if a.Code != b.Code {
+		t.Errorf("status: form = %d, unmarshalForm(body) = %d; want identical", a.Code, b.Code)
+	}
+	if a.Body.String() != b.Body.String() {
+		t.Errorf("body: form = %q, unmarshalForm(body) = %q; want identical", a.Body.String(), b.Body.String())
+	}
+	if want := "<p>extra=q&amp;user=ada</p>"; a.Body.String() != want {
+		t.Errorf("body = %q, want %q (query-merge must be included)", a.Body.String(), want)
+	}
+}
