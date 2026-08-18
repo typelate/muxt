@@ -74,8 +74,13 @@ type RoutesFileConfiguration struct {
 	Middleware                       bool
 	Verbose                          bool
 	OutputMultipleFiles              bool
-	HTMXHelpers                      bool
 	OutputExportedDefaultIdentifiers bool
+	// UseHTMX wraps every route's call in the htmx(...) framing; there is no
+	// per-route opt-out under the flag (omit it and wrap explicitly to mix).
+	UseHTMX bool
+	// UseDatastar wraps every route's call in the datastar(...) framing.
+	// Mutually exclusive with UseHTMX.
+	UseDatastar bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
@@ -84,6 +89,19 @@ type RoutesFileConfiguration struct {
 // DefaultMultipartMaxMemory is the default maxMemory value passed to
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
+
+// autoFraming is the framing applied to every unframed route under the
+// --use-htmx / --use-datastar flags, or FramingNone when neither is set.
+func (config RoutesFileConfiguration) autoFraming() muxt.Framing {
+	switch {
+	case config.UseHTMX:
+		return muxt.FramingHTMX
+	case config.UseDatastar:
+		return muxt.FramingDatastar
+	default:
+		return muxt.FramingNone
+	}
+}
 
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {

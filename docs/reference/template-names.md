@@ -247,8 +247,11 @@ one method call and composes with the `sse(...)` representation wrapper
 route uses it, and the unframed `TemplateData` is only emitted when an
 unframed route exists. Type names are overridable with
 `--output-htmx-template-data-type` and `--output-datastar-template-data-type`.
+`--use-htmx` and `--use-datastar` wrap every unframed route (they are
+mutually exclusive; an explicit wrapper is never double-wrapped), so a
+project that picks one frontend needs no wrappers in its template names.
 
-[reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt) · [reference_datastar_framing.txt](../../cmd/muxt/testdata/reference_datastar_framing.txt) · [err_htmx_bad_arity.txt](../../cmd/muxt/testdata/err_htmx_bad_arity.txt)
+[reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) · [reference_htmx_auto_wrap.txt](../../cmd/muxt/testdata/reference_htmx_auto_wrap.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt) · [reference_datastar_framing.txt](../../cmd/muxt/testdata/reference_datastar_framing.txt) · [err_htmx_bad_arity.txt](../../cmd/muxt/testdata/err_htmx_bad_arity.txt) · [err_use_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_use_htmx_and_datastar.txt)
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 

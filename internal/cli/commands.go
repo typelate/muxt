@@ -224,6 +224,9 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if config.DatastarTemplateDataType != "" && !token.IsIdentifier(config.DatastarTemplateDataType) {
 				return fmt.Errorf(outputDatastarTemplateDataType + errIdentSuffix)
 			}
+			if config.UseHTMX && config.UseDatastar {
+				return fmt.Errorf("--%s and --%s are mutually exclusive; a project selects one frontend framing flag (mix per route by omitting both and writing the wrappers explicitly)", useHTMX, useDatastar)
+			}
 			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
 				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
 			}
@@ -378,8 +381,11 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.OutputMultipleFiles {
 		args = append(args, "--"+outputMultipleFiles)
 	}
-	if config.HTMXHelpers {
-		args = append(args, "--"+outputHTMXHelpers)
+	if config.UseHTMX {
+		args = append(args, "--"+useHTMX)
+	}
+	if config.UseDatastar {
+		args = append(args, "--"+useDatastar)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -571,6 +577,8 @@ const (
 	outputRoutesFuncWithMiddlewareParam = "output-routes-func-with-middleware-param"
 	outputMultipleFiles                 = "output-multiple-files"
 	outputHTMXHelpers                   = "output-htmx-helpers"
+	useHTMX                             = "use-htmx"
+	useDatastar                         = "use-datastar"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 
@@ -609,7 +617,9 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputRoutesFuncWithMiddlewareParamHelp = `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`
 	outputMultipleFilesHelp                 = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
-	outputHTMXHelpersHelp                   = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputHTMXHelpersHelp                   = `DEPRECATED: use --use-htmx instead. Wraps every route in the htmx(...) framing.`
+	useHTMXHelp                             = `Wraps every route's call in the htmx(...) framing so all templates render with the HTMX template data type (HX-Redirect, HX-Trigger, HX-Request, etc.). To mix framed and unframed routes, omit the flag and write htmx(...) explicitly.`
+	useDatastarHelp                         = `Wraps every route's call in the datastar(...) framing so all templates render with the Datastar template data type. Mutually exclusive with --use-htmx.`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 
@@ -700,7 +710,10 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.Middleware, outputRoutesFuncWithMiddlewareParam, false, outputRoutesFuncWithMiddlewareParamHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
-	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.UseHTMX, useHTMX, false, useHTMXHelp)
+	flagSet.BoolVar(&g.UseDatastar, useDatastar, false, useDatastarHelp)
+	flagSet.BoolVar(&g.UseHTMX, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	markDeprecated(flagSet, outputHTMXHelpers, useHTMX)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }

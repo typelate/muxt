@@ -62,6 +62,8 @@ These flags tell muxt what existing code to look for and use:
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Can be specified multiple times to generate routes from multiple template sets. |
+| `--use-htmx` | bool | `false` | Wrap every route in the `htmx(...)` framing so all templates render with `HTMXTemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). Omit it and write `htmx(...)` explicitly to mix framed and unframed routes. |
+| `--use-datastar` | bool | `false` | Wrap every route in the `datastar(...)` framing so all templates render with `DatastarTemplateData`. Mutually exclusive with `--use-htmx`. |
 
 **Type resolution:**
 - **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`
@@ -83,7 +85,6 @@ These flags control the names of generated types and functions:
 | `--output-htmx-template-data-type` | string | `HTMXTemplateData` | Template data type name for `htmx(...)`-framed route templates. |
 | `--output-datastar-template-data-type` | string | `DatastarTemplateData` | Template data type name for `datastar(...)`-framed route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
-| `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |
 | `--output-routes-func-with-path-prefix-param` | bool | `false` | Add `pathsPrefix string` parameter for mounting under subpaths. |
@@ -109,6 +110,7 @@ These flags still work but are deprecated. Use the new names above:
 | `--find-templates-variable` | `--use-templates-variable` |
 | `--find-receiver-type` | `--use-receiver-type` |
 | `--find-receiver-type-package` | `--use-receiver-type-package` |
+| `--output-htmx-helpers` | `--use-htmx` |
 
 **With `--output-routes-func-with-logger-param`:**
 ```go

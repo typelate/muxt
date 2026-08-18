@@ -1,0 +1,67 @@
+muxt generate --use-htmx --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+# When every route is framed the minimal TemplateData type is not emitted:
+# a probe package referencing the identifier must fail to build.
+! exec go build ./probe
+stderr '(?m)^probe'${/}'probe\.go:[0-9]+:[0-9]+: undefined: server\.TemplateData$'
+
+-- template.gohtml --
+{{- define "GET /save Save(ctx)" -}}{{.HXTrigger "saved"}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+// Server is an existing --use-htmx project upgrading without touching
+// templates: plain (unwrapped) template names keep calling HX* helpers
+// because the flag wraps every route.
+type Server struct{}
+
+func (Server) Save(_ context.Context) (string, error) { return "ok", nil }
+-- probe/probe.go --
+package probe
+
+import "server"
+
+// The TemplateData identifier must not exist when every route is framed.
+var _ = server.TemplateData[server.RoutesReceiver, int]{}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/save", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got, want := rec.Header().Get("HX-Trigger"), "saved"; got != want {
+		t.Errorf("HX-Trigger = %q, want %q", got, want)
+	}
+	if want := "<p>ok</p>"; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}

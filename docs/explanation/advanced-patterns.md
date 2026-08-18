@@ -34,7 +34,7 @@ func (data *TemplateData[R, T]) ErrorStatusCode() *TemplateData[R, T] {
 }
 ```
 
-**Note:** the `--output-htmx-helpers` flag generates an `HXRequest` method (plus the other `HX*` header helpers), so only hand-write `IsHXRequest` if you don't use that flag.
+**Note:** the `htmx(...)` framing (or `--use-htmx`) generates an `HXRequest` method (plus the other `HX*` header helpers) on `HTMXTemplateData`, so only hand-write `IsHXRequest` on unframed routes.
 
 **Usage in templates:**
 ```gotmpl

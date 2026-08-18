@@ -48,7 +48,7 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-htmx-helpers
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --use-htmx
 
 //go:embed *.gohtml
 var templateSource embed.FS

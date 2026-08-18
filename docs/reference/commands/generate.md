@@ -36,6 +36,8 @@ These flags tell muxt what existing code to look for and use:
 | `--use-receiver-type` | string | _(none)_ | Type name for method lookup. Enables type-safe parameter parsing. **Recommended for production.** |
 | `--use-receiver-type-package` | string | _(current pkg)_ | Package path for `--use-receiver-type`. Only needed if receiver is in different package. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Pass multiple times to generate routes from multiple template sets. See [templates-variable.md](../templates-variable.md#multiple-template-variables). |
+| `--use-htmx` | bool | `false` | Wrap every route in the `htmx(...)` framing so all templates render with `HTMXTemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). Omit it and write `htmx(...)` explicitly to mix framed and unframed routes. |
+| `--use-datastar` | bool | `false` | Wrap every route in the `datastar(...)` framing so all templates render with `DatastarTemplateData`. Mutually exclusive with `--use-htmx`. |
 
 **Type resolution:**
 - **Without** `--use-receiver-type`: Parameters are `string`, return types are `any`
@@ -62,7 +64,6 @@ These flags control the names of generated types and functions:
 | `--output-routes-func-with-middleware-param` | bool | `false` | Add `middleware func(next http.Handler) http.Handler` parameter; every registered handler is wrapped with it. `nil` disables wrapping. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
 | `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
-| `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Does not affect explicit `--output-*` flag values. |
 
 ## Generated Function Signatures
@@ -127,6 +128,7 @@ These flags still work but are deprecated. Use the new names above:
 | `--find-templates-variable` | `--use-templates-variable` |
 | `--find-receiver-type` | `--use-receiver-type` |
 | `--find-receiver-type-package` | `--use-receiver-type-package` |
+| `--output-htmx-helpers` | `--use-htmx` |
 
 ## Common Patterns
 

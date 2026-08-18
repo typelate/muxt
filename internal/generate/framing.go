@@ -53,14 +53,16 @@ var datastarFraming = framingSpec{
 func htmxTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
 	htmxConfig := config
 	htmxConfig.TemplateDataType = config.HTMXTemplateDataType
-	htmxConfig.HTMXHelpers = true
-	return defaultTemplateDataDecls(file, htmxConfig, receiverInterface)
+	decls := defaultTemplateDataDecls(file, htmxConfig, receiverInterface)
+	for _, method := range templateDataHTMXHelperMethods(htmxConfig.TemplateDataType) {
+		decls = append(decls, method)
+	}
+	return decls
 }
 
 func datastarTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
 	dsConfig := config
 	dsConfig.TemplateDataType = config.DatastarTemplateDataType
-	dsConfig.HTMXHelpers = false
 	return defaultTemplateDataDecls(file, dsConfig, receiverInterface)
 }
 
@@ -95,10 +97,5 @@ func defaultTemplateDataDecls(file *File, config RoutesFileConfiguration, receiv
 		decls = append(decls, method)
 	}
 	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
-	if config.HTMXHelpers {
-		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
-			decls = append(decls, method)
-		}
-	}
 	return decls
 }

@@ -16,8 +16,11 @@ Package: {{.Path}}
     Receiver Package:   {{.}}
 {{- end}}
     Route Paths Type:   {{.Config.TemplateRoutePathsType}}
-{{- if .Config.HTMXHelpers}}
-    HTMX Helpers:       true
+{{- if .Config.UseHTMX}}
+    HTMX Framing:       true
+{{- end}}
+{{- if .Config.UseDatastar}}
+    Datastar Framing:   true
 {{- end}}
 
   Commands:

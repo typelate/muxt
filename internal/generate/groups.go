@@ -31,6 +31,17 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 			return result, err
 		}
 
+		if autoFraming := config.autoFraming(); autoFraming != muxt.FramingNone {
+			// --use-htmx / --use-datastar wrap every route: unframed calls get
+			// the framing; an explicitly written wrapper is never
+			// double-wrapped.
+			for i := range defs {
+				if defs[i].Framing == muxt.FramingNone {
+					defs[i].Framing = autoFraming
+				}
+			}
+		}
+
 		for _, d := range defs {
 			key := d.SourceFile()
 			result.byFile[key] = append(result.byFile[key], d)
