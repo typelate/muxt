@@ -13,6 +13,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
+| `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 
 These names (plus path parameters) are the only identifiers allowed as call
@@ -175,6 +176,24 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 **Parse errors:** A malformed multipart body sets `.Err` and responds `400 Bad Request` (unlike `form`, which silently ignores body parse errors).
 
 [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
+
+## Request Body
+
+### `body`
+
+Binds `request.Body` as an `io.Reader`. The method parameter must be exactly
+`io.Reader`; any other type fails generation. Use it for payloads the handler
+must not reinterpret (webhooks, proxied uploads). Like the other reserved
+names, `body` cannot be used as a path wildcard name.
+
+```gotmpl
+{{define "POST /hooks Save(ctx, body)"}}{{.Result}}{{end}}
+```
+```go
+func (s Server) Save(ctx context.Context, body io.Reader) (string, error)
+```
+
+[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt)
 
 ## Server-Sent Events
 
