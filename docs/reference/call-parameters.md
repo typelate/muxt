@@ -14,6 +14,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
 | `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
 | `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
+| `unmarshalJSON(body)` | Any JSON-unmarshalable | `request.Body` | Yes | Decode a JSON request body into a struct parameter |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 
 These names (plus path parameters) are the only identifiers allowed as call
@@ -179,6 +180,9 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 ## Request Body
 
+The request body is a **single-use stream**: at most one of `body` or
+`unmarshalJSON(body)` may appear in a call — using two fails generation.
+
 ### `body`
 
 Binds `request.Body` as an `io.Reader`. The method parameter must be exactly
@@ -193,7 +197,28 @@ names, `body` cannot be used as a path wildcard name.
 func (s Server) Save(ctx context.Context, body io.Reader) (string, error)
 ```
 
-[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt)
+[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt)
+
+### `unmarshalJSON(body)`
+
+Decodes the JSON request body into the Go type of the method parameter at that
+position. The wrapper's only valid argument is `body`. The decode target comes
+from the receiver method signature, so `muxt check` verifies it.
+
+```gotmpl
+{{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{.Result.Name}}{{end}}
+```
+```go
+func (s Server) CreateUser(ctx context.Context, u User) (User, error)
+```
+
+- A malformed (or empty) body responds 400 Bad Request and the method is not
+  called. The wrapper does not check the request `Content-Type`.
+- Decodes with `encoding/json`.
+- If the receiver method is not yet defined, the parameter synthesizes as
+  `json.RawMessage` so template-first iteration passes the raw payload through.
+
+[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
 
 ## Server-Sent Events
 

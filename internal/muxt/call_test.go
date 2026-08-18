@@ -178,6 +178,19 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, ArgumentTypeRequestBody, defs[0].Arguments[0].Type)
 			require.True(t, types.Identical(ioReaderType, defs[0].Arguments[0].ParamType))
 		}},
+		{Name: "unmarshalJSON body decodes into the parameter type", Receiver: serverType, Template: `{{define "POST / FormStruct(unmarshalJSON(body))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, "body", defs[0].Arguments[0].Identifier)
+			require.Equal(t, ArgumentTypeRequestBodyJSON, defs[0].Arguments[0].Type)
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+		}},
+		{Name: "unmarshalJSON body on a synthesized method is json.RawMessage", Receiver: emptyStruct, Template: `{{define "POST / SaveJSON(unmarshalJSON(body))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			require.Equal(t, ArgumentTypeRequestBodyJSON, defs[0].Arguments[0].Type)
+			require.Equal(t, "encoding/json.RawMessage", types.TypeString(defs[0].Arguments[0].ParamType, nil))
+		}},
 		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)

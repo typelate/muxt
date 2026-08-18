@@ -3,6 +3,7 @@ package example
 import (
 	"context"
 	"encoding"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -24,6 +25,7 @@ func (srv *Server) MultipartForm(multipart.Form) any           { return nil }
 func (srv *Server) MultipartFormPtr(*multipart.Form) any       { return nil }
 func (srv *Server) PtrServer(*Server) any                      { return nil }
 func (srv *Server) Reader(io.Reader) any                       { return nil }
+func (srv *Server) RawJSON(json.RawMessage) any                { return nil }
 
 type In struct{ Name string }
 

@@ -347,6 +347,9 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if err := checkArguments(scope, call, def.Representation == RepresentationSSE); err != nil {
 		return err
 	}
+	if n := countBodyConsumers(call); n > 1 {
+		return fmt.Errorf("call %s reads the request body %d times; the request body is a single-use stream and may be consumed at most once", astgen.Format(call.Fun), n)
+	}
 
 	def.fun = fun
 	def.call = call
@@ -427,6 +430,12 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 				hasMultipart = true
 			}
 		case *ast.CallExpr:
+			if isCallTo(exp, callWrapperUnmarshalJSON) {
+				if err := checkBodyWrapperArguments(callWrapperUnmarshalJSON, exp); err != nil {
+					return err
+				}
+				continue
+			}
 			if err := checkArguments(identifiers, exp, sse); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
