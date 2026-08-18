@@ -329,7 +329,10 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if !ok {
 		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
 	}
-	normalized := normalizeCall(call)
+	normalized, err := normalizeCall(call)
+	if err != nil {
+		return err
+	}
 	def.Framing = normalized.framing
 	def.Representation = normalized.representation
 	call = normalized.call

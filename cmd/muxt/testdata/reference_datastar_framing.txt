@@ -1,0 +1,61 @@
+# A datastar(...) framed route renders with the dedicated DatastarTemplateData
+# type. It carries the base helper surface (no HX* helpers), and its name is
+# overridable with --output-datastar-template-data-type.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+grep 'type DatastarTemplateData\[' template_routes.go
+! grep 'HXRedirect' template_routes.go
+
+muxt generate --use-receiver-type=Server --output-datastar-template-data-type=DSData
+muxt check
+
+grep 'type DSData\[' template_routes.go
+! grep 'DatastarTemplateData' template_routes.go
+
+-- template.gohtml --
+{{- define "GET /count datastar(Count(ctx))" -}}<span id="count">{{- .Result -}}</span>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Count(_ context.Context) (int, error) { return 3, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/count", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if want := `<span id="count">3</span>`; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}

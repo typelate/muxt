@@ -80,6 +80,8 @@ These flags control the names of generated types and functions:
 | `--output-receiver-interface` | string | `RoutesReceiver` | Generated receiver interface name. |
 | `--output-template-data-type` | string | `TemplateData` | Template context type name (generic). |
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
+| `--output-htmx-template-data-type` | string | `HTMXTemplateData` | Template data type name for `htmx(...)`-framed route templates. |
+| `--output-datastar-template-data-type` | string | `DatastarTemplateData` | Template data type name for `datastar(...)`-framed route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to `TemplateData` (`HX-Location`, `HX-Trigger`, `HX-Request`, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |

@@ -17,13 +17,64 @@ type framingSpec struct {
 	sseEventDecls     func(file *File, config RoutesFileConfiguration) []ast.Decl
 }
 
-// framingFor resolves the framingSpec for a framing. Only the default
-// (unframed) spec exists today.
-func framingFor(muxt.Framing) framingSpec { return defaultFraming }
+// framingFor resolves the framingSpec for a framing.
+func framingFor(f muxt.Framing) framingSpec {
+	switch f {
+	case muxt.FramingHTMX:
+		return htmxFraming
+	case muxt.FramingDatastar:
+		return datastarFraming
+	default:
+		return defaultFraming
+	}
+}
 
 var defaultFraming = framingSpec{
 	templateDataDecls: defaultTemplateDataDecls,
 	sseEventDecls:     sseTemplateDataDecls,
+}
+
+// htmxFraming renders routes with the dedicated HTMX template-data type: the
+// base helper surface plus the HX* response-header setters and request-header
+// readers. The SSE event framing stays the generic shared one.
+var htmxFraming = framingSpec{
+	templateDataDecls: htmxTemplateDataDecls,
+	sseEventDecls:     sseTemplateDataDecls,
+}
+
+// datastarFraming renders routes with the dedicated Datastar template-data
+// type: the base helper surface under the datastar type name. The SSE event
+// framing stays the generic shared one.
+var datastarFraming = framingSpec{
+	templateDataDecls: datastarTemplateDataDecls,
+	sseEventDecls:     sseTemplateDataDecls,
+}
+
+func htmxTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
+	htmxConfig := config
+	htmxConfig.TemplateDataType = config.HTMXTemplateDataType
+	htmxConfig.HTMXHelpers = true
+	return defaultTemplateDataDecls(file, htmxConfig, receiverInterface)
+}
+
+func datastarTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
+	dsConfig := config
+	dsConfig.TemplateDataType = config.DatastarTemplateDataType
+	dsConfig.HTMXHelpers = false
+	return defaultTemplateDataDecls(file, dsConfig, receiverInterface)
+}
+
+// configForFraming returns config with the render template-data type swapped
+// for the definition's framing, so handler assembly and template execution
+// reference the framing's type without any assembler changes.
+func configForFraming(config RoutesFileConfiguration, def muxt.Definition) RoutesFileConfiguration {
+	switch def.Framing {
+	case muxt.FramingHTMX:
+		config.TemplateDataType = config.HTMXTemplateDataType
+	case muxt.FramingDatastar:
+		config.TemplateDataType = config.DatastarTemplateDataType
+	}
+	return config
 }
 
 func defaultTemplateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {

@@ -64,6 +64,8 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	SSETemplateDataType,
+	HTMXTemplateDataType,
+	DatastarTemplateDataType,
 	TemplateRoutePathsTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
@@ -97,6 +99,8 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	config.PackagePath = routesPkg.PkgPath
 	config.PackageName = routesPkg.Name
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
+	config.HTMXTemplateDataType = cmp.Or(config.HTMXTemplateDataType, "HTMXTemplateData")
+	config.DatastarTemplateDataType = cmp.Or(config.DatastarTemplateDataType, "DatastarTemplateData")
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {
@@ -227,7 +231,6 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	for _, s := range is {
 		importSpecs = append(importSpecs, s)
 	}
-	spec := framingFor(muxt.FramingNone)
 	decls := []ast.Decl{
 		// import
 		&ast.GenDecl{
@@ -246,13 +249,30 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		// func routes
 		routesFunc,
 	}
-	decls = append(decls, spec.templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	// Each framing present among the routes contributes its template-data
+	// declarations. The unframed TemplateData is emitted only when an unframed
+	// route exists (or there are no routes at all) — when every route is
+	// framed the identifier must not exist.
+	hasUnframed := len(groups.all) == 0 || slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+		return definition.Framing == muxt.FramingNone
+	})
+	if hasUnframed {
+		decls = append(decls, framingFor(muxt.FramingNone).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	}
+	for _, framing := range []muxt.Framing{muxt.FramingHTMX, muxt.FramingDatastar} {
+		if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
+			return definition.Framing == framing
+		}) {
+			decls = append(decls, framingFor(framing).templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+		}
+	}
 	// The SSE event template-data type and its methods are only needed when a
-	// route streams events, so emit them conditionally to avoid unused imports.
+	// route streams events, so emit them conditionally to avoid unused
+	// imports. The event framing is shared across the current framings.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
 		return definition.Representation == muxt.RepresentationSSE
 	}) {
-		decls = append(decls, spec.sseEventDecls(file, config)...)
+		decls = append(decls, framingFor(muxt.FramingNone).sseEventDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
 	outputFile := &ast.File{
@@ -598,6 +618,7 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 		statusCodeIdent      = "statusCode"
 		templateDataVarIdent = "td"
 	)
+	config = configForFraming(config, def)
 	handlerFunc := &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
@@ -639,6 +660,7 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
+	config = configForFraming(config, def)
 	sig := def.Signature()
 	if sig == nil {
 		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())

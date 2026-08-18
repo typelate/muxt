@@ -1,0 +1,60 @@
+muxt generate --use-receiver-type=Server
+
+# The safety property itself: an unframed template calling an HX* helper
+# fails muxt check with a field-not-found error naming TemplateData — the
+# minimal type no longer carries the htmx surface.
+! muxt check
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+$WORK/template_routes.go:74:13 ExecuteTemplate "GET /oops Oops(ctx)" *TemplateData[RoutesReceiver, string]
+$WORK/template.gohtml:1:38: executing "GET /oops Oops(ctx)" at <.HXRedirect>: field or method HXRedirect not found on TemplateData[RoutesReceiver, string]
+
+  type TemplateData struct {
+    // private fields omitted
+  }
+
+  func (data *TemplateData) Err() error { /* ... */ }
+  func (data *TemplateData) Header(string, string) *TemplateData[RoutesReceiver, string] { /* ... */ }
+  func (data *TemplateData) MuxtVersion() string { /* ... */ }
+  func (data *TemplateData) Ok() bool { /* ... */ }
+  func (data *TemplateData) Path() TemplateRoutePaths { /* ... */ }
+  func (data *TemplateData) Receiver() RoutesReceiver { /* ... */ }
+  func (data *TemplateData) Redirect(string, int) (*TemplateData[RoutesReceiver, string], error) { /* ... */ }
+  func (data *TemplateData) RedirectFound(url string) (*TemplateData[RoutesReceiver, string], error) { /* ... */ }
+  func (data *TemplateData) RedirectMovedPermanently(url string) (*TemplateData[RoutesReceiver, string], error) { /* ... */ }
+  func (data *TemplateData) RedirectMultipleChoices(url string) (*TemplateData[RoutesReceiver, string], error) { /* ... */ }
+  func (data *TemplateData) RedirectSeeOther(url string) (*TemplateData[RoutesReceiver, string], error) { /* ... */ }
+  func (data *TemplateData) Request() *http.Request { /* ... */ }
+  func (data *TemplateData) Result() string { /* ... */ }
+  func (data *TemplateData) StatusCode(statusCode int) *TemplateData[RoutesReceiver, string] { /* ... */ }
+  func (data *TemplateData) String() string { /* ... */ }
+
+Error: fail: 1 error
+-- template.gohtml --
+{{- define "GET /oops Oops(ctx)" -}}{{.HXRedirect "/next"}}done{{- end -}}
+{{- define "GET /fine Fine(ctx)" -}}<p>{{- .Result -}}</p>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Oops(_ context.Context) (string, error) { return "", nil }
+
+// Fine proves the base helpers still work on unframed routes.
+func (Server) Fine(_ context.Context) (string, error) { return "ok", nil }

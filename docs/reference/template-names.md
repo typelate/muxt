@@ -226,6 +226,8 @@ names.
 {{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form binding -->
 {{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{end}}  <!-- JSON body binding -->
 {{define "POST /hooks Save(ctx, body)"}}{{end}}  <!-- Raw body stream -->
+{{define "GET /admin htmx(Admin(ctx))"}}{{end}}  <!-- htmx framing: renders with HTMXTemplateData -->
+{{define "GET /count datastar(Count(ctx))"}}{{end}}  <!-- datastar framing: renders with DatastarTemplateData -->
 {{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
 {{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
 {{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
@@ -235,6 +237,18 @@ names.
 Call arguments bind to method parameters by position. Argument names must be
 reserved identifiers or path parameter names (case-sensitive); the method's own
 parameter names don't need to match them.
+
+The outermost position may also carry a **framing wrapper**. `htmx(Method(...))`
+renders the route with `HTMXTemplateData`: the base helper surface plus the
+HX* response-header setters and request-header readers. `datastar(Method(...))`
+renders the route with `DatastarTemplateData`. A framing wrapper takes exactly
+one method call and composes with the `sse(...)` representation wrapper
+(`htmx(sse(...))`). Each framing's template-data type is only emitted when a
+route uses it, and the unframed `TemplateData` is only emitted when an
+unframed route exists. Type names are overridable with
+`--output-htmx-template-data-type` and `--output-datastar-template-data-type`.
+
+[reference_htmx_framing.txt](../../cmd/muxt/testdata/reference_htmx_framing.txt) · [reference_htmx_mixed.txt](../../cmd/muxt/testdata/reference_htmx_mixed.txt) · [reference_htmx_template_data_minimal.txt](../../cmd/muxt/testdata/reference_htmx_template_data_minimal.txt) · [reference_datastar_framing.txt](../../cmd/muxt/testdata/reference_datastar_framing.txt) · [err_htmx_bad_arity.txt](../../cmd/muxt/testdata/err_htmx_bad_arity.txt)
 
 [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
 

@@ -1,0 +1,76 @@
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "POST /save htmx(Save(ctx, form))" -}}{{.HXRedirect "/next"}}saved:{{- .Result -}}{{- end -}}
+{{- define "GET /state htmx(State(ctx))" -}}{{- if .HXRequest -}}from-htmx boosted={{ .HXBoosted }}{{- else -}}plain{{- end -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+// Save handles a form post whose template steers the htmx client with an
+// HX-Redirect response header after success.
+func (Server) Save(_ context.Context, form url.Values) (string, error) {
+	return form.Get("name"), nil
+}
+
+// State renders differently for htmx-originated requests; the template reads
+// the HX-Request and HX-Boosted request headers.
+func (Server) State(_ context.Context) (string, error) { return "", nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("template sets the HX-Redirect response header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/save", strings.NewReader("name=ada"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if got, want := rec.Header().Get("HX-Redirect"), "/next"; got != want {
+			t.Errorf("HX-Redirect = %q, want %q", got, want)
+		}
+		if !strings.Contains(rec.Body.String(), "saved:ada") {
+			t.Errorf("body = %q, want it to contain %q", rec.Body.String(), "saved:ada")
+		}
+	})
+
+	t.Run("template reads htmx request headers", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/state", nil)
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Boosted", "true")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if want := "from-htmx boosted=true"; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+}
