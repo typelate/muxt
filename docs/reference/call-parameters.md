@@ -181,9 +181,11 @@ func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
 
 ## Request Body
 
-The request body is a **single-use stream**: at most one of `body`,
-`unmarshalJSON(body)`, or `unmarshalForm(body)` may appear in a call —
-using two fails generation.
+The request body is a **single-use stream**. `body` and `unmarshalJSON(body)`
+each read it directly; `form`, `multipart`, and `unmarshalForm(body)` parse it
+once through `request.ParseForm` / `request.ParseMultipartForm` (repeats reuse
+the cached result). A call that reads the body more than once — for example
+`(form, body)` or `(multipart, unmarshalJSON(body))` — fails generation.
 
 ### `body`
 
@@ -199,7 +201,7 @@ names, `body` cannot be used as a path wildcard name.
 func (s Server) Save(ctx context.Context, body io.Reader) (string, error)
 ```
 
-[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt)
+[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt) · [err_form_and_body.txt](../../cmd/muxt/testdata/err_form_and_body.txt)
 
 ### `unmarshalJSON(body)`
 

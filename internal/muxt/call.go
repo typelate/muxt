@@ -691,27 +691,45 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 	return fmt.Errorf("the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
 }
 
-// countBodyConsumers counts how many arguments in call (recursively) read the
-// request body: the reserved body identifier and each decode wrapper. The
-// request body is a single-use stream, so more than one consumer is a
-// generation error.
+// countBodyConsumers counts how many times call (recursively) reads the
+// request body. Each body identifier and each unmarshalJSON(body) wrapper
+// reads the stream directly. The form and multipart bindings — including
+// unmarshalForm(body), which is the form binding — parse it through
+// request.ParseForm / request.ParseMultipartForm, which cache the result, so
+// however many times they appear they count as one read. The request body is
+// a single-use stream, so more than one read is a generation error.
 func countBodyConsumers(call *ast.CallExpr) int {
-	n := 0
+	reads, parsesForm := countBodyReads(call)
+	if parsesForm {
+		reads++
+	}
+	return reads
+}
+
+func countBodyReads(call *ast.CallExpr) (reads int, parsesForm bool) {
 	for _, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			if exp.Name == TemplateNameScopeIdentifierRequestBody {
-				n++
+			switch exp.Name {
+			case TemplateNameScopeIdentifierRequestBody:
+				reads++
+			case TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart:
+				parsesForm = true
 			}
 		case *ast.CallExpr:
-			if isBodyUnmarshalCall(exp) {
-				n++
-				continue
+			switch {
+			case isCallTo(exp, callWrapperUnmarshalJSON):
+				reads++
+			case isCallTo(exp, callWrapperUnmarshalForm):
+				parsesForm = true
+			default:
+				nestedReads, nestedParsesForm := countBodyReads(exp)
+				reads += nestedReads
+				parsesForm = parsesForm || nestedParsesForm
 			}
-			n += countBodyConsumers(exp)
 		}
 	}
-	return n
+	return reads, parsesForm
 }
 
 func patternScope() []string {
