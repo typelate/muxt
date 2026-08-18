@@ -768,6 +768,16 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			// TODO: add error case
 		case *ast.CallExpr:
 			nestedArg := args[i]
+			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
+				const bodyValueIdent = "bodyValue"
+				decodeStatements, err := decodeJSONBodyStatements(file, bodyValueIdent, nestedArg.ParamType, parseErrBlock)
+				if err != nil {
+					return nil, err
+				}
+				statements = append(statements, decodeStatements...)
+				call.Args[i] = ast.NewIdent(bodyValueIdent)
+				continue
+			}
 			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, resultType, nestedArg.Signature(), nestedArg.Arguments(), parsed, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
@@ -1299,6 +1309,41 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 // lastEventIDHeader is the canonical request header the lastEventID argument is
 // sourced from. http.Header.Get canonicalizes lookups, so this matches a
 // client's "Last-Event-ID" as well.
+// decodeJSONBodyStatements declares valueIdent with the parameter type and
+// decodes the JSON request body into it:
+//
+//	var bodyValue T
+//	if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { <parseErrBlock> }
+func decodeJSONBodyStatements(file *File, valueIdent string, paramType types.Type, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+	typeExpr, err := file.TypeASTExpression(paramType)
+	if err != nil {
+		return nil, err
+	}
+	declare := &ast.DeclStmt{Decl: &ast.GenDecl{
+		Tok:   token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(valueIdent)}, Type: typeExpr}},
+	}}
+	decode := &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X: &ast.CallExpr{
+				Fun: astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
+				Args: []ast.Expr{&ast.SelectorExpr{
+					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+					Sel: ast.NewIdent("Body"),
+				}},
+			},
+			Sel: ast.NewIdent("Decode"),
+		},
+		Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(valueIdent)}},
+	}
+	checkErr := &ast.IfStmt{
+		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{decode}},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: ast.NewIdent("nil")},
+		Body: parseErrBlock(),
+	}
+	return []ast.Stmt{declare, checkErr}, nil
+}
+
 const lastEventIDHeader = "Last-Event-Id"
 
 // requestArgumentSource returns the expression a scalar argument is parsed from.

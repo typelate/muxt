@@ -324,6 +324,17 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				args = append(args, Argument{Identifier: name})
 				continue
 			}
+			if name == callWrapperUnmarshalJSON {
+				// The decode target is the method parameter's type; any type
+				// encoding/json can unmarshal into is permitted, so there is
+				// no assignability constraint to check here.
+				args = append(args, Argument{
+					Identifier: TemplateNameScopeIdentifierRequestBody,
+					Type:       ArgumentTypeRequestBodyJSON,
+					ParamType:  paramType,
+				})
+				continue
+			}
 			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, templatesPackage, receiver, pl)
 			if err != nil {
 				return nil, false, nil, err
@@ -368,6 +379,16 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
+			if isCallTo(arg, callWrapperUnmarshalJSON) {
+				// Template-first iteration: without a defined method the decode
+				// target is unknown, so pass the raw payload through.
+				tp, err := stdlibType(pl, "encoding/json", "RawMessage", false)
+				if err != nil {
+					return nil, err
+				}
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
+				continue
+			}
 			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl); err != nil {
 				return nil, err
 			}
@@ -618,6 +639,51 @@ func checkRequestBodyParameter(pl []*packages.Package, param types.Type, qual ty
 		return fmt.Errorf("%s parameter must have type io.Reader, got %s", TemplateNameScopeIdentifierRequestBody, types.TypeString(param, qual))
 	}
 	return nil
+}
+
+// callWrapperUnmarshalJSON is the request-body decode wrapper recognized at
+// argument positions: unmarshalJSON(body) decodes the JSON request body into
+// the method parameter's type.
+const callWrapperUnmarshalJSON = "unmarshalJSON"
+
+// isCallTo reports whether call invokes the plain identifier name.
+func isCallTo(call *ast.CallExpr, name string) bool {
+	fn, ok := call.Fun.(*ast.Ident)
+	return ok && fn.Name == name
+}
+
+// checkBodyWrapperArguments enforces the decode-wrapper contract: exactly one
+// argument, and it must be the reserved body identifier.
+func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
+	if len(call.Args) == 1 {
+		if id, ok := call.Args[0].(*ast.Ident); ok && id.Name == TemplateNameScopeIdentifierRequestBody {
+			return nil
+		}
+	}
+	return fmt.Errorf("the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
+}
+
+// countBodyConsumers counts how many arguments in call (recursively) read the
+// request body: the reserved body identifier and each decode wrapper. The
+// request body is a single-use stream, so more than one consumer is a
+// generation error.
+func countBodyConsumers(call *ast.CallExpr) int {
+	n := 0
+	for _, a := range call.Args {
+		switch exp := a.(type) {
+		case *ast.Ident:
+			if exp.Name == TemplateNameScopeIdentifierRequestBody {
+				n++
+			}
+		case *ast.CallExpr:
+			if isCallTo(exp, callWrapperUnmarshalJSON) {
+				n++
+				continue
+			}
+			n += countBodyConsumers(exp)
+		}
+	}
+	return n
 }
 
 func patternScope() []string {
