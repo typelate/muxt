@@ -92,3 +92,40 @@ func TestRewriteBodyFormWrappers(t *testing.T) {
 		})
 	}
 }
+
+func TestPeelRepresentationWrapper(t *testing.T) {
+	for _, tt := range []struct {
+		expr           string
+		representation Representation
+		fun            string
+		peeled         bool
+	}{
+		{expr: `sse(Stream(ctx, execute))`, representation: RepresentationSSE, fun: "Stream", peeled: true},
+		{expr: `marshalJSON(List(ctx))`, representation: RepresentationMarshalJSON, fun: "List", peeled: true},
+		{expr: `List(ctx)`, peeled: false},
+		{expr: `marshalJSON()`, peeled: false},
+		{expr: `marshalJSON(ctx)`, peeled: false},
+		{expr: `marshalJSON(A(ctx), B(ctx))`, peeled: false},
+		{expr: `marshalJSON(pkg.Fn(ctx))`, peeled: false},
+	} {
+		t.Run(tt.expr, func(t *testing.T) {
+			call := mustParseCall(t, tt.expr)
+			representation, inner, innerFun, ok := peelRepresentationWrapper(call.Fun.(*ast.Ident), call)
+			if ok != tt.peeled {
+				t.Fatalf("peelRepresentationWrapper(%q) ok = %t, want %t", tt.expr, ok, tt.peeled)
+			}
+			if !tt.peeled {
+				return
+			}
+			if representation != tt.representation {
+				t.Errorf("peelRepresentationWrapper(%q) representation = %q, want %q", tt.expr, representation, tt.representation)
+			}
+			if innerFun.Name != tt.fun {
+				t.Errorf("peelRepresentationWrapper(%q) fun = %q, want %q", tt.expr, innerFun.Name, tt.fun)
+			}
+			if inner == nil {
+				t.Errorf("peelRepresentationWrapper(%q) inner call is nil", tt.expr)
+			}
+		})
+	}
+}

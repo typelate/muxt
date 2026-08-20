@@ -198,6 +198,28 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
 			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
 		}},
+		{Name: "marshalJSON with data result", Receiver: serverType, Template: `{{define "GET / marshalJSON(M())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, RepresentationMarshalJSON, defs[0].Representation)
+			require.Equal(t, ResultShapeData, defs[0].ResultShape())
+		}},
+		{Name: "marshalJSON with data and error results", Receiver: serverType, Template: `{{define "GET / marshalJSON(StringError())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, RepresentationMarshalJSON, defs[0].Representation)
+			require.Equal(t, ResultShapeDataError, defs[0].ResultShape())
+		}},
+		{Name: "marshalJSON requires a result", Receiver: serverType, Template: `{{define "GET / marshalJSON(NoResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "marshalJSON requires a result to marshal but NoResults() returns nothing")
+		}},
+		{Name: "marshalJSON requires a non-error result", Receiver: serverType, Template: `{{define "GET / marshalJSON(NoParams())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "marshalJSON requires a non-error result but NoParams() error only returns an error")
+		}},
+		{Name: "marshalJSON second result must be an error", Receiver: serverType, Template: `{{define "GET / marshalJSON(StringOK())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "marshalJSON requires the second result of StringOK() (string, bool) to be an error, got bool")
+		}},
+		{Name: "marshalJSON allows at most two results", Receiver: serverType, Template: `{{define "GET / marshalJSON(ThreeResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "marshalJSON allows at most two results but ThreeResults() (int, int, error) has 3")
+		}},
 		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
