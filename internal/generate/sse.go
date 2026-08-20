@@ -101,7 +101,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		},
 		headerSet("Content-Type", "text/event-stream"),
 		headerSet("Connection", "keep-alive"),
-		headerSet("Cache-Control", "no-cache"),
+		headerSet("Cache-Control", "no-store"),
 		&ast.ExprStmt{X: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("WriteHeader")},
 			Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
