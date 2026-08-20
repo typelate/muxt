@@ -119,6 +119,10 @@ const (
 	// RepresentationTextHTML Representation = ""
 
 	RepresentationSSE Representation = "sse"
+
+	// RepresentationMarshalJSON responds application/json with the marshaled
+	// method result; the define body executes only for its side effects.
+	RepresentationMarshalJSON Representation = "marshalJSON"
 )
 
 func (def Definition) SourceFile() string { return def.sourceFile }
@@ -327,16 +331,10 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if !ok {
 		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
 	}
-	if fun.Name == string(RepresentationSSE) && len(call.Args) == 1 {
-		actualCall, ok := call.Args[0].(*ast.CallExpr)
-		if ok {
-			actualFun, ok := actualCall.Fun.(*ast.Ident)
-			if ok {
-				def.Representation = RepresentationSSE
-				call = actualCall
-				fun = actualFun
-			}
-		}
+	if representation, inner, innerFun, ok := peelRepresentationWrapper(fun, call); ok {
+		def.Representation = representation
+		call = inner
+		fun = innerFun
 	}
 	if call.Ellipsis != token.NoPos {
 		return fmt.Errorf("unexpected ellipsis")
@@ -357,11 +355,34 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
 
-	if def.Representation == RepresentationSSE && def.hasResponseWriterArg {
-		return fmt.Errorf("sse handler cannot use a %q argument", TemplateNameScopeIdentifierHTTPResponse)
+	if (def.Representation == RepresentationSSE || def.Representation == RepresentationMarshalJSON) && def.hasResponseWriterArg {
+		return fmt.Errorf("%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 	}
 
 	return nil
+}
+
+// peelRepresentationWrapper peels a representation wrapper — sse(...) or
+// marshalJSON(...) — off the outermost position of a template-name call. A
+// wrapper is only peeled when it has exactly one argument and that argument
+// is a call to a plain identifier; otherwise the name is treated as an
+// ordinary function call (a user function named "sse" keeps working).
+func peelRepresentationWrapper(fun *ast.Ident, call *ast.CallExpr) (Representation, *ast.CallExpr, *ast.Ident, bool) {
+	if len(call.Args) != 1 {
+		return "", nil, nil, false
+	}
+	for _, representation := range []Representation{RepresentationSSE, RepresentationMarshalJSON} {
+		if fun.Name != string(representation) {
+			continue
+		}
+		if inner, ok := call.Args[0].(*ast.CallExpr); ok {
+			if innerFun, ok := inner.Fun.(*ast.Ident); ok {
+				return representation, inner, innerFun, true
+			}
+		}
+		break
+	}
+	return "", nil, nil, false
 }
 
 func (def Definition) callWriteHeader(receiverInterfaceType *ast.InterfaceType) bool {
