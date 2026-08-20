@@ -42,7 +42,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		h := response.Header()
 		h.Set("Content-Type", "text/event-stream")
 		h.Set("Connection", "keep-alive")
-		h.Set("Cache-Control", "no-cache")
+		h.Set("Cache-Control", "no-store")
 		response.WriteHeader(http.StatusOK)
 		flusher.Flush()
 		var mut sync.Mutex
