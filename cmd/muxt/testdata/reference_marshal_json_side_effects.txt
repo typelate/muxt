@@ -1,0 +1,68 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /api/status marshalJSON(Status(ctx))" -}}
+{{- with .Header "X-Side" "effect" -}}{{- end -}}
+rendered-output-to-discard
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Status struct {
+	OK bool `json:"ok"`
+}
+
+type T struct{}
+
+func (T) Status(_ context.Context) (Status, error) {
+	return Status{OK: true}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got, want := rec.Header().Get("X-Side"), "effect"; got != want {
+		t.Errorf("X-Side header = %q, want %q (the define body must execute for side effects)", got, want)
+	}
+	if want := `{"ok":true}`; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+	if strings.Contains(rec.Body.String(), "rendered-output-to-discard") {
+		t.Errorf("body = %q; rendered template output must be discarded on success", rec.Body.String())
+	}
+}

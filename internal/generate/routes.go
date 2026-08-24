@@ -665,6 +665,8 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 	switch def.Representation {
 	case muxt.RepresentationSSE:
 		return sseMethodHandlerFunc(file, config, def, sig, receiverInterfaceName)
+	case muxt.RepresentationMarshalJSON:
+		return marshalJSONHandlerFunc(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	default:
 		return executeHTMLTemplateHandler(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	}

@@ -1,0 +1,65 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}
+{{- if .Err -}}<p>lookup failed: {{ .Err }}</p>{{- else -}}unused{{- end -}}
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type User struct {
+	Name string `json:"name"`
+}
+
+type T struct{}
+
+func (T) GetUser(_ context.Context) (User, error) {
+	return User{}, errors.New("user not found")
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d (muxt's usual method-error status)", rec.Code, http.StatusInternalServerError)
+	}
+	if !strings.Contains(rec.Body.String(), "lookup failed: user not found") {
+		t.Errorf("body = %q, want the rendered error branch, not JSON", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html for the rendered fallback", ct)
+	}
+}
