@@ -1,0 +1,72 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /api/items/{id} marshalJSON(GetItem(ctx, id))" -}}{{- if .Err -}}bad-id{{- end -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Item struct {
+	ID int `json:"id"`
+}
+
+type T struct{}
+
+func (T) GetItem(_ context.Context, id int) (Item, error) {
+	return Item{ID: id}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	t.Run("typed path parameter binds as usual", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/items/42", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if want := `{"id":42}`; rec.Body.String() != want {
+			t.Errorf("body = %q, want %q", rec.Body.String(), want)
+		}
+	})
+
+	t.Run("path parse failure is 400 before any JSON concerns", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/items/abc", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if !strings.Contains(rec.Body.String(), "bad-id") {
+			t.Errorf("body = %q, want the rendered error branch", rec.Body.String())
+		}
+	})
+}

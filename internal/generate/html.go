@@ -12,7 +12,12 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string) (*ast.FuncLit, error) {
+// executeHTMLTemplateHandler assembles a rendered-route handler: template
+// data, argument parsing, the method call, and template execution into the
+// response buffer. The optional respond statements run after execution and
+// before the status/body write, letting another representation (marshalJSON)
+// replace the buffered output on success without duplicating the assembly.
+func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	var callFun ast.Expr
 	isMethodCall := sig.Recv() != nil
 	if isMethodCall {
@@ -146,6 +151,8 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 
 		callExecuteTemplate(file, config, def, handlerFunc, bufIdent, resultDataIdent)
 	}
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
 
 	if !def.HasResponseWriterArg() {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {

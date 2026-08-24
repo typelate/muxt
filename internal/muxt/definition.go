@@ -329,7 +329,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return fmt.Errorf("expected function identifier, got got: %s", astgen.Format(call.Fun))
+		return fmt.Errorf("expected function identifier, got: %s", astgen.Format(call.Fun))
 	}
 	if representation, inner, innerFun, ok := peelRepresentationWrapper(fun, call); ok {
 		def.Representation = representation

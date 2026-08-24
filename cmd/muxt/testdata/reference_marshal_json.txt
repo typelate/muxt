@@ -1,0 +1,65 @@
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /api/user 201 marshalJSON(GetUser(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type User struct {
+	Name string   `json:"name"`
+	Age  int      `json:"age"`
+	Tags []string `json:"tags"`
+}
+
+type T struct{}
+
+// GetUser returns a struct with a nil slice: encoding/json renders it as
+// null.
+func (T) GetUser(_ context.Context) (User, error) {
+	return User{Name: "Ada", Age: 36}, nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d (the route's declared status code)", rec.Code, http.StatusCreated)
+	}
+	if got, want := rec.Header().Get("Content-Type"), "application/json"; got != want {
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+	if want := `{"name":"Ada","age":36,"tags":null}`; rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}
