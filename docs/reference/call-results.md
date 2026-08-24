@@ -129,7 +129,7 @@ Templates receive `TemplateData[R, T]` where `R` is the receiver interface and
 | `.Request()` | `*http.Request` | HTTP request |
 | `.Receiver()` | `R` | The receiver passed to `TemplateRoutes` |
 | `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument |
-| `.MuxtVersion()` | `string` | The muxt version that generated the code |
+| `.MuxtVersion()` | `string` | The muxt version that generated the code (not generated when `--output-muxt-version=false`) |
 | `.StatusCode(code)` | `*TemplateData` | Set HTTP status (returns the data for chaining) |
 | `.Header(key, val)` | `*TemplateData` | Set response header (returns the data for chaining) |
 | `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code; the code must be in 300–399 or an error is returned |

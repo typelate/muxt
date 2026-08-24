@@ -74,6 +74,10 @@ type RoutesFileConfiguration struct {
 	OutputMultipleFiles              bool
 	HTMXHelpers                      bool
 	OutputExportedDefaultIdentifiers bool
+	// OutputMuxtVersion controls whether the muxt version is recorded in
+	// generated files (the "// muxt version:" comment and the TemplateData
+	// MuxtVersion method). Defaults to true.
+	OutputMuxtVersion bool
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
@@ -246,7 +250,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		routesFunc,
 
 		templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
-		templateDataMuxtVersionMethod(config),
+	}
+	if config.OutputMuxtVersion {
+		decls = append(decls, templateDataMuxtVersionMethod(config))
+	}
+	decls = append(decls,
 		templateDataPathMethod(config),
 		templateDataResultMethod(config.TemplateDataType),
 		templateDataRequestMethod(file, config.TemplateDataType),
@@ -256,7 +264,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		templateDataError(file, config.TemplateDataType),
 		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
 		templateRedirect(file, config),
-	}
+	)
 	for _, method := range templateRedirectHelperMethods(file, config) {
 		decls = append(decls, method)
 	}
