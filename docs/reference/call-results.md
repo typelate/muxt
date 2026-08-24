@@ -116,6 +116,44 @@ error through `.Err`. Returning nil without ever calling `execute` responds
 **Warning:** without `execute` in the call, a bare `error` result is treated as
 Pattern 1 — the error value lands in `.Result` and `.Err` stays nil.
 
+## JSON Responses: `marshalJSON(...)`
+
+Wrapping the call in `marshalJSON(...)` makes the route respond
+`application/json` with the marshaled result instead of rendered HTML:
+
+```gotmpl
+{{define "GET /api/user 201 marshalJSON(GetUser(ctx))"}}{{end}}
+```
+```go
+func (s Server) GetUser(ctx context.Context) (User, error)
+```
+
+| Method results | Outcome |
+|---|---|
+| `(T)` or `(T, error)` | valid — `T` is marshaled |
+| none | generation error: nothing to marshal |
+| only `error` | generation error: no non-error result |
+| `(T, U)` where `U` is not `error` | generation error: second result must be `error` |
+| three or more results | generation error: too many results |
+
+- **The define body still executes** against the template data; on success its
+  rendered output is discarded and the response is the marshaled result. That
+  lets the template call side-effect helpers — status code and response
+  headers reach the JSON response.
+- **On a method error the route falls back to the rendered output**: the
+  `{{if .Err}}` branch renders and is sent as `text/html` with muxt's usual
+  error status. Render JSON in that branch yourself if you want JSON errors.
+- A marshal failure responds `500` with the status text only.
+- The route's declared status code applies to the success response; parameter
+  binding inside the call (path values, `ctx`, `form`, `unmarshalJSON(body)`,
+  …) is unchanged, and binding failures respond 400 before any JSON concerns.
+- A `response` argument inside the wrapper is a generation error.
+- Marshaling uses `encoding/json`.
+- `marshalJSON` is reserved at the outermost call position; a package-scope
+  function named `marshalJSON` may still be called as a plain route method.
+
+[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) · [reference_marshal_json_args.txt](../../cmd/muxt/testdata/reference_marshal_json_args.txt) · [reference_marshal_json_side_effects.txt](../../cmd/muxt/testdata/reference_marshal_json_side_effects.txt) · [reference_marshal_json_method_error.txt](../../cmd/muxt/testdata/reference_marshal_json_method_error.txt)
+
 ## TemplateData API
 
 Templates receive `TemplateData[R, T]` where `R` is the receiver interface and
