@@ -225,7 +225,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 				return fmt.Errorf("output filename must use .go extension")
 			}
 
-			if v, ok := cliVersion(); ok {
+			if v, ok := cliVersion(); ok && config.OutputMuxtVersion {
 				config.MuxtVersion = v
 			}
 			applyDefaults(&config, cmd.Flags())
@@ -288,7 +288,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			newGeneratedFiles := make(map[string]bool)
 			for i, file := range files {
 				var sb bytes.Buffer
-				writeCodeGenerationComment(&sb, configToArgs(config))
+				writeCodeGenerationComment(&sb, configToArgs(config), config.OutputMuxtVersion)
 				sb.WriteString(file.Content)
 				if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
 					for _, f := range files[:i] {
@@ -375,6 +375,11 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 		args = append(args, "--"+outputExportedDefaultIdentifiers+"=false")
 	}
 
+	// Add output-muxt-version flag if false (true is the default)
+	if !config.OutputMuxtVersion {
+		args = append(args, "--"+outputMuxtVersion+"=false")
+	}
+
 	// Add output-multipart-max-memory if explicitly set
 	if config.MultipartMaxMemory > 0 {
 		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
@@ -383,13 +388,15 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	return args
 }
 
-func writeCodeGenerationComment(w io.StringWriter, args []string) {
+func writeCodeGenerationComment(w io.StringWriter, args []string, includeVersion bool) {
 	_, _ = w.WriteString(fmt.Sprintf(codeGenerationComment, strings.TrimSpace(strings.Join(args, " "))))
-	if v, ok := cliVersion(); ok {
+	if v, ok := cliVersion(); ok && includeVersion {
 		_, _ = w.WriteString("// muxt version: ")
 		_, _ = w.WriteString(v)
-		_, _ = w.WriteString("\n\n")
+		_, _ = w.WriteString("\n")
 	}
+	// The blank line keeps the header out of the package doc comment.
+	_, _ = w.WriteString("\n")
 }
 
 func listTemplateCallersCommand(wd *string) *cobra.Command {
@@ -559,6 +566,7 @@ const (
 	outputHTMXHelpers                   = "output-htmx-helpers"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
+	outputMuxtVersion                   = "output-muxt-version"
 
 	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
@@ -596,6 +604,7 @@ This function also receives an argument with a type matching the name given by o
 	outputHTMXHelpersHelp                   = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
+	outputMuxtVersionHelp                   = `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
@@ -674,6 +683,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
 	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
+	flagSet.BoolVar(&g.OutputMuxtVersion, outputMuxtVersion, true, outputMuxtVersionHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 }
 
