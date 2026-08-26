@@ -56,6 +56,8 @@ func (srv *Server) SSETwoCallbacks(func(string) error, func(string) error) {}
 
 func (srv *Server) ThreeResults() (int, int, error) { return 0, 0, nil }
 
+func (srv *Server) TwoErrors() (error, error) { return nil, nil }
+
 func (srv *Server) Float64(float64) any  { return nil }
 func (srv *Server) URLParam(url.URL) any { return nil }
 

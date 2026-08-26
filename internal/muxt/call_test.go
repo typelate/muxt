@@ -217,6 +217,9 @@ func TestArgument(t *testing.T) {
 		{Name: "marshalJSON second result must be an error", Receiver: serverType, Template: `{{define "GET / marshalJSON(StringOK())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "marshalJSON requires the second result of StringOK() (string, bool) to be an error, got bool")
 		}},
+		{Name: "marshalJSON first result must not be an error", Receiver: serverType, Template: `{{define "GET / marshalJSON(TwoErrors())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "marshalJSON requires a non-error first result to marshal but TwoErrors() (error, error) returns an error value")
+		}},
 		{Name: "marshalJSON allows at most two results", Receiver: serverType, Template: `{{define "GET / marshalJSON(ThreeResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "marshalJSON allows at most two results but ThreeResults() (int, int, error) has 3")
 		}},
