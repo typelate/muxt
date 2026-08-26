@@ -435,6 +435,15 @@ func IsSSEArgument(name string) bool {
 }
 
 func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
+	return checkCallArguments(identifiers, call, sse, false)
+}
+
+// checkCallArguments validates call's arguments against the scope. nested is
+// true when call is itself an argument of the route's method call: render
+// callbacks (execute and the sse callbacks) receive generated closures, and
+// those are only installed for direct arguments, so a nested callback
+// identifier is an error rather than generated code that does not compile.
+func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bool) error {
 	hasForm, hasMultipart := false, false
 	for i, a := range call.Args {
 		switch exp := a.(type) {
@@ -444,6 +453,9 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name))
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
+			}
+			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
+				return fmt.Errorf("the %s callback must be a direct argument of the route's method call", exp.Name)
 			}
 			switch exp.Name {
 			case TemplateNameScopeIdentifierForm:
@@ -463,7 +475,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 				}
 				continue
 			}
-			if err := checkArguments(identifiers, exp, sse); err != nil {
+			if err := checkCallArguments(identifiers, exp, sse, true); err != nil {
 				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
 			}
 		default:
