@@ -60,6 +60,9 @@ func TestDefinitionsBodyArgumentErrors(t *testing.T) {
 		{name: "unmarshalForm requires the body identifier", template: `{{define "POST / Save(unmarshalForm(form))"}}{{end}}`, wantErr: "the unmarshalForm wrapper requires exactly one argument, the reserved body identifier: unmarshalForm(body)"},
 		{name: "form parses the request body", template: `{{define "POST / Save(ctx, form, body)"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
 		{name: "multipart parses the request body", template: `{{define "POST / Save(ctx, multipart, unmarshalJSON(body))"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
+		{name: "execute nested in a call argument", template: `{{define "GET / Outer(Inner(execute))"}}{{end}}`, wantErr: "call Outer argument error: the execute callback must be a direct argument of the route's method call"},
+		{name: "execute nested inside a representation wrapper call argument", template: `{{define "GET / marshalJSON(Outer(Inner(execute)))"}}{{end}}`, wantErr: "call Outer argument error: the execute callback must be a direct argument of the route's method call"},
+		{name: "sse callback nested in a call argument", template: `{{define "GET / sse(Outer(Inner(sseClock)))"}}{{end}}`, wantErr: "call Outer argument error: the sseClock callback must be a direct argument of the route's method call"},
 		{name: "unmarshalForm conflicts with multipart like form does", template: `{{define "POST / Save(unmarshalForm(body), multipart)"}}{{end}}`, wantErr: `call Save has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
