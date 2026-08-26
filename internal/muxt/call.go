@@ -496,6 +496,9 @@ func classifyMarshalJSONResultShape(def *Definition, results *types.Tuple, errIf
 		}
 		return ResultShapeData, nil
 	case 2:
+		if first := results.At(0).Type(); types.Implements(first, errIface) {
+			return ResultShapeInvalid, fmt.Errorf("marshalJSON requires a non-error first result to marshal but %s returns an error value", sigStr)
+		}
 		if last := results.At(1).Type(); !types.Implements(last, errIface) {
 			return ResultShapeInvalid, fmt.Errorf("marshalJSON requires the second result of %s to be an error, got %s", sigStr, types.TypeString(last, qual))
 		}
