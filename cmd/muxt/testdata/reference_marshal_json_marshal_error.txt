@@ -1,0 +1,62 @@
+# When json.Marshal fails on the method result, the handler responds
+# 500 with the status text only — the buffered render is already
+# discarded and no partial JSON is written.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /api/broken marshalJSON(Broken(ctx))" -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+// Broken returns a channel: encoding/json cannot marshal it, so the
+// handler's marshal step fails at runtime.
+func (T) Broken(_ context.Context) (chan int, error) { return make(chan int), nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/broken", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if got, want := strings.TrimSpace(rec.Body.String()), http.StatusText(http.StatusInternalServerError); got != want {
+		t.Errorf("body = %q, want %q", got, want)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("content-type = %q, want text/plain (http.Error)", ct)
+	}
+}
