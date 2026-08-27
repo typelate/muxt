@@ -290,13 +290,16 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 <host>         ::= <hostname> | <ipv4>
 <path>         ::= "/" [<segment> [<path>] ["/"]]
 <status>       ::= <integer> | "http.Status" <identifier>
-<call-expr>    ::= <call> | "sse(" <call> ")"
+<call-expr>    ::= <call>
 <call>         ::= <identifier> "(" [<arg> {"," <arg>}] ")"
 <arg>          ::= <identifier> | <call>
 <identifier>   ::= <letter> {<letter> | <digit> | "_"}
 ```
 
 **Notes:** Path segments may include `{param}` or `{param...}`. Unreserved chars: `[a-zA-Z0-9-_.~]`.
+Wrappers like `sse(...)` and `marshalJSON(...)` are not separate productions —
+they are ordinary `<call>` syntax whose names are recognized semantically at
+the outermost position (each takes exactly one `<call>` argument).
 
 ## Test Files by Category
 

@@ -134,6 +134,7 @@ func (s Server) GetUser(ctx context.Context) (User, error)
 | none | generation error: nothing to marshal |
 | only `error` | generation error: no non-error result |
 | `(T, U)` where `U` is not `error` | generation error: second result must be `error` |
+| `(E, error)` where `E` implements `error` | generation error: the marshaled result must be non-error |
 | three or more results | generation error: too many results |
 
 - **The define body still executes** against the template data; on success its
@@ -152,7 +153,7 @@ func (s Server) GetUser(ctx context.Context) (User, error)
 - `marshalJSON` is reserved at the outermost call position; a package-scope
   function named `marshalJSON` may still be called as a plain route method.
 
-[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) · [reference_marshal_json_args.txt](../../cmd/muxt/testdata/reference_marshal_json_args.txt) · [reference_marshal_json_side_effects.txt](../../cmd/muxt/testdata/reference_marshal_json_side_effects.txt) · [reference_marshal_json_method_error.txt](../../cmd/muxt/testdata/reference_marshal_json_method_error.txt)
+[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) · [reference_marshal_json_args.txt](../../cmd/muxt/testdata/reference_marshal_json_args.txt) · [reference_marshal_json_side_effects.txt](../../cmd/muxt/testdata/reference_marshal_json_side_effects.txt) · [reference_marshal_json_method_error.txt](../../cmd/muxt/testdata/reference_marshal_json_method_error.txt) · [reference_marshal_json_marshal_error.txt](../../cmd/muxt/testdata/reference_marshal_json_marshal_error.txt)
 
 ## TemplateData API
 
