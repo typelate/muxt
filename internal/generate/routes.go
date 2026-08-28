@@ -248,32 +248,8 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 
 		// func routes
 		routesFunc,
-
-		templateDataType(file, config.TemplateDataType, ast.NewIdent(config.ReceiverInterface)),
 	}
-	if config.OutputMuxtVersion {
-		decls = append(decls, templateDataMuxtVersionMethod(config))
-	}
-	decls = append(decls,
-		templateDataPathMethod(config),
-		templateDataResultMethod(config.TemplateDataType),
-		templateDataRequestMethod(file, config.TemplateDataType),
-		templateDataStatusCodeMethod(config.TemplateDataType),
-		templateDataHeaderMethod(config.TemplateDataType),
-		templateDataOkay(config.TemplateDataType),
-		templateDataError(file, config.TemplateDataType),
-		templateDataReceiver(ast.NewIdent(config.ReceiverInterface), config.TemplateDataType),
-		templateRedirect(file, config),
-	)
-	for _, method := range templateRedirectHelperMethods(file, config) {
-		decls = append(decls, method)
-	}
-	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
-	if config.HTMXHelpers {
-		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
-			decls = append(decls, method)
-		}
-	}
+	decls = append(decls, templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
