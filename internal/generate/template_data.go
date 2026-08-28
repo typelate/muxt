@@ -593,3 +593,33 @@ func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl
 		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTriggerElementID", "HX-Trigger"),
 	}
 }
+
+func templateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
+	decls := []ast.Decl{
+		templateDataType(file, config.TemplateDataType, receiverInterface),
+	}
+	if config.OutputMuxtVersion {
+		decls = append(decls, templateDataMuxtVersionMethod(config))
+	}
+	decls = append(decls,
+		templateDataPathMethod(config),
+		templateDataResultMethod(config.TemplateDataType),
+		templateDataRequestMethod(file, config.TemplateDataType),
+		templateDataStatusCodeMethod(config.TemplateDataType),
+		templateDataHeaderMethod(config.TemplateDataType),
+		templateDataOkay(config.TemplateDataType),
+		templateDataError(file, config.TemplateDataType),
+		templateDataReceiver(receiverInterface, config.TemplateDataType),
+		templateRedirect(file, config),
+	)
+	for _, method := range templateRedirectHelperMethods(file, config) {
+		decls = append(decls, method)
+	}
+	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
+	if config.HTMXHelpers {
+		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
+			decls = append(decls, method)
+		}
+	}
+	return decls
+}
