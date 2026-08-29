@@ -72,7 +72,7 @@ type RoutesFileConfiguration struct {
 	Middleware                       bool
 	Verbose                          bool
 	OutputMultipleFiles              bool
-	HTMXHelpers                      bool
+	OutputHTMX                       bool
 	OutputExportedDefaultIdentifiers bool
 	// OutputMuxtVersion controls whether the muxt version is recorded in
 	// generated files (the "// muxt version:" comment and the TemplateData

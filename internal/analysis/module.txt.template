@@ -16,8 +16,8 @@ Package: {{.Path}}
     Receiver Package:   {{.}}
 {{- end}}
     Route Paths Type:   {{.Config.TemplateRoutePathsType}}
-{{- if .Config.HTMXHelpers}}
-    HTMX Helpers:       true
+{{- if .Config.OutputHTMX}}
+    HTMX:               true
 {{- end}}
 
   Commands:

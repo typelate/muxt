@@ -366,8 +366,8 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.OutputMultipleFiles {
 		args = append(args, "--"+outputMultipleFiles)
 	}
-	if config.HTMXHelpers {
-		args = append(args, "--"+outputHTMXHelpers)
+	if config.OutputHTMX {
+		args = append(args, "--"+outputHTMX)
 	}
 
 	// Add output-exported-default-identifiers flag if false (true is the default)
@@ -564,6 +564,7 @@ const (
 	outputRoutesFuncWithMiddlewareParam = "output-routes-func-with-middleware-param"
 	outputMultipleFiles                 = "output-multiple-files"
 	outputHTMXHelpers                   = "output-htmx-helpers"
+	outputHTMX                          = "output-htmx"
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 	outputMuxtVersion                   = "output-muxt-version"
@@ -601,7 +602,7 @@ This function also receives an argument with a type matching the name given by o
 	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputRoutesFuncWithMiddlewareParamHelp = `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`
 	outputMultipleFilesHelp                 = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
-	outputHTMXHelpersHelp                   = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
+	outputHTMXHelp                          = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 	outputMuxtVersionHelp                   = `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`
@@ -681,7 +682,7 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.Middleware, outputRoutesFuncWithMiddlewareParam, false, outputRoutesFuncWithMiddlewareParamHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
-	flagSet.BoolVar(&g.HTMXHelpers, outputHTMXHelpers, false, outputHTMXHelpersHelp)
+	flagSet.BoolVar(&g.OutputHTMX, outputHTMX, false, outputHTMXHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.BoolVar(&g.OutputMuxtVersion, outputMuxtVersion, true, outputMuxtVersionHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
@@ -750,6 +751,7 @@ func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.Route
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
 	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
+	flagSet.BoolVar(&g.OutputHTMX, outputHTMXHelpers, false, "DEPRECATED: use --"+outputHTMX+" instead. "+outputHTMXHelp)
 
 	markDeprecated(flagSet, deprecatedReceiverInterface, outputReceiverInterface)
 	markDeprecated(flagSet, deprecatedRoutesFunc, outputRoutesFunc)
@@ -757,6 +759,7 @@ func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.Route
 	markDeprecated(flagSet, deprecatedTemplateRoutePathsType, outputTemplateRoutePathsType)
 	markDeprecated(flagSet, deprecatedLogger, outputRoutesFuncWithLoggerParam)
 	markDeprecated(flagSet, deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
+	markDeprecated(flagSet, outputHTMXHelpers, outputHTMX)
 }
 
 func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {

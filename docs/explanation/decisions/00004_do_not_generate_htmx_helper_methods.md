@@ -14,7 +14,8 @@ Do not Generate HTMX Helper Methods on TemplateData; document (copyable) helper 
 
 ## Status
 
-Superseded. Muxt now generates HTMX helper methods, opt-in via the `--output-htmx-helpers` flag.
+Superseded. Muxt now generates HTMX helper methods, opt-in via the `--output-htmx` flag
+(`--output-htmx-helpers` is a deprecated alias).
 
 ## Consequences
 
@@ -25,7 +26,8 @@ existing documented `htmx*.go` files to the target package.
 
 ## Update
 
-The flag shipped as `--output-htmx-helpers` (not `--htmx`). When set, generation adds `HX*` helper methods to
+The flag shipped as `--output-htmx-helpers` (not `--htmx`) and is now spelled `--output-htmx`
+(the old name remains a deprecated alias). When set, generation adds `HX*` helper methods to
 `TemplateData` for writing response headers (`HX-Location`, `HX-Trigger`, etc.) and reading request headers
 (`HX-Request`, `HX-Boosted`, etc.). It is off by default, so the original decision still holds unless you opt in.
-See [reference_htmx_helpers.txt](../../../cmd/muxt/testdata/reference_htmx_helpers.txt).
+See [reference_output_htmx.txt](../../../cmd/muxt/testdata/reference_output_htmx.txt).

@@ -616,7 +616,7 @@ func templateDataDecls(file *File, config RoutesFileConfiguration, receiverInter
 		decls = append(decls, method)
 	}
 	decls = append(decls, templateDataStringMethod(config.TemplateDataType))
-	if config.HTMXHelpers {
+	if config.OutputHTMX {
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
 			decls = append(decls, method)
 		}

@@ -38,7 +38,7 @@ type PackageConfig struct {
 	ReceiverType           string `json:"receiverType,omitempty"`
 	ReceiverPackage        string `json:"receiverPackage,omitempty"`
 	TemplateRoutePathsType string `json:"templateRoutePathsType"`
-	HTMXHelpers            bool   `json:"htmxHelpers,omitempty"`
+	OutputHTMX             bool   `json:"outputHTMX,omitempty"`
 	Logger                 bool   `json:"logger,omitempty"`
 	PathPrefix             bool   `json:"pathPrefix,omitempty"`
 	Middleware             bool   `json:"middleware,omitempty"`
@@ -214,7 +214,7 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 				ReceiverType:           config.ReceiverType,
 				ReceiverPackage:        config.ReceiverPackage,
 				TemplateRoutePathsType: templateRoutePathsType,
-				HTMXHelpers:            config.HTMXHelpers,
+				OutputHTMX:             config.OutputHTMX,
 				Logger:                 config.Logger,
 				PathPrefix:             config.PathPrefix,
 				Middleware:             config.Middleware,
