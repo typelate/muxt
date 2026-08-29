@@ -191,6 +191,15 @@ templates must exist at generate time. Each callback has its own result type and
 builds its own `SSETemplateData`, so they need not share a `T`. Argument order
 within the call doesn't matter.
 
+Under `--output-datastar` each event is instead framed with
+[Datastar](https://data-star.dev)'s patch-elements protocol: the event name is
+fixed to `datastar-patch-elements` (there is no `.Event` setter), the
+chainable `.Selector`, `.Mode`, and `.UseViewTransition` setters become the
+patch option lines, and each rendered line is written as a `data: elements`
+line.
+
+[reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) · [err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)
+
 The wrapper form requires exactly one method call inside the parentheses. If
 `sse` names a package-level function in your package, `sse()` as a route's call
 is an ordinary function call, not an event stream.

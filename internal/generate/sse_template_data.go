@@ -15,6 +15,12 @@ const (
 	sseTemplateDataFieldID    = "id"
 	sseTemplateDataFieldRetry = "retryMilliseconds"
 	sseTemplateDataFieldData  = "data"
+
+	sseTemplateDataFieldSelector          = "selector"
+	sseTemplateDataFieldMode              = "mode"
+	sseTemplateDataFieldUseViewTransition = "useViewTransition"
+
+	datastarPatchElementsEvent = "datastar-patch-elements"
 )
 
 // sseTemplateDataDecls returns the SSETemplateData type declaration and all of
@@ -23,6 +29,9 @@ const (
 // Event frames: methods set the id/event/retry metadata and WriteTo serializes
 // the buffered template output as one or more `data:` lines.
 func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
+	if config.OutputDatastar {
+		return datastarSSETemplateDataDecls(file, config)
+	}
 	typeIdent := config.SSETemplateDataType
 	return []ast.Decl{
 		sseTemplateDataType(file, typeIdent),
@@ -37,6 +46,45 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataPathMethod(config),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
+}
+
+// datastarSSETemplateDataDecls emits SSETemplateData for a --output-datastar
+// package: the shared surface plus the patch option setters, with WriteTo
+// framing every event as datastar-patch-elements. The event name is fixed by
+// the protocol, so there is no Event setter.
+func datastarSSETemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
+	typeIdent := config.SSETemplateDataType
+	return []ast.Decl{
+		datastarSSETemplateDataType(file, typeIdent),
+		sseTemplateDataStringMethod(typeIdent),
+		sseTemplateDataReceiverMethod(typeIdent),
+		sseTemplateDataRequestMethod(file, typeIdent),
+		sseTemplateDataResultMethod(typeIdent),
+		sseTemplateDataErrMethod(file, typeIdent),
+		sseTemplateDataIDMethod(typeIdent),
+		sseTemplateDataRetryMethod(typeIdent),
+		sseTemplateDataPathMethod(config),
+		sseTemplateDataPointerSetterMethod(typeIdent, "Selector", "selector", "string", sseTemplateDataFieldSelector),
+		sseTemplateDataPointerSetterMethod(typeIdent, "Mode", "mode", "string", sseTemplateDataFieldMode),
+		sseTemplateDataBoolSetterMethod(typeIdent, "UseViewTransition", sseTemplateDataFieldUseViewTransition),
+		datastarWriteToMethod(file, typeIdent),
+	}
+}
+
+func datastarSSETemplateDataType(file *File, typeIdent string) *ast.GenDecl {
+	decl := sseTemplateDataType(file, typeIdent)
+	st := decl.Specs[0].(*ast.TypeSpec).Type.(*ast.StructType)
+	st.Fields.List = append(st.Fields.List,
+		&ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldSelector), ast.NewIdent(sseTemplateDataFieldMode)},
+			Type:  &ast.StarExpr{X: ast.NewIdent("string")},
+		},
+		&ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(sseTemplateDataFieldUseViewTransition)},
+			Type:  ast.NewIdent("bool"),
+		},
+	)
+	return decl
 }
 
 func sseTemplateDataTypeParams() *ast.FieldList {
@@ -161,6 +209,31 @@ func sseTemplateDataPointerSetterMethod(typeIdent, methodName, paramName, paramT
 				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}},
 				Tok: token.ASSIGN,
 				Rhs: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(paramName)}},
+			},
+			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(sseTemplateDataReceiverName)}},
+		}},
+	}
+}
+
+// sseTemplateDataBoolSetterMethod builds a chainable setter of the form
+//
+//	func (m *SSETemplateData[R, T]) Name(value bool) *SSETemplateData[R, T] {
+//		m.field = value
+//		return m
+//	}
+func sseTemplateDataBoolSetterMethod(typeIdent, methodName, field string) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: sseTemplateDataMethodReceiver(typeIdent),
+		Name: ast.NewIdent(methodName),
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("value")}, Type: ast.NewIdent("bool")}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: sseTemplateDataSelfType(typeIdent)}}},
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{ast.NewIdent("value")},
 			},
 			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(sseTemplateDataReceiverName)}},
 		}},
@@ -368,6 +441,44 @@ func sseTemplateDataWriteToMethod(file *File, typeIdent string) *ast.FuncDecl {
 			Cond: &ast.BinaryExpr{X: astgen.CallBuiltinLen(ast.NewIdent(sseLineIdent)), Op: token.GTR, Y: astgen.Int(0)},
 			Body: &ast.BlockStmt{List: []ast.Stmt{sseWriteAndCount(sseWrite(ast.NewIdent(sseLineIdent)))}},
 		},
+		sseWriteAndCount(sseWrite(sseNewline())),
+	)...)
+	body = append(body,
+		sseWriteAndCount(sseWrite(sseNewline())),
+		sseReturnCount(),
+	)
+	return sseWriteToFuncDecl(file, typeIdent, body)
+}
+
+func sseBoolLine(file *File, field, line string) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: sseField(field),
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			sseWriteAndCount(sseWriteString(file, astgen.String(line))),
+		}},
+	}
+}
+
+// datastarWriteToMethod builds the WriteTo method that frames one event with
+// the Datastar patch-elements protocol: a fixed event name, the SSE id and
+// retry metadata, the patch option lines, and each rendered line as a
+// "data: elements" line.
+func datastarWriteToMethod(file *File, typeIdent string) *ast.FuncDecl {
+	body := []ast.Stmt{
+		sseForbiddenCharCheck(file, sseTemplateDataFieldID, "\r\n\x00", "sse: id contains a forbidden character"),
+		sseForbiddenCharCheck(file, sseTemplateDataFieldSelector, "\r\n", "sse: selector contains a forbidden character"),
+		sseForbiddenCharCheck(file, sseTemplateDataFieldMode, "\r\n", "sse: mode contains a forbidden character"),
+		sseDeclareCount(),
+		sseWriteAndCount(sseWriteString(file, astgen.String("event: "+datastarPatchElementsEvent+"\n"))),
+		sseMetadataLine(file, sseTemplateDataFieldID, "id: "),
+		sseRetryLine(file),
+		sseMetadataLine(file, sseTemplateDataFieldSelector, "data: selector "),
+		sseMetadataLine(file, sseTemplateDataFieldMode, "data: mode "),
+		sseBoolLine(file, sseTemplateDataFieldUseViewTransition, "data: useViewTransition true\n"),
+	}
+	body = append(body, sseDataLineLoop(file,
+		sseWriteAndCount(sseWriteString(file, astgen.String("data: elements "))),
+		sseWriteAndCount(sseWrite(ast.NewIdent(sseLineIdent))),
 		sseWriteAndCount(sseWrite(sseNewline())),
 	)...)
 	body = append(body,
