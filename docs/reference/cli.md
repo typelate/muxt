@@ -82,6 +82,7 @@ These flags control the names of generated types and functions:
 | `--output-sse-template-data-type` | string | `SSETemplateData` | Template data type name for Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | string | `TemplateRoutePaths` | Path helper methods type name. |
 | `--output-htmx` | bool | `false` | Add HTMX helper methods to `TemplateData` for setting response headers (`HX-Location`, `HX-Redirect`, etc.) and reading request headers (`HX-Request`, `HX-Boosted`, etc.). |
+| `--output-datastar` | bool | `false` | Frame Server-Sent Events with the [Datastar](https://data-star.dev) patch protocol: `SSETemplateData` gains the patch option setters and `WriteTo` emits `datastar-patch-elements` events. Mutually exclusive with `--output-htmx`. |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Explicit `--output-*` values are unaffected. |
 | `--output-muxt-version` | bool | `true` | When false, the muxt version is left out of generated files: no `// muxt version:` header comment and no `MuxtVersion` method on TemplateData. |
 | `--output-routes-func-with-logger-param` | bool | `false` | Add `*slog.Logger` parameter. Logs requests (debug) and template errors (error). |

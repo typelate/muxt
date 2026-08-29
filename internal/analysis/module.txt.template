@@ -19,6 +19,9 @@ Package: {{.Path}}
 {{- if .Config.OutputHTMX}}
     HTMX:               true
 {{- end}}
+{{- if .Config.OutputDatastar}}
+    Datastar:           true
+{{- end}}
 
   Commands:
     List Routes: {{.Commands.ListRoutes}}
