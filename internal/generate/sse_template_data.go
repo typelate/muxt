@@ -196,152 +196,183 @@ func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	}
 }
 
-// sseTemplateDataWriteToMethod builds the WriteTo method that serializes the
-// event metadata and buffered template output into the SSE wire format.
-func sseTemplateDataWriteToMethod(file *File, typeIdent string) *ast.FuncDecl {
-	const (
-		writerIdent  = "w"
-		countIdent   = "bytesWritten"
-		nIdent       = "n"
-		dataVarIdent = "data"
-		lineIdent    = "line"
-		retryBuf     = "retryBuf"
-	)
-	mSel := func(field string) ast.Expr {
-		return &ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}
-	}
-	deref := func(field string) ast.Expr { return &ast.StarExpr{X: mSel(field)} }
-	byteSlice := func(elts ...ast.Expr) ast.Expr {
-		return &ast.CompositeLit{Type: &ast.ArrayType{Elt: ast.NewIdent("byte")}, Elts: elts}
-	}
-	newline := func() ast.Expr {
-		return byteSlice(&ast.BasicLit{Kind: token.CHAR, Value: `'\n'`})
-	}
-	byteConv := func(s string) ast.Expr {
-		return &ast.CallExpr{Fun: &ast.ArrayType{Elt: ast.NewIdent("byte")}, Args: []ast.Expr{astgen.String(s)}}
-	}
-	ioWriteString := func(x ast.Expr) ast.Expr {
-		return astgen.Call(file, "", "io", "WriteString", ast.NewIdent(writerIdent), x)
-	}
-	wWrite := func(x ast.Expr) ast.Expr {
-		return &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(writerIdent), Sel: ast.NewIdent("Write")}, Args: []ast.Expr{x}}
-	}
-	// writeAndCount emits:
-	//
-	//	if n, err := <call>; err != nil {
-	//		return int64(bytesWritten + n), err
-	//	} else {
-	//		bytesWritten += n
-	//	}
-	writeAndCount := func(call ast.Expr) ast.Stmt {
-		return &ast.IfStmt{
-			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(nIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
-			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-				&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{&ast.BinaryExpr{X: ast.NewIdent(countIdent), Op: token.ADD, Y: ast.NewIdent(nIdent)}}},
-				ast.NewIdent(errIdent),
-			}}}},
-			Else: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(countIdent)}, Tok: token.ADD_ASSIGN, Rhs: []ast.Expr{ast.NewIdent(nIdent)}}}},
-		}
-	}
-	forbidden := func(field, forbiddenChars, message string) ast.Stmt {
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  &ast.BinaryExpr{X: mSel(field), Op: token.NEQ, Y: astgen.Nil()},
-				Op: token.LAND,
-				Y:  astgen.Call(file, "", "strings", "ContainsAny", deref(field), astgen.String(forbiddenChars)),
-			},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-				astgen.Int(0), astgen.Call(file, "", "errors", "New", astgen.String(message)),
-			}}}},
-		}
-	}
-	metadataLine := func(field, prefix string) ast.Stmt {
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{X: mSel(field), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{
-				writeAndCount(ioWriteString(astgen.String(prefix))),
-				writeAndCount(ioWriteString(deref(field))),
-				writeAndCount(wWrite(newline())),
-			}},
-		}
-	}
+// Idents used inside the generated WriteTo method bodies.
+const (
+	sseWriterIdent   = "w"
+	sseCountIdent    = "bytesWritten"
+	sseNIdent        = "n"
+	sseDataVarIdent  = "data"
+	sseLineIdent     = "line"
+	sseRetryBufIdent = "retryBuf"
+)
 
-	body := []ast.Stmt{
-		forbidden(sseTemplateDataFieldID, "\r\n\x00", "sse: id contains a forbidden character"),
-		forbidden(sseTemplateDataFieldEvent, "\r\n", "sse: event contains a forbidden character"),
-		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(countIdent)}, Type: ast.NewIdent("int")}}}},
-		metadataLine(sseTemplateDataFieldID, "id: "),
-		metadataLine(sseTemplateDataFieldEvent, "event: "),
-		// retry block
-		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{X: mSel(sseTemplateDataFieldRetry), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{
-				writeAndCount(ioWriteString(astgen.String("retry: "))),
-				&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
-					Names: []*ast.Ident{ast.NewIdent(retryBuf)},
-					Type:  &ast.ArrayType{Len: astgen.Int(20), Elt: ast.NewIdent("byte")},
-				}}}},
-				writeAndCount(wWrite(astgen.Call(file, "", "strconv", "AppendInt",
-					&ast.SliceExpr{X: ast.NewIdent(retryBuf), High: astgen.Int(0)},
-					&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{deref(sseTemplateDataFieldRetry)}},
-					astgen.Int(10),
-				))),
-				writeAndCount(wWrite(newline())),
-			}},
+func sseField(field string) ast.Expr {
+	return &ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}
+}
+
+func sseFieldDeref(field string) ast.Expr { return &ast.StarExpr{X: sseField(field)} }
+
+func sseByteSlice(elts ...ast.Expr) ast.Expr {
+	return &ast.CompositeLit{Type: &ast.ArrayType{Elt: ast.NewIdent("byte")}, Elts: elts}
+}
+
+func sseNewline() ast.Expr {
+	return sseByteSlice(&ast.BasicLit{Kind: token.CHAR, Value: `'\n'`})
+}
+
+func sseByteConv(s string) ast.Expr {
+	return &ast.CallExpr{Fun: &ast.ArrayType{Elt: ast.NewIdent("byte")}, Args: []ast.Expr{astgen.String(s)}}
+}
+
+func sseWriteString(file *File, x ast.Expr) ast.Expr {
+	return astgen.Call(file, "", "io", "WriteString", ast.NewIdent(sseWriterIdent), x)
+}
+
+func sseWrite(x ast.Expr) ast.Expr {
+	return &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(sseWriterIdent), Sel: ast.NewIdent("Write")}, Args: []ast.Expr{x}}
+}
+
+// sseWriteAndCount emits:
+//
+//	if n, err := <call>; err != nil {
+//		return int64(bytesWritten + n), err
+//	} else {
+//		bytesWritten += n
+//	}
+func sseWriteAndCount(call ast.Expr) ast.Stmt {
+	return &ast.IfStmt{
+		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseNIdent), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+			&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{&ast.BinaryExpr{X: ast.NewIdent(sseCountIdent), Op: token.ADD, Y: ast.NewIdent(sseNIdent)}}},
+			ast.NewIdent(errIdent),
+		}}}},
+		Else: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseCountIdent)}, Tok: token.ADD_ASSIGN, Rhs: []ast.Expr{ast.NewIdent(sseNIdent)}}}},
+	}
+}
+
+func sseForbiddenCharCheck(file *File, field, forbiddenChars, message string) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  &ast.BinaryExpr{X: sseField(field), Op: token.NEQ, Y: astgen.Nil()},
+			Op: token.LAND,
+			Y:  astgen.Call(file, "", "strings", "ContainsAny", sseFieldDeref(field), astgen.String(forbiddenChars)),
 		},
-		// data := m.data.Bytes()
-		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
-			&ast.CallExpr{Fun: &ast.SelectorExpr{X: mSel(sseTemplateDataFieldData), Sel: ast.NewIdent("Bytes")}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+			astgen.Int(0), astgen.Call(file, "", "errors", "New", astgen.String(message)),
+		}}}},
+	}
+}
+
+func sseMetadataLine(file *File, field, prefix string) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: sseField(field), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			sseWriteAndCount(sseWriteString(file, astgen.String(prefix))),
+			sseWriteAndCount(sseWriteString(file, sseFieldDeref(field))),
+			sseWriteAndCount(sseWrite(sseNewline())),
 		}},
-		// if bytes.IndexByte(data, '\r') >= 0 { normalize CRLF -> LF }
+	}
+}
+
+func sseRetryLine(file *File) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{X: sseField(sseTemplateDataFieldRetry), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			sseWriteAndCount(sseWriteString(file, astgen.String("retry: "))),
+			&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+				Names: []*ast.Ident{ast.NewIdent(sseRetryBufIdent)},
+				Type:  &ast.ArrayType{Len: astgen.Int(20), Elt: ast.NewIdent("byte")},
+			}}}},
+			sseWriteAndCount(sseWrite(astgen.Call(file, "", "strconv", "AppendInt",
+				&ast.SliceExpr{X: ast.NewIdent(sseRetryBufIdent), High: astgen.Int(0)},
+				&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{sseFieldDeref(sseTemplateDataFieldRetry)}},
+				astgen.Int(10),
+			))),
+			sseWriteAndCount(sseWrite(sseNewline())),
+		}},
+	}
+}
+
+func sseDeclareCount() ast.Stmt {
+	return &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(sseCountIdent)}, Type: ast.NewIdent("int")}}}}
+}
+
+func sseReturnCount() ast.Stmt {
+	return &ast.ReturnStmt{Results: []ast.Expr{
+		&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{ast.NewIdent(sseCountIdent)}},
+		astgen.Nil(),
+	}}
+}
+
+// sseDataLineLoop normalizes the buffered template output (CRLF to LF, no
+// trailing newline) and emits rangeBody once per line.
+func sseDataLineLoop(file *File, rangeBody ...ast.Stmt) []ast.Stmt {
+	return []ast.Stmt{
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseDataVarIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+			&ast.CallExpr{Fun: &ast.SelectorExpr{X: sseField(sseTemplateDataFieldData), Sel: ast.NewIdent("Bytes")}},
+		}},
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{
-				X:  astgen.Call(file, "", "bytes", "IndexByte", ast.NewIdent(dataVarIdent), &ast.BasicLit{Kind: token.CHAR, Value: `'\r'`}),
+				X:  astgen.Call(file, "", "bytes", "IndexByte", ast.NewIdent(sseDataVarIdent), &ast.BasicLit{Kind: token.CHAR, Value: `'\r'`}),
 				Op: token.GEQ,
 				Y:  astgen.Int(0),
 			},
 			Body: &ast.BlockStmt{List: []ast.Stmt{
-				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
-					astgen.Call(file, "", "bytes", "ReplaceAll", ast.NewIdent(dataVarIdent), byteConv("\r\n"), byteConv("\n")),
+				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseDataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
+					astgen.Call(file, "", "bytes", "ReplaceAll", ast.NewIdent(sseDataVarIdent), sseByteConv("\r\n"), sseByteConv("\n")),
 				}},
-				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
-					astgen.Call(file, "", "bytes", "ReplaceAll", ast.NewIdent(dataVarIdent), byteConv("\r"), byteConv("\n")),
+				&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseDataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
+					astgen.Call(file, "", "bytes", "ReplaceAll", ast.NewIdent(sseDataVarIdent), sseByteConv("\r"), sseByteConv("\n")),
 				}},
 			}},
 		},
-		// data = bytes.TrimSuffix(data, []byte{'\n'})
-		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(dataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
-			astgen.Call(file, "", "bytes", "TrimSuffix", ast.NewIdent(dataVarIdent), newline()),
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(sseDataVarIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{
+			astgen.Call(file, "", "bytes", "TrimSuffix", ast.NewIdent(sseDataVarIdent), sseNewline()),
 		}},
-		// for line := range bytes.SplitSeq(data, []byte{'\n'}) { ... }
 		&ast.RangeStmt{
-			Key: ast.NewIdent(lineIdent),
-			Tok: token.DEFINE,
-			X:   astgen.Call(file, "", "bytes", "SplitSeq", ast.NewIdent(dataVarIdent), newline()),
-			Body: &ast.BlockStmt{List: []ast.Stmt{
-				writeAndCount(ioWriteString(astgen.String("data: "))),
-				&ast.IfStmt{
-					Cond: &ast.BinaryExpr{X: astgen.CallBuiltinLen(ast.NewIdent(lineIdent)), Op: token.GTR, Y: astgen.Int(0)},
-					Body: &ast.BlockStmt{List: []ast.Stmt{writeAndCount(wWrite(ast.NewIdent(lineIdent)))}},
-				},
-				writeAndCount(wWrite(newline())),
-			}},
+			Key:  ast.NewIdent(sseLineIdent),
+			Tok:  token.DEFINE,
+			X:    astgen.Call(file, "", "bytes", "SplitSeq", ast.NewIdent(sseDataVarIdent), sseNewline()),
+			Body: &ast.BlockStmt{List: rangeBody},
 		},
-		writeAndCount(wWrite(newline())),
-		&ast.ReturnStmt{Results: []ast.Expr{
-			&ast.CallExpr{Fun: ast.NewIdent("int64"), Args: []ast.Expr{ast.NewIdent(countIdent)}},
-			astgen.Nil(),
-		}},
 	}
+}
 
+func sseWriteToFuncDecl(file *File, typeIdent string, body []ast.Stmt) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Recv: sseTemplateDataMethodReceiver(typeIdent),
 		Name: ast.NewIdent("WriteTo"),
 		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(writerIdent)}, Type: astgen.ExportedIdentifier(file, "", "io", "Writer")}}},
+			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(sseWriterIdent)}, Type: astgen.ExportedIdentifier(file, "", "io", "Writer")}}},
 			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("int64")}, {Type: ast.NewIdent("error")}}},
 		},
 		Body: &ast.BlockStmt{List: body},
 	}
+}
+
+// sseTemplateDataWriteToMethod builds the WriteTo method that serializes the
+// event metadata and buffered template output into the SSE wire format.
+func sseTemplateDataWriteToMethod(file *File, typeIdent string) *ast.FuncDecl {
+	body := []ast.Stmt{
+		sseForbiddenCharCheck(file, sseTemplateDataFieldID, "\r\n\x00", "sse: id contains a forbidden character"),
+		sseForbiddenCharCheck(file, sseTemplateDataFieldEvent, "\r\n", "sse: event contains a forbidden character"),
+		sseDeclareCount(),
+		sseMetadataLine(file, sseTemplateDataFieldID, "id: "),
+		sseMetadataLine(file, sseTemplateDataFieldEvent, "event: "),
+		sseRetryLine(file),
+	}
+	body = append(body, sseDataLineLoop(file,
+		sseWriteAndCount(sseWriteString(file, astgen.String("data: "))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: astgen.CallBuiltinLen(ast.NewIdent(sseLineIdent)), Op: token.GTR, Y: astgen.Int(0)},
+			Body: &ast.BlockStmt{List: []ast.Stmt{sseWriteAndCount(sseWrite(ast.NewIdent(sseLineIdent)))}},
+		},
+		sseWriteAndCount(sseWrite(sseNewline())),
+	)...)
+	body = append(body,
+		sseWriteAndCount(sseWrite(sseNewline())),
+		sseReturnCount(),
+	)
+	return sseWriteToFuncDecl(file, typeIdent, body)
 }
