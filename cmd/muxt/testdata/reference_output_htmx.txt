@@ -1,10 +1,10 @@
-# Tests --output-htmx-helpers flag generates HTMX response header setters and request header readers
+# Tests --output-htmx flag generates HTMX response header setters and request header readers
 #
 # Grep assertions verify all HTMX helper function names exist in generated code.
 # Integration tests exercise representative behavior: HXRequest (request reader),
 # HXTrigger and HXRetarget (response header setters).
 
-muxt generate --output-htmx-helpers
+muxt generate --output-htmx
 
 grep 'func.*HXLocation' template_routes.go
 grep 'func.*HXPushURL' template_routes.go

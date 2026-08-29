@@ -4,7 +4,7 @@
 
 To support htmx and Datastar I designed framing wrappers for the template name
 syntax: `htmx(Method(...))` and `datastar(Method(...))` would select a
-frontend-specific template data type per route, `--use-htmx`/`--use-datastar`
+frontend-specific template data type per route, `--output-htmx`/`--output-datastar`
 would wrap every unframed route, and the two could mix in one package.
 
 Prototyping the design surfaced a lot of incidental complexity: wrapper arity
@@ -22,7 +22,7 @@ answer: one package per frontend, each with its own template set and its own
 ## Decision
 
 Select the frontend library per package with generate flags
-(`--use-htmx`, and later `--use-datastar`); do not add framing wrappers to
+(`--output-htmx`, and later `--output-datastar`); do not add framing wrappers to
 the template name syntax. Mixing frontends means multiple packages sharing a
 mux.
 
@@ -39,9 +39,9 @@ Decided
 - The template name grammar stays a single call expression; representation
   wrappers (`sse`, `marshalJSON`) are unaffected.
 - The HX* helpers stay on the shared `TemplateData`, so no breaking type
-  split or migration is needed; `--use-htmx` supersedes the name
+  split or migration is needed; `--output-htmx` supersedes the name
   `--output-htmx-helpers`.
-- Datastar support becomes package-level configuration: `--use-datastar`
+- Datastar support becomes package-level configuration: `--output-datastar`
   adds its helpers to `TemplateData`, and the patch-protocol event surface
   extends `SSETemplateData`, keyed off the generate configuration rather
   than per-route state.

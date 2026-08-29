@@ -60,7 +60,7 @@ These flags control the names of generated types and functions:
 | `--output-routes-func-with-middleware-param` | bool | `false` | Add `middleware func(next http.Handler) http.Handler` parameter; every registered handler is wrapped with it. `nil` disables wrapping. |
 | `--output-multiple-files` | bool | `false` | Split routes into separate `*_template_routes_gen.go` files per template source file. Default is single-file mode. |
 | `--output-multipart-max-memory` | bytes | `32 MiB` | Max memory passed to `request.ParseMultipartForm` in handlers using the `multipart` parameter. Accepts human-readable byte sizes (`32MB`, `64MiB`, `1GB`). Data exceeding this limit spills to the OS temp directory. |
-| `--output-htmx-helpers` | bool | `false` | Add HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.). |
+| `--output-htmx` | bool | `false` | Add HTMX helper methods to `TemplateData` for setting response headers (`HX-Location`, `HX-Redirect`, etc.) and reading request headers (`HX-Request`, `HX-Boosted`, etc.). |
 | `--output-exported-default-identifiers` | bool | `true` | When false, default generated identifiers use lowercase/private names. Does not affect explicit `--output-*` flag values. |
 | `--output-muxt-version` | bool | `true` | When false, the muxt version is left out of generated files: no `// muxt version:` header comment and no `MuxtVersion` method on TemplateData. |
 
@@ -126,6 +126,7 @@ These flags still work but are deprecated. Use the new names above:
 | `--find-templates-variable` | `--use-templates-variable` |
 | `--find-receiver-type` | `--use-receiver-type` |
 | `--find-receiver-type-package` | `--use-receiver-type-package` |
+| `--output-htmx-helpers` | `--output-htmx` |
 
 ## Common Patterns
 

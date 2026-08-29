@@ -1,0 +1,31 @@
+# --output-htmx-helpers is a deprecated alias for --output-htmx: it still
+# turns on the HTMX helpers and warns.
+
+muxt generate --output-htmx-helpers
+
+cmpenv stderr want-warning.txt
+
+grep 'func.*HXRequest' template_routes.go
+
+-- want-warning.txt --
+Flag --output-htmx-helpers has been deprecated, use --output-htmx instead
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.gohtml --
+{{define "GET / Home()"}}{{if .HXRequest}}fragment{{else}}page{{end}}{{end}}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml"))
+
+func main() {}
