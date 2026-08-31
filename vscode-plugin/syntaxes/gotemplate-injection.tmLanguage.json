@@ -154,11 +154,15 @@
     "muxt-call": {
       "patterns": [
         {
+          "match": "\\b(sse|marshalJSON|unmarshalJSON|unmarshalForm)(?=\\()",
+          "name": "support.function.wrapper.muxt"
+        },
+        {
           "match": "([A-Za-z_][A-Za-z0-9_]*)(?=\\()",
           "name": "entity.name.function.call.muxt"
         },
         {
-          "match": "\\b(ctx|request|response|form|err)\\b",
+          "match": "\\b(ctx|request|response|form|multipart|execute|lastEventID|body|err)\\b",
           "name": "variable.language.call-arg.muxt"
         },
         {
