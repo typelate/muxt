@@ -264,6 +264,8 @@ func (s Server) Clock(ctx context.Context, execute func(string) error) {
 | Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
 | Not allowed | a `response` argument |
 | Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
+| Under `--output-datastar` | `.Event` is replaced by the fixed `datastar-patch-elements` event name; `.Selector`, `.Mode`, and `.UseViewTransition` setters become the patch option lines |
+| Response headers | `Content-Type: text/event-stream`, `Cache-Control: no-store`, `Connection: keep-alive` |
 | Undefined method | Synthesized as `func(any) error` |
 | Extra callbacks | `sse`-prefixed arguments (`sse(Events(sseClock, execute, sseMetrics))`) each render the same-named template |
 
