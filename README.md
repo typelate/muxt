@@ -38,7 +38,9 @@ Standard `http.ServeMux` pattern, optionally with a status code and method call:
 
 Example: `"POST /user/{id} 201 CreateUser(ctx, id, form)"`
 
-Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body), `multipart` (file uploads, including `*multipart.FileHeader` fields). Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
+Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body), `multipart` (file uploads, including `*multipart.FileHeader` fields), `body` (raw `io.Reader`), `unmarshalJSON(body)` (JSON request bodies), `execute` (render callback), and `lastEventID`. Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
+
+Wrapping the call changes the response representation: `sse(Stream(ctx, execute))` streams Server-Sent Events and `marshalJSON(GetUser(ctx))` responds `application/json`. Generate flags select a frontend library per package — `--output-htmx` adds HX* helper methods to `TemplateData`, and `--output-datastar` frames SSE events with Datastar's patch-elements protocol.
 
 `TemplateRoutePaths` extends type safety to URLs: `{{$.Path.GetArticle 42}}` instead of hardcoded `href="/article/42"`. Change the route pattern, the compiler finds every stale reference.
 
@@ -55,6 +57,7 @@ The [command tests](./cmd/muxt/testdata) double as readable examples of every fe
 - `muxt generate`: generate `http.Handler` glue (writes `template_routes.go`)
 - `muxt check`: type-check templates without generating (use in CI or editor save hooks)
 - `muxt list-template-calls` / `muxt list-template-callers`: explore call sites and callers
+- `muxt explore-module` / `muxt generate-fake-server`: survey muxt packages and spin up a fake server to poke at routes
 
 ## Documentation
 
