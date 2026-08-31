@@ -338,50 +338,9 @@ Validation errors should return from your method. Display them in templates with
 
 [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
 
-## Test Files by Category
+## Test Files
 
-**Parameter sources:**
-- [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) — `ctx` parameter
-- [howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt) — `request` parameter
-- [howto_arg_response.txt](../../cmd/muxt/testdata/howto_arg_response.txt) — `response` parameter
-- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) — Path param extraction
-
-**Type parsing:**
-- [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt) — Typed path params
-- [howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt) — Custom `TextUnmarshaler`
-
-**Forms:**
-- [howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt) — Basic form with url.Values
-- [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) — Struct form binding
-- [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt) — `name` tag mapping
-- [howto_form_with_slice.txt](../../cmd/muxt/testdata/howto_form_with_slice.txt) — Form slices
-- [reference_form_field_types.txt](../../cmd/muxt/testdata/reference_form_field_types.txt) — All supported field types
-- [reference_form_with_empty_struct.txt](../../cmd/muxt/testdata/reference_form_with_empty_struct.txt) — Empty struct edge case
-
-**Multipart (`multipart/form-data`, file uploads):**
-- [howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) — End-to-end file upload walkthrough
-- [reference_multipart_basic.txt](../../cmd/muxt/testdata/reference_multipart_basic.txt) — Single `*multipart.FileHeader` field
-- [reference_multipart_multiple_files.txt](../../cmd/muxt/testdata/reference_multipart_multiple_files.txt) — `[]*multipart.FileHeader` field
-- [reference_multipart_mixed.txt](../../cmd/muxt/testdata/reference_multipart_mixed.txt) — Mixed text + slice + file fields
-- [reference_multipart_raw.txt](../../cmd/muxt/testdata/reference_multipart_raw.txt) — Raw `*multipart.Form` mode
-- [reference_multipart_with_name_tag.txt](../../cmd/muxt/testdata/reference_multipart_with_name_tag.txt) — `name` tag rebind
-- [reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) — `--output-multipart-max-memory` flag
-- [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt) — Malformed body → 400
-
-Using `form` and `multipart` in the same call is rejected (multipart parses url-encoded fields too).
-
-**Server-Sent Events:**
-- [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) — `sse(...)` wrapper with `lastEventID`
-- [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) — `func() error` callback form
-- [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) — error-returning method
-- [reference_sse_synthesized_method.txt](../../cmd/muxt/testdata/reference_sse_synthesized_method.txt) — synthesized `func(any) error` signature
-- [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt) — `lastEventID` header parsing
-
-**Multiple arguments:**
-- [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple params
-
-**Receiver types:**
-- [reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt) — Pointer receivers
-- [reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt) — Embedded methods
-
-**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
+Every binding above links its test archives inline; browse
+[cmd/muxt/testdata](../../cmd/muxt/testdata) for the full catalog —
+`howto_*` for task-oriented examples, `reference_*` for feature
+documentation, and `err_*` for pinned error messages.
