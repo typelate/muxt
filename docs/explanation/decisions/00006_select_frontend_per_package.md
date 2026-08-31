@@ -26,9 +26,10 @@ Select the frontend library per package with generate flags
 the template name syntax. Mixing frontends means multiple packages sharing a
 mux.
 
-The flags extend the existing generated types with library-specific helper
-methods — `TemplateData` for rendered routes and `SSETemplateData` for stream
-events. No parallel library-specific template data types are generated.
+The flags extend the existing generated types with library-specific surface:
+`--output-htmx` adds the HX* helper methods to `TemplateData`, and
+`--output-datastar` extends `SSETemplateData` with the patch-protocol event
+surface. No parallel library-specific template data types are generated.
 
 ## Status
 
@@ -42,9 +43,9 @@ Decided
   split or migration is needed; `--output-htmx` supersedes the name
   `--output-htmx-helpers`.
 - Datastar support becomes package-level configuration: `--output-datastar`
-  adds its helpers to `TemplateData`, and the patch-protocol event surface
-  extends `SSETemplateData`, keyed off the generate configuration rather
-  than per-route state.
+  extends `SSETemplateData` with the patch option setters and the
+  patch-protocol wire format, keyed off the generate configuration rather
+  than per-route state. Rendered (non-SSE) routes are unchanged by it.
 - Per-route mixing inside one package is not supported, and `muxt check`
   cannot flag an htmx helper call in a package generated for another
   frontend; the package boundary provides that separation instead.
