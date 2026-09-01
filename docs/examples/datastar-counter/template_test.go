@@ -19,6 +19,7 @@ func newTestServer(count int64) *http.ServeMux {
 	srv.count.Store(count)
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, srv)
+	StaticRoutes(mux)
 	return mux
 }
 
@@ -43,6 +44,13 @@ func patchElements(t *testing.T, res *http.Response) spec.DocumentFragment {
 	return domtest.ParseStringDocumentFragment(t, strings.Join(elements, "\n"), atom.Body)
 }
 
+// jsPath returns path as html/template renders it inside a data-on:*
+// attribute: the attribute name puts the value in JavaScript context, where
+// each / escapes to \/ — the same string once the browser evaluates it.
+func jsPath(path string) string {
+	return strings.ReplaceAll(path, "/", `\/`)
+}
+
 func TestCounterPage(t *testing.T) {
 	t.Run("given the counter is at zero", func(t *testing.T) {
 		mux := newTestServer(0)
@@ -58,14 +66,24 @@ func TestCounterPage(t *testing.T) {
 				require.NotNil(t, count)
 				assert.Equal(t, "0", count.TextContent())
 			})
+			t.Run("then the stylesheet it links is served", func(t *testing.T) {
+				link := doc.QuerySelector(`link[rel="stylesheet"]`)
+				require.NotNil(t, link)
+				rec := httptest.NewRecorder()
+				mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, link.GetAttribute("href"), nil))
+				res := rec.Result()
+				assert.Equal(t, http.StatusOK, res.StatusCode)
+				assert.Contains(t, res.Header.Get("Content-Type"), "text/css")
+				require.NoError(t, res.Body.Close())
+			})
 			t.Run("then each button posts a datastar action", func(t *testing.T) {
 				increment := doc.QuerySelector("#increment")
 				require.NotNil(t, increment)
-				assert.Equal(t, "@post('/increment')", increment.GetAttribute("data-on:click"))
+				assert.Equal(t, "@post('"+jsPath("/increment")+"')", increment.GetAttribute("data-on:click"))
 
 				decrement := doc.QuerySelector("#decrement")
 				require.NotNil(t, decrement)
-				assert.Equal(t, "@post('/decrement')", decrement.GetAttribute("data-on:click"))
+				assert.Equal(t, "@post('"+jsPath("/decrement")+"')", decrement.GetAttribute("data-on:click"))
 			})
 		})
 	})

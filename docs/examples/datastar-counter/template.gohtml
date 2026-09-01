@@ -7,89 +7,15 @@
 	<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0/bundles/datastar.js"
 	        integrity="sha384-LGcfj7EQR2KZk4GdiKJsUD4nFWrKrLCk/gZXLnPBBf2p/QmoaYYFuyitCwDqhgW1"
 	        crossorigin="anonymous"></script>
-	<style>
-		:root {
-			--bg: #f4f4f5;
-			--card: #ffffff;
-			--ink: #18181b;
-			--muted: #71717a;
-			--edge: #e4e4e7;
-			--accent: #0ea5e9;
-		}
-		* { box-sizing: border-box; }
-		body {
-			margin: 0;
-			min-height: 100vh;
-			display: grid;
-			place-items: center;
-			background: var(--bg);
-			color: var(--ink);
-			font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-		}
-		main {
-			background: var(--card);
-			border: 1px solid var(--edge);
-			border-radius: 16px;
-			box-shadow: 0 8px 24px rgb(0 0 0 / 0.06);
-			padding: 2.5rem 3rem;
-			text-align: center;
-			min-width: 20rem;
-		}
-		h1 {
-			margin: 0 0 0.25rem;
-			font-size: 1.125rem;
-			font-weight: 600;
-			letter-spacing: 0.02em;
-			text-transform: uppercase;
-			color: var(--muted);
-		}
-		output {
-			display: block;
-			font-size: 5rem;
-			font-weight: 700;
-			font-variant-numeric: tabular-nums;
-			line-height: 1.2;
-		}
-		.controls {
-			display: flex;
-			gap: 0.75rem;
-			justify-content: center;
-			margin-top: 1.5rem;
-		}
-		button {
-			width: 4rem;
-			height: 3rem;
-			font-size: 1.5rem;
-			font-weight: 600;
-			color: var(--ink);
-			background: var(--card);
-			border: 1px solid var(--edge);
-			border-radius: 10px;
-			cursor: pointer;
-			transition: border-color 120ms, transform 80ms;
-		}
-		button:hover { border-color: var(--accent); }
-		button:active { transform: scale(0.96); }
-		button.primary {
-			background: var(--accent);
-			border-color: var(--accent);
-			color: #fff;
-		}
-		button.primary:hover { filter: brightness(1.08); }
-		p.hint {
-			margin: 1.75rem 0 0;
-			font-size: 0.8rem;
-			color: var(--muted);
-		}
-	</style>
+	<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 	<main>
 		<h1>Counter</h1>
 		{{template "sseCount" .}}
 		<div class="controls">
-			<button id="decrement" data-on:click="@post('/decrement')" aria-label="decrement">−</button>
-			<button id="increment" class="primary" data-on:click="@post('/increment')" aria-label="increment">+</button>
+			<button id="decrement" data-on:click="@post('{{.Path.Decrement}}')" aria-label="decrement">−</button>
+			<button id="increment" class="primary" data-on:click="@post('{{.Path.Increment}}')" aria-label="increment">+</button>
 		</div>
 		<p class="hint">Each click streams a Datastar patch over SSE.</p>
 	</main>

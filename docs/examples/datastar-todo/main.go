@@ -17,6 +17,7 @@ func main() {
 	mux := http.NewServeMux()
 	srv := new(Server)
 	TemplateRoutes(mux, srv)
+	StaticRoutes(mux)
 	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8002"), mux))
 }
 
@@ -26,6 +27,15 @@ func main() {
 var templateSource embed.FS
 
 var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+//go:embed styles.css
+var staticFS embed.FS
+
+// StaticRoutes serves the embedded static assets alongside the generated
+// template routes.
+func StaticRoutes(mux *http.ServeMux) {
+	mux.Handle("GET /styles.css", http.FileServerFS(staticFS))
+}
 
 type Todo struct {
 	ID    int
