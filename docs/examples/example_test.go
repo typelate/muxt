@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-var exampleDirs = []string{"simple", "htmx-counter", "htmx-todo", "fixiproject-clock"}
+var exampleDirs = []string{"simple", "htmx-counter", "htmx-todo", "fixiproject-clock", "datastar-counter"}
 
 func TestGoVet(t *testing.T) {
 	for _, dir := range exampleDirs {
