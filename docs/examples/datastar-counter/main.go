@@ -1,0 +1,42 @@
+package main
+
+import (
+	"cmp"
+	"context"
+	"embed"
+	"html/template"
+	"log"
+	"net/http"
+	"os"
+	"sync/atomic"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	srv := new(Server)
+	TemplateRoutes(mux, srv)
+	log.Fatal(http.ListenAndServe(":"+cmp.Or(os.Getenv("PORT"), "8001"), mux))
+}
+
+//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-datastar
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct {
+	count atomic.Int64
+}
+
+func (s *Server) Home(_ context.Context) (int64, error) {
+	return s.count.Load(), nil
+}
+
+func (s *Server) Increment(_ context.Context, sseCount func(int64) error) {
+	_ = sseCount(s.count.Add(1))
+}
+
+func (s *Server) Decrement(_ context.Context, sseCount func(int64) error) {
+	_ = sseCount(s.count.Add(-1))
+}
