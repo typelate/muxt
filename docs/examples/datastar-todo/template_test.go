@@ -23,6 +23,7 @@ func newTestServer(todos ...Todo) (*http.ServeMux, *Server) {
 	}
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, srv)
+	StaticRoutes(mux)
 	return mux, srv
 }
 
@@ -83,6 +84,13 @@ func requireFooter(t *testing.T, root elementQueries, want string) {
 	assert.Equal(t, want, strings.TrimSpace(footer.TextContent()))
 }
 
+// jsPath returns path as html/template renders it inside a data-on:*
+// attribute: the attribute name puts the value in JavaScript context, where
+// each / escapes to \/ — the same string once the browser evaluates it.
+func jsPath(path string) string {
+	return strings.ReplaceAll(path, "/", `\/`)
+}
+
 func TestTodoPage(t *testing.T) {
 	t.Run("given there are no todos", func(t *testing.T) {
 		mux, _ := newTestServer()
@@ -96,10 +104,18 @@ func TestTodoPage(t *testing.T) {
 				requireTitles(t, doc)
 				requireFooter(t, doc, "0 of 0 remaining")
 			})
+			t.Run("then the stylesheet it links is served", func(t *testing.T) {
+				link := doc.QuerySelector(`link[rel="stylesheet"]`)
+				require.NotNil(t, link)
+				res := do(mux, http.MethodGet, link.GetAttribute("href"))
+				assert.Equal(t, http.StatusOK, res.StatusCode)
+				assert.Contains(t, res.Header.Get("Content-Type"), "text/css")
+				require.NoError(t, res.Body.Close())
+			})
 			t.Run("then the form posts a datastar action with the field the handler reads", func(t *testing.T) {
 				form := doc.QuerySelector("form")
 				require.NotNil(t, form)
-				assert.Contains(t, form.GetAttribute("data-on:submit"), "@post('/todos'")
+				assert.Contains(t, form.GetAttribute("data-on:submit"), "@post('"+jsPath("/todos")+"'")
 				require.NotNil(t, form.QuerySelector(`input[name="title"]`))
 			})
 		})
@@ -120,8 +136,8 @@ func TestCreateTodo(t *testing.T) {
 
 				li := fragment.QuerySelector("#todo-list li")
 				require.NotNil(t, li)
-				assert.Equal(t, "@post('/todos/1/toggle')", li.QuerySelector(`input[type="checkbox"]`).GetAttribute("data-on:change"))
-				assert.Equal(t, "@delete('/todos/1')", li.QuerySelector("button").GetAttribute("data-on:click"))
+				assert.Equal(t, "@post('"+jsPath("/todos/1/toggle")+"')", li.QuerySelector(`input[type="checkbox"]`).GetAttribute("data-on:change"))
+				assert.Equal(t, "@delete('"+jsPath("/todos/1")+"')", li.QuerySelector("button").GetAttribute("data-on:click"))
 			})
 		})
 	})

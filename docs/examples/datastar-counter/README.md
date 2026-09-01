@@ -7,8 +7,10 @@ A counter you increment and decrement over [Datastar](https://data-star.dev). It
 The page renders the count through the `sseCount` template. Each button posts a Datastar action:
 
 ```gotmpl
-<button id="increment" data-on:click="@post('/increment')">+</button>
+<button id="increment" data-on:click="@post('{{.Path.Increment}}')">+</button>
 ```
+
+`.Path.Increment` is the generated `TemplateRoutePaths` helper, so renaming the route breaks the build instead of the button. html/template treats `data-on:*` as JavaScript and renders the path as `\/increment` — the same string once the browser evaluates it.
 
 The route streams one patch event whose payload is the same `sseCount` fragment — the `sseCount` callback argument names the template it renders:
 

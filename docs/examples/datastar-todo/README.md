@@ -14,10 +14,12 @@ The page and every mutation render the same `sseTodos` fragment — two elements
 The form posts itself as a Datastar action, the checkbox and delete button carry per-todo actions:
 
 ```gotmpl
-<form data-on:submit="evt.preventDefault(); @post('/todos', {contentType: 'form'}); el.reset()">
-<input type="checkbox" data-on:change="@post('/todos/{{.ID}}/toggle')">
-<button data-on:click="@delete('/todos/{{.ID}}')">✕</button>
+<form data-on:submit="evt.preventDefault(); @post('{{.Path.CreateTodo}}', {contentType: 'form'}); el.reset()">
+<input type="checkbox" data-on:change="@post('{{$.Path.ToggleTodo .ID}}')">
+<button data-on:click="@delete('{{$.Path.DeleteTodo .ID}}')">✕</button>
 ```
+
+The URLs come from the generated `TemplateRoutePaths` helpers — change a route pattern and the compiler finds every stale action. html/template treats `data-on:*` as JavaScript, so the rendered page shows each `/` as `\/`; the strings are identical once evaluated.
 
 Each route binds its inputs and streams the snapshot through the `sseTodos` callback:
 
