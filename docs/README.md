@@ -40,6 +40,8 @@ Type-safe HTTP handlers from Go HTML templates.
 - **[HTMX Helpers](examples/htmx-counter)** - HTMX integration code
 - **[HTMX TodoMVC](examples/htmx-todo)** - TodoMVC with JSON persistence
 - **[fixi + SSE Clock](examples/fixiproject-clock)** - Server-Sent Events streaming
+- **[Datastar Counter](examples/datastar-counter)** - Datastar patch-elements over SSE
+- **[Datastar Todo](examples/datastar-todo)** - Datastar with form binding and per-item actions
 
 ---
 
