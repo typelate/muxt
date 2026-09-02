@@ -134,6 +134,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		}
 
 		ident := segmentIdentifiers[identIndex]
+		wildcard := isWildcardSegment(segment)
 		pathValueType, ok := def.ArgumentType(ident)
 		identIndex++
 		if !ok {
@@ -193,10 +194,14 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 					},
 				},
 			})
-			segmentExpressions = append(segmentExpressions, &ast.CallExpr{
+			var marshaled ast.Expr = &ast.CallExpr{
 				Fun:  ast.NewIdent("string"),
 				Args: []ast.Expr{ast.NewIdent(segmentIdent)},
-			})
+			}
+			if !wildcard {
+				marshaled = escapedPathSegment(file, marshaled)
+			}
+			segmentExpressions = append(segmentExpressions, marshaled)
 			continue
 		}
 
@@ -207,6 +212,9 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), basicType.Kind())
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode variable %s: %v", ident, err)
+		}
+		if basicType.Info()&types.IsString != 0 && !wildcard {
+			exp = escapedPathSegment(file, exp)
 		}
 		segmentExpressions = append(segmentExpressions, exp)
 	}
@@ -238,4 +246,14 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	method.Type.Params.List = fields
 
 	return method, nil
+}
+
+// isWildcardSegment reports whether segment is a trailing {name...} pattern,
+// whose value names a path suffix and is joined as given.
+func isWildcardSegment(segment string) bool {
+	return strings.HasSuffix(strings.TrimSuffix(segment, "}"), "...")
+}
+
+func escapedPathSegment(file *File, value ast.Expr) ast.Expr {
+	return astgen.Call(file, "url", "net/url", "PathEscape", value)
 }

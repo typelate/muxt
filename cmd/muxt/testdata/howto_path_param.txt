@@ -9,7 +9,7 @@ exec go test -cover
 
 -- want-err.txt --
 checking endpoint GET /fruits/{name}/tree ToUpper(name)
-$WORK/template_routes.go:37:13 ExecuteTemplate "GET /fruits/{name}/tree ToUpper(name)" *TemplateData[RoutesReceiver, any]
+$WORK/template_routes.go:38:13 ExecuteTemplate "GET /fruits/{name}/tree ToUpper(name)" *TemplateData[RoutesReceiver, any]
 $WORK/template.gohtml:2:20: executing "GET /fruits/{name}/tree ToUpper(name)" at <.Result.Name>: field or method Name not found on any
 
 any has no exported fields or methods
