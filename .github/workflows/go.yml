@@ -28,22 +28,17 @@ jobs:
         go install ./cmd/muxt
         go test -race -shuffle=on ./...
 
+  # Guards the generated code in docs/examples against gosec findings.
+  # Excluded rules only fire in the hand-written demo code:
+  #   G112, G114  demo servers do not set timeouts
+  #   G304, G306  htmx-todo persists todos to a local JSON file
+  #   G706        demo servers log their listen address
   gosec:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: "go.mod"
-        cache: true
-
-    # Excluded rules do not fit a code generator with runnable examples:
-    #   G112, G114  docs/examples servers are demos; they do not set timeouts
-    #   G122, G304  muxt reads template and source files from user-provided paths
-    #   G301, G306  generated .go files use standard source permissions (0644/0755)
-    #   G401, G505  sha1 names path-segment identifiers; it is not used for security
-    #   G706        example servers log their listen address
     - name: Scan
-      run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -exclude=G112,G114,G122,G301,G304,G306,G401,G505,G706 ./...
+      uses: securego/gosec@v2.29.0
+      with:
+        args: -exclude=G112,G114,G304,G306,G706 ./docs/examples/...
