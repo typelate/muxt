@@ -891,7 +891,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definitio
 
 // appendStructFieldParseStatements renders the per-field parse statements for
 // a form or multipart struct parameter from the field bindings resolved by
-// muxt.ResolveCall. Used by both `form` (parseCall = callParseForm()) and
+// muxt.ResolveCall. Used by both `form` (parseCall = callParseForm(file)) and
 // `multipart` (parseCall = callParseMultipartForm(...)).
 func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, rdIdent string, parseCall ast.Stmt) ([]ast.Stmt, error) {
 	const parsedVariableName = "value"
