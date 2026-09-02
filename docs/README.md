@@ -42,6 +42,7 @@ Type-safe HTTP handlers from Go HTML templates.
 - **[fixi + SSE Clock](examples/fixiproject-clock)** - Server-Sent Events streaming
 - **[Datastar Counter](examples/datastar-counter)** - Datastar patch-elements over SSE
 - **[Datastar Todo](examples/datastar-todo)** - Datastar with form binding and per-item actions
+- **[Datastar Search](examples/datastar-search)** - Datastar signals decoded with unmarshalJSON(body), plus a marshalJSON API
 
 ---
 

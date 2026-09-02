@@ -1,0 +1,42 @@
+{{define "GET / Index(ctx)"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Datastar Search</title>
+	<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0/bundles/datastar.js"
+	        integrity="sha384-LGcfj7EQR2KZk4GdiKJsUD4nFWrKrLCk/gZXLnPBBf2p/QmoaYYFuyitCwDqhgW1"
+	        crossorigin="anonymous"></script>
+	<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+	<main>
+		<header>
+			<h1>Go Proverbs</h1>
+		</header>
+		<div class="search">
+			<input type="search" placeholder="Search proverbs…" aria-label="search"
+			       data-bind:query
+			       data-on:input__debounce.300ms="@post('{{.Path.SearchProverbs}}')">
+		</div>
+		{{template "sseResults" .}}
+	</main>
+</body>
+</html>
+{{end}}
+
+{{define "sseResults"}}<ul id="results">
+{{- range .Result.Matches}}
+	<li>{{.Prefix}}{{with .Match}}<mark>{{.}}</mark>{{end}}{{.Suffix}}</li>
+{{- else}}
+	<li class="empty">no proverbs match</li>
+{{- end}}
+</ul>
+<footer id="results-footer">
+	<span>{{len .Result.Matches}} of {{.Result.Total}} proverbs</span>
+	<a href="{{$.Path.ProverbsAPI}}?query={{.Result.Query}}">JSON</a>
+</footer>{{end}}
+
+{{define "POST /search sse(SearchProverbs(ctx, unmarshalJSON(body), sseResults))"}}{{end}}
+
+{{define "GET /api/proverbs marshalJSON(ProverbsAPI(ctx, form))"}}{{end}}
