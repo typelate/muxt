@@ -34,7 +34,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
 		}
-		id := idParsed
+		idPathParam := idParsed
 		request.ParseForm()
 		var form EditRow
 		{
@@ -55,7 +55,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
 			var err error
-			td.result, err = receiver.SubmitFormEditRow(id, form)
+			td.result, err = receiver.SubmitFormEditRow(idPathParam, form)
 			if err != nil {
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
@@ -89,13 +89,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
 		}
-		id := idParsed
+		idPathParam := idParsed
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
 			var err error
-			td.result, err = receiver.GetFormEditRow(id)
+			td.result, err = receiver.GetFormEditRow(idPathParam)
 			if err != nil {
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
@@ -263,12 +263,12 @@ type TemplateRoutePaths struct {
 	pathsPrefix string
 }
 
-func (routePaths TemplateRoutePaths) SubmitFormEditRow(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(id))
+func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))
 }
 
-func (routePaths TemplateRoutePaths) GetFormEditRow(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(id), "edit")
+func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")
 }
 
 func (routePaths TemplateRoutePaths) ReadHelp() string {

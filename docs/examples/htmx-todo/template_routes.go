@@ -130,12 +130,12 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
 		}
-		id := idParsed
+		idPathParam := idParsed
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.DeleteTodo(id)
+			td.result = receiver.DeleteTodo(idPathParam)
 			td.okay = true
 		}
 		if err := templates.ExecuteTemplate(buf, "DELETE /todos/{id} DeleteTodo(id)", &td); err != nil {
@@ -166,13 +166,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
 		}
-		id := idParsed
+		idPathParam := idParsed
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
 			var err error
-			td.result, err = receiver.ToggleTodo(id)
+			td.result, err = receiver.ToggleTodo(idPathParam)
 			if err != nil {
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
@@ -413,12 +413,12 @@ func (routePaths TemplateRoutePaths) ToggleAll() string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/toggle-all")
 }
 
-func (routePaths TemplateRoutePaths) DeleteTodo(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(id))
+func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
 }
 
-func (routePaths TemplateRoutePaths) ToggleTodo(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(id))
+func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
 }
 
 func (routePaths TemplateRoutePaths) ListTodos() string {
