@@ -149,6 +149,27 @@ func TestSearchProverbs(t *testing.T) {
 		})
 	})
 
+	t.Run("given the query contains URL metacharacters", func(t *testing.T) {
+		mux := newTestServer()
+
+		t.Run("when datastar posts a&b=c", func(t *testing.T) {
+			fragment := patchElements(t, postSignals(mux, "/search", `{"query":"a&b=c"}`))
+			require.NotNil(t, fragment)
+
+			t.Run("then the JSON link query-escapes the value and round-trips through the mux", func(t *testing.T) {
+				link := fragment.QuerySelector("#results-footer a")
+				require.NotNil(t, link)
+				assert.Equal(t, "/api/proverbs?query=a%26b%3dc", link.GetAttribute("href"))
+
+				res := get(mux, link.GetAttribute("href"))
+				var results SearchResults
+				require.NoError(t, json.NewDecoder(res.Body).Decode(&results))
+				require.NoError(t, res.Body.Close())
+				assert.Equal(t, "a&b=c", results.Query, "the query survives the link round trip")
+			})
+		})
+	})
+
 	t.Run("given nothing matches", func(t *testing.T) {
 		mux := newTestServer()
 
