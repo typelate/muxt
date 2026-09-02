@@ -23,9 +23,8 @@ func newTestServer(count int64) *http.ServeMux {
 	return mux
 }
 
-// patchElements asserts res is a Datastar patch-elements stream and parses the
-// event payload as the fragment the browser would morph into the page.
-func patchElements(t *testing.T, res *http.Response) spec.DocumentFragment {
+// readEventStream asserts res is an SSE stream and returns its body.
+func readEventStream(t *testing.T, res *http.Response) string {
 	t.Helper()
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Equal(t, "text/event-stream", res.Header.Get("Content-Type"))
@@ -33,9 +32,16 @@ func patchElements(t *testing.T, res *http.Response) spec.DocumentFragment {
 	body, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-	require.Contains(t, string(body), "event: datastar-patch-elements\n")
+	return string(body)
+}
+
+// elementsFragment parses the patch-elements payload as the fragment the
+// browser would morph into the page.
+func elementsFragment(t *testing.T, stream string) spec.DocumentFragment {
+	t.Helper()
+	require.Contains(t, stream, "event: datastar-patch-elements\n")
 	var elements []string
-	for _, line := range strings.Split(string(body), "\n") {
+	for _, line := range strings.Split(stream, "\n") {
 		if payload, ok := strings.CutPrefix(line, "data: elements "); ok {
 			elements = append(elements, payload)
 		}
@@ -76,6 +82,14 @@ func TestCounterPage(t *testing.T) {
 				assert.Contains(t, res.Header.Get("Content-Type"), "text/css")
 				require.NoError(t, res.Body.Close())
 			})
+			t.Run("then the delta signal is declared and displayed", func(t *testing.T) {
+				main := doc.QuerySelector("main")
+				require.NotNil(t, main)
+				assert.True(t, main.HasAttribute("data-signals-delta"))
+				delta := doc.QuerySelector("output#delta")
+				require.NotNil(t, delta)
+				assert.Equal(t, "$delta", delta.GetAttribute("data-text"))
+			})
 			t.Run("then each button posts a datastar action", func(t *testing.T) {
 				increment := doc.QuerySelector("#increment")
 				require.NotNil(t, increment)
@@ -97,12 +111,20 @@ func TestIncrement(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/increment", nil))
 
+			stream := readEventStream(t, rec.Result())
+
 			t.Run("then one patch morphs the count to 42", func(t *testing.T) {
-				fragment := patchElements(t, rec.Result())
+				fragment := elementsFragment(t, stream)
 				require.NotNil(t, fragment)
 				count := fragment.QuerySelector("output#count")
 				require.NotNil(t, count, "the patch must carry the element the page displays")
 				assert.Equal(t, "42", count.TextContent())
+			})
+			t.Run("then a second event patches the delta signal", func(t *testing.T) {
+				assert.Contains(t, stream, "event: datastar-patch-signals\n")
+				assert.Contains(t, stream, `data: signals {"delta":"+1"}`+"\n")
+				assert.Less(t, strings.Index(stream, "data: elements"), strings.Index(stream, "data: signals"),
+					"the count patch precedes the signal patch")
 			})
 		})
 	})
@@ -116,8 +138,9 @@ func TestDecrement(t *testing.T) {
 			for range 2 {
 				rec := httptest.NewRecorder()
 				mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/decrement", nil))
-				fragment := patchElements(t, rec.Result())
-				require.NotNil(t, fragment)
+				stream := readEventStream(t, rec.Result())
+				require.NotNil(t, elementsFragment(t, stream))
+				assert.Contains(t, stream, `data: signals {"delta":"-1"}`+"\n")
 			}
 
 			t.Run("then the page shows the count below zero", func(t *testing.T) {

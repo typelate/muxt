@@ -26,14 +26,26 @@ func (s *Server) Increment(_ context.Context, sseCount func(int64) error) {
 }
 ```
 
+Each click also updates a client signal: the `Signals`-suffixed callback marshals its argument as a `datastar-patch-signals` event, and `data-text="$delta"` renders it on the page.
+
+```go
+func (s *Server) Increment(_ context.Context, sseCount func(int64) error, deltaSignals func(Delta) error) {
+	_ = sseCount(s.count.Add(1))
+	_ = deltaSignals(Delta{Delta: "+1"})
+}
+```
+
 On the wire that is:
 
 ```
 event: datastar-patch-elements
 data: elements <output id="count">1</output>
+
+event: datastar-patch-signals
+data: signals {"delta":"+1"}
 ```
 
-Datastar morphs the element in by id — no selector needed.
+Datastar morphs the element in by id — no selector needed — and merges the signal patch into the page's signals. The generated closures for both callbacks are in [template_routes.go](template_routes.go): the render callback executes the `sseCount` template into an SSE frame, the signals callback `json.Marshal`s its argument into the patch-signals frame.
 
 ## Run it
 
