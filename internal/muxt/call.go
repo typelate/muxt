@@ -92,6 +92,7 @@ const (
 	ArgumentTypeRequestMultipartForm
 	ArgumentTypeExecute
 	ArgumentTypeSendMessage
+	ArgumentTypeSignalsCallback
 	ArgumentTypeLastEventID
 	ArgumentTypeRequestBody
 	ArgumentTypeRequestBodyJSON
@@ -146,6 +147,15 @@ func resolveCallbackShapes(def *Definition) error {
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	for i := range def.Arguments {
 		a := &def.Arguments[i]
+		if a.Type == ArgumentTypeSignalsCallback {
+			callback := a.CallbackSignature()
+			if callback == nil || callback.Params().Len() != 1 || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
+				return fmt.Errorf("the %s signals callback must be a func(T) error; T is marshaled as the patch-signals payload", a.Identifier)
+			}
+			a.callbackResult = callback.Params().At(0).Type()
+			a.callbackHasArg = true
+			continue
+		}
 		if a.Type != ArgumentTypeExecute {
 			continue
 		}
@@ -377,6 +387,10 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
 				continue
 			}
+			if def.Representation == RepresentationSSE && IsSignalsCallbackArgument(arg.Name) {
+				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				continue
+			}
 			tp, ok := DefaultScopeType(pl, def, arg.Name)
 			if !ok {
 				return nil, fmt.Errorf("could not determine a type for %s", arg.Name)
@@ -581,6 +595,13 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 			a.template = def.template.Lookup(arg.Name)
 			return a, nil
 		}
+		if isSignalsCallback(def, arg) {
+			// The callback contract is validated in resolveCallbackShapes; the
+			// remainder before the Signals suffix is only a label, so muxt
+			// never derives an identifier from it.
+			a.Type = ArgumentTypeSignalsCallback
+			return a, nil
+		}
 		if isSendMessage(def, arg) {
 			a.Type = ArgumentTypeSendMessage
 
@@ -618,6 +639,18 @@ func isAssignable(pl []*packages.Package, paramType types.Type, argName, package
 		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(paramType, qual), argName, types.TypeString(at, qual))
 	}
 	return nil
+}
+
+func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
+	return def.Representation == RepresentationSSE && IsSignalsCallbackArgument(arg.Name)
+}
+
+// IsSignalsCallbackArgument reports whether name is a datastar patch-signals
+// callback argument: a Signals-suffixed identifier (countsSignals) whose
+// func(T) error argument is marshaled as the event payload. Only valid on sse
+// routes in --output-datastar packages.
+func IsSignalsCallbackArgument(name string) bool {
+	return strings.HasSuffix(name, "Signals") && token.IsIdentifier(name)
 }
 
 func isSendMessage(def *Definition, arg *ast.Ident) bool {

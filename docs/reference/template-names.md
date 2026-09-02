@@ -198,7 +198,11 @@ chainable `.Selector`, `.Mode`, and `.UseViewTransition` setters become the
 patch option lines, and each rendered line is written as a `data: elements`
 line. The flag also enables the `signals` argument, shorthand for
 `unmarshalJSON(body)`, which decodes the signal state Datastar sends as the
-JSON request body.
+JSON request body — and `Signals`-suffixed callbacks (`countsSignals
+func(T) error`), which marshal their argument as a `datastar-patch-signals`
+event so a stream can update client signals alongside element patches. The
+text before the suffix is only a label; muxt never derives an identifier
+from it.
 
 [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) · [err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)
 
