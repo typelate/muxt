@@ -133,9 +133,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 			continue
 		}
 
-		ident := segmentIdentifiers[identIndex]
-		wildcard := isWildcardSegment(segment)
-		pathValueType, ok := def.ArgumentType(ident)
+		name := segmentIdentifiers[identIndex]
+		ident := pathParamIdent(name)
+		wildcard := si == len(segmentStrings)-1 && isWildcardSegment(segment)
+		pathValueType, ok := def.ArgumentType(name)
 		identIndex++
 		if !ok {
 			pathValueType = types.Universe.Lookup("string").Type()
@@ -248,10 +249,22 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	return method, nil
 }
 
-// isWildcardSegment reports whether segment is a trailing {name...} pattern,
-// whose value names a path suffix and is joined as given.
+// isWildcardSegment reports whether segment is a {name...} pattern; only the
+// trailing segment of a pattern may be one, and its value names a path suffix
+// spliced without escaping.
 func isWildcardSegment(segment string) bool {
 	return strings.HasSuffix(strings.TrimSuffix(segment, "}"), "...")
+}
+
+// pathParamIdent keeps a path parameter from shadowing a package identifier
+// the generated helper body references.
+func pathParamIdent(name string) string {
+	switch name {
+	case "path", "cmp", "url", "strconv", "fmt":
+		return name + "PathParam"
+	default:
+		return name
+	}
 }
 
 func escapedPathSegment(file *File, value ast.Expr) ast.Expr {

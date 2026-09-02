@@ -167,7 +167,7 @@ Templates receive `TemplateData[R, T]` where `R` is the receiver interface and
 | `.Ok()` | `bool` | True after a single-value method, a `(T, bool)` method returning true, or a successful `execute` call. Never true for `(T, error)` methods — branch on `.Err` instead |
 | `.Request()` | `*http.Request` | HTTP request |
 | `.Receiver()` | `R` | The receiver passed to `TemplateRoutes` |
-| `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument. String and `TextMarshaler` path parameters are escaped with `url.PathEscape`; a trailing `{name...}` wildcard value names a path suffix and is joined as given |
+| `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument. String and `TextMarshaler` path parameters are escaped with `net/url.PathEscape`; a trailing `{name...}` wildcard value is spliced without escaping, and the joined path is cleaned by `path.Join` |
 | `.MuxtVersion()` | `string` | The muxt version that generated the code (not generated when `--output-muxt-version=false`) |
 | `.StatusCode(code)` | `*TemplateData` | Set HTTP status (returns the data for chaining) |
 | `.Header(key, val)` | `*TemplateData` | Set response header (returns the data for chaining) |

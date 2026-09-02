@@ -1,7 +1,9 @@
-# String path parameters are escaped with url.PathEscape in the generated
+# String path parameters are escaped with net/url.PathEscape in the generated
 # TemplateRoutePaths helpers, so a value containing URL metacharacters cannot
-# corrupt the path. A trailing {name...} wildcard names a path suffix and is
-# joined as given. Numeric parameters need no escaping.
+# corrupt the path. A trailing {name...} wildcard value is spliced without
+# escaping (path.Join cleans the result). Parameters named after packages the
+# helper body references (url, path, ...) are renamed so they cannot shadow
+# the imports.
 
 muxt generate --use-receiver-type=T
 muxt check
@@ -12,6 +14,8 @@ exec go test -count=1
 {{define "GET /files/{name} ShowFile(ctx, name)"}}{{.Result}}{{end}}
 {{define "GET /tree/{rest...} ShowTree(ctx, rest)"}}{{.Result}}{{end}}
 {{define "GET /tags/{tag} ShowTag(ctx, tag)"}}{{.Result}}{{end}}
+{{define "GET /link/{url} ShowLink(ctx, url)"}}{{.Result}}{{end}}
+{{define "GET /docs/{path...} ShowDocs(ctx, path)"}}{{.Result}}{{end}}
 -- go.mod --
 module server
 
@@ -43,6 +47,10 @@ func (T) ShowFile(_ context.Context, name string) string { return name }
 func (T) ShowTree(_ context.Context, rest string) string { return rest }
 
 func (T) ShowTag(_ context.Context, tag Tag) string { return string(tag) }
+
+func (T) ShowLink(_ context.Context, url string) string { return url }
+
+func (T) ShowDocs(_ context.Context, path string) string { return path }
 -- template_test.go --
 package server
 
@@ -56,6 +64,12 @@ func TestPathEscaping(t *testing.T) {
 	}
 	if got, want := paths.ShowTree("a/b c"), "/tree/a/b c"; got != want {
 		t.Errorf("ShowTree(%q) = %q, want %q", "a/b c", got, want)
+	}
+	if got, want := paths.ShowLink("a/b"), "/link/a%2Fb"; got != want {
+		t.Errorf("ShowLink(%q) = %q, want %q", "a/b", got, want)
+	}
+	if got, want := paths.ShowDocs("guides/intro"), "/docs/guides/intro"; got != want {
+		t.Errorf("ShowDocs(%q) = %q, want %q", "guides/intro", got, want)
 	}
 	got, err := paths.ShowTag(Tag("v/1"))
 	if err != nil {
