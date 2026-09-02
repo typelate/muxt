@@ -37,6 +37,6 @@
 	<a href="{{$.Path.ProverbsAPI}}?query={{.Result.Query}}">JSON</a>
 </footer>{{end}}
 
-{{define "POST /search sse(SearchProverbs(ctx, unmarshalJSON(body), sseResults))"}}{{end}}
+{{define "POST /search sse(SearchProverbs(ctx, signals, sseResults))"}}{{end}}
 
 {{define "GET /api/proverbs marshalJSON(ProverbsAPI(ctx, form))"}}{{end}}
