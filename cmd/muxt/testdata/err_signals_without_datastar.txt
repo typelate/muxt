@@ -1,0 +1,31 @@
+! muxt generate --use-receiver-type=Server
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: the signals argument in "POST /search sse(Search(ctx, signals, sseResults))" requires --output-datastar; it is shorthand for unmarshalJSON(body)
+-- template.gohtml --
+{{- define "POST /search sse(Search(ctx, signals, sseResults))" -}}{{- end -}}
+{{- define "sseResults" -}}<output id="q">{{ .Result }}</output>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Search(_ context.Context, signals string, sseResults func(string) error) {
+	_ = sseResults(signals)
+}

@@ -196,7 +196,9 @@ Under `--output-datastar` each event is instead framed with
 fixed to `datastar-patch-elements` (there is no `.Event` setter), the
 chainable `.Selector`, `.Mode`, and `.UseViewTransition` setters become the
 patch option lines, and each rendered line is written as a `data: elements`
-line.
+line. The flag also enables the `signals` argument, shorthand for
+`unmarshalJSON(body)`, which decodes the signal state Datastar sends as the
+JSON request body.
 
 [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) · [err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)
 

@@ -655,6 +655,11 @@ const (
 	TemplateNameScopeIdentifierExecute      = "execute"
 	TemplateNameScopeIdentifierLastEventID  = "lastEventID"
 	TemplateNameScopeIdentifierRequestBody  = "body"
+
+	// TemplateNameScopeIdentifierSignals is shorthand for
+	// unmarshalJSON(body); it is rewritten during parsing and generation
+	// rejects it unless the package targets Datastar.
+	TemplateNameScopeIdentifierSignals = "signals"
 )
 
 // checkRequestBodyParameter requires the parameter bound to the reserved body
@@ -719,6 +724,35 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 		}
 	}
 	return fmt.Errorf("the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
+}
+
+// rewriteSignalsArguments replaces each signals argument with
+// unmarshalJSON(body): Datastar sends the page's signal state as the JSON
+// request body, so the sugar and the explicit spelling bind identically. A
+// path wildcard named signals keeps its path-value meaning. It reports
+// whether anything was rewritten.
+func rewriteSignalsArguments(call *ast.CallExpr, pathValueNames []string) bool {
+	if slices.Contains(pathValueNames, TemplateNameScopeIdentifierSignals) {
+		return false
+	}
+	rewritten := false
+	for i, a := range call.Args {
+		switch arg := a.(type) {
+		case *ast.Ident:
+			if arg.Name == TemplateNameScopeIdentifierSignals {
+				call.Args[i] = &ast.CallExpr{
+					Fun:  ast.NewIdent(callWrapperUnmarshalJSON),
+					Args: []ast.Expr{ast.NewIdent(TemplateNameScopeIdentifierRequestBody)},
+				}
+				rewritten = true
+			}
+		case *ast.CallExpr:
+			if rewriteSignalsArguments(arg, pathValueNames) {
+				rewritten = true
+			}
+		}
+	}
+	return rewritten
 }
 
 // countBodyConsumers counts how many times call (recursively) reads the
