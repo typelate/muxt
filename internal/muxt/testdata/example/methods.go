@@ -27,6 +27,16 @@ func (srv *Server) PtrServer(*Server) any                      { return nil }
 func (srv *Server) Reader(io.Reader) any                       { return nil }
 func (srv *Server) RawJSON(json.RawMessage) any                { return nil }
 
+// CustomError implements error to prove signals callbacks require the exact
+// error result type.
+type CustomError struct{}
+
+func (CustomError) Error() string { return "custom" }
+
+func (srv *Server) StreamBadSignals(countsSignals func(int) CustomError) {}
+
+func (srv *Server) StreamGoodSignals(countsSignals func(int) error) {}
+
 type In struct{ Name string }
 
 func (srv *Server) FormStruct(In) any { return nil }

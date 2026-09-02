@@ -148,8 +148,11 @@ func resolveCallbackShapes(def *Definition) error {
 	for i := range def.Arguments {
 		a := &def.Arguments[i]
 		if a.Type == ArgumentTypeSignalsCallback {
+			// The generated closure has type func(T) error, so the result must
+			// be exactly error — an error implementation would not compile at
+			// the receiver call.
 			callback := a.CallbackSignature()
-			if callback == nil || callback.Params().Len() != 1 || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
+			if callback == nil || callback.Params().Len() != 1 || callback.Results().Len() != 1 || !types.Identical(callback.Results().At(0).Type(), types.Universe.Lookup("error").Type()) {
 				return fmt.Errorf("the %s signals callback must be a func(T) error; T is marshaled as the patch-signals payload", a.Identifier)
 			}
 			a.callbackResult = callback.Params().At(0).Type()
