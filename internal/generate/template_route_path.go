@@ -134,7 +134,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		}
 
 		name := segmentIdentifiers[identIndex]
-		ident := pathParamIdent(name, def.TemplatesVariable())
+		ident := pathParamIdent(name)
 		wildcard := si == len(segmentStrings)-1 && isWildcardSegment(segment)
 		pathValueType, ok := def.ArgumentType(name)
 		identIndex++
@@ -256,19 +256,11 @@ func isWildcardSegment(segment string) bool {
 	return strings.HasSuffix(strings.TrimSuffix(segment, "}"), "...")
 }
 
-// pathParamIdent keeps a path parameter from shadowing an identifier the
-// generated code references: an imported package, a handler or helper local,
-// or a variable the handler closure captures.
-func pathParamIdent(name, templatesVariable string) string {
-	switch name {
-	case "bytes", "cmp", "errors", "fmt", "http", "io", "json", "path", "slog", "strconv", "sync", "url",
-		"td", "buf", "err", "statusCode", "defaultStatusCode", "bodyValue",
-		"receiver", "mux", "pathsPrefix", "bytesBufferPool", "logger", "middleware",
-		templatesVariable:
-		return name + "PathParam"
-	default:
-		return name
-	}
+// pathParamIdent names the generated local for a path parameter. The suffix
+// keeps any wildcard name from colliding with an identifier the generated
+// code references: an import, another local, or a captured variable.
+func pathParamIdent(name string) string {
+	return name + "PathParam"
 }
 
 func escapedPathSegment(file *File, value ast.Expr) ast.Expr {
