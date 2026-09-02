@@ -223,6 +223,13 @@ func TestArgument(t *testing.T) {
 		{Name: "marshalJSON allows at most two results", Receiver: serverType, Template: `{{define "GET / marshalJSON(ThreeResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "marshalJSON allows at most two results but ThreeResults() (int, int, error) has 3")
 		}},
+		{Name: "signals callback with exact error result", Receiver: serverType, Template: `{{define "GET /b sse(StreamGoodSignals(countsSignals))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, ArgumentTypeSignalsCallback, defs[0].Arguments[0].Type)
+		}},
+		{Name: "signals callback result must be exactly error", Receiver: serverType, Template: `{{define "GET /b sse(StreamBadSignals(countsSignals))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
+			require.ErrorContains(t, err, "the countsSignals signals callback must be a func(T) error")
+		}},
 		{Name: "nested method call", Receiver: serverType, Template: `{{define "GET / Any(Context(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
