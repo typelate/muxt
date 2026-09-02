@@ -122,7 +122,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, err.Error(), http.StatusBadRequest)
 			return
 		}
-		id := idParsed
+		idPathParam := idParsed
 		h := response.Header()
 		h.Set("Content-Type", "text/event-stream")
 		h.Set("Connection", "keep-alive")
@@ -130,7 +130,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(http.StatusOK)
 		flusher.Flush()
 		var mut sync.Mutex
-		receiver.DeleteTodo(ctx, id, func(result Todos) error {
+		receiver.DeleteTodo(ctx, idPathParam, func(result Todos) error {
 			if err := request.Context().Err(); err != nil {
 				return err
 			}
@@ -167,7 +167,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			http.Error(response, err.Error(), http.StatusBadRequest)
 			return
 		}
-		id := idParsed
+		idPathParam := idParsed
 		h := response.Header()
 		h.Set("Content-Type", "text/event-stream")
 		h.Set("Connection", "keep-alive")
@@ -175,7 +175,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(http.StatusOK)
 		flusher.Flush()
 		var mut sync.Mutex
-		receiver.ToggleTodo(ctx, id, func(result Todos) error {
+		receiver.ToggleTodo(ctx, idPathParam, func(result Todos) error {
 			if err := request.Context().Err(); err != nil {
 				return err
 			}
@@ -477,10 +477,10 @@ func (routePaths TemplateRoutePaths) CreateTodo() string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")
 }
 
-func (routePaths TemplateRoutePaths) DeleteTodo(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(id))
+func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
 }
 
-func (routePaths TemplateRoutePaths) ToggleTodo(id int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(id), "toggle")
+func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")
 }
