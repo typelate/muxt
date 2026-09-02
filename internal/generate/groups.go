@@ -37,6 +37,9 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 				if d.UsesSignals() {
 					return result, fmt.Errorf("the signals argument in %q requires --output-datastar; it is shorthand for unmarshalJSON(body)", d.Name())
 				}
+				if name, ok := d.SignalsCallback(); ok {
+					return result, fmt.Errorf("the %s callback in %q requires --output-datastar; it marshals its argument as a datastar-patch-signals event", name, d.Name())
+				}
 			}
 		}
 

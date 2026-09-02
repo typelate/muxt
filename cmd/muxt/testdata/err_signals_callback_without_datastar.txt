@@ -1,0 +1,31 @@
+! muxt generate --use-receiver-type=Server
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: the countsSignals callback in "GET /board sse(Stream(ctx, execute, countsSignals))" requires --output-datastar; it marshals its argument as a datastar-patch-signals event
+-- template.gohtml --
+{{- define "GET /board sse(Stream(ctx, execute, countsSignals))" -}}<li>{{ .Result }}</li>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Stream(_ context.Context, execute func(string) error, countsSignals func(int) error) {
+	_ = execute("first")
+	_ = countsSignals(1)
+}

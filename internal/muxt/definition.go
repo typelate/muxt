@@ -108,7 +108,8 @@ type Definition struct {
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
 
-	usesSignals bool
+	usesSignals     bool
+	signalsCallback string
 
 	Representation Representation
 
@@ -166,6 +167,12 @@ func (def Definition) Signature() *types.Signature    { return def.sig }
 func (def Definition) IsMethod() bool                 { return def.isMethod }
 func (def Definition) ResultShape() ResultShape       { return def.resultShape }
 func (def Definition) UsesSignals() bool              { return def.usesSignals }
+
+// SignalsCallback returns the first Signals-suffixed callback argument name,
+// if the route has one.
+func (def Definition) SignalsCallback() (string, bool) {
+	return def.signalsCallback, def.signalsCallback != ""
+}
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -344,6 +351,14 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 
 	def.usesSignals = rewriteSignalsArguments(call, pathParameterNames)
+	if def.Representation == RepresentationSSE {
+		for _, a := range call.Args {
+			if ident, ok := a.(*ast.Ident); ok && IsSignalsCallbackArgument(ident.Name) {
+				def.signalsCallback = ident.Name
+				break
+			}
+		}
+	}
 
 	scope := append(patternScope(), pathParameterNames...)
 	slices.Sort(scope)
@@ -455,7 +470,7 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 		case *ast.Ident:
 			// sse-prefixed render callbacks and Message-suffixed send-message
 			// templates are only in scope on sse routes.
-			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name))
+			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
 			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}

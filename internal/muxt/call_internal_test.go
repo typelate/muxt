@@ -183,3 +183,30 @@ func TestDefinitionsSignals(t *testing.T) {
 		}
 	})
 }
+
+func TestIsSignalsCallbackArgument(t *testing.T) {
+	for name, want := range map[string]bool{
+		"countsSignals":     true,
+		"Signals":           true,
+		"signals":           false,
+		"countsSignal":      false,
+		"signalsCounts":     false,
+		"boardStateSignals": true,
+	} {
+		if got := IsSignalsCallbackArgument(name); got != want {
+			t.Errorf("IsSignalsCallbackArgument(%q) = %t, want %t", name, got, want)
+		}
+	}
+}
+
+func TestDefinitionsSignalsCallback(t *testing.T) {
+	ts := template.Must(template.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
+	defs, err := Definitions(ts, "templates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, ok := defs[0].SignalsCallback()
+	if !ok || name != "countsSignals" {
+		t.Errorf("SignalsCallback() = %q, %t; want %q, true", name, ok, "countsSignals")
+	}
+}

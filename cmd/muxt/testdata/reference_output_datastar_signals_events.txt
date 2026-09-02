@@ -1,0 +1,76 @@
+# A Signals-suffixed sse callback marshals its argument as a
+# datastar-patch-signals event, alongside the template-rendered
+# patch-elements events. The suffix keeps the user's own capitalization:
+# muxt never derives an identifier from the remainder.
+
+muxt generate --output-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /board sse(Stream(ctx, execute, countsSignals))" -}}<li>{{ .Result }}</li>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Counts struct {
+	Open int `json:"open"`
+	Done int `json:"done"`
+}
+
+type Server struct{}
+
+func (Server) Stream(_ context.Context, execute func(string) error, countsSignals func(Counts) error) {
+	_ = execute("first")
+	_ = countsSignals(Counts{Open: 4, Done: 9})
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestSignalsEvents(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/board", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"event: datastar-patch-elements\n",
+		"data: elements <li>first</li>\n",
+		"event: datastar-patch-signals\n",
+		"data: signals {\"open\":4,\"done\":9}\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the wire line %q", body, want)
+		}
+	}
+	if elements, signals := strings.Index(body, "data: elements"), strings.Index(body, "data: signals"); elements > signals {
+		t.Errorf("body = %q: the element patch should precede the signals patch", body)
+	}
+}

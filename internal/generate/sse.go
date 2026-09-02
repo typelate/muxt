@@ -116,18 +116,24 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 
 	callArgs := slices.Clone(def.CallExpression().Args)
 	for i, arg := range def.Arguments {
-		if arg.Type != muxt.ArgumentTypeExecute {
-			continue
+		switch arg.Type {
+		case muxt.ArgumentTypeExecute:
+			// The callback contract (func() error or func(T) error) and template
+			// existence are validated by muxt.ResolveCall, which records T and
+			// whether the callback takes the data argument.
+			resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
+			closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+			if err != nil {
+				return nil, err
+			}
+			callArgs[i] = closure
+		case muxt.ArgumentTypeSignalsCallback:
+			closure, err := signalsClosure(file, arg.CallbackResultType(), flusherIdent, mutexIdent)
+			if err != nil {
+				return nil, err
+			}
+			callArgs[i] = closure
 		}
-		// The callback contract (func() error or func(T) error) and template
-		// existence are validated by muxt.ResolveCall, which records T and
-		// whether the callback takes the data argument.
-		resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
-		closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
-		if err != nil {
-			return nil, err
-		}
-		callArgs[i] = closure
 	}
 	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}
 
@@ -165,6 +171,91 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
+// signalsClosure builds the callback passed at a Signals-suffixed argument.
+// Each call marshals its argument and writes one datastar-patch-signals frame
+// to the response under the stream mutex and flushes:
+//
+//	func(result T) error {
+//		if err := request.Context().Err(); err != nil { return err }
+//		payload, err := json.Marshal(result)
+//		if err != nil { return err }
+//		mut.Lock()
+//		defer mut.Unlock()
+//		if _, err := io.WriteString(response, "event: datastar-patch-signals\ndata: signals "); err != nil { return err }
+//		if _, err := response.Write(payload); err != nil { return err }
+//		if _, err := io.WriteString(response, "\n\n"); err != nil { return err }
+//		flusher.Flush()
+//		return nil
+//	}
+func signalsClosure(file *File, resultType types.Type, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+	const (
+		resultIdent  = "result"
+		payloadIdent = "payload"
+	)
+	response := muxt.TemplateNameScopeIdentifierHTTPResponse
+	request := muxt.TemplateNameScopeIdentifierHTTPRequest
+
+	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
+	}
+
+	writeCheck := func(call ast.Expr) ast.Stmt {
+		return &ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		}
+	}
+
+	body := []ast.Stmt{
+		requestContextCancelledCheck(request),
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(payloadIdent), ast.NewIdent(errIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{
+				Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json", "Marshal"),
+				Args: []ast.Expr{ast.NewIdent(resultIdent)},
+			}},
+		},
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+		},
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
+		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
+		writeCheck(astgen.Call(file, "", "io", "WriteString", ast.NewIdent(response), astgen.String("event: datastar-patch-signals\ndata: signals "))),
+		writeCheck(&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("Write")}, Args: []ast.Expr{ast.NewIdent(payloadIdent)}}),
+		writeCheck(astgen.Call(file, "", "io", "WriteString", ast.NewIdent(response), astgen.String("\n\n"))),
+		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
+	}
+
+	return &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(resultIdent)}, Type: resultTypeExpr}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
+		},
+		Body: &ast.BlockStmt{List: body},
+	}, nil
+}
+
+// requestContextCancelledCheck emits:
+//
+//	if err := request.Context().Err(); err != nil { return err }
+func requestContextCancelledCheck(request string) ast.Stmt {
+	return &ast.IfStmt{
+		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
+			&ast.CallExpr{Fun: &ast.SelectorExpr{
+				X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
+				Sel: ast.NewIdent("Err"),
+			}},
+		}},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+	}
+}
+
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
@@ -191,17 +282,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	}
 
 	body := []ast.Stmt{
-		// if err := request.Context().Err(); err != nil { return err }
-		&ast.IfStmt{
-			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{
-				&ast.CallExpr{Fun: &ast.SelectorExpr{
-					X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(request), Sel: ast.NewIdent(httpRequestContextMethod)}},
-					Sel: ast.NewIdent("Err"),
-				}},
-			}},
-			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
-		},
+		requestContextCancelledCheck(request),
 	}
 	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
 	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
