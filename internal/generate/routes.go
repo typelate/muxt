@@ -804,15 +804,20 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				// the request.
 				continue
 			}
-			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, arg.Name)
+			name := arg.Name
+			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, name)
 			if !ok {
-				return nil, fmt.Errorf("failed to determine type for %s", arg.Name)
+				return nil, fmt.Errorf("failed to determine type for %s", name)
 			}
-			src := requestArgumentSource(def, arg.Name)
+			src := requestArgumentSource(def, name)
+			// Renaming the call's own ident node updates the local declaration
+			// and the receiver-call argument together; request.PathValue and
+			// the scope lookups above keep the original name.
+			arg.Name = pathParamIdent(name, def.TemplatesVariable())
 			if types.AssignableTo(argType, param.Type()) {
-				if _, ok := parsed[arg.Name]; !ok {
-					parsed[arg.Name] = struct{}{}
-					switch arg.Name {
+				if _, ok := parsed[name]; !ok {
+					parsed[name] = struct{}{}
+					switch name {
 					case muxt.TemplateNameScopeIdentifierForm:
 						declareFormVar, err := formVariableAssignment(file, arg, param.Type())
 						if err != nil {
@@ -830,33 +835,33 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					case muxt.TemplateNameScopeIdentifierRequestBody:
 						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 					default:
-						if slices.Contains(def.PathValueIdentifiers(), arg.Name) || arg.Name == muxt.TemplateNameScopeIdentifierLastEventID {
+						if slices.Contains(def.PathValueIdentifiers(), name) || name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name))(src))
 						}
 					}
 				}
 				continue
 			}
-			if _, ok := parsed[arg.Name]; ok {
+			if _, ok := parsed[name]; ok {
 				continue
 			}
 			switch {
-			case slices.Contains(def.PathValueIdentifiers(), arg.Name):
-				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
+			case slices.Contains(def.PathValueIdentifiers(), name):
+				parsed[name] = struct{}{}
+				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
-				def.SetArgumentType(arg.Name, param.Type())
-			case arg.Name == muxt.TemplateNameScopeIdentifierLastEventID:
-				parsed[arg.Name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, arg.Name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
+				def.SetArgumentType(name, param.Type())
+			case name == muxt.TemplateNameScopeIdentifierLastEventID:
+				parsed[name] = struct{}{}
+				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(arg.Name)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
-				def.SetArgumentType(arg.Name, param.Type())
+				def.SetArgumentType(name, param.Type())
 			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
 				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, args[i], validationFailureBlock, rdIdent)
 				if err != nil {

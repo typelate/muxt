@@ -1,0 +1,82 @@
+# Path wildcard names may collide with identifiers the generated handler body
+# references: imported packages (strconv, http), generated locals (td, buf),
+# and captured variables (receiver, templates). The generator renames its
+# locals so the handler still compiles, while request.PathValue keeps the
+# original wildcard name.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{define "GET /a/{strconv} A(ctx, strconv)"}}{{.Result}}{{end}}
+{{define "GET /b/{td} B(ctx, td)"}}{{.Result}}{{end}}
+{{define "GET /c/{receiver} C(ctx, receiver)"}}{{.Result}}{{end}}
+{{define "GET /d/{templates} D(ctx, templates)"}}{{.Result}}{{end}}
+{{define "GET /e/{http}/{buf} E(ctx, http, buf)"}}{{.Result}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) A(_ context.Context, n int) string { return strconv.Itoa(n * 2) }
+
+func (T) B(_ context.Context, td string) string { return td }
+
+func (T) C(_ context.Context, receiver string) string { return receiver }
+
+func (T) D(_ context.Context, templates string) string { return templates }
+
+func (T) E(_ context.Context, httpValue, buf string) string { return httpValue + "-" + buf }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func get(t *testing.T, mux *http.ServeMux, target string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d, want %d", target, rec.Code, http.StatusOK)
+	}
+	return rec.Body.String()
+}
+
+func TestShadowedNames(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	for _, tt := range []struct{ target, want string }{
+		{"/a/21", "42"},
+		{"/b/inner-td", "inner-td"},
+		{"/c/inner-receiver", "inner-receiver"},
+		{"/d/inner-templates", "inner-templates"},
+		{"/e/one/two", "one-two"},
+	} {
+		if got := get(t, mux, tt.target); got != tt.want {
+			t.Errorf("GET %s body = %q, want %q", tt.target, got, tt.want)
+		}
+	}
+}
