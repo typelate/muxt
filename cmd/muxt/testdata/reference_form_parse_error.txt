@@ -1,0 +1,72 @@
+# A malformed url-encoded body causes ParseForm to return an error; the
+# generated handler responds 400 Bad Request with http.Error and returns
+# before calling the receiver method.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -cover
+
+-- template.gohtml --
+{{define "POST /login 201 Login(form)" }}<p>hi {{.Result}}</p>{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/url"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Login(form url.Values) string { return form.Get("username") }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestFormParseError(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	t.Run("a malformed body responds 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=%zz"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "invalid URL escape") || strings.Contains(body, "<p>") {
+			t.Errorf("body = %q, want the plain http.Error text, not a rendered template", body)
+		}
+	})
+
+	t.Run("a well-formed body responds 201", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=ada"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+		}
+		if !strings.Contains(rec.Body.String(), "<p>hi ada</p>") {
+			t.Errorf("body = %q, want the greeting", rec.Body.String())
+		}
+	})
+}

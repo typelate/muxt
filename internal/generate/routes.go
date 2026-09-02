@@ -824,7 +824,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 						if err != nil {
 							return nil, err
 						}
-						statements = append(statements, callParseForm(), declareFormVar)
+						statements = append(statements, callParseForm(file), declareFormVar)
 					case muxt.TemplateNameScopeIdentifierMultipart:
 						declareMultipartVar, err := multipartVariableAssignment(file, arg, param.Type())
 						if err != nil {
@@ -886,7 +886,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 }
 
 func appendParseFormToStructStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, rdIdent string) ([]ast.Stmt, error) {
-	return appendStructFieldParseStatements(statements, def, file, resultType, arg, argument, validationBlock, rdIdent, callParseForm())
+	return appendStructFieldParseStatements(statements, def, file, resultType, arg, argument, validationBlock, rdIdent, callParseForm(file))
 }
 
 // appendStructFieldParseStatements renders the per-field parse statements for
@@ -1368,14 +1368,31 @@ func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
 	}
 }
 
-func callParseForm() *ast.ExprStmt {
-	return &ast.ExprStmt{X: &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-			Sel: ast.NewIdent("ParseForm"),
-		},
-		Args: []ast.Expr{},
+// callParseForm emits:
+//
+//	if err := request.ParseForm(); err != nil {
+//	    http.Error(response, err.Error(), http.StatusBadRequest)
+//	    return
+//	}
+func callParseForm(file *File) *ast.IfStmt {
+	errBlock := &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), astgen.CallError(errIdent), http.StatusBadRequest)},
+		&ast.ReturnStmt{},
 	}}
+	return &ast.IfStmt{
+		Init: &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(errIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+					Sel: ast.NewIdent("ParseForm"),
+				},
+			}},
+		},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+		Body: errBlock,
+	}
 }
 
 // callParseMultipartForm emits:

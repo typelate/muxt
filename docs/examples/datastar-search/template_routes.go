@@ -68,7 +68,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	mux.HandleFunc("GET /api/proverbs", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, SearchResults]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
-		request.ParseForm()
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var form APIForm
 		form.Query = request.FormValue("query")
 		buf := bytesBufferPool.Get().(*bytes.Buffer)

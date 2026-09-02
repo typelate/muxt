@@ -32,7 +32,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	}}
 	mux.HandleFunc("POST /todos", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, TodoChange]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		request.ParseForm()
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var form NewTodo
 		form.Title = request.FormValue("todo")
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
@@ -201,7 +204,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	})
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, TodoPage]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		request.ParseForm()
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var form TodoFilter
 		form.Filter = request.FormValue("filter")
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
