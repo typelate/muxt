@@ -10,14 +10,14 @@
 	<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-	<main>
+	<main data-signals-delta="''">
 		<h1>Counter</h1>
 		{{template "sseCount" .}}
 		<div class="controls">
 			<button id="decrement" data-on:click="@post('{{.Path.Decrement}}')" aria-label="decrement">−</button>
 			<button id="increment" class="primary" data-on:click="@post('{{.Path.Increment}}')" aria-label="increment">+</button>
 		</div>
-		<p class="hint">Each click streams a Datastar patch over SSE.</p>
+		<p class="hint">Each click patches the count element and the <code>$delta</code> signal: <output id="delta" data-text="$delta"></output></p>
 	</main>
 </body>
 </html>
@@ -25,6 +25,6 @@
 
 {{define "sseCount"}}<output id="count">{{.Result}}</output>{{end}}
 
-{{define "POST /increment sse(Increment(ctx, sseCount))"}}{{end}}
+{{define "POST /increment sse(Increment(ctx, sseCount, deltaSignals))"}}{{end}}
 
-{{define "POST /decrement sse(Decrement(ctx, sseCount))"}}{{end}}
+{{define "POST /decrement sse(Decrement(ctx, sseCount, deltaSignals))"}}{{end}}

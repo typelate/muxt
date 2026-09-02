@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,8 +21,8 @@ import (
 
 type RoutesReceiver interface {
 	Home(_ context.Context) (int64, error)
-	Decrement(_ context.Context, sseCount func(int64) error)
-	Increment(_ context.Context, sseCount func(int64) error)
+	Decrement(_ context.Context, sseCount func(int64) error, deltaSignals func(Delta) error)
+	Increment(_ context.Context, sseCount func(int64) error, deltaSignals func(Delta) error)
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
@@ -97,6 +98,27 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			}
 			flusher.Flush()
 			return nil
+		}, func(result Delta) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return err
+			}
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := io.WriteString(response, "event: datastar-patch-signals\ndata: signals "); err != nil {
+				return err
+			}
+			if _, err := response.Write(payload); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(response, "\n\n"); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
 		})
 	})
 	mux.HandleFunc("POST /increment", func(response http.ResponseWriter, request *http.Request) {
@@ -132,6 +154,27 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			mut.Lock()
 			defer mut.Unlock()
 			if _, err := td.WriteTo(response); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
+		}, func(result Delta) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return err
+			}
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := io.WriteString(response, "event: datastar-patch-signals\ndata: signals "); err != nil {
+				return err
+			}
+			if _, err := response.Write(payload); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(response, "\n\n"); err != nil {
 				return err
 			}
 			flusher.Flush()
