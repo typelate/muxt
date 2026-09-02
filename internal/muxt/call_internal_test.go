@@ -132,3 +132,54 @@ func TestPeelRepresentationWrapper(t *testing.T) {
 		})
 	}
 }
+
+func TestRewriteSignalsArguments(t *testing.T) {
+	for _, tt := range []struct {
+		expr           string
+		pathValueNames []string
+		want           string
+		rewritten      bool
+	}{
+		{expr: `Save(ctx, signals)`, want: `Save(ctx, unmarshalJSON(body))`, rewritten: true},
+		{expr: `sse(Search(ctx, signals, sseResults))`, want: `sse(Search(ctx, unmarshalJSON(body), sseResults))`, rewritten: true},
+		{expr: `Save(ctx, form)`, want: `Save(ctx, form)`},
+		{expr: `Show(ctx, signals)`, pathValueNames: []string{"signals"}, want: `Show(ctx, signals)`},
+	} {
+		t.Run(tt.expr, func(t *testing.T) {
+			call := mustParseCall(t, tt.expr)
+			rewritten := rewriteSignalsArguments(call, tt.pathValueNames)
+			if rewritten != tt.rewritten {
+				t.Errorf("rewriteSignalsArguments(%q) = %t, want %t", tt.expr, rewritten, tt.rewritten)
+			}
+			if got := astgen.Format(call); got != tt.want {
+				t.Errorf("rewriteSignalsArguments(%q) rewrote to %q, want %q", tt.expr, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefinitionsSignals(t *testing.T) {
+	t.Run("signals marks the definition", func(t *testing.T) {
+		ts := template.Must(template.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
+		defs, err := Definitions(ts, "templates")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !defs[0].UsesSignals() {
+			t.Error("UsesSignals() = false, want true")
+		}
+		if got, want := astgen.Format(defs[0].CallExpression()), "Save(ctx, unmarshalJSON(body))"; got != want {
+			t.Errorf("call = %q, want %q", got, want)
+		}
+	})
+	t.Run("a signals path wildcard keeps its path-value meaning", func(t *testing.T) {
+		ts := template.Must(template.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
+		defs, err := Definitions(ts, "templates")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if defs[0].UsesSignals() {
+			t.Error("UsesSignals() = true, want false")
+		}
+	})
+}

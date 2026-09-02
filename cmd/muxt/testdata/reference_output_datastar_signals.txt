@@ -1,0 +1,81 @@
+# Under --output-datastar the reserved signals argument is shorthand for
+# unmarshalJSON(body): Datastar sends the page's signal state as the JSON
+# request body, so both spellings bind identically.
+
+muxt generate --output-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET / Index(ctx)" -}}{{- .Result.Query -}}{{- end -}}
+{{- define "POST /search sse(Search(ctx, signals, sseResults))" -}}{{- end -}}
+{{- define "sseResults" -}}<output id="q">{{ .Result.Query }}</output>{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Signals struct {
+	Query string `json:"query"`
+}
+
+type Server struct{}
+
+func (Server) Index(_ context.Context) (Signals, error) { return Signals{}, nil }
+
+func (Server) Search(_ context.Context, signals Signals, sseResults func(Signals) error) {
+	_ = sseResults(signals)
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestSignals(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodPost, "/search", strings.NewReader(`{"query":"mutex"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"event: datastar-patch-elements\n",
+		`data: elements <output id="q">mutex</output>` + "\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want the wire line %q", body, want)
+		}
+	}
+
+	malformed := httptest.NewRequest(http.MethodPost, "/search", strings.NewReader("not-json"))
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, malformed)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("malformed signals status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}

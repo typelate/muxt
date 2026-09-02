@@ -16,6 +16,7 @@ Parameters in call expressions determine how Muxt generates handlers and parses 
 | `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
 | `unmarshalJSON(body)` | Any JSON-unmarshalable | `request.Body` | Yes | Decode a JSON request body into a struct parameter |
 | `unmarshalForm(body)` | struct or `url.Values` | `request.Form` | Yes | Explicit spelling of `form`; same binding |
+| `signals` | Any JSON-unmarshalable | `request.Body` | Yes | Shorthand for `unmarshalJSON(body)`; requires `--output-datastar` |
 | Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
 
 These names (plus path parameters) are the only identifiers allowed as call
@@ -222,7 +223,12 @@ func (s Server) CreateUser(ctx context.Context, u User) (User, error)
 - If the receiver method is not yet defined, the parameter synthesizes as
   `json.RawMessage` so template-first iteration passes the raw payload through.
 
-[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt)
+Under `--output-datastar` the reserved `signals` argument is shorthand for
+`unmarshalJSON(body)` — Datastar sends the page's signal state as the JSON
+request body, so both spellings bind identically. Without the flag, `signals`
+fails generation with an error naming the shorthand.
+
+[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt) · [reference_output_datastar_signals.txt](../../cmd/muxt/testdata/reference_output_datastar_signals.txt) · [err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt)
 
 ### `unmarshalForm(body)`
 

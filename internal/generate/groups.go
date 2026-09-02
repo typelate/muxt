@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -29,6 +30,14 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 		defs, err := muxt.Definitions(ts, tv)
 		if err != nil {
 			return result, err
+		}
+
+		if !config.OutputDatastar {
+			for _, d := range defs {
+				if d.UsesSignals() {
+					return result, fmt.Errorf("the signals argument in %q requires --output-datastar; it is shorthand for unmarshalJSON(body)", d.Name())
+				}
+			}
 		}
 
 		for _, d := range defs {

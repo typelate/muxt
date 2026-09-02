@@ -108,6 +108,8 @@ type Definition struct {
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
 
+	usesSignals bool
+
 	Representation Representation
 
 	Arguments []Argument
@@ -163,6 +165,7 @@ func (def Definition) TemplatesVariable() string      { return def.templatesVari
 func (def Definition) Signature() *types.Signature    { return def.sig }
 func (def Definition) IsMethod() bool                 { return def.isMethod }
 func (def Definition) ResultShape() ResultShape       { return def.resultShape }
+func (def Definition) UsesSignals() bool              { return def.usesSignals }
 
 func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
@@ -339,6 +342,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	if call.Ellipsis != token.NoPos {
 		return fmt.Errorf("unexpected ellipsis")
 	}
+
+	def.usesSignals = rewriteSignalsArguments(call, pathParameterNames)
 
 	scope := append(patternScope(), pathParameterNames...)
 	slices.Sort(scope)
