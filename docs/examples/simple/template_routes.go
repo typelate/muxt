@@ -35,7 +35,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errStatusCode = http.StatusBadRequest
 		}
 		idPathParam := idParsed
-		request.ParseForm()
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var form EditRow
 		{
 			value, err := strconv.Atoi(request.FormValue("count"))

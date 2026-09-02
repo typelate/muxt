@@ -75,7 +75,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return
 		}
 		ctx := request.Context()
-		request.ParseForm()
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var form TodoForm
 		form.Title = request.FormValue("title")
 		h := response.Header()
