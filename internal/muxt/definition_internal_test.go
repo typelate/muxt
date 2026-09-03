@@ -327,6 +327,30 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "form with multipart in a nested call",
+			In:       "POST / Upload(form, Helper(multipart))",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, `call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`)
+			},
+		},
+		{
+			Name:     "multipart with form in a nested call",
+			In:       "POST / Upload(multipart, Helper(form))",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, `call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`)
+			},
+		},
+		{
+			Name:     "multipart with unmarshalForm in a nested call",
+			In:       "POST / Upload(multipart, Helper(unmarshalForm(body)))",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, `call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`)
+			},
+		},
+		{
 			Name:     "sse prefixed argument on a non-sse route",
 			In:       "GET / F(sseClock)",
 			ExpMatch: true,
