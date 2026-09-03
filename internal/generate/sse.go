@@ -23,9 +23,10 @@ const (
 	sseStreamIdent         = "stream"
 )
 
-// isNamedTypeFrom reports whether tp is the named type pkgPath.name.
+// isNamedTypeFrom reports whether tp is the named type pkgPath.name; an alias
+// of that type is identical to it and is accepted.
 func isNamedTypeFrom(tp types.Type, pkgPath, name string) bool {
-	named, ok := tp.(*types.Named)
+	named, ok := types.Unalias(tp).(*types.Named)
 	if !ok || named.Obj().Pkg() == nil {
 		return false
 	}

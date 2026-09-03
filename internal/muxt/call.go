@@ -214,9 +214,9 @@ func resolveCallbackShapes(def *Definition) error {
 
 func callbackTooManyParamsError(def *Definition) error {
 	if def.Representation == RepresentationSSE {
-		return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+		return errors.New("sse callback must be func() error, func(T) error, or func(T, ...O) error; wrap multiple values in a struct")
 	}
-	return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
+	return errors.New("execute callback must be func() error, func(T) error, or func(T, ...O) error; wrap multiple values in a struct")
 }
 
 // classifyResultShape validates def's method results against its contract:

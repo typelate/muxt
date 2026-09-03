@@ -59,6 +59,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/typelate/sse"
 )
 
@@ -71,16 +73,12 @@ func readFrames(t *testing.T, url string) []frame {
 	t.Helper()
 
 	res, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = res.Body.Close() }()
 	res.Request = nil // read to EOF; do not reconnect
 
 	messages, err := sse.Source(res)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var frames []frame
 	for msg := range messages {
 		var f frame
@@ -100,18 +98,10 @@ func TestEvents(t *testing.T) {
 
 	frames := readFrames(t, srv.URL+"/events")
 
-	want := []frame{
+	assert.Equal(t, []frame{
 		{id: "e1", event: "tick", data: "0"},
 		{id: "e1", event: "tick", data: "1"},
-	}
-	if len(frames) != len(want) {
-		t.Fatalf("got %d frames %+v, want %d", len(frames), frames, len(want))
-	}
-	for i, f := range frames {
-		if f != want[i] {
-			t.Errorf("frame %d = %+v, want %+v", i, f, want[i])
-		}
-	}
+	}, frames)
 }
 
 func TestNumbersForwardsOptions(t *testing.T) {
@@ -122,7 +112,5 @@ func TestNumbersForwardsOptions(t *testing.T) {
 
 	frames := readFrames(t, srv.URL+"/numbers")
 
-	if want := (frame{id: "n7", data: "7"}); len(frames) != 1 || frames[0] != want {
-		t.Errorf("frames = %+v, want exactly one %+v", frames, want)
-	}
+	assert.Equal(t, []frame{{id: "n7", data: "7"}}, frames)
 }
