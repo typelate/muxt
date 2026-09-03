@@ -33,6 +33,7 @@ Type-safe HTTP handlers from Go HTML templates.
 
 - **[Quick Start](tutorials/quick-start.md)** - Your first Muxt server
 - **[Add Logging](tutorials/add-logging.md)** - Structured logging with `log/slog`
+- **[Hot Reload with Air](tutorials/hot-reload-with-air.md)** - Regenerate, rebuild, and restart on save
 
 ## Examples
 
