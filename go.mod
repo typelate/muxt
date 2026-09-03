@@ -10,7 +10,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
 	github.com/typelate/check v0.3.2
-	github.com/typelate/dom v0.7.8
+	github.com/typelate/dom v0.9.0
 	golang.org/x/net v0.58.0
 	golang.org/x/tools v0.49.0
 	rsc.io/script v0.0.2
