@@ -17,8 +17,14 @@
 {{block `GET /time sse(Time(ctx, lastEventID, execute))` .}}
 		<time>{{.Result}}</time>
 {{end}}
+<nav>
+	<a href='{{.Path.InZone "America/New_York"}}'>New York</a>
+	<a href='{{.Path.InZone "Asia/Tokyo"}}'>Tokyo</a>
+</nav>
 </body>
 </html>
 
 {{define "timezone"}}{{.}}{{end}}
 {{- define "GET /{$} Index()"}}{{template "index.gohtml" .}}{{end}}
+
+{{- define "GET /zone/{tz...} InZone(tz)"}}{{if .Err}}unknown time zone{{else}}<time>{{.Result}}</time>{{end}}{{end}}

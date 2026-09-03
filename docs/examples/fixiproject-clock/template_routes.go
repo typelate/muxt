@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 type RoutesReceiver interface {
 	Time(ctx context.Context, lastEventID string, updateTime func(data string) error)
+	InZone(tz string) (string, error)
 	Index() string
 }
 
@@ -67,6 +69,37 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			flusher.Flush()
 			return nil
 		})
+	})
+	mux.HandleFunc("GET /zone/{tz...}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		tzPathParam := request.PathValue("tz")
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			var err error
+			td.result, err = receiver.InZone(tzPathParam)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			}
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /zone/{tz...} InZone(tz)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
@@ -328,6 +361,28 @@ func (routePaths TemplateRoutePaths) Time() string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "time")
 }
 
+func (routePaths TemplateRoutePaths) InZone(tzPathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "zone", routePaths.escapePathSegments(tzPathParam))
+}
+
 func (routePaths TemplateRoutePaths) Index() string {
 	return "/"
+}
+
+func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+	switch value {
+	case ".":
+		return "%2E"
+	case "..":
+		return "%2E%2E"
+	}
+	return url.PathEscape(value)
+}
+
+func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+	segments := strings.Split(value, "/")
+	for i, segment := range segments {
+		segments[i] = routePaths.escapePathSegment(segment)
+	}
+	return strings.Join(segments, "/")
 }

@@ -48,6 +48,17 @@ func (c clock) Index() string {
 	return time.Now().In(c.location).Format(time.RFC3339)
 }
 
+// InZone shows the current time in an IANA time zone. Zone names contain
+// slashes, so the tz wildcard exercises the generated per-segment path
+// escaping in the TemplateRoutePaths helper.
+func (c clock) InZone(tz string) (string, error) {
+	location, err := time.LoadLocation(tz)
+	if err != nil {
+		return "", err
+	}
+	return time.Now().In(location).Format(time.RFC3339), nil
+}
+
 func main() {
 	c := clock{location: time.UTC}
 	mux := http.NewServeMux()
