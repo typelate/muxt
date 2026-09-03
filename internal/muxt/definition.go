@@ -26,6 +26,9 @@ func Definitions(ts *template.Template, templatesVariable string) ([]Definition,
 			continue
 		}
 		if err != nil {
+			if fileName := templateSourceFile(t); fileName != "" {
+				return defs, fmt.Errorf("%s: %w", fileName, err)
+			}
 			return defs, err
 		}
 		// Extract source file from ParseName if available
@@ -46,6 +49,17 @@ func Definitions(ts *template.Template, templatesVariable string) ([]Definition,
 	analyzeRedirectCalls(ts, defs)
 
 	return defs, nil
+}
+
+// templateSourceFile returns the file t was parsed from, or "". ParseFS and
+// ParseFiles record the file name as the tree's ParseName; a template defined
+// directly with Parse carries its own name there instead, so a ParseName
+// matching the template name does not identify a file.
+func templateSourceFile(t *template.Template) string {
+	if t.Tree == nil || t.Tree.ParseName == t.Name() {
+		return ""
+	}
+	return t.Tree.ParseName
 }
 
 func CheckForDuplicatePatterns(templates []Definition) error {
