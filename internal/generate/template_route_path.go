@@ -14,6 +14,11 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
+const (
+	routePathsReceiverName    = "routePaths"
+	escapePathSegmentFuncName = "escapePathSegment"
+)
+
 func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
 	decls := []ast.Decl{
 		&ast.GenDecl{
@@ -30,21 +35,26 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
+	needsSegmentEscaper := false
 	for _, t := range defs {
-		decl, err := routePathFunc(imports, config, &t)
+		decl, usesEscaper, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
 		}
+		needsSegmentEscaper = needsSegmentEscaper || usesEscaper
 		decls = append(decls, decl)
+	}
+	if needsSegmentEscaper {
+		decls = append(decls, escapePathSegmentMethod(imports, config))
 	}
 	return decls, nil
 }
 
-func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (*ast.FuncDecl, error) {
-	const methodReceiverName = "routePaths"
+func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper bool, _ error) {
+	const methodReceiverName = routePathsReceiverName
 	encodingPkg, ok := file.Types("encoding")
 	if !ok {
-		return nil, fmt.Errorf(`the "encoding" package must be loaded`)
+		return nil, false, fmt.Errorf(`the "encoding" package must be loaded`)
 	}
 	scope := encodingPkg.Scope()
 	textMarshalerObject := scope.Lookup("TextMarshaler")
@@ -54,7 +64,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	ident, err := def.ExportedPathIdentifier()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	method := &ast.FuncDecl{
@@ -89,7 +99,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		} else {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
 		}
-		return method, nil
+		return method, usesEscaper, nil
 	}
 
 	templatePath, hasDollarSuffix := strings.CutSuffix(def.Path(), "{$}")
@@ -143,7 +153,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		}
 		tpNode, err := file.TypeASTExpression(pathValueType)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if last != nil && len(fields) > 0 && types.Identical(last, pathValueType) {
 			fields[len(fields)-1].Names = append(fields[len(fields)-1].Names, ast.NewIdent(ident))
@@ -200,7 +210,8 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 				Args: []ast.Expr{ast.NewIdent(segmentIdent)},
 			}
 			if !wildcard {
-				marshaled = escapedPathSegment(file, marshaled)
+				usesEscaper = true
+				marshaled = escapedPathSegment(marshaled)
 			}
 			segmentExpressions = append(segmentExpressions, marshaled)
 			continue
@@ -208,14 +219,15 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 		basicType, ok := pathValueType.Underlying().(*types.Basic)
 		if !ok {
-			return nil, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
+			return nil, false, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
 		}
 		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), basicType.Kind())
 		if err != nil {
-			return nil, fmt.Errorf("failed to encode variable %s: %v", ident, err)
+			return nil, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
 		if basicType.Info()&types.IsString != 0 && !wildcard {
-			exp = escapedPathSegment(file, exp)
+			usesEscaper = true
+			exp = escapedPathSegment(exp)
 		}
 		segmentExpressions = append(segmentExpressions, exp)
 	}
@@ -246,7 +258,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	method.Type.Params.List = fields
 
-	return method, nil
+	return method, usesEscaper, nil
 }
 
 // isWildcardSegment reports whether segment is a {name...} pattern; only the
@@ -263,6 +275,68 @@ func pathParamIdent(name string) string {
 	return name + "PathParam"
 }
 
-func escapedPathSegment(file *File, value ast.Expr) ast.Expr {
-	return astgen.Call(file, "url", "net/url", "PathEscape", value)
+// escapedPathSegment wraps value in a call to the generated escapePathSegment
+// method; the caller must arrange for escapePathSegmentMethod to be emitted.
+func escapedPathSegment(value ast.Expr) ast.Expr {
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(routePathsReceiverName),
+			Sel: ast.NewIdent(escapePathSegmentFuncName),
+		},
+		Args: []ast.Expr{value},
+	}
+}
+
+// escapePathSegmentMethod emits:
+//
+//	func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+//		switch value {
+//		case ".":
+//			return "%2E"
+//		case "..":
+//			return "%2E%2E"
+//		}
+//		return url.PathEscape(value)
+//	}
+//
+// url.PathEscape leaves "." and ".." unchanged ('.' is unreserved), but
+// path.Join and request routing collapse dot segments, so a helper value of
+// ".." would address a parent route. The percent-encoded forms survive both:
+// http.ServeMux matches the escaped path and PathValue decodes them back.
+func escapePathSegmentMethod(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
+	const valueIdent = "value"
+	caseReturn := func(match, encoded string) *ast.CaseClause {
+		return &ast.CaseClause{
+			List: []ast.Expr{astgen.String(match)},
+			Body: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String(encoded)}}},
+		}
+	}
+	return &ast.FuncDecl{
+		Name: ast.NewIdent(escapePathSegmentFuncName),
+		Recv: &ast.FieldList{
+			List: []*ast.Field{
+				{Names: []*ast.Ident{ast.NewIdent(routePathsReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
+			},
+		},
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(valueIdent)}, Type: ast.NewIdent("string")}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.SwitchStmt{
+					Tag: ast.NewIdent(valueIdent),
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							caseReturn(".", "%2E"),
+							caseReturn("..", "%2E%2E"),
+						},
+					},
+				},
+				&ast.ReturnStmt{Results: []ast.Expr{
+					astgen.Call(file, "url", "net/url", "PathEscape", ast.NewIdent(valueIdent)),
+				}},
+			},
+		},
+	}
 }
