@@ -38,11 +38,15 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    # cache-dependency-path keys this job's cache on the workflow file rather
+    # than go.sum: gosec's modules are not in go.sum, so sharing the build
+    # job's key would leave the gosec build uncached on most runs.
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
         go-version-file: "go.mod"
         cache: true
+        cache-dependency-path: .github/workflows/go.yml
 
     - name: Install gosec
       run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
