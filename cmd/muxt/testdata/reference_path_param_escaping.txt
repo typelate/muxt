@@ -54,13 +54,23 @@ func (T) ShowDocs(_ context.Context, path string) string { return path }
 -- template_test.go --
 package server
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestPathEscaping(t *testing.T) {
 	var paths TemplateRoutePaths
 
 	if got, want := paths.ShowFile("a#b c/d"), "/files/a%23b%20c%2Fd"; got != want {
 		t.Errorf("ShowFile(%q) = %q, want %q", "a#b c/d", got, want)
+	}
+	if got, want := paths.ShowFile(".."), "/files/%2E%2E"; got != want {
+		t.Errorf("ShowFile(%q) = %q, want %q", "..", got, want)
+	}
+	if got, want := paths.ShowFile("."), "/files/%2E"; got != want {
+		t.Errorf("ShowFile(%q) = %q, want %q", ".", got, want)
 	}
 	if got, want := paths.ShowTree("a/b c"), "/tree/a/b c"; got != want {
 		t.Errorf("ShowTree(%q) = %q, want %q", "a/b c", got, want)
@@ -77,5 +87,23 @@ func TestPathEscaping(t *testing.T) {
 	}
 	if want := "/tags/v%2F1"; got != want {
 		t.Errorf("ShowTag(%q) = %q, want %q", "v/1", got, want)
+	}
+}
+
+// TestDotSegmentRoundTrip proves the escaped dot segment stays on the route:
+// the raw value would redirect to / before the handler could run.
+func TestDotSegmentRoundTrip(t *testing.T) {
+	mux := http.NewServeMux()
+	paths := TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, paths.ShowFile(".."), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d, want %d", paths.ShowFile(".."), rec.Code, http.StatusOK)
+	}
+	if got, want := rec.Body.String(), ".."; got != want {
+		t.Errorf("body = %q, want %q", got, want)
 	}
 }
