@@ -390,7 +390,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
 				continue
 			}
-			if def.Representation == RepresentationSSE && IsSignalsCallbackArgument(arg.Name) {
+			if def.IsSignalsCallback(arg.Name) {
 				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
 				continue
 			}
@@ -645,7 +645,16 @@ func isAssignable(pl []*packages.Package, paramType types.Type, argName, package
 }
 
 func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
-	return def.Representation == RepresentationSSE && IsSignalsCallbackArgument(arg.Name)
+	return def.IsSignalsCallback(arg.Name)
+}
+
+// IsSignalsCallback reports whether name is a Signals-suffixed patch-signals
+// callback argument on this route. A declared path parameter wins: a path
+// value that happens to end in Signals stays a path value.
+func (def *Definition) IsSignalsCallback(name string) bool {
+	return def.Representation == RepresentationSSE &&
+		IsSignalsCallbackArgument(name) &&
+		!slices.Contains(def.pathValueNames, name)
 }
 
 // IsSignalsCallbackArgument reports whether name is a datastar patch-signals

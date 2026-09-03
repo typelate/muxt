@@ -367,7 +367,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	def.usesSignals = rewriteSignalsArguments(call, pathParameterNames)
 	if def.Representation == RepresentationSSE {
 		for _, a := range call.Args {
-			if ident, ok := a.(*ast.Ident); ok && IsSignalsCallbackArgument(ident.Name) {
+			if ident, ok := a.(*ast.Ident); ok && def.IsSignalsCallback(ident.Name) {
 				def.signalsCallback = ident.Name
 				break
 			}
@@ -487,10 +487,13 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 	for i, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			// sse-prefixed render callbacks and Message-suffixed send-message
-			// templates are only in scope on sse routes.
-			sseScoped := sse && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
-			if _, ok := slices.BinarySearch(identifiers, exp.Name); !ok && !sseScoped {
+			// sse-prefixed render callbacks and Message- or Signals-suffixed
+			// callbacks are only in scope on sse routes. A name already in
+			// scope — a path parameter, say — keeps its scope meaning even
+			// when it matches a callback naming convention.
+			_, inScope := slices.BinarySearch(identifiers, exp.Name)
+			sseScoped := sse && !inScope && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
+			if !inScope && !sseScoped {
 				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
 			}
 			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
