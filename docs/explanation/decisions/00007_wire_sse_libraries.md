@@ -1,4 +1,4 @@
-# 7 - Import SSE Libraries Instead of Generating the Wire Layer
+# 7 - Wire SSE Routes with Existing Libraries Instead of Generating the Protocol
 
 ## Context
 
@@ -29,36 +29,40 @@ already exist:
 
 Neither existing flag family fits: `--use-*` names source queries and
 `--output-*` names generated identifiers ([decision 5](00005_rename_flags.md)),
-but this choice is about which third-party module the generated code depends
-on.
+but this choice is about which implementation writes the SSE protocol.
+An `--import-<module>` spelling was considered — it names the mechanism (the
+generated code gains a module dependency) — but the family would be unbounded
+in meaning; `--wire-*` names the domain being replaced and keeps the family
+coherent.
 
 ## Decision
 
-Add an `--import-*` flag family: an `--import-<module>` flag means the
-generated code imports that module instead of generating the equivalent code.
-The default remains the generated, dependency-free implementation.
+Add a `--wire-*` flag family: a `--wire-<library>` flag means the generated
+code wires the SSE protocol through that library instead of generating the
+equivalent code. The default remains the generated, dependency-free
+implementation.
 
-- `--import-typelate-sse` — valid with any frontend (vanilla, `--output-htmx`,
+- `--wire-typelate-sse` — valid with any frontend (vanilla, `--output-htmx`,
   `--output-datastar`). Replaces stream setup, the mutex, frame writing,
   field validation, and `Last-Event-Id` handling with `sse.New` and
   `Response.Message`. The `SSETemplateData` event setters map to
   `MessageOption` values.
-- `--import-star-federation-datastar` — requires `--output-datastar` and is
-  mutually exclusive with `--import-typelate-sse`. Replaces the render and
+- `--wire-star-federation-datastar-go` — requires `--output-datastar` and is
+  mutually exclusive with `--wire-typelate-sse`. Replaces the render and
   signals closures with `PatchElements` and `MarshalAndPatchSignals`, decodes
   the `signals` argument with `ReadSignals`, and exposes stream-level
   `SSEOption` values (compression among them).
 
 Library capabilities reach receiver methods through variadic option
-parameters on the callback signatures. Under an import flag, a callback
+parameters on the callback signatures. Under a wire flag, a callback
 parameter may be declared with the library's option type for its kind, and
 the generated closure forwards the options to the library call:
 
 ```go
-// --import-typelate-sse
+// --wire-typelate-sse
 func (s Server) Watch(ctx context.Context, sseCount func(int64, ...sse.MessageOption) error) error
 
-// --import-star-federation-datastar
+// --wire-star-federation-datastar-go
 func (s Server) Increment(ctx context.Context,
 	sseCount func(int64, ...datastar.PatchElementOption) error,
 	deltaSignals func(Delta, ...datastar.PatchSignalsOption) error,
@@ -66,10 +70,10 @@ func (s Server) Increment(ctx context.Context,
 ```
 
 Validation accepts exactly `func(T) error` or `func(T, ...O) error`, where
-`O` is type-checked against the imported module's option type for that
+`O` is type-checked against the wired library's option type for that
 callback kind (`MessageOption` for render callbacks under typelate-sse;
 `PatchElementOption` for render callbacks and `PatchSignalsOption` for
-Signals-suffixed callbacks under star-federation-datastar). Without an import
+Signals-suffixed callbacks under star-federation-datastar-go). Without a wire
 flag the variadic form is a generation error naming the flag that permits it.
 
 Stream-level options that precede any callback (compression, per-stream
@@ -84,18 +88,18 @@ Decided
 ## Consequences
 
 - The default stays dependency-free; projects opt into a module dependency
-  explicitly, and the flag name says which module the generated code will
-  import.
-- Receiver signatures using variadic options couple to the chosen import
-  flag: switching libraries is a compile-time break in receiver code. This is
+  explicitly, and the flag name says which library the generated code wires
+  the protocol through.
+- Receiver signatures using variadic options couple to the chosen wire flag:
+  switching libraries is a compile-time break in receiver code. This is
   accepted — exposing a library's own option types is the point, and wrapping
   them in muxt-owned types would re-implement the surface the flags exist to
   avoid.
-- `--import-star-federation-datastar` closes the `ReadSignals` GET-query gap
+- `--wire-star-federation-datastar-go` closes the `ReadSignals` GET-query gap
   and the compression gap; `muxt check` and generation validate option types
   against the loaded module, so the module must be in the project's go.mod.
 - The generated-code paths triple for SSE routes (generated, typelate-sse,
-  star-federation-datastar); txtar coverage is required per path, and the
+  star-federation-datastar-go); txtar coverage is required per path, and the
   generated default remains the reference behavior the libraries must match.
-- `--import-typelate-sse` removes the generated mutex: `sse.Response`
+- `--wire-typelate-sse` removes the generated mutex: `sse.Response`
   serializes concurrent `Message` calls itself.
