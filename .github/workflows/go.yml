@@ -38,7 +38,14 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Scan
-      uses: securego/gosec@v2.29.0
+    - name: Set up Go
+      uses: actions/setup-go@v6
       with:
-        args: -exclude=G112,G114,G304,G306,G706 ./docs/examples/...
+        go-version-file: "go.mod"
+        cache: true
+
+    - name: Install gosec
+      run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+    - name: Scan
+      run: gosec -exclude=G112,G114,G304,G306,G706 ./docs/examples/...
