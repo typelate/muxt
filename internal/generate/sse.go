@@ -151,26 +151,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	return handlerFunc, nil
 }
 
-// sseClosure builds the callback passed to the receiver method. Each call
-// acquires a pooled buffer, renders the template into it, then writes one SSE
-// frame to the response under a mutex and flushes:
-//
-//	func(result T) error {
-//		if err := request.Context().Err(); err != nil { return err }
-//		buf := bytesBufferPool.Get().(*bytes.Buffer)
-//		buf.Reset()
-//		defer bytesBufferPool.Put(buf)
-//		td := SSETemplateData[Recv, T]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
-//		if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
-//		td.data = buf
-//		mut.Lock()
-//		defer mut.Unlock()
-//		if _, err := td.WriteTo(response); err != nil { return err }
-//		flusher.Flush()
-//		return nil
-//	}
-//
-// For the zero-arg form it omits the parameter and the result field.
 // signalsClosure builds the callback passed at a Signals-suffixed argument.
 // Each call marshals its argument and writes one datastar-patch-signals frame
 // to the response under the stream mutex and flushes:
@@ -213,10 +193,7 @@ func signalsClosure(file *File, resultType types.Type, flusherIdent, mutexIdent 
 		&ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(payloadIdent), ast.NewIdent(errIdent)},
 			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.CallExpr{
-				Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json", "Marshal"),
-				Args: []ast.Expr{ast.NewIdent(resultIdent)},
-			}},
+			Rhs: []ast.Expr{astgen.Call(file, "json", "encoding/json", "Marshal", ast.NewIdent(resultIdent))},
 		},
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
@@ -256,6 +233,26 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 	}
 }
 
+// sseClosure builds the callback passed to the receiver method. Each call
+// acquires a pooled buffer, renders the template into it, then writes one SSE
+// frame to the response under a mutex and flushes:
+//
+//	func(result T) error {
+//		if err := request.Context().Err(); err != nil { return err }
+//		buf := bytesBufferPool.Get().(*bytes.Buffer)
+//		buf.Reset()
+//		defer bytesBufferPool.Put(buf)
+//		td := SSETemplateData[Recv, T]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+//		if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
+//		td.data = buf
+//		mut.Lock()
+//		defer mut.Unlock()
+//		if _, err := td.WriteTo(response); err != nil { return err }
+//		flusher.Flush()
+//		return nil
+//	}
+//
+// For the zero-arg form it omits the parameter and the result field.
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"

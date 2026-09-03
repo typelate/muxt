@@ -62,19 +62,15 @@ func marshalJSONRespondStmts(file *File, resultDataIdent, bufIdent string) []ast
 			&ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(jsonBodyIdent), ast.NewIdent(errIdent)},
 				Tok: token.DEFINE,
-				Rhs: []ast.Expr{&ast.CallExpr{
-					Fun:  astgen.ExportedIdentifier(file, "json", "encoding/json", "Marshal"),
-					Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}},
-				}},
+				Rhs: []ast.Expr{astgen.Call(file, "json", "encoding/json", "Marshal",
+					&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)},
+				)},
 			},
 			&ast.IfStmt{
 				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 				Body: &ast.BlockStmt{List: []ast.Stmt{
 					&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse),
-						&ast.CallExpr{
-							Fun:  astgen.ExportedIdentifier(file, "", "net/http", "StatusText"),
-							Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusInternalServerError)},
-						},
+						astgen.Call(file, "", "net/http", "StatusText", astgen.HTTPStatusCode(file, http.StatusInternalServerError)),
 						http.StatusInternalServerError)},
 					&ast.ReturnStmt{},
 				}},
