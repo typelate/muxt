@@ -798,7 +798,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || muxt.IsSignalsCallbackArgument(arg.Name) {
+			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || def.IsSignalsCallback(arg.Name) {
 				// Render and signals callbacks are validated and wired into the
 				// call in the sse handler assembly. They are not parsed from
 				// the request.

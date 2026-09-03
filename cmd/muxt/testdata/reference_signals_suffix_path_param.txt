@@ -1,0 +1,60 @@
+# A path parameter that happens to end in "Signals" is a path value, not a
+# datastar patch-signals callback: it needs no --output-datastar flag, and the
+# generated handler parses it from the path like any other parameter.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{define "GET /watch/{chSignals} sse(Watch(ctx, chSignals, execute))"}}{{.Result}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Watch(_ context.Context, chSignals string, execute func(string) error) {
+	_ = execute(chSignals)
+}
+
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestSignalsSuffixedPathParam(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	req := httptest.NewRequest(http.MethodGet, "/watch/updates", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /watch/updates = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "updates") {
+		t.Errorf("body %q does not contain the path value %q", body, "updates")
+	}
+}

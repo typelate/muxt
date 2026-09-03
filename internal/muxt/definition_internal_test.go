@@ -367,6 +367,15 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "signals suffixed path parameter stays a path value",
+			In:       "GET /watch/{chSignals} sse(Watch(ctx, chSignals, execute))",
+			ExpMatch: true,
+			TemplateName: func(t *testing.T, def Definition) {
+				callback, ok := def.SignalsCallback()
+				assert.False(t, ok, "path parameter %q must not be recorded as a signals callback", callback)
+			},
+		},
+		{
 			Name:     "sse prefixed argument on a non-sse route",
 			In:       "GET / F(sseClock)",
 			ExpMatch: true,
