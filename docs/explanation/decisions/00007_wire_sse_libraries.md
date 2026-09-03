@@ -15,13 +15,13 @@ already exist:
   ...MessageOption)` writes frames with `WithEvent`, `WithID`, `WithIntID`,
   and `WithRetry` options; `Response.LastEventID()` reads the reconnect
   header; `ErrInvalidField` covers field validation. It is frontend-agnostic:
-  for datastar routes muxt still formats the `elements ...` payload lines and
+  for datastar routes Muxt still formats the `elements ...` payload lines and
   passes `WithEvent("datastar-patch-elements")`.
 - [github.com/starfederation/datastar-go](https://github.com/starfederation/datastar-go)
   — the official Datastar SDK. `datastar.NewSSE(w, r, ...SSEOption)` plus
   `PatchElements(html, ...PatchElementOption)` and
   `MarshalAndPatchSignals(v, ...PatchSignalsOption)` replace both generated
-  closure kinds and bring capabilities muxt does not generate: response
+  closure kinds and bring capabilities Muxt does not generate: response
   compression, `onlyIfMissing` signal patches, `ExecuteScript`, and
   `ReadSignals`, which also decodes signals from the `?datastar=` query on GET
   requests — a case the `signals` argument (sugar for `unmarshalJSON(body)`)
@@ -30,10 +30,11 @@ already exist:
 Neither existing flag family fits: `--use-*` names source queries and
 `--output-*` names generated identifiers ([decision 5](00005_rename_flags.md)),
 but this choice is about which implementation writes the SSE protocol.
-An `--import-<module>` spelling was considered — it names the mechanism (the
+An `--import-*` spelling was considered — it names the mechanism (the
 generated code gains a module dependency) — but the family would be unbounded
 in meaning; `--wire-*` names the domain being replaced and keeps the family
-coherent.
+coherent. In both families the flag name is a readable label for the library,
+not its literal Go module path.
 
 ## Decision
 
@@ -42,16 +43,18 @@ code wires the SSE protocol through that library instead of generating the
 equivalent code. The default remains the generated, dependency-free
 implementation.
 
-- `--wire-typelate-sse` — valid with any frontend (vanilla, `--output-htmx`,
-  `--output-datastar`). Replaces stream setup, the mutex, frame writing,
-  field validation, and `Last-Event-Id` handling with `sse.New` and
-  `Response.Message`. The `SSETemplateData` event setters map to
-  `MessageOption` values.
-- `--wire-star-federation-datastar-go` — requires `--output-datastar` and is
-  mutually exclusive with `--wire-typelate-sse`. Replaces the render and
-  signals closures with `PatchElements` and `MarshalAndPatchSignals`, decodes
-  the `signals` argument with `ReadSignals`, and exposes stream-level
-  `SSEOption` values (compression among them).
+- `--wire-typelate-sse` — generated code imports `github.com/typelate/sse`.
+  Valid with any frontend (vanilla, `--output-htmx`, `--output-datastar`).
+  Replaces stream setup, the mutex, frame writing, field validation, and
+  `Last-Event-Id` handling with `sse.New` and `Response.Message`. The
+  `SSETemplateData` event setters map to `MessageOption` values.
+- `--wire-star-federation-datastar-go` — generated code imports
+  `github.com/starfederation/datastar-go/datastar`. Requires
+  `--output-datastar` and is mutually exclusive with `--wire-typelate-sse`.
+  Replaces the render and signals closures with `PatchElements` and
+  `MarshalAndPatchSignals`, decodes the `signals` argument with
+  `ReadSignals`, and exposes stream-level `SSEOption` values (compression
+  among them).
 
 Library capabilities reach receiver methods through variadic option
 parameters on the callback signatures. Under a wire flag, a callback
@@ -93,7 +96,7 @@ Decided
 - Receiver signatures using variadic options couple to the chosen wire flag:
   switching libraries is a compile-time break in receiver code. This is
   accepted — exposing a library's own option types is the point, and wrapping
-  them in muxt-owned types would re-implement the surface the flags exist to
+  them in Muxt-owned types would re-implement the surface the flags exist to
   avoid.
 - `--wire-star-federation-datastar-go` closes the `ReadSignals` GET-query gap
   and the compression gap; `muxt check` and generation validate option types
