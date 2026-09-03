@@ -18,7 +18,7 @@ You can stay in hypermedia-land and drive a significant amount of behavior from 
 
 Muxt plays super well with fixi, htmx, Datastar, and plain server-rendered HTML.
 
-Making templates statically analyzable was a key development goal of Muxt and the original inspiration — along with reducing the boilerplate of mapping and parsing path and form parameters. The generated handlers call `ExecuteTemplate` with a string-literal template name and data of a known static type, so `muxt check` can type-check each template and its actions against the data it actually receives.
+Making templates statically analyzable was a key development goal of Muxt and the original inspiration. The generated handlers call `ExecuteTemplate` with a string-literal template name and data of a known static type, so `muxt check` can type-check each template and its actions against the data it actually receives.
 
 ## Install
 
