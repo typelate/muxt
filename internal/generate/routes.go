@@ -74,6 +74,7 @@ type RoutesFileConfiguration struct {
 	OutputMultipleFiles              bool
 	OutputHTMX                       bool
 	OutputDatastar                   bool
+	WireTypelateSSE                  bool
 	OutputExportedDefaultIdentifiers bool
 	// OutputMuxtVersion controls whether the muxt version is recorded in
 	// generated files (the "// muxt version:" comment and the TemplateData

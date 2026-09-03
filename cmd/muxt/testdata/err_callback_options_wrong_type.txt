@@ -1,0 +1,36 @@
+# Under --wire-typelate-sse the callback options element type must be the
+# wired library's MessageOption.
+
+! muxt generate --use-receiver-type=Server --wire-typelate-sse
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: the sseNum callback options must be ...sse.MessageOption from github.com/typelate/sse, got server.Option
+-- template.gohtml --
+{{define "GET /numbers sse(Numbers(ctx, sseNum))"}}{{end}}
+{{define "sseNum"}}{{.Result}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Option func()
+
+type Server struct{}
+
+func (Server) Numbers(_ context.Context, sseNum func(int, ...Option) error) error {
+	return sseNum(7)
+}

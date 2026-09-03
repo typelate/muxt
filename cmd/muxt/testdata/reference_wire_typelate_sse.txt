@@ -1,0 +1,128 @@
+# --wire-typelate-sse wires SSE routes through github.com/typelate/sse instead
+# of generating the wire protocol: sse.New owns the stream headers, flushing,
+# and goroutine safety, Response.Message writes the frames, and the
+# SSETemplateData setters map to MessageOption values. A callback parameter may
+# append a variadic ...sse.MessageOption, which the generated closure forwards
+# to Message.
+
+exec go get github.com/typelate/sse@v0.2.0
+exec go mod tidy
+
+muxt generate --use-receiver-type=Server --wire-typelate-sse
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{define "GET /events sse(Events(ctx, execute))"}}{{.ID "e1"}}{{.Event "tick"}}{{.Result}}{{end}}
+{{define "GET /numbers sse(Numbers(ctx, sseNum))"}}{{end}}
+{{define "sseNum"}}{{.Result}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+
+	"github.com/typelate/sse"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Events(_ context.Context, execute func(int) error) error {
+	for n := range 2 {
+		if err := execute(n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (Server) Numbers(_ context.Context, sseNum func(int, ...sse.MessageOption) error) error {
+	return sseNum(7, sse.WithID("n7"))
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/typelate/sse"
+)
+
+type frame struct {
+	id, event, data string
+}
+
+// readFrames consumes the whole stream once through the sse package's client.
+func readFrames(t *testing.T, url string) []frame {
+	t.Helper()
+
+	res, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	res.Request = nil // read to EOF; do not reconnect
+
+	messages, err := sse.Source(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frames []frame
+	for msg := range messages {
+		var f frame
+		f.id, _ = msg.ID()
+		f.event, _ = msg.Event()
+		f.data = msg.Data()
+		frames = append(frames, f)
+	}
+	return frames
+}
+
+func TestEvents(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	frames := readFrames(t, srv.URL+"/events")
+
+	want := []frame{
+		{id: "e1", event: "tick", data: "0"},
+		{id: "e1", event: "tick", data: "1"},
+	}
+	if len(frames) != len(want) {
+		t.Fatalf("got %d frames %+v, want %d", len(frames), frames, len(want))
+	}
+	for i, f := range frames {
+		if f != want[i] {
+			t.Errorf("frame %d = %+v, want %+v", i, f, want[i])
+		}
+	}
+}
+
+func TestNumbersForwardsOptions(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	frames := readFrames(t, srv.URL+"/numbers")
+
+	if want := (frame{id: "n7", data: "7"}); len(frames) != 1 || frames[0] != want {
+		t.Errorf("frames = %+v, want exactly one %+v", frames, want)
+	}
+}

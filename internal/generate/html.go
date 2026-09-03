@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -37,6 +38,9 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 			// The callback contract (func() error or func(T) error) is
 			// validated by muxt.ResolveCall, which records T and whether the
 			// callback takes the data argument.
+			if arg.CallbackOptionsType() != nil {
+				return nil, fmt.Errorf("the %s callback options parameter is only supported on sse routes wired through a library flag", arg.Identifier)
+			}
 			execIdx, hasExecute = i, true
 			resultType, execHasArg = arg.CallbackResultType(), arg.CallbackHasArg()
 			break

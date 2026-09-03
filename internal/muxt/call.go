@@ -36,6 +36,12 @@ type Argument struct {
 	callbackResult types.Type
 	callbackHasArg bool
 
+	// callbackOptions is the variadic option element type O of a
+	// func(T, ...O) error render callback, nil when the callback declares no
+	// option parameter. The generate package validates O against the wired
+	// library.
+	callbackOptions types.Type
+
 	// formFields describes how each struct field of a form or multipart
 	// argument binds to the request (nil for the raw url.Values /
 	// *multipart.Form mode).
@@ -75,6 +81,11 @@ func (a Argument) CallbackResultType() types.Type { return a.callbackResult }
 // CallbackHasArg reports whether a validated render-callback argument's
 // callback takes the template data argument (func(T) error vs func() error).
 func (a Argument) CallbackHasArg() bool { return a.callbackHasArg }
+
+// CallbackOptionsType returns the variadic option element type O of a
+// func(T, ...O) error render callback, or nil when the callback declares no
+// option parameter.
+func (a Argument) CallbackOptionsType() types.Type { return a.callbackOptions }
 
 // FormFields returns the field bindings of a form or multipart argument in
 // struct mode, or nil when the parameter receives the raw request value.
@@ -177,19 +188,35 @@ func resolveCallbackShapes(def *Definition) error {
 			a.callbackResult = types.NewStruct(nil, nil)
 			a.callbackHasArg = false
 		case 1:
+			if callback.Variadic() {
+				return fmt.Errorf("the %s callback options parameter requires a data parameter before it: func(T, ...O) error", a.Identifier)
+			}
 			a.callbackResult = callback.Params().At(0).Type()
 			a.callbackHasArg = true
-		default:
-			if def.Representation == RepresentationSSE {
-				return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+		case 2:
+			if !callback.Variadic() {
+				return callbackTooManyParamsError(def)
 			}
-			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
+			// func(T, ...O) error: O is validated against the wired library
+			// during generation, where the wire flag is known.
+			a.callbackResult = callback.Params().At(0).Type()
+			a.callbackHasArg = true
+			a.callbackOptions = callback.Params().At(1).Type().(*types.Slice).Elem()
+		default:
+			return callbackTooManyParamsError(def)
 		}
 		if def.Representation == RepresentationSSE && a.template == nil {
 			return fmt.Errorf("no template %q for sse argument %s", a.Identifier, a.Identifier)
 		}
 	}
 	return nil
+}
+
+func callbackTooManyParamsError(def *Definition) error {
+	if def.Representation == RepresentationSSE {
+		return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+	}
+	return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
 }
 
 // classifyResultShape validates def's method results against its contract:
