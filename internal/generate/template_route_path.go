@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	routePathsReceiverName    = "routePaths"
-	escapePathSegmentFuncName = "escapePathSegment"
+	routePathsReceiverName     = "routePaths"
+	escapePathSegmentFuncName  = "escapePathSegment"
+	escapePathSegmentsFuncName = "escapePathSegments"
 )
 
 func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
@@ -35,26 +36,32 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
-	needsSegmentEscaper := false
+	needsSegmentEscaper, needsSegmentsEscaper := false, false
 	for _, t := range defs {
-		decl, usesEscaper, err := routePathFunc(imports, config, &t)
+		decl, usesEscaper, usesSegmentsEscaper, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
 		}
-		needsSegmentEscaper = needsSegmentEscaper || usesEscaper
+		// escapePathSegments calls escapePathSegment, so needing the former
+		// implies emitting both.
+		needsSegmentEscaper = needsSegmentEscaper || usesEscaper || usesSegmentsEscaper
+		needsSegmentsEscaper = needsSegmentsEscaper || usesSegmentsEscaper
 		decls = append(decls, decl)
 	}
 	if needsSegmentEscaper {
 		decls = append(decls, escapePathSegmentMethod(imports, config))
 	}
+	if needsSegmentsEscaper {
+		decls = append(decls, escapePathSegmentsMethod(imports, config))
+	}
 	return decls, nil
 }
 
-func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper bool, _ error) {
+func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper, usesSegmentsEscaper bool, _ error) {
 	const methodReceiverName = routePathsReceiverName
 	encodingPkg, ok := file.Types("encoding")
 	if !ok {
-		return nil, false, fmt.Errorf(`the "encoding" package must be loaded`)
+		return nil, false, false, fmt.Errorf(`the "encoding" package must be loaded`)
 	}
 	scope := encodingPkg.Scope()
 	textMarshalerObject := scope.Lookup("TextMarshaler")
@@ -64,7 +71,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	ident, err := def.ExportedPathIdentifier()
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	method := &ast.FuncDecl{
@@ -99,7 +106,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		} else {
 			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
 		}
-		return method, usesEscaper, nil
+		return method, usesEscaper, usesSegmentsEscaper, nil
 	}
 
 	templatePath, hasDollarSuffix := strings.CutSuffix(def.Path(), "{$}")
@@ -153,7 +160,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		}
 		tpNode, err := file.TypeASTExpression(pathValueType)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		if last != nil && len(fields) > 0 && types.Identical(last, pathValueType) {
 			fields[len(fields)-1].Names = append(fields[len(fields)-1].Names, ast.NewIdent(ident))
@@ -197,7 +204,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 							Results: []ast.Expr{
 								&ast.BasicLit{Kind: token.STRING, Value: `""`},
 								astgen.Call(file, "fmt", "fmt", "Errorf",
-									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", ident, si, def.Path())),
+									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", name, si, def.Path())),
 									ast.NewIdent("err"),
 								),
 							},
@@ -209,7 +216,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 				Fun:  ast.NewIdent("string"),
 				Args: []ast.Expr{ast.NewIdent(segmentIdent)},
 			}
-			if !wildcard {
+			if wildcard {
+				usesSegmentsEscaper = true
+				marshaled = escapedPathSegments(marshaled)
+			} else {
 				usesEscaper = true
 				marshaled = escapedPathSegment(marshaled)
 			}
@@ -219,15 +229,20 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 		basicType, ok := pathValueType.Underlying().(*types.Basic)
 		if !ok {
-			return nil, false, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
+			return nil, false, false, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
 		}
 		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), basicType.Kind())
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
+			return nil, false, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
-		if basicType.Info()&types.IsString != 0 && !wildcard {
-			usesEscaper = true
-			exp = escapedPathSegment(exp)
+		if basicType.Info()&types.IsString != 0 {
+			if wildcard {
+				usesSegmentsEscaper = true
+				exp = escapedPathSegments(exp)
+			} else {
+				usesEscaper = true
+				exp = escapedPathSegment(exp)
+			}
 		}
 		segmentExpressions = append(segmentExpressions, exp)
 	}
@@ -258,7 +273,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	method.Type.Params.List = fields
 
-	return method, usesEscaper, nil
+	return method, usesEscaper, usesSegmentsEscaper, nil
 }
 
 // isWildcardSegment reports whether segment is a {name...} pattern; only the
@@ -284,6 +299,79 @@ func escapedPathSegment(value ast.Expr) ast.Expr {
 			Sel: ast.NewIdent(escapePathSegmentFuncName),
 		},
 		Args: []ast.Expr{value},
+	}
+}
+
+// escapedPathSegments wraps a trailing-wildcard value in a call to the
+// generated escapePathSegments method; the caller must arrange for both
+// escaper methods to be emitted.
+func escapedPathSegments(value ast.Expr) ast.Expr {
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(routePathsReceiverName),
+			Sel: ast.NewIdent(escapePathSegmentsFuncName),
+		},
+		Args: []ast.Expr{value},
+	}
+}
+
+// escapePathSegmentsMethod emits:
+//
+//	func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+//		segments := strings.Split(value, "/")
+//		for i, segment := range segments {
+//			segments[i] = routePaths.escapePathSegment(segment)
+//		}
+//		return strings.Join(segments, "/")
+//	}
+//
+// A trailing {name...} wildcard names a multi-segment path suffix, so its "/"
+// separators are meaningful and each segment between them is escaped alone.
+func escapePathSegmentsMethod(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
+	const (
+		valueIdent    = "value"
+		segmentsIdent = "segments"
+		indexIdent    = "i"
+		segmentIdent  = "segment"
+	)
+	return &ast.FuncDecl{
+		Name: ast.NewIdent(escapePathSegmentsFuncName),
+		Recv: &ast.FieldList{
+			List: []*ast.Field{
+				{Names: []*ast.Ident{ast.NewIdent(routePathsReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
+			},
+		},
+		Type: &ast.FuncType{
+			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(valueIdent)}, Type: ast.NewIdent("string")}}},
+			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.AssignStmt{
+					Lhs: []ast.Expr{ast.NewIdent(segmentsIdent)},
+					Tok: token.DEFINE,
+					Rhs: []ast.Expr{astgen.Call(file, "strings", "strings", "Split", ast.NewIdent(valueIdent), astgen.String("/"))},
+				},
+				&ast.RangeStmt{
+					Key:   ast.NewIdent(indexIdent),
+					Value: ast.NewIdent(segmentIdent),
+					Tok:   token.DEFINE,
+					X:     ast.NewIdent(segmentsIdent),
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.AssignStmt{
+								Lhs: []ast.Expr{&ast.IndexExpr{X: ast.NewIdent(segmentsIdent), Index: ast.NewIdent(indexIdent)}},
+								Tok: token.ASSIGN,
+								Rhs: []ast.Expr{escapedPathSegment(ast.NewIdent(segmentIdent))},
+							},
+						},
+					},
+				},
+				&ast.ReturnStmt{Results: []ast.Expr{
+					astgen.Call(file, "strings", "strings", "Join", ast.NewIdent(segmentsIdent), astgen.String("/")),
+				}},
+			},
+		},
 	}
 }
 

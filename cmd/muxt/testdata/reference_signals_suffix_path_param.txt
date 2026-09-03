@@ -32,7 +32,6 @@ type Server struct{}
 func (Server) Watch(_ context.Context, chSignals string, execute func(string) error) {
 	_ = execute(chSignals)
 }
-
 -- template_test.go --
 package server
 

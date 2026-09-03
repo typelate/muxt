@@ -59,7 +59,11 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 					log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
 					if checkErr, ok := errors.AsType[*check.Error](err); ok {
 						var sb strings.Builder
-						_ = checkErr.DetailedError(&sb, qualifier)
+						if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
+							// The detail rendering failed; the compact error
+							// must still reach the user.
+							log.Println(" - ", err)
+						}
 						log.Println(sb.String())
 					} else {
 						log.Println(" - ", err)

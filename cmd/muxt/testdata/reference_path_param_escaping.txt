@@ -1,12 +1,17 @@
-# String path parameters are escaped with net/url.PathEscape in the generated
-# TemplateRoutePaths helpers, so a value containing URL metacharacters cannot
-# corrupt the path. A trailing {name...} wildcard value is spliced without
-# escaping (path.Join cleans the result). Parameters named after packages the
-# helper body references (url, path, ...) are renamed so they cannot shadow
-# the imports.
+# String path parameters are escaped in the generated TemplateRoutePaths
+# helpers, so a value containing URL metacharacters cannot corrupt the path;
+# whole-segment "." and ".." are percent-encoded so they cannot address a
+# parent route. A trailing {name...} wildcard value is escaped per "/"-separated
+# segment, preserving its multi-segment meaning. Parameters named after
+# packages the helper body references (url, path, ...) are renamed so they
+# cannot shadow the imports.
 
 muxt generate --use-receiver-type=T
 muxt check
+
+# The MarshalText failure message names the pattern's parameter, not the
+# generated local (tagPathParam).
+grep 'failed to marshal path value .tag. .segment 2. in /tags/.tag.' template_routes.go
 
 exec go test -count=1
 
@@ -72,8 +77,11 @@ func TestPathEscaping(t *testing.T) {
 	if got, want := paths.ShowFile("."), "/files/%2E"; got != want {
 		t.Errorf("ShowFile(%q) = %q, want %q", ".", got, want)
 	}
-	if got, want := paths.ShowTree("a/b c"), "/tree/a/b c"; got != want {
+	if got, want := paths.ShowTree("a/b c"), "/tree/a/b%20c"; got != want {
 		t.Errorf("ShowTree(%q) = %q, want %q", "a/b c", got, want)
+	}
+	if got, want := paths.ShowTree("a#b/50%"), "/tree/a%23b/50%25"; got != want {
+		t.Errorf("ShowTree(%q) = %q, want %q", "a#b/50%", got, want)
 	}
 	if got, want := paths.ShowLink("a/b"), "/link/a%2Fb"; got != want {
 		t.Errorf("ShowLink(%q) = %q, want %q", "a/b", got, want)
