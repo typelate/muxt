@@ -496,9 +496,6 @@ func sseCallbackSignature() *types.Signature {
 		false)
 }
 
-// typeQualifier renders types the way they read in the receiver's package:
-// types from that package are unqualified and all others use the package name
-// (*http.Request, not *net/http.Request).
 // classifyMarshalJSONResultShape enforces the marshalJSON contract: the
 // wrapped method must produce exactly one non-error value to marshal,
 // optionally followed by an error.
@@ -525,6 +522,9 @@ func classifyMarshalJSONResultShape(def *Definition, results *types.Tuple, errIf
 	}
 }
 
+// typeQualifier renders types the way they read in the receiver's package:
+// types from that package are unqualified and all others use the package name
+// (*http.Request, not *net/http.Request).
 func typeQualifier(receiverPkg *types.Package) types.Qualifier {
 	return func(p *types.Package) string {
 		if p == receiverPkg {
@@ -799,37 +799,44 @@ func rewriteSignalsArguments(call *ast.CallExpr, pathValueNames []string) bool {
 // however many times they appear they count as one read. The request body is
 // a single-use stream, so more than one read is a generation error.
 func countBodyConsumers(call *ast.CallExpr) int {
-	reads, parsesForm := countBodyReads(call)
-	if parsesForm {
+	reads, hasForm, hasMultipart := scanBodyBindings(call)
+	if hasForm || hasMultipart {
 		reads++
 	}
 	return reads
 }
 
-func countBodyReads(call *ast.CallExpr) (reads int, parsesForm bool) {
+// scanBodyBindings walks call's argument tree, counting direct request-body
+// reads (the body identifier and the unmarshalJSON(body) wrapper) and noting
+// the form and multipart bindings (the form and multipart identifiers, and
+// unmarshalForm(body), which is the form binding).
+func scanBodyBindings(call *ast.CallExpr) (reads int, hasForm, hasMultipart bool) {
 	for _, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
 			switch exp.Name {
 			case TemplateNameScopeIdentifierRequestBody:
 				reads++
-			case TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart:
-				parsesForm = true
+			case TemplateNameScopeIdentifierForm:
+				hasForm = true
+			case TemplateNameScopeIdentifierMultipart:
+				hasMultipart = true
 			}
 		case *ast.CallExpr:
 			switch {
 			case isCallTo(exp, callWrapperUnmarshalJSON):
 				reads++
 			case isCallTo(exp, callWrapperUnmarshalForm):
-				parsesForm = true
+				hasForm = true
 			default:
-				nestedReads, nestedParsesForm := countBodyReads(exp)
+				nestedReads, nestedForm, nestedMultipart := scanBodyBindings(exp)
 				reads += nestedReads
-				parsesForm = parsesForm || nestedParsesForm
+				hasForm = hasForm || nestedForm
+				hasMultipart = hasMultipart || nestedMultipart
 			}
 		}
 	}
-	return reads, parsesForm
+	return reads, hasForm, hasMultipart
 }
 
 func patternScope() []string {

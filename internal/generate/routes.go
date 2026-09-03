@@ -1299,9 +1299,6 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 	}
 }
 
-// lastEventIDHeader is the canonical request header the lastEventID argument is
-// sourced from. http.Header.Get canonicalizes lookups, so this matches a
-// client's "Last-Event-ID" as well.
 // decodeJSONBodyStatements declares valueIdent with the parameter type and
 // decodes the JSON request body into it:
 //
@@ -1318,25 +1315,27 @@ func decodeJSONBodyStatements(file *File, valueIdent string, paramType types.Typ
 	}}
 	decode := &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
-			X: &ast.CallExpr{
-				Fun: astgen.ExportedIdentifier(file, "json", "encoding/json", "NewDecoder"),
-				Args: []ast.Expr{&ast.SelectorExpr{
+			X: astgen.Call(file, "json", "encoding/json", "NewDecoder",
+				&ast.SelectorExpr{
 					X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 					Sel: ast.NewIdent("Body"),
-				}},
-			},
+				},
+			),
 			Sel: ast.NewIdent("Decode"),
 		},
 		Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(valueIdent)}},
 	}
 	checkErr := &ast.IfStmt{
 		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{decode}},
-		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: ast.NewIdent("nil")},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: parseErrBlock(),
 	}
 	return []ast.Stmt{declare, checkErr}, nil
 }
 
+// lastEventIDHeader is the canonical request header the lastEventID argument is
+// sourced from. http.Header.Get canonicalizes lookups, so this matches a
+// client's "Last-Event-ID" as well.
 const lastEventIDHeader = "Last-Event-Id"
 
 // requestArgumentSource returns the expression a scalar argument is parsed from.

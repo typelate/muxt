@@ -472,37 +472,10 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 	if err := checkCallArguments(identifiers, call, sse, false); err != nil {
 		return err
 	}
-	if hasForm, hasMultipart := scanFormBindings(call); hasForm && hasMultipart {
+	if _, hasForm, hasMultipart := scanBodyBindings(call); hasForm && hasMultipart {
 		return fmt.Errorf("call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
 	}
 	return nil
-}
-
-// scanFormBindings reports whether call binds the request body as an
-// url-encoded form and as a multipart form anywhere in its call tree.
-// unmarshalForm(body) is the form binding. The two bindings parse the same
-// body differently, so a call tree carrying both is rejected.
-func scanFormBindings(call *ast.CallExpr) (hasForm, hasMultipart bool) {
-	for _, a := range call.Args {
-		switch exp := a.(type) {
-		case *ast.Ident:
-			switch exp.Name {
-			case TemplateNameScopeIdentifierForm:
-				hasForm = true
-			case TemplateNameScopeIdentifierMultipart:
-				hasMultipart = true
-			}
-		case *ast.CallExpr:
-			if isCallTo(exp, callWrapperUnmarshalForm) {
-				hasForm = true
-				continue
-			}
-			nestedForm, nestedMultipart := scanFormBindings(exp)
-			hasForm = hasForm || nestedForm
-			hasMultipart = hasMultipart || nestedMultipart
-		}
-	}
-	return hasForm, hasMultipart
 }
 
 // checkCallArguments validates call's arguments against the scope. nested is
