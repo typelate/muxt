@@ -353,13 +353,13 @@ func TestArgument(t *testing.T) {
 			require.ErrorContains(t, err, "execute argument for ExecuteNotFunc must be a func(...) error")
 		}},
 		{Name: "execute callback with too many parameters", Receiver: serverType, Template: `{{define "GET / ExecuteMultiArg(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "execute callback must have zero or one parameter; wrap multiple values in a struct")
+			require.ErrorContains(t, err, "execute callback must be func() error, func(T) error, or func(T, ...O) error; wrap multiple values in a struct")
 		}},
 		{Name: "sse callback parameter is not a function", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackNotFunc(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "execute parameter for SSECallbackNotFunc must be a function")
 		}},
 		{Name: "sse callback with too many parameters", Receiver: serverType, Template: `{{define "GET /x sse(SSECallbackMultiArg(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "sse callback must have zero or one parameter; wrap multiple values in a struct")
+			require.ErrorContains(t, err, "sse callback must be func() error, func(T) error, or func(T, ...O) error; wrap multiple values in a struct")
 		}},
 		{Name: "execute callback method not defined on receiver", Receiver: emptyStruct, Template: `{{define "GET / NotDefined(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method NotDefined using the execute callback must be defined on the receiver type")

@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -16,6 +17,37 @@ import (
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
+const (
+	typelateSSEPackagePath = "github.com/typelate/sse"
+	typelateSSEPackageName = "sse"
+	sseStreamIdent         = "stream"
+)
+
+// isNamedTypeFrom reports whether tp is the named type pkgPath.name; an alias
+// of that type is identical to it and is accepted.
+func isNamedTypeFrom(tp types.Type, pkgPath, name string) bool {
+	named, ok := types.Unalias(tp).(*types.Named)
+	if !ok || named.Obj().Pkg() == nil {
+		return false
+	}
+	return named.Obj().Pkg().Path() == pkgPath && named.Obj().Name() == name
+}
+
+// checkCallbackOptionsType validates a func(T, ...O) error render callback's
+// option element type against the wired library.
+func checkCallbackOptionsType(config RoutesFileConfiguration, identifier string, optionsType types.Type) error {
+	if optionsType == nil {
+		return nil
+	}
+	if !config.WireTypelateSSE {
+		return fmt.Errorf("the %s callback options parameter requires --wire-typelate-sse", identifier)
+	}
+	if !isNamedTypeFrom(optionsType, typelateSSEPackagePath, "MessageOption") {
+		return fmt.Errorf("the %s callback options must be ...sse.MessageOption from %s, got %s", identifier, typelateSSEPackagePath, optionsType)
+	}
+	return nil
+}
+
 func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		flusherIdent = "flusher"
@@ -41,6 +73,16 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		Type: astgen.HTTPHandlerFuncType(file, response, request),
 		Body: &ast.BlockStmt{},
 	}
+	// if !ok { http.Error(response, "streaming unsupported", 500); return }
+	streamingUnsupportedCheck := func() ast.Stmt {
+		return &ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.String("streaming unsupported"), http.StatusInternalServerError)},
+				&ast.ReturnStmt{},
+			}},
+		}
+	}
 	body := []ast.Stmt{
 		// defer func() { _ = request.Body.Close() }()
 		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.FuncLit{
@@ -54,20 +96,17 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 				}}},
 			}}},
 		}}},
-		// flusher, ok := response.(http.Flusher)
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(flusherIdent), ast.NewIdent(okIdent)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(response), Type: astgen.ExportedIdentifier(file, "", "net/http", "Flusher")}},
-		},
-		// if !ok { http.Error(response, "streaming unsupported", 500); return }
-		&ast.IfStmt{
-			Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
-			Body: &ast.BlockStmt{List: []ast.Stmt{
-				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.String("streaming unsupported"), http.StatusInternalServerError)},
-				&ast.ReturnStmt{},
-			}},
-		},
+	}
+	if !config.WireTypelateSSE {
+		body = append(body,
+			// flusher, ok := response.(http.Flusher)
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(flusherIdent), ast.NewIdent(okIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(response), Type: astgen.ExportedIdentifier(file, "", "net/http", "Flusher")}},
+			},
+			streamingUnsupportedCheck(),
+		)
 	}
 
 	// Parse ctx, lastEventID and any path params into locals. A typed parse
@@ -86,33 +125,48 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		return nil, err
 	}
 
-	// h := response.Header(); set the SSE headers; WriteHeader(200); flush.
-	headerSet := func(key, value string) ast.Stmt {
-		return &ast.ExprStmt{X: &ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(headerIdent), Sel: ast.NewIdent("Set")},
-			Args: []ast.Expr{astgen.String(key), astgen.String(value)},
-		}}
+	if config.WireTypelateSSE {
+		// stream, ok := sse.New(response, request, http.StatusOK); sse.New
+		// writes the headers and owns flushing and goroutine safety.
+		body = append(body,
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(sseStreamIdent), ast.NewIdent(okIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{astgen.Call(file, typelateSSEPackageName, typelateSSEPackagePath, "New",
+					ast.NewIdent(response), ast.NewIdent(request), astgen.HTTPStatusCode(file, http.StatusOK),
+				)},
+			},
+			streamingUnsupportedCheck(),
+		)
+	} else {
+		// h := response.Header(); set the SSE headers; WriteHeader(200); flush.
+		headerSet := func(key, value string) ast.Stmt {
+			return &ast.ExprStmt{X: &ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(headerIdent), Sel: ast.NewIdent("Set")},
+				Args: []ast.Expr{astgen.String(key), astgen.String(value)},
+			}}
+		}
+		body = append(body,
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(headerIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("Header")}}},
+			},
+			headerSet("Content-Type", "text/event-stream"),
+			headerSet("Connection", "keep-alive"),
+			headerSet("Cache-Control", "no-store"),
+			&ast.ExprStmt{X: &ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("WriteHeader")},
+				Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
+			}},
+			&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+			// var mut sync.Mutex
+			&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+				Names: []*ast.Ident{ast.NewIdent(mutexIdent)},
+				Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
+			}}}},
+		)
 	}
-	body = append(body,
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(headerIdent)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("Header")}}},
-		},
-		headerSet("Content-Type", "text/event-stream"),
-		headerSet("Connection", "keep-alive"),
-		headerSet("Cache-Control", "no-store"),
-		&ast.ExprStmt{X: &ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent(response), Sel: ast.NewIdent("WriteHeader")},
-			Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
-		}},
-		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
-		// var mut sync.Mutex
-		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
-			Names: []*ast.Ident{ast.NewIdent(mutexIdent)},
-			Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
-		}}}},
-	)
 
 	callArgs := slices.Clone(def.CallExpression().Args)
 	for i, arg := range def.Arguments {
@@ -121,8 +175,11 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			// The callback contract (func() error or func(T) error) and template
 			// existence are validated by muxt.ResolveCall, which records T and
 			// whether the callback takes the data argument.
+			if err := checkCallbackOptionsType(config, arg.Identifier, arg.CallbackOptionsType()); err != nil {
+				return nil, err
+			}
 			resultType, hasArg := arg.CallbackResultType(), arg.CallbackHasArg()
-			closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, receiverInterfaceName, flusherIdent, mutexIdent)
+			closure, err := sseClosure(file, config, def, arg.Template().Name(), resultType, hasArg, arg.CallbackOptionsType(), receiverInterfaceName, flusherIdent, mutexIdent)
 			if err != nil {
 				return nil, err
 			}
@@ -235,7 +292,8 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 
 // sseClosure builds the callback passed to the receiver method. Each call
 // acquires a pooled buffer, renders the template into it, then writes one SSE
-// frame to the response under a mutex and flushes:
+// frame — through the generated wire writer under a mutex by default, or
+// through the wired library's stream under --wire-typelate-sse:
 //
 //	func(result T) error {
 //		if err := request.Context().Err(); err != nil { return err }
@@ -252,8 +310,10 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 //		return nil
 //	}
 //
-// For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+// For the zero-arg form it omits the parameter and the result field. A
+// non-nil optionsType adds a variadic opts parameter forwarded to the wired
+// library's Message call.
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, optionsType types.Type, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
 		tdIdent     = "td"
@@ -304,27 +364,102 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
 		}},
 	})
-	body = append(body,
-		// td.data = buf
-		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
-		// mut.Lock()
-		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
-		// defer mut.Unlock()
-		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
-		// if _, err := td.WriteTo(response); err != nil { return err }
-		&ast.IfStmt{
-			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
-				Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
-				Args: []ast.Expr{ast.NewIdent(response)},
+	if config.WireTypelateSSE {
+		const (
+			messageOptionsIdent = "messageOptions"
+			optsIdent           = "opts"
+		)
+		messageOptionType := astgen.ExportedIdentifier(file, typelateSSEPackageName, typelateSSEPackagePath, "MessageOption")
+		tdField := func(field string) ast.Expr {
+			return &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(field)}
+		}
+		appendOptionIfSet := func(field string, option ast.Expr) ast.Stmt {
+			return &ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: tdField(field), Op: token.NEQ, Y: astgen.Nil()},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+					Lhs: []ast.Expr{ast.NewIdent(messageOptionsIdent)},
+					Tok: token.ASSIGN,
+					Rhs: []ast.Expr{astgen.CallBuiltinAppend(ast.NewIdent(messageOptionsIdent), option)},
+				}}},
+			}
+		}
+		capExpr := ast.Expr(astgen.Int(3))
+		if optionsType != nil {
+			params = append(params, &ast.Field{
+				Names: []*ast.Ident{ast.NewIdent(optsIdent)},
+				Type:  &ast.Ellipsis{Elt: messageOptionType},
+			})
+			capExpr = &ast.BinaryExpr{X: capExpr, Op: token.ADD, Y: astgen.CallBuiltinLen(ast.NewIdent(optsIdent))}
+		}
+		body = append(body,
+			// messageOptions := make([]sse.MessageOption, 0, 3[+len(opts)])
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(messageOptionsIdent)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("make"), Args: []ast.Expr{
+					&ast.ArrayType{Elt: messageOptionType}, astgen.Int(0), capExpr,
+				}}},
+			},
+			appendOptionIfSet(sseTemplateDataFieldID, astgen.Call(file, typelateSSEPackageName, typelateSSEPackagePath, "WithID",
+				&ast.StarExpr{X: tdField(sseTemplateDataFieldID)},
+			)),
+			appendOptionIfSet(sseTemplateDataFieldEvent, astgen.Call(file, typelateSSEPackageName, typelateSSEPackagePath, "WithEvent",
+				&ast.StarExpr{X: tdField(sseTemplateDataFieldEvent)},
+			)),
+			appendOptionIfSet(sseTemplateDataFieldRetry, astgen.Call(file, typelateSSEPackageName, typelateSSEPackagePath, "WithRetry",
+				&ast.BinaryExpr{
+					X:  astgen.Call(file, "time", "time", "Duration", &ast.StarExpr{X: tdField(sseTemplateDataFieldRetry)}),
+					Op: token.MUL,
+					Y:  astgen.ExportedIdentifier(file, "time", "time", "Millisecond"),
+				},
+			)),
+		)
+		if optionsType != nil {
+			// messageOptions = append(messageOptions, opts...)
+			body = append(body, &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(messageOptionsIdent)},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun:      ast.NewIdent("append"),
+					Args:     []ast.Expr{ast.NewIdent(messageOptionsIdent), ast.NewIdent(optsIdent)},
+					Ellipsis: token.Pos(1),
+				}},
+			})
+		}
+		body = append(body,
+			// return stream.Message(buf.Bytes(), messageOptions...)
+			&ast.ReturnStmt{Results: []ast.Expr{&ast.CallExpr{
+				Fun: &ast.SelectorExpr{X: ast.NewIdent(sseStreamIdent), Sel: ast.NewIdent("Message")},
+				Args: []ast.Expr{
+					&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(bufIdent), Sel: ast.NewIdent("Bytes")}},
+					ast.NewIdent(messageOptionsIdent),
+				},
+				Ellipsis: token.Pos(1),
 			}}},
-			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
-		},
-		// flusher.Flush()
-		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
-		// return nil
-		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
-	)
+		)
+	} else {
+		body = append(body,
+			// td.data = buf
+			&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
+			// mut.Lock()
+			&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
+			// defer mut.Unlock()
+			&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
+			// if _, err := td.WriteTo(response); err != nil { return err }
+			&ast.IfStmt{
+				Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
+					Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
+					Args: []ast.Expr{ast.NewIdent(response)},
+				}}},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
+			},
+			// flusher.Flush()
+			&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
+			// return nil
+			&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
+		)
+	}
 
 	return &ast.FuncLit{
 		Type: &ast.FuncType{

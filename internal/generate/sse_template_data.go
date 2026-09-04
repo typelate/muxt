@@ -33,7 +33,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		return datastarSSETemplateDataDecls(file, config)
 	}
 	typeIdent := config.SSETemplateDataType
-	return []ast.Decl{
+	decls := []ast.Decl{
 		sseTemplateDataType(file, typeIdent),
 		sseTemplateDataStringMethod(typeIdent),
 		sseTemplateDataReceiverMethod(typeIdent),
@@ -44,8 +44,14 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
 		sseTemplateDataPathMethod(config),
-		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
+	if !config.WireTypelateSSE {
+		// Under --wire-typelate-sse the closure maps the setter fields to
+		// MessageOption values and sse.Response writes the frames, so the
+		// generated WriteTo wire writer is not emitted.
+		decls = append(decls, sseTemplateDataWriteToMethod(file, typeIdent))
+	}
+	return decls
 }
 
 // datastarSSETemplateDataDecls emits SSETemplateData for a --output-datastar
