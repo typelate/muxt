@@ -41,7 +41,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
-	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type) {
+	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
 		pos := asteval.NewParseNodePosition(tree, node)
 		refs[node.Name] = append(refs[node.Name], TemplateReference{
 			Position: pos,
