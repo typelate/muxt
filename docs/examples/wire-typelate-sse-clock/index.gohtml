@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang='us-en'>
+<head>
+	<meta charset='UTF-8'>
+	<title>wire typelate sse - muxt example</title>
+</head>
+<body>
+{{block `GET /time sse(Clock(ctx, execute))` .}}{{.Event "tick"}}<time>{{.Result.Format "15:04:05"}}</time>{{end}}
+</body>
+</html>
+
+{{- define "GET /{$} Index()"}}{{template "index.gohtml" .}}{{end}}
