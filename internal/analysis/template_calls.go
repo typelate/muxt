@@ -40,7 +40,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, 
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
-	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type) {
+	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
 		refs[tree.Name] = append(refs[tree.Name], TemplateReference{
 			Name:     node.Name,
 			Kind:     ParseTemplateNode,
