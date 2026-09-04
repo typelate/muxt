@@ -11,7 +11,6 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/typelate/check v0.4.0
 	github.com/typelate/dom v0.9.0
-	github.com/typelate/sse v0.2.0
 	golang.org/x/net v0.58.0
 	golang.org/x/tools v0.49.0
 	rsc.io/script v0.0.2
