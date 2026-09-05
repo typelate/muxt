@@ -2,7 +2,10 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-Error: duplicate route pattern "GET /": first defined at $WORK/admin/index.gohtml:3:11, also defined at $WORK/public/index.gohtml:3:11
+Error:
+duplicate route pattern "GET /"
+$WORK/admin/index.gohtml:3:11: first defined here
+$WORK/public/index.gohtml:3:11: also defined here
 -- go.mod --
 module example.com
 

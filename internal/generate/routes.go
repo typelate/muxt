@@ -191,7 +191,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, logger); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -276,7 +276,12 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	return generatedFiles, nil
 }
 
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger) error {
+// hydrateGroup resolves each definition's call. When noteSynthesized
+// is set (a --use-receiver-type run with a non-nil logger), methods the
+// named receiver does not define are announced with their inferred
+// signatures; the default mode synthesizes every method by design, so
+// it stays quiet.
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized bool) error {
 	for i := range defs {
 		if defs[i].FunctionIdentifier() == nil {
 			continue
@@ -284,10 +289,12 @@ func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, tem
 		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages()); err != nil {
 			return err
 		}
-		for _, sig := range defs[i].SynthesizedMethods() {
-			// The result is any until the method exists, so field checks
-			// on .Result are deferred; say so where it originates.
-			logger.Printf("note: %s does not define %s; the generated RoutesReceiver declares this inferred signature — implement the method to type-check the template against real types", receiver.Obj().Name(), sig)
+		if noteSynthesized {
+			for _, sig := range defs[i].SynthesizedMethods() {
+				// The result is any until the method exists, so field checks
+				// on .Result are deferred; say so where it originates.
+				logger.Printf("note: %s does not define %s; the generated RoutesReceiver declares this inferred signature — implement the method to type-check the template against real types", receiver.Obj().Name(), sig)
+			}
 		}
 		if err := accumulateReceiverMethods(defs[i].FunctionIdentifier().Name, defs[i].Signature(), defs[i].IsMethod(), defs[i].Arguments, file, receiverInterface); err != nil {
 			return err
@@ -505,7 +512,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, logger); err != nil {
+	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil); err != nil {
 		return nil, err
 	}
 	for i := range defs {

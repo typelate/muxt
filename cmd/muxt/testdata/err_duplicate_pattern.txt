@@ -2,7 +2,10 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-Error: duplicate route pattern "GET /": first defined at $WORK/template.gohtml:1:11, also defined at $WORK/template.gohtml:5:11
+Error:
+duplicate route pattern "GET /"
+$WORK/template.gohtml:1:11: first defined here
+$WORK/template.gohtml:5:11: also defined here
 -- template.gohtml --
 {{define "GET / Greetings()" }}
 	<h1>Hello, world!</h1>
