@@ -6,6 +6,8 @@ How `muxt check` validates template actions at compile time.
 
 `muxt check` performs static analysis of Go templates. Since `html/template` uses reflection at runtime, static analysis cannot catch all errors. Use concrete types to maximize type checking coverage.
 
+The contract, precisely: check validates **templates against Go types** — it is not `go build`. A package with Go syntax or type errors does not fail check on its own (the compiler owns that); run `go build` alongside check in CI. Route templates that have no generated handler yet fail check with `run muxt generate to wire them up`, so generate must run before check in a fresh checkout.
+
 ## How It Works
 
 1. **Resolve the templates variable:** `muxt check` fails if the configured variable (default `templates`) isn't found

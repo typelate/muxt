@@ -1,6 +1,8 @@
 # CLI Reference
 
-Complete specification for `muxt` command-line interface. Use during setup and CI configuration.
+Complete specification for the `muxt` command-line interface.
+
+muxt loads Go packages the way the `go` command does and inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
 
 ## Quick Reference
 
@@ -118,7 +120,9 @@ muxt -C ./web generate --use-receiver-type=Server
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| Non-zero | Error (message on stderr) |
+| `1` | Error (message on stderr); every failure exits `1` |
+
+`muxt check` does not accept `--use-receiver-type`: it resolves receiver types from the generated routes file, so run `muxt generate` first.
 
 ---
 

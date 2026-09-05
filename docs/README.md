@@ -2,6 +2,11 @@
 
 Type-safe HTTP handlers from Go HTML templates.
 
+## How-to guides
+
+- **[Structure a project for testing](how-to/receiver-package-and-testing.md)** - Receiver in a library package, sqlc storage, httptest through the generated routes
+- **[Build a Datastar live view](how-to/datastar-live-view.md)** - Element patches, signals both directions, .Path inside Datastar attributes
+
 ## Reference
 
 - **[CLI Overview](reference/cli.md)** - Commands and flags
@@ -24,7 +29,6 @@ Type-safe HTTP handlers from Go HTML templates.
 - **[Manifesto](explanation/manifesto.md)** - Core principles
 - **[Motivation](explanation/motivation.md)** - Why Muxt exists
 - **[Complexity is the Enemy](explanation/complexity-is-the-enemy.md)**
-- **[Go Proverbs and Muxt](explanation/go-proverbs-and-muxt.md)**
 - **[Advanced Patterns](explanation/advanced-patterns.md)**
 - **[Package Structure](explanation/package-structure.md)**
 - **[Architecture Decisions](explanation/decisions/)**
@@ -47,4 +51,4 @@ Type-safe HTTP handlers from Go HTML templates.
 
 ---
 
-Organized by [Diátaxis](https://diataxis.fr/): Reference (specs), Explanation (concepts), Tutorials (walkthroughs), Examples (how-to code). Task-oriented workflows are in the repository's AI assistant skills (`.claude/skills/`).
+Organized by [Diátaxis](https://diataxis.fr/): Tutorials (walkthroughs), How-to guides (task recipes), Reference (specs), and Explanation (concepts). The examples are runnable companions to the how-to guides.

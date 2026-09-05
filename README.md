@@ -28,6 +28,8 @@ go install github.com/typelate/muxt@latest
 
 Or as a project tool: `go get -tool github.com/typelate/muxt`. Pre-built binaries are also attached to each [release](https://github.com/typelate/muxt/releases).
 
+muxt loads Go packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
+
 ## Template Name Syntax
 
 This is what muxt uses to map `Go` `<->` `HTML`.

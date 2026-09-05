@@ -1,6 +1,6 @@
 # Call Parameters Reference
 
-Parameters in call expressions determine how Muxt generates handlers and parses request data. Use this reference when reviewing parameter bindings with team members.
+Parameters in call expressions determine how Muxt generates handlers and parses request data.
 
 ## Parameter Binding Quick Reference
 
@@ -57,7 +57,7 @@ type RoutesReceiver interface {
 
 Generated handler parses `id` from string to `int` automatically. Parse failures return 400 Bad Request.
 
-Always use `--use-receiver-type` for production. Type safety prevents runtime errors.
+Use `--use-receiver-type` once your receiver methods exist: muxt then binds arguments against the real signatures instead of inferring untyped ones.
 
 [howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)
 
@@ -71,9 +71,10 @@ Muxt auto-parses path and form parameters to these types:
 | **Unsigned** | `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint` | Base 10 |
 | **Boolean** | `bool` | `strconv.ParseBool` | Accepts: `1`, `t`, `T`, `true`, `True`, `TRUE` and the `0`/`f`/`false` equivalents |
 | **String** | `string` | None | Passed through |
-| **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing |
+| **Floats** | `float64`, `float32` | `strconv.ParseFloat` | Form and multipart fields only; path values and `lastEventID` reject floats by design |
+| **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing; `time.Time` qualifies (`*time.Time` implements it) |
 
-**Parse failures:** Return 400 Bad Request automatically.
+**Parse failures:** Return 400 Bad Request automatically. For plain routes the handler still renders the route template with a zero-value `.Result` and the parse error appended to `.Err`; sse routes respond 400 before the stream is established.
 
 [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
 
@@ -223,6 +224,8 @@ func (s Server) CreateUser(ctx context.Context, u User) (User, error)
 - If the receiver method is not yet defined, the parameter synthesizes as
   `json.RawMessage` so template-first iteration passes the raw payload through.
 
+Diagnostics echo `signals` in its desugared form: an error about the call may print `unmarshalJSON(body)` where your template says `signals`.
+
 Under `--output-datastar` the reserved `signals` argument is shorthand for
 `unmarshalJSON(body)` — Datastar sends the page's signal state as the JSON
 request body, so both spellings bind identically. Without the flag, `signals`
@@ -242,7 +245,7 @@ same by construction. On GET the bound values are the query string and the
 
 ## Server-Sent Events
 
-Wrapping the method call in `sse(...)` makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback at the `execute` argument's position. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+Wrapping the method call in `sse` — `sse(Stream(ctx, execute))` — makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback at the `execute` argument's position. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
 
 ```gotmpl
 {{define "GET /clock sse(Clock(ctx, execute))"}}{{.Result}}{{end}}
@@ -270,7 +273,8 @@ func (s Server) Clock(ctx context.Context, execute func(string) error) {
 | Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
 | Not allowed | a `response` argument |
 | Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
-| Under `--output-datastar` | `.Event` is replaced by the fixed `datastar-patch-elements` event name; `.Selector`, `.Mode`, and `.UseViewTransition` setters become the patch option lines. A `Signals`-suffixed callback (`countsSignals func(T) error`) marshals its argument as a `datastar-patch-signals` event |
+| Under `--output-datastar` | `.Event` is replaced by the fixed `datastar-patch-elements` event name; `.Selector`, `.Mode`, and `.UseViewTransition` setters become the patch option lines. |
+| `Signals`-suffixed callbacks | The suffix is load-bearing: under `--output-datastar`, a callback argument whose name ends in `Signals` (`countsSignals func(T) error`) marshals its argument as a `datastar-patch-signals` event instead of rendering a template. The shape must be exactly `func(T) error`. Renaming away the suffix reclassifies the argument as an sse render callback that wants a `{{define}}` of its own name. An sse route may omit the render callback entirely — the stream then carries only signal patches |
 | Response headers | `Content-Type: text/event-stream`, `Cache-Control: no-store`, `Connection: keep-alive` |
 | Undefined method | Synthesized as `func(any) error` |
 | Extra callbacks | `sse`-prefixed arguments (`sse(Events(sseClock, execute, sseMetrics))`) each render the same-named template |
