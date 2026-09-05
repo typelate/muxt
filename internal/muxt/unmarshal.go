@@ -31,6 +31,8 @@ const (
 	UnmarshalUint16
 	UnmarshalUint32
 	UnmarshalUint64
+	UnmarshalFloat32
+	UnmarshalFloat64
 	UnmarshalTextUnmarshaler
 )
 
@@ -67,6 +69,10 @@ func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 			return UnmarshalUint32
 		case "uint64":
 			return UnmarshalUint64
+		case "float32":
+			return UnmarshalFloat32
+		case "float64":
+			return UnmarshalFloat64
 		}
 	case *types.Named:
 		if encPkg, ok := findPackageTypes(pl, "encoding"); ok {
@@ -79,31 +85,49 @@ func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 	return UnmarshalUnsupported
 }
 
-// supportedUnmarshalTypes names the types a form field or path value
-// parses into, for error messages about everything else.
+// supportedUnmarshalTypes names the types a path value or lastEventID
+// parameter parses into, for error messages about everything else.
+// Floats are excluded by design: they parse ambiguously and format
+// lossily, which route paths cannot afford.
 const supportedUnmarshalTypes = "string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler"
 
-// checkUnmarshalable reports whether tp parses from a string, matching the
-// error wording of the pre-hydration generator: unsupported basic types name
-// the type directly, other types render in Go syntax. Both wordings list
-// the supported set so the fix needs no doc lookup.
+// supportedUnmarshalFieldTypes names the types a form or multipart
+// struct field parses into: fields also accept floats.
+const supportedUnmarshalFieldTypes = "float64, float32, " + supportedUnmarshalTypes
+
+// unsupportedTypeError matches the error wording of the pre-hydration
+// generator: unsupported basic types name the type directly, other
+// types render in Go syntax. Both wordings list the supported set so
+// the fix needs no doc lookup.
+func unsupportedTypeError(tp types.Type, qual types.Qualifier, supported string) error {
+	if _, ok := tp.(*types.Basic); ok {
+		return fmt.Errorf("method param type %s not supported (supported: %s; bind as string and parse it yourself for other values)", tp.String(), supported)
+	}
+	return fmt.Errorf("unsupported type: %s (supported: %s)", types.TypeString(tp, qual), supported)
+}
+
+// checkUnmarshalable reports whether tp parses from a form field's
+// string value.
 func checkUnmarshalable(pl []*packages.Package, tp types.Type, qual types.Qualifier) error {
 	if UnmarshalMethodFor(pl, tp) != UnmarshalUnsupported {
 		return nil
 	}
-	if _, ok := tp.(*types.Basic); ok {
-		return fmt.Errorf("method param type %s not supported (supported: %s; bind as string and parse it yourself for other values)", tp.String(), supportedUnmarshalTypes)
-	}
-	return fmt.Errorf("unsupported type: %s (supported: %s)", types.TypeString(tp, qual), supportedUnmarshalTypes)
+	return unsupportedTypeError(tp, qual, supportedUnmarshalFieldTypes)
 }
 
-// checkParsedArgument validates a path value or lastEventID parameter: it
-// either receives the raw string or parses from one.
+// checkParsedArgument validates a path value or lastEventID parameter:
+// it either receives the raw string or parses from one. Floats are
+// rejected here even though form fields accept them.
 func checkParsedArgument(pl []*packages.Package, paramType types.Type, qual types.Qualifier) error {
 	if types.AssignableTo(types.Universe.Lookup("string").Type(), paramType) {
 		return nil
 	}
-	return checkUnmarshalable(pl, paramType, qual)
+	switch UnmarshalMethodFor(pl, paramType) {
+	case UnmarshalUnsupported, UnmarshalFloat32, UnmarshalFloat64:
+		return unsupportedTypeError(paramType, qual, supportedUnmarshalTypes)
+	default:
+		return nil
+	}
 }
 
 const (

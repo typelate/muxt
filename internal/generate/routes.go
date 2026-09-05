@@ -1146,6 +1146,10 @@ func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp s
 		return parseBlock(tmp, astgen.StrconvParseUint32Call(file, str), validations, errBlock, convert), nil
 	case muxt.UnmarshalUint64:
 		return parseBlock(tmp, astgen.StrconvParseUint64Call(file, str), validations, errBlock, assignment), nil
+	case muxt.UnmarshalFloat32:
+		return parseBlock(tmp, astgen.StrconvParseFloatCall(file, str, 32), validations, errBlock, convert), nil
+	case muxt.UnmarshalFloat64:
+		return parseBlock(tmp, astgen.StrconvParseFloatCall(file, str, 64), validations, errBlock, assignment), nil
 	case muxt.UnmarshalString:
 		if len(validations) == 0 {
 			assign := assignment(str)
