@@ -1,0 +1,75 @@
+# Form struct fields parse float64 and float32 values with strconv.ParseFloat.
+# Floats stay unsupported as path parameters by design; see call_test.go.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /sales AddSale(ctx, form)" -}}price={{.Result.Price}} ratio={{.Result.Ratio}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type SaleForm struct {
+	Price float64 `name:"price"`
+	Ratio float32 `name:"ratio"`
+}
+
+type Server struct{}
+
+func (Server) AddSale(_ context.Context, f SaleForm) (SaleForm, error) { return f, nil }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func postForm(t *testing.T, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	req := httptest.NewRequest(http.MethodPost, "/sales", strings.NewReader(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestFloatFormFields(t *testing.T) {
+	t.Run("floats parse", func(t *testing.T) {
+		rec := postForm(t, url.Values{"price": []string{"19.99"}, "ratio": []string{"0.5"}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "price=19.99") || !strings.Contains(body, "ratio=0.5") {
+			t.Errorf("body %q does not contain the parsed float values", body)
+		}
+	})
+	t.Run("a bad float responds 400", func(t *testing.T) {
+		rec := postForm(t, url.Values{"price": []string{"abc"}, "ratio": []string{"0.5"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+}
