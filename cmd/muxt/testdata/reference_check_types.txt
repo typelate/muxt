@@ -26,11 +26,8 @@ go 1.22
 package server
 
 import (
-	_ "embed"
-	"testing"
-
-	"net/http"
-	"net/http/httptest"
+	"embed"
+	"html/template"
 )
 
 //go:embed *.gohtml

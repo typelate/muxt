@@ -51,6 +51,10 @@ func TestEntrypoint(t *testing.T) {
 }
 
 func Test(t *testing.T) {
+	// The scripts extract scratch modules that are never part of a
+	// workspace; a GOWORK from the invoking environment must not leak
+	// into their package loading.
+	t.Setenv("GOWORK", "off")
 	e := script.NewEngine()
 	e.Quiet = true
 	e.Cmds = scripttest.DefaultCmds()

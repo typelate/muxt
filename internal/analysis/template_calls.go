@@ -44,7 +44,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, 
 		refs[tree.Name] = append(refs[tree.Name], TemplateReference{
 			Name:     node.Name,
 			Kind:     ParseTemplateNode,
-			Position: asteval.NewParseNodePosition(tree, node),
+			Position: check.ParseNodePosition(tree, node),
 			data:     data,
 		})
 	}

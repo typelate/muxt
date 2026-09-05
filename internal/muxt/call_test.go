@@ -11,6 +11,9 @@ import (
 )
 
 func TestArgument(t *testing.T) {
+	// The testdata module is never part of a workspace; a GOWORK from the
+	// invoking environment must not leak into its package loading.
+	t.Setenv("GOWORK", "off")
 	fileSet := token.NewFileSet()
 	packageList, err := packages.Load(&packages.Config{
 		Fset: fileSet,

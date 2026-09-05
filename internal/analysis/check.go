@@ -34,14 +34,10 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	var errs []error
 
 	for _, tv := range config.TemplatesVariables {
-		ts, fm, err := asteval.Templates(wd, tv, routesPkg)
+		_, global, ts, err := asteval.LoadTemplates(wd, tv, pl)
 		if err != nil {
 			return err
 		}
-		fns := check.DefaultFunctions(routesPkg.Types)
-		fns = fns.Add(check.Functions(fm))
-
-		global := check.NewGlobal(routesPkg.Types, routesPkg.Fset, asteval.NewForrest(ts), fns)
 
 		executedTemplates := make(map[string][]TemplateExecution)
 
@@ -79,7 +75,7 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 			log.Println("Unused templates:")
 			for _, name := range unusedTemplates {
 				t := ts.Lookup(name)
-				log.Printf("  - %s: %q", asteval.NewParseNodePosition(t.Tree, t.Tree.Root), name)
+				log.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
 			}
 			errs = append(errs, fmt.Errorf("unused templates %d", len(unusedTemplates)))
 		}
@@ -192,7 +188,7 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 	}
 	tree := ts2.Tree
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, tp types.Type, _ check.Definition) {
-		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(asteval.NewParseNodePosition(tree, node), node, node.Name, dataType))
+		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(check.ParseNodePosition(tree, node), node, node.Name, dataType))
 	}
 	global.Qualifier = qualifier
 	if err := check.Execute(global, tree, dataType); err != nil {

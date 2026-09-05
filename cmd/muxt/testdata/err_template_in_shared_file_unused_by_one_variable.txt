@@ -22,17 +22,17 @@ cmpenv stderr want-err-both.txt
 
 -- want-err-a.txt --
 Unused templates:
-  - $WORK/shared.gohtml:3:18: "for b"
+  - $WORK/shared.gohtml:3:19: "for b"
 Error: fail: 1 error
 -- want-err-b.txt --
 Unused templates:
-  - $WORK/shared.gohtml:2:18: "for a"
+  - $WORK/shared.gohtml:2:19: "for a"
 Error: fail: 1 error
 -- want-err-both.txt --
 Unused templates:
-  - $WORK/shared.gohtml:3:18: "for b"
+  - $WORK/shared.gohtml:3:19: "for b"
 Unused templates:
-  - $WORK/shared.gohtml:2:18: "for a"
+  - $WORK/shared.gohtml:2:19: "for a"
 Error: fail: 2 errors
 -- a.gohtml --
 {{define "GET /a"}}{{template "for a"}}{{end}}
