@@ -49,11 +49,8 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 		// surfaces with its position instead of leaving the template to
 		// be reported as merely unused below.
 		if _, err := muxt.Definitions(ts, tv, lt.Templates); err != nil {
-			if nameErr, ok := errors.AsType[*muxt.NameError](err); ok {
-				var sb strings.Builder
-				_ = nameErr.DetailedError(&sb)
-				log.Print(sb.String())
-				log.Println(nameErr.Error())
+			if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
+				log.Println(multiLine.MultiLineError())
 				log.Println()
 			} else {
 				log.Println(err)

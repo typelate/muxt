@@ -37,8 +37,8 @@ const (
 // UnmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
-// encoding.TextUnmarshaler. TextUnmarshaler detection requires the encoding
-// package to be reachable in the load graph.
+// encoding.TextUnmarshaler. asteval.LoadPackages always loads the encoding
+// package (like fmt), so detection needs nothing from user code.
 func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 	switch t := tp.(type) {
 	case *types.Basic:
@@ -80,10 +80,7 @@ func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 }
 
 // supportedUnmarshalTypes names the types a form field or path value
-// parses into, for error messages about everything else. Listing
-// TextUnmarshaler is safe: asteval.LoadPackages always includes the
-// encoding package in its load patterns, so detection is active in
-// every muxt command.
+// parses into, for error messages about everything else.
 const supportedUnmarshalTypes = "string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler"
 
 // checkUnmarshalable reports whether tp parses from a string, matching the
