@@ -241,10 +241,11 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
 				if nameErr, ok := errors.AsType[*muxt.NameError](err); ok {
-					// The long form shows the template name with a marker
-					// under the failing segment, then the short form on its
-					// own line without cobra's "Error: " prefix.
+					// An "Error:" heading, then the template name with a
+					// marker under the failing segment, then the short form
+					// with the position; cobra's inline prefix is silenced.
 					cmd.SilenceErrors = true
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
 					_ = nameErr.DetailedError(cmd.ErrOrStderr())
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), nameErr.Error())
 				}

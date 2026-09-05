@@ -2,6 +2,7 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
+Error:
   GET /x sse(Endpoint(response))
              ^^^^^^^^^^^^^^^^^^
 $WORK/template.gohtml:1:24: sse handler cannot use a "response" argument

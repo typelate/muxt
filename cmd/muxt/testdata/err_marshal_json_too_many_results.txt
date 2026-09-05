@@ -2,6 +2,7 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
+Error:
   GET /api/user marshalJSON(GetUser(ctx))
                 ^^^^^^^^^^^^^^^^^^^^^^^^^
 $WORK/template.gohtml:1:27: marshalJSON allows at most two results but GetUser(_ context.Context) (User, int, error) has 3

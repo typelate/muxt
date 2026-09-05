@@ -2,6 +2,7 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
+Error:
   POST /users CreateUser(ctx, unmarshalJSON(form))
                               ^^^^^^^^^^^^^^^^^^^
 $WORK/template.gohtml:1:41: the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)
