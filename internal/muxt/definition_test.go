@@ -1,8 +1,11 @@
 package muxt_test
 
 import (
+	"errors"
 	"html/template"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,5 +78,44 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 			assert.Equalf(t, "/abc", np, "expected normalized pattern (raw %q, normalized %q)", rawPat, np)
 		}
 		require.ErrorContains(t, muxt.CheckForDuplicatePatterns(definitions), `duplicate route pattern "/abc"`, "it should find the duplicate")
+	})
+
+	t.Run("the short form is one line and the long form has one location per line", func(t *testing.T) {
+		dupErr := &muxt.DuplicatePatternError{
+			Pattern:   "GET /",
+			Locations: []string{"index.gohtml:1:11", "index.gohtml:5:11", "other.gohtml:2:11"},
+		}
+		require.Equal(t, `duplicate route pattern "GET /"`, dupErr.Error())
+		var sb strings.Builder
+		require.NoError(t, dupErr.DetailedError(&sb))
+		require.Equal(t, "index.gohtml:1:11: first defined here\nindex.gohtml:5:11: also defined here\nother.gohtml:2:11: also defined here\n", sb.String())
+	})
+
+	t.Run("unknown locations leave the long form empty", func(t *testing.T) {
+		dupErr := &muxt.DuplicatePatternError{Pattern: "GET /"}
+		var sb strings.Builder
+		require.NoError(t, dupErr.DetailedError(&sb))
+		require.Empty(t, sb.String())
+	})
+
+	t.Run("all definitions of the pattern are reported in a stable order", func(t *testing.T) {
+		// Three different handler calls across two files, one normalized
+		// pattern. The template set iterates in map order, so the error
+		// must sort: by file, then by position, then by name.
+		fsys := fstest.MapFS{
+			"b.gohtml": &fstest.MapFile{Data: []byte(`{{define "GET /  F2()"}}b{{end}}{{define "GET / F3()"}}c{{end}}`)},
+			"a.gohtml": &fstest.MapFile{Data: []byte(`{{define "GET  / F1()"}}a{{end}}`)},
+		}
+		ts := template.Must(template.ParseFS(fsys, "*.gohtml"))
+		definitions, err := muxt.Definitions(ts, "ts", nil)
+		require.NoError(t, err)
+		require.Len(t, definitions, 3)
+		for range 8 {
+			err := muxt.CheckForDuplicatePatterns(definitions)
+			dupErr, ok := errors.AsType[*muxt.DuplicatePatternError](err)
+			require.True(t, ok)
+			require.Equal(t, "GET /", dupErr.Pattern)
+			require.Equal(t, []string{"a.gohtml", "b.gohtml", "b.gohtml"}, dupErr.Locations)
+		}
 	})
 }

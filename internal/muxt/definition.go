@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"html/template"
+	"io"
 	"net/http"
 	"regexp"
 	"slices"
@@ -76,22 +77,75 @@ func templateSourceFile(t *template.Template) string {
 	return t.Tree.ParseName
 }
 
+// CheckForDuplicatePatterns fails when distinct route template
+// definitions produce the same normalized pattern. Templates that share
+// a NAME never reach this check: html/template keeps only the last
+// definition of a name, so overriding a template is allowed.
 func CheckForDuplicatePatterns(templates []Definition) error {
-	patterns := make(map[string]Definition)
+	patterns := make(map[string][]Definition)
+	order := make([]string, 0, len(templates))
 	for _, def := range templates {
 		pat := def.Pattern()
-		other, ok := patterns[pat]
-		if ok {
-			err := fmt.Errorf("duplicate route pattern %q", pat)
-			if a, b := other.definitionLocation(), def.definitionLocation(); a != "" && b != "" {
-				return fmt.Errorf("%w: first defined at %s, also defined at %s", err, a, b)
+		if _, ok := patterns[pat]; !ok {
+			order = append(order, pat)
+		}
+		patterns[pat] = append(patterns[pat], def)
+	}
+	for _, pat := range order {
+		defs := patterns[pat]
+		if len(defs) < 2 {
+			continue
+		}
+		// Definitions with the same pattern tie in the byPathThenMethod
+		// ordering and the template set iterates in map order, so the
+		// group is sorted here to keep the report stable across runs.
+		slices.SortFunc(defs, func(a, b Definition) int {
+			if n := cmp.Compare(a.sourceFile, b.sourceFile); n != 0 {
+				return n
 			}
-			if a, b := def.SourceFile(), other.SourceFile(); a != "" && b != "" && a != b {
-				return fmt.Errorf("duplicate template in %s and %s: %w", a, b, err)
+			if n := cmp.Compare(a.namePosition.Offset, b.namePosition.Offset); n != 0 {
+				return n
 			}
+			return cmp.Compare(a.name, b.name)
+		})
+		dup := &DuplicatePatternError{Pattern: pat}
+		for _, def := range defs {
+			dup.Locations = append(dup.Locations, def.definitionLocation())
+		}
+		return dup
+	}
+	return nil
+}
+
+// DuplicatePatternError reports template definitions whose names all
+// produce the same route pattern. Error is the short single-line form;
+// DetailedError writes one definition location per line, path first,
+// so long absolute paths stay readable and clickable in a terminal.
+type DuplicatePatternError struct {
+	// Pattern is the normalized http.ServeMux pattern the names produce.
+	Pattern string
+
+	// Locations renders where each definition's name literal was
+	// written, in definition order: a file:line:col position, a bare
+	// file name, or "" when the source is unknown.
+	Locations []string
+}
+
+func (e *DuplicatePatternError) Error() string {
+	return fmt.Sprintf("duplicate route pattern %q", e.Pattern)
+}
+
+// DetailedError writes the location of every definition, one per line.
+func (e *DuplicatePatternError) DetailedError(w io.Writer) error {
+	note := "first defined here"
+	for _, location := range e.Locations {
+		if location == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "%s: %s\n", location, note); err != nil {
 			return err
 		}
-		patterns[pat] = def
+		note = "also defined here"
 	}
 	return nil
 }

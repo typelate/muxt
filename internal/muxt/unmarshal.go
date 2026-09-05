@@ -80,7 +80,10 @@ func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 }
 
 // supportedUnmarshalTypes names the types a form field or path value
-// parses into, for error messages about everything else.
+// parses into, for error messages about everything else. Listing
+// TextUnmarshaler is safe: asteval.LoadPackages always includes the
+// encoding package in its load patterns, so detection is active in
+// every muxt command.
 const supportedUnmarshalTypes = "string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler"
 
 // checkUnmarshalable reports whether tp parses from a string, matching the

@@ -253,6 +253,14 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 					for _, related := range nameErr.Related {
 						_, _ = fmt.Fprintln(cmd.ErrOrStderr(), related)
 					}
+				} else if dupErr, ok := errors.AsType[*muxt.DuplicatePatternError](err); ok {
+					// The short form on one line, then one definition
+					// location per line so long absolute paths stay
+					// readable and clickable.
+					cmd.SilenceErrors = true
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), dupErr.Error())
+					_ = dupErr.DetailedError(cmd.ErrOrStderr())
 				}
 				return err
 			}
