@@ -29,6 +29,11 @@ type NameError struct {
 	Offset int
 	Length int
 
+	// Related lists source positions that give the error context, such
+	// as where the handler method is defined. Each entry is a complete
+	// "file:line:col: note" line.
+	Related []string
+
 	err error
 }
 
@@ -109,6 +114,68 @@ func errAt(node ast.Node, format string, args ...any) error {
 	return &positionedError{pos: node.Pos(), end: node.End(), err: fmt.Errorf(format, args...)}
 }
 
+// errAtNode positions err at node unless it already carries a position.
+func errAtNode(node ast.Node, err error) error {
+	if err == nil {
+		return nil
+	}
+	switch err.(type) {
+	case *positionedError, *NameError:
+		return err
+	}
+	return &positionedError{pos: node.Pos(), end: node.End(), err: err}
+}
+
+// findIdent returns the identifier named name among the call's
+// arguments, searching nested calls, or nil.
+func findIdent(call *ast.CallExpr, name string) ast.Node {
+	if call == nil {
+		return nil
+	}
+	for _, a := range call.Args {
+		switch arg := a.(type) {
+		case *ast.Ident:
+			if arg.Name == name {
+				return arg
+			}
+		case *ast.CallExpr:
+			if node := findIdent(arg, name); node != nil {
+				return node
+			}
+		}
+	}
+	return nil
+}
+
+// argErrorf reports an error about the call argument named name,
+// falling back to an unpositioned error when the argument cannot be
+// found in the handler expression.
+func (def *Definition) argErrorf(name, format string, args ...any) error {
+	if node := findIdent(def.call, name); node != nil {
+		return errAt(node, format, args...)
+	}
+	return fmt.Errorf(format, args...)
+}
+
+// pathParamErrorf reports an error about the occurrence-th path
+// parameter named n, pointing at the name inside its braces.
+func (def *Definition) pathParamErrorf(n string, occurrence int, format string, args ...any) error {
+	needle := "{" + n
+	offset := def.spans.path[0]
+	rest := def.path
+	for i := 0; ; i++ {
+		idx := strings.Index(rest, needle)
+		if idx < 0 {
+			return def.spanErrorf(def.spans.path, format, args...)
+		}
+		if i == occurrence {
+			return def.nameErrorf(offset+idx+1, len(n), format, args...)
+		}
+		offset += idx + len(needle)
+		rest = rest[idx+len(needle):]
+	}
+}
+
 // handlerSpan spans the trimmed handler expression within the name,
 // falling back to the matched call segment when there is no handler.
 func (def *Definition) handlerSpan() [2]int {
@@ -148,5 +215,6 @@ func (def *Definition) finishNameError(err error, fallback [2]int) error {
 		ne.Position = pos
 	}
 	ne.SourceFile = def.sourceFile
+	ne.Related = append(ne.Related, def.related...)
 	return ne
 }

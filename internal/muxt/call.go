@@ -132,7 +132,9 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 	def.Arguments = args
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
-		return def.finishNameError(err, def.handlerSpan())
+		// Result-shape errors are about the method contract, so the
+		// marker points at the method identifier.
+		return def.finishNameError(errAtNode(def.fun, err), def.handlerSpan())
 	}
 	def.resultShape = shape
 	return def.finishNameError(resolveCallbackShapes(def), def.handlerSpan())
@@ -153,7 +155,7 @@ func resolveCallbackShapes(def *Definition) error {
 			// the receiver call.
 			callback := a.CallbackSignature()
 			if callback == nil || callback.Params().Len() != 1 || callback.Results().Len() != 1 || !types.Identical(callback.Results().At(0).Type(), types.Universe.Lookup("error").Type()) {
-				return fmt.Errorf("the %s signals callback must be a func(T) error; T is marshaled as the patch-signals payload", a.Identifier)
+				return def.argErrorf(a.Identifier, "the %s signals callback must be a func(T) error; T is marshaled as the patch-signals payload", a.Identifier)
 			}
 			a.callbackResult = callback.Params().At(0).Type()
 			a.callbackHasArg = true
@@ -168,9 +170,9 @@ func resolveCallbackShapes(def *Definition) error {
 		callback := a.CallbackSignature()
 		if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
 			if def.Representation == RepresentationSSE {
-				return fmt.Errorf("execute parameter for %s must be a function", def.fun.Name)
+				return def.argErrorf(a.Identifier, "execute parameter for %s must be a function", def.fun.Name)
 			}
-			return fmt.Errorf("execute argument for %s must be a func(...) error", def.fun.Name)
+			return def.argErrorf(a.Identifier, "execute argument for %s must be a func(...) error", def.fun.Name)
 		}
 		switch callback.Params().Len() {
 		case 0:
@@ -181,12 +183,12 @@ func resolveCallbackShapes(def *Definition) error {
 			a.callbackHasArg = true
 		default:
 			if def.Representation == RepresentationSSE {
-				return errors.New("sse callback must have zero or one parameter; wrap multiple values in a struct")
+				return def.argErrorf(a.Identifier, "sse callback must have zero or one parameter; wrap multiple values in a struct")
 			}
-			return errors.New("execute callback must have zero or one parameter; wrap multiple values in a struct")
+			return def.argErrorf(a.Identifier, "execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}
 		if def.Representation == RepresentationSSE && a.template == nil {
-			return fmt.Errorf("no template %q for sse argument %s", a.Identifier, a.Identifier)
+			return def.argErrorf(a.Identifier, "no template %q for sse argument %s", a.Identifier, a.Identifier)
 		}
 	}
 	return nil
@@ -200,6 +202,7 @@ func resolveCallbackShapes(def *Definition) error {
 func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, error) {
 	results := def.sig.Results()
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	sigStr := def.fun.Name + strings.TrimPrefix(types.TypeString(def.sig, qual), "func")
 	if def.Representation == RepresentationMarshalJSON {
 		return classifyMarshalJSONResultShape(def, results, errIface, qual)
 	}
@@ -210,14 +213,14 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 		case results.Len() == 1 && types.Implements(results.At(0).Type(), errIface):
 			return ResultShapeError, nil
 		default:
-			return ResultShapeInvalid, fmt.Errorf("method %s using the sse callback must return nothing or an error", def.fun.Name)
+			return ResultShapeInvalid, fmt.Errorf("sse handler method %s must return nothing or a single error", sigStr)
 		}
 	}
 	if slices.ContainsFunc(def.Arguments, func(a Argument) bool {
 		return a.Type == ArgumentTypeExecute && a.Identifier == TemplateNameScopeIdentifierExecute
 	}) {
 		if results.Len() != 1 || !types.Implements(results.At(0).Type(), errIface) {
-			return ResultShapeInvalid, fmt.Errorf("method %s using the execute callback must return only error", def.fun.Name)
+			return ResultShapeInvalid, fmt.Errorf("method %s receiving the execute callback must return only error", sigStr)
 		}
 		return ResultShapeError, nil
 	}
@@ -232,19 +235,20 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
 			return ResultShapeDataOK, nil
 		}
-		return ResultShapeInvalid, errors.New("expected last result to be either an error or a bool")
+		return ResultShapeInvalid, fmt.Errorf("the second result of %s must be an error or a bool, got %s", sigStr, types.TypeString(last, qual))
 	case 0:
-		return ResultShapeInvalid, fmt.Errorf("method for pattern %q has no results it should have one or two", def.name)
+		return ResultShapeInvalid, fmt.Errorf("method %s has no results; it should have one or two", sigStr)
 	default:
-		return ResultShapeInvalid, fmt.Errorf("method %s has %d results it should have one or two", def.fun.Name, results.Len())
+		return ResultShapeInvalid, fmt.Errorf("method %s has %d results; it should have one or two", sigStr, results.Len())
 	}
 }
 
 // checkNestedCallResultShape validates a nested call's results: one value,
 // optionally followed by an error or bool.
-func checkNestedCallResultShape(name string, sig *types.Signature) error {
+func checkNestedCallResultShape(name string, sig *types.Signature, qual types.Qualifier) error {
 	results := sig.Results()
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	sigStr := name + strings.TrimPrefix(types.TypeString(sig, qual), "func")
 	switch results.Len() {
 	case 1:
 		return nil
@@ -256,12 +260,26 @@ func checkNestedCallResultShape(name string, sig *types.Signature) error {
 		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
 			return nil
 		}
-		return errors.New("expected last result to be either an error or a bool")
+		return fmt.Errorf("the second result of %s must be an error or a bool, got %s", sigStr, types.TypeString(last, qual))
 	case 0:
-		return fmt.Errorf("method %s has no results it should have one or two", name)
+		return fmt.Errorf("method %s has no results; it should have one or two", sigStr)
 	default:
-		return fmt.Errorf("method %s has %d results it should have one or two", name, results.Len())
+		return fmt.Errorf("method %s has %d results; it should have one or two", sigStr, results.Len())
 	}
+}
+
+// definedHere returns a "file:line:col: name is defined here" note for
+// object, or "" when its source position is unknown (synthesized
+// methods, for instance, have no position).
+func definedHere(pl []*packages.Package, object types.Object) string {
+	if object == nil || !object.Pos().IsValid() || len(pl) == 0 || pl[0].Fset == nil {
+		return ""
+	}
+	position := pl[0].Fset.Position(object.Pos())
+	if position.Filename == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s: %s is defined here", position, object.Name())
 }
 
 // resolveCall resolves a single call expression (top-level or nested) against
@@ -275,7 +293,7 @@ func checkNestedCallResultShape(name string, sig *types.Signature) error {
 func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) (*types.Signature, bool, []Argument, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return nil, false, nil, fmt.Errorf("expected call to be a function identifier")
+		return nil, false, nil, errAt(call.Fun, "expected a function identifier, got: %s", astgen.Format(call.Fun))
 	}
 	isMethod := true
 	object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
@@ -293,6 +311,11 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			object = fn
 		}
 	}
+	if call == def.call {
+		if note := definedHere(pl, object); note != "" {
+			def.related = append(def.related, note)
+		}
+	}
 	sig := object.Type().(*types.Signature)
 	args := make([]Argument, 0, len(call.Args))
 	qual := typeQualifier(receiver.Obj().Pkg())
@@ -306,10 +329,10 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 				continue
 			}
 			if i >= paramCount {
-				return nil, false, nil, fmt.Errorf("execute argument for %s must be a func(...) error", fun.Name)
+				return nil, false, nil, errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
 			}
 			if _, ok := sig.Params().At(i).Type().Underlying().(*types.Signature); !ok {
-				return nil, false, nil, fmt.Errorf("execute argument for %s must be a func(...) error", fun.Name)
+				return nil, false, nil, errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
 			}
 		}
 		sigStr := fun.Name + strings.TrimPrefix(types.TypeString(sig, qual), "func")
@@ -329,7 +352,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			}
 			arg, err := newArgumentFromIdentifier(def, pl, argument, paramType, qual)
 			if err != nil {
-				return nil, false, nil, err
+				return nil, false, nil, errAtNode(argument, err)
 			}
 			args = append(args, arg)
 		case *ast.CallExpr:
@@ -356,8 +379,8 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			if err != nil {
 				return nil, false, nil, err
 			}
-			if err := checkNestedCallResultShape(name, nestedSig); err != nil {
-				return nil, false, nil, err
+			if err := checkNestedCallResultShape(name, nestedSig, qual); err != nil {
+				return nil, false, nil, errAtNode(argument.Fun, err)
 			}
 			args = append(args, Argument{
 				Identifier: name,
@@ -383,7 +406,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 		switch arg := a.(type) {
 		case *ast.Ident:
 			if arg.Name == TemplateNameScopeIdentifierExecute {
-				return nil, fmt.Errorf("method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
+				return nil, errAt(arg, "method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
 			if IsSSEArgument(arg.Name) {
 				hasSSE = true
@@ -396,7 +419,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			tp, ok := DefaultScopeType(pl, def, arg.Name)
 			if !ok {
-				return nil, fmt.Errorf("could not determine a type for %s", arg.Name)
+				return nil, errAt(arg, "could not determine a type for %s", arg.Name)
 			}
 			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
 		case *ast.CallExpr:
@@ -767,6 +790,8 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 		if id, ok := call.Args[0].(*ast.Ident); ok && id.Name == TemplateNameScopeIdentifierRequestBody {
 			return nil
 		}
+		// Point at the one wrong argument rather than the whole wrapper.
+		return errAt(call.Args[0], "the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
 	}
 	return errAt(call, "the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
 }

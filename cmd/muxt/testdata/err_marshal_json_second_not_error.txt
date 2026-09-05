@@ -4,8 +4,9 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
 Error:
   GET /api/user marshalJSON(GetUser(ctx))
-                ^^^^^^^^^^^^^^^^^^^^^^^^^
-$WORK/template.gohtml:1:27: marshalJSON requires the second result of GetUser(_ context.Context) (User, bool) to be an error, got bool
+                            ^^^^^^^
+$WORK/template.gohtml:1:39: marshalJSON requires the second result of GetUser(_ context.Context) (User, bool) to be an error, got bool
+$WORK/template.go:20:10: GetUser is defined here
 -- template.gohtml --
 {{- define "GET /api/user marshalJSON(GetUser(ctx))" -}}{{- end -}}
 -- go.mod --
