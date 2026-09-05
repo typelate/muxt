@@ -138,8 +138,11 @@ routing and parameter parsing muxt's own tests already cover.
 
 Three thicknesses, by where the fake sits:
 
-1. **Thin — fake `RoutesReceiver`.** Verifies wiring only. Use when
-   specifically testing handler generation behavior.
+1. **Thin — fake `RoutesReceiver`.** Verifies wiring and template control
+   flow: the fake's return values drive the rendered HTML, so each `{{if}}`,
+   `{{range}}`, and partial branch is cheap to reach — an empty list, a
+   populated one, an error state. Use it for template rendering behavior, not
+   business logic.
 2. **Medium — fake the service interfaces** (above). Fast, no I/O, covers
    most business logic. The default.
 3. **Thick — fake the services' own collaborators**, e.g. a
