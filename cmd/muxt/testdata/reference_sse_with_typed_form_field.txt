@@ -1,0 +1,84 @@
+# An sse route may bind a form struct with parsed (non-string) fields. A field
+# parse failure responds 400 before the event stream is established.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /allocations sse(CreateAllocation(ctx, form, execute))" -}}hours: {{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type AllocationForm struct {
+	Person string `name:"person"`
+	Hours  int    `name:"hours"`
+}
+
+type Server struct{}
+
+func (Server) CreateAllocation(_ context.Context, f AllocationForm, execute func(data int) error) error {
+	return execute(f.Hours)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func TestSSEFormFieldParse(t *testing.T) {
+	t.Run("a bad int responds 400 before the stream starts", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, Server{})
+		form := url.Values{"person": []string{"sam"}, "hours": []string{"abc"}}
+		req := httptest.NewRequest(http.MethodPost, "/allocations", strings.NewReader(form.Encode()))
+		req.Header.Set("content-type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if ct := rec.Header().Get("content-type"); strings.Contains(ct, "text/event-stream") {
+			t.Errorf("content-type = %q, the stream must not be established", ct)
+		}
+	})
+	t.Run("a good int streams the event", func(t *testing.T) {
+		mux := http.NewServeMux()
+		TemplateRoutes(mux, Server{})
+		form := url.Values{"person": []string{"sam"}, "hours": []string{"3"}}
+		req := httptest.NewRequest(http.MethodPost, "/allocations", strings.NewReader(form.Encode()))
+		req.Header.Set("content-type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if ct := rec.Header().Get("content-type"); !strings.Contains(ct, "text/event-stream") {
+			t.Errorf("content-type = %q, want text/event-stream", ct)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "hours:3") {
+			t.Errorf("body %q does not contain the rendered event data", body)
+		}
+	})
+}
