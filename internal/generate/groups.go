@@ -7,7 +7,6 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -22,7 +21,7 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 		byFile: make(map[string][]muxt.Definition),
 	}
 	for _, tv := range config.TemplatesVariables {
-		ts, _, err := asteval.Templates(tv, routesPkg)
+		ts, err := loadTemplates(tv, routesPkg)
 		if err != nil {
 			return result, err
 		}

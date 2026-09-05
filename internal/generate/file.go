@@ -16,8 +16,6 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
-
-	"github.com/typelate/muxt/internal/asteval"
 )
 
 type File struct {
@@ -42,7 +40,7 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 		packageIdentifiers: make(map[string]string),
 	}
 	file.addPackages(list)
-	pkg, found := asteval.PackageAtFilepath(list, filePath)
+	pkg, found := packageAtFilepath(list, filePath)
 	if !found {
 		return nil, fmt.Errorf("package not found for filepath %s", filePath)
 	}
@@ -51,7 +49,7 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 }
 
 func (file *File) Package(path string) (*packages.Package, bool) {
-	return asteval.PackageWithPath(file.packages, path)
+	return packageWithPath(file.packages, path)
 }
 
 func (file *File) addPackages(packages []*packages.Package) {

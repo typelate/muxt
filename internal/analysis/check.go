@@ -16,7 +16,6 @@ import (
 	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
 )
 
@@ -30,7 +29,7 @@ type CheckConfiguration struct {
 }
 
 func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) error {
-	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
+	routesPkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
 		return fmt.Errorf("package not found at %s", wd)
 	}
@@ -38,7 +37,7 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	var errs []error
 
 	for _, tv := range config.TemplatesVariables {
-		lt, err := asteval.LoadTemplates(wd, tv, pl)
+		lt, err := LoadTemplates(wd, tv, pl)
 		if err != nil {
 			return err
 		}

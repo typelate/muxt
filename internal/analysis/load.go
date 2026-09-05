@@ -1,4 +1,4 @@
-package asteval
+package analysis
 
 import (
 	"fmt"

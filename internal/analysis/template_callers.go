@@ -11,8 +11,6 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-
-	"github.com/typelate/muxt/internal/asteval"
 )
 
 type TemplateCallersConfiguration struct {
@@ -34,7 +32,7 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, lt *asteval.LoadedTemplates) (*TemplateCallers, error) {
+func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, lt *LoadedTemplates) (*TemplateCallers, error) {
 	global, ts := lt.Global, lt.HTML
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 

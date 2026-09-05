@@ -1,4 +1,4 @@
-package asteval_test
+package analysis_test
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/analysis"
 )
 
 // writeModule lays out a scratch module so templates load the way muxt
@@ -51,13 +51,13 @@ func TestTemplates(t *testing.T) {
 		"index.gohtml": `{{define "home"}}Hello, {{upper .Name}}{{end}}`,
 		"form.gohtml":  `{{define "create"}}<form></form>{{end}}`,
 	})
-	_, pl, err := asteval.LoadPackages(dir)
+	_, pl, err := analysis.LoadPackages(dir)
 	require.NoError(t, err)
-	pkg, ok := asteval.PackageAtFilepath(pl, dir)
+	pkg, ok := analysis.PackageAtFilepath(pl, dir)
 	require.True(t, ok)
 
 	t.Run("parses the embedded files", func(t *testing.T) {
-		ts, functions, err := asteval.Templates("templates", pkg)
+		ts, functions, err := analysis.Templates("templates", pkg)
 		require.NoError(t, err)
 
 		var names []string
@@ -73,12 +73,12 @@ func TestTemplates(t *testing.T) {
 	})
 
 	t.Run("unknown variable", func(t *testing.T) {
-		_, _, err := asteval.Templates("nope", pkg)
+		_, _, err := analysis.Templates("nope", pkg)
 		require.ErrorContains(t, err, "variable nope not found")
 	})
 
 	t.Run("load templates wires the global", func(t *testing.T) {
-		lt, err := asteval.LoadTemplates(dir, "templates", pl)
+		lt, err := analysis.LoadTemplates(dir, "templates", pl)
 		require.NoError(t, err)
 		require.NotNil(t, lt.HTML)
 
@@ -100,14 +100,14 @@ var texts = template.Must(template.New("t").Parse(` + "`{{define \"note\"}}hi{{e
 func main() {}
 `,
 	})
-	_, pl, err := asteval.LoadPackages(dir)
+	_, pl, err := analysis.LoadPackages(dir)
 	require.NoError(t, err)
-	pkg, ok := asteval.PackageAtFilepath(pl, dir)
+	pkg, ok := analysis.PackageAtFilepath(pl, dir)
 	require.True(t, ok)
 
 	// Muxt introspects trees without executing, so a text/template
 	// variable loads through an html/template value with the same trees.
-	ts, _, err := asteval.Templates("texts", pkg)
+	ts, _, err := analysis.Templates("texts", pkg)
 	require.NoError(t, err)
 	require.NotNil(t, ts.Lookup("note"))
 }

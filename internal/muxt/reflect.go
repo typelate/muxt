@@ -1,4 +1,4 @@
-package asteval
+package muxt
 
 import (
 	"fmt"
@@ -7,12 +7,12 @@ import (
 	"strconv"
 )
 
-const IntBitLength = 32 << (^uint(0) >> 63)
+const intBitLength = 32 << (^uint(0) >> 63)
 
-func ParseWithType(val string, tp types.Type) (reflect.Value, error) {
+func parseWithType(val string, tp types.Type) (reflect.Value, error) {
 	switch tp.Underlying().String() {
 	case reflect.Int.String():
-		n, err := strconv.ParseInt(val, 10, IntBitLength)
+		n, err := strconv.ParseInt(val, 10, intBitLength)
 		if err != nil {
 			return reflect.Value{}, err
 		}
@@ -42,7 +42,7 @@ func ParseWithType(val string, tp types.Type) (reflect.Value, error) {
 		}
 		return reflect.ValueOf(n), nil
 	case reflect.Uint.String():
-		n, err := strconv.ParseUint(val, 10, IntBitLength)
+		n, err := strconv.ParseUint(val, 10, intBitLength)
 		if err != nil {
 			return reflect.Value{}, err
 		}

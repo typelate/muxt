@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -59,7 +58,7 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 }
 
 func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) ([]*Routes, error) {
-	pkg, ok := asteval.PackageAtFilepath(pl, wd)
+	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
 		return nil, fmt.Errorf("package not found in working directory")
 	}
@@ -70,7 +69,7 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var receiver *types.Named
 	if config.ReceiverType != "" {
 		var err error
-		receiver, err = asteval.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
+		receiver, err = FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +78,7 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var results []*Routes
 
 	for _, tv := range config.TemplatesVariables {
-		ts, functions, err := asteval.Templates(tv, pkg)
+		ts, functions, err := Templates(tv, pkg)
 		if err != nil {
 			return nil, err
 		}

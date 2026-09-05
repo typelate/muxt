@@ -24,7 +24,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -71,7 +70,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				return err
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, rootCommandConfig.ReceiverPackage)
+			fileSet, pl, err := analysis.LoadPackages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
 			}
@@ -141,7 +140,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				}
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory)
+			fileSet, pl, err := analysis.LoadPackages(*workingDirectory)
 			if err != nil {
 				return err
 			}
@@ -233,7 +232,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			}
 			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, config.ReceiverPackage)
+			fileSet, pl, err := analysis.LoadPackages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
 				return err
 			}
@@ -430,14 +429,14 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			fileSet, pl, err := asteval.LoadPackages(*wd)
+			fileSet, pl, err := analysis.LoadPackages(*wd)
 			if err != nil {
 				return err
 			}
 			combined := &analysis.TemplateCallers{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				lt, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := analysis.LoadTemplates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
@@ -483,14 +482,14 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			_, pl, err := asteval.LoadPackages(*wd)
+			_, pl, err := analysis.LoadPackages(*wd)
 			if err != nil {
 				return err
 			}
 			combined := &analysis.TemplateCalls{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				lt, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := analysis.LoadTemplates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
@@ -852,7 +851,7 @@ This command is intended for exploratory use only.`,
 					return fmt.Errorf("no muxt-generated package found at %s", dir)
 				}
 
-				_, pl, err := asteval.LoadPackages(pkg.Dir)
+				_, pl, err := analysis.LoadPackages(pkg.Dir)
 				if err != nil {
 					return err
 				}

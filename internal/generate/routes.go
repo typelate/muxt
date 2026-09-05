@@ -17,7 +17,6 @@ import (
 	"github.com/ettle/strcase"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
 )
@@ -105,10 +104,10 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 
 	var receiver *types.Named
 	if config.ReceiverType == "" {
-		receiver = asteval.NamedEmptyStruct("Receiver", routesPkg.Types)
+		receiver = namedEmptyStruct("Receiver", routesPkg.Types)
 	} else {
 		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-		receiver, err = asteval.FindType(pl, receiverPkgPath, config.ReceiverType)
+		receiver, err = findType(pl, receiverPkgPath, config.ReceiverType)
 		if err != nil {
 			return nil, err
 		}
