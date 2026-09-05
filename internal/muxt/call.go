@@ -188,6 +188,9 @@ func resolveCallbackShapes(def *Definition) error {
 			return def.argErrorf(a.Identifier, "execute callback must have zero or one parameter; wrap multiple values in a struct")
 		}
 		if def.Representation == RepresentationSSE && a.template == nil {
+			if suggestion, ok := astgen.NearestString(a.Identifier, templateNames(def.template)); ok {
+				return def.argErrorf(a.Identifier, "no template %q for sse argument %s; did you mean %q?", a.Identifier, a.Identifier, suggestion)
+			}
 			return def.argErrorf(a.Identifier, "no template %q for sse argument %s", a.Identifier, a.Identifier)
 		}
 	}
@@ -652,6 +655,9 @@ func newArgumentFromIdentifier(def *Definition, pl []*packages.Package, arg *ast
 
 			t := def.template.Lookup(arg.Name)
 			if t == nil {
+				if suggestion, ok := astgen.NearestString(arg.Name, templateNames(def.template)); ok {
+					return Argument{}, fmt.Errorf("no template %q for sse message argument %s; did you mean %q?", arg.Name, arg.Name, suggestion)
+				}
 				return Argument{}, fmt.Errorf("no template %q for sse message argument %s", arg.Name, arg.Name)
 			}
 			a.template = t
@@ -890,6 +896,20 @@ func scanBodyBindings(call *ast.CallExpr) (reads int, hasForm, hasMultipart bool
 		}
 	}
 	return reads, hasForm, hasMultipart
+}
+
+// templateNames lists the names in ts's template set, candidates for
+// suggesting a fix to a misspelled template name.
+func templateNames(ts *template.Template) []string {
+	if ts == nil {
+		return nil
+	}
+	all := ts.Templates()
+	names := make([]string, 0, len(all))
+	for _, t := range all {
+		names = append(names, t.Name())
+	}
+	return names
 }
 
 func patternScope() []string {

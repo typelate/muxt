@@ -535,6 +535,9 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 			_, inScope := slices.BinarySearch(identifiers, exp.Name)
 			sseScoped := sse && !inScope && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
 			if !inScope && !sseScoped {
+				if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
+					return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
+				}
 				return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
 			}
 			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {

@@ -384,6 +384,22 @@ func TestNewTemplateName(t *testing.T) {
 			},
 		},
 		{
+			Name:     "misspelled argument gets a suggestion",
+			In:       "GET / F(reqest)",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "unknown argument reqest; did you mean request?")
+			},
+		},
+		{
+			Name:     "misspelled path parameter argument gets a suggestion",
+			In:       "GET /{userID} F(userId)",
+			ExpMatch: true,
+			Error: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "unknown argument userId; did you mean userID?")
+			},
+		},
+		{
 			Name:     "sse handler cannot use response argument",
 			In:       "GET /x sse(Endpoint(response))",
 			ExpMatch: true,

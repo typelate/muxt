@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/typelate/check"
+
+	"github.com/typelate/muxt/internal/astgen"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -130,6 +132,15 @@ func FindType(pl []*packages.Package, packagePath, ident string) (*types.Named, 
 		}
 		obj := pkg.Types.Scope().Lookup(ident)
 		if obj == nil {
+			var typeNames []string
+			for _, name := range pkg.Types.Scope().Names() {
+				if _, ok := pkg.Types.Scope().Lookup(name).(*types.TypeName); ok {
+					typeNames = append(typeNames, name)
+				}
+			}
+			if suggestion, ok := astgen.NearestString(ident, typeNames); ok {
+				return nil, fmt.Errorf("could not find receiver type %s in %s; did you mean %s?", ident, packagePath, suggestion)
+			}
 			return nil, notFoundErr
 		}
 		named, ok := obj.Type().(*types.Named)
