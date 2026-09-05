@@ -60,7 +60,9 @@ func workspaceNote(dir string) string {
 	switch gowork := os.Getenv("GOWORK"); gowork {
 	case "off":
 		return ""
-	case "":
+	case "", "auto":
+		// Empty and "auto" both mean the go command discovers the
+		// nearest go.work in a parent directory.
 		for d := dir; ; {
 			workFile := filepath.Join(d, "go.work")
 			if _, err := os.Stat(workFile); err == nil {
