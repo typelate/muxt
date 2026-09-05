@@ -231,6 +231,13 @@ func (def Definition) Call() string {
 	return def.fun.Name
 }
 
+// IsRouteDefinitionName reports whether name has the shape of a route
+// template definition: an HTTP pattern optionally followed by a status
+// code and handler call.
+func IsRouteDefinitionName(name string) bool {
+	return templateNameMux.MatchString(name)
+}
+
 func newDefinition(t *template.Template) (Definition, error, bool) {
 	in := t.Name()
 	if !templateNameMux.MatchString(in) {

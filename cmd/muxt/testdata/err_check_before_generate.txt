@@ -1,0 +1,38 @@
+# Running muxt check before the first muxt generate reports route templates
+# as waiting for generated handlers, not as unused, and does not flag the
+# partials those routes reference.
+
+! muxt check
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Route templates with no generated handler; run muxt generate to wire them up:
+  - $WORK/template.gohtml:1:29: "GET / Home(ctx)"
+Error: fail: 1 error
+-- template.gohtml --
+{{define "GET / Home(ctx)"}}
+{{template "greeting" .}}
+{{end}}
+
+{{define "greeting"}}Hello{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Home(_ context.Context) string { return "" }
