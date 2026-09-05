@@ -20,6 +20,10 @@ import (
 	"github.com/typelate/muxt/internal/astgen"
 )
 
+// executeTemplateFunc names the method the endpoint scan reports call
+// positions for.
+const executeTemplateFunc = "ExecuteTemplate"
+
 type CheckConfiguration struct {
 	Verbose            bool
 	TemplatesVariables []string
@@ -34,39 +38,35 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 	var errs []error
 
 	for _, tv := range config.TemplatesVariables {
-		_, global, ts, err := asteval.LoadTemplates(wd, tv, pl)
+		lt, err := asteval.LoadTemplates(wd, tv, pl)
 		if err != nil {
 			return err
 		}
+		global, ts := lt.Global, lt.HTML
 
 		executedTemplates := make(map[string][]TemplateExecution)
 
-		for _, file := range routesPkg.Syntax {
-			for node := range ast.Preorder(file) {
-				templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, routesPkg.TypesInfo, tv)
-				if !ok {
-					continue
-				}
-				if config.Verbose {
-					log.Println("checking endpoint", templateName)
-				}
-				qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
-				if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, node, templateName, dataType); err != nil {
-					log.Println(fileSet.Position(node.Pos()), asteval.TemplateExecuteFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
-					if checkErr, ok := errors.AsType[*check.Error](err); ok {
-						var sb strings.Builder
-						if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
-							// The detail rendering failed; the compact error
-							// must still reach the user.
-							log.Println(" - ", err)
-						}
-						log.Println(sb.String())
-					} else {
+		for c := range lt.Templates.ExecuteTemplateCalls() {
+			templateName, dataType := c.TemplateName, c.DataType
+			if config.Verbose {
+				log.Println("checking endpoint", templateName)
+			}
+			qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
+			if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, c.Call, templateName, dataType); err != nil {
+				log.Println(fileSet.Position(c.Call.Pos()), executeTemplateFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
+				if checkErr, ok := errors.AsType[*check.Error](err); ok {
+					var sb strings.Builder
+					if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
+						// The detail rendering failed; the compact error
+						// must still reach the user.
 						log.Println(" - ", err)
 					}
-					log.Println()
-					errs = append(errs, err)
+					log.Println(sb.String())
+				} else {
+					log.Println(" - ", err)
 				}
+				log.Println()
+				errs = append(errs, err)
 			}
 		}
 

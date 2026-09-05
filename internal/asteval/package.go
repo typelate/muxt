@@ -54,20 +54,29 @@ func PackageWithPath(list []*packages.Package, path string) (*packages.Package, 
 	return nil, false
 }
 
-func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*packages.Package, *check.Global, *template.Template, error) {
+// LoadedTemplates bundles a package's loaded template variable with the
+// analysis wiring built from it.
+type LoadedTemplates struct {
+	Package   *packages.Package
+	Templates *check.Templates
+	Global    *check.Global
+	HTML      *template.Template
+}
+
+func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
 	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("package not found at %s", wd)
+		return nil, fmt.Errorf("package not found at %s", wd)
 	}
 
 	lt, ts, err := loadHTMLTemplates(templatesVariable, pkg)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	global := check.NewGlobal(pkg.Types, pkg.Fset, lt, lt.Functions())
 	global.Definitions = lt
-	return pkg, global, ts, nil
+	return &LoadedTemplates{Package: pkg, Templates: lt, Global: global, HTML: ts}, nil
 }
 
 // Templates evaluates the package-level template variable through

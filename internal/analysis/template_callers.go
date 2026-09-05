@@ -2,10 +2,8 @@ package analysis
 
 import (
 	"bytes"
-	"go/ast"
 	"go/token"
 	"go/types"
-	"html/template"
 	"io"
 	"maps"
 	"regexp"
@@ -13,7 +11,6 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -37,7 +34,8 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, pkg *packages.Package, global *check.Global, ts *template.Template) (*TemplateCallers, error) {
+func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, lt *asteval.LoadedTemplates) (*TemplateCallers, error) {
+	global, ts := lt.Global, lt.HTML
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -51,15 +49,12 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		})
 	}
 
-	for _, file := range pkg.Syntax {
-		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, config.TemplatesVariable)
-			if !ok {
-				continue
-			}
+	{
+		for c := range lt.Templates.ExecuteTemplateCalls() {
+			templateName, dataType := c.TemplateName, c.DataType
 
 			refs[templateName] = append(refs[templateName], TemplateReference{
-				Position: fileSet.Position(node.Pos()),
+				Position: fileSet.Position(c.Call.Pos()),
 				Kind:     ExecuteTemplateNode,
 				Name:     templateName,
 				data:     dataType,
@@ -79,7 +74,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
 	}
 
 	return &result, nil
