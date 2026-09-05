@@ -92,4 +92,60 @@ To test handler behavior without a database, generate a fake of the
 `RoutesReceiver` interface (this is why the receiver lives in a library
 package) and register the routes with the fake.
 
-The [simple example](../examples/simple) shows this layout end to end.
+## Mock service interfaces, not RoutesReceiver
+
+For most suites, compose the server from focused interfaces and fake those
+instead of `RoutesReceiver`:
+
+```go
+type Database interface {
+	Portfolio(ctx context.Context, id string) (Portfolio, error)
+	InsertPortfolio(ctx context.Context, meta Metadata) (Portfolio, error)
+}
+
+type UsersService interface {
+	SessionUserID(ctx context.Context) (string, error)
+}
+
+type Server struct {
+	Logger   *slog.Logger
+	Database Database
+	Users    UsersService
+}
+```
+
+```go
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
+//counterfeiter:generate -o internal/fake/database.go . Database
+
+func TestGetPortfolio(t *testing.T) {
+	fakeDB := &fake.Database{}
+	fakeDB.PortfolioReturns(Portfolio{ID: "123", Name: "Growth"}, nil)
+
+	server := Server{Database: fakeDB}
+	result, err := server.GetPortfolio(context.Background(), "123")
+
+	require.NoError(t, err)
+	assert.Equal(t, "Growth", result.Name)
+	assert.Equal(t, 1, fakeDB.PortfolioCallCount())
+}
+```
+
+Faking the service layer makes the tested layer thicker: each test exercises
+receiver methods, domain errors, and `TemplateData` extensions. Faking
+`RoutesReceiver` only verifies that generated handlers call the right method —
+routing and parameter parsing muxt's own tests already cover.
+
+Three thicknesses, by where the fake sits:
+
+1. **Thin — fake `RoutesReceiver`.** Verifies wiring only. Use when
+   specifically testing handler generation behavior.
+2. **Medium — fake the service interfaces** (above). Fast, no I/O, covers
+   most business logic. The default.
+3. **Thick — fake the services' own collaborators**, e.g. a
+   [sqlc](https://docs.sqlc.dev/en/latest/reference/config.html#go) `Querier`
+   with `emit_interface: true`. Each test covers a whole call path; more
+   verbose. Pair it with [real query tests](https://github.com/peterldowns/pgtestdb).
+
+The [simple example](../examples/simple) shows this layout end to end, and
+[package layout](../reference/package-layout.md) names where each file lives.
