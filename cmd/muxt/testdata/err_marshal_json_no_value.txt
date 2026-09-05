@@ -2,7 +2,9 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-Error: marshalJSON requires a result to marshal but Ping(_ context.Context) returns nothing
+  GET /api/ping marshalJSON(Ping(ctx))
+                ^^^^^^^^^^^^^^^^^^^^^^
+Error: $WORK/template.gohtml:1:27: marshalJSON requires a result to marshal but Ping(_ context.Context) returns nothing
 -- template.gohtml --
 {{- define "GET /api/ping marshalJSON(Ping(ctx))" -}}{{- end -}}
 -- go.mod --

@@ -69,7 +69,7 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*Loade
 		return nil, fmt.Errorf("package not found at %s", wd)
 	}
 
-	lt, ts, err := loadHTMLTemplates(templatesVariable, pkg)
+	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
 	if err != nil {
 		return nil, err
 	}
@@ -83,14 +83,19 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*Loade
 // check.LoadTemplates and returns the html/template value together with
 // the functions collected from Funcs calls in its construction chain.
 func Templates(templatesVariable string, pkg *packages.Package) (*template.Template, check.Functions, error) {
-	lt, ts, err := loadHTMLTemplates(templatesVariable, pkg)
+	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
 	if err != nil {
 		return nil, nil, err
 	}
 	return ts, lt.CollectedFunctions(), nil
 }
 
-func loadHTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
+// HTMLTemplates evaluates the package-level template variable through
+// check.LoadTemplates and returns the loaded handle alongside the
+// html/template value; muxt introspects template names and trees without
+// executing, so a text/template set works through an html/template value
+// carrying the same trees.
+func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
 	lt, err := check.LoadTemplates(pkg, templatesVariable)
 	if err != nil {
 		return nil, nil, err

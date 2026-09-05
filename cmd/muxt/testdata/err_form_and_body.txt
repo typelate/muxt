@@ -5,7 +5,9 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-Error: $WORK/template.gohtml: call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once
+  POST /hooks Save(ctx, form, body)
+              ^^^^^^^^^^^^^^^^^^^^^
+Error: $WORK/template.gohtml:1:25: call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once
 -- template.gohtml --
 {{- define "POST /hooks Save(ctx, form, body)" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --

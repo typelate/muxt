@@ -67,7 +67,7 @@ func TestDefinitionsBodyArgumentErrors(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tt.template))
-			_, err := Definitions(ts, "templates")
+			_, err := Definitions(ts, "templates", nil)
 			if err == nil {
 				t.Fatalf("Definitions(%q) = nil error, want %q", tt.template, tt.wantErr)
 			}
@@ -161,7 +161,7 @@ func TestRewriteSignalsArguments(t *testing.T) {
 func TestDefinitionsSignals(t *testing.T) {
 	t.Run("signals marks the definition", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
-		defs, err := Definitions(ts, "templates")
+		defs, err := Definitions(ts, "templates", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +174,7 @@ func TestDefinitionsSignals(t *testing.T) {
 	})
 	t.Run("a signals path wildcard keeps its path-value meaning", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
-		defs, err := Definitions(ts, "templates")
+		defs, err := Definitions(ts, "templates", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +201,7 @@ func TestIsSignalsCallbackArgument(t *testing.T) {
 
 func TestDefinitionsSignalsCallback(t *testing.T) {
 	ts := template.Must(template.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
-	defs, err := Definitions(ts, "templates")
+	defs, err := Definitions(ts, "templates", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
