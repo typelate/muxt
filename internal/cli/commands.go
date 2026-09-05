@@ -244,10 +244,15 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 					// An "Error:" heading, then the template name with a
 					// marker under the failing segment, then the short form
 					// with the position; cobra's inline prefix is silenced.
+					// Related lines link to Go source positions that give
+					// the error context.
 					cmd.SilenceErrors = true
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
 					_ = nameErr.DetailedError(cmd.ErrOrStderr())
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), nameErr.Error())
+					for _, related := range nameErr.Related {
+						_, _ = fmt.Fprintln(cmd.ErrOrStderr(), related)
+					}
 				}
 				return err
 			}

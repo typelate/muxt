@@ -4,8 +4,8 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
 Error:
   POST /upload Upload(form, Helper(multipart))
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-$WORK/template.gohtml:1:24: call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)
+                                   ^^^^^^^^^
+$WORK/template.gohtml:1:44: call Upload has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)
 -- template.gohtml --
 {{define "POST /upload Upload(form, Helper(multipart))"}}{{.Result}}{{end}}
 -- go.mod --

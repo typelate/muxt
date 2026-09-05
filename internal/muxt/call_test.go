@@ -320,23 +320,23 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, ResultShapeDataOK, defs[0].ResultShape())
 		}},
 		{Name: "method with no results", Receiver: serverType, Template: `{{define "GET / NoResults()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, `method for pattern "GET / NoResults()" has no results it should have one or two`)
+			require.ErrorContains(t, err, "method NoResults() has no results; it should have one or two")
 		}},
 		{Name: "second result must be error or bool", Receiver: serverType, Template: `{{define "GET / TwoResultsSecondNotErrorOrBool()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "expected last result to be either an error or a bool")
+			require.ErrorContains(t, err, "the second result of TwoResultsSecondNotErrorOrBool() (int, float64) must be an error or a bool, got float64")
 		}},
 		{Name: "execute method must return only error", Receiver: serverType, Template: `{{define "GET / ExecuteReturnsValue(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method ExecuteReturnsValue using the execute callback must return only error")
+			require.ErrorContains(t, err, "method ExecuteReturnsValue(func() error) (int, error) receiving the execute callback must return only error")
 		}},
 		{Name: "sse method must return nothing or an error", Receiver: serverType, Template: `{{define "GET /x sse(SSEReturnsValue(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method SSEReturnsValue using the sse callback must return nothing or an error")
+			require.ErrorContains(t, err, "sse handler method SSEReturnsValue(func(string) error) int must return nothing or a single error")
 		}},
 		{Name: "sse method returning nothing", Receiver: serverType, Template: `{{define "GET /x sse(SSEEvents(execute))"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
 			require.Equal(t, ResultShapeNone, defs[0].ResultShape())
 		}},
 		{Name: "nested call with no results", Receiver: serverType, Template: `{{define "GET / Any(NoResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method NoResults has no results it should have one or two")
+			require.ErrorContains(t, err, "method NoResults() has no results; it should have one or two")
 		}},
 		{Name: "execute callback with data parameter", Receiver: serverType, Template: `{{define "GET / ExecuteTD(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.NoError(t, err)
@@ -386,10 +386,10 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "fooMessage", defs[0].Arguments[0].Template().Name())
 		}},
 		{Name: "method with three results", Receiver: serverType, Template: `{{define "GET / ThreeResults()"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method ThreeResults has 3 results it should have one or two")
+			require.ErrorContains(t, err, "method ThreeResults() (int, int, error) has 3 results; it should have one or two")
 		}},
 		{Name: "nested call with three results", Receiver: serverType, Template: `{{define "GET / Any(ThreeResults())"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
-			require.ErrorContains(t, err, "method ThreeResults has 3 results it should have one or two")
+			require.ErrorContains(t, err, "method ThreeResults() (int, int, error) has 3 results; it should have one or two")
 		}},
 		{Name: "path value with unsupported basic type", Receiver: serverType, Template: `{{define "GET /{id} Float64(id)"}}{{end}}`, Expect: func(t *testing.T, defs []Definition, err error) {
 			require.ErrorContains(t, err, "method param type float64 not supported")

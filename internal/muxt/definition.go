@@ -148,6 +148,11 @@ type Definition struct {
 	handlerOffset int
 	namePosition  token.Position
 
+	// related holds "file:line:col: note" lines that give errors about
+	// this definition context, such as where the handler method is
+	// defined in Go source.
+	related []string
+
 	Representation Representation
 
 	Arguments []Argument
@@ -253,36 +258,36 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 		if strings.HasPrefix(httpStatusCode, "http.Status") {
 			code, err := astgen.HTTPStatusName(httpStatusCode)
 			if err != nil {
-				return def, def.spanErrorf(def.spans.status, "failed to parse status code: %w", err), true
+				return def, def.spanErrorf(def.spans.status, "invalid status code %s: %v", httpStatusCode, err), true
 			}
 			def.defaultStatusCode = code
 		} else {
 			code, err := strconv.Atoi(strings.TrimSpace(httpStatusCode))
 			if err != nil {
-				return def, def.spanErrorf(def.spans.status, "failed to parse status code: %w", err), true
+				return def, def.spanErrorf(def.spans.status, "invalid status code %q: expected an integer like 201 or a constant name like http.StatusCreated", strings.TrimSpace(httpStatusCode)), true
 			}
 			def.defaultStatusCode = code
 		}
 	}
 
 	if len(def.path) > 1 {
-		segments := strings.Split(def.path[1:], "/")
-		for _, segment := range segments {
-			if segment == "" {
-				return def, def.spanErrorf(def.spans.path, "template has an empty path segment: %s", def.name), true
-			}
+		if idx := strings.Index(def.path, "//"); idx >= 0 {
+			return def, def.nameErrorf(def.spans.path[0]+idx+1, 1, "path has an empty segment"), true
+		}
+		if strings.HasSuffix(def.path, "/") {
+			return def, def.nameErrorf(def.spans.path[0]+len(def.path)-1, 1, "path has an empty segment"), true
 		}
 	}
 
 	switch def.method {
 	default:
-		return def, def.spanErrorf(def.spans.method, "%s method not allowed", def.method), true
+		return def, def.spanErrorf(def.spans.method, "%s method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE", def.method), true
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
 	pathValueNames := def.PathValueIdentifiers()
-	if err := checkPathValueNames(pathValueNames); err != nil {
-		return def, def.spanErrorf(def.spans.path, "%w", err), true
+	if err := def.checkPathValueNames(pathValueNames); err != nil {
+		return def, err, true
 	}
 	def.pathValueNames = pathValueNames
 
@@ -298,7 +303,10 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	}
 
 	if httpStatusCode != "" && !def.callWriteHeader(nil) {
-		return def, fmt.Errorf("you can not use %s as an argument and specify an HTTP status code", TemplateNameScopeIdentifierHTTPResponse), true
+		if node := findIdent(def.call, TemplateNameScopeIdentifierHTTPResponse); node != nil {
+			return def, errAt(node, "cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s", TemplateNameScopeIdentifierHTTPResponse), true
+		}
+		return def, fmt.Errorf("cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s", TemplateNameScopeIdentifierHTTPResponse), true
 	}
 
 	return def, nil, true
@@ -338,16 +346,16 @@ func hasHTTPResponseWriterArgument(call *ast.CallExpr) bool {
 	return false
 }
 
-func checkPathValueNames(in []string) error {
+func (def *Definition) checkPathValueNames(in []string) error {
 	for i, n := range in {
 		if !token.IsIdentifier(n) {
-			return fmt.Errorf("path parameter name not permitted: %q is not a Go identifier", n)
+			return def.pathParamErrorf(n, 0, "path parameter name not permitted: %q is not a Go identifier", n)
 		}
 		if slices.Contains(in[:i], n) {
-			return fmt.Errorf("forbidden repeated path parameter names: found at least 2 path parameters with name %q", n)
+			return def.pathParamErrorf(n, 1, "path parameter name %q is used more than once; parameter names must be unique within a path", n)
 		}
 		if slices.Contains(patternScope(), n) {
-			return fmt.Errorf("the name %s is not allowed as a path parameter it is already in scope", n)
+			return def.pathParamErrorf(n, 0, "path parameter name %s conflicts with a reserved identifier (%s)", n, strings.Join(patternScope(), ", "))
 		}
 	}
 	return nil
@@ -415,7 +423,11 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
 
 	if (def.Representation == RepresentationSSE || def.Representation == RepresentationMarshalJSON) && def.hasResponseWriterArg {
-		return errAt(call, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
+		node := findIdent(call, TemplateNameScopeIdentifierHTTPResponse)
+		if node == nil {
+			node = call
+		}
+		return errAt(node, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 	}
 
 	return nil
@@ -498,7 +510,11 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 		return err
 	}
 	if _, hasForm, hasMultipart := scanBodyBindings(call); hasForm && hasMultipart {
-		return errAt(call, "call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
+		node := findIdent(call, TemplateNameScopeIdentifierMultipart)
+		if node == nil {
+			node = call
+		}
+		return errAt(node, "call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
 	}
 	return nil
 }
@@ -519,7 +535,7 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 			_, inScope := slices.BinarySearch(identifiers, exp.Name)
 			sseScoped := sse && !inScope && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
 			if !inScope && !sseScoped {
-				return errAt(exp, "unknown argument %s at index %d", exp.Name, i)
+				return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
 			}
 			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
 				return errAt(exp, "the %s callback must be a direct argument of the route's method call", exp.Name)

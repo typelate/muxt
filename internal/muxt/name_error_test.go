@@ -40,7 +40,7 @@ func TestDefinitionsErrorPosition(t *testing.T) {
 	_, err := Definitions(ts, "templates", finder)
 	// The name literal's content starts one byte past the opening quote at
 	// column 11; the failing METHOD segment starts at the first byte of the name.
-	require.EqualError(t, err, "index.gohtml:1:11: OPTIONS method not allowed")
+	require.EqualError(t, err, "index.gohtml:1:11: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 
 	nameErr, ok := err.(*NameError)
 	require.True(t, ok)

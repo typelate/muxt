@@ -230,7 +230,7 @@ func TestDefinitionsErrorIncludesSourceFile(t *testing.T) {
 		// error must not be prefixed with the template name.
 		ts := template.Must(template.New("OPTIONS / F()").Parse(``))
 		_, err := Definitions(ts, "templates", nil)
-		require.EqualError(t, err, "OPTIONS method not allowed")
+		require.EqualError(t, err, "OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 	})
 }
 
@@ -380,7 +380,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "GET / F(sseClock)",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "unknown argument sseClock at index 0")
+				assert.ErrorContains(t, err, "unknown argument sseClock; expected one of: body, ctx, execute, form, lastEventID, multipart, request, response")
 			},
 		},
 		{
@@ -418,7 +418,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "GET /{name}/{name} F()",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, `forbidden repeated path parameter names: found at least 2 path parameters with name "name"`)
+				assert.ErrorContains(t, err, `path parameter name "name" is used more than once; parameter names must be unique within a path`)
 			},
 		},
 		{
@@ -458,7 +458,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / http.StatusBANANA F()",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "failed to parse status code: unknown http.StatusBANANA")
+				assert.ErrorContains(t, err, "invalid status code http.StatusBANANA: unknown http.StatusBANANA")
 			},
 		},
 		{
@@ -481,7 +481,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "GET /{response} 200 F(response)",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "the name response is not allowed as a path parameter it is already in scope")
+				assert.ErrorContains(t, err, "path parameter name response conflicts with a reserved identifier")
 			},
 		},
 		{
@@ -600,7 +600,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / 1.2",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, `failed to parse status code: strconv.Atoi: parsing "1.2": invalid syntax`)
+				require.ErrorContains(t, err, `invalid status code "1.2": expected an integer like 201 or a constant name like http.StatusCreated`)
 			},
 		},
 		{
@@ -638,7 +638,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "GET /{fileName} 201 F(response)",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "you can not use response as an argument and specify an HTTP status code")
+				require.ErrorContains(t, err, "cannot use response as an argument and also set an HTTP status code in the template name")
 			},
 		},
 		{
@@ -646,7 +646,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "/x//y",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "template has an empty path segment:")
+				require.ErrorContains(t, err, "path has an empty segment")
 			},
 		},
 		{
@@ -654,7 +654,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "//x/y",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "template has an empty path segment:")
+				require.ErrorContains(t, err, "path has an empty segment")
 			},
 		},
 		{
@@ -662,7 +662,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "/x//",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "template has an empty path segment:")
+				require.ErrorContains(t, err, "path has an empty segment")
 			},
 		},
 	} {
