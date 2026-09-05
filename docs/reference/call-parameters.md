@@ -74,7 +74,10 @@ Muxt auto-parses path and form parameters to these types:
 | **Floats** | `float64`, `float32` | `strconv.ParseFloat` | Form and multipart fields only; path values and `lastEventID` reject floats by design |
 | **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing; `time.Time` qualifies (`*time.Time` implements it) |
 
-**Parse failures:** Return 400 Bad Request automatically. For plain routes the handler still renders the route template with a zero-value `.Result` and the parse error appended to `.Err`; sse routes respond 400 before the stream is established.
+**Parse failures:** Return 400 Bad Request automatically. What renders depends on where parsing failed:
+
+- A typed value that fails to parse (path value, typed form or multipart field, `lastEventID`) sets status 400 and, on a plain route, still renders the route template with a zero-value `.Result` and the error appended to `.Err`. An sse route responds 400 before the stream is established.
+- A request body that `request.ParseForm` itself rejects responds 400 via `http.Error` and returns without rendering ([reference_form_parse_error.txt](../../cmd/muxt/testdata/reference_form_parse_error.txt)).
 
 [reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
 
