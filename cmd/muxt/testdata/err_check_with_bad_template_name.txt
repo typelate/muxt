@@ -1,0 +1,37 @@
+# muxt check reports malformed route template names with the same positioned
+# error muxt generate prints, instead of listing the template as unused.
+
+! muxt check
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+  GET / Home(reqest)
+             ^^^^^^
+$WORK/template.gohtml:1:22: unknown argument reqest; did you mean request?
+
+Route templates with no generated handler; run muxt generate to wire them up:
+  - $WORK/template.gohtml:1:32: "GET / Home(reqest)"
+Error: fail: 2 errors
+-- template.gohtml --
+{{define "GET / Home(reqest)"}}ok{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Home(_ *http.Request) string { return "" }
