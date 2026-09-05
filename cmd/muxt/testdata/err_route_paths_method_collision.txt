@@ -1,0 +1,36 @@
+# Two handlers whose names differ only in case produce the same exported
+# TemplateRoutePaths method; the error lists where each is defined.
+
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error:
+TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"
+$WORK/template.gohtml:1:11: "list" is defined here
+$WORK/template.gohtml:2:11: "List" is defined here
+-- template.gohtml --
+{{define "GET /items list(ctx)"}}a{{end}}
+{{define "GET /items/{id} List(ctx, id)"}}b{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) list(_ context.Context) string             { return "" }
+func (T) List(_ context.Context, _ string) string   { return "" }

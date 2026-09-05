@@ -1,9 +1,9 @@
 package muxt
 
 import (
+	"errors"
 	"go/token"
 	"html/template"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,12 +44,10 @@ func TestDefinitionsErrorPosition(t *testing.T) {
 
 	nameErr, ok := err.(*NameError)
 	require.True(t, ok)
-	var sb strings.Builder
-	require.NoError(t, nameErr.DetailedError(&sb))
-	assert.Equal(t, "  OPTIONS / F()\n  ^^^^^^^\n", sb.String())
+	assert.Equal(t, "  OPTIONS / F()\n  ^^^^^^^\n"+nameErr.Error(), nameErr.MultiLineError())
 }
 
-func TestNameErrorDetailedErrorClamps(t *testing.T) {
+func TestNameErrorMultiLineErrorClamps(t *testing.T) {
 	for _, tt := range []struct {
 		Name           string
 		Err            NameError
@@ -57,17 +55,17 @@ func TestNameErrorDetailedErrorClamps(t *testing.T) {
 	}{
 		{
 			Name:           "span past the end of the name",
-			Err:            NameError{Name: "GET /", Offset: 4, Length: 10},
+			Err:            NameError{Name: "GET /", Offset: 4, Length: 10, err: errors.New("boom")},
 			ExpectedMarker: "    ^",
 		},
 		{
 			Name:           "zero length gets one marker",
-			Err:            NameError{Name: "GET /", Offset: 0, Length: 0},
+			Err:            NameError{Name: "GET /", Offset: 0, Length: 0, err: errors.New("boom")},
 			ExpectedMarker: "^",
 		},
 		{
 			Name:           "negative offset clamps to the start",
-			Err:            NameError{Name: "GET /", Offset: -3, Length: 3},
+			Err:            NameError{Name: "GET /", Offset: -3, Length: 3, err: errors.New("boom")},
 			ExpectedMarker: "^^^",
 		},
 		{
@@ -76,14 +74,21 @@ func TestNameErrorDetailedErrorClamps(t *testing.T) {
 			// prefix "GET /é " is 8 bytes but 7 display columns, and
 			// "Héllo()" is 8 bytes but 7 runes.
 			Name:           "multi-byte runes in the name",
-			Err:            NameError{Name: "GET /é Héllo()", Offset: 8, Length: 8},
+			Err:            NameError{Name: "GET /é Héllo()", Offset: 8, Length: 8, err: errors.New("boom")},
 			ExpectedMarker: "       ^^^^^^^",
+		},
+		{
+			Name:           "related locations follow the short form",
+			Err:            NameError{Name: "GET /", Offset: 0, Length: 3, err: errors.New("boom"), Related: []string{"main.go:4:5: F is defined here"}},
+			ExpectedMarker: "^^^",
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			var sb strings.Builder
-			require.NoError(t, tt.Err.DetailedError(&sb))
-			assert.Equal(t, "  "+tt.Err.Name+"\n  "+tt.ExpectedMarker+"\n", sb.String())
+			expected := "  " + tt.Err.Name + "\n  " + tt.ExpectedMarker + "\n" + tt.Err.Error()
+			for _, related := range tt.Err.Related {
+				expected += "\n" + related
+			}
+			assert.Equal(t, expected, tt.Err.MultiLineError())
 		})
 	}
 }

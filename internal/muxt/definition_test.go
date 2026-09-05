@@ -3,7 +3,6 @@ package muxt_test
 import (
 	"errors"
 	"html/template"
-	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -86,16 +85,12 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 			Locations: []string{"index.gohtml:1:11", "index.gohtml:5:11", "other.gohtml:2:11"},
 		}
 		require.Equal(t, `duplicate route pattern "GET /"`, dupErr.Error())
-		var sb strings.Builder
-		require.NoError(t, dupErr.DetailedError(&sb))
-		require.Equal(t, "index.gohtml:1:11: first defined here\nindex.gohtml:5:11: also defined here\nother.gohtml:2:11: also defined here\n", sb.String())
+		require.Equal(t, "duplicate route pattern \"GET /\"\nindex.gohtml:1:11: first defined here\nindex.gohtml:5:11: also defined here\nother.gohtml:2:11: also defined here", dupErr.MultiLineError())
 	})
 
-	t.Run("unknown locations leave the long form empty", func(t *testing.T) {
+	t.Run("unknown locations leave only the short form", func(t *testing.T) {
 		dupErr := &muxt.DuplicatePatternError{Pattern: "GET /"}
-		var sb strings.Builder
-		require.NoError(t, dupErr.DetailedError(&sb))
-		require.Empty(t, sb.String())
+		require.Equal(t, dupErr.Error(), dupErr.MultiLineError())
 	})
 
 	t.Run("all definitions of the pattern are reported in a stable order", func(t *testing.T) {

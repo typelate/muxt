@@ -240,27 +240,14 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			}
 			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
-				if nameErr, ok := errors.AsType[*muxt.NameError](err); ok {
-					// An "Error:" heading, then the template name with a
-					// marker under the failing segment, then the short form
-					// with the position; cobra's inline prefix is silenced.
-					// Related lines link to Go source positions that give
-					// the error context.
+				if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
+					// An "Error:" heading then the verbose rendering —
+					// markers, positions, one location per line — with
+					// cobra's inline prefix silenced so every path-first
+					// line stays clickable.
 					cmd.SilenceErrors = true
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
-					_ = nameErr.DetailedError(cmd.ErrOrStderr())
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), nameErr.Error())
-					for _, related := range nameErr.Related {
-						_, _ = fmt.Fprintln(cmd.ErrOrStderr(), related)
-					}
-				} else if dupErr, ok := errors.AsType[*muxt.DuplicatePatternError](err); ok {
-					// The short form on one line, then one definition
-					// location per line so long absolute paths stay
-					// readable and clickable.
-					cmd.SilenceErrors = true
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), dupErr.Error())
-					_ = dupErr.DetailedError(cmd.ErrOrStderr())
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), multiLine.MultiLineError())
 				}
 				return err
 			}
