@@ -1,8 +1,10 @@
 # How to map domain errors to HTTP status codes
 
-Muxt never inspects a returned error — a method error renders the template with `.Err` set and responds 500. To respond 404 for a missing record and 403 for a permission failure without importing `net/http` into the domain, give domain errors a `StatusCode() int` method and apply it during rendering with a small `TemplateData` extension.
+Muxt never inspects a returned error — a method error renders the template with `.Err` set and responds 500. To respond 404 for a missing record and 403 for a permission failure, give the errors your receiver methods return a `StatusCode() int` method and apply it during rendering with a small `TemplateData` extension.
 
-Define the error at the domain boundary:
+The error type lives at the boundary between your domain and the hypertext package, and it confines the HTTP knowledge: importing `net/http` for the status constants is fine *here*, in the error type — what stays HTTP-free is everything behind it, the services and repositories whose errors it wraps.
+
+Define the error at that boundary:
 
 ```go
 type ReadSecurityError struct {
