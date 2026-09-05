@@ -11,6 +11,7 @@ import (
 	"log"
 	"maps"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,7 +45,9 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 	file.addPackages(list)
 	pkg, found := asteval.PackageAtFilepath(list, filePath)
 	if !found {
-		return nil, fmt.Errorf("package not found for filepath %s", filePath)
+		// filePath names the output file, which need not exist yet; the
+		// lookup is for the package in its directory.
+		return nil, asteval.NoPackageError(filepath.Dir(filePath), list)
 	}
 	file.outPkg = pkg
 	return file, nil

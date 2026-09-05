@@ -32,7 +32,7 @@ type CheckConfiguration struct {
 func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) error {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
-		return fmt.Errorf("package not found at %s", wd)
+		return asteval.NoPackageError(wd, pl)
 	}
 
 	var errs []error
