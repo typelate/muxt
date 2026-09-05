@@ -70,6 +70,15 @@ func TestNameErrorDetailedErrorClamps(t *testing.T) {
 			Err:            NameError{Name: "GET /", Offset: -3, Length: 3},
 			ExpectedMarker: "^^^",
 		},
+		{
+			// Handler identifiers may contain non-ASCII letters; the
+			// marker is measured in runes so it stays aligned. The
+			// prefix "GET /é " is 8 bytes but 7 display columns, and
+			// "Héllo()" is 8 bytes but 7 runes.
+			Name:           "multi-byte runes in the name",
+			Err:            NameError{Name: "GET /é Héllo()", Offset: 8, Length: 8},
+			ExpectedMarker: "       ^^^^^^^",
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			var sb strings.Builder
