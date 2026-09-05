@@ -1397,15 +1397,19 @@ func callParseForm(file *File) *ast.IfStmt {
 // callParseMultipartForm emits:
 //
 //	if err := request.ParseMultipartForm(<maxMemory>); err != nil && !errors.Is(err, http.ErrNotMultipart) {
-//	    td.errList = append(td.errList, err)
-//	    td.errStatusCode = http.StatusBadRequest
+//	    <errBlock>
 //	}
+//
+// The caller supplies errBlock so the failure is handled per handler
+// kind: normal handlers accumulate the error into the template data
+// with a 400 status; SSE handlers respond 400 and return before the
+// event stream is established.
 //
 // http.ErrNotMultipart is exempted because ParseMultipartForm calls ParseForm
 // internally, so url-encoded POSTs to a multipart route still populate
 // request.PostForm — the receiver method should run with text fields bound
 // (file fields stay nil). Other errors (truncated body, bad boundary,
-// underlying ParseForm failures) are real and surface as 400.
+// underlying ParseForm failures) are real.
 func callParseMultipartForm(file *File, config RoutesFileConfiguration, errBlock *ast.BlockStmt) *ast.IfStmt {
 	maxMemory := config.MultipartMaxMemory
 	if maxMemory <= 0 {
