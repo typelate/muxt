@@ -1,6 +1,8 @@
 # Running muxt check before the first muxt generate reports route templates
 # as waiting for generated handlers, not as unused, and does not flag the
-# partials those routes reference.
+# partials those routes reference. block actions count as references too:
+# text/template/parse compiles {{block "name" .}} into a define plus an
+# in-place template invocation, so the footer below is pending, not unused.
 
 ! muxt check
 cmpenv stderr want-err.txt
@@ -12,6 +14,7 @@ Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Home(ctx)"}}
 {{template "greeting" .}}
+{{block "footer" .}}bye{{end}}
 {{end}}
 
 {{define "greeting"}}Hello{{end}}
