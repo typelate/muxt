@@ -78,11 +78,11 @@ func TestTemplates(t *testing.T) {
 	})
 
 	t.Run("load templates wires the global", func(t *testing.T) {
-		_, global, ts, err := asteval.LoadTemplates(dir, "templates", pl)
+		lt, err := asteval.LoadTemplates(dir, "templates", pl)
 		require.NoError(t, err)
-		require.NotNil(t, ts)
+		require.NotNil(t, lt.HTML)
 
-		def, ok := global.Definitions.FindDefinition("home")
+		def, ok := lt.Global.Definitions.FindDefinition("home")
 		require.True(t, ok, "definitions resolve for file-parsed templates")
 		require.True(t, def.Define.IsValid())
 		assert.Equal(t, "index.gohtml", filepath.Base(def.Define.Filename))

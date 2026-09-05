@@ -2,9 +2,7 @@ package analysis
 
 import (
 	"bytes"
-	"go/ast"
 	"go/types"
-	"html/template"
 	"io"
 	"maps"
 	"regexp"
@@ -12,7 +10,6 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -36,7 +33,8 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, global *check.Global, ts *template.Template) (*TemplateCalls, error) {
+func NewTemplateCalls(config TemplateCallsConfiguration, lt *asteval.LoadedTemplates) (*TemplateCalls, error) {
+	global, ts := lt.Global, lt.HTML
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
@@ -50,16 +48,10 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, 
 	}
 
 	// Analyze all templates
-	for _, file := range pkg.Syntax {
-		for node := range ast.Preorder(file) {
-			templateName, dataType, ok := asteval.ExecuteTemplateArguments(node, pkg.TypesInfo, config.TemplatesVariable)
-			if !ok {
-				continue
-			}
-			t := ts.Lookup(templateName)
-			if t != nil && t.Tree != nil {
-				_ = check.Execute(global, t.Tree, dataType)
-			}
+	for c := range lt.Templates.ExecuteTemplateCalls() {
+		t := ts.Lookup(c.TemplateName)
+		if t != nil && t.Tree != nil {
+			_ = check.Execute(global, t.Tree, c.DataType)
 		}
 	}
 
@@ -69,7 +61,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg *packages.Package, 
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(pkg.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
 	}
 
 	return &result, nil

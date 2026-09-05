@@ -437,11 +437,11 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 			combined := &analysis.TemplateCallers{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				pkg, glb, ts, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := asteval.LoadTemplates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
-				result, err := analysis.NewTemplateCallers(config, fileSet, pkg, glb, ts)
+				result, err := analysis.NewTemplateCallers(config, fileSet, lt)
 				if err != nil {
 					return err
 				}
@@ -490,11 +490,11 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 			combined := &analysis.TemplateCalls{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				pkg, glb, ts, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := asteval.LoadTemplates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
-				result, err := analysis.NewTemplateCalls(config, pkg, glb, ts)
+				result, err := analysis.NewTemplateCalls(config, lt)
 				if err != nil {
 					return err
 				}
