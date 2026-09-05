@@ -4,7 +4,7 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
   POST /users CreateUser(ctx, unmarshalJSON(form))
                               ^^^^^^^^^^^^^^^^^^^
-Error: $WORK/template.gohtml:1:41: the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)
+$WORK/template.gohtml:1:41: the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)
 -- template.gohtml --
 {{- define "POST /users CreateUser(ctx, unmarshalJSON(form))" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --
