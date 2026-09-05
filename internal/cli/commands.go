@@ -78,6 +78,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 			}
 			results, err := analysis.NewRoutes(rootCommandConfig, *workingDirectory, fileSet, pl)
 			if err != nil {
+				printMultiLineError(cmd, err)
 				return err
 			}
 			for _, result := range results {
@@ -148,6 +149,9 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
 			if err := analysis.Check(config, *workingDirectory, logger, fileSet, pl); err != nil {
+				if printMultiLineError(cmd, err) {
+					return err
+				}
 				return fmt.Errorf("fail: %s", err)
 			}
 			return nil
@@ -240,15 +244,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			}
 			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
-				if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
-					// An "Error:" heading then the verbose rendering —
-					// markers, positions, one location per line — with
-					// cobra's inline prefix silenced so every path-first
-					// line stays clickable.
-					cmd.SilenceErrors = true
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), multiLine.MultiLineError())
-				}
+				printMultiLineError(cmd, err)
 				return err
 			}
 
@@ -679,6 +675,22 @@ func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *[]string, deprecat
 	// For backward compatibility, also handle the deprecated flag as a single string
 	flagSet.StringVar(deprecated, deprecatedTemplatesVariable, "", "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
+}
+
+// printMultiLineError renders err's verbose form to stderr — an
+// "Error:" heading then the multi-line rendering (markers, positions,
+// one location per line) — and silences cobra's inline prefix so every
+// path-first line stays clickable. It reports whether err had a
+// multi-line form.
+func printMultiLineError(cmd *cobra.Command, err error) bool {
+	multiLine, ok := errors.AsType[muxt.MultiLineError](err)
+	if !ok {
+		return false
+	}
+	cmd.SilenceErrors = true
+	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Error:")
+	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), multiLine.MultiLineError())
+	return true
 }
 
 func addUseReceiverTypeVarToFlagSet(flagSet *pflag.FlagSet, out *string) {

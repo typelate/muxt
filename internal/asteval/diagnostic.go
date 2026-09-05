@@ -1,7 +1,6 @@
 package asteval
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,15 +10,15 @@ import (
 )
 
 // NoPackageError explains a failed package lookup at dir: no loaded
-// package matched it. The message lists what did load, forwards the
-// loader's own errors, and names workspace state when a go.work file
-// may be excluding the module, since muxt loads packages like the go
-// command and inherits GOWORK, GOFLAGS, and GOROOT.
+// package matched it. The short Error form names the directory; the
+// MultiLineError form lists what did load, forwards the loader's own
+// errors, and names workspace state when a go.work file may be
+// excluding the module, since muxt loads packages like the go command
+// and inherits GOWORK, GOFLAGS, and GOROOT.
 func NoPackageError(dir string, pl []*packages.Package) error {
-	var b strings.Builder
-	fmt.Fprintf(&b, "no Go package found at %s", dir)
+	e := &PackageLookupError{Dir: dir}
 	if len(pl) == 0 {
-		b.WriteString("\n\tgo/packages loaded no packages")
+		e.Details = append(e.Details, "go/packages loaded no packages")
 	} else {
 		paths := make([]string, 0, len(pl))
 		for _, p := range pl {
@@ -27,17 +26,17 @@ func NoPackageError(dir string, pl []*packages.Package) error {
 				paths = append(paths, p.PkgPath)
 			}
 		}
-		fmt.Fprintf(&b, "\n\tloaded %d packages: %s", len(pl), strings.Join(paths, ", "))
+		e.Details = append(e.Details, fmt.Sprintf("loaded %d packages: %s", len(pl), strings.Join(paths, ", ")))
 	}
 	const maxLoadErrors = 3
 	shown := 0
 	for _, p := range pl {
 		for _, loadErr := range p.Errors {
 			if shown == maxLoadErrors {
-				b.WriteString("\n\t(more load errors omitted)")
+				e.Details = append(e.Details, "(more load errors omitted)")
 				break
 			}
-			fmt.Fprintf(&b, "\n\t%s", loadErr)
+			e.Details = append(e.Details, loadErr.Error())
 			shown++
 		}
 		if shown == maxLoadErrors {
@@ -45,10 +44,38 @@ func NoPackageError(dir string, pl []*packages.Package) error {
 		}
 	}
 	if note := workspaceNote(dir); note != "" {
-		fmt.Fprintf(&b, "\n\t%s", note)
+		e.Details = append(e.Details, note)
 	}
-	b.WriteString("\n\tmuxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
-	return errors.New(b.String())
+	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
+	return e
+}
+
+// PackageLookupError reports that no loaded package matched a
+// directory. Error is the short single-line form; MultiLineError adds
+// one detail line each for what did load, the loader's own errors, and
+// the workspace state steering resolution.
+type PackageLookupError struct {
+	// Dir is the directory whose package lookup came up empty.
+	Dir string
+
+	// Details are indented under the short form, one line each.
+	Details []string
+}
+
+func (e *PackageLookupError) Error() string {
+	return "no Go package found at " + e.Dir
+}
+
+// MultiLineError renders the short form with each detail line
+// indented under it.
+func (e *PackageLookupError) MultiLineError() string {
+	var sb strings.Builder
+	sb.WriteString(e.Error())
+	for _, detail := range e.Details {
+		sb.WriteString("\n\t")
+		sb.WriteString(detail)
+	}
+	return sb.String()
 }
 
 // workspaceNote reports the go.work file that governs dir, if any:
