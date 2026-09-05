@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"go/types"
 	"html/template"
-	"io"
 	"net/http"
 	"regexp"
 	"slices"
@@ -119,7 +118,7 @@ func CheckForDuplicatePatterns(templates []Definition) error {
 
 // DuplicatePatternError reports template definitions whose names all
 // produce the same route pattern. Error is the short single-line form;
-// DetailedError writes one definition location per line, path first,
+// MultiLineError renders one definition location per line, path first,
 // so long absolute paths stay readable and clickable in a terminal.
 type DuplicatePatternError struct {
 	// Pattern is the normalized http.ServeMux pattern the names produce.
@@ -135,19 +134,20 @@ func (e *DuplicatePatternError) Error() string {
 	return fmt.Sprintf("duplicate route pattern %q", e.Pattern)
 }
 
-// DetailedError writes the location of every definition, one per line.
-func (e *DuplicatePatternError) DetailedError(w io.Writer) error {
+// MultiLineError renders the short form followed by the location of
+// every definition, one per line.
+func (e *DuplicatePatternError) MultiLineError() string {
+	var sb strings.Builder
+	sb.WriteString(e.Error())
 	note := "first defined here"
 	for _, location := range e.Locations {
 		if location == "" {
 			continue
 		}
-		if _, err := fmt.Fprintf(w, "%s: %s\n", location, note); err != nil {
-			return err
-		}
+		fmt.Fprintf(&sb, "\n%s: %s", location, note)
 		note = "also defined here"
 	}
-	return nil
+	return sb.String()
 }
 
 // definitionLocation renders where this definition's name literal was

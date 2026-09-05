@@ -4,16 +4,26 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"io"
 	"strings"
 	"unicode/utf8"
 )
 
+// MultiLineError is implemented by errors that carry a verbose
+// multi-line rendering in addition to the single-line Error string.
+// Printers show MultiLineError when the output has room for detail —
+// source excerpts, markers, one location per line — and fall back to
+// Error wherever a single line must do. The rendering has no trailing
+// newline.
+type MultiLineError interface {
+	error
+	MultiLineError() string
+}
+
 // NameError locates an error in a route template name. Error is the
 // short single-line form, prefixed with the position of the failing
-// segment inside the file that defines the template; DetailedError
-// writes the long form, the template name with a marker under the
-// failing segment.
+// segment inside the file that defines the template; MultiLineError
+// renders the long form: the template name with a marker under the
+// failing segment, the short form, and any related source locations.
 type NameError struct {
 	// Position locates the failing segment inside the file that defines
 	// the template. It is the zero Position when the definition's
@@ -50,16 +60,23 @@ func (e *NameError) Error() string {
 	}
 }
 
-// DetailedError writes the template name with a marker under the
-// failing segment. Offset and Length are byte ranges; the marker is
-// measured in runes so it lines up under multi-byte characters.
-func (e *NameError) DetailedError(w io.Writer) error {
+// MultiLineError renders the template name with a marker under the
+// failing segment, then the short form, then the related locations.
+// Offset and Length are byte ranges; the marker is measured in runes
+// so it lines up under multi-byte characters.
+func (e *NameError) MultiLineError() string {
 	offset := min(max(e.Offset, 0), len(e.Name))
 	end := min(offset+max(e.Length, 1), len(e.Name))
 	pad := utf8.RuneCountInString(e.Name[:offset])
 	width := max(utf8.RuneCountInString(e.Name[offset:end]), 1)
-	_, err := fmt.Fprintf(w, "  %s\n  %s%s\n", e.Name, strings.Repeat(" ", pad), strings.Repeat("^", width))
-	return err
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "  %s\n  %s%s\n", e.Name, strings.Repeat(" ", pad), strings.Repeat("^", width))
+	sb.WriteString(e.Error())
+	for _, related := range e.Related {
+		sb.WriteString("\n")
+		sb.WriteString(related)
+	}
+	return sb.String()
 }
 
 // nameSpans records the byte offsets of the matched template name

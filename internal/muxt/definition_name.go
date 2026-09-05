@@ -134,24 +134,64 @@ func exportPathIdentifier(s string) (string, error) {
 // Duplicate route patterns also collide here, so check
 // CheckForDuplicatePatterns first for the more precise error.
 func CheckPathMethodCollisions(defs []Definition) error {
-	seen := make(map[string]string, len(defs))
+	seen := make(map[string]Definition, len(defs))
+	handlerName := func(def Definition) string {
+		// Report the original handler names (e.g. "list" and "List"), not the
+		// exported identifier they collide on, so the difference is visible.
+		if handler := def.Call(); handler != "" {
+			return handler
+		}
+		return def.Identifier()
+	}
 	for _, t := range defs {
 		exported, err := exportPathIdentifier(t.Identifier())
 		if err != nil {
 			return err
 		}
-		// Report the original handler names (e.g. "list" and "List"), not the
-		// exported identifier they collide on, so the difference is visible.
-		handler := t.Call()
-		if handler == "" {
-			handler = t.Identifier()
-		}
 		if prev, ok := seen[exported]; ok {
-			return fmt.Errorf("TemplateRoutePaths method name collision: handlers %q and %q both produce method %q", prev, handler, exported)
+			return &MethodNameCollisionError{
+				Method:    exported,
+				Handlers:  [2]string{handlerName(prev), handlerName(t)},
+				Locations: [2]string{prev.definitionLocation(), t.definitionLocation()},
+			}
 		}
-		seen[exported] = handler
+		seen[exported] = t
 	}
 	return nil
+}
+
+// MethodNameCollisionError reports two handlers whose names produce the
+// same exported TemplateRoutePaths method. Error is the short
+// single-line form; MultiLineError adds one definition location per
+// line.
+type MethodNameCollisionError struct {
+	// Method is the exported method name both handlers produce.
+	Method string
+
+	// Handlers are the original handler names, in definition order.
+	Handlers [2]string
+
+	// Locations render where each definition's name literal was
+	// written; "" when the source is unknown.
+	Locations [2]string
+}
+
+func (e *MethodNameCollisionError) Error() string {
+	return fmt.Sprintf("TemplateRoutePaths method name collision: handlers %q and %q both produce method %q", e.Handlers[0], e.Handlers[1], e.Method)
+}
+
+// MultiLineError renders the short form followed by where each
+// colliding handler is defined, one location per line.
+func (e *MethodNameCollisionError) MultiLineError() string {
+	var sb strings.Builder
+	sb.WriteString(e.Error())
+	for i, location := range e.Locations {
+		if location == "" {
+			continue
+		}
+		fmt.Fprintf(&sb, "\n%s: %q is defined here", location, e.Handlers[i])
+	}
+	return sb.String()
 }
 
 // FileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.
