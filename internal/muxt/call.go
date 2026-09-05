@@ -402,6 +402,17 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPackage *types.Package, receiver *types.Named, pl []*packages.Package) (*types.Signature, error) {
 	var params []*types.Var
 	hasSSE := false
+	// Each argument becomes a parameter named after it, so a repeated
+	// argument would synthesize a method whose parameter names collide.
+	seen := make(map[string]bool)
+	addParam := func(node ast.Node, name string, tp types.Type) error {
+		if seen[name] {
+			return errAt(node, "cannot infer a signature for %s: the %s argument is passed more than once; define the method on the receiver to use repeated arguments", call.Fun.(*ast.Ident).Name, name)
+		}
+		seen[name] = true
+		params = append(params, types.NewVar(0, receiver.Obj().Pkg(), name, tp))
+		return nil
+	}
 	for _, a := range call.Args {
 		switch arg := a.(type) {
 		case *ast.Ident:
@@ -410,18 +421,24 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 			}
 			if IsSSEArgument(arg.Name) {
 				hasSSE = true
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			if def.IsSignalsCallback(arg.Name) {
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, sseCallbackSignature()))
+				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			tp, ok := DefaultScopeType(pl, def, arg.Name)
 			if !ok {
 				return nil, errAt(arg, "could not determine a type for %s", arg.Name)
 			}
-			params = append(params, types.NewVar(0, receiver.Obj().Pkg(), arg.Name, tp))
+			if err := addParam(arg, arg.Name, tp); err != nil {
+				return nil, err
+			}
 		case *ast.CallExpr:
 			if isCallTo(arg, callWrapperUnmarshalJSON) {
 				// Template-first iteration: without a defined method the decode
@@ -430,7 +447,9 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, templatesPacka
 				if err != nil {
 					return nil, err
 				}
-				params = append(params, types.NewVar(0, receiver.Obj().Pkg(), TemplateNameScopeIdentifierRequestBody, tp))
+				if err := addParam(arg, TemplateNameScopeIdentifierRequestBody, tp); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			if _, _, _, err := resolveCall(def, arg, templatesPackage, receiver, pl); err != nil {

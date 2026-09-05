@@ -1,0 +1,32 @@
+# A method that is not defined on the receiver gets its signature synthesized
+# from the call's arguments, so each argument becomes a parameter named after
+# it; a repeated argument would synthesize colliding parameter names.
+
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error:
+  GET / F(request, request)
+                   ^^^^^^^
+$WORK/template.gohtml:1:30: cannot infer a signature for F: the request argument is passed more than once; define the method on the receiver to use repeated arguments
+-- template.gohtml --
+{{- define "GET / F(request, request)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
