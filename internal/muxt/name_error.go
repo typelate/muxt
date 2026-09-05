@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // NameError locates an error in a route template name. Error is the
@@ -45,14 +46,14 @@ func (e *NameError) Error() string {
 }
 
 // DetailedError writes the template name with a marker under the
-// failing segment.
+// failing segment. Offset and Length are byte ranges; the marker is
+// measured in runes so it lines up under multi-byte characters.
 func (e *NameError) DetailedError(w io.Writer) error {
 	offset := min(max(e.Offset, 0), len(e.Name))
-	length := max(e.Length, 1)
-	if offset+length > len(e.Name) {
-		length = max(len(e.Name)-offset, 1)
-	}
-	_, err := fmt.Fprintf(w, "  %s\n  %s%s\n", e.Name, strings.Repeat(" ", offset), strings.Repeat("^", length))
+	end := min(offset+max(e.Length, 1), len(e.Name))
+	pad := utf8.RuneCountInString(e.Name[:offset])
+	width := max(utf8.RuneCountInString(e.Name[offset:end]), 1)
+	_, err := fmt.Fprintf(w, "  %s\n  %s%s\n", e.Name, strings.Repeat(" ", pad), strings.Repeat("^", width))
 	return err
 }
 
