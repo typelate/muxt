@@ -214,4 +214,4 @@ var templates = template.Must(
 ## Related
 
 - [Templates Variable Reference](../reference/templates-variable.md) - Detailed specification
-- [Advanced Patterns](advanced-patterns.md) - Production patterns for template organization
+- [Package Layout](../reference/package-layout.md) - Where files live in a production muxt package
