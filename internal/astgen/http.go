@@ -81,10 +81,15 @@ var httpCodes = map[int]string{
 // HTTPStatusName converts an http.Status constant name to its integer value
 func HTTPStatusName(name string) (int, error) {
 	n := strings.TrimPrefix(name, "http.")
+	candidates := make([]string, 0, len(httpCodes))
 	for code, constName := range httpCodes {
 		if constName == n {
 			return code, nil
 		}
+		candidates = append(candidates, constName)
+	}
+	if suggestion, ok := NearestString(n, candidates); ok {
+		return 0, fmt.Errorf("unknown %s; did you mean http.%s?", name, suggestion)
 	}
 	return 0, fmt.Errorf("unknown %s", name)
 }

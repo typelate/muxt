@@ -1,0 +1,31 @@
+# An unknown argument close in spelling to an in-scope identifier gets a
+# "did you mean" suggestion instead of the full identifier list.
+
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error:
+  GET / F(reqest)
+          ^^^^^^
+$WORK/template.gohtml:1:21: unknown argument reqest; did you mean request?
+-- template.gohtml --
+{{- define "GET / F(reqest)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
