@@ -1,0 +1,31 @@
+# When --use-receiver-type names a type that does not define a called method,
+# generate notes the inferred signature so the untyped fallback is visible
+# where it originates instead of surfacing later as check errors on any.
+
+muxt generate --use-receiver-type=T
+cmp stdout want-out.txt
+
+exec go vet .
+
+-- want-out.txt --
+note: T does not define ListPages(ctx context.Context) any; the generated RoutesReceiver declares this inferred signature — implement the method to type-check the template against real types
+-- template.gohtml --
+{{- define "GET / ListPages(ctx)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}

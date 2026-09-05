@@ -79,17 +79,22 @@ func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 	return UnmarshalUnsupported
 }
 
+// supportedUnmarshalTypes names the types a form field or path value
+// parses into, for error messages about everything else.
+const supportedUnmarshalTypes = "string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler"
+
 // checkUnmarshalable reports whether tp parses from a string, matching the
 // error wording of the pre-hydration generator: unsupported basic types name
-// the type directly, other types render in Go syntax.
+// the type directly, other types render in Go syntax. Both wordings list
+// the supported set so the fix needs no doc lookup.
 func checkUnmarshalable(pl []*packages.Package, tp types.Type, qual types.Qualifier) error {
 	if UnmarshalMethodFor(pl, tp) != UnmarshalUnsupported {
 		return nil
 	}
 	if _, ok := tp.(*types.Basic); ok {
-		return fmt.Errorf("method param type %s not supported", tp.String())
+		return fmt.Errorf("method param type %s not supported (supported: %s; bind as string and parse it yourself for other values)", tp.String(), supportedUnmarshalTypes)
 	}
-	return fmt.Errorf("unsupported type: %s", types.TypeString(tp, qual))
+	return fmt.Errorf("unsupported type: %s (supported: %s)", types.TypeString(tp, qual), supportedUnmarshalTypes)
 }
 
 // checkParsedArgument validates a path value or lastEventID parameter: it

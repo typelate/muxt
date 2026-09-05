@@ -197,4 +197,12 @@ Visit [http://localhost:8080/about](http://localhost:8080/about).
 
 ## What's next
 
-The templates here read from `.Request` because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.
+The templates here read from `.Request` because they have no method call. Once you want to fetch from a database or run real business logic, you add a receiver method and name it in the template — and the template then reads the method's result through `.Result`, not the bare dot:
+
+```gotemplate
+{{define "GET /square/{n} Square(n)"}}{{.Result}}{{end}}
+```
+
+A bare `{{.}}` renders empty in a route template because the dot is muxt's template data wrapper, not the method result. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.
+
+If you plan to fake the generated `RoutesReceiver` interface in tests (with counterfeiter or a similar tool), keep your receiver type and templates in an importable library package and keep `package main` a thin wrapper — Go cannot import `package main`, so an interface defined there cannot be faked from a test package.

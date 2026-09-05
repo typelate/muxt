@@ -83,6 +83,9 @@ func CheckForDuplicatePatterns(templates []Definition) error {
 		other, ok := patterns[pat]
 		if ok {
 			err := fmt.Errorf("duplicate route pattern %q", pat)
+			if a, b := other.definitionLocation(), def.definitionLocation(); a != "" && b != "" {
+				return fmt.Errorf("%w: first defined at %s, also defined at %s", err, a, b)
+			}
 			if a, b := def.SourceFile(), other.SourceFile(); a != "" && b != "" && a != b {
 				return fmt.Errorf("duplicate template in %s and %s: %w", a, b, err)
 			}
@@ -91,6 +94,16 @@ func CheckForDuplicatePatterns(templates []Definition) error {
 		patterns[pat] = def
 	}
 	return nil
+}
+
+// definitionLocation renders where this definition's name literal was
+// written: the full position when the define clause was located, the
+// file name alone when only that is known, or "".
+func (def Definition) definitionLocation() string {
+	if def.namePosition.IsValid() {
+		return def.namePosition.String()
+	}
+	return def.sourceFile
 }
 
 type Definition struct {
@@ -152,6 +165,11 @@ type Definition struct {
 	// this definition context, such as where the handler method is
 	// defined in Go source.
 	related []string
+
+	// synthesizedMethods lists the signatures ResolveCall inferred for
+	// methods the receiver does not define yet, so generation can tell
+	// the user typed checking is deferred until the method exists.
+	synthesizedMethods []string
 
 	Representation Representation
 
@@ -221,6 +239,12 @@ func (def Definition) ArgumentType(name string) (types.Type, bool) {
 	tp, ok := def.pathValueTypes[name]
 	return tp, ok
 }
+
+// SynthesizedMethods lists the signatures ResolveCall inferred for
+// handler methods the receiver does not define. The results are
+// untyped (any), so template field checks are deferred until the
+// method exists.
+func (def Definition) SynthesizedMethods() []string { return def.synthesizedMethods }
 
 func (def Definition) String() string { return def.name }
 
