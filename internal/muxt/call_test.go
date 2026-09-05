@@ -471,7 +471,7 @@ func TestArgument(t *testing.T) {
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))
-			defs, err := Definitions(ts, "templates")
+			defs, err := Definitions(ts, "templates", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

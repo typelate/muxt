@@ -13,7 +13,7 @@ import (
 func TestDefinitions(t *testing.T) {
 	t.Run("when one of the template names is a malformed pattern", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "HEAD /"}}{{end}}`))
-		_, err := muxt.Definitions(ts, "ts")
+		_, err := muxt.Definitions(ts, "ts", nil)
 		require.Error(t, err)
 	})
 }
@@ -21,7 +21,7 @@ func TestDefinitions(t *testing.T) {
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
-		defs, err := muxt.Definitions(ts, "ts")
+		defs, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`)
 	})
@@ -29,13 +29,13 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 		// 一覧 (Japanese "list") has no uppercase form, so no exported
 		// TemplateRoutePaths method name can be derived from it.
 		ts := template.Must(template.New("").Parse(`{{define "GET /items 一覧(ctx)"}}{{end}}`))
-		defs, err := muxt.Definitions(ts, "ts")
+		defs, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `cannot export identifier "一覧" for TemplateRoutePaths method: first character '一' has no uppercase form`)
 	})
 	t.Run("when handlers produce distinct method names", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items List(ctx)"}}{{end}}{{define "GET /items/{id} Show(ctx, id)"}}{{end}}`))
-		defs, err := muxt.Definitions(ts, "ts")
+		defs, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.NoError(t, muxt.CheckPathMethodCollisions(defs))
 	})
@@ -44,7 +44,7 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 func TestCheckForDuplicatePatterns(t *testing.T) {
 	t.Run("when the pattern is not unique", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET  / F1()"}}a{{end}} {{define "GET /  F2()"}}b{{end}}`))
-		definitions, err := muxt.Definitions(ts, "ts")
+		definitions, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
 		for _, def := range definitions {
@@ -55,7 +55,7 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 
 	t.Run("ensure hosts are normalized", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET  example.com/ F1()"}}a{{end}} {{define "GET Example.COM/  F2()"}}b{{end}}`))
-		definitions, err := muxt.Definitions(ts, "ts")
+		definitions, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
 		for _, def := range definitions {
@@ -66,7 +66,7 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 
 	t.Run("ensure paths are normalized", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "  /abc"}}a{{end}} {{define "/abc  "}}b{{end}}`))
-		definitions, err := muxt.Definitions(ts, "ts")
+		definitions, err := muxt.Definitions(ts, "ts", nil)
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
 		for _, def := range definitions {

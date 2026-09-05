@@ -222,14 +222,14 @@ func TestDefinitionsErrorIncludesSourceFile(t *testing.T) {
 	t.Run("template parsed from a file", func(t *testing.T) {
 		// ParseFS and ParseFiles record the file name as the tree's ParseName.
 		ts := template.Must(template.New("template.gohtml").Parse(`{{define "OPTIONS / F()"}}{{end}}`))
-		_, err := Definitions(ts, "templates")
+		_, err := Definitions(ts, "templates", nil)
 		require.ErrorContains(t, err, "template.gohtml: OPTIONS method not allowed")
 	})
 	t.Run("template defined without a file", func(t *testing.T) {
 		// Parse-defined templates carry their own name as ParseName; the
 		// error must not be prefixed with the template name.
 		ts := template.Must(template.New("OPTIONS / F()").Parse(``))
-		_, err := Definitions(ts, "templates")
+		_, err := Definitions(ts, "templates", nil)
 		require.EqualError(t, err, "OPTIONS method not allowed")
 	})
 }

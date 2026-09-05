@@ -79,12 +79,13 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var results []*Routes
 
 	for _, tv := range config.TemplatesVariables {
-		ts, functions, err := asteval.Templates(tv, pkg)
+		lt, ts, err := asteval.HTMLTemplates(tv, pkg)
 		if err != nil {
 			return nil, err
 		}
+		functions := lt.CollectedFunctions()
 
-		definitions, err := muxt.Definitions(ts, tv)
+		definitions, err := muxt.Definitions(ts, tv, lt)
 		if err != nil {
 			return nil, err
 		}

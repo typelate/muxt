@@ -125,17 +125,17 @@ func ResolveCall(def *Definition, templatesPackage *types.Package, receiver *typ
 	}
 	sig, isMethod, args, err := resolveCall(def, def.call, templatesPackage, receiver, pl)
 	if err != nil {
-		return err
+		return def.finishNameError(err, def.handlerSpan())
 	}
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
-		return err
+		return def.finishNameError(err, def.handlerSpan())
 	}
 	def.resultShape = shape
-	return resolveCallbackShapes(def)
+	return def.finishNameError(resolveCallbackShapes(def), def.handlerSpan())
 }
 
 // resolveCallbackShapes validates each render-callback argument against the
@@ -768,7 +768,7 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
+	return errAt(call, "the %[1]s wrapper requires exactly one argument, the reserved %[2]s identifier: %[1]s(%[2]s)", name, TemplateNameScopeIdentifierRequestBody)
 }
 
 // rewriteSignalsArguments replaces each signals argument with

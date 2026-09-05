@@ -2,6 +2,7 @@ package muxt
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -15,21 +16,34 @@ import (
 	"strings"
 	"text/template/parse"
 
+	"github.com/typelate/check"
+
 	"github.com/typelate/muxt/internal/astgen"
 )
 
-func Definitions(ts *template.Template, templatesVariable string) ([]Definition, error) {
+// Definitions parses route definitions from the template names in ts.
+// The optional definitions finder locates each template's define clause
+// so template name errors carry a file position; pass nil when the
+// source locations are unknown.
+func Definitions(ts *template.Template, templatesVariable string, definitions check.DefinitionFinder) ([]Definition, error) {
 	var defs []Definition
 	for _, t := range ts.Templates() {
 		mt, err, ok := newDefinition(t)
 		if !ok {
 			continue
 		}
-		if err != nil {
-			if fileName := templateSourceFile(t); fileName != "" {
-				return defs, fmt.Errorf("%s: %w", fileName, err)
+		if definitions != nil {
+			if d, found := definitions.FindDefinition(t.Name()); found && d.TemplateName.IsValid() {
+				// The span includes the quotes; the name starts one byte in.
+				pos := d.TemplateName.Position
+				pos.Column++
+				pos.Offset++
+				mt.namePosition = pos
 			}
-			return defs, err
+		}
+		if err != nil {
+			mt.sourceFile = templateSourceFile(t)
+			return defs, mt.finishNameError(err, mt.handlerSpan())
 		}
 		// Extract source file from ParseName if available
 		if t.Tree != nil && t.Tree.ParseName != "" {
@@ -124,6 +138,15 @@ type Definition struct {
 
 	usesSignals     bool
 	signalsCallback string
+
+	// spans records the byte offsets of the matched name segments and
+	// handlerOffset the offset of the trimmed handler expression, so
+	// errors can point at the failing part of the name. namePosition is
+	// where the name literal's content begins in the defining file, when
+	// the definition was found.
+	spans         nameSpans
+	handlerOffset int
+	namePosition  token.Position
 
 	Representation Representation
 
@@ -220,19 +243,23 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 		defaultStatusCode: http.StatusOK,
 		pathValueTypes:    make(map[string]types.Type),
 		template:          t,
+		spans:             newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
+	}
+	if def.handler != "" && def.spans.call[0] >= 0 {
+		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)
 	}
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
 		if strings.HasPrefix(httpStatusCode, "http.Status") {
 			code, err := astgen.HTTPStatusName(httpStatusCode)
 			if err != nil {
-				return Definition{}, fmt.Errorf("failed to parse status code: %w", err), true
+				return def, def.spanErrorf(def.spans.status, "failed to parse status code: %w", err), true
 			}
 			def.defaultStatusCode = code
 		} else {
 			code, err := strconv.Atoi(strings.TrimSpace(httpStatusCode))
 			if err != nil {
-				return Definition{}, fmt.Errorf("failed to parse status code: %w", err), true
+				return def, def.spanErrorf(def.spans.status, "failed to parse status code: %w", err), true
 			}
 			def.defaultStatusCode = code
 		}
@@ -242,20 +269,20 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 		segments := strings.Split(def.path[1:], "/")
 		for _, segment := range segments {
 			if segment == "" {
-				return Definition{}, fmt.Errorf("template has an empty path segment: %s", def.name), true
+				return def, def.spanErrorf(def.spans.path, "template has an empty path segment: %s", def.name), true
 			}
 		}
 	}
 
 	switch def.method {
 	default:
-		return def, fmt.Errorf("%s method not allowed", def.method), true
+		return def, def.spanErrorf(def.spans.method, "%s method not allowed", def.method), true
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
 	pathValueNames := def.PathValueIdentifiers()
 	if err := checkPathValueNames(pathValueNames); err != nil {
-		return Definition{}, err, true
+		return def, def.spanErrorf(def.spans.path, "%w", err), true
 	}
 	def.pathValueNames = pathValueNames
 
@@ -342,18 +369,16 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	}
 	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
 	if err != nil {
-		// msg := err.Error()
-		// regexp.MustCompile(`template_name\.go:\d*:\d*: (.*)`)
 		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
-		return fmt.Errorf("failed to parse handler expression %s: %v", loc, err)
+		return def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
-		return fmt.Errorf("expected call expression, got: %s", astgen.Format(e))
+		return errAt(e, "expected call expression, got: %s", astgen.Format(e))
 	}
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
-		return fmt.Errorf("expected function identifier, got: %s", astgen.Format(call.Fun))
+		return errAt(call.Fun, "expected function identifier, got: %s", astgen.Format(call.Fun))
 	}
 	if representation, inner, innerFun, ok := peelRepresentationWrapper(fun, call); ok {
 		def.Representation = representation
@@ -361,7 +386,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		fun = innerFun
 	}
 	if call.Ellipsis != token.NoPos {
-		return fmt.Errorf("unexpected ellipsis")
+		return errAt(call, "unexpected ellipsis")
 	}
 
 	def.usesSignals = rewriteSignalsArguments(call, pathParameterNames)
@@ -380,7 +405,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		return err
 	}
 	if n := countBodyConsumers(call); n > 1 {
-		return fmt.Errorf("call %s reads the request body %d times; the request body is a single-use stream and may be consumed at most once", astgen.Format(call.Fun), n)
+		return errAt(call, "call %s reads the request body %d times; the request body is a single-use stream and may be consumed at most once", astgen.Format(call.Fun), n)
 	}
 	rewriteBodyFormWrappers(call)
 
@@ -390,7 +415,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
 
 	if (def.Representation == RepresentationSSE || def.Representation == RepresentationMarshalJSON) && def.hasResponseWriterArg {
-		return fmt.Errorf("%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
+		return errAt(call, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 	}
 
 	return nil
@@ -473,7 +498,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 		return err
 	}
 	if _, hasForm, hasMultipart := scanBodyBindings(call); hasForm && hasMultipart {
-		return fmt.Errorf("call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
+		return errAt(call, "call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
 	}
 	return nil
 }
@@ -494,10 +519,10 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 			_, inScope := slices.BinarySearch(identifiers, exp.Name)
 			sseScoped := sse && !inScope && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
 			if !inScope && !sseScoped {
-				return fmt.Errorf("unknown argument %s at index %d", exp.Name, i)
+				return errAt(exp, "unknown argument %s at index %d", exp.Name, i)
 			}
 			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
-				return fmt.Errorf("the %s callback must be a direct argument of the route's method call", exp.Name)
+				return errAt(exp, "the %s callback must be a direct argument of the route's method call", exp.Name)
 			}
 		case *ast.CallExpr:
 			if isBodyUnmarshalCall(exp) {
@@ -507,10 +532,16 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 				continue
 			}
 			if err := checkCallArguments(identifiers, exp, sse, true); err != nil {
-				return fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
+				wrapped := fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
+				if pe, ok := errors.AsType[*positionedError](err); ok {
+					// Keep the inner argument's position on the wrapped
+					// message.
+					return &positionedError{pos: pe.pos, end: pe.end, err: wrapped}
+				}
+				return wrapped
 			}
 		default:
-			return fmt.Errorf("expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
+			return errAt(a, "expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
 		}
 	}
 	return nil

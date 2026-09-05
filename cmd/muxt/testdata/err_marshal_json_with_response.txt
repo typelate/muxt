@@ -2,7 +2,9 @@
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-Error: $WORK/template.gohtml: marshalJSON handler cannot use a "response" argument
+  POST /api/save marshalJSON(Save(ctx, response))
+                             ^^^^^^^^^^^^^^^^^^^
+Error: $WORK/template.gohtml:1:40: marshalJSON handler cannot use a "response" argument
 -- template.gohtml --
 {{- define "POST /api/save marshalJSON(Save(ctx, response))" -}}{{- end -}}
 -- go.mod --

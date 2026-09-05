@@ -26,6 +26,7 @@ import (
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 const (
@@ -239,6 +240,12 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			}
 			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
+				if nameErr, ok := errors.AsType[*muxt.NameError](err); ok {
+					// The long form shows the template name with a marker
+					// under the failing segment; the short form follows as
+					// the returned error.
+					_ = nameErr.DetailedError(cmd.ErrOrStderr())
+				}
 				return err
 			}
 
