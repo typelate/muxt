@@ -57,6 +57,17 @@ func TestNoPackageError(t *testing.T) {
 		assert.Contains(t, err.Error(), "GOWORK=off")
 		assert.Contains(t, err.Error(), "go work use "+dir)
 	})
+	t.Run("GOWORK auto discovers a parent go.work", func(t *testing.T) {
+		t.Setenv("GOWORK", "auto")
+		parent := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
+		dir := filepath.Join(parent, "app")
+		require.NoError(t, os.Mkdir(dir, 0o700))
+		err := asteval.NoPackageError(dir, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), filepath.Join(parent, "go.work"))
+		assert.NotContains(t, err.Error(), "GOWORK=auto is set")
+	})
 	t.Run("an explicit GOWORK is named", func(t *testing.T) {
 		t.Setenv("GOWORK", "/somewhere/go.work")
 		err := asteval.NoPackageError(t.TempDir(), nil)
