@@ -3,7 +3,6 @@ package analysis
 import (
 	"bytes"
 	"cmp"
-	"fmt"
 	"go/token"
 	"go/types"
 	"io"
@@ -61,7 +60,7 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) ([]*Routes, error) {
 	pkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
-		return nil, fmt.Errorf("package not found in working directory")
+		return nil, asteval.NoPackageError(wd, pl)
 	}
 
 	config.PackagePath = pkg.PkgPath

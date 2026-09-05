@@ -68,7 +68,7 @@ type LoadedTemplates struct {
 func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
 	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
-		return nil, fmt.Errorf("package not found at %s", wd)
+		return nil, NoPackageError(wd, pl)
 	}
 
 	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
