@@ -4,7 +4,7 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
   GET /api/check marshalJSON(Check(ctx))
                  ^^^^^^^^^^^^^^^^^^^^^^^
-Error: $WORK/template.gohtml:1:28: marshalJSON requires a non-error result but Check(_ context.Context) error only returns an error
+$WORK/template.gohtml:1:28: marshalJSON requires a non-error result but Check(_ context.Context) error only returns an error
 -- template.gohtml --
 {{- define "GET /api/check marshalJSON(Check(ctx))" -}}{{- end -}}
 -- go.mod --

@@ -4,7 +4,7 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
   POST /hooks Save(ctx, body)
               ^^^^^^^^^^^^^^^
-Error: $WORK/template.gohtml:1:25: body parameter must have type io.Reader, got string
+$WORK/template.gohtml:1:25: body parameter must have type io.Reader, got string
 -- template.gohtml --
 {{- define "POST /hooks Save(ctx, body)" -}}<p>{{- .Result -}}</p>{{- end -}}
 -- go.mod --

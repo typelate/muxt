@@ -242,9 +242,11 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if err != nil {
 				if nameErr, ok := errors.AsType[*muxt.NameError](err); ok {
 					// The long form shows the template name with a marker
-					// under the failing segment; the short form follows as
-					// the returned error.
+					// under the failing segment, then the short form on its
+					// own line without cobra's "Error: " prefix.
+					cmd.SilenceErrors = true
 					_ = nameErr.DetailedError(cmd.ErrOrStderr())
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), nameErr.Error())
 				}
 				return err
 			}

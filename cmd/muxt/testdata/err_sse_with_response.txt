@@ -4,7 +4,7 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
   GET /x sse(Endpoint(response))
              ^^^^^^^^^^^^^^^^^^
-Error: $WORK/template.gohtml:1:24: sse handler cannot use a "response" argument
+$WORK/template.gohtml:1:24: sse handler cannot use a "response" argument
 -- template.gohtml --
 {{- define "GET /x sse(Endpoint(response))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
