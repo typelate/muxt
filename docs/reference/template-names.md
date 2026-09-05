@@ -164,7 +164,8 @@ render while holding a lock so the template observes a consistent snapshot of
 state. If the callback is never invoked the response body is empty and muxt
 returns `204 No Content`.
 
-To stream **Server-Sent Events**, wrap the whole method call in `sse(...)`:
+To stream **Server-Sent Events**, wrap the whole method call in `sse`, as in
+`sse(Stream(ctx, execute))`:
 
 ```gotmpl
 {{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
@@ -188,8 +189,11 @@ the method call and renders a different template: `execute` renders the
 route's own template, while a prefixed callback renders the template named
 exactly after the argument (`sseClock` renders `{{define "sseClock"}}`). Those
 templates must exist at generate time. Each callback has its own result type and
-builds its own `SSETemplateData`, so they need not share a `T`. Argument order
-within the call doesn't matter.
+builds its own `SSETemplateData`, so they need not share a `T`. The order of
+these callback arguments within the call doesn't matter — but this is true of
+sse callbacks only. Everywhere else, arguments bind to the method's parameters
+by position, so reordering `form` or `ctx` past a callback binds the wrong
+parameter.
 
 Under `--output-datastar` each event is instead framed with
 [Datastar](https://data-star.dev)'s patch-elements protocol: the event name is
@@ -313,9 +317,10 @@ Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#h
 ```
 
 **Notes:** Path segments may include `{param}` or `{param...}`. Unreserved chars: `[a-zA-Z0-9-_.~]`.
-Wrappers like `sse(...)` and `marshalJSON(...)` are not separate productions —
-they are ordinary `<call>` syntax whose names are recognized semantically at
-the outermost position (each takes exactly one `<call>` argument).
+Wrappers like `sse(Stream(ctx, execute))` and `marshalJSON(GetUser(ctx))` are
+not separate productions — they are ordinary `<call>` syntax whose names are
+recognized semantically at the outermost position (each takes exactly one
+`<call>` argument).
 
 ## Test Files by Category
 

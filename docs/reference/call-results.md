@@ -1,7 +1,6 @@
 # Call Results Reference
 
 Receiver method return values control template data and HTTP status.
-Use this reference when designing method signatures with team members.
 
 ## Return Patterns Quick Reference
 
@@ -116,9 +115,9 @@ error through `.Err`. Returning nil without ever calling `execute` responds
 **Warning:** without `execute` in the call, a bare `error` result is treated as
 Pattern 1 — the error value lands in `.Result` and `.Err` stays nil.
 
-## JSON Responses: `marshalJSON(...)`
+## JSON Responses: `marshalJSON(GetUser(ctx))`
 
-Wrapping the call in `marshalJSON(...)` makes the route respond
+Wrapping the call in `marshalJSON` makes the route respond
 `application/json` with the marshaled result instead of rendered HTML:
 
 ```gotmpl
