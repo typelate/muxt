@@ -312,6 +312,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, templatesPackage *types.Pa
 			fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
 			receiver.AddMethod(fn)
 			object = fn
+			def.synthesizedMethods = append(def.synthesizedMethods, fun.Name+strings.TrimPrefix(types.TypeString(ms, typeQualifier(receiver.Obj().Pkg())), "func"))
 		}
 	}
 	if call == def.call {
