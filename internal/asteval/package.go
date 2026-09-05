@@ -60,16 +60,52 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*packa
 		return nil, nil, nil, fmt.Errorf("package not found at %s", wd)
 	}
 
-	ts, fm, err := Templates(wd, templatesVariable, pkg)
+	lt, ts, err := loadHTMLTemplates(templatesVariable, pkg)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Set up the check package for template type analysis
-	fns := check.DefaultFunctions(pkg.Types)
-	fns = fns.Add(check.Functions(fm))
-	global := check.NewGlobal(pkg.Types, pkg.Fset, NewForrest(ts), fns)
+	global := check.NewGlobal(pkg.Types, pkg.Fset, lt, lt.Functions())
+	global.Definitions = lt
 	return pkg, global, ts, nil
+}
+
+// Templates evaluates the package-level template variable through
+// check.LoadTemplates and returns the html/template value together with
+// the functions collected from Funcs calls in its construction chain.
+func Templates(templatesVariable string, pkg *packages.Package) (*template.Template, check.Functions, error) {
+	lt, ts, err := loadHTMLTemplates(templatesVariable, pkg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ts, lt.CollectedFunctions(), nil
+}
+
+func loadHTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
+	lt, err := check.LoadTemplates(pkg, templatesVariable)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ts, ok := lt.HTML(); ok {
+		return lt, ts, nil
+	}
+	// Muxt introspects template names and trees; it never executes the
+	// user's variable, so a text/template set works through an
+	// html/template value carrying the same trees.
+	textTemplates, ok := lt.Text()
+	if !ok {
+		return nil, nil, fmt.Errorf("variable %s is not a template", templatesVariable)
+	}
+	ts := template.New(textTemplates.Name())
+	for _, t := range textTemplates.Templates() {
+		if t.Tree == nil {
+			continue
+		}
+		if _, err := ts.AddParseTree(t.Name(), t.Tree); err != nil {
+			return nil, nil, fmt.Errorf("adopting text/template %q: %w", t.Name(), err)
+		}
+	}
+	return lt, ts, nil
 }
 
 func FindType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {

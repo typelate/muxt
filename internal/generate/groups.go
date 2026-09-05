@@ -22,7 +22,7 @@ func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packag
 		byFile: make(map[string][]muxt.Definition),
 	}
 	for _, tv := range config.TemplatesVariables {
-		ts, _, err := asteval.Templates(wd, tv, routesPkg)
+		ts, _, err := asteval.Templates(tv, routesPkg)
 		if err != nil {
 			return result, err
 		}

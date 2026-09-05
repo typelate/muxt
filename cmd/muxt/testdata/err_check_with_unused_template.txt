@@ -8,8 +8,8 @@ cmpenv stderr want-err.txt
 
 -- want-err.txt --
 Unused templates:
-  - $WORK/index.gohtml:5:27: "orphan-partial"
-  - $WORK/template.gohtml:36:27: "unused-partial"
+  - $WORK/index.gohtml:5:28: "orphan-partial"
+  - $WORK/template.gohtml:36:28: "unused-partial"
 Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Endpoint()" }}

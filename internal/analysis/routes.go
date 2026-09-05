@@ -79,7 +79,7 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var results []*Routes
 
 	for _, tv := range config.TemplatesVariables {
-		ts, functions, err := asteval.Templates(wd, tv, pkg)
+		ts, functions, err := asteval.Templates(tv, pkg)
 		if err != nil {
 			return nil, err
 		}
