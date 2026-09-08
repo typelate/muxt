@@ -313,12 +313,10 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 					}
 					return err
 				}
-				switch file.Routes {
-				case 0:
-					_, _ = fmt.Fprintf(stdout, "wrote %s\n", filepath.Base(file.Path))
-				case 1:
+				// Always include the count — a uniform line parses reliably.
+				if file.Routes == 1 {
 					_, _ = fmt.Fprintf(stdout, "wrote %s: 1 route\n", filepath.Base(file.Path))
-				default:
+				} else {
 					_, _ = fmt.Fprintf(stdout, "wrote %s: %d routes\n", filepath.Base(file.Path), file.Routes)
 				}
 				newGeneratedFiles[file.Path] = true
