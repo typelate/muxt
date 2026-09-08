@@ -30,18 +30,22 @@ type CheckConfiguration struct {
 	TemplatesVariables []string
 }
 
-func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) error {
+// Check validates the package's templates and returns how many
+// ExecuteTemplate call sites it checked, so the caller can report the
+// count on success.
+func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) (int, error) {
 	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
 	if !ok {
-		return asteval.NoPackageError(wd, pl)
+		return 0, asteval.NoPackageError(wd, pl)
 	}
 
 	var errs []error
+	totalChecked := 0
 
 	for _, tv := range config.TemplatesVariables {
 		lt, err := asteval.LoadTemplates(wd, tv, pl)
 		if err != nil {
-			return err
+			return totalChecked, err
 		}
 		global, ts := lt.Global, lt.HTML
 
@@ -59,8 +63,10 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 		}
 
 		executedTemplates := make(map[string][]TemplateExecution)
+		checkedTemplates := 0
 
 		for c := range lt.Templates.ExecuteTemplateCalls() {
+			checkedTemplates++
 			templateName, dataType := c.TemplateName, c.DataType
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
@@ -105,18 +111,16 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 			}
 			errs = append(errs, fmt.Errorf("unused templates %d", len(unusedPartials)))
 		}
+		totalChecked += checkedTemplates
 	}
 
 	switch len(errs) {
 	case 0:
-		if config.Verbose {
-			log.Println(`OK`)
-		}
-		return nil
+		return totalChecked, nil
 	case 1:
-		return fmt.Errorf("1 error")
+		return totalChecked, fmt.Errorf("1 error")
 	default:
-		return fmt.Errorf("%d errors", len(errs))
+		return totalChecked, fmt.Errorf("%d errors", len(errs))
 	}
 }
 

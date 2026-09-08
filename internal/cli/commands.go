@@ -148,11 +148,17 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				return err
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
-			if err := analysis.Check(config, *workingDirectory, logger, fileSet, pl); err != nil {
+			checked, err := analysis.Check(config, *workingDirectory, logger, fileSet, pl)
+			if err != nil {
 				if printMultiLineError(cmd, err) {
 					return err
 				}
 				return fmt.Errorf("fail: %s", err)
+			}
+			if checked == 1 {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "ok: 1 template")
+			} else {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %d templates\n", checked)
 			}
 			return nil
 		},
@@ -306,6 +312,14 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 						}
 					}
 					return err
+				}
+				switch file.Routes {
+				case 0:
+					_, _ = fmt.Fprintf(stdout, "wrote %s\n", filepath.Base(file.Path))
+				case 1:
+					_, _ = fmt.Fprintf(stdout, "wrote %s: 1 route\n", filepath.Base(file.Path))
+				default:
+					_, _ = fmt.Fprintf(stdout, "wrote %s: %d routes\n", filepath.Base(file.Path), file.Routes)
 				}
 				newGeneratedFiles[file.Path] = true
 			}

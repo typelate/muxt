@@ -474,7 +474,7 @@ func TestNewTemplateName(t *testing.T) {
 			In:       "POST / http.StatusBANANA F()",
 			ExpMatch: true,
 			Error: func(t *testing.T, err error) {
-				assert.ErrorContains(t, err, "invalid status code http.StatusBANANA: unknown http.StatusBANANA")
+				assert.ErrorContains(t, err, "invalid status code http.StatusBANANA: not an http.Status constant")
 			},
 		},
 		{

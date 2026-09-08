@@ -52,6 +52,10 @@ const (
 type GeneratedFile struct {
 	Path    string
 	Content string
+
+	// Routes counts the route handlers registered in this file, for the
+	// one-line success report after the file is written.
+	Routes int
 }
 
 type RoutesFileConfiguration struct {
@@ -271,36 +275,45 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Append main file to generated files
-	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content})
+	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content, Routes: len(topLevelTemplateRoutes)})
 
 	return generatedFiles, nil
 }
 
-// hydrateGroup resolves each definition's call. When noteSynthesized
-// is set (a --use-receiver-type run with a non-nil logger), methods the
+// hydrateGroup resolves each definition's call, collecting every
+// resolution error so one run reports them all. When noteSynthesized is
+// set (a --use-receiver-type run with a non-nil logger), methods the
 // named receiver does not define are announced with their inferred
-// signatures; the default mode synthesizes every method by design, so
-// it stays quiet.
+// signatures — one line per method and the explanation once after the
+// list; the default mode synthesizes every method by design, so it
+// stays quiet.
 func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized bool) error {
+	var resolveErrs []error
+	synthesized := 0
 	for i := range defs {
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
 		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages()); err != nil {
-			return err
+			resolveErrs = append(resolveErrs, err)
+			continue
 		}
 		if noteSynthesized {
 			for _, sig := range defs[i].SynthesizedMethods() {
-				// The result is any until the method exists, so field checks
-				// on .Result are deferred; say so where it originates.
-				logger.Printf("note: %s does not define %s; the generated RoutesReceiver declares this inferred signature — implement the method to type-check the template against real types", receiver.Obj().Name(), sig)
+				logger.Printf("note: %s does not define %s", receiver.Obj().Name(), sig)
+				synthesized++
 			}
 		}
 		if err := accumulateReceiverMethods(defs[i].FunctionIdentifier().Name, defs[i].Signature(), defs[i].IsMethod(), defs[i].Arguments, file, receiverInterface); err != nil {
 			return err
 		}
 	}
-	return nil
+	if synthesized > 0 {
+		// The results are any until the methods exist, so field checks
+		// on .Result are deferred; say so once.
+		logger.Printf("note: the inferred signatures return any — implement the methods to type-check the templates against real types")
+	}
+	return muxt.CombineErrors(resolveErrs)
 }
 
 func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool, args []muxt.Argument, file *File, receiverInterface *ast.InterfaceType) error {
@@ -365,6 +378,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		generatedFiles = append(generatedFiles, GeneratedFile{
 			Path:    outputFilePath,
 			Content: content,
+			Routes:  len(definitions),
 		})
 
 		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
