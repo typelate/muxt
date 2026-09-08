@@ -4,6 +4,8 @@ Complete specification for the `muxt` command-line interface.
 
 muxt loads Go packages the way the `go` command does and inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
 
+`MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true` silences the per-route warning `muxt generate` prints when a route's method takes the `response` argument (the escape hatch that makes the method responsible for the whole response).
+
 ## Quick Reference
 
 | Command | Purpose | Common Flags |

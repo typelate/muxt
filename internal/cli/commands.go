@@ -102,7 +102,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	rootCmd.SetErr(stderr)
 
 	rootCmd.AddCommand(
-		generateCommand(workingDirectory),
+		generateCommand(workingDirectory, getEnv),
 		versionCommand(),
 		checkCommand(workingDirectory),
 		listTemplateCallersCommand(workingDirectory),
@@ -194,7 +194,11 @@ func addGenerateFlagsForModule(flagSet *pflag.FlagSet, config *generate.RoutesFi
 	addGenerateFlags(flagSet, config, &deprecatedTemplatesVar)
 }
 
-func generateCommand(workingDirectory *string) *cobra.Command {
+// envSilenceHTTPResponseWarning silences the per-route warning about
+// the response argument when set to a true value.
+const envSilenceHTTPResponseWarning = "MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT"
+
+func generateCommand(workingDirectory *string, getEnv func(string) string) *cobra.Command {
 	var (
 		config                 generate.RoutesFileConfiguration
 		deprecatedTemplatesVar string
@@ -208,6 +212,7 @@ func generateCommand(workingDirectory *string) *cobra.Command {
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
+			config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
 			stdout := cmd.OutOrStdout()
 			for _, tv := range config.TemplatesVariables {
 				if tv != "" && !token.IsIdentifier(tv) {

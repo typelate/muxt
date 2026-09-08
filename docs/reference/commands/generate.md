@@ -166,6 +166,10 @@ TemplateRoutes(mux, app, "/docs")
 
 ## Related
 
+## Environment
+
+A route whose method takes the `response` argument is an escape hatch: muxt does not manage that route's status codes, headers, or rendering, and generate prints a per-route warning saying so. Set `MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true` to silence it.
+
 - [Template Name Syntax](../template-names.md) — Route naming syntax
 - [Call Parameters](../call-parameters.md) — Method parameter parsing
 - [Call Results](../call-results.md) — Return value handling
