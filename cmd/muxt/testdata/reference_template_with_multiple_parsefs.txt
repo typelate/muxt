@@ -10,11 +10,11 @@ exec go build -o build ./cmd
 generating handler for pattern GET /
 generating handler for pattern GET /form
 generating handler for pattern POST /form
+wrote template_routes.go: 3 routes
 -- want-check.txt --
 checking endpoint GET /
 checking endpoint GET /form
 checking endpoint POST /form
-OK
 -- index.gohtml --
 {{define "GET /" }}
 	<h1>Hello, world!</h1>

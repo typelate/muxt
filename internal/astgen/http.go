@@ -1,6 +1,7 @@
 package astgen
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -88,10 +89,12 @@ func HTTPStatusName(name string) (int, error) {
 		}
 		candidates = append(candidates, constName)
 	}
+	// The caller prefixes the message with the token ("invalid status
+	// code X: …"), so neither branch repeats it.
 	if suggestion, ok := NearestString(n, candidates); ok {
-		return 0, fmt.Errorf("unknown %s; did you mean http.%s?", name, suggestion)
+		return 0, fmt.Errorf("did you mean http.%s?", suggestion)
 	}
-	return 0, fmt.Errorf("unknown %s", name)
+	return 0, errors.New("not an http.Status constant")
 }
 
 // HTTPStatusCode creates an AST expression for an HTTP status code.

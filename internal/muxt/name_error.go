@@ -235,3 +235,51 @@ func (def *Definition) finishNameError(err error, fallback [2]int) error {
 	ne.Related = append(ne.Related, def.related...)
 	return ne
 }
+
+// ErrorList joins several template errors so one run reports them all.
+// Error stays a single line naming the first failure; MultiLineError
+// renders each member's verbose form separated by blank lines.
+type ErrorList []error
+
+func (l ErrorList) Error() string {
+	switch len(l) {
+	case 1:
+		return l[0].Error()
+	case 2:
+		return fmt.Sprintf("%s (and 1 more error)", l[0].Error())
+	default:
+		return fmt.Sprintf("%s (and %d more errors)", l[0].Error(), len(l)-1)
+	}
+}
+
+func (l ErrorList) Unwrap() []error { return l }
+
+// MultiLineError renders every member's verbose form.
+func (l ErrorList) MultiLineError() string {
+	var sb strings.Builder
+	for i, err := range l {
+		if i > 0 {
+			sb.WriteString("\n\n")
+		}
+		if multiLine, ok := err.(MultiLineError); ok {
+			sb.WriteString(multiLine.MultiLineError())
+		} else {
+			sb.WriteString(err.Error())
+		}
+	}
+	return sb.String()
+}
+
+// CombineErrors returns nil for no errors, the error itself for one,
+// and an ErrorList for several, so single-error runs keep their
+// original type for errors.As.
+func CombineErrors(errs []error) error {
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return ErrorList(errs)
+	}
+}

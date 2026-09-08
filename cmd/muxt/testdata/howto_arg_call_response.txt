@@ -16,7 +16,6 @@ exec go test -cover
 
 -- want-check-verbose.txt --
 checking endpoint GET / F(ctx, Headers(response))
-OK
 -- want-check-quiet.txt --
 -- template.gohtml --
 {{define "GET / F(ctx, Headers(response))"}}{{end}}

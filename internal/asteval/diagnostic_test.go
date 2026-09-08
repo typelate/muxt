@@ -76,6 +76,43 @@ func TestNoPackageError(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), "GOWORK=/somewhere/go.work is set")
 	})
+	t.Run("the remediation names the module root, not the package dir", func(t *testing.T) {
+		t.Setenv("GOWORK", "")
+		parent := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
+		module := filepath.Join(parent, "app")
+		pkgDir := filepath.Join(module, "internal", "hypertext")
+		require.NoError(t, os.MkdirAll(pkgDir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(module, "go.mod"), []byte("module app\n\ngo 1.24\n"), 0o600))
+		err := asteval.NoPackageError(pkgDir, nil)
+		require.Error(t, err)
+		assert.Contains(t, multiLine(t, err), "go work use "+module)
+		assert.NotContains(t, multiLine(t, err), "go work use "+pkgDir)
+	})
+	t.Run("a directory that loaded with errors is not called missing", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		dir := t.TempDir()
+		pl := []*packages.Package{{PkgPath: dir, Errors: []packages.Error{{Msg: "contained in a module that is not one of the workspace modules"}}}}
+		err := asteval.NoPackageError(dir, pl)
+		require.Error(t, err)
+		assert.Equal(t, "the Go package at "+dir+" loaded, but with errors", err.Error())
+		assert.NotContains(t, multiLine(t, err), "no Go package found")
+	})
+	t.Run("a load failure strips the driver plumbing", func(t *testing.T) {
+		// A go.work naming a missing module makes go list itself fail;
+		// the driver wraps that as "err: exit status 1: stderr: go: …".
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module broken\n\ngo 1.24\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.work"), []byte("go 1.24\n\nuse (\n\t.\n\t./missing\n)\n"), 0o600))
+		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+		_, _, err := asteval.LoadPackages(dir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load Go packages from "+dir)
+		msg := multiLine(t, err)
+		assert.NotContains(t, msg, "stderr:")
+		assert.NotContains(t, msg, "exit status")
+		assert.Contains(t, msg, "go: ")
+	})
 	t.Run("GOWORK off adds no workspace note", func(t *testing.T) {
 		t.Setenv("GOWORK", "off")
 		err := asteval.NoPackageError(t.TempDir(), nil)

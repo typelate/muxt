@@ -29,7 +29,7 @@ func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*package
 		Dir:  wd,
 	}, patterns...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, loadFailedError(wd, err)
 	}
 	return fileSet, pl, err
 }

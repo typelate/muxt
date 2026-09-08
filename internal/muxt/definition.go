@@ -27,6 +27,11 @@ import (
 // source locations are unknown.
 func Definitions(ts *template.Template, templatesVariable string, definitions check.DefinitionFinder) ([]Definition, error) {
 	var defs []Definition
+	type nameFailure struct {
+		def Definition
+		err error
+	}
+	var failures []nameFailure
 	for _, t := range ts.Templates() {
 		mt, err, ok := newDefinition(t)
 		if !ok {
@@ -42,8 +47,10 @@ func Definitions(ts *template.Template, templatesVariable string, definitions ch
 			}
 		}
 		if err != nil {
+			// Collect every malformed name so one run reports them all.
 			mt.sourceFile = templateSourceFile(t)
-			return defs, mt.finishNameError(err, mt.handlerSpan())
+			failures = append(failures, nameFailure{def: mt, err: mt.finishNameError(err, mt.handlerSpan())})
+			continue
 		}
 		// Extract source file from ParseName if available
 		if t.Tree != nil && t.Tree.ParseName != "" {
@@ -55,6 +62,24 @@ func Definitions(ts *template.Template, templatesVariable string, definitions ch
 		mt.templatesVariable = templatesVariable
 
 		defs = append(defs, mt)
+	}
+	if len(failures) > 0 {
+		// The template set iterates in map order; sort so the report is
+		// stable across runs.
+		slices.SortFunc(failures, func(a, b nameFailure) int {
+			if n := cmp.Compare(a.def.sourceFile, b.def.sourceFile); n != 0 {
+				return n
+			}
+			if n := cmp.Compare(a.def.namePosition.Offset, b.def.namePosition.Offset); n != 0 {
+				return n
+			}
+			return cmp.Compare(a.def.name, b.def.name)
+		})
+		errs := make([]error, 0, len(failures))
+		for _, failure := range failures {
+			errs = append(errs, failure.err)
+		}
+		return defs, CombineErrors(errs)
 	}
 	slices.SortFunc(defs, Definition.byPathThenMethod)
 	calculateIdentifiers(defs)

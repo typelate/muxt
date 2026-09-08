@@ -13,7 +13,6 @@ exec go build -o build
 
 -- want-check.txt --
 checking endpoint GET / F(form)
-OK
 -- in.go --
 package main
 

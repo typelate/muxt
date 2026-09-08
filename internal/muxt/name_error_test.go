@@ -92,3 +92,36 @@ func TestNameErrorMultiLineErrorClamps(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorList(t *testing.T) {
+	first := &NameError{Name: "GET / F(a)", Offset: 0, Length: 3, err: errors.New("first problem")}
+	second := &NameError{Name: "GET / G(b)", Offset: 0, Length: 3, err: errors.New("second problem")}
+
+	t.Run("one error keeps its own type", func(t *testing.T) {
+		err := CombineErrors([]error{first})
+		require.Same(t, first, err)
+	})
+	t.Run("no errors is nil", func(t *testing.T) {
+		require.NoError(t, CombineErrors(nil))
+	})
+	t.Run("the short form is one line naming the first failure", func(t *testing.T) {
+		err := CombineErrors([]error{first, second})
+		require.Equal(t, "first problem (and 1 more error)", err.Error())
+		require.NotContains(t, err.Error(), "\n")
+	})
+	t.Run("the long form renders every member", func(t *testing.T) {
+		err := CombineErrors([]error{first, second})
+		multiLine, ok := err.(MultiLineError)
+		require.True(t, ok)
+		rendered := multiLine.MultiLineError()
+		require.Contains(t, rendered, "first problem")
+		require.Contains(t, rendered, "second problem")
+		require.Contains(t, rendered, "\n\n", "members are separated by a blank line")
+	})
+	t.Run("members stay reachable through errors.As", func(t *testing.T) {
+		err := CombineErrors([]error{first, second})
+		nameErr, ok := errors.AsType[*NameError](err)
+		require.True(t, ok)
+		require.Same(t, first, nameErr)
+	})
+}
