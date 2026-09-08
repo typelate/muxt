@@ -86,6 +86,11 @@ type RoutesFileConfiguration struct {
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
+
+	// SilenceHTTPResponseWarning suppresses the warning printed for
+	// routes that take the response argument. Set from the
+	// MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT environment variable.
+	SilenceHTTPResponseWarning bool
 }
 
 // DefaultMultipartMaxMemory is the default maxMemory value passed to
@@ -195,7 +200,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -287,10 +292,15 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 // signatures — one line per method and the explanation once after the
 // list; the default mode synthesizes every method by design, so it
 // stays quiet.
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized bool) error {
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized, warnResponse bool) error {
 	var resolveErrs []error
 	synthesized := 0
 	for i := range defs {
+		if warnResponse && defs[i].HasResponseWriterArg() {
+			// Taking over the http.ResponseWriter is an escape hatch:
+			// muxt then leaves the response entirely to the method.
+			logger.Printf("warning: %s uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true", defs[i].Pattern())
+		}
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
@@ -526,7 +536,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil); err != nil {
+	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for i := range defs {
