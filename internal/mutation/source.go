@@ -14,6 +14,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -59,9 +60,59 @@ type templateSource struct {
 	// reader would open.
 	lines lineIndex
 
+	// leftDelim and rightDelim are the delimiters this text was written
+	// with. A template set built with Delims keeps them to itself, so
+	// they are recovered from the clauses check located: a definition's
+	// End span runs from the left delimiter through the right one, which
+	// is enough to read both off.
+	//
+	// Empty means the text/template defaults.
+	leftDelim  string
+	rightDelim string
+
 	// regions are the actions written in text, scanned once because
 	// every template defined here shares them.
 	regions []region
+}
+
+// spaceChars are the bytes text/template treats as whitespace beside a
+// trim marker.
+const spaceChars = " \t\r\n"
+
+// delimiters reads the delimiters a definition was written with off the
+// clause that closes it.
+//
+// An end clause is the one place the shape is fixed: the left delimiter,
+// an optional trim marker, the word end, another optional marker, and
+// the right delimiter. Nothing else in it varies, so whatever surrounds
+// the word is the pair.
+func delimiters(text string, definition check.Definition) (left, right string, ok bool) {
+	if !definition.TemplateName.IsValid() {
+		// A template with no define clause has no end clause either.
+		return "", "", false
+	}
+	start, end := definition.End.Offset, definition.End.Offset+definition.End.Length
+	if start < 0 || end > len(text) || start >= end {
+		return "", "", false
+	}
+	clause := text[start:end]
+
+	word := strings.Index(clause, "end")
+	if word < 0 {
+		return "", "", false
+	}
+	left = strings.TrimRight(clause[:word], spaceChars)
+	left = strings.TrimSuffix(left, "-")
+	left = strings.TrimRight(left, spaceChars)
+
+	right = strings.TrimLeft(clause[word+len("end"):], spaceChars)
+	right = strings.TrimPrefix(right, "-")
+	right = strings.TrimLeft(right, spaceChars)
+
+	if left == "" || right == "" {
+		return "", "", false
+	}
+	return left, right, true
 }
 
 // mutatedText returns the template text with the edits in place, which
@@ -86,23 +137,25 @@ func (s *templateSource) mutatedText(edits []edit) string {
 
 // newFileSource builds a source for a template file, whose text is its
 // bytes.
-func newFileSource(file, path, fileText string) *templateSource {
+func newFileSource(file, path, fileText, leftDelim, rightDelim string) *templateSource {
 	return &templateSource{
-		file:     file,
-		path:     path,
-		rootName: filepath.Base(file),
-		text:     fileText,
-		fileText: fileText,
-		litEnd:   len(fileText),
-		encode:   func(mutated string) string { return mutated },
-		lines:    newLineIndex(fileText),
-		regions:  regions(fileText, "", ""),
+		file:       file,
+		path:       path,
+		rootName:   filepath.Base(file),
+		text:       fileText,
+		fileText:   fileText,
+		litEnd:     len(fileText),
+		encode:     func(mutated string) string { return mutated },
+		lines:      newLineIndex(fileText),
+		leftDelim:  leftDelim,
+		rightDelim: rightDelim,
+		regions:    regions(fileText, leftDelim, rightDelim),
 	}
 }
 
 // newLiteralSource builds a source for a template written as a Go string
 // literal spanning litStart to litEnd in fileText.
-func newLiteralSource(file, path, rootName, fileText string, litStart, litEnd int) (*templateSource, error) {
+func newLiteralSource(file, path, rootName, fileText, leftDelim, rightDelim string, litStart, litEnd int) (*templateSource, error) {
 	if litStart < 0 || litEnd > len(fileText) || litStart >= litEnd {
 		return nil, fmt.Errorf("%s: string literal is not within the file", path)
 	}
@@ -119,17 +172,19 @@ func newLiteralSource(file, path, rootName, fileText string, litStart, litEnd in
 		offsets[i] += litStart
 	}
 	return &templateSource{
-		file:     file,
-		path:     path,
-		rootName: rootName,
-		text:     text,
-		fileText: fileText,
-		litStart: litStart,
-		litEnd:   litEnd,
-		offsets:  offsets,
-		encode:   literalEncoder(literal),
-		lines:    newLineIndex(fileText),
-		regions:  regions(text, "", ""),
+		file:       file,
+		path:       path,
+		rootName:   rootName,
+		text:       text,
+		fileText:   fileText,
+		litStart:   litStart,
+		litEnd:     litEnd,
+		offsets:    offsets,
+		encode:     literalEncoder(literal),
+		lines:      newLineIndex(fileText),
+		leftDelim:  leftDelim,
+		rightDelim: rightDelim,
+		regions:    regions(text, leftDelim, rightDelim),
 	}, nil
 }
 

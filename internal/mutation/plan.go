@@ -238,7 +238,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functi
 // behaviour, the template just stopped working.
 func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
 	mutated := sc.src.mutatedText(mutant.edits)
-	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, "", "", functions)
+	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, functions)
 	if err != nil {
 		return "does not parse", true
 	}
@@ -259,12 +259,21 @@ func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions che
 // that every node position is an offset into text this package holds,
 // which is what a mutation is spliced into.
 func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*packages.Package, functions check.Functions) (map[string]treeLocation, error) {
-	collector := newSourceCollector(workingDirectory, pl)
+	// The definitions are gathered before the collector is built: a
+	// source scans its actions as it is constructed, and it can only do
+	// that once the delimiters its file was written with are known,
+	// which is something the definitions say.
+	var defs []check.Definition
 	for _, t := range lt.HTML.Templates() {
 		definition, ok := lt.Templates.FindDefinition(t.Name())
 		if !ok {
 			continue
 		}
+		defs = append(defs, definition)
+	}
+
+	collector := newSourceCollector(workingDirectory, pl, defs)
+	for _, definition := range defs {
 		if _, err := collector.add(definition); err != nil {
 			return nil, err
 		}
@@ -272,7 +281,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 
 	index := make(map[string]treeLocation)
 	for _, src := range collector.sorted() {
-		trees, err := asteval.ParseTrees(src.rootName, src.text, "", "", functions)
+		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}

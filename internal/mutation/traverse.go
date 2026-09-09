@@ -33,11 +33,11 @@ type scope struct {
 	// invocation rather than named by the call itself.
 	via bool
 
-	src  *templateSource
-	tree *parse.Tree
-
-	// sourceDigest is the template's own source.
-	sourceDigest string
+	// treeLocation is where the template was found and what its own
+	// source digests to. It is embedded rather than copied field by
+	// field so that a scope cannot come to hold a tree from one place
+	// and a digest from another.
+	treeLocation
 }
 
 // treeLocation pairs a parsed template with the source its text came
@@ -115,9 +115,7 @@ func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site call
 		template:     name,
 		dataType:     dot,
 		via:          via,
-		src:          location.src,
-		tree:         location.tree,
-		sourceDigest: location.sourceDigest,
+		treeLocation: location,
 	})
 
 	for _, nested := range templateCalls(lt, location.tree, dot) {

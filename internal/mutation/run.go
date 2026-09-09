@@ -535,10 +535,45 @@ type sourceCollector struct {
 	defined map[*templateSource][]definitionSpan
 
 	digested map[*templateSource]map[string]string
+
+	// delims are the delimiters each file was written with, read off the
+	// definitions before any source is built. A source scans its actions
+	// as it is constructed, so the delimiters have to be known by then,
+	// and the definition that reveals them is not necessarily the first
+	// one filed for that file.
+	delims map[string][2]string
 }
 
-func newSourceCollector(workingDirectory string, pl []*packages.Package) *sourceCollector {
-	return &sourceCollector{
+// newDelimiters reads the delimiters each file was written with off the
+// definitions found in it.
+//
+// A file is written with one pair throughout -- the template set parsed
+// it with one -- so the first definition that reveals them answers for
+// the whole file. A file whose only template has no define clause
+// reveals nothing, and is read with the defaults.
+func newDelimiters(defs []check.Definition, read func(string) (string, error)) map[string][2]string {
+	found := make(map[string][2]string)
+	for _, definition := range defs {
+		file := definition.Define.Position.Filename
+		if file == "" {
+			continue
+		}
+		if _, known := found[file]; known {
+			continue
+		}
+		text, err := read(file)
+		if err != nil {
+			continue
+		}
+		if left, right, ok := delimiters(text, definition); ok {
+			found[file] = [2]string{left, right}
+		}
+	}
+	return found
+}
+
+func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []check.Definition) *sourceCollector {
+	c := &sourceCollector{
 		workingDirectory: workingDirectory,
 		packages:         pl,
 		files:            make(map[string]string),
@@ -546,6 +581,15 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package) *source
 		defined:          make(map[*templateSource][]definitionSpan),
 		digested:         make(map[*templateSource]map[string]string),
 	}
+	c.delims = newDelimiters(defs, c.read)
+	return c
+}
+
+// delimitersFor reports the delimiters a file was written with, empty
+// for the text/template defaults.
+func (c *sourceCollector) delimitersFor(file string) (string, string) {
+	pair := c.delims[file]
+	return pair[0], pair[1]
 }
 
 // digests reports a source digest for every template one text carries.
@@ -583,8 +627,9 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 
 	var src *templateSource
 	if filepath.Ext(file) != ".go" {
+		left, right := c.delimitersFor(file)
 		src, err = c.source(sourceKey{file: file}, func() (*templateSource, error) {
-			return newFileSource(file, c.relative(file), fileText), nil
+			return newFileSource(file, c.relative(file), fileText, left, right), nil
 		})
 		if err != nil {
 			return nil, err
@@ -594,8 +639,9 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 		if !ok {
 			return nil, nil
 		}
+		left, right := c.delimitersFor(file)
 		src, err = c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
-			return newLiteralSource(file, c.relative(file), definition.Name, fileText, litStart, litEnd)
+			return newLiteralSource(file, c.relative(file), definition.Name, fileText, left, right, litStart, litEnd)
 		})
 		if err != nil {
 			return nil, err
