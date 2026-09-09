@@ -83,16 +83,24 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		}
 
 		scopes, trimmed := traverse(lt, index)
+		reported := make(map[TrimmedTemplate]struct{})
 		for _, t := range trimmed {
 			if !config.IncludeTests && isTestFile(t.call.Position.Filename) {
 				continue
 			}
-			p.trimmed = append(p.trimmed, TrimmedTemplate{
+			entry := TrimmedTemplate{
 				CallSite:    relativePosition(workingDirectory, t.call.Position),
 				Template:    t.template,
 				DataType:    typeDisplay(t.dataType),
 				FirstSeenAt: relativePosition(workingDirectory, t.firstFor.Position),
-			})
+			}
+			if _, said := reported[entry]; said {
+				// One template may invoke a partial several times. That
+				// is one thing to say once, not once per invocation.
+				continue
+			}
+			reported[entry] = struct{}{}
+			p.trimmed = append(p.trimmed, entry)
 		}
 
 		for _, sc := range scopes {
