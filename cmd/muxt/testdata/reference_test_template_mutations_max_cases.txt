@@ -1,0 +1,84 @@
+# Replacing each command in an action combinatorially is what proves every
+# input is coupled to a failure, but n inputs need 2^n-1 cases and each case
+# is a full test run. --max-cases bounds that.
+#
+# An action over the bound is not quietly dropped. It is reported where its
+# mutants would have been, with the arithmetic that ruled it out, so a run
+# that skipped work says so instead of looking thorough.
+#
+# Here the action reads two inputs, .First and .Last, so it needs three cases.
+# Under a bound of two it is skipped; raised to four, all three are tried.
+
+muxt test-template-mutations -v --seed 1 --max-cases 2
+cmp stdout want-skipped.txt
+
+muxt test-template-mutations -v --seed 1 --max-cases 4 --state ""
+cmp stdout want-enumerated.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}{{printf "%s %s" .First .Last}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	First string
+	Last  string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{First: "Ada", Last: "Lovelace"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Ada Lovelace"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want-skipped.txt --
+2 mutants across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:22 action-zero
+    SKIP 1:22 operands (2 operands need 3 cases, over --max-cases=2)
+
+2 mutants, 1 killed, 0 missed, 1 skipped
+-- want-enumerated.txt --
+4 mutants across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:22 action-zero
+    KILL 1:22 operands .First="nard"
+    KILL 1:22 operands .First="nard" .Last="xeqr"
+    KILL 1:22 operands .Last="xeqr"
+
+4 mutants, 4 killed, 0 missed, 0 skipped
