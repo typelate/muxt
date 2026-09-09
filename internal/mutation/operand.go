@@ -63,20 +63,45 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *parse.Pi
 	}
 }
 
-// appendOperand records a leaf, but only when the node's own rendering
-// matches the source at its position.
+// appendOperand records a leaf, but only where the node's own rendering
+// matches the source.
 //
-// A node's String is a reconstruction, not a quotation, so this is what
-// keeps a mutation from splicing over the wrong bytes when the two
-// disagree.
+// A node's String is a reconstruction, not a quotation, so requiring the
+// two to agree is what keeps a mutation from splicing over the wrong
+// bytes.
 func appendOperand(out *[]operand, text string, node parse.Node, dataType types.Type) {
 	written := node.String()
-	start := int(node.Position())
-	end := start + len(written)
-	if start < 0 || end > len(text) || text[start:end] != written {
+	start, ok := operandStart(text, int(node.Position()), written)
+	if !ok {
 		return
 	}
-	*out = append(*out, operand{start: start, end: end, text: written, dataType: dataType})
+	*out = append(*out, operand{start: start, end: start + len(written), text: written, dataType: dataType})
+}
+
+// operandStart locates where a node is written in text.
+//
+// A field path of more than one segment does not begin where the parser
+// says it does: the lexer emits one item per segment, and the node keeps
+// the position of the segment that extended it, so .A.B.C is reported at
+// .B and .Path.Link at .Link. Taking that position literally makes the
+// rendering disagree with the text, and the operand is dropped -- which
+// silently cost every dotted path its mutants.
+//
+// The rendering is exact, so the start is the nearest offset at or before
+// the reported one where the text equals it. The search is bounded by the
+// rendering's own length, which is longer than any prefix the position
+// can have skipped.
+func operandStart(text string, pos int, written string) (int, bool) {
+	if written == "" || pos < 0 || len(written) > len(text) {
+		return 0, false
+	}
+	lowest := max(pos-len(written), 0)
+	for start := min(pos, len(text)-len(written)); start >= lowest; start-- {
+		if text[start:start+len(written)] == written {
+			return start, true
+		}
+	}
+	return 0, false
 }
 
 func fieldType(dot types.Type, idents []string) types.Type {
