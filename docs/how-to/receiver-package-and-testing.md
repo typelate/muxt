@@ -152,3 +152,7 @@ Three thicknesses, by where the fake sits:
 
 The [simple example](../examples/simple) shows this layout end to end, and
 [package layout](../reference/package-layout.md) names where each file lives.
+
+Status codes are the shallow half of the contract. To assert on the markup a
+handler returns — forms, field names, swap targets — see
+[HTML is the API](../explanation/html-is-the-api.md).
