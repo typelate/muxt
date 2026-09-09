@@ -102,7 +102,7 @@ func (r *Report) writeTemplate(out *bufio.Writer, template TemplateReport) {
 	for _, result := range template.Results {
 		line := fmt.Sprintf("    %s %d:%d %s",
 			result.Status, result.Line, result.Column, result.Operator)
-		if result.Operator == OperatorOperands && result.Mutated != "" {
+		if (result.Operator == OperatorOperands || result.Operator == OperatorCondition) && result.Mutated != "" {
 			// Which operands were substituted is the whole content of a
 			// combination mutant; without it the lines are identical.
 			line += " " + result.Mutated

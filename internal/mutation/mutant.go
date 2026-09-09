@@ -202,6 +202,12 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 	case *parse.IfNode:
 		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
 		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
+		// A decision written with and, or and not gets one mutant per
+		// condition; anything else falls back to the general
+		// combinations over its operands.
+		if !ctx.addConditions(out, n.Pipe) {
+			ctx.addOperandCombinations(out, n.Pipe, ctx.maxCases)
+		}
 		collect(out, n.List, ctx)
 		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:

@@ -1,0 +1,86 @@
+# A decision written with and, or and not gets one mutant per condition,
+# forcing that condition true and false while the others keep reading the
+# template's real data.
+#
+# Forcing every condition at once only ever produces the then branch or
+# the else branch, which if-true and if-false already cover. Forcing one
+# leaves a decision that is still a function of the data, so whether a
+# test notices depends on the data it renders with -- which is what shows
+# whether anything is coupled to that condition in particular.
+#
+# TestPage renders with Admin false and Owner true. Nothing renders with
+# Admin true, so forcing .Admin either way leaves what the test sees
+# unchanged and both mutants survive.
+#
+# .Banned is absorbed: {{or .Banned (and .Banned .Loud)}} is just .Banned,
+# so .Loud cannot change the decision and is reported dead rather than run.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{if and .Admin .Owner}}A{{end}}{{if or .Banned (and .Banned .Loud)}}B{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Admin  bool
+	Owner  bool
+	Banned bool
+	Loud   bool
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Owner: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), ""; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+11 mutants across 1 template (complexity 5, seed 1)
+baseline ok
+
+template.go:22:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 5, dot: server.Page)
+    MISS 1:18 condition .Admin=false
+    KILL 1:18 condition .Admin=true
+    MISS 1:18 condition .Owner=false
+    MISS 1:18 condition .Owner=true
+    MISS 1:18 if-false
+    KILL 1:18 if-true
+    MISS 1:50 condition .Banned=false
+    KILL 1:50 condition .Banned=true
+    SKIP 1:50 condition-dead (.Loud cannot change the decision)
+    MISS 1:50 if-false
+    KILL 1:50 if-true
+
+11 mutants, 4 killed, 6 missed, 1 skipped
