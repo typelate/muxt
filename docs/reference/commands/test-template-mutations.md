@@ -267,7 +267,7 @@ Unresolved means `action-empty` rather than `action-zero`; the mutation still ha
 
 ## Limitations
 
-- A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`.
+- A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. They are resolved per parsed source, not per file, so a construction chain that calls `Delims` more than once — or one Go file holding several literals parsed differently — reads each source with its own pair. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`; if that leaves a template the set can see actions in and this command cannot, the run fails rather than measuring fewer templates than it was given.
 - `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
 - Each mutant is a full `go test -count=1` run. Narrow it with `--template-pattern`, `--run`, and a package argument, and use `--dry-run` first to see the size of the job.
 

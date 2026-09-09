@@ -299,7 +299,57 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 			index[name] = treeLocation{src: src, tree: tree, sourceDigest: digests[name]}
 		}
 	}
+
+	for _, definition := range defs {
+		if definition.Tree == nil || countActions(definition.Tree.Root) == 0 {
+			continue
+		}
+		location, indexed := index[definition.Name]
+		// Absent is the same failure as present and empty: read with the
+		// wrong delimiters, the define clause is not recognised as one,
+		// so no tree is produced under that name at all.
+		if !indexed || countActions(location.tree.Root) == 0 {
+			path := collector.relative(definition.Define.Position.Filename)
+			if indexed {
+				path = location.src.path
+			}
+			// The template set found actions here and this re-parse found
+			// none, so the text was read with delimiters it was not
+			// written in. Left alone the template contributes no mutants
+			// and the run reports a smaller job rather than a problem.
+			return nil, &UnreadableTemplateError{
+				Template: definition.Name,
+				Path:     path,
+			}
+		}
+	}
 	return index, nil
+}
+
+// countActions reports how many dynamic or control flow actions a tree
+// holds, which is what a template has to offer a mutation.
+func countActions(node parse.Node) int {
+	switch n := node.(type) {
+	case *parse.ListNode:
+		if n == nil {
+			return 0
+		}
+		total := 0
+		for _, child := range n.Nodes {
+			total += countActions(child)
+		}
+		return total
+	case *parse.ActionNode, *parse.TemplateNode:
+		return 1
+	case *parse.IfNode:
+		return 1 + countActions(n.List) + countActions(n.ElseList)
+	case *parse.WithNode:
+		return 1 + countActions(n.List) + countActions(n.ElseList)
+	case *parse.RangeNode:
+		return 1 + countActions(n.List) + countActions(n.ElseList)
+	default:
+		return 0
+	}
 }
 
 // loadPackages loads the working directory's package, optionally
