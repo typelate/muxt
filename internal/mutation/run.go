@@ -87,6 +87,11 @@ type Configuration struct {
 	// later run only has to try the actions that changed. Empty turns
 	// the record off.
 	StatePath string
+
+	// Engine is the muxt version. It feeds every fingerprint, so a
+	// change to the mutation engine retries everything rather than
+	// trusting verdicts an older one reached.
+	Engine string
 }
 
 // DefaultMaxCases bounds the combinations one action may contribute.
@@ -341,6 +346,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 
 	state.Seed = config.Seed
+	state.Engine = config.Engine
 	if err := state.save(statePath); err != nil {
 		return nil, err
 	}

@@ -151,7 +151,7 @@ func (m Mutant) Replacement() string { return m.detail }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64) ([]Mutant, []budgetNote) {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64, engine string) ([]Mutant, []budgetNote) {
 	var (
 		notes     []budgetNote
 		actionSeq int
@@ -184,6 +184,7 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		source:   sc.identity,
 		types:    hex.EncodeToString(types.Sum(nil)),
 		seed:     seed,
+		engine:   engine,
 	}
 	for i := range all {
 		all[i].fingerprint = id.fingerprint(all[i].action, all[i].actionIndex)

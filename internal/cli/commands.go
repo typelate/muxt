@@ -228,6 +228,9 @@ working tree is never written to.`,
 			}
 			config.Packages = args
 			config.SeedSet = cmd.Flags().Changed("seed")
+			// Recorded verdicts belong to the engine that reached them,
+			// so a muxt upgrade retries rather than trusting them.
+			config.Engine, _ = cliVersion()
 
 			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
 			if err != nil {
