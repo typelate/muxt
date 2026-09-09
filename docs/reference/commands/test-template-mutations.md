@@ -79,8 +79,8 @@ One mutant is produced per applicable action. No operator renames a template or 
 
 | Operator | Applies to | Variation |
 |----------|-----------|-----------|
-| `action-zero` | `{{.Field}}` whose type resolved | Substitutes that type's zero value: `""`, `0`, `false`. |
-| `action-empty` | `{{.Field}}`, `{{printf ...}}` | Prints nothing, where the type could not be resolved from dot. |
+| `action-zero` | An action whose type resolved | Substitutes that type's zero value: `""`, `0`, `false`. |
+| `action-empty` | An action whose type did not | Prints nothing. |
 | `if-true` | `{{if}}` | Takes the then branch unconditionally. |
 | `if-false` | `{{if}}` | Takes the else branch, or none, unconditionally. |
 | `with-empty` | `{{with}}` | Behaves as though the value were absent, leaving the else branch. |
@@ -177,10 +177,23 @@ Work down the misses; each one closed is an assertion the suite did not have.
 
 Statuses are `KILL`, `MISS`, `SKIP`, and `PEND` for a mutant that was enumerated but not run.
 
+## How an Action's Type Is Resolved
+
+A pipeline's value is whatever its **last** command produces, so `{{.Name | printf "%s"}}` is typed from `printf`, not from `.Name`.
+
+- **A field path off dot** — `{{.User.Email}}` — is resolved structurally, through struct fields and no-argument methods, following pointers.
+- **A call** is resolved from the function's signature. The template set carries one for every function it registered, so a project's own `{{upper .Name}}` is typed from `upper`. The builtins the checker verifies by shape rather than by signature are answered from their fixed result types: `len` is an `int`, the comparisons and `not` are `bool`, the print and escape families are `string`.
+- **`and`, `or`, `index`, `slice` and `call` are deliberately left unresolved.** What they produce depends on their arguments, and guessing would put a wrong replacement in a mutant.
+- **A pipeline reading a variable** — `{{$item}}` — is left unresolved.
+
+Unresolved means `action-empty` rather than `action-zero`; the mutation still happens, it just substitutes an empty string instead of a type-directed value.
+
+`html/template`'s safe string types — `HTML`, `HTMLAttr`, `CSS`, `JS`, `JSStr`, `Srcset`, `URL` — are named types over `string`, and get `action-empty` too. A template has no way to write a literal of one: `""` in template source is an ordinary string the escaper treats differently, so calling it that type's zero value would claim more than the substitution delivers.
+
 ## Limitations
 
 - Custom delimiters are not supported; templates are scanned with `{{` and `}}`.
-- A pipeline that calls a function or reads a variable has no resolved type, so it gets `action-empty` rather than a type-directed replacement.
+- `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
 - Each mutant is a full `go test -count=1` run. Narrow it with `--template-pattern`, `--run`, and a package argument, and use `--dry-run` first to see the size of the job.
 
 ## Related

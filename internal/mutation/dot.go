@@ -3,6 +3,8 @@ package mutation
 import (
 	"go/types"
 	"text/template/parse"
+
+	"github.com/typelate/check"
 )
 
 // zeroLiteral returns the template literal standing for the zero value of
@@ -13,9 +15,18 @@ import (
 // a string, zero for a count, false for a flag. Where the type cannot be
 // resolved from dot the caller falls back to an empty string, which
 // text/template accepts in any printing position.
-func zeroLiteral(dot types.Type, pipe *parse.PipeNode) (string, bool) {
-	resolved, ok := pipelineType(dot, pipe)
+func zeroLiteral(dot types.Type, pipe *parse.PipeNode, functions check.Functions) (string, bool) {
+	resolved, ok := pipelineType(dot, pipe, functions)
 	if !ok {
+		return "", false
+	}
+	if isSafeString(resolved) {
+		// html/template's safe string types carry a promise about their
+		// contents, and a template has no way to write a literal of one:
+		// "" in template source is an ordinary string, which the escaper
+		// treats differently. Emptying the action is still the right
+		// mutation, but calling it that type's zero value would be a
+		// claim this cannot make.
 		return "", false
 	}
 	basic, ok := resolved.Underlying().(*types.Basic)
@@ -34,10 +45,36 @@ func zeroLiteral(dot types.Type, pipe *parse.PipeNode) (string, bool) {
 	}
 }
 
+// safeStringTypes are html/template's named string types, each of which
+// marks its contents as already safe for one escaping context.
+var safeStringTypes = map[string]struct{}{
+	"CSS": {}, "HTML": {}, "HTMLAttr": {}, "JS": {},
+	"JSStr": {}, "Srcset": {}, "URL": {},
+}
+
+// isSafeString reports whether a type is one of html/template's safe
+// string types.
+//
+// They are named types over string, so an underlying type check alone
+// would take them for ordinary strings, and a function returning one is
+// the usual way a project marks trusted markup.
+func isSafeString(t types.Type) bool {
+	named, ok := t.(*types.Named)
+	if !ok {
+		return false
+	}
+	object := named.Obj()
+	if object == nil || object.Pkg() == nil || object.Pkg().Path() != "html/template" {
+		return false
+	}
+	_, found := safeStringTypes[object.Name()]
+	return found
+}
+
 // withDot returns the type of dot inside a {{with}} body, which is what
 // the with's pipeline selected.
-func withDot(dot types.Type, pipe *parse.PipeNode) types.Type {
-	if selected, ok := pipelineType(dot, pipe); ok {
+func withDot(dot types.Type, pipe *parse.PipeNode, functions check.Functions) types.Type {
+	if selected, ok := pipelineType(dot, pipe, functions); ok {
 		return selected
 	}
 	return nil
@@ -48,8 +85,8 @@ func withDot(dot types.Type, pipe *parse.PipeNode) types.Type {
 //
 // Ranging over an integer, which text/template has allowed since Go 1.22,
 // yields the integer type itself.
-func rangeDot(dot types.Type, pipe *parse.PipeNode) types.Type {
-	over, ok := pipelineType(dot, pipe)
+func rangeDot(dot types.Type, pipe *parse.PipeNode, functions check.Functions) types.Type {
+	over, ok := pipelineType(dot, pipe, functions)
 	if !ok {
 		return nil
 	}
@@ -72,21 +109,32 @@ func rangeDot(dot types.Type, pipe *parse.PipeNode) types.Type {
 	}
 }
 
-// pipelineType resolves the type a pipeline evaluates to, for the field
-// access shapes a template mostly uses.
+// pipelineType resolves the type a pipeline evaluates to.
 //
-// Only a lone dot or a field path off dot is resolved. A pipeline calling
-// a function, chaining commands, or reading a variable is left alone:
-// getting those right means reimplementing the checker, and the fallback
-// costs nothing but a less specific replacement.
-func pipelineType(dot types.Type, pipe *parse.PipeNode) (types.Type, bool) {
-	if dot == nil || pipe == nil || len(pipe.Cmds) != 1 {
+// A pipeline's value is whatever its last command produces, so that is
+// the command resolved: for {{.Name | printf "%s"}} the answer comes
+// from printf, not from .Name.
+//
+// A field path off dot is resolved structurally. A call is resolved from
+// the function's signature, which is what the template set carries for
+// every function it registered. A pipeline reading a variable is left
+// alone; the fallback costs nothing but a less specific replacement.
+func pipelineType(dot types.Type, pipe *parse.PipeNode, functions check.Functions) (types.Type, bool) {
+	if pipe == nil || len(pipe.Cmds) == 0 {
 		return nil, false
 	}
-	command := pipe.Cmds[0]
-	if len(command.Args) != 1 {
+	command := pipe.Cmds[len(pipe.Cmds)-1]
+	if len(command.Args) == 0 {
 		return nil, false
 	}
+
+	if ident, ok := command.Args[0].(*parse.IdentifierNode); ok {
+		return functionResult(ident.Ident, functions)
+	}
+	if len(command.Args) != 1 || dot == nil {
+		return nil, false
+	}
+
 	switch arg := command.Args[0].(type) {
 	case *parse.DotNode:
 		return dot, true
@@ -97,6 +145,32 @@ func pipelineType(dot types.Type, pipe *parse.PipeNode) (types.Type, bool) {
 			return nil, false
 		}
 		return fieldPath(dot, arg.Field)
+	default:
+		return nil, false
+	}
+}
+
+// functionResult resolves what a called function produces.
+//
+// The template set carries a signature for every function it registered,
+// which covers the project's own and the print and escape families. The
+// builtins the checker verifies by shape rather than by signature are not
+// in it, and the ones with a fixed result type are answered here.
+//
+// and, or, index, slice and call are deliberately unresolved: what they
+// produce depends on their arguments, and guessing would put a wrong
+// replacement in a mutant.
+func functionResult(name string, functions check.Functions) (types.Type, bool) {
+	if signature, ok := functions[name]; ok && signature.Results().Len() > 0 {
+		return signature.Results().At(0).Type(), true
+	}
+	switch name {
+	case "len":
+		return types.Typ[types.Int], true
+	case "eq", "ne", "lt", "le", "gt", "ge", "not":
+		return types.Typ[types.Bool], true
+	case "print", "printf", "println", "html", "js", "urlquery":
+		return types.Typ[types.String], true
 	default:
 		return nil, false
 	}
