@@ -13,7 +13,7 @@
 # an integer with more than one variable -- so the whole construct is
 # replaced by its else branch instead.
 
-muxt test-template-mutations -v
+muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -63,7 +63,7 @@ func TestPage(t *testing.T) {
 	}
 }
 -- want.txt --
-5 mutants across 2 templates (complexity 4)
+5 mutants across 2 templates (complexity 4, seed 1)
 baseline ok
 
 template.go:20:9 ExecuteTemplate "page" (dot: server.Page)

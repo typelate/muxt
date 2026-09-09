@@ -9,10 +9,10 @@
 # narrows what can catch a mutant, which is what makes a miss reported
 # under --run a statement about that subset and not about the whole suite.
 
-muxt test-template-mutations -v --template-pattern '^alpha$' --run TestAlpha
+muxt test-template-mutations -v --template-pattern '^alpha$' --run TestAlpha --seed 1
 cmp stdout want-alpha.txt
 
-muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha
+muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1
 cmp stdout want-beta.txt
 
 -- go.mod --
@@ -75,7 +75,7 @@ func TestBeta(t *testing.T) {
 	}
 }
 -- want-alpha.txt --
-1 mutant across 1 template (complexity 1)
+1 mutant across 1 template (complexity 1, seed 1)
 baseline ok
 
 template.go:19:9 ExecuteTemplate "alpha" (dot: server.Data)
@@ -84,7 +84,7 @@ template.go:19:9 ExecuteTemplate "alpha" (dot: server.Data)
 
 1 mutant, 1 killed, 0 missed, 0 skipped
 -- want-beta.txt --
-1 mutant across 1 template (complexity 1)
+1 mutant across 1 template (complexity 1, seed 1)
 baseline ok
 
 template.go:23:9 ExecuteTemplate "beta" (dot: server.Data)

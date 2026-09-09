@@ -45,10 +45,10 @@ func (r *Report) WriteTo(w io.Writer) (int64, error) {
 }
 
 func (r *Report) writePreamble(out *bufio.Writer) {
-	_, _ = fmt.Fprintf(out, "%d %s across %d %s (complexity %d)\n",
+	_, _ = fmt.Fprintf(out, "%d %s across %d %s (complexity %d, seed %d)\n",
 		r.Total, pluralize(r.Total, "mutant"),
 		r.Templates, pluralize(r.Templates, "template"),
-		r.Complexity)
+		r.Complexity, r.Seed)
 
 	switch {
 	case r.DryRun:
@@ -102,6 +102,11 @@ func (r *Report) writeTemplate(out *bufio.Writer, template TemplateReport) {
 	for _, result := range template.Results {
 		line := fmt.Sprintf("    %s %d:%d %s",
 			result.Status, result.Line, result.Column, result.Operator)
+		if result.Operator == OperatorOperands && result.Mutated != "" {
+			// Which operands were substituted is the whole content of a
+			// combination mutant; without it the lines are identical.
+			line += " " + result.Mutated
+		}
 		if result.Reason != "" {
 			line += " (" + result.Reason + ")"
 		}

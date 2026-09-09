@@ -10,7 +10,7 @@
 # never renders with Loud true, so forcing the branch false changes nothing it
 # observes, and that mutant survives.
 
-muxt test-template-mutations -v
+muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -59,7 +59,7 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
-3 mutants across 1 template (complexity 2)
+3 mutants across 1 template (complexity 2, seed 1)
 baseline ok
 
 template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)

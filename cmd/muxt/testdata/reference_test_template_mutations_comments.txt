@@ -6,7 +6,7 @@
 # The comment here also carries a trim marker, which comes between the left
 # delimiter and the /* that opens the comment.
 
-muxt test-template-mutations -v
+muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -56,7 +56,7 @@ func TestPage(t *testing.T) {
 	}
 }
 -- want.txt --
-1 mutant across 1 template (complexity 1)
+1 mutant across 1 template (complexity 1, seed 1)
 baseline ok
 
 template.go:19:9 ExecuteTemplate "page" (dot: server.Page)

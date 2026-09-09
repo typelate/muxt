@@ -11,10 +11,10 @@
 # leaves it alone: it normalises embedded JSON to two space indentation,
 # and the report is written with tabs.
 
-muxt test-template-mutations --dry-run --format json
+muxt test-template-mutations --dry-run --format json --seed 1
 cmp stdout want.txt
 
-muxt test-template-mutations --format json
+muxt test-template-mutations --format json --seed 1
 stdout '"status": "KILL"'
 stdout '"status": "MISS"'
 stdout '"operator": "if-false"'
@@ -70,6 +70,7 @@ func TestGreeting(t *testing.T) {
 -- want.txt --
 {
 	"dry_run": true,
+	"seed": 1,
 	"templates": 1,
 	"complexity": 2,
 	"total": 3,

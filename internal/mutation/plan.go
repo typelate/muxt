@@ -1,9 +1,11 @@
 package mutation
 
 import (
+	"cmp"
 	"fmt"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template/parse"
@@ -26,6 +28,10 @@ type plan struct {
 	templates  int
 	complexity int
 	runnableN  int
+	overBudget int
+	seed       uint64
+	draw       *values
+	maxCases   int
 }
 
 func (p *plan) total() int    { return len(p.mutants) }
@@ -43,10 +49,11 @@ func (p *plan) report() *Report {
 	return &Report{
 		Templates:  p.templates,
 		Complexity: p.complexity,
-		Total:      len(p.mutants),
+		Seed:       p.seed,
+		Total:      len(p.mutants) + p.overBudget,
 		// Skips are decided while planning, not while running, so a dry
 		// run reports them too.
-		Skipped: len(p.mutants) - p.runnableN,
+		Skipped: len(p.mutants) - p.runnableN + p.overBudget,
 		Groups:  groups,
 		Trimmed: trimmed,
 	}
@@ -65,7 +72,14 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		include = config.TemplatePattern.MatchString
 	}
 
-	p := new(plan)
+	p := &plan{
+		seed:     config.Seed,
+		draw:     newValues(config.Seed),
+		maxCases: config.MaxCases,
+	}
+	if p.maxCases <= 0 {
+		p.maxCases = DefaultMaxCases
+	}
 	seen := make(map[string]struct{})
 
 	for _, templatesVariable := range config.TemplatesVariables {
@@ -129,7 +143,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
 func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
-	found := mutantsInScope(sc, functions)
+	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases)
 
 	report := TemplateReport{
 		Template:   sc.template,
@@ -161,6 +175,28 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functi
 		report.Results = append(report.Results, result)
 	}
 
+	p.overBudget += len(notes)
+	for _, note := range notes {
+		// An action too wide to enumerate is reported where its mutants
+		// would have been, so the gap is visible in the same place a
+		// reader is already looking.
+		report.Results = append(report.Results, Result{
+			Status:   StatusSkipped,
+			Operator: OperatorOperands,
+			Line:     note.line,
+			Column:   note.column,
+			Reason:   note.reason(),
+		})
+	}
+	slices.SortFunc(report.Results, func(a, b Result) int {
+		return cmp.Or(
+			cmp.Compare(a.Line, b.Line),
+			cmp.Compare(a.Column, b.Column),
+			cmp.Compare(a.Operator, b.Operator),
+			cmp.Compare(a.Mutated, b.Mutated),
+		)
+	})
+
 	site := relativePosition(workingDirectory, sc.call.Position)
 	for i := range p.groups {
 		if p.groups[i].CallSite == site && p.groups[i].Entry == sc.call.Template {
@@ -184,7 +220,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functi
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
 func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
-	mutated := sc.src.mutatedText(mutant)
+	mutated := sc.src.mutatedText(mutant.edits)
 	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, "", "", functions)
 	if err != nil {
 		return "does not parse", true

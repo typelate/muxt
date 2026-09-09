@@ -10,7 +10,7 @@
 # changes nothing it sees and that mutant survives. Forcing it false swaps
 # the branch and is caught.
 
-muxt test-template-mutations
+muxt test-template-mutations --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -58,7 +58,7 @@ func TestStatus(t *testing.T) {
 	}
 }
 -- want.txt --
-2 mutants across 1 template (complexity 2)
+2 mutants across 1 template (complexity 2, seed 1)
 baseline ok
 
 template.go:19:9 ExecuteTemplate "status" (dot: server.Status)

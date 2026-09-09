@@ -13,10 +13,10 @@
 # escaper treats differently -- so emptying it is reported as action-empty
 # rather than as that type's zero value.
 
-muxt test-template-mutations --dry-run
+muxt test-template-mutations --dry-run --seed 1
 cmp stdout want.txt
 
-muxt test-template-mutations --dry-run --format json
+muxt test-template-mutations --dry-run --format json --seed 1
 stdout '"original": "\{\{len \.Items\}\}"'
 stdout '"mutated": "0"'
 stdout '"original": "\{\{upper \.Name\}\}"'
@@ -72,7 +72,7 @@ func TestPage(t *testing.T) {
 	}
 }
 -- want.txt --
-3 mutants across 1 template (complexity 1)
+3 mutants across 1 template (complexity 1, seed 1)
 dry run: no tests were run
 
 template.go:24:9 ExecuteTemplate "page" (dot: server.Page)
