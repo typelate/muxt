@@ -1,0 +1,79 @@
+# Two templates written as Go string literals in one file, parsed with
+# different delimiters.
+#
+# Delimiters belong to the source that was parsed, not to the file holding it,
+# and one .go file can hold several parsed sources. Reading either literal with
+# the other's pair yields a tree with no actions in it.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates = template.Must(
+	template.Must(
+		template.New("t").Delims("[[", "]]").Parse(`[[define "square"]]Hello, [[.Name]]![[end]]`),
+	).Delims("{{", "}}").Parse(`{{define "curly"}}Bye, {{.Name}}.{{end}}`),
+)
+
+type Page struct {
+	Name string
+}
+
+func Square(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "square", page)
+}
+
+func Curly(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "curly", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestSquare(t *testing.T) {
+	var buf strings.Builder
+	if err := Square(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("square = %q, want %q", got, want)
+	}
+}
+
+func TestCurly(t *testing.T) {
+	var buf strings.Builder
+	if err := Curly(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Bye, World."; got != want {
+		t.Errorf("curly = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "square" (dot: server.Page)
+  "square" template.go (complexity 1, dot: server.Page)
+    KILL 10:73 action-zero
+
+template.go:23:9 ExecuteTemplate "curly" (dot: server.Page)
+  "curly" template.go (complexity 1, dot: server.Page)
+    KILL 11:53 action-zero
+
+2 mutants, 2 killed, 0 missed, 0 skipped

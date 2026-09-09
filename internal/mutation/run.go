@@ -242,6 +242,22 @@ func (e *NoMutationsError) Error() string {
 	return fmt.Sprintf("no mutations available: the %d template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything", e.Templates)
 }
 
+// UnreadableTemplateError reports a template the template set parsed into
+// actions and this package re-parsed into none.
+//
+// The two disagree only when the text was read with delimiters it was not
+// written in. The template would otherwise contribute no mutants at all,
+// and a run that quietly measured fewer templates than it was given is
+// the failure this reports instead.
+type UnreadableTemplateError struct {
+	Template string
+	Path     string
+}
+
+func (e *UnreadableTemplateError) Error() string {
+	return fmt.Sprintf("template %q in %s holds actions the template set can see and this run cannot: it was read with the wrong delimiters", e.Template, e.Path)
+}
+
 // Run mutates every action the configuration selects and reports which
 // variations the tests catch.
 //
@@ -536,40 +552,64 @@ type sourceCollector struct {
 
 	digested map[*templateSource]map[string]string
 
-	// delims are the delimiters each file was written with, read off the
+	// delims are the delimiters each source was parsed with, read off the
 	// definitions before any source is built. A source scans its actions
 	// as it is constructed, so the delimiters have to be known by then,
 	// and the definition that reveals them is not necessarily the first
-	// one filed for that file.
-	delims map[string][2]string
+	// one filed for that source.
+	delims map[sourceKey][2]string
 }
 
-// newDelimiters reads the delimiters each file was written with off the
-// definitions found in it.
+// resolveDelimiters reads the delimiters each source was parsed with off
+// the definitions written in it.
 //
-// A file is written with one pair throughout -- the template set parsed
-// it with one -- so the first definition that reveals them answers for
-// the whole file. A file whose only template has no define clause
-// reveals nothing, and is read with the defaults.
-func newDelimiters(defs []check.Definition, read func(string) (string, error)) map[string][2]string {
-	found := make(map[string][2]string)
+// They are keyed by source rather than by file because a construction
+// chain may call Delims more than once, and one Go file can hold several
+// parsed literals. Keying by file would give every literal in a file the
+// pair of whichever definition was seen first, and the rest would be read
+// with delimiters they were not written in -- which yields a tree with no
+// actions in it and a template that silently contributes no mutants.
+//
+// Within one source the pair is fixed, so the first definition that
+// reveals it answers for the whole source. A source whose only template
+// has no define clause reveals nothing and keeps the defaults.
+func (c *sourceCollector) resolveDelimiters(defs []check.Definition) {
 	for _, definition := range defs {
 		file := definition.Define.Position.Filename
 		if file == "" {
 			continue
 		}
-		if _, known := found[file]; known {
+		key, ok := c.keyFor(definition)
+		if !ok {
 			continue
 		}
-		text, err := read(file)
+		if _, known := c.delims[key]; known {
+			continue
+		}
+		text, err := c.read(file)
 		if err != nil {
 			continue
 		}
 		if left, right, ok := delimiters(text, definition); ok {
-			found[file] = [2]string{left, right}
+			c.delims[key] = [2]string{left, right}
 		}
 	}
-	return found
+}
+
+// keyFor names the source a definition was written in.
+//
+// It is the same key add files the definition under, so the delimiters
+// resolved here reach the source they were read from.
+func (c *sourceCollector) keyFor(definition check.Definition) (sourceKey, bool) {
+	file := definition.Define.Position.Filename
+	if filepath.Ext(file) != ".go" {
+		return sourceKey{file: file}, true
+	}
+	litStart, _, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
+	if !ok {
+		return sourceKey{}, false
+	}
+	return sourceKey{file: file, litStart: litStart}, true
 }
 
 func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []check.Definition) *sourceCollector {
@@ -580,15 +620,16 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []
 		byKey:            make(map[sourceKey]*templateSource),
 		defined:          make(map[*templateSource][]definitionSpan),
 		digested:         make(map[*templateSource]map[string]string),
+		delims:           make(map[sourceKey][2]string),
 	}
-	c.delims = newDelimiters(defs, c.read)
+	c.resolveDelimiters(defs)
 	return c
 }
 
-// delimitersFor reports the delimiters a file was written with, empty
+// delimitersFor reports the delimiters a source was parsed with, empty
 // for the text/template defaults.
-func (c *sourceCollector) delimitersFor(file string) (string, string) {
-	pair := c.delims[file]
+func (c *sourceCollector) delimitersFor(key sourceKey) (string, string) {
+	pair := c.delims[key]
 	return pair[0], pair[1]
 }
 
@@ -627,7 +668,7 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 
 	var src *templateSource
 	if filepath.Ext(file) != ".go" {
-		left, right := c.delimitersFor(file)
+		left, right := c.delimitersFor(sourceKey{file: file})
 		src, err = c.source(sourceKey{file: file}, func() (*templateSource, error) {
 			return newFileSource(file, c.relative(file), fileText, left, right), nil
 		})
@@ -639,7 +680,7 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 		if !ok {
 			return nil, nil
 		}
-		left, right := c.delimitersFor(file)
+		left, right := c.delimitersFor(sourceKey{file: file, litStart: litStart})
 		src, err = c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
 			return newLiteralSource(file, c.relative(file), definition.Name, fileText, left, right, litStart, litEnd)
 		})

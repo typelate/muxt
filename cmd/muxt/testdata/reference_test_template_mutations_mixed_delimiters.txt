@@ -1,0 +1,88 @@
+# One template set can hold sources parsed with different delimiters. A
+# construction chain may call Delims more than once, and each ParseFS after it
+# reads its files with whatever pair was last set.
+#
+# So the delimiters are not a property of the set. They are a property of each
+# source, and every source has to be read with its own pair: reading either of
+# these two files with the other's delimiters yields a tree with no actions.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- square.gohtml --
+[[define "square"]]Hello, [[.Name]]![[end]]
+-- curly.gohtml --
+{{define "curly"}}Bye, {{.Name}}.{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(
+	template.Must(
+		template.New("t").Delims("[[", "]]").ParseFS(templateFiles, "square.gohtml"),
+	).Delims("{{", "}}").ParseFS(templateFiles, "curly.gohtml"),
+)
+
+type Page struct {
+	Name string
+}
+
+func Square(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "square", page)
+}
+
+func Curly(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "curly", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestSquare(t *testing.T) {
+	var buf strings.Builder
+	if err := Square(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("square = %q, want %q", got, want)
+	}
+}
+
+func TestCurly(t *testing.T) {
+	var buf strings.Builder
+	if err := Curly(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Bye, World."; got != want {
+		t.Errorf("curly = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+template.go:23:9 ExecuteTemplate "square" (dot: server.Page)
+  "square" square.gohtml (complexity 1, dot: server.Page)
+    KILL 1:27 action-zero
+
+template.go:27:9 ExecuteTemplate "curly" (dot: server.Page)
+  "curly" curly.gohtml (complexity 1, dot: server.Page)
+    KILL 1:24 action-zero
+
+2 mutants, 2 killed, 0 missed, 0 skipped
