@@ -1,0 +1,93 @@
+# --format json emits the same report as a machine readable document, so a
+# CI job can track the missed count over time or turn each miss into a
+# ticket. It carries the mutated action's source and its replacement, which
+# the text form leaves out.
+#
+# The golden file is named want.txt rather than want.json so that txtarfmt
+# leaves it alone: it normalises embedded JSON to two space indentation,
+# and the report is written with tabs.
+
+muxt test-template-mutations --format json
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{if .Loud}} !!!{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+{
+	"baseline": {
+		"passed": true
+	},
+	"results": [
+		{
+			"status": "KILL",
+			"operator": "action-empty",
+			"template": "greeting",
+			"file": "templates.gohtml",
+			"line": 1,
+			"column": 29,
+			"original": "{{.Name}}",
+			"mutated": "\"\""
+		},
+		{
+			"status": "MISS",
+			"operator": "if-false",
+			"template": "greeting",
+			"file": "templates.gohtml",
+			"line": 1,
+			"column": 39,
+			"original": "{{if .Loud}}",
+			"mutated": "false"
+		},
+		{
+			"status": "KILL",
+			"operator": "if-true",
+			"template": "greeting",
+			"file": "templates.gohtml",
+			"line": 1,
+			"column": 39,
+			"original": "{{if .Loud}}",
+			"mutated": "true"
+		}
+	],
+	"total": 3,
+	"killed": 2,
+	"missed": 1
+}

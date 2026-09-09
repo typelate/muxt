@@ -1,0 +1,76 @@
+# --template-pattern narrows which templates are mutated; --run narrows
+# which tests each mutant is run against. Both take regular expressions.
+#
+# The first run mutates only alpha and runs only TestAlpha, which renders
+# alpha and compares the whole string, so the mutant is caught.
+#
+# The second run mutates only beta but still runs only TestAlpha. Nothing
+# that executes is looking at beta, so the mutant survives. Narrowing --run
+# narrows what can catch a mutant, which is what makes a miss reported
+# under --run a statement about that subset and not about the whole suite.
+
+muxt test-template-mutations --template-pattern '^alpha$' --run TestAlpha
+cmp stdout want-alpha.txt
+
+muxt test-template-mutations --template-pattern '^beta$' --run TestAlpha
+cmp stdout want-beta.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "alpha"}}A{{.Name}}{{end}}
+{{define "beta"}}B{{.Name}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Data struct {
+	Name string
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func render(t *testing.T, name string) string {
+	t.Helper()
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, name, Data{Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
+}
+
+func TestAlpha(t *testing.T) {
+	if got, want := render(t, "alpha"), "Ax"; got != want {
+		t.Errorf("alpha = %q, want %q", got, want)
+	}
+}
+
+func TestBeta(t *testing.T) {
+	if got, want := render(t, "beta"), "Bx"; got != want {
+		t.Errorf("beta = %q, want %q", got, want)
+	}
+}
+-- want-alpha.txt --
+baseline ok
+KILL templates.gohtml:1:20 "alpha" action-empty
+1 mutant, 1 killed, 0 missed
+-- want-beta.txt --
+baseline ok
+MISS templates.gohtml:2:19 "beta" action-empty
+1 mutant, 0 killed, 1 missed

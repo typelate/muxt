@@ -1,0 +1,51 @@
+# The tests run once unmutated before anything is varied.
+#
+# If that baseline fails, nothing is mutated. Every mutant would be
+# recorded as caught, but caught by the failure that was already there
+# rather than by the mutation, so the whole report would read as full
+# coverage of a suite that is not even passing.
+
+! muxt test-template-mutations
+stderr '(?m)^Error: baseline tests failed before mutation; fix them first:$'
+stderr '(?m)^--- FAIL: TestGreeting'
+! stdout .
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "this assertion is wrong"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
