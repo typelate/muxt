@@ -32,6 +32,7 @@ Type-safe HTTP handlers from Go HTML templates.
 ## Explanation
 
 - **[Manifesto](explanation/manifesto.md)** - Core principles
+- **[HTML is the API](explanation/html-is-the-api.md)** - Testing hypermedia responses with domtest
 - **[Motivation](explanation/motivation.md)** - Why Muxt exists
 - **[Complexity is the Enemy](explanation/complexity-is-the-enemy.md)**
 - **[Package Structure](explanation/package-structure.md)**
