@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"cmp"
+	"go/types"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -16,7 +17,19 @@ const (
 	// OperatorActionEmpty makes an action print nothing, standing in for
 	// the value it prints being absent. A test that never looks at the
 	// printed value survives it.
+	//
+	// It is used where the type of the value could not be resolved from
+	// dot, so an empty string is the only substitution available.
 	OperatorActionEmpty = "action-empty"
+
+	// OperatorActionZero replaces the value an action prints with the
+	// zero value of its own type: an empty string for a string, 0 for a
+	// count, false for a flag.
+	//
+	// It stays closer to a real defect than substituting an empty string
+	// regardless of type, and it says in the report that the type was
+	// known.
+	OperatorActionZero = "action-zero"
 
 	// OperatorIfTrue takes the then branch unconditionally.
 	OperatorIfTrue = "if-true"
@@ -42,20 +55,6 @@ const (
 	// the partial rendering nothing. It does not apply to {{block}},
 	// whose call cannot be removed without orphaning its {{end}}.
 	OperatorTemplateDrop = "template-drop"
-)
-
-// Status is the verdict on one mutant.
-type Status string
-
-const (
-	// StatusKilled means the tests failed while the mutation was in
-	// place, which is the outcome to want: something asserts on the
-	// behaviour the mutated action controls.
-	StatusKilled Status = "KILL"
-
-	// StatusMissed means the tests still passed, so nothing observes
-	// what the action does.
-	StatusMissed Status = "MISS"
 )
 
 // Mutant is one variation of one action in one template.
@@ -106,46 +105,40 @@ func (m Mutant) Action() string { return m.action }
 // Replacement returns the text the mutation substitutes.
 func (m Mutant) Replacement() string { return m.replacement }
 
-// mutantsInSource enumerates every mutation available in the templates
-// the source's text defines.
-func mutantsInSource(src *templateSource, funcs map[string]any, include func(string) bool) ([]Mutant, error) {
-	trees, err := parse.Parse(src.rootName, src.text, "", "", funcs)
-	if err != nil {
-		return nil, err
-	}
-
+// mutantsInScope enumerates every mutation available in one template,
+// rendered with the type of dot its scope carries.
+func mutantsInScope(sc scope) []Mutant {
 	ctx := mutantContext{
-		src:     src,
-		regions: regions(src.text, "", ""),
+		src:      sc.src,
+		template: sc.template,
+		regions:  sc.src.regions,
+		dot:      sc.dataType,
 	}
 
 	var all []Mutant
-	for name, tree := range trees {
-		if tree == nil || tree.Root == nil {
-			continue
-		}
-		if include != nil && !include(name) {
-			continue
-		}
-		ctx.template = name
-		collect(&all, tree.Root, ctx)
-	}
+	collect(&all, sc.tree.Root, ctx)
 
 	slices.SortFunc(all, func(a, b Mutant) int {
 		return cmp.Or(
-			cmp.Compare(a.Path, b.Path),
 			cmp.Compare(a.start, b.start),
 			cmp.Compare(a.Operator, b.Operator),
-			cmp.Compare(a.Template, b.Template),
 		)
 	})
-	return all, nil
+	return all
 }
 
 type mutantContext struct {
 	src      *templateSource
 	template string
 	regions  []region
+	dot      types.Type
+}
+
+// narrowed returns the context for a body where dot has changed, as it
+// does inside a range or a with.
+func (ctx mutantContext) narrowed(dot types.Type) mutantContext {
+	ctx.dot = dot
+	return ctx
 }
 
 // collect walks a parse tree and appends a mutant for every action a
@@ -160,7 +153,11 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 			collect(out, child, ctx)
 		}
 	case *parse.ActionNode:
-		ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
+		if zero, typed := zeroLiteral(ctx.dot, n.Pipe); typed {
+			ctx.addPipeline(out, n.Pipe, OperatorActionZero, zero)
+		} else {
+			ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
+		}
 	case *parse.IfNode:
 		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
 		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
@@ -168,11 +165,13 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:
 		ctx.addPipeline(out, n.Pipe, OperatorWithEmpty, "false")
-		collect(out, n.List, ctx)
+		// Inside the body, dot is what the with selected.
+		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe)))
 		collect(out, n.ElseList, ctx)
 	case *parse.RangeNode:
 		ctx.addConstructDrop(out, int(n.Position()), OperatorRangeNever)
-		collect(out, n.List, ctx)
+		// Inside the body, dot is one element of what was ranged over.
+		collect(out, n.List, ctx.narrowed(rangeDot(ctx.dot, n.Pipe)))
 		collect(out, n.ElseList, ctx)
 	case *parse.TemplateNode:
 		ctx.addTemplateDrop(out, int(n.Position()))

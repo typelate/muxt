@@ -13,7 +13,7 @@
 # an integer with more than one variable -- so the whole construct is
 # replaced by its else branch instead.
 
-muxt test-template-mutations
+muxt test-template-mutations -v
 cmp stdout want.txt
 
 -- go.mod --
@@ -29,6 +29,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -40,6 +41,10 @@ type Page struct {
 	Items  []string
 	Footer string
 }
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
 -- render_test.go --
 package server
 
@@ -50,7 +55,7 @@ import (
 
 func TestPage(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "page", Page{Items: []string{"a", "b"}}); err != nil {
+	if err := Render(&buf, Page{Items: []string{"a", "b"}}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "<ul><li>a</li><li>b</li></ul><b>muxt</b>"; got != want {
@@ -58,10 +63,15 @@ func TestPage(t *testing.T) {
 	}
 }
 -- want.txt --
+5 mutants across 2 templates (complexity 4)
 baseline ok
-KILL templates.gohtml:1:22 "page" range-never
-KILL templates.gohtml:1:55 "page" action-empty
-MISS templates.gohtml:1:81 "page" with-empty
-MISS templates.gohtml:1:100 "page" action-empty
-KILL templates.gohtml:1:116 "page" template-drop
-5 mutants, 3 killed, 2 missed
+
+template.go:20:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 3, dot: server.Page)
+    KILL 1:22 range-never
+    KILL 1:55 action-empty
+    MISS 1:81 with-empty
+    MISS 1:100 action-zero
+    KILL 1:116 template-drop
+
+5 mutants, 3 killed, 2 missed, 0 skipped

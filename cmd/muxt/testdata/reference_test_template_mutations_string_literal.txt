@@ -4,7 +4,7 @@
 # re-encoded, so the overlay replaces the .go file rather than a template
 # file. Positions are reported in the .go file, at the action itself.
 
-muxt test-template-mutations
+muxt test-template-mutations -v
 cmp stdout want.txt
 
 -- go.mod --
@@ -14,13 +14,20 @@ go 1.24
 -- template.go --
 package server
 
-import "html/template"
+import (
+	"html/template"
+	"io"
+)
 
 var templates = template.Must(template.New("greeting").Parse(`Hello, {{.Name}}!{{if .Loud}} !!!{{end}}`))
 
 type Greeting struct {
 	Name string
 	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
 }
 -- render_test.go --
 package server
@@ -32,7 +39,7 @@ import (
 
 func TestGreeting(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.Execute(&buf, Greeting{Name: "World"}); err != nil {
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "Hello, World!"; got != want {
@@ -40,8 +47,13 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
+3 mutants across 1 template (complexity 2)
 baseline ok
-KILL template.go:5:70 "greeting" action-empty
-MISS template.go:5:80 "greeting" if-false
-KILL template.go:5:80 "greeting" if-true
-3 mutants, 2 killed, 1 missed
+
+template.go:16:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" template.go (complexity 2, dot: server.Greeting)
+    KILL 8:70 action-zero
+    MISS 8:80 if-false
+    KILL 8:80 if-true
+
+3 mutants, 2 killed, 1 missed, 0 skipped
