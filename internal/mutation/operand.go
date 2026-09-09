@@ -216,7 +216,7 @@ func (ctx mutantContext) addOperandCombinations(out *[]Mutant, pipe *parse.PipeN
 	if pipe == nil {
 		return
 	}
-	_, r, ok := regionAt(ctx.regions, int(pipe.Position()))
+	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
 	if !ok {
 		return
 	}

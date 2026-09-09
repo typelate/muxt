@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -49,9 +50,9 @@ type ActionState struct {
 
 // StateResult is one mutant's recorded verdict.
 type StateResult struct {
-	Operator string `json:"operator"`
-	Mutated  string `json:"mutated"`
-	Status   Status `json:"status"`
+	Operator Operator `json:"operator"`
+	Mutated  string   `json:"mutated"`
+	Status   Status   `json:"status"`
 }
 
 // loadState reads the state file, returning an empty state when there is
@@ -80,7 +81,7 @@ func loadState(path string) *State {
 
 // verdict returns what a mutant was found to be last time, if the action
 // it varies is unchanged.
-func (s *State) verdict(fingerprint, operator, mutated string) (Status, bool) {
+func (s *State) verdict(fingerprint string, operator Operator, mutated string) (Status, bool) {
 	action, ok := s.Actions[fingerprint]
 	if !ok {
 		return "", false
@@ -106,10 +107,10 @@ func (s *State) save(path string) error {
 	// Sorted for a readable diff: this file is reviewed and committed.
 	for fingerprint, action := range s.Actions {
 		slices.SortFunc(action.Results, func(a, b StateResult) int {
-			if a.Operator != b.Operator {
-				return compareStrings(a.Operator, b.Operator)
-			}
-			return compareStrings(a.Mutated, b.Mutated)
+			return cmp.Or(
+				cmp.Compare(a.Operator, b.Operator),
+				cmp.Compare(a.Mutated, b.Mutated),
+			)
 		})
 		s.Actions[fingerprint] = action
 	}
@@ -120,19 +121,8 @@ func (s *State) save(path string) error {
 	return os.WriteFile(path, append(b, '\n'), 0o644)
 }
 
-func compareStrings(a, b string) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	default:
-		return 0
-	}
-}
-
 // record adds a mutant's verdict.
-func (s *State) record(fingerprint, template, file, operator, mutated string, status Status) {
+func (s *State) record(fingerprint, template, file string, operator Operator, mutated string, status Status) {
 	action, ok := s.Actions[fingerprint]
 	if !ok {
 		action = ActionState{Template: template, File: file}
@@ -147,4 +137,3 @@ func (s *State) record(fingerprint, template, file, operator, mutated string, st
 	action.Results = append(action.Results, StateResult{Operator: operator, Mutated: mutated, Status: status})
 	s.Actions[fingerprint] = action
 }
-

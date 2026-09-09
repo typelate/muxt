@@ -127,12 +127,12 @@ const (
 
 // Result is one mutant and the verdict its test run produced.
 type Result struct {
-	Status   Status `json:"status"`
-	Operator string `json:"operator"`
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
-	Original string `json:"original"`
-	Mutated  string `json:"mutated"`
+	Status   Status   `json:"status"`
+	Operator Operator `json:"operator"`
+	Line     int      `json:"line"`
+	Column   int      `json:"column"`
+	Original string   `json:"original"`
+	Mutated  string   `json:"mutated"`
 
 	// Reason says why a skipped mutant was not run.
 	Reason string `json:"reason,omitempty"`
@@ -225,6 +225,21 @@ type NoCallSitesError struct {
 
 func (e *NoCallSitesError) Error() string {
 	return fmt.Sprintf("no %s.ExecuteTemplate calls found: mutation testing needs a call site to know the type of dot", strings.Join(e.Variables, ", "))
+}
+
+// NoMutationsError reports that templates were reached but none of them
+// held an action to mutate.
+//
+// A run that mutates nothing passes, and a passing mutation run reads as
+// "the tests catch everything". That is the most misleading thing this
+// tool can say, so finding nothing to ask about is an error rather than
+// an empty report that exits zero.
+type NoMutationsError struct {
+	Templates int
+}
+
+func (e *NoMutationsError) Error() string {
+	return fmt.Sprintf("no mutations available: the %d template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything", e.Templates)
 }
 
 // Run mutates every action the configuration selects and reports which
@@ -545,7 +560,7 @@ func (c *sourceCollector) digests(src *templateSource) map[string]string {
 	if found, ok := c.digested[src]; ok {
 		return found
 	}
-	found := src.identities(src.rootName, c.defined[src])
+	found := src.sourceDigests(src.rootName, c.defined[src])
 	c.digested[src] = found
 	return found
 }

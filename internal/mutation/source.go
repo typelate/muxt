@@ -180,7 +180,7 @@ type definitionSpan struct {
 	trimsBefore, trimsAfter bool
 }
 
-// identities returns, per template name, a digest of the source that
+// sourceDigests returns, per template name, a digest of the source that
 // defines it.
 //
 // A defined template is its own source, from {{define}} through {{end}}.
@@ -193,7 +193,7 @@ type definitionSpan struct {
 // The spans are hashed where they lie. Nothing keeps a copy of a
 // template's source: a project's templates are large, and only the digest
 // is ever compared.
-func (s *templateSource) identities(rootName string, defined []definitionSpan) map[string]string {
+func (s *templateSource) sourceDigests(rootName string, defined []definitionSpan) map[string]string {
 	found := make(map[string]string, len(defined)+1)
 
 	ordered := slices.Clone(defined)
