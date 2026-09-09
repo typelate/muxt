@@ -32,6 +32,12 @@ type State struct {
 	// action's fingerprint, so changing it retries everything.
 	Seed uint64 `json:"seed"`
 
+	// Engine is the muxt version that reached them, recorded for the
+	// same reason: it feeds every fingerprint, so an improvement to the
+	// mutation engine retries everything rather than trusting verdicts
+	// reached by an older one.
+	Engine string `json:"engine"`
+
 	// Actions maps an action's fingerprint to the verdicts its mutants
 	// reached.
 	Actions map[string]ActionState `json:"actions"`
@@ -145,13 +151,6 @@ func (s *State) record(fingerprint, template, file, operator, mutated string, st
 	s.Actions[fingerprint] = action
 }
 
-// fingerprint identifies an action by everything a verdict depends on.
-//
-// The template's source is not enough on its own: a field changing from a
-// string to an int changes what a mutation substitutes without changing a
-// byte of the template, and the dot type's name stays the same either
-// way. So the resolved type of every operand goes in too, alongside the
-// seed the values are drawn from.
 // identity is everything an action's mutants depend on.
 type identity struct {
 	// template is the name the action's template is rendered under, and
@@ -174,6 +173,11 @@ type identity struct {
 	// seed decides the values substituted, so verdicts reached under one
 	// are not claimed for another.
 	seed uint64
+
+	// engine is the muxt version that produced the mutants. An
+	// improvement to the engine can change what a template is mutated
+	// into, so verdicts do not carry across one.
+	engine string
 }
 
 // fingerprint identifies one action's mutants.
@@ -183,7 +187,7 @@ type identity struct {
 // goes in too.
 func (id identity) fingerprint(action string, index int) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%d\x00",
-		stateVersion, id.template, id.dot, id.source, id.types, id.seed, action, index)
+	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%d\x00",
+		stateVersion, id.engine, id.template, id.dot, id.source, id.types, id.seed, action, index)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }

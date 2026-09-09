@@ -30,6 +30,7 @@ type plan struct {
 	runnableN  int
 	overBudget int
 	seed       uint64
+	engine     string
 	draw       *values
 	maxCases   int
 }
@@ -74,6 +75,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 
 	p := &plan{
 		seed:     config.Seed,
+		engine:   config.Engine,
 		draw:     newValues(config.Seed),
 		maxCases: config.MaxCases,
 	}
@@ -143,7 +145,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
 func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
-	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases, p.seed)
+	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases, p.seed, p.engine)
 
 	report := TemplateReport{
 		Template:   sc.template,
