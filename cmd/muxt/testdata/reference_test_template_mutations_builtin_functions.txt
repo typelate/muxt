@@ -1,7 +1,10 @@
-# Templates are re-parsed to locate their actions, and text/template/parse
-# rejects a call to a function it was not given. The builtins -- eq, and,
-# index, len and the rest -- have to be among them, or any template using
-# one fails to enumerate.
+# Templates are re-parsed to locate their actions, and that re-parse has to
+# go through text/template rather than through text/template/parse.
+#
+# text/template defines the builtins -- eq, and, index, len and the rest --
+# and passes them to the parser. The parse package on its own rejects a
+# call to any function it was not handed, so parsing there directly makes
+# every template using a builtin fail to enumerate.
 #
 # TestStatus only renders a code of 200, so forcing the condition true
 # changes nothing it sees and that mutant survives. Forcing it false swaps
