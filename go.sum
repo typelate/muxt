@@ -3,6 +3,8 @@ github.com/andybalholm/cascadia v1.3.4/go.mod h1:BLRmbRjpEtNKieZOCCvYj4RqN+KRA41
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/crhntr/txtarfmt v0.4.4 h1:UQcrx6l2GVWQaV0qQplAGYGs4zxoQHq5p6FYnhuEu0c=
 github.com/crhntr/txtarfmt v0.4.4/go.mod h1:qlo4mpPHKLsKyVDZhg8Hl7km7Z2TYBq0c0+EAD23Xiw=
+github.com/crhntr/txtarfmt v0.4.6 h1:uNeLI0LQjh8Htp5B3qTEBBQH6Rf4S6OphfqZ7hpRVco=
+github.com/crhntr/txtarfmt v0.4.6/go.mod h1:iRHEZbEhVtwZAyE/ybievaHoR1FWarpIEojiXJ8PzQA=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/ettle/strcase v0.2.0 h1:fGNiVF21fHXpX1niBgk0aROov1LagYsOwV/xqKDKR/Q=

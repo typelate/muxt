@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.4 // indirect
-	github.com/crhntr/txtarfmt v0.4.4 // indirect
+	github.com/crhntr/txtarfmt v0.4.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
