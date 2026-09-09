@@ -1,7 +1,9 @@
 package mutation
 
 import (
+	"fmt"
 	"go/types"
+	"strings"
 	"text/template/parse"
 
 	"github.com/typelate/check"
@@ -178,43 +180,59 @@ func functionResult(name string, functions check.Functions) (types.Type, bool) {
 
 // fieldPath walks a chain of field and method names from a starting type.
 func fieldPath(from types.Type, idents []string) (types.Type, bool) {
+	resolved, _, ok := fieldPathTrace(from, idents)
+	return resolved, ok
+}
+
+// fieldPathTrace walks a field path and also describes how each segment
+// resolved.
+//
+// The description is what an action's identity records. A method's result
+// type is not enough on its own: a signature can change while its first
+// result stays put, and a template that reads the method as a field stops
+// working when it gains a parameter. Recording the signature means such a
+// change re-runs the mutants that depend on it.
+func fieldPathTrace(from types.Type, idents []string) (types.Type, string, bool) {
+	var trace strings.Builder
 	current := from
 	for _, ident := range idents {
-		next, ok := memberType(current, ident)
+		next, describe, ok := memberType(current, ident)
 		if !ok {
-			return nil, false
+			return nil, "", false
 		}
+		fmt.Fprintf(&trace, ".%s=%s", ident, describe)
 		current = next
 	}
-	return current, true
+	return current, trace.String(), true
 }
 
 // memberType resolves one name against a type, as a template does: a
-// struct field, or a method taking no arguments.
-func memberType(from types.Type, ident string) (types.Type, bool) {
+// struct field, or a method taking no arguments. The second result
+// describes what was found, for the identity to record.
+func memberType(from types.Type, ident string) (types.Type, string, bool) {
 	if from == nil {
-		return nil, false
+		return nil, "", false
 	}
-	if method, ok := methodType(from, ident); ok {
-		return method, true
+	if method, describe, ok := methodType(from, ident); ok {
+		return method, describe, true
 	}
 
 	structure, ok := deref(from).Underlying().(*types.Struct)
 	if !ok {
-		return nil, false
+		return nil, "", false
 	}
 	for i := range structure.NumFields() {
 		field := structure.Field(i)
 		if field.Name() == ident && field.Exported() {
-			return field.Type(), true
+			return field.Type(), "field " + typeKey(field.Type()), true
 		}
 	}
-	return nil, false
+	return nil, "", false
 }
 
 // methodType resolves a method with no parameters, whose single result,
 // or whose first result alongside an error, is what a template sees.
-func methodType(from types.Type, ident string) (types.Type, bool) {
+func methodType(from types.Type, ident string) (types.Type, string, bool) {
 	named, ok := deref(from).(*types.Named)
 	if !ok {
 		// A method set is also reachable through the pointer to a
@@ -223,7 +241,7 @@ func methodType(from types.Type, ident string) (types.Type, bool) {
 			named, ok = pointer.Elem().(*types.Named)
 		}
 		if !ok {
-			return nil, false
+			return nil, "", false
 		}
 	}
 	for i := range named.NumMethods() {
@@ -233,15 +251,17 @@ func methodType(from types.Type, ident string) (types.Type, bool) {
 		}
 		signature, ok := method.Type().(*types.Signature)
 		if !ok || signature.Params().Len() != 0 {
-			return nil, false
+			return nil, "", false
 		}
 		results := signature.Results()
 		if results.Len() == 0 {
-			return nil, false
+			return nil, "", false
 		}
-		return results.At(0).Type(), true
+		// The whole signature goes in, not just the result: a parameter
+		// appearing is what stops a template reading it as a field.
+		return results.At(0).Type(), "method " + typeKey(signature), true
 	}
-	return nil, false
+	return nil, "", false
 }
 
 func deref(t types.Type) types.Type {

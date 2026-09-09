@@ -267,6 +267,10 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}
+		// A template's identity is its own source, which is what the
+		// definitions in this text carve it into.
+		identities := src.identities(src.rootName, collector.defined[src])
+
 		for name, tree := range trees {
 			if tree == nil || tree.Root == nil {
 				continue
@@ -274,7 +278,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
-			index[name] = treeLocation{src: src, tree: tree}
+			index[name] = treeLocation{src: src, tree: tree, identity: identities[name]}
 		}
 	}
 	return index, nil

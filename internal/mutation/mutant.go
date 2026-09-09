@@ -2,7 +2,11 @@ package mutation
 
 import (
 	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"go/types"
+	"hash"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -106,6 +110,10 @@ type Mutant struct {
 	// to put mutated text back into it.
 	src *templateSource
 
+	// actionIndex is the action's number in the walk, which tells two
+	// identically written actions apart.
+	actionIndex int
+
 	// fingerprint identifies the action this mutation varies, by its
 	// source and by the types resolved for it. A run compares it against
 	// a previous run's state to decide what has to be tried again.
@@ -148,6 +156,8 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		notes     []budgetNote
 		actionSeq int
 	)
+	// The digest takes every action's types as the walk reaches them.
+	types := sha256.New()
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
@@ -157,13 +167,27 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		values:    draw,
 		maxCases:  maxCases,
 		seed:      seed,
-		treeText:  sc.tree.Root.String(),
 		actionSeq: &actionSeq,
+		digest:    types,
 		notes:     &notes,
 	}
 
 	var all []Mutant
 	collect(&all, sc.tree.Root, ctx)
+
+	// The types are only complete once the whole template has been
+	// walked, so fingerprints are taken afterwards: every action in the
+	// template shares them, and a change to any one of them re-runs all.
+	id := identity{
+		template: sc.template,
+		dot:      typeKey(sc.dataType),
+		source:   sc.identity,
+		types:    hex.EncodeToString(types.Sum(nil)),
+		seed:     seed,
+	}
+	for i := range all {
+		all[i].fingerprint = id.fingerprint(all[i].action, all[i].actionIndex)
+	}
 
 	slices.SortFunc(all, func(a, b Mutant) int {
 		return cmp.Or(
@@ -184,10 +208,10 @@ type mutantContext struct {
 	values    *values
 	maxCases  int
 	seed      uint64
-	treeText  string
 	pipe      *parse.PipeNode
 	actionSeq *int
 	action    int
+	digest    hash.Hash
 	notes     *[]budgetNote
 }
 
@@ -202,6 +226,18 @@ func (ctx mutantContext) forAction(pipe *parse.PipeNode) mutantContext {
 	*ctx.actionSeq++
 	ctx.action = *ctx.actionSeq
 	ctx.pipe = pipe
+
+	// The types an action reads are part of what its mutants depend on:
+	// a field going from a string to an int changes what a mutation
+	// substitutes without changing a byte of the template. They are
+	// written straight into the running digest, in walk order, so the
+	// result depends on the whole template rather than on this action:
+	// a type change anywhere in it re-runs all of it, which is the unit
+	// a reader works in.
+	fmt.Fprintf(ctx.digest, "%d\x00%s\x00", ctx.action, typeKey(ctx.dot))
+	for _, op := range operands(ctx.src.text, ctx.dot, pipe) {
+		fmt.Fprintf(ctx.digest, "%s=%s=%s\x00", op.text, typeKey(op.dataType), op.resolution)
+	}
 	return ctx
 }
 
@@ -336,7 +372,7 @@ func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator string, e
 		edits:       edits,
 		detail:      detail,
 		action:      ctx.src.text[r.start:r.end],
-		fingerprint: ctx.fingerprint(r),
+		actionIndex: ctx.action,
 	})
 }
 

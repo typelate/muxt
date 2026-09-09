@@ -152,12 +152,38 @@ func (s *State) record(fingerprint, template, file, operator, mutated string, st
 // byte of the template, and the dot type's name stays the same either
 // way. So the resolved type of every operand goes in too, alongside the
 // seed the values are drawn from.
-func (ctx mutantContext) fingerprint(r region) string {
+// identity is everything an action's mutants depend on.
+type identity struct {
+	// template is the name the action's template is rendered under, and
+	// dot the type it is rendered with. The two together are the
+	// execution a verdict belongs to.
+	template string
+	dot      string
+
+	// source is the template's own source: for a defined template, the
+	// text from {{define}} through {{end}}; for the template a file
+	// carries, what its definitions leave behind.
+	source string
+
+	// types are the types resolved for every action in the template.
+	// They are recorded for the template rather than the action so that
+	// a field changing type re-runs the template as a whole, which is
+	// the unit a reader works in.
+	types string
+
+	// seed decides the values substituted, so verdicts reached under one
+	// are not claimed for another.
+	seed uint64
+}
+
+// fingerprint identifies one action's mutants.
+//
+// The action's own text is not enough to tell it from an identically
+// written one elsewhere in the same template, so its number in the walk
+// goes in too.
+func (id identity) fingerprint(action string, index int) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00",
-		stateVersion, ctx.template, typeKey(ctx.dot), ctx.treeText, ctx.src.text[r.start:r.end], ctx.action, ctx.seed)
-	for _, op := range operands(ctx.src.text, ctx.dot, ctx.pipe) {
-		fmt.Fprintf(h, "%s=%s\x00", op.text, typeKey(op.dataType))
-	}
+	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%d\x00",
+		stateVersion, id.template, id.dot, id.source, id.types, id.seed, action, index)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }

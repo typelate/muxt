@@ -507,6 +507,11 @@ type sourceCollector struct {
 	files            map[string]string
 	byKey            map[sourceKey]*templateSource
 	keys             []sourceKey
+
+	// defined holds where each source writes the templates its define
+	// clauses declare, which is what separates one template's source
+	// from the text around it.
+	defined map[*templateSource][]definitionSpan
 }
 
 func newSourceCollector(workingDirectory string, pl []*packages.Package) *sourceCollector {
@@ -515,6 +520,7 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package) *source
 		packages:         pl,
 		files:            make(map[string]string),
 		byKey:            make(map[sourceKey]*templateSource),
+		defined:          make(map[*templateSource][]definitionSpan),
 	}
 }
 
@@ -528,30 +534,72 @@ func (c *sourceCollector) add(definition check.Definition) error {
 		return err
 	}
 
+	var src *templateSource
 	if filepath.Ext(file) != ".go" {
-		_, err := c.source(sourceKey{file: file}, func() (*templateSource, error) {
+		src, err = c.source(sourceKey{file: file}, func() (*templateSource, error) {
 			return newFileSource(file, c.relative(file), fileText), nil
 		})
-		return err
+		if err != nil {
+			return err
+		}
+	} else {
+		litStart, litEnd, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
+		if !ok {
+			return nil
+		}
+		src, err = c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
+			return newLiteralSource(file, c.relative(file), definition.Name, fileText, litStart, litEnd)
+		})
+		if err != nil {
+			return err
+		}
+		if !definition.TemplateName.IsValid() {
+			// A definition with no define clause is the template the
+			// literal's own text carries, so its name is the root name
+			// the text has to be parsed under.
+			src.rootName = definition.Name
+		}
 	}
 
-	litStart, litEnd, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
-	if !ok {
+	if !definition.TemplateName.IsValid() {
+		// The template the text itself carries has no define clause, so
+		// there is no span to record: it is what the others leave.
 		return nil
 	}
-	src, err := c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
-		return newLiteralSource(file, c.relative(file), definition.Name, fileText, litStart, litEnd)
-	})
-	if err != nil {
-		return err
-	}
-	if !definition.TemplateName.IsValid() {
-		// A definition with no define clause is the template the
-		// literal's own text carries, so its name is the root name the
-		// text has to be parsed under.
-		src.rootName = definition.Name
+	if span, ok := definitionSpanOf(src, definition); ok {
+		c.defined[src] = append(c.defined[src], span)
 	}
 	return nil
+}
+
+// definitionSpanOf locates a definition within the text it was written
+// in, from the clause that opens it through the one that closes it.
+func definitionSpanOf(src *templateSource, definition check.Definition) (definitionSpan, bool) {
+	start, ok := src.textOffset(definition.Define.Offset)
+	if !ok {
+		return definitionSpan{}, false
+	}
+	endStart, ok := src.textOffset(definition.End.Offset)
+	if !ok {
+		return definitionSpan{}, false
+	}
+	end := endStart + definition.End.Length
+	if end > len(src.text) || start >= end {
+		return definitionSpan{}, false
+	}
+
+	opening := src.text[start:min(start+definition.Define.Length, len(src.text))]
+	closing := src.text[endStart:end]
+	return definitionSpan{
+		name:  definition.Name,
+		start: start,
+		end:   end,
+		// Only the outward facing markers matter to the surrounding
+		// template: a trim on the far side of either delimiter acts on
+		// text inside the definition.
+		trimsBefore: strings.HasPrefix(opening, "{{-"),
+		trimsAfter:  strings.HasSuffix(closing, "-}}"),
+	}, true
 }
 
 func (c *sourceCollector) source(key sourceKey, build func() (*templateSource, error)) (*templateSource, error) {

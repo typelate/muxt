@@ -28,6 +28,10 @@ type operand struct {
 	start, end int
 	text       string
 	dataType   types.Type
+
+	// resolution describes how the type was reached, segment by segment,
+	// so a method signature changing invalidates what depends on it.
+	resolution string
 }
 
 // operands returns the leaf inputs a pipeline reads, in source order.
@@ -50,14 +54,15 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *parse.Pi
 			case *parse.PipeNode:
 				collectOperands(out, text, dot, node)
 			case *parse.FieldNode:
-				appendOperand(out, text, node, fieldType(dot, node.Ident))
+				resolved, trace := fieldType(dot, node.Ident)
+				appendOperand(out, text, node, resolved, trace)
 			case *parse.VariableNode:
 				// A variable's type would have to be tracked through the
 				// declaration that bound it, which the checker does and
 				// this does not. It is still an input worth varying.
-				appendOperand(out, text, node, nil)
+				appendOperand(out, text, node, nil, "")
 			case *parse.DotNode:
-				appendOperand(out, text, node, dot)
+				appendOperand(out, text, node, dot, "dot")
 			}
 		}
 	}
@@ -69,13 +74,13 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *parse.Pi
 // A node's String is a reconstruction, not a quotation, so requiring the
 // two to agree is what keeps a mutation from splicing over the wrong
 // bytes.
-func appendOperand(out *[]operand, text string, node parse.Node, dataType types.Type) {
+func appendOperand(out *[]operand, text string, node parse.Node, dataType types.Type, resolution string) {
 	written := node.String()
 	start, ok := operandStart(text, int(node.Position()), written)
 	if !ok {
 		return
 	}
-	*out = append(*out, operand{start: start, end: start + len(written), text: written, dataType: dataType})
+	*out = append(*out, operand{start: start, end: start + len(written), text: written, dataType: dataType, resolution: resolution})
 }
 
 // operandStart locates where a node is written in text.
@@ -104,12 +109,12 @@ func operandStart(text string, pos int, written string) (int, bool) {
 	return 0, false
 }
 
-func fieldType(dot types.Type, idents []string) types.Type {
-	resolved, ok := fieldPath(dot, idents)
+func fieldType(dot types.Type, idents []string) (types.Type, string) {
+	resolved, trace, ok := fieldPathTrace(dot, idents)
 	if !ok {
-		return nil
+		return nil, ""
 	}
-	return resolved
+	return resolved, trace
 }
 
 // values draws replacement literals.
