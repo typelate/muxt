@@ -52,7 +52,7 @@ func TestGreeting(t *testing.T) {
 }
 -- want.txt --
 baseline ok
-KILL templates.gohtml:1:31 "greeting" action-empty
-MISS templates.gohtml:1:44 "greeting" if-false
-KILL templates.gohtml:1:44 "greeting" if-true
+KILL templates.gohtml:1:29 "greeting" action-empty
+MISS templates.gohtml:1:39 "greeting" if-false
+KILL templates.gohtml:1:39 "greeting" if-true
 3 mutants, 2 killed, 1 missed

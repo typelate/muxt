@@ -9,9 +9,9 @@ import (
 
 // Operator names the variation applied to one action.
 //
-// Every operator rewrites a pipeline in place, leaving the surrounding
-// template text and every template's name untouched, so a mutant never
-// moves a route or changes which templates exist.
+// No operator renames a template or changes which templates exist, so a
+// mutant never moves a route: only what a template does with its data
+// changes.
 const (
 	// OperatorActionEmpty makes an action print nothing, standing in for
 	// the value it prints being absent. A test that never looks at the
@@ -21,8 +21,27 @@ const (
 	// OperatorIfTrue takes the then branch unconditionally.
 	OperatorIfTrue = "if-true"
 
-	// OperatorIfFalse takes the else branch, or no branch, unconditionally.
+	// OperatorIfFalse takes the else branch, or no branch at all,
+	// unconditionally.
 	OperatorIfFalse = "if-false"
+
+	// OperatorWithEmpty makes a with behave as though its value were
+	// absent, so the body never runs and the else branch does.
+	OperatorWithEmpty = "with-empty"
+
+	// OperatorRangeNever makes a range iterate zero times, replacing the
+	// whole construct with its else branch.
+	//
+	// It cannot be done by replacing the pipeline: there is no literal
+	// for an empty sequence, and while ranging over the literal 0
+	// iterates zero times, text/template refuses that for a range
+	// declaring more than one variable.
+	OperatorRangeNever = "range-never"
+
+	// OperatorTemplateDrop removes a {{template}} call, standing in for
+	// the partial rendering nothing. It does not apply to {{block}},
+	// whose call cannot be removed without orphaning its {{end}}.
+	OperatorTemplateDrop = "template-drop"
 )
 
 // Status is the verdict on one mutant.
@@ -55,15 +74,21 @@ type Mutant struct {
 	// is what reports show.
 	Path string
 
-	// Line and Column locate the pipeline in File, both one based, with
-	// Column counting bytes.
+	// Line and Column locate the action's left delimiter in File, both
+	// one based, with Column counting bytes.
 	Line, Column int
 
-	// start and end bound the pipeline within the file's text.
+	// start and end bound the text the mutation replaces. For a
+	// pipeline variation that is the pipeline; for a structural one it
+	// is the whole construct, opening action through matching end.
 	start, end int
 
-	// replacement is the pipeline text the mutation substitutes.
+	// replacement is the text substituted for that range.
 	replacement string
+
+	// action is the opening action as it is written, which is what a
+	// report shows so that a whole range body does not land in it.
+	action string
 }
 
 // Apply returns the file's text with the mutation in place.
@@ -71,16 +96,10 @@ func (m Mutant) Apply(text string) string {
 	return text[:m.start] + m.replacement + text[m.end:]
 }
 
-// Pipeline returns the pipeline text the mutation replaces, which is what
-// a report shows as the mutated source.
-func (m Mutant) Pipeline(text string) string {
-	if m.start < 0 || m.end > len(text) || m.start > m.end {
-		return ""
-	}
-	return text[m.start:m.end]
-}
+// Action returns the mutated action as it is written in the template.
+func (m Mutant) Action() string { return m.action }
 
-// Replacement returns the pipeline text the mutation substitutes.
+// Replacement returns the text the mutation substitutes.
 func (m Mutant) Replacement() string { return m.replacement }
 
 // mutantsInFile enumerates every mutation available in the templates that
@@ -94,8 +113,13 @@ func mutantsInFile(file, path, rootName, text string, funcs map[string]any, incl
 		return nil, err
 	}
 
-	found := regions(text, "", "")
-	lines := newLineIndex(text)
+	ctx := mutantContext{
+		file:    file,
+		path:    path,
+		text:    text,
+		regions: regions(text, "", ""),
+		lines:   newLineIndex(text),
+	}
 
 	var all []Mutant
 	for name, tree := range trees {
@@ -105,13 +129,8 @@ func mutantsInFile(file, path, rootName, text string, funcs map[string]any, incl
 		if include != nil && !include(name) {
 			continue
 		}
-		collect(&all, tree.Root, mutantContext{
-			file:     file,
-			path:     path,
-			template: name,
-			regions:  found,
-			lines:    lines,
-		})
+		ctx.template = name
+		collect(&all, tree.Root, ctx)
 	}
 
 	slices.SortFunc(all, func(a, b Mutant) int {
@@ -129,6 +148,7 @@ type mutantContext struct {
 	file     string
 	path     string
 	template string
+	text     string
 	regions  []region
 	lines    lineIndex
 }
@@ -145,40 +165,79 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 			collect(out, child, ctx)
 		}
 	case *parse.ActionNode:
-		ctx.add(out, n.Pipe, OperatorActionEmpty, `""`)
+		ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
 	case *parse.IfNode:
-		ctx.add(out, n.Pipe, OperatorIfTrue, "true")
-		ctx.add(out, n.Pipe, OperatorIfFalse, "false")
-		collect(out, n.List, ctx)
-		collect(out, n.ElseList, ctx)
-	case *parse.RangeNode:
+		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
+		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
 		collect(out, n.List, ctx)
 		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:
+		ctx.addPipeline(out, n.Pipe, OperatorWithEmpty, "false")
 		collect(out, n.List, ctx)
 		collect(out, n.ElseList, ctx)
+	case *parse.RangeNode:
+		ctx.addConstructDrop(out, int(n.Position()), OperatorRangeNever)
+		collect(out, n.List, ctx)
+		collect(out, n.ElseList, ctx)
+	case *parse.TemplateNode:
+		ctx.addTemplateDrop(out, int(n.Position()))
 	}
 }
 
-// add appends one mutant for pipe, unless the pipeline cannot be varied
-// without breaking the template around it.
-func (ctx mutantContext) add(out *[]Mutant, pipe *parse.PipeNode, operator, replacement string) {
+// addPipeline appends a mutant replacing the value a pipeline evaluates.
+//
+// A pipeline that declares variables keeps its declarations, so that
+// references to them elsewhere in the template still resolve; only the
+// value assigned changes.
+func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operator, replacement string) {
 	if pipe == nil {
 		return
 	}
-	if len(pipe.Decl) > 0 {
-		// The pipeline declares variables the rest of the template
-		// refers to. Replacing it would leave those references
-		// undefined, which is a broken template rather than a
-		// behaviour change worth testing for.
+	_, r, ok := regionAt(ctx.regions, int(pipe.Position()))
+	if !ok {
 		return
 	}
-	start := int(pipe.Position())
-	end, ok := pipelineEnd(ctx.regions, start)
-	if !ok || end <= start {
+	start := ctx.valueStart(pipe, r)
+	if start >= r.innerEnd {
 		return
 	}
-	line, column := ctx.lines.at(start)
+	ctx.appendMutant(out, r, operator, start, r.innerEnd, replacement)
+}
+
+// addConstructDrop appends a mutant replacing a whole construct with its
+// else branch, or with nothing when it has none.
+func (ctx mutantContext) addConstructDrop(out *[]Mutant, pos int, operator string) {
+	index, r, ok := regionAt(ctx.regions, pos)
+	if !ok {
+		return
+	}
+	endIndex, elseIndex, ok := matchEnd(ctx.regions, index)
+	if !ok {
+		return
+	}
+	replacement := ""
+	if elseIndex >= 0 {
+		replacement = ctx.text[ctx.regions[elseIndex].end:ctx.regions[endIndex].start]
+	}
+	ctx.appendMutant(out, r, operator, r.start, ctx.regions[endIndex].end, replacement)
+}
+
+// addTemplateDrop appends a mutant removing a {{template}} call.
+func (ctx mutantContext) addTemplateDrop(out *[]Mutant, pos int) {
+	_, r, ok := regionAt(ctx.regions, pos)
+	if !ok || r.keyword != "template" {
+		// A block defines its body in place, so removing its call
+		// would leave the body and its {{end}} behind.
+		return
+	}
+	ctx.appendMutant(out, r, OperatorTemplateDrop, r.start, r.end, "")
+}
+
+func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator string, start, end int, replacement string) {
+	if start < 0 || end > len(ctx.text) || start > end {
+		return
+	}
+	line, column := ctx.lines.at(r.start)
 	*out = append(*out, Mutant{
 		Operator:    operator,
 		Template:    ctx.template,
@@ -189,7 +248,34 @@ func (ctx mutantContext) add(out *[]Mutant, pipe *parse.PipeNode, operator, repl
 		start:       start,
 		end:         end,
 		replacement: replacement,
+		action:      ctx.text[r.start:r.end],
 	})
+}
+
+// valueStart returns the offset of the value a pipeline assigns, which is
+// the pipeline itself unless it declares variables first.
+func (ctx mutantContext) valueStart(pipe *parse.PipeNode, r region) int {
+	start := int(pipe.Position())
+	if len(pipe.Decl) == 0 {
+		return start
+	}
+	last := pipe.Decl[len(pipe.Decl)-1]
+	i := int(last.Position()) + len(last.String())
+	for i < r.innerEnd && isSpace(ctx.text[i]) {
+		i++
+	}
+	switch {
+	case strings.HasPrefix(ctx.text[i:], ":="):
+		i += 2
+	case i < r.innerEnd && ctx.text[i] == '=':
+		i++
+	default:
+		return start
+	}
+	for i < r.innerEnd && isSpace(ctx.text[i]) {
+		i++
+	}
+	return i
 }
 
 // lineIndex turns a byte offset into a one based line and column.
@@ -214,17 +300,4 @@ func (l lineIndex) at(offset int) (line, column int) {
 		i = 0
 	}
 	return i + 1, offset - l[i] + 1
-}
-
-// functionNames adapts the names a template set may call into the shape
-// text/template/parse wants, which checks only that a name is known.
-func functionNames(names []string) map[string]any {
-	funcs := make(map[string]any, len(names))
-	for _, name := range names {
-		if strings.TrimSpace(name) == "" {
-			continue
-		}
-		funcs[name] = func() string { return "" }
-	}
-	return funcs
 }
