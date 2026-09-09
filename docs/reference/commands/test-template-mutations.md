@@ -45,6 +45,9 @@ Calls in `_test.go` files are ignored by default — a template rendered only by
 | `--template-pattern` | string | _(all)_ | Only mutate templates whose name matches this regular expression. |
 | `--run` | string | _(all)_ | Only run tests matching this regular expression. Passed to `go test -run`. |
 | `--include-test-callers` | bool | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
+| `--seed` | uint64 | _(drawn)_ | Seed the values substituted for an action's operands. Drawn and reported when not given. |
+| `--max-cases` | int | `8` | Most operand combinations one action may contribute. |
+| `--state` | string | `testdata/template-mutations.json` | Record verdicts here and reuse them for unchanged actions. Empty disables. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to read templates from. |
 | `--format` | string | `text` | `text` or `json`. |
 
@@ -86,12 +89,74 @@ One mutant is produced per applicable action. No operator renames a template or 
 | `with-empty` | `{{with}}` | Behaves as though the value were absent, leaving the else branch. |
 | `range-never` | `{{range}}` | Iterates zero times, leaving the else branch. |
 | `template-drop` | `{{template}}` | Removes the call. |
+| `operands` | An action reading two or more inputs | Substitutes drawn values into one combination of its leaf operands. |
+| `condition` | A condition of an `and`/`or`/`not` decision | Forces that one condition true or false, leaving the others reading real data. |
+| `condition-dead` | A condition simplification removed | Reported, never run: it cannot change the decision. |
 
 A pipeline that declares variables keeps its declarations and has only its value replaced, so `{{range $i, $item := .Items}}` is mutated without leaving `$item` undefined.
 
 `{{block}}` is not dropped: a block defines its body in place, so removing its call would orphan the body's `{{end}}`.
 
 `with-empty` and `range-never` replace the whole construct rather than the pipeline. Substituting `false` into a `{{with}}` would rebind dot to a boolean and stop every field access in the body from type checking, and there is no literal for an empty sequence.
+
+## Is Each Input Coupled to a Failure?
+
+Emptying a whole action says only that *something* about it is watched. An action reading more than one input also gets a mutant per combination of its leaf operands, which says *which* of them nothing is watching:
+
+```
+MISS 12:5 operands .First="nard"
+KILL 12:5 operands .First="nard" .Last="xeqr"
+KILL 12:5 operands .Last="xeqr"
+```
+
+Here nothing depends on `.First` on its own. The values are drawn per type from a seeded generator; the seed is reported, and drawn when `--seed` is not given, so any run can be repeated exactly.
+
+Leaf operands are the field accesses, variables and dots a pipeline reads, including inside a nested pipeline. A function name is not one and neither is a literal — neither carries data into the template.
+
+### Boolean Decisions
+
+Forcing every condition of a decision at once only ever produces the then branch or the else branch, which `if-true` and `if-false` already cover. So a decision written with `and`, `or` and `not` gets one mutant per condition, forcing **that one** true or false while the others keep reading real data. The decision is then still a function of the data, so whether a test notices depends on what it renders with — which is what says whether anything is coupled to that condition. It is also linear in the number of conditions rather than exponential.
+
+```
+MISS 1:18 condition .Admin=false
+KILL 1:18 condition .Admin=true
+MISS 1:18 condition .Owner=false
+MISS 1:18 condition .Owner=true
+```
+
+`.Owner` survives both: with `{{if and .Admin .Owner}}` and a test that never renders with `.Admin` true, nothing can observe `.Owner` at all.
+
+The decision is simplified first — flattening, constant folding, idempotence, complement and absorption. A condition simplification removes is reported `condition-dead` and never run, because nothing could have been coupled to something that cannot change the outcome:
+
+```
+SKIP 1:50 condition-dead (.Loud cannot change the decision)
+```
+
+`{{or .Banned (and .Banned .Loud)}}` is just `.Banned`.
+
+Anything the model does not cover exactly — a comparison, a call, a multi-command pipeline — falls back to the general operand combinations.
+
+### Cost
+
+Every case is a full test run, so `--max-cases` bounds what one action may contribute. An action over the bound contributes nothing and says so, rather than quietly turning a two-minute run into an hour:
+
+```
+SKIP 18:3 operands (7 operands need 127 cases, over --max-cases=8)
+```
+
+## Only Run What Changed
+
+A run records its verdicts in `testdata/template-mutations.json` and reuses them next time for actions that have not changed:
+
+```
+2 mutants, 2 killed, 0 missed, 0 skipped, 1 reused
+```
+
+An action is identified by a hash of its template's source, the action itself, the fully resolved type of dot and of every operand, and the seed. The source alone would not be enough: a field changing from a `string` to an `int` changes what a mutation substitutes without changing a byte of the template, and the dot type's name stays the same either way.
+
+The file belongs to the tests, which is why it sits in `testdata` — it is the record of which template behaviour the suite was shown to cover, and it should be reviewed and committed alongside the tests that produced it. Pass `--state ""` to turn it off, and a different `--seed` retries everything.
+
+A dry run neither reads nor writes it.
 
 ## Skipped Mutants
 
