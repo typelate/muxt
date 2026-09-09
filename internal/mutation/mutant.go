@@ -144,7 +144,10 @@ func (m Mutant) Replacement() string { return m.detail }
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
 func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64) ([]Mutant, []budgetNote) {
-	var notes []budgetNote
+	var (
+		notes     []budgetNote
+		actionSeq int
+	)
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
@@ -155,6 +158,7 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		maxCases:  maxCases,
 		seed:      seed,
 		treeText:  sc.tree.Root.String(),
+		actionSeq: &actionSeq,
 		notes:     &notes,
 	}
 
@@ -182,12 +186,21 @@ type mutantContext struct {
 	seed      uint64
 	treeText  string
 	pipe      *parse.PipeNode
+	actionSeq *int
+	action    int
 	notes     *[]budgetNote
 }
 
 // forAction returns the context for one action, whose pipeline the
 // fingerprint is computed over.
+//
+// Each action also takes the next number in the walk, which is what
+// tells two identically written actions apart. Without it they share a
+// fingerprint, and the second inherits the first's verdict instead of
+// being run -- reporting a kill it never earned.
 func (ctx mutantContext) forAction(pipe *parse.PipeNode) mutantContext {
+	*ctx.actionSeq++
+	ctx.action = *ctx.actionSeq
 	ctx.pipe = pipe
 	return ctx
 }

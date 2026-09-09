@@ -1,0 +1,70 @@
+# Two identically written actions are two mutants, not one.
+#
+# An action is identified for reuse by its template, its text and the
+# types resolved for it. On its own that does not tell {{.Name}} in one
+# place from {{.Name}} in another, so the second would find the first's
+# verdict recorded and take it instead of being run -- reporting a kill it
+# never earned, which is the sort of lie the skip machinery exists to
+# avoid.
+#
+# TestPage looks only at the first occurrence. Emptying that one is caught;
+# emptying the second changes nothing it asserts on and survives. The two
+# must therefore reach different verdicts.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}<a>{{.Name}}</a><b>{{.Name}}</b>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "<a>x</a>") {
+		t.Errorf("page = %q", buf.String())
+	}
+}
+-- want.txt --
+2 mutants across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:21 action-zero
+    MISS 1:37 action-zero
+
+2 mutants, 1 killed, 1 missed, 0 skipped
