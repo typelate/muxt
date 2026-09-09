@@ -55,13 +55,70 @@ where `atom.Tbody` yields the rows. Pass the element the swap targets and the
 test checks the swap contract for free — a fragment that vanishes here would
 not have landed in the page either.
 
+## htmx and Datastar widen the API
+
+htmx and Datastar write the interaction graph into attributes: which element
+issues a request, to what URL, and where the response lands. Attributes travel
+in the response body, and attribute selectors reach hyphenated and
+colon-separated names, so the graph is queryable — `[hx-post]`, `[hx-target]`,
+`[data-on\:click]`.
+
+That turns questions that sound like browser questions into graph questions.
+Does this button's click have somewhere to go? Does what it targets exist? Both
+are answerable from a single response.
+
+The generated mux answers the routing half. `http.ServeMux.Handler` reports the
+pattern that would serve a request, and an empty pattern means nothing would:
+
+```go
+for el := range doc.QuerySelectorSequence("[hx-post]") {
+	url := el.GetAttribute("hx-post")
+	_, pattern := mux.Handler(httptest.NewRequest(http.MethodPost, url, nil))
+	assert.NotEmptyf(t, pattern, "hx-post=%q is not routable", url)
+}
+```
+
+A sweep like that fails the moment a template and a route pattern drift apart —
+the drift that otherwise surfaces as a 404 after a click.
+
+### Resolve targets from the trigger, not the declaration
+
+`hx-target` is inherited, so the element declaring it is often not the element
+issuing the request: a `<tbody hx-target="closest tr">` sets the target for the
+`<td hx-get=...>` inside it. Start at the trigger and walk up for the nearest
+declaration with `trigger.Closest("[hx-target]")`.
+
+The value is not plain CSS either. `closest`, `find`, `this`, `next`, and
+`previous` are htmx syntax, and `dom` compiles selectors with
+`cascadia.MustCompile` — so handing `closest tr` to `QuerySelector` panics.
+Split the verb off first; `spec.Element` already has what each one needs.
+
+| `hx-target` value | resolve with |
+|---|---|
+| `#id`, `.class`, any CSS | `doc.QuerySelector(target)` |
+| `closest tr` | `trigger.Closest("tr")` |
+| `find td` | `trigger.QuerySelector("td")` |
+| `this` | the trigger itself |
+
+The same shape covers `hx-swap-oob`: a fragment's out-of-band element carries an
+`id`, and that `id` has to exist in the page being patched.
+
+### Datastar hides the URL in an expression
+
+`data-on:click="@post('/increment')"` holds the action inside a JavaScript
+expression, so match the attribute and extract the URL. `data-on:*` is a
+JavaScript context to `html/template`, which renders `/` as `\/` — unescape
+before routing. [datastar-counter](../examples/datastar-counter) keeps a
+`jsPath` helper for exactly this.
+
 ## Where it stops
 
-domtest does not execute JavaScript. It sees the markup the handler wrote,
-including `hx-swap-oob` attributes and Datastar `data-*` signals, but not the
-DOM htmx or Datastar produces afterward. Assert on the response here; reach for
-a real browser (chromedp) only when the behavior under test belongs to the
-browser.
+A sweep proves the graph is wired: the trigger exists, its URL is served, its
+target is present. It does not prove htmx or Datastar behaves — nothing binds a
+listener and no swap happens, because domtest does not execute JavaScript. It
+sees the markup the handler wrote, not the DOM the library produces from it.
+Assert the contract here; reach for a real browser (chromedp) only when the
+behavior under test genuinely belongs to the browser.
 
 ## Read next
 
