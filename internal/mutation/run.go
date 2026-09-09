@@ -253,7 +253,6 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		for i := range group.Results {
 			result := &group.Results[i]
 			if result.Status == StatusSkipped {
-				report.Skipped++
 				reportProgress(progress, index, plan.total(), group, *result, clock)
 				index++
 				continue

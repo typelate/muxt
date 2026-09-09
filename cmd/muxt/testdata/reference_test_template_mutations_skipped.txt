@@ -1,0 +1,72 @@
+# A mutation that stops the template type checking is not run.
+#
+# Emptying {{.Inner}} would leave {{$inner := ""}}, and {{$inner.Name}}
+# below it would then read a field off a string. The tests would fail, but
+# on a render error rather than on anything they assert, so counting that
+# as a caught mutation would overstate the coverage.
+#
+# The type of dot is what makes this knowable before running anything,
+# which is why mutants are checked against the ExecuteTemplate call that
+# renders them.
+
+muxt test-template-mutations --dry-run
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{$inner := .Inner}}{{$inner.Name}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Inner struct {
+	Name string
+}
+
+type Page struct {
+	Inner Inner
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Inner: Inner{Name: "hi"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "hi"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+2 mutants across 1 template (complexity 1)
+dry run: no tests were run
+
+template.go:23:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 1, dot: server.Page)
+    SKIP 1:18 action-empty (does not type check against server.Page)
+    PEND 1:38 action-empty
+
+2 mutants, 1 runnable, 1 skipped

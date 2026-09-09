@@ -1,0 +1,63 @@
+# A template rendered only by a test is not rendered in production, so
+# mutating it measures the tests against themselves. Those call sites are
+# ignored by default, and a project whose only renders live in tests is
+# told so rather than handed an empty report.
+#
+# --include-test-callers opts in, for a template set exercised only from
+# tests.
+
+! muxt test-template-mutations --dry-run
+stderr 'no templates.ExecuteTemplate calls found'
+! stdout .
+
+muxt test-template-mutations --dry-run --include-test-callers
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+1 mutant across 1 template (complexity 1)
+dry run: no tests were run
+
+render_test.go:10:12 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 1, dot: server.Greeting)
+    PEND 1:29 action-zero
+
+1 mutant, 1 runnable, 0 skipped
