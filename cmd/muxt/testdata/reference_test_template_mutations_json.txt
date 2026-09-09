@@ -3,12 +3,24 @@
 # ticket. It carries the mutated action's source and its replacement, which
 # the text form leaves out.
 #
+# The byte exact assertion is on a dry run, because a real run records how
+# long each mutant took and those numbers differ every time. A real run is
+# checked line by line below.
+#
 # The golden file is named want.txt rather than want.json so that txtarfmt
 # leaves it alone: it normalises embedded JSON to two space indentation,
 # and the report is written with tabs.
 
-muxt test-template-mutations --format json
+muxt test-template-mutations --dry-run --format json
 cmp stdout want.txt
+
+muxt test-template-mutations --format json
+stdout '"status": "KILL"'
+stdout '"status": "MISS"'
+stdout '"operator": "if-false"'
+stdout '"seconds": [0-9]'
+stdout '"killed": 2'
+stdout '"missed": 1'
 
 -- go.mod --
 module server
@@ -22,6 +34,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -33,6 +46,10 @@ type Greeting struct {
 	Name string
 	Loud bool
 }
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
 -- render_test.go --
 package server
 
@@ -43,7 +60,7 @@ import (
 
 func TestGreeting(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "Hello, World!"; got != want {
@@ -52,42 +69,54 @@ func TestGreeting(t *testing.T) {
 }
 -- want.txt --
 {
-	"baseline": {
-		"passed": true
-	},
-	"results": [
+	"dry_run": true,
+	"templates": 1,
+	"complexity": 2,
+	"total": 3,
+	"killed": 0,
+	"missed": 0,
+	"skipped": 0,
+	"groups": [
 		{
-			"status": "KILL",
-			"operator": "action-empty",
-			"template": "greeting",
-			"file": "templates.gohtml",
-			"line": 1,
-			"column": 29,
-			"original": "{{.Name}}",
-			"mutated": "\"\""
-		},
-		{
-			"status": "MISS",
-			"operator": "if-false",
-			"template": "greeting",
-			"file": "templates.gohtml",
-			"line": 1,
-			"column": 39,
-			"original": "{{if .Loud}}",
-			"mutated": "false"
-		},
-		{
-			"status": "KILL",
-			"operator": "if-true",
-			"template": "greeting",
-			"file": "templates.gohtml",
-			"line": 1,
-			"column": 39,
-			"original": "{{if .Loud}}",
-			"mutated": "true"
+			"call_site": "template.go:20:9",
+			"entry": "greeting",
+			"data_type": "server.Greeting",
+			"templates": [
+				{
+					"template": "greeting",
+					"file": "templates.gohtml",
+					"data_type": "server.Greeting",
+					"via_template_call": false,
+					"complexity": 2,
+					"results": [
+						{
+							"status": "PEND",
+							"operator": "action-zero",
+							"line": 1,
+							"column": 29,
+							"original": "{{.Name}}",
+							"mutated": "\"\""
+						},
+						{
+							"status": "PEND",
+							"operator": "if-false",
+							"line": 1,
+							"column": 39,
+							"original": "{{if .Loud}}",
+							"mutated": "false"
+						},
+						{
+							"status": "PEND",
+							"operator": "if-true",
+							"line": 1,
+							"column": 39,
+							"original": "{{if .Loud}}",
+							"mutated": "true"
+						}
+					]
+				}
+			]
 		}
 	],
-	"total": 3,
-	"killed": 2,
-	"missed": 1
+	"trimmed": []
 }

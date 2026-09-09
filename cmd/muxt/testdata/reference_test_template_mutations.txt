@@ -2,12 +2,15 @@
 # and re-runs the tests. A mutation the tests still pass through is a miss:
 # nothing asserts on the behaviour that action controls.
 #
+# Templates are mutated in the context of the ExecuteTemplate call that
+# renders them, which is where the type of dot is known.
+#
 # Here TestGreeting renders with Loud false and compares the whole string, so
-# it catches the {{.Name}} action and catches forcing {{if .Loud}} true. It
+# it catches emptying {{.Name}} and catches forcing {{if .Loud}} true. It
 # never renders with Loud true, so forcing the branch false changes nothing it
 # observes, and that mutant survives.
 
-muxt test-template-mutations
+muxt test-template-mutations -v
 cmp stdout want.txt
 
 -- go.mod --
@@ -22,6 +25,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -33,6 +37,10 @@ type Greeting struct {
 	Name string
 	Loud bool
 }
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
 -- render_test.go --
 package server
 
@@ -43,7 +51,7 @@ import (
 
 func TestGreeting(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "Hello, World!"; got != want {
@@ -51,8 +59,13 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
+3 mutants across 1 template (complexity 2)
 baseline ok
-KILL templates.gohtml:1:29 "greeting" action-empty
-MISS templates.gohtml:1:39 "greeting" if-false
-KILL templates.gohtml:1:39 "greeting" if-true
-3 mutants, 2 killed, 1 missed
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+    KILL 1:29 action-zero
+    MISS 1:39 if-false
+    KILL 1:39 if-true
+
+3 mutants, 2 killed, 1 missed, 0 skipped

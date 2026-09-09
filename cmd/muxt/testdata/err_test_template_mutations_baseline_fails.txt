@@ -22,6 +22,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -31,6 +32,10 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 
 type Greeting struct {
 	Name string
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
 }
 -- render_test.go --
 package server
@@ -42,7 +47,7 @@ import (
 
 func TestGreeting(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "this assertion is wrong"; got != want {

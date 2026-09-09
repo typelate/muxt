@@ -228,11 +228,7 @@ working tree is never written to.`,
 			}
 			config.Packages = args
 
-			_, pl, err := asteval.LoadPackages(*workingDirectory)
-			if err != nil {
-				return err
-			}
-			report, err := mutation.Run(config, *workingDirectory, pl)
+			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
 			if err != nil {
 				if printMultiLineError(cmd, err) {
 					return err
@@ -246,6 +242,9 @@ working tree is never written to.`,
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
 	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")
+	cmd.Flags().BoolVar(&config.DryRun, "dry-run", false, "enumerate the mutants and report them without running any tests")
+	cmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "report every mutant, not only the ones no test caught, and stream progress")
+	cmd.Flags().BoolVar(&config.IncludeTests, "include-test-callers", false, "also mutate templates reached only from ExecuteTemplate calls in _test.go files")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd

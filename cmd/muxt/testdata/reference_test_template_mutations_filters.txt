@@ -9,10 +9,10 @@
 # narrows what can catch a mutant, which is what makes a miss reported
 # under --run a statement about that subset and not about the whole suite.
 
-muxt test-template-mutations --template-pattern '^alpha$' --run TestAlpha
+muxt test-template-mutations -v --template-pattern '^alpha$' --run TestAlpha
 cmp stdout want-alpha.txt
 
-muxt test-template-mutations --template-pattern '^beta$' --run TestAlpha
+muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha
 cmp stdout want-beta.txt
 
 -- go.mod --
@@ -28,6 +28,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -38,6 +39,14 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 type Data struct {
 	Name string
 }
+
+func RenderAlpha(w io.Writer, data Data) error {
+	return templates.ExecuteTemplate(w, "alpha", data)
+}
+
+func RenderBeta(w io.Writer, data Data) error {
+	return templates.ExecuteTemplate(w, "beta", data)
+}
 -- render_test.go --
 package server
 
@@ -46,31 +55,40 @@ import (
 	"testing"
 )
 
-func render(t *testing.T, name string) string {
-	t.Helper()
+func TestAlpha(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, name, Data{Name: "x"}); err != nil {
+	if err := RenderAlpha(&buf, Data{Name: "x"}); err != nil {
 		t.Fatal(err)
 	}
-	return buf.String()
-}
-
-func TestAlpha(t *testing.T) {
-	if got, want := render(t, "alpha"), "Ax"; got != want {
+	if got, want := buf.String(), "Ax"; got != want {
 		t.Errorf("alpha = %q, want %q", got, want)
 	}
 }
 
 func TestBeta(t *testing.T) {
-	if got, want := render(t, "beta"), "Bx"; got != want {
+	var buf strings.Builder
+	if err := RenderBeta(&buf, Data{Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Bx"; got != want {
 		t.Errorf("beta = %q, want %q", got, want)
 	}
 }
 -- want-alpha.txt --
+1 mutant across 1 template (complexity 1)
 baseline ok
-KILL templates.gohtml:1:20 "alpha" action-empty
-1 mutant, 1 killed, 0 missed
+
+template.go:19:9 ExecuteTemplate "alpha" (dot: server.Data)
+  "alpha" templates.gohtml (complexity 1, dot: server.Data)
+    KILL 1:20 action-zero
+
+1 mutant, 1 killed, 0 missed, 0 skipped
 -- want-beta.txt --
+1 mutant across 1 template (complexity 1)
 baseline ok
-MISS templates.gohtml:2:19 "beta" action-empty
-1 mutant, 0 killed, 1 missed
+
+template.go:23:9 ExecuteTemplate "beta" (dot: server.Data)
+  "beta" templates.gohtml (complexity 1, dot: server.Data)
+    MISS 2:19 action-zero
+
+1 mutant, 0 killed, 1 missed, 0 skipped

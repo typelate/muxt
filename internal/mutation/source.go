@@ -53,6 +53,17 @@ type templateSource struct {
 	// lines indexes fileText, so positions are reported in the file a
 	// reader would open.
 	lines lineIndex
+
+	// regions are the actions written in text, scanned once because
+	// every template defined here shares them.
+	regions []region
+}
+
+// mutatedText returns the template text with the mutation in place,
+// which is what has to parse and type check for the mutant to be worth
+// running.
+func (s *templateSource) mutatedText(m Mutant) string {
+	return s.text[:m.start] + m.replacement + s.text[m.end:]
 }
 
 // newFileSource builds a source for a template file, whose text is its
@@ -67,6 +78,7 @@ func newFileSource(file, path, fileText string) *templateSource {
 		litEnd:   len(fileText),
 		encode:   func(mutated string) string { return mutated },
 		lines:    newLineIndex(fileText),
+		regions:  regions(fileText, "", ""),
 	}
 }
 
@@ -99,6 +111,7 @@ func newLiteralSource(file, path, rootName, fileText string, litStart, litEnd in
 		offsets:  offsets,
 		encode:   literalEncoder(literal),
 		lines:    newLineIndex(fileText),
+		regions:  regions(text, "", ""),
 	}, nil
 }
 

@@ -22,6 +22,7 @@ package server
 import (
 	"embed"
 	"html/template"
+	"io"
 )
 
 //go:embed *.gohtml
@@ -31,6 +32,10 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 
 type Status struct {
 	Code int
+}
+
+func Render(w io.Writer, status Status) error {
+	return templates.ExecuteTemplate(w, "status", status)
 }
 -- render_test.go --
 package server
@@ -42,7 +47,7 @@ import (
 
 func TestStatus(t *testing.T) {
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "status", Status{Code: 200}); err != nil {
+	if err := Render(&buf, Status{Code: 200}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "ok"; got != want {
@@ -50,7 +55,11 @@ func TestStatus(t *testing.T) {
 	}
 }
 -- want.txt --
+2 mutants across 1 template (complexity 2)
 baseline ok
-KILL templates.gohtml:1:20 "status" if-false
-MISS templates.gohtml:1:20 "status" if-true
-2 mutants, 1 killed, 1 missed
+
+template.go:19:9 ExecuteTemplate "status" (dot: server.Status)
+  "status" templates.gohtml (complexity 2, dot: server.Status)
+    MISS 1:20 if-true
+
+2 mutants, 1 killed, 1 missed, 0 skipped
