@@ -2,11 +2,7 @@ package mutation
 
 import (
 	"cmp"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"go/types"
-	"hash"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -152,42 +148,31 @@ func (m Mutant) Replacement() string { return m.detail }
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
 func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64, engine string) ([]Mutant, []budgetNote) {
-	var (
-		notes     []budgetNote
-		actionSeq int
-	)
-	// The digest takes every action's types as the walk reaches them.
-	types := sha256.New()
+	var notes []budgetNote
+
+	// One walk, shared with the identifiers: the same actions, in the
+	// same order, with the same dot.
+	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.identity, seed, engine)
+
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
 		regions:   sc.src.regions,
-		dot:       sc.dataType,
 		functions: functions,
 		values:    draw,
 		maxCases:  maxCases,
-		seed:      seed,
-		actionSeq: &actionSeq,
-		digest:    types,
 		notes:     &notes,
 	}
 
 	var all []Mutant
-	collect(&all, sc.tree.Root, ctx)
-
-	// The types are only complete once the whole template has been
-	// walked, so fingerprints are taken afterwards: every action in the
-	// template shares them, and a change to any one of them re-runs all.
-	id := identity{
-		template: sc.template,
-		dot:      typeKey(sc.dataType),
-		source:   sc.identity,
-		types:    hex.EncodeToString(types.Sum(nil)),
-		seed:     seed,
-		engine:   engine,
+	for _, a := range scanned.Actions {
+		ctx.variations(&all, a)
 	}
+
+	// The identity accounts for every action in the template, so it is
+	// only complete once the walk is: fingerprints are taken afterwards.
 	for i := range all {
-		all[i].fingerprint = id.fingerprint(all[i].action, all[i].actionIndex)
+		all[i].fingerprint = scanned.Identity.fingerprint(all[i].action, all[i].actionIndex)
 	}
 
 	slices.SortFunc(all, func(a, b Mutant) int {
@@ -208,11 +193,8 @@ type mutantContext struct {
 	functions check.Functions
 	values    *values
 	maxCases  int
-	seed      uint64
 	pipe      *parse.PipeNode
-	actionSeq *int
 	action    int
-	digest    hash.Hash
 	notes     *[]budgetNote
 }
 
@@ -223,80 +205,47 @@ type mutantContext struct {
 // tells two identically written actions apart. Without it they share a
 // fingerprint, and the second inherits the first's verdict instead of
 // being run -- reporting a kill it never earned.
-func (ctx mutantContext) forAction(pipe *parse.PipeNode) mutantContext {
-	*ctx.actionSeq++
-	ctx.action = *ctx.actionSeq
-	ctx.pipe = pipe
-
-	// The types an action reads are part of what its mutants depend on:
-	// a field going from a string to an int changes what a mutation
-	// substitutes without changing a byte of the template. They are
-	// written straight into the running digest, in walk order, so the
-	// result depends on the whole template rather than on this action:
-	// a type change anywhere in it re-runs all of it, which is the unit
-	// a reader works in.
-	fmt.Fprintf(ctx.digest, "%d\x00%s\x00", ctx.action, typeKey(ctx.dot))
-	for _, op := range operands(ctx.src.text, ctx.dot, pipe) {
-		fmt.Fprintf(ctx.digest, "%s=%s=%s\x00", op.text, typeKey(op.dataType), op.resolution)
-	}
+func (ctx mutantContext) forAction(a action) mutantContext {
+	ctx.action = a.index
+	ctx.pipe = a.pipe
+	ctx.dot = a.dot
 	return ctx
 }
 
-// narrowed returns the context for a body where dot has changed, as it
-// does inside a range or a with.
-func (ctx mutantContext) narrowed(dot types.Type) mutantContext {
-	ctx.dot = dot
-	return ctx
-}
+// variations appends the mutants that apply to one action.
+//
+// The walk decided which actions there are and what dot each is rendered
+// with; this decides only what to do with one. Keeping the two apart is
+// what lets the identifiers be taken from the same walk without either
+// side knowing about the other.
+func (ctx mutantContext) variations(out *[]Mutant, a action) {
+	ctx = ctx.forAction(a)
 
-// collect walks a parse tree and appends a mutant for every action a
-// variation applies to.
-func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
-	switch n := node.(type) {
-	case *parse.ListNode:
-		if n == nil {
-			return
-		}
-		for _, child := range n.Nodes {
-			collect(out, child, ctx)
-		}
+	switch a.node.(type) {
 	case *parse.ActionNode:
-		ctx = ctx.forAction(n.Pipe)
-		if zero, typed := zeroLiteral(ctx.dot, n.Pipe, ctx.functions); typed {
-			ctx.addPipeline(out, n.Pipe, OperatorActionZero, zero)
+		if zero, typed := zeroLiteral(a.dot, a.pipe, ctx.functions); typed {
+			ctx.addPipeline(out, a.pipe, OperatorActionZero, zero)
 		} else {
-			ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
+			ctx.addPipeline(out, a.pipe, OperatorActionEmpty, `""`)
 		}
 		// Emptying the whole action says only that something about it is
 		// watched. Varying its operands says which ones.
-		ctx.addOperandCombinations(out, n.Pipe, ctx.maxCases)
+		ctx.addOperandCombinations(out, a.pipe, ctx.maxCases)
 	case *parse.IfNode:
-		ctx = ctx.forAction(n.Pipe)
-		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
-		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
+		ctx.addPipeline(out, a.pipe, OperatorIfTrue, "true")
+		ctx.addPipeline(out, a.pipe, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
 		// condition; anything else falls back to the general
 		// combinations over its operands.
-		if !ctx.addConditions(out, n.Pipe) {
-			ctx.addOperandCombinations(out, n.Pipe, ctx.maxCases)
+		if !ctx.addConditions(out, a.pipe) {
+			ctx.addOperandCombinations(out, a.pipe, ctx.maxCases)
 		}
-		collect(out, n.List, ctx)
-		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:
-		ctx = ctx.forAction(n.Pipe)
-		ctx.addConstructDrop(out, int(n.Position()), OperatorWithEmpty)
-		// Inside the body, dot is what the with selected.
-		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe, ctx.functions)))
-		collect(out, n.ElseList, ctx)
+		ctx.addConstructDrop(out, a.region, OperatorWithEmpty)
 	case *parse.RangeNode:
-		ctx = ctx.forAction(n.Pipe)
-		ctx.addConstructDrop(out, int(n.Position()), OperatorRangeNever)
-		// Inside the body, dot is one element of what was ranged over.
-		collect(out, n.List, ctx.narrowed(rangeDot(ctx.dot, n.Pipe, ctx.functions)))
-		collect(out, n.ElseList, ctx)
+		ctx.addConstructDrop(out, a.region, OperatorRangeNever)
 	case *parse.TemplateNode:
-		ctx = ctx.forAction(n.Pipe)
-		ctx.addTemplateDrop(out, int(n.Position()))
+		ctx.addTemplateDrop(out, a.region)
 	}
 }
 
@@ -322,8 +271,8 @@ func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operat
 
 // addConstructDrop appends a mutant replacing a whole construct with its
 // else branch, or with nothing when it has none.
-func (ctx mutantContext) addConstructDrop(out *[]Mutant, pos int, operator string) {
-	index, r, ok := regionAt(ctx.regions, pos)
+func (ctx mutantContext) addConstructDrop(out *[]Mutant, r region, operator string) {
+	index, _, ok := regionAt(ctx.regions, r.start)
 	if !ok {
 		return
 	}
@@ -339,9 +288,8 @@ func (ctx mutantContext) addConstructDrop(out *[]Mutant, pos int, operator strin
 }
 
 // addTemplateDrop appends a mutant removing a {{template}} call.
-func (ctx mutantContext) addTemplateDrop(out *[]Mutant, pos int) {
-	_, r, ok := regionAt(ctx.regions, pos)
-	if !ok || r.keyword != "template" {
+func (ctx mutantContext) addTemplateDrop(out *[]Mutant, r region) {
+	if r.keyword != "template" {
 		// A block defines its body in place, so removing its call
 		// would leave the body and its {{end}} behind.
 		return

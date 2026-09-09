@@ -95,7 +95,7 @@ func traverse(lt *asteval.LoadedTemplates, index map[string]treeLocation) ([]sco
 }
 
 func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site callSite, name string, dot types.Type, via bool, visited map[string]callSite, out *[]scope, trimmed *[]trim) {
-	key := name + "\x00" + typeKey(dot)
+	key := executionKey(name, dot)
 	if first, seen := visited[key]; seen {
 		*trimmed = append(*trimmed, trim{
 			call:     site,

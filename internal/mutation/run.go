@@ -518,6 +518,8 @@ type sourceCollector struct {
 	// clauses declare, which is what separates one template's source
 	// from the text around it.
 	defined map[*templateSource][]definitionSpan
+
+	digested map[*templateSource]map[string]string
 }
 
 func newSourceCollector(workingDirectory string, pl []*packages.Package) *sourceCollector {
@@ -527,17 +529,41 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package) *source
 		files:            make(map[string]string),
 		byKey:            make(map[sourceKey]*templateSource),
 		defined:          make(map[*templateSource][]definitionSpan),
+		digested:         make(map[*templateSource]map[string]string),
 	}
 }
 
-func (c *sourceCollector) add(definition check.Definition) error {
+// digests reports a source digest for every template one text carries.
+//
+// This is the single rule for "what is this template's own source", so a
+// run and an identifier calculated ahead of one cannot disagree about
+// whether a template changed. Add every definition a text holds before
+// asking: the answer depends on where the text's define clauses are, and
+// a digest taken early would describe a template that has not been
+// carved up yet.
+func (c *sourceCollector) digests(src *templateSource) map[string]string {
+	if found, ok := c.digested[src]; ok {
+		return found
+	}
+	found := src.identities(src.rootName, c.defined[src])
+	c.digested[src] = found
+	return found
+}
+
+// add files one definition under the text it was written in, reading
+// that text at most once, and reports the source it was filed under.
+//
+// A definition the collector cannot place -- a Go string literal it has
+// no package for -- is reported as no source rather than as an error,
+// since the caller may hold others it can still use.
+func (c *sourceCollector) add(definition check.Definition) (*templateSource, error) {
 	file := definition.Define.Position.Filename
 	if file == "" {
-		return nil
+		return nil, nil
 	}
 	fileText, err := c.read(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var src *templateSource
@@ -546,18 +572,18 @@ func (c *sourceCollector) add(definition check.Definition) error {
 			return newFileSource(file, c.relative(file), fileText), nil
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		litStart, litEnd, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		src, err = c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
 			return newLiteralSource(file, c.relative(file), definition.Name, fileText, litStart, litEnd)
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !definition.TemplateName.IsValid() {
 			// A definition with no define clause is the template the
@@ -570,12 +596,12 @@ func (c *sourceCollector) add(definition check.Definition) error {
 	if !definition.TemplateName.IsValid() {
 		// The template the text itself carries has no define clause, so
 		// there is no span to record: it is what the others leave.
-		return nil
+		return src, nil
 	}
 	if span, ok := definitionSpanOf(src, definition); ok {
 		c.defined[src] = append(c.defined[src], span)
 	}
-	return nil
+	return src, nil
 }
 
 // definitionSpanOf locates a definition within the text it was written
