@@ -1,0 +1,88 @@
+# A field path of more than one segment is an operand like any other.
+#
+# The parser does not report such a path at the position it is written:
+# the lexer emits one item per segment and the node keeps the position of
+# the segment that extended it, so .A.B.C is reported at .B. Taking that
+# position literally makes the node's rendering disagree with the text,
+# and the operand is dropped -- which silently cost every dotted path its
+# mutants, in both the combinations and the conditions.
+#
+# Templates written against a route's data reach almost everything through
+# a path like this, so the gap covered most real actions.
+
+muxt test-template-mutations --dry-run -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{if and .Flags.Admin .Flags.Owner}}A{{end}}{{printf "%s-%s" .User.First .User.Last}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Flags struct {
+	Admin bool
+	Owner bool
+}
+
+type User struct {
+	First string
+	Last  string
+}
+
+type Page struct {
+	Flags Flags
+	User  User
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{User: User{First: "a", Last: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "a-b"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+10 mutants across 1 template (complexity 3, seed 1)
+dry run: no tests were run
+
+template.go:30:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 3, dot: server.Page)
+    PEND 1:18 condition .Flags.Admin=false
+    PEND 1:18 condition .Flags.Admin=true
+    PEND 1:18 condition .Flags.Owner=false
+    PEND 1:18 condition .Flags.Owner=true
+    PEND 1:18 if-false
+    PEND 1:18 if-true
+    PEND 1:62 action-zero
+    PEND 1:62 operands .User.First="nard"
+    PEND 1:62 operands .User.First="nard" .User.Last="xeqr"
+    PEND 1:62 operands .User.Last="xeqr"
+
+10 mutants, 10 runnable, 0 skipped
