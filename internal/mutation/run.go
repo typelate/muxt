@@ -16,6 +16,7 @@
 package mutation
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
@@ -113,6 +115,7 @@ func Run(config Configuration, workingDirectory string, pl []*packages.Package) 
 	report := &Report{
 		Baseline: BaselineResult{Passed: true},
 		Total:    len(mutants),
+		Results:  make([]Result, 0, len(mutants)),
 	}
 	if len(mutants) == 0 {
 		return report, nil
@@ -124,19 +127,8 @@ func Run(config Configuration, workingDirectory string, pl []*packages.Package) 
 	}
 	defer func() { _ = os.RemoveAll(scratch) }()
 
-	texts := make(map[string]string)
 	for i, mutant := range mutants {
-		text, ok := texts[mutant.File]
-		if !ok {
-			b, err := os.ReadFile(mutant.File)
-			if err != nil {
-				return nil, err
-			}
-			text = string(b)
-			texts[mutant.File] = text
-		}
-
-		overlay, err := writeMutant(scratch, i, mutant, text)
+		overlay, err := writeMutant(scratch, i, mutant)
 		if err != nil {
 			return nil, err
 		}
@@ -170,13 +162,13 @@ func Run(config Configuration, workingDirectory string, pl []*packages.Package) 
 
 // writeMutant writes the mutated file and the overlay pointing at it,
 // returning the overlay's path.
-func writeMutant(scratch string, index int, mutant Mutant, text string) (string, error) {
+func writeMutant(scratch string, index int, mutant Mutant) (string, error) {
 	dir := filepath.Join(scratch, fmt.Sprintf("%06d", index))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	mutated := filepath.Join(dir, filepath.Base(mutant.File))
-	if err := os.WriteFile(mutated, []byte(mutant.Apply(text)), 0o600); err != nil {
+	if err := os.WriteFile(mutated, []byte(mutant.Apply()), 0o600); err != nil {
 		return "", err
 	}
 	overlay := filepath.Join(dir, "overlay.json")
@@ -229,12 +221,13 @@ func enumerate(config Configuration, workingDirectory string, pl []*packages.Pac
 		include = config.TemplatePattern.MatchString
 	}
 
-	var (
-		all   []Mutant
-		files []string
-		seen  = make(map[string]struct{})
-		funcs = make(map[string]any)
-	)
+	funcs := make(map[string]any)
+	collector := &sourceCollector{
+		workingDirectory: workingDirectory,
+		packages:         pl,
+		files:            make(map[string]string),
+		byKey:            make(map[sourceKey]*templateSource),
+	}
 
 	for _, templatesVariable := range config.TemplatesVariables {
 		lt, err := asteval.LoadTemplates(workingDirectory, templatesVariable, pl)
@@ -249,35 +242,123 @@ func enumerate(config Configuration, workingDirectory string, pl []*packages.Pac
 			if !ok {
 				continue
 			}
-			file := definition.Define.Position.Filename
-			if file == "" || filepath.Ext(file) == ".go" {
-				// Templates written as Go string literals are
-				// reported but not yet mutated.
-				continue
+			if err := collector.add(definition); err != nil {
+				return nil, err
 			}
-			if _, ok := seen[file]; ok {
-				continue
-			}
-			seen[file] = struct{}{}
-			files = append(files, file)
 		}
 	}
 
-	slices.Sort(files)
-	for _, file := range files {
-		b, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
-		path, err := filepath.Rel(workingDirectory, file)
-		if err != nil {
-			path = file
-		}
-		found, err := mutantsInFile(file, filepath.ToSlash(path), filepath.Base(file), string(b), funcs, include)
+	var all []Mutant
+	for _, src := range collector.sorted() {
+		found, err := mutantsInSource(src, funcs, include)
 		if err != nil {
 			return nil, err
 		}
 		all = append(all, found...)
 	}
 	return all, nil
+}
+
+// sourceKey identifies the text a template was written in: a template
+// file, or one string literal within a Go file.
+type sourceKey struct {
+	file     string
+	litStart int
+}
+
+// sourceCollector turns the definitions a template set reports into the
+// distinct texts holding them, reading each file once.
+type sourceCollector struct {
+	workingDirectory string
+	packages         []*packages.Package
+	files            map[string]string
+	byKey            map[sourceKey]*templateSource
+	keys             []sourceKey
+}
+
+func (c *sourceCollector) add(definition check.Definition) error {
+	file := definition.Define.Position.Filename
+	if file == "" {
+		return nil
+	}
+	fileText, err := c.read(file)
+	if err != nil {
+		return err
+	}
+
+	if filepath.Ext(file) != ".go" {
+		_, err := c.source(sourceKey{file: file}, func() (*templateSource, error) {
+			return newFileSource(file, c.relative(file), fileText), nil
+		})
+		return err
+	}
+
+	litStart, litEnd, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
+	if !ok {
+		return nil
+	}
+	src, err := c.source(sourceKey{file: file, litStart: litStart}, func() (*templateSource, error) {
+		return newLiteralSource(file, c.relative(file), definition.Name, fileText, litStart, litEnd)
+	})
+	if err != nil {
+		return err
+	}
+	if !definition.TemplateName.IsValid() {
+		// A definition with no define clause is the template the
+		// literal's own text carries, so its name is the root name the
+		// text has to be parsed under.
+		src.rootName = definition.Name
+	}
+	return nil
+}
+
+func (c *sourceCollector) source(key sourceKey, build func() (*templateSource, error)) (*templateSource, error) {
+	if existing, ok := c.byKey[key]; ok {
+		return existing, nil
+	}
+	src, err := build()
+	if err != nil {
+		return nil, err
+	}
+	c.byKey[key] = src
+	c.keys = append(c.keys, key)
+	return src, nil
+}
+
+func (c *sourceCollector) read(file string) (string, error) {
+	if text, ok := c.files[file]; ok {
+		return text, nil
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	c.files[file] = string(b)
+	return string(b), nil
+}
+
+func (c *sourceCollector) relative(file string) string {
+	path, err := filepath.Rel(c.workingDirectory, file)
+	if err != nil {
+		return file
+	}
+	return filepath.ToSlash(path)
+}
+
+// sorted returns the collected sources in a stable order, so that two
+// runs over an unchanged project report the same mutants in the same
+// sequence.
+func (c *sourceCollector) sorted() []*templateSource {
+	keys := slices.Clone(c.keys)
+	slices.SortFunc(keys, func(a, b sourceKey) int {
+		return cmp.Or(
+			cmp.Compare(a.file, b.file),
+			cmp.Compare(a.litStart, b.litStart),
+		)
+	})
+	sources := make([]*templateSource, 0, len(keys))
+	for _, key := range keys {
+		sources = append(sources, c.byKey[key])
+	}
+	return sources
 }

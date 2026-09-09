@@ -16,6 +16,7 @@ muxt loads Go packages the way the `go` command does and inherits `GOWORK`, `GOF
 | `list-template-calls` | List templates called by a template | `--match`, `--format` |
 | `explore-module` | List every muxt package in the module | `--format` |
 | `generate-fake-server` | Generate a fake-server `main.go` for exploring routes | `--output` |
+| `test-template-mutations` | Vary template actions and report the ones no test catches | `--template-pattern`, `--run`, `--format` |
 | `version` | Print muxt version | `-v, --verbose` |
 | _(no subcommand)_ | Print a routes overview for the working directory | `--format`, `--use-templates-variable`, `--use-receiver-type` |
 
@@ -136,6 +137,7 @@ muxt -C ./web generate --use-receiver-type=Server
 - [`muxt list-template-calls`](commands/list-template-calls.md) — List template call sites
 - [`muxt explore-module`](commands/explore-module.md) — List every muxt package in the module
 - [`muxt generate-fake-server`](commands/generate-fake-server.md) — Generate a fake server for exploring routes
+- [`muxt test-template-mutations`](commands/test-template-mutations.md) — Find template behaviour no test covers
 - [`muxt version`](commands/version.md) — Version command reference
 
 ## Related

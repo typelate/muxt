@@ -1,0 +1,47 @@
+# A template written as a Go string literal is mutated too.
+#
+# The variation is spliced into the literal's text and the whole literal is
+# re-encoded, so the overlay replaces the .go file rather than a template
+# file. Positions are reported in the .go file, at the action itself.
+
+muxt test-template-mutations
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import "html/template"
+
+var templates = template.Must(template.New("greeting").Parse(`Hello, {{.Name}}!{{if .Loud}} !!!{{end}}`))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.Execute(&buf, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+baseline ok
+KILL template.go:5:70 "greeting" action-empty
+MISS template.go:5:80 "greeting" if-false
+KILL template.go:5:80 "greeting" if-true
+3 mutants, 2 killed, 1 missed

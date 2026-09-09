@@ -78,7 +78,7 @@ type Mutant struct {
 	// one based, with Column counting bytes.
 	Line, Column int
 
-	// start and end bound the text the mutation replaces. For a
+	// start and end bound the template text the mutation replaces. For a
 	// pipeline variation that is the pipeline; for a structural one it
 	// is the whole construct, opening action through matching end.
 	start, end int
@@ -89,11 +89,15 @@ type Mutant struct {
 	// action is the opening action as it is written, which is what a
 	// report shows so that a whole range body does not land in it.
 	action string
+
+	// src is the file the template text was read from, which knows how
+	// to put mutated text back into it.
+	src *templateSource
 }
 
-// Apply returns the file's text with the mutation in place.
-func (m Mutant) Apply(text string) string {
-	return text[:m.start] + m.replacement + text[m.end:]
+// Apply returns the whole file with the mutation in place.
+func (m Mutant) Apply() string {
+	return m.src.apply(m.start, m.end, m.replacement)
 }
 
 // Action returns the mutated action as it is written in the template.
@@ -102,23 +106,17 @@ func (m Mutant) Action() string { return m.action }
 // Replacement returns the text the mutation substitutes.
 func (m Mutant) Replacement() string { return m.replacement }
 
-// mutantsInFile enumerates every mutation available in the templates that
-// text defines.
-//
-// rootName is the name text's own template carries, which for a template
-// file is the file's base name.
-func mutantsInFile(file, path, rootName, text string, funcs map[string]any, include func(string) bool) ([]Mutant, error) {
-	trees, err := parse.Parse(rootName, text, "", "", funcs)
+// mutantsInSource enumerates every mutation available in the templates
+// the source's text defines.
+func mutantsInSource(src *templateSource, funcs map[string]any, include func(string) bool) ([]Mutant, error) {
+	trees, err := parse.Parse(src.rootName, src.text, "", "", funcs)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := mutantContext{
-		file:    file,
-		path:    path,
-		text:    text,
-		regions: regions(text, "", ""),
-		lines:   newLineIndex(text),
+		src:     src,
+		regions: regions(src.text, "", ""),
 	}
 
 	var all []Mutant
@@ -145,12 +143,9 @@ func mutantsInFile(file, path, rootName, text string, funcs map[string]any, incl
 }
 
 type mutantContext struct {
-	file     string
-	path     string
+	src      *templateSource
 	template string
-	text     string
 	regions  []region
-	lines    lineIndex
 }
 
 // collect walks a parse tree and appends a mutant for every action a
@@ -217,7 +212,7 @@ func (ctx mutantContext) addConstructDrop(out *[]Mutant, pos int, operator strin
 	}
 	replacement := ""
 	if elseIndex >= 0 {
-		replacement = ctx.text[ctx.regions[elseIndex].end:ctx.regions[endIndex].start]
+		replacement = ctx.src.text[ctx.regions[elseIndex].end:ctx.regions[endIndex].start]
 	}
 	ctx.appendMutant(out, r, operator, r.start, ctx.regions[endIndex].end, replacement)
 }
@@ -234,21 +229,22 @@ func (ctx mutantContext) addTemplateDrop(out *[]Mutant, pos int) {
 }
 
 func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator string, start, end int, replacement string) {
-	if start < 0 || end > len(ctx.text) || start > end {
+	if start < 0 || end > len(ctx.src.text) || start > end {
 		return
 	}
-	line, column := ctx.lines.at(r.start)
+	line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
 	*out = append(*out, Mutant{
 		Operator:    operator,
 		Template:    ctx.template,
-		File:        ctx.file,
-		Path:        ctx.path,
+		File:        ctx.src.file,
+		Path:        ctx.src.path,
+		src:         ctx.src,
 		Line:        line,
 		Column:      column,
 		start:       start,
 		end:         end,
 		replacement: replacement,
-		action:      ctx.text[r.start:r.end],
+		action:      ctx.src.text[r.start:r.end],
 	})
 }
 
@@ -261,18 +257,18 @@ func (ctx mutantContext) valueStart(pipe *parse.PipeNode, r region) int {
 	}
 	last := pipe.Decl[len(pipe.Decl)-1]
 	i := int(last.Position()) + len(last.String())
-	for i < r.innerEnd && isSpace(ctx.text[i]) {
+	for i < r.innerEnd && isSpace(ctx.src.text[i]) {
 		i++
 	}
 	switch {
-	case strings.HasPrefix(ctx.text[i:], ":="):
+	case strings.HasPrefix(ctx.src.text[i:], ":="):
 		i += 2
-	case i < r.innerEnd && ctx.text[i] == '=':
+	case i < r.innerEnd && ctx.src.text[i] == '=':
 		i++
 	default:
 		return start
 	}
-	for i < r.innerEnd && isSpace(ctx.text[i]) {
+	for i < r.innerEnd && isSpace(ctx.src.text[i]) {
 		i++
 	}
 	return i
