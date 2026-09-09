@@ -76,7 +76,9 @@ func (r *Report) templateBlocks(group Group) []TemplateReport {
 }
 
 func (r *Report) visibleResults(template TemplateReport) []Result {
-	if r.Verbose {
+	if r.Verbose || r.DryRun {
+		// A dry run has no verdicts to filter by: listing what would
+		// run is the whole point of it.
 		return template.Results
 	}
 	var missed []Result

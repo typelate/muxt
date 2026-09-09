@@ -39,7 +39,13 @@ const (
 	OperatorIfFalse = "if-false"
 
 	// OperatorWithEmpty makes a with behave as though its value were
-	// absent, so the body never runs and the else branch does.
+	// absent, so the body never runs and the else branch does. Like
+	// range-never it replaces the whole construct.
+	//
+	// Replacing the pipeline with false would do it at run time, but it
+	// also rebinds dot to a boolean, so every field access in the body
+	// stops type checking and the mutant would be skipped as broken
+	// rather than run as a behaviour change.
 	OperatorWithEmpty = "with-empty"
 
 	// OperatorRangeNever makes a range iterate zero times, replacing the
@@ -164,7 +170,7 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 		collect(out, n.List, ctx)
 		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:
-		ctx.addPipeline(out, n.Pipe, OperatorWithEmpty, "false")
+		ctx.addConstructDrop(out, int(n.Position()), OperatorWithEmpty)
 		// Inside the body, dot is what the with selected.
 		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe)))
 		collect(out, n.ElseList, ctx)

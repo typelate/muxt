@@ -43,8 +43,11 @@ func (p *plan) report() *Report {
 		Templates:  p.templates,
 		Complexity: p.complexity,
 		Total:      len(p.mutants),
-		Groups:     groups,
-		Trimmed:    trimmed,
+		// Skips are decided while planning, not while running, so a dry
+		// run reports them too.
+		Skipped: len(p.mutants) - p.runnableN,
+		Groups:  groups,
+		Trimmed: trimmed,
 	}
 }
 
@@ -87,7 +90,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 			p.trimmed = append(p.trimmed, TrimmedTemplate{
 				CallSite:    relativePosition(workingDirectory, t.call.Position),
 				Template:    t.template,
-				DataType:    typeKey(t.dataType),
+				DataType:    typeDisplay(t.dataType),
 				FirstSeenAt: relativePosition(workingDirectory, t.firstFor.Position),
 			})
 		}
@@ -125,7 +128,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, funcs map[string]any, 
 	report := TemplateReport{
 		Template:   sc.template,
 		File:       sc.src.path,
-		DataType:   typeKey(sc.dataType),
+		DataType:   typeDisplay(sc.dataType),
 		Via:        sc.via,
 		Complexity: complexity(sc.tree.Root),
 	}
@@ -162,7 +165,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, funcs map[string]any, 
 	p.groups = append(p.groups, Group{
 		CallSite:  site,
 		Entry:     sc.call.Template,
-		DataType:  typeKey(sc.call.DataType),
+		DataType:  typeDisplay(sc.call.DataType),
 		Templates: []TemplateReport{report},
 	})
 }
@@ -185,7 +188,7 @@ func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, funcs map[str
 		return "template not found after mutation", true
 	}
 	if !checks(lt, tree, sc.dataType) {
-		return "does not type check against " + typeKey(sc.dataType), true
+		return "does not type check against " + typeDisplay(sc.dataType), true
 	}
 	return "", false
 }

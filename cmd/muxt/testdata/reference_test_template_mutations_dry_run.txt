@@ -1,0 +1,67 @@
+# --dry-run enumerates the mutants and reports them without running a
+# single test, which takes about as long as muxt check. It answers "how
+# much work is this" before committing to it, and the complexity figure
+# says where the work is concentrated.
+#
+# Nothing runs, so no mutant has a verdict: every one is listed as pending.
+
+muxt test-template-mutations --dry-run
+cmp stdout want.txt
+! stderr .
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{if .Loud}} !!!{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+3 mutants across 1 template (complexity 2)
+dry run: no tests were run
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+    PEND 1:29 action-zero
+    PEND 1:39 if-false
+    PEND 1:39 if-true
+
+3 mutants, 3 runnable, 0 skipped

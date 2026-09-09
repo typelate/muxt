@@ -1,0 +1,77 @@
+# A template is mutated once per type of dot, across the whole run.
+#
+# Two calls render "page" with the same Page, so the mutants and the
+# verdicts would be identical the second time. The second subtree is
+# trimmed instead, which is most of what makes a large template set
+# affordable to mutate.
+#
+# -v says which subtrees were trimmed and where they were first reached,
+# so a run that does less work than expected explains itself.
+
+muxt test-template-mutations --dry-run -v
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}<h1>{{.Title}}</h1>{{template "footer" .}}{{end}}
+{{define "footer"}}<i>{{.Title}}</i>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Title string
+}
+
+func RenderHome(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+
+func RenderArchive(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestHome(t *testing.T) {
+	var buf strings.Builder
+	if err := RenderHome(&buf, Page{Title: "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "<h1>hi</h1><i>hi</i>"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+3 mutants across 2 templates (complexity 2)
+dry run: no tests were run
+
+template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 1, dot: server.Page)
+    PEND 1:22 action-zero
+    PEND 1:37 template-drop
+  "footer" templates.gohtml via {{template}} (complexity 1, dot: server.Page)
+    PEND 2:23 action-zero
+
+trimmed 1 subtree already mutated with the same dot:
+  "page" at template.go:23:9, first reached from template.go:19:9
+
+3 mutants, 3 runnable, 0 skipped

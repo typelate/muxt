@@ -152,11 +152,26 @@ func checks(lt *asteval.LoadedTemplates, tree *parse.Tree, dot types.Type) bool 
 	return err == nil
 }
 
+// typeKey identifies a type exactly, for deciding whether a template has
+// already been mutated with this dot. It keeps full package paths so that
+// two same named types from different packages never collide.
 func typeKey(t types.Type) string {
 	if t == nil {
 		return "<nil>"
 	}
 	return t.String()
+}
+
+// typeDisplay renders a type for a report, qualified by package name
+// rather than by import path.
+//
+// A generic route type written out in full is most of a line of import
+// path, which buries the part a reader is actually looking at.
+func typeDisplay(t types.Type) string {
+	if t == nil {
+		return "<nil>"
+	}
+	return types.TypeString(t, func(p *types.Package) string { return p.Name() })
 }
 
 // complexity is the cyclomatic complexity of a template: one, plus one
