@@ -1,0 +1,58 @@
+# Mutation testing varies each dynamic and control flow action in a template
+# and re-runs the tests. A mutation the tests still pass through is a miss:
+# nothing asserts on the behaviour that action controls.
+#
+# Here TestGreeting renders with Loud false and compares the whole string, so
+# it catches the {{.Name}} action and catches forcing {{if .Loud}} true. It
+# never renders with Loud true, so forcing the branch false changes nothing it
+# observes, and that mutant survives.
+
+muxt test-template-mutations
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{if .Loud}} !!!{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "greeting", Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+baseline ok
+KILL templates.gohtml:1:31 "greeting" action-empty
+MISS templates.gohtml:1:44 "greeting" if-false
+KILL templates.gohtml:1:44 "greeting" if-true
+3 mutants, 2 killed, 1 missed

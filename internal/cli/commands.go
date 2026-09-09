@@ -26,6 +26,7 @@ import (
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/mutation"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -37,6 +38,7 @@ const (
 	listTemplateCallsCommandName   = "list-template-calls"
 	exploreModuleCommandName       = "explore-module"
 	generateFakeServerCommandName  = "generate-fake-server"
+	testTemplateMutationsName      = "test-template-mutations"
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
@@ -109,6 +111,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 		listTemplateCallsCommand(workingDirectory),
 		exploreModuleCommand(workingDirectory),
 		generateFakeServerCommand(workingDirectory),
+		testTemplateMutationsCommand(workingDirectory),
 	)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr
@@ -167,6 +170,83 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
 	addDeprecatedReceiverType(cmd.Flags(), &rt)
+
+	return cmd
+}
+
+// testTemplateMutationsCommand varies each dynamic and control flow
+// action in the project's templates and reports the variations the tests
+// let through.
+func testTemplateMutationsCommand(workingDirectory *string) *cobra.Command {
+	var (
+		config                 mutation.Configuration
+		templatePattern        string
+		runPattern             string
+		deprecatedTemplatesVar string
+	)
+
+	cmd := &cobra.Command{
+		Use:   testTemplateMutationsName + " [packages]",
+		Short: "Vary template actions and report the ones no test catches",
+		Long: `Vary each dynamic and control flow action in the project's templates, one
+at a time, and re-run the tests against each variation.
+
+A variation the tests still pass through is a miss: nothing the suite
+asserts on depends on what that action does. A variation that makes a
+test fail is caught, which is the outcome to want.
+
+The tests run once unmutated first. If that baseline fails, nothing is
+mutated, because every later failure would be indistinguishable from the
+one already there.
+
+Variations are delivered through the go command's -overlay flag, so the
+working tree is never written to.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+				return err
+			}
+			for _, tv := range config.TemplatesVariables {
+				if tv != "" && !token.IsIdentifier(tv) {
+					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
+				}
+			}
+			cmd.SilenceUsage = true
+
+			if templatePattern != "" {
+				pattern, err := regexp.Compile(templatePattern)
+				if err != nil {
+					return fmt.Errorf("--template-pattern: %w", err)
+				}
+				config.TemplatePattern = pattern
+			}
+			if runPattern != "" {
+				pattern, err := regexp.Compile(runPattern)
+				if err != nil {
+					return fmt.Errorf("--run: %w", err)
+				}
+				config.Run = pattern
+			}
+			config.Packages = args
+
+			_, pl, err := asteval.LoadPackages(*workingDirectory)
+			if err != nil {
+				return err
+			}
+			report, err := mutation.Run(config, *workingDirectory, pl)
+			if err != nil {
+				if printMultiLineError(cmd, err) {
+					return err
+				}
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), report)
+		},
+	}
+
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
+	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
+	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")
+	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd
 }
