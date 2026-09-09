@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -34,8 +33,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/template"
-	"text/template/parse"
 	"time"
 
 	"github.com/typelate/check"
@@ -419,50 +416,6 @@ func (t goTest) run(extra []string) (string, error) {
 func isTestFailure(err error) bool {
 	var exitErr *exec.ExitError
 	return errors.As(err, &exitErr)
-}
-
-// parseTemplates parses template text the way text/template itself does,
-// and returns the trees it defines.
-//
-// It matters that this goes through text/template rather than calling
-// text/template/parse directly. The builtins -- eq, index, len and the
-// rest -- are defined by text/template, which passes them to the parser;
-// the parse package on its own rejects a call to any function it was not
-// handed. Parsing through the same door means the builtins never have to
-// be listed here, and a template using one enumerates without this
-// package tracking what Go adds.
-//
-// funcs carries the project's own functions, whose names are all the
-// parser wants: it checks that a name is known and never calls it.
-func parseTemplates(name, text string, funcs template.FuncMap) (map[string]*parse.Tree, error) {
-	ts, err := template.New(name).Funcs(funcs).Parse(text)
-	if err != nil {
-		return nil, err
-	}
-	trees := make(map[string]*parse.Tree)
-	for _, t := range ts.Templates() {
-		if t.Tree != nil && t.Tree.Root != nil {
-			trees[t.Name()] = t.Tree
-		}
-	}
-	return trees, nil
-}
-
-// projectFunctions adapts the names a template set may call into the
-// shape text/template wants.
-//
-// A name that is not a valid identifier would make Funcs panic, and one
-// could reach here from a template set built with an odd map, so those
-// are dropped rather than crashing the command.
-func projectFunctions(names ...string) template.FuncMap {
-	funcs := make(template.FuncMap, len(names))
-	for _, name := range names {
-		if !token.IsIdentifier(name) {
-			continue
-		}
-		funcs[name] = func() string { return "" }
-	}
-	return funcs
 }
 
 // sourceKey identifies the text a template was written in: a template

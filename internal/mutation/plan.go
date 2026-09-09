@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/template"
 	"text/template/parse"
 
+	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
@@ -73,13 +73,9 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		if err != nil {
 			return nil, err
 		}
-		var names []string
-		for name := range lt.Templates.Functions() {
-			names = append(names, name)
-		}
-		funcs := projectFunctions(names...)
+		functions := lt.Templates.Functions()
 
-		index, err := buildTreeIndex(lt, workingDirectory, pl, funcs)
+		index, err := buildTreeIndex(lt, workingDirectory, pl, functions)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +116,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 				continue
 			}
 			seen[key] = struct{}{}
-			p.add(lt, sc, funcs, workingDirectory)
+			p.add(lt, sc, functions, workingDirectory)
 		}
 	}
 
@@ -132,8 +128,8 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
-func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, funcs template.FuncMap, workingDirectory string) {
-	found := mutantsInScope(sc)
+func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
+	found := mutantsInScope(sc, functions)
 
 	report := TemplateReport{
 		Template:   sc.template,
@@ -154,7 +150,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, funcs template.FuncMap
 			Mutated:  mutant.Replacement(),
 			Status:   StatusPending,
 		}
-		if reason, ok := invalid(lt, sc, mutant, funcs); ok {
+		if reason, ok := invalid(lt, sc, mutant, functions); ok {
 			result.Status = StatusSkipped
 			result.Reason = reason
 		} else {
@@ -187,9 +183,9 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, funcs template.FuncMap
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, funcs template.FuncMap) (string, bool) {
+func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
 	mutated := sc.src.mutatedText(mutant)
-	trees, err := parseTemplates(sc.src.rootName, mutated, funcs)
+	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, "", "", functions)
 	if err != nil {
 		return "does not parse", true
 	}
@@ -209,7 +205,7 @@ func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, funcs templat
 // The trees are parsed here rather than taken from the template set so
 // that every node position is an offset into text this package holds,
 // which is what a mutation is spliced into.
-func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*packages.Package, funcs template.FuncMap) (map[string]treeLocation, error) {
+func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*packages.Package, functions check.Functions) (map[string]treeLocation, error) {
 	collector := newSourceCollector(workingDirectory, pl)
 	for _, t := range lt.HTML.Templates() {
 		definition, ok := lt.Templates.FindDefinition(t.Name())
@@ -223,7 +219,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 
 	index := make(map[string]treeLocation)
 	for _, src := range collector.sorted() {
-		trees, err := parseTemplates(src.rootName, src.text, funcs)
+		trees, err := asteval.ParseTrees(src.rootName, src.text, "", "", functions)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"text/template/parse"
+
+	"github.com/typelate/check"
 )
 
 // Operator names the variation applied to one action.
@@ -113,12 +115,13 @@ func (m Mutant) Replacement() string { return m.replacement }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope) []Mutant {
+func mutantsInScope(sc scope, functions check.Functions) []Mutant {
 	ctx := mutantContext{
-		src:      sc.src,
-		template: sc.template,
-		regions:  sc.src.regions,
-		dot:      sc.dataType,
+		src:       sc.src,
+		template:  sc.template,
+		regions:   sc.src.regions,
+		dot:       sc.dataType,
+		functions: functions,
 	}
 
 	var all []Mutant
@@ -134,10 +137,11 @@ func mutantsInScope(sc scope) []Mutant {
 }
 
 type mutantContext struct {
-	src      *templateSource
-	template string
-	regions  []region
-	dot      types.Type
+	src       *templateSource
+	template  string
+	regions   []region
+	dot       types.Type
+	functions check.Functions
 }
 
 // narrowed returns the context for a body where dot has changed, as it
@@ -159,7 +163,7 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 			collect(out, child, ctx)
 		}
 	case *parse.ActionNode:
-		if zero, typed := zeroLiteral(ctx.dot, n.Pipe); typed {
+		if zero, typed := zeroLiteral(ctx.dot, n.Pipe, ctx.functions); typed {
 			ctx.addPipeline(out, n.Pipe, OperatorActionZero, zero)
 		} else {
 			ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
@@ -172,12 +176,12 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 	case *parse.WithNode:
 		ctx.addConstructDrop(out, int(n.Position()), OperatorWithEmpty)
 		// Inside the body, dot is what the with selected.
-		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe)))
+		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe, ctx.functions)))
 		collect(out, n.ElseList, ctx)
 	case *parse.RangeNode:
 		ctx.addConstructDrop(out, int(n.Position()), OperatorRangeNever)
 		// Inside the body, dot is one element of what was ranged over.
-		collect(out, n.List, ctx.narrowed(rangeDot(ctx.dot, n.Pipe)))
+		collect(out, n.List, ctx.narrowed(rangeDot(ctx.dot, n.Pipe, ctx.functions)))
 		collect(out, n.ElseList, ctx)
 	case *parse.TemplateNode:
 		ctx.addTemplateDrop(out, int(n.Position()))
