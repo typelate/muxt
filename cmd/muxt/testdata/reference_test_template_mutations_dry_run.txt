@@ -5,7 +5,7 @@
 #
 # Nothing runs, so no mutant has a verdict: every one is listed as pending.
 
-muxt test-template-mutations --dry-run
+muxt test-template-mutations --dry-run --seed 1
 cmp stdout want.txt
 ! stderr .
 
@@ -55,7 +55,7 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
-3 mutants across 1 template (complexity 2)
+3 mutants across 1 template (complexity 2, seed 1)
 dry run: no tests were run
 
 template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)

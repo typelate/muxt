@@ -59,11 +59,24 @@ type templateSource struct {
 	regions []region
 }
 
-// mutatedText returns the template text with the mutation in place,
-// which is what has to parse and type check for the mutant to be worth
-// running.
-func (s *templateSource) mutatedText(m Mutant) string {
-	return s.text[:m.start] + m.replacement + s.text[m.end:]
+// mutatedText returns the template text with the edits in place, which
+// is what has to parse and type check for the mutant to be worth running.
+//
+// The edits must be sorted by start and must not overlap, which is what
+// building them from distinct operands of one action guarantees.
+func (s *templateSource) mutatedText(edits []edit) string {
+	var b strings.Builder
+	last := 0
+	for _, e := range edits {
+		if e.start < last || e.end > len(s.text) || e.start > e.end {
+			return s.text
+		}
+		b.WriteString(s.text[last:e.start])
+		b.WriteString(e.text)
+		last = e.end
+	}
+	b.WriteString(s.text[last:])
+	return b.String()
 }
 
 // newFileSource builds a source for a template file, whose text is its
@@ -126,11 +139,9 @@ func (s *templateSource) fileOffset(offset int) int {
 	return s.offsets[offset]
 }
 
-// apply returns the whole file with replacement substituted for the
-// template text between start and end.
-func (s *templateSource) apply(start, end int, replacement string) string {
-	mutated := s.text[:start] + replacement + s.text[end:]
-	return s.fileText[:s.litStart] + s.encode(mutated) + s.fileText[s.litEnd:]
+// apply returns the whole file with the edits in place.
+func (s *templateSource) apply(edits []edit) string {
+	return s.fileText[:s.litStart] + s.encode(s.mutatedText(edits)) + s.fileText[s.litEnd:]
 }
 
 // literalEncoder returns a function writing text as a Go string literal,

@@ -6,11 +6,11 @@
 # --include-test-callers opts in, for a template set exercised only from
 # tests.
 
-! muxt test-template-mutations --dry-run
+! muxt test-template-mutations --dry-run --seed 1
 stderr 'no templates.ExecuteTemplate calls found'
 ! stdout .
 
-muxt test-template-mutations --dry-run --include-test-callers
+muxt test-template-mutations --dry-run --include-test-callers --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -53,7 +53,7 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
-1 mutant across 1 template (complexity 1)
+1 mutant across 1 template (complexity 1, seed 1)
 dry run: no tests were run
 
 render_test.go:10:12 ExecuteTemplate "greeting" (dot: server.Greeting)

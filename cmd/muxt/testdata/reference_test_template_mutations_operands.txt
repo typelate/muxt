@@ -1,0 +1,71 @@
+# An action reading more than one thing gets a mutant per combination of
+# its operands, so a test that watches the rendered result without
+# depending on all of it is shown which parts nothing is watching.
+#
+# Emptying the whole action says only that something about it matters.
+# Replacing .First alone, .Last alone, and both together says which.
+#
+# The substituted values are drawn from a seeded generator, so --seed 1
+# gives the same report every time. Without --seed one is drawn and
+# printed, so any run can be repeated.
+
+muxt test-template-mutations --dry-run --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{printf "%s-%s" .First .Last}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	First string
+	Last  string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{First: "a", Last: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "a-b"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+4 mutants across 1 template (complexity 1, seed 1)
+dry run: no tests were run
+
+template.go:20:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 1, dot: server.Page)
+    PEND 1:18 action-zero
+    PEND 1:18 operands .First="nard"
+    PEND 1:18 operands .First="nard" .Last="xeqr"
+    PEND 1:18 operands .Last="xeqr"
+
+4 mutants, 4 runnable, 0 skipped

@@ -85,43 +85,67 @@ type Mutant struct {
 	// one based, with Column counting bytes.
 	Line, Column int
 
-	// start and end bound the template text the mutation replaces. For a
-	// pipeline variation that is the pipeline; for a structural one it
-	// is the whole construct, opening action through matching end.
-	start, end int
-
-	// replacement is the text substituted for that range.
-	replacement string
+	// edits are the substitutions the mutation makes, sorted by start
+	// and non-overlapping.
+	//
+	// Most operators make one: a pipeline, or a whole construct. An
+	// operator that varies several operands of one action at once makes
+	// one per operand.
+	edits []edit
 
 	// action is the opening action as it is written, which is what a
 	// report shows so that a whole range body does not land in it.
 	action string
+
+	// detail is what the mutation substituted, written for a reader:
+	// the replacement text for a single edit, or operand=value pairs
+	// for several.
+	detail string
 
 	// src is the file the template text was read from, which knows how
 	// to put mutated text back into it.
 	src *templateSource
 }
 
+// edit is one substitution within a template's text.
+type edit struct {
+	start, end int
+	text       string
+}
+
+// start reports where in the template text the mutation begins, which is
+// what orders mutants within a template.
+func (m Mutant) start() int {
+	if len(m.edits) == 0 {
+		return 0
+	}
+	return m.edits[0].start
+}
+
 // Apply returns the whole file with the mutation in place.
 func (m Mutant) Apply() string {
-	return m.src.apply(m.start, m.end, m.replacement)
+	return m.src.apply(m.edits)
 }
 
 // Action returns the mutated action as it is written in the template.
 func (m Mutant) Action() string { return m.action }
 
-// Replacement returns the text the mutation substitutes.
-func (m Mutant) Replacement() string { return m.replacement }
+// Replacement returns what the mutation substituted.
+func (m Mutant) Replacement() string { return m.detail }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions) []Mutant {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]Mutant, []budgetNote) {
+	var notes []budgetNote
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
 		regions:   sc.src.regions,
 		dot:       sc.dataType,
 		functions: functions,
+		values:    draw,
+		maxCases:  maxCases,
+		notes:     &notes,
 	}
 
 	var all []Mutant
@@ -129,11 +153,12 @@ func mutantsInScope(sc scope, functions check.Functions) []Mutant {
 
 	slices.SortFunc(all, func(a, b Mutant) int {
 		return cmp.Or(
-			cmp.Compare(a.start, b.start),
+			cmp.Compare(a.start(), b.start()),
 			cmp.Compare(a.Operator, b.Operator),
+			cmp.Compare(a.detail, b.detail),
 		)
 	})
-	return all
+	return all, notes
 }
 
 type mutantContext struct {
@@ -142,6 +167,9 @@ type mutantContext struct {
 	regions   []region
 	dot       types.Type
 	functions check.Functions
+	values    *values
+	maxCases  int
+	notes     *[]budgetNote
 }
 
 // narrowed returns the context for a body where dot has changed, as it
@@ -168,6 +196,9 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 		} else {
 			ctx.addPipeline(out, n.Pipe, OperatorActionEmpty, `""`)
 		}
+		// Emptying the whole action says only that something about it is
+		// watched. Varying its operands says which ones.
+		ctx.addOperandCombinations(out, n.Pipe, ctx.maxCases)
 	case *parse.IfNode:
 		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
 		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
@@ -241,19 +272,26 @@ func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator string, 
 	if start < 0 || end > len(ctx.src.text) || start > end {
 		return
 	}
+	ctx.appendEdits(out, r, operator, []edit{{start: start, end: end, text: replacement}}, replacement)
+}
+
+// appendEdits records a mutant made of one or more substitutions.
+func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator string, edits []edit, detail string) {
+	if len(edits) == 0 {
+		return
+	}
 	line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
 	*out = append(*out, Mutant{
-		Operator:    operator,
-		Template:    ctx.template,
-		File:        ctx.src.file,
-		Path:        ctx.src.path,
-		src:         ctx.src,
-		Line:        line,
-		Column:      column,
-		start:       start,
-		end:         end,
-		replacement: replacement,
-		action:      ctx.src.text[r.start:r.end],
+		Operator: operator,
+		Template: ctx.template,
+		File:     ctx.src.file,
+		Path:     ctx.src.path,
+		src:      ctx.src,
+		Line:     line,
+		Column:   column,
+		edits:    edits,
+		detail:   detail,
+		action:   ctx.src.text[r.start:r.end],
 	})
 }
 

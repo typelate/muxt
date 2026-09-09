@@ -227,6 +227,7 @@ working tree is never written to.`,
 				config.Run = pattern
 			}
 			config.Packages = args
+			config.SeedSet = cmd.Flags().Changed("seed")
 
 			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
 			if err != nil {
@@ -245,6 +246,8 @@ working tree is never written to.`,
 	cmd.Flags().BoolVar(&config.DryRun, "dry-run", false, "enumerate the mutants and report them without running any tests")
 	cmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "report every mutant, not only the ones no test caught, and stream progress")
 	cmd.Flags().BoolVar(&config.IncludeTests, "include-test-callers", false, "also mutate templates reached only from ExecuteTemplate calls in _test.go files")
+	cmd.Flags().Uint64Var(&config.Seed, "seed", 0, "seed the values substituted for an action's operands (default: drawn and reported)")
+	cmd.Flags().IntVar(&config.MaxCases, "max-cases", mutation.DefaultMaxCases, "most operand combinations one action may contribute")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd

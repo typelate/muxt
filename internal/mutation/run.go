@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,7 +72,24 @@ type Configuration struct {
 	// a test is not rendered in production, and mutating it measures the
 	// tests against themselves.
 	IncludeTests bool
+
+	// Seed seeds the values substituted for an action's operands. When
+	// SeedSet is false one is drawn and reported, so a run can always be
+	// repeated with the seed it printed.
+	Seed    uint64
+	SeedSet bool
+
+	// MaxCases bounds how many combinations one action may contribute.
+	// An action over the bound contributes none, and says so.
+	MaxCases int
 }
+
+// DefaultMaxCases bounds the combinations one action may contribute.
+//
+// Every case is a full test run, so a wide action can cost more than the
+// rest of a template set put together. Eight allows three operands to be
+// varied in every combination.
+const DefaultMaxCases = 8
 
 // Status is the verdict on one mutant.
 type Status string
@@ -161,6 +179,7 @@ type BaselineResult struct {
 type Report struct {
 	Baseline   BaselineResult    `json:"baseline,omitzero"`
 	DryRun     bool              `json:"dry_run"`
+	Seed       uint64            `json:"seed"`
 	Verbose    bool              `json:"-"`
 	Templates  int               `json:"templates"`
 	Complexity int               `json:"complexity"`
@@ -199,6 +218,10 @@ func (e *NoCallSitesError) Error() string {
 // progress receives a line per mutant as it completes when the
 // configuration is verbose; it may be nil.
 func Run(config Configuration, workingDirectory string, status io.Writer) (*Report, error) {
+	if !config.SeedSet {
+		// A drawn seed is reported so the run can be repeated exactly.
+		config.Seed = rand.Uint64()
+	}
 	plan, err := newPlan(config, workingDirectory)
 	if err != nil {
 		return nil, err

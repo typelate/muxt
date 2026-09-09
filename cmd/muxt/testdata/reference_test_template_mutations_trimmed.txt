@@ -8,7 +8,7 @@
 # -v says which subtrees were trimmed and where they were first reached,
 # so a run that does less work than expected explains itself.
 
-muxt test-template-mutations --dry-run -v
+muxt test-template-mutations --dry-run -v --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -61,7 +61,7 @@ func TestHome(t *testing.T) {
 	}
 }
 -- want.txt --
-3 mutants across 2 templates (complexity 2)
+3 mutants across 2 templates (complexity 2, seed 1)
 dry run: no tests were run
 
 template.go:19:9 ExecuteTemplate "page" (dot: server.Page)

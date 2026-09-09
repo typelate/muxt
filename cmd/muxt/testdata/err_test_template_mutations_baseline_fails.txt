@@ -5,7 +5,7 @@
 # rather than by the mutation, so the whole report would read as full
 # coverage of a suite that is not even passing.
 
-! muxt test-template-mutations
+! muxt test-template-mutations --seed 1
 stderr '(?m)^Error: baseline tests failed before mutation; fix them first:$'
 stderr '(?m)^--- FAIL: TestGreeting'
 ! stdout .

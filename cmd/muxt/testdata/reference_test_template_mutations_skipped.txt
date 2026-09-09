@@ -9,7 +9,7 @@
 # which is why mutants are checked against the ExecuteTemplate call that
 # renders them.
 
-muxt test-template-mutations --dry-run
+muxt test-template-mutations --dry-run --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -61,7 +61,7 @@ func TestPage(t *testing.T) {
 	}
 }
 -- want.txt --
-2 mutants across 1 template (complexity 1)
+2 mutants across 1 template (complexity 1, seed 1)
 dry run: no tests were run
 
 template.go:23:9 ExecuteTemplate "page" (dot: server.Page)

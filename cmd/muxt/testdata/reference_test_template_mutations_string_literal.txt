@@ -4,7 +4,7 @@
 # re-encoded, so the overlay replaces the .go file rather than a template
 # file. Positions are reported in the .go file, at the action itself.
 
-muxt test-template-mutations -v
+muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
 
 -- go.mod --
@@ -47,7 +47,7 @@ func TestGreeting(t *testing.T) {
 	}
 }
 -- want.txt --
-3 mutants across 1 template (complexity 2)
+3 mutants across 1 template (complexity 2, seed 1)
 baseline ok
 
 template.go:16:9 ExecuteTemplate "greeting" (dot: server.Greeting)
