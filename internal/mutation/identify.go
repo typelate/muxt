@@ -95,7 +95,7 @@ func NewIdentifiers(defs []check.Definition, functions check.Functions, seed uin
 		// No packages: a template written as a Go string literal cannot
 		// be located without the loaded package, and source refuses one
 		// rather than answering wrongly.
-		sources: newSourceCollector("", nil),
+		sources: newSourceCollector("", nil, defs),
 		read:    make(map[string]struct{}),
 		srcOf:   make(map[string]*templateSource),
 		busy:    make(map[string]struct{}),

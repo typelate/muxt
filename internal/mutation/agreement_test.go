@@ -36,7 +36,7 @@ func TestIdentifyAgreesWithTheMutantsARunProduces(t *testing.T) {
 	// The scope is assembled the way a run assembles one: through the
 	// collector, not through anything Identify touched. That is what
 	// makes this an agreement rather than a restatement.
-	collector := newSourceCollector("", nil)
+	collector := newSourceCollector("", nil, defs)
 	var src *templateSource
 	for _, definition := range defs {
 		filed, err := collector.add(definition)
@@ -51,10 +51,12 @@ func TestIdentifyAgreesWithTheMutantsARunProduces(t *testing.T) {
 		t.Fatal("the collector filed no source for the template under test")
 	}
 	sc := scope{
-		template:     "page",
-		src:          src,
-		tree:         trees["page"],
-		sourceDigest: collector.digests(src)["page"],
+		template: "page",
+		treeLocation: treeLocation{
+			src:          src,
+			tree:         trees["page"],
+			sourceDigest: collector.digests(src)["page"],
+		},
 	}
 
 	mutants, _ := mutantsInScope(sc, nil, newValues(seed), DefaultMaxCases, seed, engine)

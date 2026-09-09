@@ -1,0 +1,75 @@
+# A template set built with Delims is mutated like any other.
+#
+# The delimiters are not recorded anywhere a caller can read: the template
+# keeps them to itself. They are recovered from the definitions instead. An
+# end clause has a fixed shape -- left delimiter, an optional trim marker,
+# the word end, another marker, the right delimiter -- and check spans it from
+# one delimiter through the other, so whatever surrounds the word is the pair.
+#
+# Everything downstream depends on getting this right. Reading the templates
+# with the wrong delimiters yields trees holding no actions at all, and a run
+# over those would find nothing to mutate.
+#
+# The verdicts here are the ones reference_test_template_mutations.txt reaches
+# for the same template written with the default delimiters. Which delimiters
+# a project chose is not something a mutation report should depend on.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+[[define "greeting"]]Hello, [[.Name]]![[if .Loud]] !!![[end]][[end]]
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.New("t").Delims("[[", "]]").ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+3 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+    KILL 1:29 action-zero
+    MISS 1:39 if-false
+    KILL 1:39 if-true
+
+3 mutants, 2 killed, 1 missed, 0 skipped

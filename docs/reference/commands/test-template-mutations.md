@@ -179,6 +179,16 @@ Error: baseline tests failed before mutation; fix them first:
 
 Every mutant would otherwise be recorded as caught — by the failure that was already there.
 
+## Nothing To Mutate
+
+If every template reached holds only static text, the command exits non-zero rather than reporting a run of zero mutants:
+
+```
+Error: no mutations available: the 3 template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything
+```
+
+A report of `0 mutants, 0 missed` reads as the tests catching everything. It is an error so that a project whose templates were never read cannot be mistaken for one whose tests are thorough.
+
 ## How Variations Are Delivered
 
 Mutants reach the test run through the go command's `-overlay` flag, which replaces a file for the build without writing to your working tree. The overlay reaches `//go:embed` content, so an embedded template is varied without touching the checkout.
@@ -257,7 +267,7 @@ Unresolved means `action-empty` rather than `action-zero`; the mutation still ha
 
 ## Limitations
 
-- Custom delimiters are not supported; templates are scanned with `{{` and `}}`.
+- A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`.
 - `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
 - Each mutant is a full `go test -count=1` run. Narrow it with `--template-pattern`, `--run`, and a package argument, and use `--dry-run` first to see the size of the job.
 
