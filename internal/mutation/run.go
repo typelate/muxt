@@ -82,6 +82,11 @@ type Configuration struct {
 	// MaxCases bounds how many combinations one action may contribute.
 	// An action over the bound contributes none, and says so.
 	MaxCases int
+
+	// StatePath is where the verdicts are recorded and read back, so a
+	// later run only has to try the actions that changed. Empty turns
+	// the record off.
+	StatePath string
 }
 
 // DefaultMaxCases bounds the combinations one action may contribute.
@@ -129,6 +134,10 @@ type Result struct {
 
 	// Seconds is how long the mutant's test run took.
 	Seconds float64 `json:"seconds,omitempty"`
+
+	// Reused is set when the verdict came from the state file rather
+	// than from a run, because the action had not changed.
+	Reused bool `json:"reused,omitempty"`
 
 	// mutantIndex locates the mutant this result came from, so the run
 	// does not have to carry the mutants inside the report it prints.
@@ -187,6 +196,7 @@ type Report struct {
 	Killed     int               `json:"killed"`
 	Missed     int               `json:"missed"`
 	Skipped    int               `json:"skipped"`
+	Reused     int               `json:"reused"`
 	Groups     []Group           `json:"groups"`
 	Trimmed    []TrimmedTemplate `json:"trimmed"`
 }
@@ -264,6 +274,14 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	reportTrims(progress, report.Trimmed)
 
+	// The state path is given relative to the project, not to wherever
+	// the command happens to have been started from.
+	statePath := config.StatePath
+	if statePath != "" && !filepath.IsAbs(statePath) {
+		statePath = filepath.Join(workingDirectory, statePath)
+	}
+	state := loadState(statePath)
+
 	scratch, err := os.MkdirTemp("", "muxt-mutation-")
 	if err != nil {
 		return nil, err
@@ -282,6 +300,20 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 			}
 
 			mutant := plan.mutants[result.mutantIndex]
+
+			if status, found := state.verdict(mutant.Fingerprint(), result.Operator, result.Mutated); found {
+				// The action's source and its resolved types are what
+				// they were when this verdict was reached, so running it
+				// again could only reach the same one.
+				result.Status = status
+				result.Reused = true
+				report.Reused++
+				countVerdict(report, status)
+				reportProgress(progress, index, plan.total(), group, *result, clock)
+				index++
+				continue
+			}
+
 			overlay, err := writeMutant(scratch, index, mutant)
 			if err != nil {
 				return nil, err
@@ -297,17 +329,33 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 			result.Seconds = elapsed.Seconds()
 			if testErr != nil {
 				result.Status = StatusKilled
-				report.Killed++
 			} else {
 				result.Status = StatusMissed
-				report.Missed++
 			}
+			countVerdict(report, result.Status)
+			state.record(mutant.Fingerprint(), group.Template, group.File, result.Operator, result.Mutated, result.Status)
 			clock.observe(elapsed)
 			reportProgress(progress, index, plan.total(), group, *result, clock)
 			index++
 		}
 	}
+
+	state.Seed = config.Seed
+	if err := state.save(statePath); err != nil {
+		return nil, err
+	}
 	return report, nil
+}
+
+// countVerdict tallies one mutant's outcome, whether it was just run or
+// read back from the state file.
+func countVerdict(report *Report, status Status) {
+	switch status {
+	case StatusKilled:
+		report.Killed++
+	case StatusMissed:
+		report.Missed++
+	}
 }
 
 // eachTemplate iterates the report's templates in the order they were

@@ -1,0 +1,101 @@
+# A run records what it learned in testdata, so the next run only has to
+# try the actions that changed.
+#
+# An action is identified by its source together with the types resolved
+# for it and the seed the values were drawn from. The source alone is not
+# enough: a field changing from a string to an int changes what a mutation
+# substitutes without changing a byte of the template, and the dot type's
+# name stays the same either way.
+#
+# The first run tries everything and writes the file. The second reuses
+# every verdict. Editing the template changes that action's fingerprint,
+# so its mutants are tried again while the untouched template's are not.
+
+muxt test-template-mutations --seed 1
+cmp stdout want-first.txt
+exists testdata/template-mutations.json
+
+muxt test-template-mutations --seed 1
+cmp stdout want-reused.txt
+
+cp changed.txt templates.gohtml
+muxt test-template-mutations --seed 1
+cmp stdout want-changed.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+{{define "farewell"}}Bye, {{.Name}}.{{end}}
+-- changed.txt --
+{{define "greeting"}}Howdy, {{.Name}}!{{end}}
+{{define "farewell"}}Bye, {{.Name}}.{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+
+func Farewell(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "farewell", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "World") {
+		t.Errorf("greeting = %q", buf.String())
+	}
+}
+
+func TestFarewell(t *testing.T) {
+	var buf strings.Builder
+	if err := Farewell(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "World") {
+		t.Errorf("farewell = %q", buf.String())
+	}
+}
+-- want-first.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+2 mutants, 2 killed, 0 missed, 0 skipped
+-- want-reused.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+2 mutants, 2 killed, 0 missed, 0 skipped, 2 reused
+-- want-changed.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+2 mutants, 2 killed, 0 missed, 0 skipped, 1 reused

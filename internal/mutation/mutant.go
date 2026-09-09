@@ -105,7 +105,15 @@ type Mutant struct {
 	// src is the file the template text was read from, which knows how
 	// to put mutated text back into it.
 	src *templateSource
+
+	// fingerprint identifies the action this mutation varies, by its
+	// source and by the types resolved for it. A run compares it against
+	// a previous run's state to decide what has to be tried again.
+	fingerprint string
 }
+
+// Fingerprint identifies the action a mutation varies.
+func (m Mutant) Fingerprint() string { return m.fingerprint }
 
 // edit is one substitution within a template's text.
 type edit struct {
@@ -135,7 +143,7 @@ func (m Mutant) Replacement() string { return m.detail }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]Mutant, []budgetNote) {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64) ([]Mutant, []budgetNote) {
 	var notes []budgetNote
 	ctx := mutantContext{
 		src:       sc.src,
@@ -145,6 +153,8 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		functions: functions,
 		values:    draw,
 		maxCases:  maxCases,
+		seed:      seed,
+		treeText:  sc.tree.Root.String(),
 		notes:     &notes,
 	}
 
@@ -169,7 +179,17 @@ type mutantContext struct {
 	functions check.Functions
 	values    *values
 	maxCases  int
+	seed      uint64
+	treeText  string
+	pipe      *parse.PipeNode
 	notes     *[]budgetNote
+}
+
+// forAction returns the context for one action, whose pipeline the
+// fingerprint is computed over.
+func (ctx mutantContext) forAction(pipe *parse.PipeNode) mutantContext {
+	ctx.pipe = pipe
+	return ctx
 }
 
 // narrowed returns the context for a body where dot has changed, as it
@@ -191,6 +211,7 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 			collect(out, child, ctx)
 		}
 	case *parse.ActionNode:
+		ctx = ctx.forAction(n.Pipe)
 		if zero, typed := zeroLiteral(ctx.dot, n.Pipe, ctx.functions); typed {
 			ctx.addPipeline(out, n.Pipe, OperatorActionZero, zero)
 		} else {
@@ -200,6 +221,7 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 		// watched. Varying its operands says which ones.
 		ctx.addOperandCombinations(out, n.Pipe, ctx.maxCases)
 	case *parse.IfNode:
+		ctx = ctx.forAction(n.Pipe)
 		ctx.addPipeline(out, n.Pipe, OperatorIfTrue, "true")
 		ctx.addPipeline(out, n.Pipe, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
@@ -211,16 +233,19 @@ func collect(out *[]Mutant, node parse.Node, ctx mutantContext) {
 		collect(out, n.List, ctx)
 		collect(out, n.ElseList, ctx)
 	case *parse.WithNode:
+		ctx = ctx.forAction(n.Pipe)
 		ctx.addConstructDrop(out, int(n.Position()), OperatorWithEmpty)
 		// Inside the body, dot is what the with selected.
 		collect(out, n.List, ctx.narrowed(withDot(ctx.dot, n.Pipe, ctx.functions)))
 		collect(out, n.ElseList, ctx)
 	case *parse.RangeNode:
+		ctx = ctx.forAction(n.Pipe)
 		ctx.addConstructDrop(out, int(n.Position()), OperatorRangeNever)
 		// Inside the body, dot is one element of what was ranged over.
 		collect(out, n.List, ctx.narrowed(rangeDot(ctx.dot, n.Pipe, ctx.functions)))
 		collect(out, n.ElseList, ctx)
 	case *parse.TemplateNode:
+		ctx = ctx.forAction(n.Pipe)
 		ctx.addTemplateDrop(out, int(n.Position()))
 	}
 }
@@ -288,16 +313,17 @@ func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator string, e
 	}
 	line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
 	*out = append(*out, Mutant{
-		Operator: operator,
-		Template: ctx.template,
-		File:     ctx.src.file,
-		Path:     ctx.src.path,
-		src:      ctx.src,
-		Line:     line,
-		Column:   column,
-		edits:    edits,
-		detail:   detail,
-		action:   ctx.src.text[r.start:r.end],
+		Operator:    operator,
+		Template:    ctx.template,
+		File:        ctx.src.file,
+		Path:        ctx.src.path,
+		src:         ctx.src,
+		Line:        line,
+		Column:      column,
+		edits:       edits,
+		detail:      detail,
+		action:      ctx.src.text[r.start:r.end],
+		fingerprint: ctx.fingerprint(r),
 	})
 }
 
