@@ -154,8 +154,8 @@ func (s *State) record(fingerprint, template, file, operator, mutated string, st
 // seed the values are drawn from.
 func (ctx mutantContext) fingerprint(r region) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
-		stateVersion, ctx.template, typeKey(ctx.dot), ctx.treeText, ctx.src.text[r.start:r.end], ctx.seed)
+	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00",
+		stateVersion, ctx.template, typeKey(ctx.dot), ctx.treeText, ctx.src.text[r.start:r.end], ctx.action, ctx.seed)
 	for _, op := range operands(ctx.src.text, ctx.dot, ctx.pipe) {
 		fmt.Fprintf(h, "%s=%s\x00", op.text, typeKey(op.dataType))
 	}
