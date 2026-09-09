@@ -342,6 +342,9 @@ func reportProgress(progress io.Writer, index, total int, group *TemplateReport,
 		len(fmt.Sprint(total)), index+1, total,
 		result.Status, group.File, result.Line, result.Column,
 		strconv.Quote(group.Template), result.Operator)
+	if (result.Operator == OperatorOperands || result.Operator == OperatorCondition) && result.Mutated != "" {
+		line += " " + result.Mutated
+	}
 	switch {
 	case result.Status == StatusSkipped:
 		line += " (" + result.Reason + ")"

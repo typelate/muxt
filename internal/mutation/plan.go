@@ -164,10 +164,18 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functi
 			Mutated:  mutant.Replacement(),
 			Status:   StatusPending,
 		}
-		if reason, ok := invalid(lt, sc, mutant, functions); ok {
+		switch reason, broken := invalid(lt, sc, mutant, functions); {
+		case mutant.Operator == OperatorConditionDead:
+			// Simplification already proved this condition cannot change
+			// the decision, so no test could be coupled to it and there
+			// is nothing to learn from running it.
+			result.Status = StatusSkipped
+			result.Reason = mutant.Replacement()
+			result.Mutated = ""
+		case broken:
 			result.Status = StatusSkipped
 			result.Reason = reason
-		} else {
+		default:
 			p.runnableN++
 		}
 		result.mutantIndex = len(p.mutants)
