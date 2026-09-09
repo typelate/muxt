@@ -1,0 +1,56 @@
+# Templates are re-parsed to locate their actions, and text/template/parse
+# rejects a call to a function it was not given. The builtins -- eq, and,
+# index, len and the rest -- have to be among them, or any template using
+# one fails to enumerate.
+#
+# TestStatus only renders a code of 200, so forcing the condition true
+# changes nothing it sees and that mutant survives. Forcing it false swaps
+# the branch and is caught.
+
+muxt test-template-mutations
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "status"}}{{if eq .Code 200}}ok{{else}}bad{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Status struct {
+	Code int
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestStatus(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "status", Status{Code: 200}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "ok"; got != want {
+		t.Errorf("status = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+baseline ok
+KILL templates.gohtml:1:20 "status" if-false
+MISS templates.gohtml:1:20 "status" if-true
+2 mutants, 1 killed, 1 missed

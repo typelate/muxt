@@ -221,7 +221,7 @@ func enumerate(config Configuration, workingDirectory string, pl []*packages.Pac
 		include = config.TemplatePattern.MatchString
 	}
 
-	funcs := make(map[string]any)
+	funcs := parseBuiltins()
 	collector := &sourceCollector{
 		workingDirectory: workingDirectory,
 		packages:         pl,
@@ -257,6 +257,28 @@ func enumerate(config Configuration, workingDirectory string, pl []*packages.Pac
 		all = append(all, found...)
 	}
 	return all, nil
+}
+
+// parseBuiltins returns the functions text/template defines for every
+// template.
+//
+// Locating a template's actions means re-parsing its text, and
+// text/template/parse rejects a call to a function it was not given. A
+// template set reports the functions its own construction registered, not
+// these, so a template using eq or index would fail to enumerate without
+// them. Only the names matter: parse checks that a name is known and
+// never calls it.
+func parseBuiltins() map[string]any {
+	names := [...]string{
+		"and", "call", "eq", "ge", "gt", "html", "index", "js", "le",
+		"len", "lt", "ne", "not", "or", "print", "printf", "println",
+		"slice", "urlquery",
+	}
+	funcs := make(map[string]any, len(names))
+	for _, name := range names {
+		funcs[name] = func() string { return "" }
+	}
+	return funcs
 }
 
 // sourceKey identifies the text a template was written in: a template

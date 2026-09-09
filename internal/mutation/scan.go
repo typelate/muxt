@@ -67,10 +67,13 @@ func regions(text, leftDelim, rightDelim string) []region {
 
 		closing, ok := closeOffset(text, content, rightDelim)
 		if !ok {
-			// An unterminated action cannot be mutated. The template
-			// would not have parsed, so this is unreachable for a
-			// loaded template, but scanning must still terminate.
-			break
+			// Whatever this is, it is not an action this scanner
+			// understands. Carry on past the left delimiter rather
+			// than abandoning the rest of the template: one region
+			// that cannot be read must not cost every action after
+			// it its mutants.
+			i = content
+			continue
 		}
 
 		inner := trimLeft(text, content, closing)
@@ -88,14 +91,16 @@ func regions(text, leftDelim, rightDelim string) []region {
 // closeOffset returns the offset of the right delimiter that closes the
 // action whose content begins at content.
 func closeOffset(text string, content int, rightDelim string) (int, bool) {
-	if strings.HasPrefix(text[content:], "/*") {
+	if body, ok := commentBody(text, content); ok {
 		// A comment runs to */ and then to the right delimiter, and may
-		// hold anything in between.
-		rel := strings.Index(text[content+2:], "*/")
+		// hold anything in between: an apostrophe, an unbalanced quote,
+		// even the right delimiter itself. Reading it as a unit is what
+		// keeps prose from being lexed as template source.
+		rel := strings.Index(text[body:], "*/")
 		if rel < 0 {
 			return 0, false
 		}
-		rest := content + 2 + rel + 2
+		rest := body + rel + 2
 		next := strings.Index(text[rest:], rightDelim)
 		if next < 0 {
 			return 0, false
@@ -125,6 +130,25 @@ func closeOffset(text string, content int, rightDelim string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// commentBody reports whether the action whose content begins at content
+// is a comment, and returns the offset just past the opening /*.
+//
+// A trim marker may sit between the left delimiter and the /*, so the
+// marker and the whitespace after it are skipped before looking.
+func commentBody(text string, content int) (int, bool) {
+	i := content
+	if i < len(text) && text[i] == '-' && i+1 < len(text) && isSpace(text[i+1]) {
+		i++
+	}
+	for i < len(text) && isSpace(text[i]) {
+		i++
+	}
+	if !strings.HasPrefix(text[i:], "/*") {
+		return 0, false
+	}
+	return i + 2, true
 }
 
 // skipQuoted returns the offset one past the literal that opens at start
