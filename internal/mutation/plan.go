@@ -127,7 +127,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 			if !include(sc.template) {
 				continue
 			}
-			key := sc.template + "\x00" + typeKey(sc.dataType)
+			key := executionKey(sc.template, sc.dataType)
 			if _, done := seen[key]; done {
 				continue
 			}
@@ -258,7 +258,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 		if !ok {
 			continue
 		}
-		if err := collector.add(definition); err != nil {
+		if _, err := collector.add(definition); err != nil {
 			return nil, err
 		}
 	}
@@ -271,7 +271,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 		}
 		// A template's identity is its own source, which is what the
 		// definitions in this text carve it into.
-		identities := src.identities(src.rootName, collector.defined[src])
+		identities := collector.digests(src)
 
 		for name, tree := range trees {
 			if tree == nil || tree.Root == nil {
