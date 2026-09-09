@@ -21,6 +21,26 @@ type region struct {
 
 	// end is the offset one past the right delimiter.
 	end int
+
+	// keyword is the word the action opens with, one of if, range,
+	// with, block, define, else, end or template, and empty for an
+	// action that just evaluates a pipeline.
+	keyword string
+}
+
+// opensBlock reports whether an action of this kind is closed by a
+// matching {{end}}.
+//
+// An else does not open anything, including the "else if" form, which
+// text/template folds into the enclosing if rather than nesting a second
+// construct with an end of its own.
+func (r region) opensBlock() bool {
+	switch r.keyword {
+	case "if", "range", "with", "block", "define":
+		return true
+	default:
+		return false
+	}
 }
 
 // regions splits text into the actions it holds, in source order.
@@ -53,10 +73,12 @@ func regions(text, leftDelim, rightDelim string) []region {
 			break
 		}
 
+		inner := trimLeft(text, content, closing)
 		found = append(found, region{
 			start:    start,
 			innerEnd: trimRight(text, content, closing),
 			end:      closing + len(rightDelim),
+			keyword:  leadingWord(text, inner, closing),
 		})
 		i = closing + len(rightDelim)
 	}
@@ -146,22 +168,85 @@ func trimRight(text string, content, closing int) int {
 	return end
 }
 
+// trimLeft returns the offset of the action's first content byte, with a
+// leading trim marker and the whitespace after it skipped.
+func trimLeft(text string, content, closing int) int {
+	start := content
+	if start < closing && text[start] == '-' && start+1 < closing && isSpace(text[start+1]) {
+		start++
+	}
+	for start < closing && isSpace(text[start]) {
+		start++
+	}
+	return start
+}
+
+// leadingWord returns the keyword the action opens with, or the empty
+// string when it opens with anything else.
+//
+// Only the words text/template gives a meaning to are reported, so an
+// action calling a function named "endorse" is not mistaken for an end.
+func leadingWord(text string, inner, closing int) string {
+	end := inner
+	for end < closing && isWordByte(text[end]) {
+		end++
+	}
+	word := text[inner:end]
+	switch word {
+	case "if", "range", "with", "block", "define", "else", "end", "template":
+		if end < closing && isWordByte(text[end]) {
+			return ""
+		}
+		return word
+	default:
+		return ""
+	}
+}
+
+func isWordByte(c byte) bool {
+	return c >= 'a' && c <= 'z'
+}
+
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-// pipelineEnd returns the offset one past the pipeline that starts at pos.
+// regionAt returns the action holding pos, and its index.
 //
-// The pipeline is the last thing an action holds, so it ends where the
-// action's content ends.
-func pipelineEnd(found []region, pos int) (int, bool) {
-	for _, r := range found {
+// A parse node's position always falls inside the action that produced
+// it, which is how a node is related back to the text it was written as.
+func regionAt(found []region, pos int) (int, region, bool) {
+	for i, r := range found {
 		if pos >= r.start && pos < r.end {
-			if pos > r.innerEnd {
-				return 0, false
-			}
-			return r.innerEnd, true
+			return i, r, true
 		}
 	}
-	return 0, false
+	return 0, region{}, false
+}
+
+// matchEnd returns the {{end}} closing the action at index open, and the
+// {{else}} belonging to it when it has one.
+//
+// Actions nested inside are skipped by depth, so the else and end
+// reported are the ones at the opening action's own level.
+func matchEnd(found []region, open int) (endIndex int, elseIndex int, ok bool) {
+	if open < 0 || open >= len(found) || !found[open].opensBlock() {
+		return 0, 0, false
+	}
+	elseIndex = -1
+	depth := 1
+	for i := open + 1; i < len(found); i++ {
+		switch {
+		case found[i].opensBlock():
+			depth++
+		case found[i].keyword == "end":
+			depth--
+			if depth == 0 {
+				return i, elseIndex, true
+			}
+		case found[i].keyword == "else" && depth == 1 && elseIndex < 0:
+			elseIndex = i
+		}
+	}
+	return 0, 0, false
 }

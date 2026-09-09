@@ -161,7 +161,7 @@ func Run(config Configuration, workingDirectory string, pl []*packages.Package) 
 			File:     mutant.Path,
 			Line:     mutant.Line,
 			Column:   mutant.Column,
-			Original: mutant.Pipeline(text),
+			Original: mutant.Action(),
 			Mutated:  mutant.Replacement(),
 		})
 	}

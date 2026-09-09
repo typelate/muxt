@@ -1,0 +1,67 @@
+# Every control flow action is varied, not just if.
+#
+# TestPage renders with two items and an empty footer. It catches emptying
+# the range, emptying what the range prints, and dropping the {{template}}
+# call, because all three change the string it compares.
+#
+# It never renders with a footer, so the {{with}} body never runs. Emptying
+# the {{with}} pipeline and emptying the action inside its body both leave
+# the output the test sees untouched, and both survive.
+#
+# The range declares two variables. A range cannot be emptied by replacing
+# its pipeline with 0 in that form -- text/template refuses to iterate over
+# an integer with more than one variable -- so the whole construct is
+# replaced by its else branch instead.
+
+muxt test-template-mutations
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}<ul>{{range $i, $item := .Items}}<li>{{$item}}</li>{{end}}</ul>{{with .Footer}}<p>{{.}}</p>{{end}}{{template "brand"}}{{end}}
+{{define "brand"}}<b>muxt</b>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Items  []string
+	Footer string
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "page", Page{Items: []string{"a", "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "<ul><li>a</li><li>b</li></ul><b>muxt</b>"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+baseline ok
+KILL templates.gohtml:1:22 "page" range-never
+KILL templates.gohtml:1:55 "page" action-empty
+MISS templates.gohtml:1:81 "page" with-empty
+MISS templates.gohtml:1:100 "page" action-empty
+KILL templates.gohtml:1:116 "page" template-drop
+5 mutants, 3 killed, 2 missed
