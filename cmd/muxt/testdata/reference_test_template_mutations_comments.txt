@@ -1,0 +1,56 @@
+# A template comment may hold anything, including an apostrophe and
+# unbalanced quotes. Scanning has to take the comment as a unit, or the
+# apostrophe reads as an unterminated character constant and every action
+# after the comment is lost -- along with every mutant in it.
+#
+# The comment here also carries a trim marker, which comes between the left
+# delimiter and the /* that opens the comment.
+
+muxt test-template-mutations
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{- /*
+you'd want "quotes" and `backticks` here
+*/}}<p>{{.Name}}</p>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "page", Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "<p>World</p>"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+baseline ok
+KILL templates.gohtml:3:8 "page" action-empty
+1 mutant, 1 killed, 0 missed
