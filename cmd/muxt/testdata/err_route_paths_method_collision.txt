@@ -32,5 +32,5 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 
 type T struct{}
 
-func (T) list(_ context.Context) string             { return "" }
-func (T) List(_ context.Context, _ string) string   { return "" }
+func (T) list(_ context.Context) string           { return "" }
+func (T) List(_ context.Context, _ string) string { return "" }
