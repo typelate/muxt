@@ -139,6 +139,13 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 	if len(p.groups) == 0 && len(p.trimmed) == 0 {
 		return nil, &NoCallSitesError{Variables: config.TemplatesVariables}
 	}
+	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {
+		// Templates were reached and held nothing to mutate. A template
+		// that is entirely static is possible, but a whole run of them
+		// means the actions were not read, and reporting that as a pass
+		// would say the tests catch everything.
+		return nil, &NoMutationsError{Templates: p.templates}
+	}
 	return p, nil
 }
 
@@ -271,7 +278,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 		}
 		// A template's identity is its own source, which is what the
 		// definitions in this text carve it into.
-		identities := collector.digests(src)
+		digests := collector.digests(src)
 
 		for name, tree := range trees {
 			if tree == nil || tree.Root == nil {
@@ -280,7 +287,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
-			index[name] = treeLocation{src: src, tree: tree, identity: identities[name]}
+			index[name] = treeLocation{src: src, tree: tree, sourceDigest: digests[name]}
 		}
 	}
 	return index, nil

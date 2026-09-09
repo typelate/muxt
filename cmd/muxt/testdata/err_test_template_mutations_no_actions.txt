@@ -1,0 +1,56 @@
+# A template holding no dynamic or control flow action has nothing to mutate.
+#
+# Reporting that as "0 mutants, 0 missed" and exiting zero would read as the
+# tests catching everything, which is the most misleading answer this tool can
+# give. Finding nothing to ask about is an error instead.
+
+! muxt test-template-mutations --seed 1
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want-err.txt --
+Error: no mutations available: the 1 template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything

@@ -15,6 +15,13 @@ import (
 // No operator renames a template or changes which templates exist, so a
 // mutant never moves a route: only what a template does with its data
 // changes.
+//
+// It is a named type because it is written to the state file and to the
+// JSON report, where a run reads back what an earlier one recorded. A
+// bare string there would let any other string be compared against it
+// and agree with nothing.
+type Operator string
+
 const (
 	// OperatorActionEmpty makes an action print nothing, standing in for
 	// the value it prints being absent. A test that never looks at the
@@ -22,7 +29,7 @@ const (
 	//
 	// It is used where the type of the value could not be resolved from
 	// dot, so an empty string is the only substitution available.
-	OperatorActionEmpty = "action-empty"
+	OperatorActionEmpty Operator = "action-empty"
 
 	// OperatorActionZero replaces the value an action prints with the
 	// zero value of its own type: an empty string for a string, 0 for a
@@ -31,14 +38,14 @@ const (
 	// It stays closer to a real defect than substituting an empty string
 	// regardless of type, and it says in the report that the type was
 	// known.
-	OperatorActionZero = "action-zero"
+	OperatorActionZero Operator = "action-zero"
 
 	// OperatorIfTrue takes the then branch unconditionally.
-	OperatorIfTrue = "if-true"
+	OperatorIfTrue Operator = "if-true"
 
 	// OperatorIfFalse takes the else branch, or no branch at all,
 	// unconditionally.
-	OperatorIfFalse = "if-false"
+	OperatorIfFalse Operator = "if-false"
 
 	// OperatorWithEmpty makes a with behave as though its value were
 	// absent, so the body never runs and the else branch does. Like
@@ -48,7 +55,7 @@ const (
 	// also rebinds dot to a boolean, so every field access in the body
 	// stops type checking and the mutant would be skipped as broken
 	// rather than run as a behaviour change.
-	OperatorWithEmpty = "with-empty"
+	OperatorWithEmpty Operator = "with-empty"
 
 	// OperatorRangeNever makes a range iterate zero times, replacing the
 	// whole construct with its else branch.
@@ -57,18 +64,18 @@ const (
 	// for an empty sequence, and while ranging over the literal 0
 	// iterates zero times, text/template refuses that for a range
 	// declaring more than one variable.
-	OperatorRangeNever = "range-never"
+	OperatorRangeNever Operator = "range-never"
 
 	// OperatorTemplateDrop removes a {{template}} call, standing in for
 	// the partial rendering nothing. It does not apply to {{block}},
 	// whose call cannot be removed without orphaning its {{end}}.
-	OperatorTemplateDrop = "template-drop"
+	OperatorTemplateDrop Operator = "template-drop"
 )
 
 // Mutant is one variation of one action in one template.
 type Mutant struct {
 	// Operator is the variation applied.
-	Operator string
+	Operator Operator
 
 	// Template is the name of the template holding the action.
 	Template string
@@ -152,12 +159,11 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 
 	// One walk, shared with the identifiers: the same actions, in the
 	// same order, with the same dot.
-	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.identity, seed, engine)
+	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.sourceDigest, seed, engine)
 
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
-		regions:   sc.src.regions,
 		functions: functions,
 		values:    draw,
 		maxCases:  maxCases,
@@ -185,15 +191,19 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 	return all, notes
 }
 
+// mutantContext is what every variation needs regardless of which action
+// it applies to, plus which action that is.
+//
+// The regions are not held here: they belong to src, and a copy could
+// come to describe a different text than the one the edits are written
+// against.
 type mutantContext struct {
 	src       *templateSource
 	template  string
-	regions   []region
 	dot       types.Type
 	functions check.Functions
 	values    *values
 	maxCases  int
-	pipe      *parse.PipeNode
 	action    int
 	notes     *[]budgetNote
 }
@@ -207,7 +217,6 @@ type mutantContext struct {
 // being run -- reporting a kill it never earned.
 func (ctx mutantContext) forAction(a action) mutantContext {
 	ctx.action = a.index
-	ctx.pipe = a.pipe
 	ctx.dot = a.dot
 	return ctx
 }
@@ -254,11 +263,11 @@ func (ctx mutantContext) variations(out *[]Mutant, a action) {
 // A pipeline that declares variables keeps its declarations, so that
 // references to them elsewhere in the template still resolve; only the
 // value assigned changes.
-func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operator, replacement string) {
+func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operator Operator, replacement string) {
 	if pipe == nil {
 		return
 	}
-	_, r, ok := regionAt(ctx.regions, int(pipe.Position()))
+	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
 	if !ok {
 		return
 	}
@@ -266,25 +275,25 @@ func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operat
 	if start >= r.innerEnd {
 		return
 	}
-	ctx.appendMutant(out, r, operator, start, r.innerEnd, replacement)
+	ctx.appendMutant(out, r, operator, edit{start: start, end: r.innerEnd, text: replacement})
 }
 
 // addConstructDrop appends a mutant replacing a whole construct with its
 // else branch, or with nothing when it has none.
-func (ctx mutantContext) addConstructDrop(out *[]Mutant, r region, operator string) {
-	index, _, ok := regionAt(ctx.regions, r.start)
+func (ctx mutantContext) addConstructDrop(out *[]Mutant, r region, operator Operator) {
+	index, _, ok := regionAt(ctx.src.regions, r.start)
 	if !ok {
 		return
 	}
-	endIndex, elseIndex, ok := matchEnd(ctx.regions, index)
+	endIndex, elseIndex, ok := matchEnd(ctx.src.regions, index)
 	if !ok {
 		return
 	}
 	replacement := ""
 	if elseIndex >= 0 {
-		replacement = ctx.src.text[ctx.regions[elseIndex].end:ctx.regions[endIndex].start]
+		replacement = ctx.src.text[ctx.src.regions[elseIndex].end:ctx.src.regions[endIndex].start]
 	}
-	ctx.appendMutant(out, r, operator, r.start, ctx.regions[endIndex].end, replacement)
+	ctx.appendMutant(out, r, operator, edit{start: r.start, end: ctx.src.regions[endIndex].end, text: replacement})
 }
 
 // addTemplateDrop appends a mutant removing a {{template}} call.
@@ -294,18 +303,23 @@ func (ctx mutantContext) addTemplateDrop(out *[]Mutant, r region) {
 		// would leave the body and its {{end}} behind.
 		return
 	}
-	ctx.appendMutant(out, r, OperatorTemplateDrop, r.start, r.end, "")
+	ctx.appendMutant(out, r, OperatorTemplateDrop, edit{start: r.start, end: r.end})
 }
 
-func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator string, start, end int, replacement string) {
-	if start < 0 || end > len(ctx.src.text) || start > end {
+// appendMutant records a mutant made of one substitution.
+//
+// The span arrives as an edit rather than as two ints so that a caller
+// naming its bounds cannot swap them: a reversed span is refused here,
+// which would turn a typo into a mutant that is silently never run.
+func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator Operator, e edit) {
+	if e.start < 0 || e.end > len(ctx.src.text) || e.start > e.end {
 		return
 	}
-	ctx.appendEdits(out, r, operator, []edit{{start: start, end: end, text: replacement}}, replacement)
+	ctx.appendEdits(out, r, operator, []edit{e}, e.text)
 }
 
 // appendEdits records a mutant made of one or more substitutions.
-func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator string, edits []edit, detail string) {
+func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator Operator, edits []edit, detail string) {
 	if len(edits) == 0 {
 		return
 	}

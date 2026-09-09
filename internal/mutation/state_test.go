@@ -19,7 +19,7 @@ func TestStateVerdictKeyedByActionOperatorAndMutation(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
 		fingerprint string
-		operator    string
+		operator    Operator
 		mutated     string
 		want        Status
 		found       bool

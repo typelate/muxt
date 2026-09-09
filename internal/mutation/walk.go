@@ -39,8 +39,8 @@ type action struct {
 }
 
 // operands returns the leaf inputs the action reads.
-func (a action) operands(text string) []operand {
-	return operands(text, a.dot, a.pipe)
+func (a action) operands(templateText string) []operand {
+	return operands(templateText, a.dot, a.pipe)
 }
 
 // walkActions reports every action of a template, in the order they are
@@ -50,7 +50,7 @@ func (a action) operands(text string) []operand {
 // and a body before the else beside it. Everything that consumes actions
 // depends on that order, since an action's place in it is part of its
 // identity.
-func walkActions(text string, found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
+func walkActions(templateText string, found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
 	seq := 0
 
 	var walk func(parse.Node, types.Type)
@@ -66,7 +66,7 @@ func walkActions(text string, found []region, dot types.Type, functions check.Fu
 			pipe:   pipe,
 			dot:    dot,
 			region: r,
-			text:   text[r.start:r.end],
+			text:   templateText[r.start:r.end],
 		})
 	}
 

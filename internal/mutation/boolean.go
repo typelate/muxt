@@ -278,7 +278,7 @@ func (ctx mutantContext) addConditions(out *[]Mutant, pipe *parse.PipeNode) bool
 	if pipe == nil {
 		return false
 	}
-	_, r, ok := regionAt(ctx.regions, int(pipe.Position()))
+	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
 	if !ok {
 		return false
 	}

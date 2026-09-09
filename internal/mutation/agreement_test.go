@@ -51,10 +51,10 @@ func TestIdentifyAgreesWithTheMutantsARunProduces(t *testing.T) {
 		t.Fatal("the collector filed no source for the template under test")
 	}
 	sc := scope{
-		template: "page",
-		src:      src,
-		tree:     trees["page"],
-		identity: collector.digests(src)["page"],
+		template:     "page",
+		src:          src,
+		tree:         trees["page"],
+		sourceDigest: collector.digests(src)["page"],
 	}
 
 	mutants, _ := mutantsInScope(sc, nil, newValues(seed), DefaultMaxCases, seed, engine)
