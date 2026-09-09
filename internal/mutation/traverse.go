@@ -35,6 +35,9 @@ type scope struct {
 
 	src  *templateSource
 	tree *parse.Tree
+
+	// identity is the template's own source.
+	identity string
 }
 
 // treeLocation pairs a parsed template with the source its text came
@@ -42,6 +45,10 @@ type scope struct {
 type treeLocation struct {
 	src  *templateSource
 	tree *parse.Tree
+
+	// identity is the template's own source, which is what decides
+	// whether its mutants have to be run again.
+	identity string
 }
 
 // trim is a subtree the traversal did not descend into, because the same
@@ -112,6 +119,7 @@ func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site call
 		via:      via,
 		src:      location.src,
 		tree:     location.tree,
+		identity: location.identity,
 	})
 
 	for _, nested := range templateCalls(lt, location.tree, dot) {
