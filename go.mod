@@ -10,14 +10,14 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
 	github.com/typelate/check v0.8.1
-	github.com/typelate/dom v0.9.0
+	github.com/typelate/dom v0.10.0
 	golang.org/x/net v0.59.0
 	golang.org/x/tools v0.50.0
 	rsc.io/script v0.0.2
 )
 
 require (
-	github.com/andybalholm/cascadia v1.3.4 // indirect
+	github.com/andybalholm/cascadia v1.3.5 // indirect
 	github.com/crhntr/txtarfmt v0.4.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect

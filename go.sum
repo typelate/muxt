@@ -1,5 +1,7 @@
 github.com/andybalholm/cascadia v1.3.4 h1:vM2lgh0Vru9Vwyfm4cQqWP2HHMW0u0+2PAW7Q38Qufg=
 github.com/andybalholm/cascadia v1.3.4/go.mod h1:BLRmbRjpEtNKieZOCCvYj4RqN+KRA41GBe/5O+G93kM=
+github.com/andybalholm/cascadia v1.3.5 h1:RLjq12WJy58dN6eCIQrz0bAGZkztHWsEPFxP53Y7Ms8=
+github.com/andybalholm/cascadia v1.3.5/go.mod h1:BLRmbRjpEtNKieZOCCvYj4RqN+KRA41GBe/5O+G93kM=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/crhntr/txtarfmt v0.4.4 h1:UQcrx6l2GVWQaV0qQplAGYGs4zxoQHq5p6FYnhuEu0c=
 github.com/crhntr/txtarfmt v0.4.4/go.mod h1:qlo4mpPHKLsKyVDZhg8Hl7km7Z2TYBq0c0+EAD23Xiw=
@@ -33,6 +35,8 @@ github.com/typelate/check v0.8.1 h1:8Khblg4YbfR7hazgijQB5oUQNGHkyg/o03QRmRzLTq4=
 github.com/typelate/check v0.8.1/go.mod h1:1wzoJKFkT+X+vEYuHbptbsKVYmOCxC1WgMyO/MEtS8M=
 github.com/typelate/dom v0.9.0 h1:MCINBhwO0ILI0/XTBRM9IFE/Pwbf3kW6Z+ZEN9zoOrE=
 github.com/typelate/dom v0.9.0/go.mod h1:yJqbbj0Yew7Vwu+R/TG3IqJ285rCZKyBbFMTUsfqB8M=
+github.com/typelate/dom v0.10.0 h1:gFpVNqgqucVZ1hjsJNewW/DXDED0v+9G9lpx4CKmeU4=
+github.com/typelate/dom v0.10.0/go.mod h1:V69BEpQorcv7QfTB5BaNDqpVxu79gcOeqPD+y9mQv24=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
 go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
