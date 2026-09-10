@@ -1,0 +1,115 @@
+# Reuse is a claim about coverage the tests were never asked to support
+# again. The rules deciding it are the one part of this tool that can quietly
+# report a suite as stronger than it is, so --verify checks them: it runs every
+# mutant even when the state has an answer, and fails when the answer was wrong.
+#
+# Run it in CI on a schedule. It costs a full run, and it is the only thing
+# that can catch a reuse rule that has drifted.
+
+muxt test-template-mutations --seed 1
+cmp stdout want-first.txt
+
+# An honest state file verifies clean, and says how much it checked.
+muxt test-template-mutations --seed 1 --verify
+cmp stdout want-verified.txt
+
+# Now make the file lie: the mutant was killed, the record says missed.
+cp lying-state.txt testdata/template-mutations.json
+! muxt test-template-mutations --seed 1 --verify
+cmp stdout want-disagreement.txt
+stderr 'recorded MISS, found KILL'
+
+# The file was rewritten with what the run found, so it no longer lies.
+muxt test-template-mutations --seed 1 --verify
+cmp stdout want-verified.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want-first.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+1 mutant, 1 killed, 0 missed, 0 skipped
+-- want-verified.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+1 mutant, 1 killed, 0 missed, 0 skipped, 1 verified
+-- want-disagreement.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+1 mutant, 1 killed, 0 missed, 0 skipped, 1 verified
+DISAGREE templates.gohtml:1:29 greeting action-zero: recorded MISS, found KILL
+-- lying-state.txt --
+{
+	"version": 2,
+	"seed": 1,
+	"engine": "(devel)",
+	"scope": "7e43a62cd03c4c99d36646a6a4a99dd5",
+	"suite": {
+		"packages": {
+			"server": {
+				"support": "9f0308b132ea179a0da1c83ca98661c8",
+				"tests": {
+					"TestGreet": "fa9b5b84e8082f0bb58c06cb463b4ac8"
+				}
+			}
+		}
+	},
+	"actions": {
+		"6c13c9759010f599408dbb50b5207d50": {
+			"template": "greeting",
+			"file": "templates.gohtml",
+			"results": [
+				{
+					"operator": "action-zero",
+					"mutated": "\"\"",
+					"status": "MISS"
+				}
+			]
+		}
+	}
+}

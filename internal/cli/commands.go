@@ -229,20 +229,36 @@ working tree is never written to.`,
 				}
 				config.Run = pattern
 			}
-			config.Packages = args
+			// Everything before a -- names packages; everything after is
+			// handed to go test as written.
+			if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+				config.Packages = args[:dash]
+				config.GoTestArgs = args[dash:]
+			} else {
+				config.Packages = args
+			}
+			if err := mutation.CheckGoTestArgs(config.GoTestArgs); err != nil {
+				return err
+			}
 			config.SeedSet = cmd.Flags().Changed("seed")
 			// Recorded verdicts belong to the engine that reached them,
 			// so a muxt upgrade retries rather than trusting them.
 			config.Engine, _ = cliVersion()
 
 			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
-			if err != nil {
-				if printMultiLineError(cmd, err) {
-					return err
+			if report != nil {
+				// A run that fails on a disagreement still found every
+				// verdict it ran for, and that report is what says which
+				// ones. Print it before the error.
+				if writeErr := writeResult(cmd, cmd.OutOrStdout(), report); writeErr != nil && err == nil {
+					return writeErr
 				}
+			}
+			if err != nil {
+				printMultiLineError(cmd, err)
 				return err
 			}
-			return writeResult(cmd, cmd.OutOrStdout(), report)
+			return nil
 		},
 	}
 
@@ -250,6 +266,7 @@ working tree is never written to.`,
 	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
 	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")
 	cmd.Flags().BoolVar(&config.DryRun, "dry-run", false, "enumerate the mutants and report them without running any tests")
+	cmd.Flags().BoolVar(&config.Verify, "verify", false, "run every mutant even when the state file has an answer, and fail if a recorded verdict disagrees")
 	cmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "report every mutant, not only the ones no test caught, and stream progress")
 	cmd.Flags().BoolVar(&config.IncludeTests, "include-test-callers", false, "also mutate templates reached only from ExecuteTemplate calls in _test.go files")
 	cmd.Flags().Uint64Var(&config.Seed, "seed", 0, "seed the values substituted for an action's operands (default: drawn and reported)")

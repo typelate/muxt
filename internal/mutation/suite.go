@@ -135,8 +135,8 @@ func (d suiteDelta) reusable(result StateResult) bool {
 // go list is asked rather than the directory walked, so the answer
 // follows the same build constraints, tags and package selection the test
 // run will.
-func readTestSuite(workingDirectory string, packages []string) (TestSuite, error) {
-	listed, err := listTestPackages(workingDirectory, packages)
+func readTestSuite(workingDirectory string, packages, extra []string) (TestSuite, error) {
+	listed, err := listTestPackages(workingDirectory, packages, buildFlags(extra))
 	if err != nil {
 		return TestSuite{}, err
 	}
@@ -227,8 +227,9 @@ type listedPackage struct {
 	XTestGoFiles []string
 }
 
-func listTestPackages(workingDirectory string, packages []string) ([]listedPackage, error) {
-	args := append([]string{"list", "-e", "-json=Dir,ImportPath,TestGoFiles,XTestGoFiles"}, packages...)
+func listTestPackages(workingDirectory string, packages, flags []string) ([]listedPackage, error) {
+	args := append([]string{"list", "-e", "-json=Dir,ImportPath,TestGoFiles,XTestGoFiles"}, flags...)
+	args = append(args, packages...)
 	cmd := exec.Command("go", args...)
 	cmd.Dir = workingDirectory
 	out, err := cmd.Output()
@@ -292,7 +293,7 @@ func killers(jsonOutput string) []string {
 
 // suiteScope is the package patterns and -run expression a run tests
 // under, recorded so a verdict is not reused for a different selection.
-func suiteScope(packages []string, match *regexp.Regexp) string {
+func suiteScope(packages []string, match *regexp.Regexp, extra []string) string {
 	h := sha256.New()
 	for _, pattern := range packages {
 		fmt.Fprintf(h, "pkg\x00%s\x00", pattern)
@@ -300,5 +301,34 @@ func suiteScope(packages []string, match *regexp.Regexp) string {
 	if match != nil {
 		fmt.Fprintf(h, "run\x00%s\x00", match.String())
 	}
+	// Flags passed through to go test decide what is built and what
+	// runs, so verdicts reached under one set do not answer for another.
+	for _, arg := range extra {
+		fmt.Fprintf(h, "arg\x00%s\x00", arg)
+	}
 	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
+// buildFlags picks out the pass-through flags that change which files are
+// part of a package, so go list sees the same test files go test will.
+//
+// Without this a test file behind a build tag would be missing from the
+// suite record, and editing it would invalidate nothing.
+func buildFlags(extra []string) []string {
+	var flags []string
+	for i := 0; i < len(extra); i++ {
+		name, value, hasValue := strings.Cut(extra[i], "=")
+		switch "-" + strings.TrimLeft(name, "-") {
+		case "-tags":
+			if hasValue {
+				flags = append(flags, "-tags="+value)
+				continue
+			}
+			if i+1 < len(extra) {
+				i++
+				flags = append(flags, "-tags="+extra[i])
+			}
+		}
+	}
+	return flags
 }

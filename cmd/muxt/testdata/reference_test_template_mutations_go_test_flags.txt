@@ -1,0 +1,94 @@
+# Everything after a -- is handed to go test as written, so a project can run
+# its mutation testing the way it runs its tests: build tags, -race, -shuffle,
+# whatever the suite needs.
+#
+# Three flags are refused rather than fought over. muxt sets each of them
+# itself, and losing one does not degrade the run, it breaks it: -overlay is
+# how a mutant reaches the build at all, -json is how the tests that caught it
+# are read back, and -run has to go through muxt's own flag or the state file
+# records a selection the verdicts were not reached under.
+
+muxt test-template-mutations --seed 1 -- -tags=extra
+cmp stdout want.txt
+
+# go list is asked with the same tags, so a test that only exists under one is
+# in the suite record and editing it invalidates. Without this it would be
+# invisible, and its verdicts would never be retried.
+grep '"TestTagged"' testdata/template-mutations.json
+
+# Without the tag it is not part of the suite, and not recorded.
+muxt test-template-mutations --seed 1 --state other.json
+! grep '"TestTagged"' other.json
+
+! muxt test-template-mutations --seed 1 -- -overlay=/tmp/mine.json
+stderr 'go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant'
+
+! muxt test-template-mutations --seed 1 -- -json
+stderr 'go test flag -json cannot be passed through'
+
+! muxt test-template-mutations --seed 1 -- -run TestGreet
+stderr 'go test flag -run cannot be passed through: use muxt'
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- tagged_test.go --
+//go:build extra
+
+package server
+
+import "testing"
+
+// TestTagged only exists under -tags=extra. The suite record is read with
+// the same tags, so editing it invalidates rather than going unnoticed.
+func TestTagged(t *testing.T) {
+	if got := "Hello, World!"; got == "" {
+		t.Error("unreachable")
+	}
+}
+-- want.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+1 mutant, 1 killed, 0 missed, 0 skipped

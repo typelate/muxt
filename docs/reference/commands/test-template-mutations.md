@@ -48,6 +48,7 @@ Calls in `_test.go` files are ignored by default — a template rendered only by
 | `--seed` | uint64 | _(drawn)_ | Seed the values substituted for an action's operands. Drawn and reported when not given. |
 | `--max-cases` | int | `8` | Most operand combinations one action may contribute. |
 | `--state` | string | `testdata/template-mutations.json` | Record verdicts here and reuse them for unchanged actions. Empty disables. |
+| `--verify` | bool | `false` | Run every mutant even when the state has an answer, and fail if a recorded verdict disagrees. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to read templates from. |
 | `--format` | string | `text` | `text` or `json`. |
 
@@ -143,6 +144,35 @@ Every case is a full test run, so `--max-cases` bounds what one action may contr
 ```
 SKIP 18:3 operands (7 operands need 127 cases, over --max-cases=8)
 ```
+
+## Extra Go Test Flags
+
+Anything after `--` is handed to `go test` as written, so a project can mutate the way it tests:
+
+```bash
+muxt test-template-mutations ./internal/hypertext -- -tags=integration -race
+```
+
+They reach the baseline and every mutant alike, and they are recorded with the verdicts: a run under different flags builds and runs different tests, so nothing recorded under one answers for another. `-tags` is passed to `go list` too, so a test file behind a build tag is part of the suite record rather than invisible to it.
+
+Three flags are refused. muxt sets each itself, and losing one does not degrade the run, it breaks it:
+
+| Flag | Why |
+|---|---|
+| `-overlay` | how a mutant reaches the build at all |
+| `-json` | how the tests that caught a mutant are read back |
+| `-run` | use `--run`, which is recorded with the verdicts |
+
+## Checking The Reuse Rules
+
+Reuse is a claim about coverage the tests were never asked to support again, so `--verify` checks it: every mutant runs, and a recorded verdict that disagrees with what the run finds fails the command.
+
+```
+1 mutant, 1 killed, 0 missed, 0 skipped, 1 verified
+DISAGREE templates.gohtml:1:29 greeting action-zero: recorded MISS, found KILL
+```
+
+The state file is rewritten with what the run found, so the next run starts from the truth; the exit code is about the rule that produced the wrong answer. It costs a full run, so it belongs on a schedule rather than on every commit — but it is the only thing that can catch a reuse rule that has drifted.
 
 ## Only Run What Changed
 

@@ -83,6 +83,23 @@ type Configuration struct {
 	// An action over the bound contributes none, and says so.
 	MaxCases int
 
+	// GoTestArgs are extra flags for the go test invocations, from
+	// everything after a -- on the command line.
+	//
+	// They reach the baseline and every mutant alike, so the report is
+	// about the suite as those flags run it. A flag muxt depends on is
+	// refused rather than fought over.
+	GoTestArgs []string
+
+	// Verify runs every mutant even when the state has an answer, and
+	// fails when a recorded verdict disagrees with what the run finds.
+	//
+	// Reuse is a claim about coverage the tests were never asked to
+	// support again, so the rules deciding it are the one part of this
+	// tool that can quietly report a suite as stronger than it is. This
+	// is how that claim gets checked.
+	Verify bool
+
 	// StatePath is where the verdicts are recorded and read back, so a
 	// later run only has to try the actions that changed. Empty turns
 	// the record off.
@@ -196,19 +213,25 @@ type BaselineResult struct {
 
 // Report is the outcome of a whole mutation run.
 type Report struct {
-	Baseline   BaselineResult    `json:"baseline,omitzero"`
-	DryRun     bool              `json:"dry_run"`
-	Seed       uint64            `json:"seed"`
-	Verbose    bool              `json:"-"`
-	Templates  int               `json:"templates"`
-	Complexity int               `json:"complexity"`
-	Total      int               `json:"total"`
-	Killed     int               `json:"killed"`
-	Missed     int               `json:"missed"`
-	Skipped    int               `json:"skipped"`
-	Reused     int               `json:"reused"`
-	Groups     []Group           `json:"groups"`
-	Trimmed    []TrimmedTemplate `json:"trimmed"`
+	Baseline BaselineResult `json:"baseline,omitzero"`
+	DryRun   bool           `json:"dry_run"`
+
+	// Verified counts the mutants that were run despite having a
+	// recorded verdict, and Disagreements the ones whose recorded
+	// verdict turned out to be wrong. Both are zero unless --verify.
+	Verified      int               `json:"verified,omitempty"`
+	Disagreements []Disagreement    `json:"disagreements,omitempty"`
+	Seed          uint64            `json:"seed"`
+	Verbose       bool              `json:"-"`
+	Templates     int               `json:"templates"`
+	Complexity    int               `json:"complexity"`
+	Total         int               `json:"total"`
+	Killed        int               `json:"killed"`
+	Missed        int               `json:"missed"`
+	Skipped       int               `json:"skipped"`
+	Reused        int               `json:"reused"`
+	Groups        []Group           `json:"groups"`
+	Trimmed       []TrimmedTemplate `json:"trimmed"`
 }
 
 // BaselineFailedError reports that the tests do not pass before anything
@@ -292,7 +315,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		return report, nil
 	}
 
-	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run}
+	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs}
 
 	started := time.Now()
 	if out, err := tester.run(nil); err != nil {
@@ -324,11 +347,11 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	// moved since. A kill survives everything except a change to the
 	// test that reached it; a miss survives only a suite that gained
 	// nothing.
-	suite, err := readTestSuite(workingDirectory, testedPackages(config))
+	suite, err := readTestSuite(workingDirectory, testedPackages(config), config.GoTestArgs)
 	if err != nil {
 		return nil, err
 	}
-	scope := suiteScope(testedPackages(config), config.Run)
+	scope := suiteScope(testedPackages(config), config.Run, config.GoTestArgs)
 	delta := suite.delta(state.Suite)
 	if state.Scope != scope {
 		// A different selection of packages or tests ran, so nothing
@@ -356,7 +379,9 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 
 			mutant := plan.mutants[result.mutantIndex]
 
-			if recorded, found := state.result(mutant.Fingerprint(), result.Operator, result.Mutated); found && delta.reusable(recorded) {
+			recorded, found := state.result(mutant.Fingerprint(), result.Operator, result.Mutated)
+			reusable := found && delta.reusable(recorded)
+			if reusable && !config.Verify {
 				// The action's source and its resolved types are what
 				// they were when this verdict was reached, and so are
 				// the tests it turns on, so running it again could only
@@ -394,6 +419,24 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 			} else {
 				result.Status = StatusMissed
 			}
+			if reusable {
+				// The verdict would have been taken from the file. Say
+				// so whether or not it turned out to be right, so a run
+				// reports how much of its reuse it actually checked.
+				report.Verified++
+				if recorded.Status != result.Status {
+					report.Disagreements = append(report.Disagreements, Disagreement{
+						Template: group.Template,
+						File:     group.File,
+						Line:     result.Line,
+						Column:   result.Column,
+						Operator: result.Operator,
+						Mutated:  result.Mutated,
+						Recorded: recorded.Status,
+						Found:    result.Status,
+					})
+				}
+			}
 			countVerdict(report, result.Status)
 			state.record(mutant.Fingerprint(), group.Template, group.File, result.Operator, result.Mutated, result.Status, caughtBy)
 			clock.observe(elapsed)
@@ -409,7 +452,46 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	if err := state.save(statePath); err != nil {
 		return nil, err
 	}
+	if len(report.Disagreements) > 0 {
+		// The file now holds what this run found, so the next one starts
+		// from the truth. The error is about the rule that produced the
+		// wrong answer, which is still there.
+		return report, &ReuseDisagreementError{Disagreements: report.Disagreements}
+	}
 	return report, nil
+}
+
+// Disagreement is a verdict the state would have been reused for, and
+// what running it actually found.
+type Disagreement struct {
+	Template string   `json:"template"`
+	File     string   `json:"file"`
+	Line     int      `json:"line"`
+	Column   int      `json:"column"`
+	Operator Operator `json:"operator"`
+	Mutated  string   `json:"mutated"`
+	Recorded Status   `json:"recorded"`
+	Found    Status   `json:"found"`
+}
+
+// ReuseDisagreementError reports that reuse would have claimed something
+// the tests do not support.
+//
+// This is the failure --verify exists to find. A run that reuses a stale
+// kill reports coverage the suite has lost, and nothing else in the tool
+// would ever say so.
+type ReuseDisagreementError struct {
+	Disagreements []Disagreement
+}
+
+func (e *ReuseDisagreementError) Error() string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%d reused verdict(s) disagreed with the run:", len(e.Disagreements))
+	for _, d := range e.Disagreements {
+		fmt.Fprintf(&sb, "\n  %s:%d:%d %s %s: recorded %s, found %s",
+			d.File, d.Line, d.Column, d.Template, d.Operator, d.Recorded, d.Found)
+	}
+	return sb.String()
 }
 
 // countVerdict tallies one mutant's outcome, whether it was just run or
@@ -533,10 +615,15 @@ type goTest struct {
 	dir      string
 	packages []string
 	match    *regexp.Regexp
+	extra    []string
 }
 
 func (t goTest) run(extra []string) (string, error) {
 	args := []string{"test", "-count=1"}
+	// The caller's flags go first so muxt's own land last: for a
+	// repeated flag the go command takes the last, and the overlay
+	// carrying the mutant is not negotiable.
+	args = append(args, t.extra...)
 	args = append(args, extra...)
 	if t.match != nil {
 		args = append(args, "-run="+t.match.String())
@@ -547,6 +634,31 @@ func (t goTest) run(extra []string) (string, error) {
 	cmd.Dir = t.dir
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// reservedTestFlags are the go test flags muxt sets itself, with why.
+//
+// Passing one of these through would not be a preference, it would break
+// the run: the overlay is how a mutant reaches the build, the JSON stream
+// is how the tests that caught it are read back, and -run has to go
+// through muxt's own flag or the state file records a selection the
+// verdicts were not reached under.
+var reservedTestFlags = map[string]string{
+	"-overlay": "muxt uses -overlay to deliver each mutant",
+	"-json":    "muxt reads -json output to record which tests caught a mutant",
+	"-run":     "use muxt's --run flag, which is recorded with the verdicts",
+}
+
+// CheckGoTestArgs refuses flags muxt depends on.
+func CheckGoTestArgs(args []string) error {
+	for _, arg := range args {
+		name, _, _ := strings.Cut(arg, "=")
+		name = "-" + strings.TrimLeft(name, "-")
+		if reason, reserved := reservedTestFlags[name]; reserved {
+			return fmt.Errorf("go test flag %s cannot be passed through: %s", name, reason)
+		}
+	}
+	return nil
 }
 
 // testedPackages is the package patterns a run tests, with the default

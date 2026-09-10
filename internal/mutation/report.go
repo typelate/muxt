@@ -143,7 +143,16 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 		// from reading as a full one.
 		_, _ = fmt.Fprintf(out, ", %d reused", r.Reused)
 	}
+	if r.Verified > 0 {
+		// Under --verify nothing is reused; this is how much of the
+		// reuse the run checked instead.
+		_, _ = fmt.Fprintf(out, ", %d verified", r.Verified)
+	}
 	_, _ = fmt.Fprintln(out)
+	for _, d := range r.Disagreements {
+		_, _ = fmt.Fprintf(out, "DISAGREE %s:%d:%d %s %s: recorded %s, found %s\n",
+			d.File, d.Line, d.Column, d.Template, d.Operator, d.Recorded, d.Found)
+	}
 }
 
 // Estimate is how long the whole run is expected to take, from the
