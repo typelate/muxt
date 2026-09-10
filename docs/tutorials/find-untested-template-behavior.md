@@ -174,7 +174,9 @@ Each operator asks for a particular assertion:
 
 Drop `--state ""` outside this tutorial. Verdicts are recorded in `testdata/template-mutations.json` and a re-run only re-tries what changed, which is what makes a large project's second run fast. Commit that file alongside the tests that produced it.
 
-Editing a test invalidates the whole cache, on purpose: a verdict says the tests caught a mutant, and any test can catch any mutant, so once the suite changes none of them are answers any more. The run you make after writing an assertion is the one that has to prove it.
+Writing an assertion retries what it could have changed. A run records which test caught each mutant, so adding a test retries the misses — the ones a new assertion could close — while every kill some untouched test is still witness to stands. That is why the run right after you write an assertion is the one that proves it.
+
+The cache is for this loop, not for CI. It watches the templates, the types, each test's source and each package's `testdata`, but a test can read any file, and one that compares against a guide in `docs/` changes its assertion when that guide does. In CI, keep the state file as a build artifact and let each run start from nothing.
 
 Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
 

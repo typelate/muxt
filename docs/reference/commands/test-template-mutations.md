@@ -36,6 +36,14 @@ Two consequences:
 
 Calls in `_test.go` files are ignored by default — a template rendered only by a test is not rendered in production, and mutating it measures the tests against themselves. Pass `--include-test-callers` to opt in.
 
+## Usage
+
+```
+muxt test-template-mutations [flags] [packages] [-- go test flags]
+```
+
+Packages default to `./...`. Everything after `--` is handed to `go test`; see [Extra Go Test Flags](#extra-go-test-flags).
+
 ## Flags
 
 | Flag | Type | Default | Description |
