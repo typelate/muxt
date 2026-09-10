@@ -36,11 +36,15 @@ type State struct {
 	// reached by an older one.
 	Engine string `json:"engine"`
 
-	// Suite identifies the tests those verdicts were measured against.
-	// It feeds every fingerprint too, so editing a test retries
-	// everything: a verdict says the tests caught a mutant, and that
-	// stops being an answer about anything once the tests change.
-	Suite string `json:"suite"`
+	// Scope is the package patterns and -run expression the verdicts
+	// were reached under. A different selection runs different tests, so
+	// nothing recorded here answers for it.
+	Scope string `json:"scope"`
+
+	// Suite is the tests those verdicts were measured against, recorded
+	// test by test so the next run can tell an added test from an edited
+	// one.
+	Suite TestSuite `json:"suite"`
 
 	// Actions maps an action's fingerprint to the verdicts its mutants
 	// reached.
@@ -59,6 +63,12 @@ type StateResult struct {
 	Operator Operator `json:"operator"`
 	Mutated  string   `json:"mutated"`
 	Status   Status   `json:"status"`
+
+	// Killers names the tests that failed against this mutant, qualified
+	// by package. A kill is evidence for exactly as long as the tests
+	// that reached it are untouched; everything else in the suite can
+	// move without disturbing it.
+	Killers []string `json:"killers,omitempty"`
 }
 
 // loadState reads the state file, returning an empty state when there is
@@ -87,17 +97,17 @@ func loadState(path string) *State {
 
 // verdict returns what a mutant was found to be last time, if the action
 // it varies is unchanged.
-func (s *State) verdict(fingerprint string, operator Operator, mutated string) (Status, bool) {
+func (s *State) result(fingerprint string, operator Operator, mutated string) (StateResult, bool) {
 	action, ok := s.Actions[fingerprint]
 	if !ok {
-		return "", false
+		return StateResult{}, false
 	}
 	for _, result := range action.Results {
 		if result.Operator == operator && result.Mutated == mutated {
-			return result.Status, true
+			return result, true
 		}
 	}
-	return "", false
+	return StateResult{}, false
 }
 
 // save writes the state, creating the directory it lives in.
@@ -128,7 +138,7 @@ func (s *State) save(path string) error {
 }
 
 // record adds a mutant's verdict.
-func (s *State) record(fingerprint, template, file string, operator Operator, mutated string, status Status) {
+func (s *State) record(fingerprint, template, file string, operator Operator, mutated string, status Status, killers []string) {
 	action, ok := s.Actions[fingerprint]
 	if !ok {
 		action = ActionState{Template: template, File: file}
@@ -136,10 +146,11 @@ func (s *State) record(fingerprint, template, file string, operator Operator, mu
 	for i, result := range action.Results {
 		if result.Operator == operator && result.Mutated == mutated {
 			action.Results[i].Status = status
+			action.Results[i].Killers = killers
 			s.Actions[fingerprint] = action
 			return
 		}
 	}
-	action.Results = append(action.Results, StateResult{Operator: operator, Mutated: mutated, Status: status})
+	action.Results = append(action.Results, StateResult{Operator: operator, Mutated: mutated, Status: status, Killers: killers})
 	s.Actions[fingerprint] = action
 }

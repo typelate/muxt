@@ -72,15 +72,10 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		include = config.TemplatePattern.MatchString
 	}
 
-	suite, err := suiteDigest(workingDirectory, testedPackages(config), config.Run)
-	if err != nil {
-		return nil, err
-	}
 	p := &plan{
 		run: runIdentity{
 			seed:   config.Seed,
 			engine: config.Engine,
-			suite:  suite,
 		},
 		draw:     newValues(config.Seed),
 		maxCases: config.MaxCases,
