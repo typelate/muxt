@@ -115,7 +115,7 @@ func sumsOf(t *testing.T, text string, names ...string) map[string]string {
 	t.Helper()
 	defs, trees := identifyFixture(t, text)
 
-	ids := NewIdentifiers(defs, nil, 1, "test")
+	ids := NewIdentifiers(defs, nil, runIdentity{seed: 1, engine: "test"})
 	sums := make(map[string]string, len(names))
 	for _, name := range names {
 		tree, ok := trees[name]
@@ -200,7 +200,7 @@ func TestIdentifyRestsOnSeedAndEngine(t *testing.T) {
 
 	sum := func(seed uint64, engine string) string {
 		t.Helper()
-		id, err := NewIdentifiers(defs, nil, seed, engine).Identify(trees["a"], nil)
+		id, err := NewIdentifiers(defs, nil, runIdentity{seed: seed, engine: engine}).Identify(trees["a"], nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,7 +222,7 @@ func TestIdentifyReachesPartials(t *testing.T) {
 `
 	defs, trees := identifyFixture(t, text)
 
-	id, err := NewIdentifiers(defs, nil, 1, "test").Identify(trees["page"], nil)
+	id, err := NewIdentifiers(defs, nil, runIdentity{seed: 1, engine: "test"}).Identify(trees["page"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestIdentifyTerminatesOnSelfReference(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		id, err := NewIdentifiers(defs, nil, 1, "test").Identify(trees["loop"], nil)
+		id, err := NewIdentifiers(defs, nil, runIdentity{seed: 1, engine: "test"}).Identify(trees["loop"], nil)
 		if err != nil {
 			t.Errorf("Identify = %v", err)
 			return
@@ -278,7 +278,7 @@ func TestIdentifyRefusesGoStringLiterals(t *testing.T) {
 	// A tree positioned against a decoded literal cannot be matched
 	// against Go source, so the answer must be an error rather than an
 	// identifier with no actions in it.
-	if _, err := NewIdentifiers(defs, nil, 1, "test").Identify(trees["a"], nil); err == nil {
+	if _, err := NewIdentifiers(defs, nil, runIdentity{seed: 1, engine: "test"}).Identify(trees["a"], nil); err == nil {
 		t.Error("Identify accepted a template written in a .go file, want an error")
 	}
 }
@@ -287,7 +287,7 @@ func TestIdentifyTellsRepeatedActionsApart(t *testing.T) {
 	const text = `{{define "a"}}<x>{{.Name}}</x><y>{{.Name}}</y>{{end}}`
 	defs, trees := identifyFixture(t, text)
 
-	id, err := NewIdentifiers(defs, nil, 1, "test").Identify(trees["a"], nil)
+	id, err := NewIdentifiers(defs, nil, runIdentity{seed: 1, engine: "test"}).Identify(trees["a"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}

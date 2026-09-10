@@ -68,8 +68,7 @@ type Identifier struct {
 type Identifiers struct {
 	defs      []check.Definition
 	functions check.Functions
-	seed      uint64
-	engine    string
+	run       runIdentity
 
 	// sources is the same reader a run uses, so "what is this
 	// template's own source" is answered once, in one place.
@@ -84,14 +83,13 @@ type Identifiers struct {
 // NewIdentifiers prepares to identify executions of one loaded template
 // set.
 //
-// seed and engine must be the ones a run would use, or the identifiers
-// will not match the fingerprints that run records.
-func NewIdentifiers(defs []check.Definition, functions check.Functions, seed uint64, engine string) *Identifiers {
+// run must carry the seed, engine and suite digest a run would use, or
+// the identifiers will not match the fingerprints that run records.
+func NewIdentifiers(defs []check.Definition, functions check.Functions, run runIdentity) *Identifiers {
 	return &Identifiers{
 		defs:      defs,
 		functions: functions,
-		seed:      seed,
-		engine:    engine,
+		run:       run,
 		// No packages: a template written as a Go string literal cannot
 		// be located without the loaded package, and source refuses one
 		// rather than answering wrongly.
@@ -134,7 +132,7 @@ func (ids *Identifiers) template(tree *parse.Tree, dot types.Type) (Identifier, 
 
 	// One walk, and one source digest rule, shared with the run: the same
 	// actions, in the same order, identified the same way.
-	scanned := scanTemplate(src, tree, dot, ids.functions, digests[tree.Name], ids.seed, ids.engine)
+	scanned := scanTemplate(src, tree, dot, ids.functions, digests[tree.Name], ids.run)
 
 	identifier := Identifier{
 		Name:     tree.Name,

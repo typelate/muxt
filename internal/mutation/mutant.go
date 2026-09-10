@@ -154,12 +154,12 @@ func (m Mutant) Replacement() string { return m.detail }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, seed uint64, engine string) ([]Mutant, []budgetNote) {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, run runIdentity) ([]Mutant, []budgetNote) {
 	var notes []budgetNote
 
 	// One walk, shared with the identifiers: the same actions, in the
 	// same order, with the same dot.
-	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.sourceDigest, seed, engine)
+	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.sourceDigest, run)
 
 	ctx := mutantContext{
 		src:       sc.src,
