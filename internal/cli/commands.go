@@ -24,6 +24,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"golang.org/x/tools/go/packages"
+
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/mutation"
@@ -151,6 +153,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				return err
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
+			warnPartialAST(logger, pl)
 			checked, err := analysis.Check(config, *workingDirectory, logger, fileSet, pl)
 			if err != nil {
 				if printMultiLineError(cmd, err) {
@@ -339,6 +342,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 			if err != nil {
 				return err
 			}
+			warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
 			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
 			if err != nil {
 				printMultiLineError(cmd, err)
@@ -653,6 +657,20 @@ func versionCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	return cmd
+}
+
+// warnPartialAST says when the checks that follow ran against source the
+// parser could not fully read.
+//
+// muxt is not the gate on a package compiling -- go build is -- and its
+// template checks are worth running on broken Go, so this does not stop
+// the command. What it stops is the silence: without it, a package go
+// build rejects gets the same clean output as one that passes.
+func warnPartialAST(logger *log.Logger, pl []*packages.Package) {
+	if logger == nil || len(asteval.ParseErrors(pl)) == 0 {
+		return
+	}
+	logger.Printf("warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture")
 }
 
 func cliVersion() (string, bool) {
