@@ -1,0 +1,53 @@
+# A Go file that does not parse leaves the loader with a recovered, partial
+# AST. The template checks still run against it, and they are still worth
+# running -- but what they saw was incomplete, so they say so.
+#
+# muxt does not fail here. go build is what gates on a package compiling;
+# muxt check is additional validation layered on top, and refusing to run it
+# would take away a signal rather than add one. What was wrong before is that
+# the output was identical either way: a package go build rejects looked
+# exactly as clean as one that passes.
+
+muxt generate --use-receiver-type=T
+exec go build ./...
+
+# Break a file the templates never mention.
+cp broken.txt broken.go
+! exec go build ./...
+
+muxt check
+stderr 'warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture'
+stdout 'ok: 1 template'
+
+muxt generate --use-receiver-type=T
+stderr 'warning: package has syntax errors'
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /greet Greet(ctx)" -}}
+	{{- .Result -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Greet(ctx context.Context) string { return "hello" }
+-- broken.txt --
+package server
+
+func Broken() {

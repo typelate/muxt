@@ -1,0 +1,46 @@
+# Generate has to work on a package that does not compile yet.
+#
+# Before it has run, main.go calls a TemplateRoutes that does not exist, so the
+# package carries a type error. That is the normal starting state, not a
+# problem, which is why the partial-AST warning covers syntax errors only: a
+# type error leaves the source intact and merely incomplete, and warning about
+# it would fire on every project's first generate.
+
+! exec go build ./...
+stderr 'undefined: TemplateRoutes'
+
+muxt generate --use-receiver-type=T
+! stderr 'warning: package has syntax errors'
+exec go build ./...
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /greet Greet(ctx)" -}}
+	{{- .Result -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) Greet(ctx context.Context) string { return "hello" }
+
+// Routes is what a project writes before muxt has generated anything.
+func Routes(mux *http.ServeMux) {
+	TemplateRoutes(mux, T{})
+}

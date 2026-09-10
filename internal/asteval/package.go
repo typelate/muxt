@@ -34,6 +34,38 @@ func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*package
 	return fileSet, pl, err
 }
 
+// ParseErrors returns the syntax errors the loader recovered from.
+//
+// The loader carries on with a partial AST, so a caller still gets
+// answers -- they are just answers about source that is missing whatever
+// the parser could not read. Reporting that is the caller's job: go build
+// is what gates on a package compiling, and muxt's own checks are worth
+// running on broken source, so this reads as a warning rather than a
+// refusal.
+//
+// Only syntax errors. A type error is how a package looks before muxt
+// generate has written its handlers -- main.go calling a TemplateRoutes
+// that does not exist yet -- so warning about those would fire on the
+// ordinary first run.
+func ParseErrors(pl []*packages.Package) []packages.Error {
+	var found []packages.Error
+	seen := make(map[string]struct{})
+	for _, pkg := range pl {
+		for _, e := range pkg.Errors {
+			if e.Kind != packages.ParseError {
+				continue
+			}
+			// One broken file is reported once per package that reads it.
+			if _, dup := seen[e.Error()]; dup {
+				continue
+			}
+			seen[e.Error()] = struct{}{}
+			found = append(found, e)
+		}
+	}
+	return found
+}
+
 func PackageAtFilepath(list []*packages.Package, dir string) (*packages.Package, bool) {
 	d := dir
 	if filepath.Ext(d) == ".go" {
