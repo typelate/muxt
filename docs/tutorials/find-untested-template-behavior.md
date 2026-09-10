@@ -46,7 +46,7 @@ template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[ma
 
 `--seed 1` makes the run reproducible, so your output matches this page. Before mutating anything the command runs the tests once unmutated — that is the `baseline ok` line. A red baseline stops the run, because every mutant would otherwise look caught by the failure that was already there.
 
-`--state ""` turns off the verdict cache for this tutorial. A run normally records what it learned and re-tries only what changed, and what it watches for change is the template, its types, and the seed — not your test files. You are about to change only a test file, so without `--state ""` the second run would hand back the verdicts from the first and report the same twenty misses. [Step 6](#step-6-work-through-the-rest) comes back to this.
+`--state ""` turns off the verdict cache, so every run here starts from nothing and the counts on this page are the ones you see. A real run records what it learned and re-tries only what changed. [Step 6](#step-6-work-through-the-rest) comes back to that.
 
 ## Step 3: Read one miss
 
@@ -172,7 +172,9 @@ Each operator asks for a particular assertion:
 | `template-drop` | the partial renders nothing at all | something only that partial produces |
 | `operands` | one named input is replaced | that input specifically |
 
-Drop `--state ""` once you are working on templates rather than tests. Verdicts are then recorded in `testdata/template-mutations.json` and a re-run only re-tries actions whose source, resolved types, seed, or muxt version changed, which is what makes a large project's second run fast. Commit that file. While you are writing tests against templates you are not editing, keep `--state ""`: nothing in the fingerprint changes when a test does, so a cached verdict would answer for a suite that no longer exists.
+Drop `--state ""` outside this tutorial. Verdicts are recorded in `testdata/template-mutations.json` and a re-run only re-tries what changed, which is what makes a large project's second run fast. Commit that file alongside the tests that produced it.
+
+Editing a test invalidates the whole cache, on purpose: a verdict says the tests caught a mutant, and any test can catch any mutant, so once the suite changes none of them are answers any more. The run you make after writing an assertion is the one that has to prove it.
 
 Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
 
