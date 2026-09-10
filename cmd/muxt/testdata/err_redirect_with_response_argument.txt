@@ -1,0 +1,71 @@
+# A method that takes `response` owns the response, so muxt writes no status
+# code and no redirect for that route. A template calling .Redirect*, or
+# .StatusCode, on such a route is asking for something that cannot happen: the
+# field is set on TemplateData and never read.
+#
+# It used to generate quietly. The template parsed, generate and check both
+# exited 0, and the redirect simply did not occur at runtime.
+#
+# .StatusCode has the same problem for the same reason, so it is reported the
+# same way.
+
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
+# check reports it too, so it fails in CI before anyone runs the route. Its
+# second complaint is that nothing generated the handlers, which follows from
+# the first: generate stopped.
+! muxt check
+cmpenv stderr want-check.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /with-response WithResponse(ctx, response)" -}}
+	{{- .RedirectSeeOther "/elsewhere" -}}
+{{- end -}}
+
+{{- define "GET /status WithStatus(ctx, response)" -}}
+	{{- .StatusCode 404 -}}
+{{- end -}}
+
+{{- define "GET /without-response WithoutResponse(ctx)" -}}
+	{{- .RedirectSeeOther "/elsewhere" -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) WithResponse(ctx context.Context, response http.ResponseWriter) any { return nil }
+func (T) WithStatus(ctx context.Context, response http.ResponseWriter) any   { return nil }
+func (T) WithoutResponse(ctx context.Context) any                           { return nil }
+-- want-err.txt --
+Error:
+$WORK/template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" calls StatusCode but WithStatus takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method
+
+$WORK/template.gohtml:1:13: template "GET /with-response WithResponse(ctx, response)" calls RedirectSeeOther but WithResponse takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call http.Redirect in the method
+-- want-check.txt --
+$WORK/template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" calls StatusCode but WithStatus takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method
+
+$WORK/template.gohtml:1:13: template "GET /with-response WithResponse(ctx, response)" calls RedirectSeeOther but WithResponse takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call http.Redirect in the method
+
+Route templates with no generated handler; run muxt generate to wire them up:
+  - $WORK/template.gohtml:6:2: "GET /status WithStatus(ctx, response)"
+  - $WORK/template.gohtml:2:2: "GET /with-response WithResponse(ctx, response)"
+  - $WORK/template.gohtml:10:2: "GET /without-response WithoutResponse(ctx)"
+Error: fail: 2 errors
