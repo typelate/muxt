@@ -347,7 +347,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	// moved since. A kill survives everything except a change to the
 	// test that reached it; a miss survives only a suite that gained
 	// nothing.
-	suite, err := readTestSuite(workingDirectory, testedPackages(config), config.GoTestArgs)
+	suite, err := readTestSuite(workingDirectory, testedPackages(config), config.GoTestArgs, statePath)
 	if err != nil {
 		return nil, err
 	}

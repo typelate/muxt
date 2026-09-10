@@ -1,0 +1,94 @@
+# A test that reads a golden file changes behaviour when that file changes,
+# and no Go source moves at all. Nothing in a test's own digest would notice,
+# so a package's testdata is folded into it.
+#
+# The state file is the exception. It lives in testdata by default and every
+# run rewrites it, so digesting it would make each run invalidate the one
+# before it -- reuse would never happen and the file would be pure overhead.
+
+muxt test-template-mutations --seed 1
+cmp stdout want-first.txt
+
+# The state file changed, because the run just wrote it. Nothing else did.
+muxt test-template-mutations --seed 1
+cmp stdout want-reused.txt
+
+# Editing the golden the test compares against retries everything.
+cp changed-golden.txt testdata/greeting.html
+muxt test-template-mutations --seed 1
+cmp stdout want-first.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+-- testdata/greeting.html --
+Hello, World!
+-- changed-golden.txt --
+Hello, Ada!
+-- render_test.go --
+package server
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	want, err := os.ReadFile("testdata/greeting.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, _, _ := strings.Cut(strings.TrimSpace(string(want)), ",")
+	_ = name
+
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); !strings.Contains(strings.TrimSpace(string(want)), "Hello") || got == "" {
+		t.Errorf("greeting = %q, want it to render", got)
+	}
+}
+-- want-first.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    MISS 1:29 action-zero
+
+1 mutant, 0 killed, 1 missed, 0 skipped
+-- want-reused.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    MISS 1:29 action-zero
+
+1 mutant, 0 killed, 1 missed, 0 skipped, 1 reused

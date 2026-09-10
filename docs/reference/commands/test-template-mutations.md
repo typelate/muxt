@@ -163,6 +163,25 @@ Three flags are refused. muxt sets each itself, and losing one does not degrade 
 | `-json` | how the tests that caught a mutant are read back |
 | `-run` | use `--run`, which is recorded with the verdicts |
 
+## What The Cache Can And Cannot See
+
+Reuse rests on noticing everything that could change a verdict. It watches the template's source, the types every action reads, the seed, the muxt version, each test function's own source, everything else in the test files, and each package's `testdata` directory.
+
+It cannot watch what it cannot predict. A test may read any file: a golden fixture kept outside `testdata`, a schema, a user guide. A test asserting that the buttons named in `docs/guide.md` match the ones the page renders changes its assertion when that markdown changes, and no Go source and no `testdata` file has moved. Knowing which files a test reads means running it, which is the thing the cache exists to avoid.
+
+So treat the cache as what it is: an optimization for the loop where you are editing a template, running, and editing again. It is not a record CI should build a claim on.
+
+**In CI, do not feed the state file back in.** Keep it as a build artifact for reading afterwards — it says which test caught which mutant — but let each run start from nothing:
+
+```yaml
+- run: muxt test-template-mutations ./internal/hypertext
+- uses: actions/upload-artifact@v4
+  with:
+    path: internal/hypertext/testdata/template-mutations.json
+```
+
+Never restoring it is enough; there is no flag to add. If you do restore it — to compare against a known-good record, say — run with `--verify` so the comparison is checked rather than trusted.
+
 ## Checking The Reuse Rules
 
 Reuse is a claim about coverage the tests were never asked to support again, so `--verify` checks it: every mutant runs, and a recorded verdict that disagrees with what the run finds fails the command.
@@ -172,7 +191,7 @@ Reuse is a claim about coverage the tests were never asked to support again, so 
 DISAGREE templates.gohtml:1:29 greeting action-zero: recorded MISS, found KILL
 ```
 
-The state file is rewritten with what the run found, so the next run starts from the truth; the exit code is about the rule that produced the wrong answer. It costs a full run, so it belongs on a schedule rather than on every commit — but it is the only thing that can catch a reuse rule that has drifted.
+The state file is rewritten with what the run found, so the next run starts from the truth; the exit code is about the rule that produced the wrong answer. It costs a full run, which is the same as not reusing at all — so reach for it when you have a state file you want to check, and otherwise just do not restore one.
 
 ## Only Run What Changed
 
@@ -199,11 +218,14 @@ A **kill** needs one failing test, so it stands while the test that reached it i
 | a test was edited | the misses, and the kills that test was the witness to |
 | a test was deleted | the kills it was the witness to |
 | a helper or fixture in a test file | everything in that package — a test's own digest cannot see its helpers |
+| a file under the package's `testdata` | everything in that package |
 | the packages or `--run` expression | everything |
 
 The common case while working through a report is adding assertions, which retries only the misses. A killer list is per package, so `server.TestGreet` and `server/admin.TestGreet` are different witnesses.
 
 The file belongs to the tests, which is why it sits in `testdata` — it is the record of which template behaviour the suite was shown to cover, and it should be reviewed and committed alongside the tests that produced it. Pass `--state ""` to turn it off, and a different `--seed` retries everything.
+
+The state file itself is skipped when digesting `testdata`. Every run rewrites it, so watching it would make each run invalidate the one before.
 
 A dry run neither reads nor writes it.
 

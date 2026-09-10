@@ -9,6 +9,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,9 +32,10 @@ type TestSuite struct {
 // TestPackage is one package's tests, and everything they are built on.
 type TestPackage struct {
 	// Support digests everything in the package's test files that is not
-	// a test function: imports, helpers, fixtures, package level state.
-	// A test's own digest cannot see a helper it calls change, so a
-	// change here unsettles every test in the package.
+	// a test function -- imports, helpers, fixtures, package level state
+	// -- and everything under its testdata directory. A test's own digest
+	// cannot see a helper it calls change, nor a golden file it reads, so
+	// a change here unsettles every test in the package.
 	Support string `json:"support"`
 
 	// Tests maps each test function's name to a digest of its source.
@@ -135,7 +137,7 @@ func (d suiteDelta) reusable(result StateResult) bool {
 // go list is asked rather than the directory walked, so the answer
 // follows the same build constraints, tags and package selection the test
 // run will.
-func readTestSuite(workingDirectory string, packages, extra []string) (TestSuite, error) {
+func readTestSuite(workingDirectory string, packages, extra []string, statePath string) (TestSuite, error) {
 	listed, err := listTestPackages(workingDirectory, packages, buildFlags(extra))
 	if err != nil {
 		return TestSuite{}, err
@@ -153,7 +155,11 @@ func readTestSuite(workingDirectory string, packages, extra []string) (TestSuite
 				return TestSuite{}, err
 			}
 		}
-		if len(files) == 0 {
+		fixtures, err := digestTestdata(pkg.Dir, support, statePath)
+		if err != nil {
+			return TestSuite{}, err
+		}
+		if len(files) == 0 && !fixtures {
 			continue
 		}
 		suite.Packages[pkg.ImportPath] = TestPackage{
@@ -201,6 +207,72 @@ func digestTestFile(path, name string, support io.Writer, tests map[string]strin
 		tests[fn.Name.Name] = hex.EncodeToString(h.Sum(nil))[:32]
 	}
 	return nil
+}
+
+// digestTestdata folds a package's testdata directory into its support,
+// and reports whether there was any.
+//
+// A test that reads a golden file changes behaviour when that file
+// changes and no Go source moves at all, which nothing else here would
+// notice. go test runs with the package directory as the working
+// directory and testdata is where the go tool has always said fixtures
+// go, so that is what gets watched.
+//
+// The state file is skipped. It lives in testdata by default and every
+// run rewrites it, so digesting it would make each run invalidate the
+// one before it.
+func digestTestdata(packageDir string, support io.Writer, statePath string) (bool, error) {
+	root := filepath.Join(packageDir, "testdata")
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return false, nil
+	}
+
+	var paths []string
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if statePath != "" && sameFile(path, statePath) {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("reading testdata: %w", err)
+	}
+	slices.Sort(paths)
+
+	for _, path := range paths {
+		rel, relErr := filepath.Rel(packageDir, path)
+		if relErr != nil {
+			rel = path
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			fmt.Fprintf(support, "fixture\x00%s\x00unreadable\x00", filepath.ToSlash(rel))
+			continue
+		}
+		fmt.Fprintf(support, "fixture\x00%s\x00%d\x00", filepath.ToSlash(rel), len(body))
+		support.Write(body)
+	}
+	return len(paths) > 0, nil
+}
+
+// sameFile reports whether two paths name the same file, comparing them
+// as cleaned absolute paths.
+func sameFile(a, b string) bool {
+	if absA, err := filepath.Abs(a); err == nil {
+		a = absA
+	}
+	if absB, err := filepath.Abs(b); err == nil {
+		b = absB
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // isTestFunction reports whether a declaration is a test the go command
