@@ -152,7 +152,9 @@ A run records its verdicts in `testdata/template-mutations.json` and reuses them
 2 mutants, 2 killed, 0 missed, 0 skipped, 1 reused
 ```
 
-An action is identified by a hash of its template's source, the action itself, the fully resolved type of dot and of every operand, and the seed. The source alone would not be enough: a field changing from a `string` to an `int` changes what a mutation substitutes without changing a byte of the template, and the dot type's name stays the same either way.
+An action is identified by a hash of its template's source, the action itself, the fully resolved type of dot and of every operand, the seed, the muxt version, and the test suite. The source alone would not be enough: a field changing from a `string` to an `int` changes what a mutation substitutes without changing a byte of the template, and the dot type's name stays the same either way.
+
+The suite is part of it because a verdict says *the tests caught this mutant*, which stops being an answer about anything once those tests change. It covers the package patterns, the `--run` expression, and the contents of every test file the go command would compile for them — so adding an assertion to close a miss retries that action instead of handing back the miss it just closed. Editing a test therefore retries everything, which is the honest answer: any test can catch any mutant.
 
 The file belongs to the tests, which is why it sits in `testdata` — it is the record of which template behaviour the suite was shown to cover, and it should be reviewed and committed alongside the tests that produced it. Pass `--state ""` to turn it off, and a different `--seed` retries everything.
 

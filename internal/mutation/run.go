@@ -287,10 +287,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		return report, nil
 	}
 
-	tester := goTest{dir: workingDirectory, packages: config.Packages, match: config.Run}
-	if len(tester.packages) == 0 {
-		tester.packages = []string{"./..."}
-	}
+	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run}
 
 	started := time.Now()
 	if out, err := tester.run(nil); err != nil {
@@ -378,6 +375,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 
 	state.Seed = config.Seed
 	state.Engine = config.Engine
+	state.Suite = plan.run.suite
 	if err := state.save(statePath); err != nil {
 		return nil, err
 	}
@@ -519,6 +517,19 @@ func (t goTest) run(extra []string) (string, error) {
 	cmd.Dir = t.dir
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// testedPackages is the package patterns a run tests, with the default
+// applied.
+//
+// The suite digest and the test command have to agree about this: a
+// digest taken over different packages than the ones that run describes a
+// suite nothing was measured against.
+func testedPackages(config Configuration) []string {
+	if len(config.Packages) == 0 {
+		return []string{"./..."}
+	}
+	return config.Packages
 }
 
 // isTestFailure reports whether the go command exited non zero, which is

@@ -21,7 +21,7 @@ func TestIdentifyAgreesWithTheMutantsARunProduces(t *testing.T) {
 	)
 	defs, trees := identifyFixture(t, text)
 
-	identified, err := NewIdentifiers(defs, nil, seed, engine).Identify(trees["page"], nil)
+	identified, err := NewIdentifiers(defs, nil, runIdentity{seed: seed, engine: engine}).Identify(trees["page"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestIdentifyAgreesWithTheMutantsARunProduces(t *testing.T) {
 		},
 	}
 
-	mutants, _ := mutantsInScope(sc, nil, newValues(seed), DefaultMaxCases, seed, engine)
+	mutants, _ := mutantsInScope(sc, nil, newValues(seed), DefaultMaxCases, runIdentity{seed: seed, engine: engine})
 	if len(mutants) == 0 {
 		t.Fatal("the run produced no mutants, so this proves nothing")
 	}

@@ -19,7 +19,7 @@ const DefaultStatePath = "testdata/template-mutations.json"
 // stateVersion guards the file's shape. A run that finds a version it
 // does not know starts from nothing rather than trusting a record it may
 // read wrongly.
-const stateVersion = 1
+const stateVersion = 2
 
 // State is what a previous run learned.
 type State struct {
@@ -35,6 +35,12 @@ type State struct {
 	// mutation engine retries everything rather than trusting verdicts
 	// reached by an older one.
 	Engine string `json:"engine"`
+
+	// Suite identifies the tests those verdicts were measured against.
+	// It feeds every fingerprint too, so editing a test retries
+	// everything: a verdict says the tests caught a mutant, and that
+	// stops being an answer about anything once the tests change.
+	Suite string `json:"suite"`
 
 	// Actions maps an action's fingerprint to the verdicts its mutants
 	// reached.
