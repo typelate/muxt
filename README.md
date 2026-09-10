@@ -61,6 +61,7 @@ The [command tests](./cmd/muxt/testdata) double as readable examples of every fe
 - `muxt generate`: generate `http.Handler` glue (writes `template_routes.go`)
 - `muxt check`: type-check templates without generating (use in CI or editor save hooks)
 - `muxt list-template-calls` / `muxt list-template-callers`: explore call sites and callers
+- `muxt test-template-mutations`: vary each template action and report the ones no test catches
 - `muxt explore-module` / `muxt generate-fake-server`: survey muxt packages and spin up a fake server to poke at routes
 
 ## Documentation
