@@ -2,6 +2,15 @@
 
 Type-safe HTTP handlers from Go HTML templates.
 
+## Building a well-tested app
+
+The pages above are organized by kind. This is the order to read them in:
+
+1. **[Quick Start](tutorials/quick-start.md)** - get a route rendering.
+2. **[HTML is the API](explanation/html-is-the-api.md)** - why the markup a handler writes is the contract, and what to assert on.
+3. **[Structure a project for testing](how-to/receiver-package-and-testing.md)** - put the receiver where a test can reach it, and fake the layer below it.
+4. **[Find Untested Template Behavior](tutorials/find-untested-template-behavior.md)** - let mutation testing tell you which assertions are still missing.
+
 ## How-to guides
 
 - **[Structure a project for testing](how-to/receiver-package-and-testing.md)** - Receiver in a library package, sqlc storage, httptest through the generated routes, fake the service layer
@@ -42,6 +51,7 @@ Type-safe HTTP handlers from Go HTML templates.
 ## Tutorials
 
 - **[Quick Start](tutorials/quick-start.md)** - Your first Muxt server
+- **[Find Untested Template Behavior](tutorials/find-untested-template-behavior.md)** - Use mutation testing to find what your tests do not assert on
 - **[Add Logging](tutorials/add-logging.md)** - Structured logging with `log/slog`
 - **[Hot Reload with Air](tutorials/hot-reload-with-air.md)** - Regenerate, rebuild, and restart on save
 

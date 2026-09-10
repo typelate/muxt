@@ -5,6 +5,8 @@ library package, and keep `package main` a thin wrapper. Go cannot import
 `package main`, so a receiver defined there cannot be faked (counterfeiter,
 moq) or tested from an external test package.
 
+Once the tests run, [Find Untested Template Behavior](../tutorials/find-untested-template-behavior.md) shows how to find the assertions they are still missing.
+
 ## Layout
 
 ```
