@@ -21,11 +21,6 @@ type identity struct {
 	// into, so verdicts do not carry across one.
 	engine string
 
-	// suite identifies the tests the verdicts were measured against. A
-	// verdict says the tests caught a mutant, which stops being an
-	// answer about anything once those tests change.
-	suite string
-
 	// template is the name the action's template is rendered under, and
 	// dot the type it is rendered with. The two together are the
 	// execution a verdict belongs to.
@@ -55,8 +50,8 @@ type identity struct {
 // goes in too.
 func (id identity) fingerprint(action string, index int) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%d\x00",
-		stateVersion, id.engine, id.suite, id.template, id.dot, id.source, id.types, id.seed, action, index)
+	fmt.Fprintf(h, "v%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%d\x00",
+		stateVersion, id.engine, id.template, id.dot, id.source, id.types, id.seed, action, index)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
@@ -117,7 +112,6 @@ func scanTemplate(src *templateSource, tree *parse.Tree, dot types.Type, functio
 		Actions: actions,
 		Identity: identity{
 			engine:   run.engine,
-			suite:    run.suite,
 			template: tree.Name,
 			dot:      typeKey(dot),
 			source:   source,
@@ -128,14 +122,16 @@ func scanTemplate(src *templateSource, tree *parse.Tree, dot types.Type, functio
 }
 
 // runIdentity is what every action in a run shares: the values a mutation
-// draws from, the engine that drew them, and the suite that judged them.
+// draws from and the engine that drew them.
 //
 // They travel together because they invalidate together -- a change to
-// any one of them means no verdict from the last run answers for this
-// one -- and passing them as one value keeps them from being reordered
-// on the way through.
+// either means the mutants themselves are different -- and passing them
+// as one value keeps them from being reordered on the way through.
+//
+// The test suite is deliberately not here. It does not change what a
+// mutant is, only whether an old verdict about one still holds, which is
+// a question the state answers per result.
 type runIdentity struct {
 	seed   uint64
 	engine string
-	suite  string
 }

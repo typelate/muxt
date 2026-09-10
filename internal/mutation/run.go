@@ -144,6 +144,11 @@ type Result struct {
 	// than from a run, because the action had not changed.
 	Reused bool `json:"reused,omitempty"`
 
+	// Killers names the tests that failed against this mutant, qualified
+	// by package. It says which test is holding this behaviour in place,
+	// which is what a reader needs to know before changing either.
+	Killers []string `json:"killers,omitempty"`
+
 	// mutantIndex locates the mutant this result came from, so the run
 	// does not have to carry the mutants inside the report it prints.
 	mutantIndex int
@@ -315,6 +320,23 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	state := loadState(statePath)
 
+	// What the recorded verdicts were measured against, and what has
+	// moved since. A kill survives everything except a change to the
+	// test that reached it; a miss survives only a suite that gained
+	// nothing.
+	suite, err := readTestSuite(workingDirectory, testedPackages(config))
+	if err != nil {
+		return nil, err
+	}
+	scope := suiteScope(testedPackages(config), config.Run)
+	delta := suite.delta(state.Suite)
+	if state.Scope != scope {
+		// A different selection of packages or tests ran, so nothing
+		// recorded says what this one would find.
+		delta = suiteDelta{unsettled: nil, grew: true}
+		state.Actions = make(map[string]ActionState)
+	}
+
 	scratch, err := os.MkdirTemp("", "muxt-mutation-")
 	if err != nil {
 		return nil, err
@@ -334,14 +356,15 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 
 			mutant := plan.mutants[result.mutantIndex]
 
-			if status, found := state.verdict(mutant.Fingerprint(), result.Operator, result.Mutated); found {
+			if recorded, found := state.result(mutant.Fingerprint(), result.Operator, result.Mutated); found && delta.reusable(recorded) {
 				// The action's source and its resolved types are what
-				// they were when this verdict was reached, so running it
-				// again could only reach the same one.
-				result.Status = status
+				// they were when this verdict was reached, and so are
+				// the tests it turns on, so running it again could only
+				// reach the same one.
+				result.Status = recorded.Status
 				result.Reused = true
 				report.Reused++
-				countVerdict(report, status)
+				countVerdict(report, recorded.Status)
 				reportProgress(progress, index, plan.total(), group, *result, clock)
 				index++
 				continue
@@ -353,20 +376,26 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 			}
 
 			runStarted := time.Now()
-			_, testErr := tester.run([]string{"-overlay=" + overlay})
+			out, testErr := tester.run([]string{"-json", "-overlay=" + overlay})
 			elapsed := time.Since(runStarted)
 			if testErr != nil && !isTestFailure(testErr) {
 				return nil, testErr
 			}
 
 			result.Seconds = elapsed.Seconds()
+			var caughtBy []string
 			if testErr != nil {
 				result.Status = StatusKilled
+				// Which tests failed is what makes this verdict reusable
+				// later: everything else in the suite can change without
+				// disturbing it.
+				caughtBy = killers(out)
+				result.Killers = caughtBy
 			} else {
 				result.Status = StatusMissed
 			}
 			countVerdict(report, result.Status)
-			state.record(mutant.Fingerprint(), group.Template, group.File, result.Operator, result.Mutated, result.Status)
+			state.record(mutant.Fingerprint(), group.Template, group.File, result.Operator, result.Mutated, result.Status, caughtBy)
 			clock.observe(elapsed)
 			reportProgress(progress, index, plan.total(), group, *result, clock)
 			index++
@@ -375,7 +404,8 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 
 	state.Seed = config.Seed
 	state.Engine = config.Engine
-	state.Suite = plan.run.suite
+	state.Scope = scope
+	state.Suite = suite
 	if err := state.save(statePath); err != nil {
 		return nil, err
 	}

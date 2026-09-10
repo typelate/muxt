@@ -1,0 +1,144 @@
+# A kill is evidence for exactly as long as the test that reached it is
+# untouched. Everything else in the suite can move without disturbing it.
+#
+# So the run records which tests failed against each mutant, and the next run
+# reuses a kill unless one of those tests changed. A miss is the other way
+# round: it needs the whole suite to pass, so anything added or edited could
+# have closed it.
+#
+# Two templates, two tests, one test per template.
+
+muxt test-template-mutations --seed 1 -v
+cmp stdout want-first.txt
+
+# Nothing changed: both stand.
+muxt test-template-mutations --seed 1 -v
+cmp stdout want-both-reused.txt
+
+# Editing the farewell test unsettles only the mutant its test caught.
+cp farewell-changed.txt farewell_test.go
+muxt test-template-mutations --seed 1 -v
+cmp stdout want-one-retried.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+{{define "farewell"}}Bye, {{.Name}}.{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+
+func Farewell(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "farewell", page)
+}
+-- greeting_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- farewell_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestFarewell(t *testing.T) {
+	var buf strings.Builder
+	if err := Farewell(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Bye, World."; got != want {
+		t.Errorf("farewell = %q, want %q", got, want)
+	}
+}
+-- farewell-changed.txt --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestFarewell(t *testing.T) {
+	var buf strings.Builder
+	if err := Farewell(&buf, Page{Name: "Ada"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Bye, Ada."; got != want {
+		t.Errorf("farewell = %q, want %q", got, want)
+	}
+}
+-- want-first.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:29 action-zero
+
+template.go:23:9 ExecuteTemplate "farewell" (dot: server.Page)
+  "farewell" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 2:27 action-zero
+
+2 mutants, 2 killed, 0 missed, 0 skipped
+-- want-both-reused.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:29 action-zero
+
+template.go:23:9 ExecuteTemplate "farewell" (dot: server.Page)
+  "farewell" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 2:27 action-zero
+
+2 mutants, 2 killed, 0 missed, 0 skipped, 2 reused
+-- want-one-retried.txt --
+2 mutants across 2 templates (complexity 2, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 1:29 action-zero
+
+template.go:23:9 ExecuteTemplate "farewell" (dot: server.Page)
+  "farewell" templates.gohtml (complexity 1, dot: server.Page)
+    KILL 2:27 action-zero
+
+2 mutants, 2 killed, 0 missed, 0 skipped, 1 reused

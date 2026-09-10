@@ -12,9 +12,9 @@ import "testing"
 // which is the failure the whole reuse mechanism exists to avoid.
 func TestStateVerdictKeyedByActionOperatorAndMutation(t *testing.T) {
 	state := &State{Version: stateVersion, Actions: make(map[string]ActionState)}
-	state.record("fp-1", "page", "page.gohtml", OperatorActionEmpty, `""`, StatusKilled)
-	state.record("fp-1", "page", "page.gohtml", OperatorOperands, `""`, StatusMissed)
-	state.record("fp-2", "page", "page.gohtml", OperatorActionEmpty, `""`, StatusMissed)
+	state.record("fp-1", "page", "page.gohtml", OperatorActionEmpty, `""`, StatusKilled, nil)
+	state.record("fp-1", "page", "page.gohtml", OperatorOperands, `""`, StatusMissed, nil)
+	state.record("fp-2", "page", "page.gohtml", OperatorActionEmpty, `""`, StatusMissed, nil)
 
 	for _, tt := range []struct {
 		name        string
@@ -56,7 +56,8 @@ func TestStateVerdictKeyedByActionOperatorAndMutation(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, found := state.verdict(tt.fingerprint, tt.operator, tt.mutated)
+			recorded, found := state.result(tt.fingerprint, tt.operator, tt.mutated)
+			got := recorded.Status
 			if found != tt.found {
 				t.Fatalf("verdict found = %t, want %t", found, tt.found)
 			}
@@ -72,13 +73,13 @@ func TestStateVerdictKeyedByActionOperatorAndMutation(t *testing.T) {
 // one could then be read back.
 func TestStateRecordReplacesAVerdict(t *testing.T) {
 	state := &State{Version: stateVersion, Actions: make(map[string]ActionState)}
-	state.record("fp-1", "page", "page.gohtml", OperatorIfTrue, "true", StatusMissed)
-	state.record("fp-1", "page", "page.gohtml", OperatorIfTrue, "true", StatusKilled)
+	state.record("fp-1", "page", "page.gohtml", OperatorIfTrue, "true", StatusMissed, nil)
+	state.record("fp-1", "page", "page.gohtml", OperatorIfTrue, "true", StatusKilled, nil)
 
 	if got := len(state.Actions["fp-1"].Results); got != 1 {
 		t.Fatalf("results = %d, want 1: recording a mutant again should replace its verdict", got)
 	}
-	if got, _ := state.verdict("fp-1", OperatorIfTrue, "true"); got != StatusKilled {
-		t.Errorf("verdict = %q, want %q", got, StatusKilled)
+	if recorded, _ := state.result("fp-1", OperatorIfTrue, "true"); recorded.Status != StatusKilled {
+		t.Errorf("verdict = %q, want %q", recorded.Status, StatusKilled)
 	}
 }

@@ -15,9 +15,9 @@
 # verdict here would be one carried across a change that could have flipped it.
 #
 # The file itself is pinned too. It is committed and reviewed, so its shape is
-# part of the interface, and the engine field it carries is what makes an
-# improvement to the mutation engine recalculate everything rather than trust
-# answers an older one gave.
+# part of the interface: the engine field is what makes an improvement to the
+# mutation engine recalculate rather than trust an older one's answers, and the
+# suite record is what lets a later run tell an added test from an edited one.
 
 muxt test-template-mutations --seed 1
 cmp stdout want-first.txt
@@ -107,16 +107,29 @@ baseline ok
 	"version": 2,
 	"seed": 1,
 	"engine": "(devel)",
-	"suite": "725d45fbf8733ebbd9a236bdca47808f",
+	"scope": "7e43a62cd03c4c99d36646a6a4a99dd5",
+	"suite": {
+		"packages": {
+			"server": {
+				"support": "9f0308b132ea179a0da1c83ca98661c8",
+				"tests": {
+					"TestGreet": "fa9b5b84e8082f0bb58c06cb463b4ac8"
+				}
+			}
+		}
+	},
 	"actions": {
-		"64000794d4f73a2e7e3f58792bdcd677": {
+		"6c13c9759010f599408dbb50b5207d50": {
 			"template": "greeting",
 			"file": "templates.gohtml",
 			"results": [
 				{
 					"operator": "action-zero",
 					"mutated": "\"\"",
-					"status": "KILL"
+					"status": "KILL",
+					"killers": [
+						"server.TestGreet"
+					]
 				}
 			]
 		}
