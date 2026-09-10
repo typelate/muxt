@@ -273,5 +273,7 @@ Unresolved means `action-empty` rather than `action-zero`; the mutation still ha
 
 ## Related
 
+- [Find Untested Template Behavior](../../tutorials/find-untested-template-behavior.md) — a walkthrough: read a miss, write the assertion it asks for, watch it turn green
+- [HTML is the API](../../explanation/html-is-the-api.md) — why the rendered markup is the contract these mutations probe
 - [muxt check](check.md) — Type-check templates without running them
 - [muxt list-template-callers](list-template-callers.md) — List callers of a template

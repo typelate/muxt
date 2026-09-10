@@ -122,6 +122,9 @@ behavior under test genuinely belongs to the browser.
 
 ## Read next
 
+- [Find Untested Template Behavior](../tutorials/find-untested-template-behavior.md) —
+  which parts of that contract your tests actually pin down, found by mutating the
+  templates and re-running the suite
 - [domtest](https://github.com/typelate/dom/tree/main/domtest) — the six
   parsers, failure behavior, testify conventions, and reusable assertions
   written against `spec.ElementQueries`
