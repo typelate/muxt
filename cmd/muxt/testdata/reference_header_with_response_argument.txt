@@ -1,0 +1,42 @@
+# .Header is not response state muxt has to write: it sets a key on the
+# response header map when the template runs. So it works whoever owns the
+# response, and a method taking the response argument may still use it.
+#
+# This is the other side of err_redirect_with_response_argument.txt. The
+# diagnostic there has to name only the methods that genuinely cannot work, or
+# it breaks routes that were fine.
+
+muxt generate --use-receiver-type=T
+grep 'mux\.HandleFunc\("GET /with-response"' template_routes.go
+
+# The method owns the response, so muxt writes no status code for this route.
+! grep 'statusCode := cmp\.Or' template_routes.go
+
+exec go build ./...
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /with-response WithResponse(ctx, response)" -}}
+	{{- .Header "x-example" "set-from-template" -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+func (T) WithResponse(ctx context.Context, response http.ResponseWriter) any { return nil }

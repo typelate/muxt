@@ -87,7 +87,130 @@ func Definitions(ts *template.Template, templatesVariable string, definitions ch
 	// Analyze templates to determine which ones can call Redirect
 	analyzeRedirectCalls(ts, defs)
 
+	if err := checkResponseWriterConflicts(ts, defs); err != nil {
+		return defs, err
+	}
+
 	return defs, nil
+}
+
+// checkResponseWriterConflicts rejects a template that asks muxt to set the
+// response status when the receiver method has taken the response.
+//
+// A method with an http.ResponseWriter argument owns the response, so muxt
+// generates no status code and no redirect for that route. A template calling
+// .Redirect, one of its siblings, or .StatusCode is then writing a field of
+// TemplateData that nothing reads: the template parses, the handler compiles,
+// and at run time the redirect simply does not happen. Saying so here is the
+// whole point -- the alternative is a route that looks right and silently is
+// not.
+func checkResponseWriterConflicts(ts *template.Template, defs []Definition) error {
+	var errs []error
+	for i := range defs {
+		if !defs[i].hasResponseWriterArg {
+			continue
+		}
+		t := ts.Lookup(defs[i].name)
+		if t == nil || t.Tree == nil {
+			continue
+		}
+		method, found := findResponseStateCall(t.Tree.Root, ts)
+		if !found {
+			continue
+		}
+		function := defs[i].handler
+		if defs[i].fun != nil {
+			function = defs[i].fun.Name
+		}
+		errs = append(errs, &ResponseWriterTemplateStateError{
+			Location: defs[i].definitionLocation(),
+			Template: defs[i].name,
+			Method:   method,
+			Function: function,
+		})
+	}
+	return CombineErrors(errs)
+}
+
+// ResponseWriterTemplateStateError reports a template that sets response state
+// muxt will not write, because the route's method took the response.
+type ResponseWriterTemplateStateError struct {
+	// Location is where the template name was written.
+	Location string
+
+	// Template is the full template name, Method the TemplateData method the
+	// template calls, and Function the receiver method that took the response.
+	Template, Method, Function string
+}
+
+func (e *ResponseWriterTemplateStateError) Error() string {
+	var sb strings.Builder
+	if e.Location != "" {
+		sb.WriteString(e.Location)
+		sb.WriteString(": ")
+	}
+	remedy := "call response.WriteHeader in the method"
+	if isRedirectMethod(e.Method) {
+		remedy = "call http.Redirect in the method"
+	}
+	fmt.Fprintf(&sb, "template %q calls %s but %s takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or %s",
+		e.Template, e.Method, e.Function, remedy)
+	return sb.String()
+}
+
+// findResponseStateCall reports the first TemplateData method a template calls
+// that only has an effect through the response muxt would write.
+func findResponseStateCall(node parse.Node, ts *template.Template) (string, bool) {
+	var found string
+	walkTemplateCommands(node, ts, make(map[string]bool), func(cmd *parse.CommandNode) bool {
+		method, ok := responseStateCallInCommand(cmd)
+		if ok {
+			found = method
+		}
+		return ok
+	})
+	return found, found != ""
+}
+
+// responseStateCallInCommand names the method when a command calls one that
+// only takes effect through the response muxt writes.
+func responseStateCallInCommand(cmd *parse.CommandNode) (string, bool) {
+	if cmd == nil {
+		return "", false
+	}
+	for _, arg := range cmd.Args {
+		switch a := arg.(type) {
+		case *parse.FieldNode:
+			for _, ident := range a.Ident {
+				if writesResponseState(ident) {
+					return ident, true
+				}
+			}
+		case *parse.ChainNode:
+			for _, field := range a.Field {
+				if writesResponseState(field) {
+					return field, true
+				}
+			}
+			if pipe, ok := a.Node.(*parse.PipeNode); ok {
+				for _, chained := range pipe.Cmds {
+					if method, found := responseStateCallInCommand(chained); found {
+						return method, true
+					}
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// writesResponseState reports whether a TemplateData method records something
+// that reaches the client only through the status line muxt writes.
+//
+// .Header is not one of them: it writes to the response header map directly,
+// so it works whoever owns the response.
+func writesResponseState(methodName string) bool {
+	return isRedirectMethod(methodName) || methodName == "StatusCode"
 }
 
 // templateSourceFile returns the file t was parsed from, or "". ParseFS and
@@ -680,31 +803,25 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 // which ones can call the Redirect method. It updates the canRedirect field
 // on each Definition in the templates slice.
 func analyzeRedirectCalls(ts *template.Template, defs []Definition) {
-	// Build a map from template name to template index for quick lookup
-	templateMap := make(map[string]int)
-	for i := range defs {
-		templateMap[defs[i].name] = i
-	}
-
-	// For each template, check if it can redirect
 	for i := range defs {
 		t := ts.Lookup(defs[i].name)
 		if t == nil || t.Tree == nil {
 			continue
 		}
-		visited := make(map[string]bool)
-		defs[i].canRedirect = canTemplateRedirect(t.Tree.Root, ts, templateMap, defs, visited)
+		defs[i].canRedirect = canTemplateRedirect(t.Tree.Root, ts, make(map[string]bool))
 	}
 }
 
-// canTemplateRedirect recursively checks if a template tree can call Redirect.
-// It returns true if:
-// 1. The template directly calls .Redirect
-// 2. The template calls another template that can redirect
-// 3. The template passes TemplateData to a function (conservatively assume it might redirect)
-// 4. The template calls a non-default method on TemplateData (conservatively assume it might redirect)
-// The visited map tracks templates currently being analyzed to prevent infinite recursion on circular references.
-func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map[string]int, defs []Definition, visited map[string]bool) bool {
+// walkTemplateCommands visits every command in a template's tree, following
+// {{template}} invocations, and stops at the first command visit accepts.
+//
+// One traversal serves everything that asks "does this template call X":
+// deciding whether to emit the redirect block, and rejecting a call that
+// cannot work. Two walks would have to agree about which nodes carry
+// commands, and nothing would notice when they stopped.
+//
+// visited stops a template that reaches itself.
+func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[string]bool, visit func(*parse.CommandNode) bool) bool {
 	if node == nil {
 		return false
 	}
@@ -715,88 +832,76 @@ func canTemplateRedirect(node parse.Node, ts *template.Template, templateMap map
 			return false
 		}
 		for _, child := range n.Nodes {
-			if canTemplateRedirect(child, ts, templateMap, defs, visited) {
+			if walkTemplateCommands(child, ts, visited, visit) {
 				return true
 			}
 		}
 
 	case *parse.ActionNode:
-		if n.Pipe != nil {
-			for _, cmd := range n.Pipe.Cmds {
-				if containsRedirectCall(cmd) {
-					return true
-				}
-				// Check if TemplateData is passed as argument to a function
-				if callsMethodOnTemplateData(cmd) {
-					return true
+		return walkTemplateCommands(n.Pipe, ts, visited, visit)
+
+	case *parse.PipeNode:
+		if n == nil {
+			return false
+		}
+		for _, cmd := range n.Cmds {
+			if visit(cmd) {
+				return true
+			}
+			// A parenthesised pipeline is an argument, not a command of
+			// this pipeline, so it needs the walk of its own.
+			for _, arg := range cmd.Args {
+				if pipe, ok := arg.(*parse.PipeNode); ok {
+					if walkTemplateCommands(pipe, ts, visited, visit) {
+						return true
+					}
 				}
 			}
 		}
 
 	case *parse.IfNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
-			return true
-		}
+		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
 
 	case *parse.RangeNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
-			return true
-		}
+		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
 
 	case *parse.WithNode:
-		if canTemplateRedirect(n.Pipe, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.List, ts, templateMap, defs, visited) {
-			return true
-		}
-		if canTemplateRedirect(n.ElseList, ts, templateMap, defs, visited) {
-			return true
-		}
+		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
 
 	case *parse.TemplateNode:
-		// Check if the called template can redirect
-		// Prevent infinite recursion on circular template references
 		if visited[n.Name] {
 			return false
 		}
 		visited[n.Name] = true
 		defer delete(visited, n.Name)
 
-		// Look up the template in the full template set (not just routes)
-		calledTemplate := ts.Lookup(n.Name)
-		if calledTemplate != nil && calledTemplate.Tree != nil {
-			if canTemplateRedirect(calledTemplate.Tree.Root, ts, templateMap, defs, visited) {
-				return true
-			}
+		called := ts.Lookup(n.Name)
+		if called == nil || called.Tree == nil {
+			return false
 		}
-
-	case *parse.PipeNode:
-		if n != nil {
-			for _, cmd := range n.Cmds {
-				if containsRedirectCall(cmd) {
-					return true
-				}
-				if callsMethodOnTemplateData(cmd) {
-					return true
-				}
-			}
-		}
+		return walkTemplateCommands(called.Tree.Root, ts, visited, visit)
 	}
 
 	return false
+}
+
+func walkBranchCommands(branch *parse.BranchNode, ts *template.Template, visited map[string]bool, visit func(*parse.CommandNode) bool) bool {
+	return walkTemplateCommands(branch.Pipe, ts, visited, visit) ||
+		walkTemplateCommands(branch.List, ts, visited, visit) ||
+		walkTemplateCommands(branch.ElseList, ts, visited, visit)
+}
+
+// canTemplateRedirect reports whether a template, or one it calls, can reach
+// the Redirect method.
+//
+// It is deliberately conservative: passing TemplateData to a function, or
+// calling a method that is not known to be safe, counts. Emitting the redirect
+// block for a template that never redirects costs nothing, and omitting it for
+// one that does is the bug this guards.
+func canTemplateRedirect(node parse.Node, ts *template.Template, visited map[string]bool) bool {
+	return walkTemplateCommands(node, ts, visited, func(cmd *parse.CommandNode) bool {
+		return containsRedirectCall(cmd) || callsMethodOnTemplateData(cmd)
+	})
 }
 
 // isRedirectMethod returns true if the method name is a redirect method
