@@ -1,0 +1,63 @@
+# A method of the result that happens to be named StatusCode or Redirect is
+# not TemplateData's.
+#
+# Inside {{with}}, {{range}}, or a partial invoked with a value, dot is
+# whatever was selected, so .StatusCode there sets nothing muxt would have
+# written. Rejecting it would break a route that works, which is worse than
+# the silence err_redirect_with_response_argument.txt exists to fix.
+#
+# $ is the exception: it is the dot the template started with wherever it is
+# written, so $.StatusCode is TemplateData's even inside a with.
+
+muxt generate --use-receiver-type=T
+exec go build ./...
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /with-response WithResponse(ctx, response)" -}}
+	{{- with .Result -}}
+		{{- .StatusCode -}}
+		{{- .RedirectSeeOther -}}
+	{{- end -}}
+	{{- range .Result.Rows -}}
+		{{- .StatusCode -}}
+	{{- end -}}
+	{{- template "row" .Result -}}
+{{- end -}}
+
+{{- define "row" -}}
+	{{- .StatusCode -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+// Row and Page carry names muxt also uses on TemplateData. They are the
+// result's own, and the templates above read them through a rebound dot.
+type Row struct {
+	StatusCode string
+}
+
+type Page struct {
+	StatusCode       string
+	RedirectSeeOther string
+	Rows             []Row
+}
+
+func (T) WithResponse(ctx context.Context, response http.ResponseWriter) Page { return Page{} }

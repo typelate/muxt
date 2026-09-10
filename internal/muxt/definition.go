@@ -162,8 +162,8 @@ func (e *ResponseWriterTemplateStateError) Error() string {
 // that only has an effect through the response muxt would write.
 func findResponseStateCall(node parse.Node, ts *template.Template) (string, bool) {
 	var found string
-	walkTemplateCommands(node, ts, make(map[string]bool), func(cmd *parse.CommandNode) bool {
-		method, ok := responseStateCallInCommand(cmd)
+	walkTemplateCommands(node, ts, make(map[string]bool), true, func(cmd *parse.CommandNode, dotIsTemplateData bool) bool {
+		method, ok := responseStateCallInCommand(cmd, dotIsTemplateData)
 		if ok {
 			found = method
 		}
@@ -174,34 +174,66 @@ func findResponseStateCall(node parse.Node, ts *template.Template) (string, bool
 
 // responseStateCallInCommand names the method when a command calls one that
 // only takes effect through the response muxt writes.
-func responseStateCallInCommand(cmd *parse.CommandNode) (string, bool) {
+func responseStateCallInCommand(cmd *parse.CommandNode, dotIsTemplateData bool) (string, bool) {
 	if cmd == nil {
 		return "", false
 	}
 	for _, arg := range cmd.Args {
 		switch a := arg.(type) {
 		case *parse.FieldNode:
+			// .StatusCode is only TemplateData's when dot still is.
+			// Inside a with or a range it names a field of whatever was
+			// selected, and reporting that would reject a working route.
+			if !dotIsTemplateData {
+				continue
+			}
 			for _, ident := range a.Ident {
 				if writesResponseState(ident) {
 					return ident, true
 				}
 			}
+		case *parse.VariableNode:
+			// $ is the dot the template started with, whatever the
+			// current one is, so $.StatusCode is TemplateData's wherever
+			// it is written.
+			if len(a.Ident) == 0 || a.Ident[0] != "$" {
+				continue
+			}
+			for _, ident := range a.Ident[1:] {
+				if writesResponseState(ident) {
+					return ident, true
+				}
+			}
 		case *parse.ChainNode:
+			if !chainStartsAtTemplateData(a, dotIsTemplateData) {
+				continue
+			}
 			for _, field := range a.Field {
 				if writesResponseState(field) {
 					return field, true
 				}
 			}
-			if pipe, ok := a.Node.(*parse.PipeNode); ok {
-				for _, chained := range pipe.Cmds {
-					if method, found := responseStateCallInCommand(chained); found {
-						return method, true
-					}
-				}
-			}
 		}
 	}
 	return "", false
+}
+
+// chainStartsAtTemplateData reports whether a chained expression is rooted
+// at the TemplateData the handler passed in.
+func chainStartsAtTemplateData(chain *parse.ChainNode, dotIsTemplateData bool) bool {
+	switch node := chain.Node.(type) {
+	case *parse.DotNode:
+		return dotIsTemplateData
+	case *parse.VariableNode:
+		return len(node.Ident) > 0 && node.Ident[0] == "$"
+	case *parse.PipeNode:
+		// (.Redirect "/x").Header and the like: the parenthesised
+		// pipeline is walked on its own, so the chain only has to say
+		// whether its own fields are TemplateData's.
+		return dotIsTemplateData
+	default:
+		return false
+	}
 }
 
 // writesResponseState reports whether a TemplateData method records something
@@ -820,8 +852,15 @@ func analyzeRedirectCalls(ts *template.Template, defs []Definition) {
 // cannot work. Two walks would have to agree about which nodes carry
 // commands, and nothing would notice when they stopped.
 //
+// dotIsTemplateData says whether the dot in force where a command sits is
+// still the TemplateData the handler passed in. It is passed to visit
+// rather than acted on here, because the two callers want different
+// things from it: the redirect analysis is deliberately conservative and
+// ignores it, while a diagnostic must not claim a method belongs to
+// TemplateData when the dot has been rebound.
+//
 // visited stops a template that reaches itself.
-func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[string]bool, visit func(*parse.CommandNode) bool) bool {
+func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[string]bool, dotIsTemplateData bool, visit func(*parse.CommandNode, bool) bool) bool {
 	if node == nil {
 		return false
 	}
@@ -832,27 +871,27 @@ func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[st
 			return false
 		}
 		for _, child := range n.Nodes {
-			if walkTemplateCommands(child, ts, visited, visit) {
+			if walkTemplateCommands(child, ts, visited, dotIsTemplateData, visit) {
 				return true
 			}
 		}
 
 	case *parse.ActionNode:
-		return walkTemplateCommands(n.Pipe, ts, visited, visit)
+		return walkTemplateCommands(n.Pipe, ts, visited, dotIsTemplateData, visit)
 
 	case *parse.PipeNode:
 		if n == nil {
 			return false
 		}
 		for _, cmd := range n.Cmds {
-			if visit(cmd) {
+			if visit(cmd, dotIsTemplateData) {
 				return true
 			}
 			// A parenthesised pipeline is an argument, not a command of
 			// this pipeline, so it needs the walk of its own.
 			for _, arg := range cmd.Args {
 				if pipe, ok := arg.(*parse.PipeNode); ok {
-					if walkTemplateCommands(pipe, ts, visited, visit) {
+					if walkTemplateCommands(pipe, ts, visited, dotIsTemplateData, visit) {
 						return true
 					}
 				}
@@ -860,15 +899,25 @@ func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[st
 		}
 
 	case *parse.IfNode:
-		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
-
-	case *parse.RangeNode:
-		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
+		// An if does not rebind dot, in either branch.
+		return walkBranchCommands(&n.BranchNode, ts, visited, dotIsTemplateData, dotIsTemplateData, visit)
 
 	case *parse.WithNode:
-		return walkBranchCommands(&n.BranchNode, ts, visited, visit)
+		// Inside the body dot is whatever the with selected; the else
+		// branch runs with the dot the with was written under.
+		return walkBranchCommands(&n.BranchNode, ts, visited, false, dotIsTemplateData, visit)
+
+	case *parse.RangeNode:
+		// Inside the body dot is one element of what was ranged over.
+		return walkBranchCommands(&n.BranchNode, ts, visited, false, dotIsTemplateData, visit)
 
 	case *parse.TemplateNode:
+		if n.Pipe != nil {
+			// The argument is evaluated where the invocation is written.
+			if walkTemplateCommands(n.Pipe, ts, visited, dotIsTemplateData, visit) {
+				return true
+			}
+		}
 		if visited[n.Name] {
 			return false
 		}
@@ -879,27 +928,48 @@ func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[st
 		if called == nil || called.Tree == nil {
 			return false
 		}
-		return walkTemplateCommands(called.Tree.Root, ts, visited, visit)
+		return walkTemplateCommands(called.Tree.Root, ts, visited, passesDotAlong(n, dotIsTemplateData), visit)
 	}
 
 	return false
 }
 
-func walkBranchCommands(branch *parse.BranchNode, ts *template.Template, visited map[string]bool, visit func(*parse.CommandNode) bool) bool {
-	return walkTemplateCommands(branch.Pipe, ts, visited, visit) ||
-		walkTemplateCommands(branch.List, ts, visited, visit) ||
-		walkTemplateCommands(branch.ElseList, ts, visited, visit)
+// passesDotAlong reports whether the template a {{template}} node invokes
+// runs with the same dot the invocation was written under.
+//
+// Only {{template "x" .}} does. Written without an argument the called
+// template runs with no dot at all, and any other argument is a value
+// selected out of the current one.
+func passesDotAlong(n *parse.TemplateNode, dotIsTemplateData bool) bool {
+	if !dotIsTemplateData || n.Pipe == nil || len(n.Pipe.Cmds) != 1 {
+		return false
+	}
+	cmd := n.Pipe.Cmds[0]
+	if len(cmd.Args) != 1 {
+		return false
+	}
+	_, isDot := cmd.Args[0].(*parse.DotNode)
+	return isDot
+}
+
+func walkBranchCommands(branch *parse.BranchNode, ts *template.Template, visited map[string]bool, bodyDot, elseDot bool, visit func(*parse.CommandNode, bool) bool) bool {
+	// The pipeline itself is evaluated with the dot in force outside the
+	// branch, which is the one the else branch runs under too.
+	return walkTemplateCommands(branch.Pipe, ts, visited, elseDot, visit) ||
+		walkTemplateCommands(branch.List, ts, visited, bodyDot, visit) ||
+		walkTemplateCommands(branch.ElseList, ts, visited, elseDot, visit)
 }
 
 // canTemplateRedirect reports whether a template, or one it calls, can reach
 // the Redirect method.
 //
 // It is deliberately conservative: passing TemplateData to a function, or
-// calling a method that is not known to be safe, counts. Emitting the redirect
-// block for a template that never redirects costs nothing, and omitting it for
-// one that does is the bug this guards.
+// calling a method that is not known to be safe, counts, and it does not
+// care whether dot has been rebound. Emitting the redirect block for a
+// template that never redirects costs nothing, and omitting it for one
+// that does is the bug this guards.
 func canTemplateRedirect(node parse.Node, ts *template.Template, visited map[string]bool) bool {
-	return walkTemplateCommands(node, ts, visited, func(cmd *parse.CommandNode) bool {
+	return walkTemplateCommands(node, ts, visited, true, func(cmd *parse.CommandNode, _ bool) bool {
 		return containsRedirectCall(cmd) || callsMethodOnTemplateData(cmd)
 	})
 }

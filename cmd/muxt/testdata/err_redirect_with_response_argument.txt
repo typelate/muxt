@@ -7,7 +7,9 @@
 # exited 0, and the redirect simply did not occur at runtime.
 #
 # .StatusCode has the same problem for the same reason, so it is reported the
-# same way.
+# same way. The second route writes it as $.StatusCode from inside a {{with}}:
+# $ is the dot the template started with wherever it appears, so that really is
+# TemplateData's and really does go nowhere.
 
 ! muxt generate --use-receiver-type=T
 cmpenv stderr want-err.txt
@@ -28,7 +30,9 @@ go 1.24
 {{- end -}}
 
 {{- define "GET /status WithStatus(ctx, response)" -}}
-	{{- .StatusCode 404 -}}
+	{{- with .Result -}}
+		{{- $.StatusCode 404 -}}
+	{{- end -}}
 {{- end -}}
 
 {{- define "GET /without-response WithoutResponse(ctx)" -}}
@@ -67,5 +71,5 @@ $WORK/template.gohtml:1:13: template "GET /with-response WithResponse(ctx, respo
 Route templates with no generated handler; run muxt generate to wire them up:
   - $WORK/template.gohtml:6:2: "GET /status WithStatus(ctx, response)"
   - $WORK/template.gohtml:2:2: "GET /with-response WithResponse(ctx, response)"
-  - $WORK/template.gohtml:10:2: "GET /without-response WithoutResponse(ctx)"
+  - $WORK/template.gohtml:12:2: "GET /without-response WithoutResponse(ctx)"
 Error: fail: 2 errors
