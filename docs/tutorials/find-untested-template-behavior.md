@@ -25,7 +25,7 @@ Green. The suite runs `muxt check`, so the templates are type-correct, and the H
 ## Step 2: Ask what the tests actually pin down
 
 ```bash
-muxt test-template-mutations --seed 1
+muxt test-template-mutations --seed 1 --state ""
 ```
 
 ```
@@ -45,6 +45,8 @@ template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[ma
 **Zero killed.** Twenty ways to change what these templates render, and not one of them makes a test fail. The suite proves the templates compile; it asserts nothing about the HTML they produce.
 
 `--seed 1` makes the run reproducible, so your output matches this page. Before mutating anything the command runs the tests once unmutated — that is the `baseline ok` line. A red baseline stops the run, because every mutant would otherwise look caught by the failure that was already there.
+
+`--state ""` turns off the verdict cache for this tutorial. A run normally records what it learned and re-tries only what changed, and what it watches for change is the template, its types, and the seed — not your test files. You are about to change only a test file, so without `--state ""` the second run would hand back the verdicts from the first and report the same twenty misses. [Step 6](#step-6-work-through-the-rest) comes back to this.
 
 ## Step 3: Read one miss
 
@@ -97,7 +99,7 @@ func TestCounterPage(t *testing.T) {
 
 ```bash
 go test ./...
-muxt test-template-mutations --seed 1
+muxt test-template-mutations --seed 1 --state ""
 ```
 
 ```
@@ -141,34 +143,36 @@ and assert on it:
 
 ```bash
 go test ./...
-muxt test-template-mutations --seed 1
+muxt test-template-mutations --seed 1 --state ""
 ```
 
 ```
 20 mutants, 2 killed, 18 missed, 0 skipped
 ```
 
-Two killed. The same test, the same assertion — only the fixture changed. This is the kind of gap that reading a test cannot show you and coverage percentages cannot either: the line was covered the whole time.
+Two killed. The test asks the same question of the same element; it just asks it about a value the mutation can destroy. This is the kind of gap that reading a test cannot show you and coverage percentages cannot either: the line was covered the whole time.
 
 ## Step 6: Work through the rest
 
-The remaining eighteen are the other routes, whose HTMX and non-HTMX branches nothing exercises. Narrow the run to one template while you work on it:
+Eighteen are left. Most are the other routes, whose HTMX and non-HTMX branches nothing exercises, but one is still on this page: line 14 drops the shared `imports` partial, and no test looks at the script tag it writes. Narrow the run to one template while you work on it:
 
 ```bash
-muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
+muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 --state "" -v
 ```
 
 Each operator asks for a particular assertion:
 
 | Operator | The change it makes | What to assert |
 |----------|--------------------|----------------|
-| `action-zero`, `action-empty` | the value renders as its zero value | that value's text or attribute — from a fixture that is *not* the zero value |
+| `action-zero` | the value renders as the zero value of its own type | that value's text or attribute — from a fixture that is *not* the zero value |
+| `action-empty` | the value renders as nothing, when its type could not be resolved | that value's text or attribute |
 | `if-true`, `if-false` | the branch is taken unconditionally | one case per side of the condition |
-| `range-never` | the loop body never runs | the number of rows, not just the first |
-| `with-empty`, `template-drop` | the body or partial renders nothing | something only it produces |
+| `range-never` | the loop body never runs, so the `{{else}}` runs instead | the number of rows, not just the first |
+| `with-empty` | the `with` body is skipped, so the `{{else}}` runs instead | something only the body produces |
+| `template-drop` | the partial renders nothing at all | something only that partial produces |
 | `operands` | one named input is replaced | that input specifically |
 
-Verdicts are recorded in `testdata/template-mutations.json`, so the next run only re-tries actions whose source, resolved types, seed, or muxt version changed. Commit that file and a re-run stays fast.
+Drop `--state ""` once you are working on templates rather than tests. Verdicts are then recorded in `testdata/template-mutations.json` and a re-run only re-tries actions whose source, resolved types, seed, or muxt version changed, which is what makes a large project's second run fast. Commit that file. While you are writing tests against templates you are not editing, keep `--state ""`: nothing in the fingerprint changes when a test does, so a cached verdict would answer for a suite that no longer exists.
 
 Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
 
