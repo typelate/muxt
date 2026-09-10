@@ -205,4 +205,6 @@ The templates here read from `.Request` because they have no method call. Once y
 
 A bare `{{.}}` renders empty in a route template because the dot is muxt's template data wrapper, not the method result. The [template name syntax reference](../reference/template-names.md) covers the full syntax including method calls and status codes. The [add-logging tutorial](add-logging.md) shows how to add structured logging to your generated handlers.
 
+Once a route renders, [Find Untested Template Behavior](find-untested-template-behavior.md) shows how to tell which parts of that HTML your tests actually hold you to.
+
 If you plan to fake the generated `RoutesReceiver` interface in tests (with counterfeiter or a similar tool), keep your receiver type and templates in an importable library package and keep `package main` a thin wrapper — Go cannot import `package main`, so an interface defined there cannot be faked from a test package.
