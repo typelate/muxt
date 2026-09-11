@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"time"
 )
 
 // Status is the verdict on one mutant.
@@ -106,10 +105,6 @@ type Report struct {
 	Skipped    int               `json:"skipped"`
 	Groups     []Group           `json:"groups"`
 	Trimmed    []TrimmedTemplate `json:"trimmed"`
-
-	// parallel is how many mutants run at once, which the estimate
-	// divides the work by.
-	parallel int
 }
 
 // eachTemplate iterates the report's templates in the order they were
@@ -249,24 +244,10 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 	if r.DryRun {
 		_, _ = fmt.Fprintf(out, "%d %s, %d runnable, %d skipped\n",
 			r.Total, pluralize(r.Total, "mutant"), r.Total-r.Skipped, r.Skipped)
-		if r.Baseline.Seconds > 0 {
-			_, _ = fmt.Fprintf(out, "estimated %s\n", r.Estimate())
-		}
 		return
 	}
 	_, _ = fmt.Fprintf(out, "%d %s, %d killed, %d missed, %d skipped\n",
 		r.Total, pluralize(r.Total, "mutant"), r.Killed, r.Missed, r.Skipped)
-}
-
-// Estimate is how long the whole run is expected to take, from the
-// unmutated run's duration, the number of mutants that will be run, and
-// how many run at once.
-func (r *Report) Estimate() string {
-	runnable := r.Total - r.Skipped
-	parallel := max(r.parallel, 1)
-	batches := (runnable + parallel - 1) / parallel
-	total := time.Duration(float64(batches) * r.Baseline.Seconds * float64(time.Second))
-	return roundDuration(total)
 }
 
 func pluralize(n int, word string) string {

@@ -133,13 +133,14 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	baseline := time.Since(started)
 	report.Baseline = BaselineResult{Passed: true, Seconds: baseline.Seconds()}
-	report.parallel = max(config.Parallel, 1)
+	parallel := max(config.Parallel, 1)
+	clock := &estimate{perMutant: baseline, remaining: plan.runnable(), parallel: parallel}
 
 	if status != nil {
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s, estimated %s\n",
 			report.Total, pluralize(report.Total, "mutant"),
 			report.Templates, pluralize(report.Templates, "template"),
-			report.Complexity, roundDuration(baseline), report.Estimate())
+			report.Complexity, roundDuration(baseline), clock.left())
 	}
 	reportTrims(progress, report.Trimmed)
 
@@ -154,9 +155,9 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		test:     tester.verdict,
 		scratch:  scratch,
 		progress: progress,
-		clock:    &estimate{perMutant: baseline, remaining: plan.runnable(), parallel: report.parallel},
+		clock:    clock,
 	}
-	if err := runner.runAll(report, report.parallel); err != nil {
+	if err := runner.runAll(report, parallel); err != nil {
 		return nil, err
 	}
 	return report, nil
