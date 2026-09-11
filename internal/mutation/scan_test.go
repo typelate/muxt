@@ -96,6 +96,31 @@ func TestMatchEndSkipsAFunctionNamedLikeAKeyword(t *testing.T) {
 	}
 }
 
+// TestMatchEnd states which {{end}} and {{else}} belong to a block: the
+// ones at its own depth, and of an else chain only the first.
+func TestMatchEnd(t *testing.T) {
+	for _, tt := range []struct {
+		name              string
+		text              string
+		wantEnd, wantElse int
+		ok                bool
+	}{
+		{name: "no else", text: `{{range .A}}x{{end}}`, wantEnd: 1, wantElse: -1, ok: true},
+		{name: "an else", text: `{{range .A}}{{.B}}{{else}}{{.C}}{{end}}`, wantEnd: 4, wantElse: 2, ok: true},
+		{name: "a nested else is not ours", text: `{{with .A}}{{if .B}}{{else}}{{end}}{{else}}{{end}}`, wantEnd: 5, wantElse: 4, ok: true},
+		{name: "the first else of a chain", text: `{{if .A}}a{{else if .B}}b{{else}}c{{end}}`, wantEnd: 3, wantElse: 1, ok: true},
+		{name: "not a block", text: `{{.A}}{{end}}`},
+		{name: "never closed", text: `{{range .A}}{{if .B}}{{end}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			end, elseIndex, ok := matchEnd(regions(tt.text, "", ""), 0)
+			if end != tt.wantEnd || elseIndex != tt.wantElse || ok != tt.ok {
+				t.Errorf("matchEnd = %d, %d, %t, want %d, %d, %t", end, elseIndex, ok, tt.wantEnd, tt.wantElse, tt.ok)
+			}
+		})
+	}
+}
+
 // TestRegionsKeepsScanningPastSomethingItCannotRead states that one
 // unreadable action does not cost the rest of the template its mutants.
 //
