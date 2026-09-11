@@ -13,6 +13,8 @@
 env GIT_CONFIG_GLOBAL=$WORK/gitconfig GIT_CONFIG_NOSYSTEM=1
 env GIT_AUTHOR_NAME=muxt GIT_AUTHOR_EMAIL=muxt@example.com
 env GIT_COMMITTER_NAME=muxt GIT_COMMITTER_EMAIL=muxt@example.com
+# git translates its messages, and one is asserted below.
+env LC_ALL=C
 
 exec git init -q
 exec git add go.mod
@@ -34,6 +36,12 @@ muxt test-template-mutations -v --dry-run --seed 1 --diff HEAD
 cmp stdout want-text.txt
 ! stderr .
 
+# --format json carries the comparison too: the revision, and the
+# templates left alone.
+
+muxt test-template-mutations --dry-run --seed 1 --diff HEAD --format json
+cmp stdout want-json.txt
+
 # A revision the templates cannot be read at, such as one from before the
 # package existed, leaves nothing to compare with, so everything counts as
 # changed and the report says why.
@@ -42,10 +50,15 @@ muxt test-template-mutations --dry-run --seed 1 --diff empty
 stdout '^4 mutants across 3 templates'
 stdout '^every template counts as changed: the templates at empty could not be read'
 
-# A revision git does not know is an error.
+muxt test-template-mutations --dry-run --seed 1 --diff empty --format json
+stdout '"diff": "empty"'
+stdout '"diff_error": "'
+! stdout '"unchanged"'
+
+# A revision git does not know is an error, and git says why.
 
 ! muxt test-template-mutations --dry-run --diff no-such-revision
-stderr 'no-such-revision'
+cmp stderr want-revision-error.txt
 
 -- go.mod --
 module server
@@ -119,6 +132,59 @@ unchanged since HEAD, not mutated:
   "name" templates.gohtml (dot: string)
 
 3 mutants, 3 runnable, 0 skipped
+-- want-revision-error.txt --
+Error: --diff no-such-revision: exit status 128: fatal: Needed a single revision
+-- want-json.txt --
+{
+	"dry_run": true,
+	"seed": 1,
+	"templates": 1,
+	"complexity": 1,
+	"total": 1,
+	"killed": 0,
+	"missed": 0,
+	"skipped": 0,
+	"groups": [
+		{
+			"call_site": "template.go:20:9",
+			"entry": "page",
+			"data_type": "server.Summary",
+			"templates": [
+				{
+					"template": "name",
+					"file": "templates.gohtml",
+					"data_type": "string",
+					"via_template_call": true,
+					"complexity": 1,
+					"results": [
+						{
+							"status": "PEND",
+							"operator": "action-zero",
+							"line": 2,
+							"column": 21,
+							"original": "{{.}}",
+							"mutated": "\"\""
+						}
+					]
+				}
+			]
+		}
+	],
+	"trimmed": [],
+	"diff": "HEAD",
+	"unchanged": [
+		{
+			"template": "page",
+			"file": "templates.gohtml",
+			"data_type": "server.Summary"
+		},
+		{
+			"template": "count",
+			"file": "templates.gohtml",
+			"data_type": "float64"
+		}
+	]
+}
 -- want-text.txt --
 1 mutant across 1 template (complexity 1, seed 1)
 2 templates unchanged since HEAD

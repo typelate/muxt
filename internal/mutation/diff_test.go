@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -96,6 +97,45 @@ func TestExtractWritesTheTree(t *testing.T) {
 	}
 	if string(got) != `{{.}}` {
 		t.Errorf("sub/page.gohtml = %q, want %q", got, `{{.}}`)
+	}
+}
+
+// TestExtractWritesASymlink states that a symlink in the tree is made as
+// one, pointing where it pointed.
+func TestExtractWritesASymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a symlink needs privileges on Windows")
+	}
+	archive := tarOf(t,
+		tarEntry{header: tar.Header{Typeflag: tar.TypeReg, Name: "sub/page.gohtml", Mode: 0o644}, body: `{{.}}`},
+		tarEntry{header: tar.Header{Typeflag: tar.TypeSymlink, Name: "link/page.gohtml", Linkname: "../sub/page.gohtml"}},
+	)
+	dir := t.TempDir()
+	if err := extract(archive, dir); err != nil {
+		t.Fatalf("extract = %v", err)
+	}
+	link := filepath.Join(dir, "link", "page.gohtml")
+	if target, err := os.Readlink(link); err != nil || target != "../sub/page.gohtml" {
+		t.Errorf("Readlink = %q, %v, want %q", target, err, "../sub/page.gohtml")
+	}
+	if got, err := os.ReadFile(link); err != nil || string(got) != `{{.}}` {
+		t.Errorf("reading through the link = %q, %v, want %q", got, err, `{{.}}`)
+	}
+}
+
+// TestExtractRefusesALinkOutOfTheTree states that a symlink pointing
+// outside the copy is refused: it would read what the revision does not
+// hold.
+func TestExtractRefusesALinkOutOfTheTree(t *testing.T) {
+	for _, target := range []string{"../../escape", "/etc/hosts"} {
+		archive := tarOf(t, tarEntry{header: tar.Header{Typeflag: tar.TypeSymlink, Name: "link/escape", Linkname: target}})
+		dir := t.TempDir()
+		if err := extract(archive, dir); err == nil {
+			t.Errorf("extract of a link to %q = nil, want an error", target)
+		}
+		if _, err := os.Lstat(filepath.Join(dir, "link", "escape")); err == nil {
+			t.Errorf("extract made the link to %q", target)
+		}
 	}
 }
 
@@ -322,6 +362,23 @@ func TestNewPlanWithDiff(t *testing.T) {
 		}
 		if text := reportText(t, p); !strings.Contains(text, "1 mutant across 1 template (complexity 1, seed 1)\n2 templates unchanged since HEAD\n") {
 			t.Errorf("report does not count the unchanged templates:\n%s", text)
+		}
+	})
+
+	t.Run("a workspace the caller names", func(t *testing.T) {
+		// The working tree loads within the workspace; the copy of the
+		// revision is outside it and has to load as the module it is.
+		r.write(map[string]string{"go.work": "go 1.24\n\nuse ./web\n"})
+		t.Setenv("GOWORK", filepath.Join(r.dir, "go.work"))
+		p, err := newPlan(config, web)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.diffError != "" {
+			t.Fatalf("the templates at HEAD could not be read: %s", p.diffError)
+		}
+		if got, want := mutatedTemplates(p), []string{"name string"}; !slices.Equal(got, want) {
+			t.Errorf("mutated %q, want %q", got, want)
 		}
 	})
 

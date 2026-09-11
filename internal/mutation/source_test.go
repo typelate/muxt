@@ -123,3 +123,21 @@ func TestLiteralOffsetsRefusesAValueItCannotAccountFor(t *testing.T) {
 		})
 	}
 }
+
+// TestLiteralEncoder states how mutated text is written back into Go
+// source: a raw literal stays raw while it can, which keeps a mutant's diff
+// readable, and anything else is quoted.
+func TestLiteralEncoder(t *testing.T) {
+	for _, tt := range []struct {
+		name, literal, mutated, want string
+	}{
+		{name: "raw stays raw", literal: "`{{.A}}`", mutated: `{{""}}`, want: "`{{\"\"}}`"},
+		{name: "raw cannot hold a back quote", literal: "`{{.A}}`", mutated: "{{`x`}}", want: "\"{{`x`}}\""},
+		{name: "raw cannot hold a carriage return", literal: "`{{.A}}`", mutated: "a\rb", want: `"a\rb"`},
+		{name: "interpreted is quoted", literal: `"{{.A}}\n"`, mutated: "{{0}}\n", want: `"{{0}}\n"`},
+	} {
+		if got := literalEncoder(tt.literal)(tt.mutated); got != tt.want {
+			t.Errorf("%s: encoded %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

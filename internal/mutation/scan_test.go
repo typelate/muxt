@@ -55,6 +55,10 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 		{name: "an empty comment", text: `{{/**/}}`, content: `/**/`},
 		{name: "a right delimiter just before the comment closes", text: `{{/*}}*/}}`, content: `/*}}*/`},
 		{name: "a comment whose body opens with a slash", text: `{{/*/}}*/}}`, content: `/*/}}*/`},
+		{name: "a raw string holding the right delimiter", text: "{{printf `}}`}}", content: "printf `}}`"},
+		{name: "a raw string may span lines", text: "{{printf `a\nb`}}", content: "printf `a\nb`"},
+		{name: "a character constant", text: `{{printf "%c" '}'}}`, content: `printf "%c" '}'`},
+		{name: "an escaped quote", text: `{{printf "\"}}"}}`, content: `printf "\"}}"`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			found := regions(tt.text, "", "")
@@ -106,6 +110,17 @@ func TestRegionsIgnoresAnUnfinishedTail(t *testing.T) {
 		if found := regions(text, "", ""); len(found) != 1 || text[found[0].start:found[0].end] != "{{.A}}" {
 			t.Errorf("regions(%q) = %v, want only {{.A}}", text, found)
 		}
+	}
+}
+
+// TestRegionsEndAStringAtALineEnd states that an interpreted string running
+// into the end of a line is taken as unterminated, so the rest of the
+// template is still scanned rather than swallowed.
+func TestRegionsEndAStringAtALineEnd(t *testing.T) {
+	const text = "{{printf \"a\nb\"}}{{.B}}"
+	found := regions(text, "", "")
+	if len(found) != 1 || text[found[0].start:found[0].end] != "{{.B}}" {
+		t.Errorf("regions(%q) = %v, want only {{.B}}", text, found)
 	}
 }
 
