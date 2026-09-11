@@ -6,14 +6,8 @@ import (
 	"text/template/parse"
 )
 
-// TestWalkActionsOrder states the order every identifier rests on.
-//
-// An action's place in this walk is part of what identifies it, so the
-// order is a contract, not an implementation detail: reordering a body
-// and its else, or reporting a construct after the body it encloses,
-// renumbers every action and quietly stops a recorded verdict matching
-// the action it was reached for. Nothing else in the suite would notice,
-// because the symptom is a slower run rather than a failing one.
+// TestWalkActionsOrder states the order actions are reported in, which is
+// the order a template's mutants are enumerated.
 //
 // The rule: the enclosing action first, then its body, then its else.
 func TestWalkActionsOrder(t *testing.T) {
@@ -30,12 +24,7 @@ func TestWalkActionsOrder(t *testing.T) {
 	}
 
 	var got []string
-	seen := 0
 	walkActions(text, regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
-		seen++
-		if a.index != seen {
-			t.Errorf("action %q has index %d, want %d: indexes must count the walk", a.text, a.index, seen)
-		}
 		got = append(got, a.text)
 	})
 

@@ -36,6 +36,20 @@ Two consequences:
 
 Calls in `_test.go` files are ignored by default — a template rendered only by a test is not rendered in production, and mutating it measures the tests against themselves. Pass `--include-test-callers` to opt in.
 
+## Usage
+
+```
+muxt test-template-mutations [flags] [packages] [-- go test flags]
+```
+
+Package patterns default to `./...`, so a mutation caught only by a test in another package is still reported as caught. Everything after `--` is handed to `go test` as written, so mutants run the way your tests do:
+
+```bash
+muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web/... -- -tags=integration -race
+```
+
+`-overlay` cannot be passed through: it is how each mutant reaches the build.
+
 ## Flags
 
 | Flag | Type | Default | Description |
@@ -47,15 +61,11 @@ Calls in `_test.go` files are ignored by default — a template rendered only by
 | `--include-test-callers` | bool | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
 | `--seed` | uint64 | _(drawn)_ | Seed the values substituted for an action's operands. Drawn and reported when not given. |
 | `--max-cases` | int | `8` | Most operand combinations one action may contribute. |
-| `--state` | string | `testdata/template-mutations.json` | Record verdicts here and reuse them for unchanged actions. Empty disables. |
+| `--parallel` | int | `1` | How many mutants to run at once. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to read templates from. |
 | `--format` | string | `text` | `text` or `json`. |
 
-Package patterns may be passed as arguments. The default is `./...`, so a mutation caught only by a test in another package is still reported as caught.
-
-```bash
-muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web/...
-```
+`--parallel` runs that many mutants at once, each as its own `go test` against its own overlay, so no mutant sees another's. They do share whatever your tests share — a port, a database, a file a test writes — so raise it only for a suite that tolerates running beside itself. The report is the same either way; only the `-v` progress lines come out in the order runs finish.
 
 ## Knowing How Long It Will Take
 
@@ -143,22 +153,6 @@ Every case is a full test run, so `--max-cases` bounds what one action may contr
 ```
 SKIP 18:3 operands (7 operands need 127 cases, over --max-cases=8)
 ```
-
-## Only Run What Changed
-
-A run records its verdicts in `testdata/template-mutations.json` and reuses them next time for actions that have not changed:
-
-```
-2 mutants, 2 killed, 0 missed, 0 skipped, 1 reused
-```
-
-An action is identified by a hash of its template's source, the action itself, the fully resolved type of dot and of every operand, the seed, the muxt version, and the test suite. The source alone would not be enough: a field changing from a `string` to an `int` changes what a mutation substitutes without changing a byte of the template, and the dot type's name stays the same either way.
-
-The suite is part of it because a verdict says *the tests caught this mutant*, which stops being an answer about anything once those tests change. It covers the package patterns, the `--run` expression, and the contents of every test file the go command would compile for them — so adding an assertion to close a miss retries that action instead of handing back the miss it just closed. Editing a test therefore retries everything, which is the honest answer: any test can catch any mutant.
-
-The file belongs to the tests, which is why it sits in `testdata` — it is the record of which template behaviour the suite was shown to cover, and it should be reviewed and committed alongside the tests that produced it. Pass `--state ""` to turn it off, and a different `--seed` retries everything.
-
-A dry run neither reads nor writes it.
 
 ## Skipped Mutants
 
@@ -271,7 +265,7 @@ Unresolved means `action-empty` rather than `action-zero`; the mutation still ha
 
 - A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. They are resolved per parsed source, not per file, so a construction chain that calls `Delims` more than once — or one Go file holding several literals parsed differently — reads each source with its own pair. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`; if that leaves a template the set can see actions in and this command cannot, the run fails rather than measuring fewer templates than it was given.
 - `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
-- Each mutant is a full `go test -count=1` run. Narrow it with `--template-pattern`, `--run`, and a package argument, and use `--dry-run` first to see the size of the job.
+- Each mutant is a full `go test -count=1` run, and every run mutates everything it selects. Narrow it with `--template-pattern`, `--run`, and a package argument, spread it with `--parallel`, and use `--dry-run` first to see the size of the job.
 
 ## Related
 

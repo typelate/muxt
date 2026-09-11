@@ -25,7 +25,7 @@ Green. The suite runs `muxt check`, so the templates are type-correct, and the H
 ## Step 2: Ask what the tests actually pin down
 
 ```bash
-muxt test-template-mutations --seed 1 --state ""
+muxt test-template-mutations --seed 1
 ```
 
 ```
@@ -45,8 +45,6 @@ template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[ma
 **Zero killed.** Twenty ways to change what these templates render, and not one of them makes a test fail. The suite proves the templates compile; it asserts nothing about the HTML they produce.
 
 `--seed 1` makes the run reproducible, so your output matches this page. Before mutating anything the command runs the tests once unmutated — that is the `baseline ok` line. A red baseline stops the run, because every mutant would otherwise look caught by the failure that was already there.
-
-`--state ""` turns off the verdict cache, so every run here starts from nothing and the counts on this page are the ones you see. A real run records what it learned and re-tries only what changed. [Step 6](#step-6-work-through-the-rest) comes back to that.
 
 ## Step 3: Read one miss
 
@@ -99,7 +97,7 @@ func TestCounterPage(t *testing.T) {
 
 ```bash
 go test ./...
-muxt test-template-mutations --seed 1 --state ""
+muxt test-template-mutations --seed 1
 ```
 
 ```
@@ -143,7 +141,7 @@ and assert on it:
 
 ```bash
 go test ./...
-muxt test-template-mutations --seed 1 --state ""
+muxt test-template-mutations --seed 1
 ```
 
 ```
@@ -157,7 +155,7 @@ Two killed. The test asks the same question of the same element; it just asks it
 Eighteen are left. Most are the other routes, whose HTMX and non-HTMX branches nothing exercises, but one is still on this page: line 14 drops the shared `imports` partial, and no test looks at the script tag it writes. Narrow the run to one template while you work on it:
 
 ```bash
-muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 --state "" -v
+muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
 ```
 
 Each operator asks for a particular assertion:
@@ -172,9 +170,7 @@ Each operator asks for a particular assertion:
 | `template-drop` | the partial renders nothing at all | something only that partial produces |
 | `operands` | one named input is replaced | that input specifically |
 
-Drop `--state ""` outside this tutorial. Verdicts are recorded in `testdata/template-mutations.json` and a re-run only re-tries what changed, which is what makes a large project's second run fast. Commit that file alongside the tests that produced it.
-
-Editing a test invalidates the whole cache, on purpose: a verdict says the tests caught a mutant, and any test can catch any mutant, so once the suite changes none of them are answers any more. The run you make after writing an assertion is the one that has to prove it.
+Every run is a full run: one `go test` per mutant, every time. On a larger project that is what CI is for. If your suite tolerates running beside itself, `--parallel 4` runs four mutants at once.
 
 Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
 

@@ -1,15 +1,10 @@
 package mutation
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"go/token"
-	"hash"
-	"io"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -197,93 +192,6 @@ func (s *templateSource) fileOffset(offset int) int {
 		return s.litStart
 	}
 	return s.offsets[offset]
-}
-
-// textOffset maps an offset in the file back to one in the template text.
-//
-// Definition spans arrive in file coordinates, and for a template written
-// as a Go string literal those are not the coordinates the text is
-// indexed by.
-func (s *templateSource) textOffset(offset int) (int, bool) {
-	if s.offsets == nil {
-		offset -= s.litStart
-		if offset < 0 || offset > len(s.text) {
-			return 0, false
-		}
-		return offset, true
-	}
-	i, found := slices.BinarySearch(s.offsets, offset)
-	if !found || i >= len(s.offsets) {
-		return 0, false
-	}
-	return i, true
-}
-
-// definitionSpan is where one template is written within a source, in
-// text coordinates.
-type definitionSpan struct {
-	name string
-
-	// start and end bound the whole definition, from the {{define}}
-	// clause through the matching {{end}}.
-	start, end int
-
-	// trimsBefore and trimsAfter report whether the definition's opening
-	// and closing delimiters trim the whitespace around the block. Those
-	// two markers are written inside the definition but act on the text
-	// outside it, so the template that holds the block depends on them.
-	trimsBefore, trimsAfter bool
-}
-
-// sourceDigests returns, per template name, a digest of the source that
-// defines it.
-//
-// A defined template is its own source, from {{define}} through {{end}}.
-// The template the text itself carries is everything the definitions
-// leave behind, since a change inside a definition cannot alter what the
-// surrounding template renders -- except through the trim markers on the
-// definition's own delimiters, which act on the text around the block and
-// so are written into the surrounding template's digest.
-//
-// The spans are hashed where they lie. Nothing keeps a copy of a
-// template's source: a project's templates are large, and only the digest
-// is ever compared.
-func (s *templateSource) sourceDigests(rootName string, defined []definitionSpan) map[string]string {
-	found := make(map[string]string, len(defined)+1)
-
-	ordered := slices.Clone(defined)
-	slices.SortFunc(ordered, func(a, b definitionSpan) int { return a.start - b.start })
-
-	outer := sha256.New()
-	last := 0
-	for _, span := range ordered {
-		if span.start < last || span.end > len(s.text) || span.start > span.end {
-			// Overlapping or out of range spans mean the definitions
-			// were not read from this text. Fall back to hashing all of
-			// it rather than build an identity from nothing.
-			return map[string]string{rootName: digestOf(s.text)}
-		}
-		found[span.name] = digestOf(s.text[span.start:span.end])
-		writeString(outer, s.text[last:span.start])
-		fmt.Fprintf(outer, "\x00define %s %t %t\x00", span.name, span.trimsBefore, span.trimsAfter)
-		last = span.end
-	}
-	writeString(outer, s.text[last:])
-
-	found[rootName] = hex.EncodeToString(outer.Sum(nil))
-	return found
-}
-
-func digestOf(text string) string {
-	h := sha256.New()
-	writeString(h, text)
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-func writeString(h hash.Hash, text string) {
-	// hash.Hash never returns an error, which is what lets a digest be
-	// built without an error path running through the walk.
-	_, _ = io.WriteString(h, text)
 }
 
 // apply returns the whole file with the edits in place.
