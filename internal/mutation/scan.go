@@ -203,10 +203,7 @@ func trimLeft(text string, content, closing int) int {
 // so an action calling a function named "endorse" or "withDefault" is not
 // mistaken for an end or a with.
 func leadingWord(content string) string {
-	word := content
-	if n := strings.IndexFunc(content, notIdentifier); n >= 0 {
-		word = content[:n]
-	}
+	word := content[:len(content)-len(strings.TrimLeftFunc(content, isIdentifier))]
 	switch word {
 	case "if", "range", "with", "block", "define", "else", "end", "template":
 		return word
@@ -215,9 +212,10 @@ func leadingWord(content string) string {
 	}
 }
 
-// notIdentifier is text/template's isAlphaNumeric, negated.
-func notIdentifier(r rune) bool {
-	return r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
+// isIdentifier is text/template's isAlphaNumeric: the runes an identifier
+// is made of.
+func isIdentifier(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 func isSpace(c byte) bool {
@@ -243,7 +241,7 @@ func regionAt(found []region, pos int) (int, region, bool) {
 // Actions nested inside are skipped by depth, so the else and end
 // reported are the ones at the opening action's own level.
 func matchEnd(found []region, open int) (endIndex int, elseIndex int, ok bool) {
-	if open < 0 || open >= len(found) || !found[open].opensBlock() {
+	if !found[open].opensBlock() {
 		return 0, 0, false
 	}
 	elseIndex = -1

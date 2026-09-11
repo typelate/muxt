@@ -258,23 +258,14 @@ func (e *enumerator) addTemplateDrop(r region) {
 	e.appendMutant(r, OperatorTemplateDrop, edit{start: r.start, end: r.end})
 }
 
-// appendMutant records a mutant made of one substitution.
-//
-// The span arrives as an edit rather than as two ints so that a caller
-// naming its bounds cannot swap them: a reversed span is refused here,
-// which would turn a typo into a mutant that is silently never run.
+// appendMutant records a mutant made of one substitution, described by
+// what it substitutes.
 func (e *enumerator) appendMutant(r region, operator Operator, change edit) {
-	if change.start < 0 || change.end > len(e.src.text) || change.start > change.end {
-		return
-	}
 	e.appendEdits(r, operator, []edit{change}, change.text)
 }
 
 // appendEdits records a mutant made of one or more substitutions.
 func (e *enumerator) appendEdits(r region, operator Operator, edits []edit, detail string) {
-	if len(edits) == 0 {
-		return
-	}
 	line, column := e.src.lines.at(e.src.fileOffset(r.start))
 	e.mutants = append(e.mutants, Mutant{
 		Operator: operator,
@@ -316,10 +307,9 @@ func newLineIndex(text string) lineIndex {
 func (l lineIndex) at(offset int) (line, column int) {
 	i, found := slices.BinarySearch(l, offset)
 	if !found {
+		// Offsets are never negative and the first line starts at zero,
+		// so the line before is always there.
 		i--
-	}
-	if i < 0 {
-		i = 0
 	}
 	return i + 1, offset - l[i] + 1
 }
