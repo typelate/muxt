@@ -96,9 +96,6 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		scopes, trimmed := traverse(lt, index)
 		reported := make(map[TrimmedTemplate]struct{})
 		for _, t := range trimmed {
-			if !config.IncludeTests && isTestFile(t.call.Position.Filename) {
-				continue
-			}
 			entry := TrimmedTemplate{
 				CallSite:    relativePosition(workingDirectory, t.call.Position),
 				Template:    t.template,
@@ -115,12 +112,6 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		}
 
 		for _, sc := range scopes {
-			if !config.IncludeTests && isTestFile(sc.call.Position.Filename) {
-				// A template rendered only by a test is not rendered
-				// in production, and mutating it measures the tests
-				// against themselves.
-				continue
-			}
 			if !include(sc.template) {
 				continue
 			}
@@ -381,10 +372,6 @@ func loadPackages(workingDirectory string, includeTests bool) ([]*packages.Packa
 		}
 	}
 	return slices, nil
-}
-
-func isTestFile(filename string) bool {
-	return strings.HasSuffix(filename, "_test.go")
 }
 
 func relativePosition(workingDirectory string, position token.Position) string {

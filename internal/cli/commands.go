@@ -244,9 +244,7 @@ working tree is never written to.`,
 
 			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
 			if err != nil {
-				if printMultiLineError(cmd, err) {
-					return err
-				}
+				printMultiLineError(cmd, err)
 				return err
 			}
 			return writeResult(cmd, cmd.OutOrStdout(), report)

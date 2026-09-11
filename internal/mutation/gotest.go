@@ -36,6 +36,20 @@ func (t goTest) run(extra []string) (string, error) {
 	return string(out), err
 }
 
+// verdict runs the tests against one mutant's overlay and reports whether
+// they caught it. An error means go test could not run at all.
+func (t goTest) verdict(overlay string) (Status, error) {
+	_, err := t.run([]string{"-overlay=" + overlay})
+	switch {
+	case err == nil:
+		return StatusMissed, nil
+	case isTestFailure(err):
+		return StatusKilled, nil
+	default:
+		return "", err
+	}
+}
+
 // testedPackages is the package patterns a run tests, with the default
 // applied.
 func testedPackages(config Configuration) []string {

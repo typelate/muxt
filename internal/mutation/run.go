@@ -151,7 +151,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 
 	runner := &mutantRunner{
 		plan:     plan,
-		tester:   tester,
+		test:     tester.verdict,
 		scratch:  scratch,
 		progress: progress,
 		clock:    &estimate{perMutant: baseline, remaining: plan.runnable(), parallel: report.parallel},
