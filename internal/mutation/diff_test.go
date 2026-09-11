@@ -3,10 +3,13 @@ package mutation
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"go/types"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/iotest"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -89,6 +92,16 @@ func TestExtractWritesTheTree(t *testing.T) {
 	}
 	if string(got) != `{{.}}` {
 		t.Errorf("sub/page.gohtml = %q, want %q", got, `{{.}}`)
+	}
+}
+
+// TestWriteArchivedReportsAReadError states that a file the archive stops
+// short of is an error, not a file cut short: a template read from a
+// truncated copy would be compared as though it had changed.
+func TestWriteArchivedReportsAReadError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "page.gohtml")
+	if err := writeArchived(path, iotest.ErrReader(io.ErrUnexpectedEOF), 0o644); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("writeArchived = %v, want %v", err, io.ErrUnexpectedEOF)
 	}
 }
 
