@@ -218,7 +218,7 @@ func (ctx mutantContext) variations(out *[]Mutant, a action) {
 // value assigned changes.
 func (ctx mutantContext) addPipeline(out *[]Mutant, a action, operator Operator, replacement string) {
 	r := a.region
-	start := ctx.valueStart(a.pipe, r)
+	start := valueStart(a.pipe)
 	if start >= r.innerEnd {
 		return
 	}
@@ -293,30 +293,14 @@ func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator Operator,
 	})
 }
 
-// valueStart returns the offset of the value a pipeline assigns, which is
-// the pipeline itself unless it declares variables first.
-func (ctx mutantContext) valueStart(pipe *parse.PipeNode, r region) int {
-	start := int(pipe.Position())
-	if len(pipe.Decl) == 0 {
-		return start
-	}
-	last := pipe.Decl[len(pipe.Decl)-1]
-	i := int(last.Position()) + len(last.String())
-	for i < r.innerEnd && isSpace(ctx.src.text[i]) {
-		i++
-	}
-	switch {
-	case strings.HasPrefix(ctx.src.text[i:], ":="):
-		i += 2
-	case i < r.innerEnd && ctx.src.text[i] == '=':
-		i++
-	default:
-		return start
-	}
-	for i < r.innerEnd && isSpace(ctx.src.text[i]) {
-		i++
-	}
-	return i
+// valueStart returns the offset of the value a pipeline assigns, which
+// follows any variables it declares.
+//
+// The parser positions a command at its first token, so the first command
+// starts exactly where the value is written. A pipeline always has one: an
+// action with no command does not parse.
+func valueStart(pipe *parse.PipeNode) int {
+	return int(pipe.Cmds[0].Position())
 }
 
 // lineIndex turns a byte offset into a one based line and column.

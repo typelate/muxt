@@ -41,7 +41,7 @@ func TestValueStart(t *testing.T) {
 			if !ok {
 				t.Fatalf("no region holds the pipeline at %d", pipe.Position())
 			}
-			start := mutantContext{src: src}.valueStart(pipe, r)
+			start := valueStart(pipe)
 			if got := tt.text[start:r.innerEnd]; got != tt.want {
 				t.Errorf("value = %q, want %q", got, tt.want)
 			}

@@ -96,12 +96,12 @@ func appendOperand(out *[]operand, text string, node parse.Node, dataType types.
 // can have skipped.
 func operandStart(text string, pos int, written string) (int, bool) {
 	lowest := max(pos-len(written), 0)
-	for start := min(pos, len(text)-len(written)); start >= lowest; start-- {
-		if text[start:start+len(written)] == written {
-			return start, true
-		}
+	window := text[lowest:min(pos+len(written), len(text))]
+	i := strings.LastIndex(window, written)
+	if i < 0 {
+		return 0, false
 	}
-	return 0, false
+	return lowest + i, true
 }
 
 // values draws replacement literals.
