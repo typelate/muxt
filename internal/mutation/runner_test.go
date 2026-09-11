@@ -3,10 +3,13 @@ package mutation
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // runnerFixture builds a report of n runnable mutants of one template.
@@ -124,5 +127,43 @@ func TestRunAllStopsDispatchingAfterAnError(t *testing.T) {
 	}
 	if got := calls.Load(); got != 1 {
 		t.Errorf("mutants started = %d, want 1: nothing should start after the first error", got)
+	}
+}
+
+// TestRunAllReportsEachMutantAsItFinishes states the progress stream: a
+// line per mutant, numbered as it finishes, with the time left falling as
+// runs complete. A skipped mutant says why, and since it costs nothing it
+// does not move the estimate.
+func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
+	report, p := runnerFixture(t, []bool{true, false, false})
+	skipped := &report.Groups[0].Templates[0].Results[1]
+	skipped.Status, skipped.Reason = StatusSkipped, "does not type check"
+
+	var progress strings.Builder
+	r := &mutantRunner{
+		plan:     p,
+		scratch:  t.TempDir(),
+		progress: &progress,
+		// An hour a mutant until a run says otherwise: each run that
+		// finishes has to bring the estimate down with it.
+		clock: &estimate{perMutant: time.Hour, remaining: 2, parallel: 1},
+		test: func(overlay string) (Status, error) {
+			if strings.Contains(readMutated(t, overlay), "K") {
+				return StatusKilled, nil
+			}
+			return StatusMissed, nil
+		},
+	}
+	if err := r.runAll(report, 1); err != nil {
+		t.Fatalf("runAll = %v", err)
+	}
+
+	want := []string{
+		fmt.Sprintf(`[1/3] KILL page.gohtml:0:0 "page" %s (0s, ~0s left)`, OperatorActionEmpty),
+		fmt.Sprintf(`[2/3] SKIP page.gohtml:0:0 "page" %s (does not type check)`, OperatorActionEmpty),
+		fmt.Sprintf(`[3/3] MISS page.gohtml:0:0 "page" %s (0s, ~0s left)`, OperatorActionEmpty),
+	}
+	if got := strings.Split(strings.TrimSpace(progress.String()), "\n"); !slices.Equal(got, want) {
+		t.Errorf("progress:\n got %q\nwant %q", got, want)
 	}
 }
