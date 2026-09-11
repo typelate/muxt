@@ -170,7 +170,7 @@ Each operator asks for a particular assertion:
 | `template-drop` | the partial renders nothing at all | something only that partial produces |
 | `operands` | one named input is replaced | that input specifically |
 
-Every run is a full run: one `go test` per mutant, every time. On a larger project that is what CI is for. If your suite tolerates running beside itself, `--workers 4` runs four mutants at once.
+Each mutant is its own `go test` run, so on a larger project this belongs in CI. On a pull request, `--diff origin/main` mutates only the templates the branch changed. If your suite tolerates running beside itself, `--workers 4` runs four mutants at once.
 
 Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
 

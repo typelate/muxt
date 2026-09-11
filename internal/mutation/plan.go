@@ -32,6 +32,13 @@ type plan struct {
 	seed       uint64
 	draw       *values
 	maxCases   int
+
+	// diff is the revision a --diff run compares with, diffError why the
+	// templates there could not be read, and unchanged the templates
+	// left alone because nothing about them changed since.
+	diff      string
+	diffError string
+	unchanged []UnchangedTemplate
 }
 
 func (p *plan) runnable() int { return p.runnableN }
@@ -52,9 +59,12 @@ func (p *plan) report() *Report {
 		Total:      len(p.mutants) + p.overBudget,
 		// Skips are decided while planning, not while running, so a dry
 		// run reports them too.
-		Skipped: len(p.mutants) - p.runnableN + p.overBudget,
-		Groups:  groups,
-		Trimmed: trimmed,
+		Skipped:   len(p.mutants) - p.runnableN + p.overBudget,
+		Groups:    groups,
+		Trimmed:   trimmed,
+		Diff:      p.diff,
+		DiffError: p.diffError,
+		Unchanged: p.unchanged,
 	}
 }
 
@@ -81,6 +91,23 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 	}
 	seen := make(map[string]struct{})
 
+	// before is what the templates looked like at the --diff revision.
+	// Nil means there is nothing to compare with, so every template
+	// counts as changed.
+	var before revision
+	if config.Diff != "" {
+		p.diff = config.Diff
+		dir, cleanup, err := checkout(workingDirectory, config.Diff)
+		if err != nil {
+			return nil, err
+		}
+		defer cleanup()
+		if before, err = templatesAt(config, dir); err != nil {
+			p.diffError = err.Error()
+		}
+	}
+	unchanged := make(map[string]struct{})
+
 	for _, templatesVariable := range config.TemplatesVariables {
 		lt, err := asteval.LoadTemplates(workingDirectory, templatesVariable, pl)
 		if err != nil {
@@ -94,8 +121,34 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		}
 
 		scopes, trimmed := traverse(lt, index)
+		for _, sc := range scopes {
+			if !include(sc.template) {
+				continue
+			}
+			key := executionKey(sc.template, sc.dataType)
+			if _, done := seen[key]; done {
+				continue
+			}
+			seen[key] = struct{}{}
+			if before != nil && !before.changed(sc) {
+				unchanged[key] = struct{}{}
+				p.unchanged = append(p.unchanged, UnchangedTemplate{
+					Template: sc.template,
+					File:     sc.src.path,
+					DataType: typeDisplay(sc.dataType),
+				})
+				continue
+			}
+			p.add(lt, sc, functions, workingDirectory)
+		}
+
 		reported := make(map[TrimmedTemplate]struct{})
 		for _, t := range trimmed {
+			if _, skipped := unchanged[executionKey(t.template, t.dataType)]; skipped {
+				// Unchanged means mutated nowhere, so there is no first
+				// mutation for the trim to point at.
+				continue
+			}
 			entry := TrimmedTemplate{
 				CallSite:    relativePosition(workingDirectory, t.call.Position),
 				Template:    t.template,
@@ -111,20 +164,9 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 			p.trimmed = append(p.trimmed, entry)
 		}
 
-		for _, sc := range scopes {
-			if !include(sc.template) {
-				continue
-			}
-			key := executionKey(sc.template, sc.dataType)
-			if _, done := seen[key]; done {
-				continue
-			}
-			seen[key] = struct{}{}
-			p.add(lt, sc, functions, workingDirectory)
-		}
 	}
 
-	if len(p.groups) == 0 && len(p.trimmed) == 0 {
+	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {
 		return nil, &NoCallSitesError{Variables: config.TemplatesVariables}
 	}
 	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {

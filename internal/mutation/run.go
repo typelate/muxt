@@ -80,6 +80,11 @@ type Configuration struct {
 	// Zero or less means one.
 	Workers int
 
+	// Diff, when set, names a git revision, and only templates that
+	// changed since it are mutated: ones whose text differs, and ones
+	// reached with a type of dot they were not reached with there.
+	Diff string
+
 	// GoTestArgs are extra flags for every go test invocation, from
 	// everything after a -- on the command line. They reach the
 	// baseline and each mutant alike.
