@@ -11,16 +11,6 @@ import (
 	"time"
 )
 
-// countVerdict tallies one mutant's outcome.
-func countVerdict(report *Report, status Status) {
-	switch status {
-	case StatusKilled:
-		report.Killed++
-	case StatusMissed:
-		report.Missed++
-	}
-}
-
 // mutantRunner runs the mutants a plan enumerated and writes each
 // verdict into the report.
 type mutantRunner struct {
@@ -83,11 +73,7 @@ dispatch:
 	if r.err != nil {
 		return r.err
 	}
-	for group := range report.eachTemplate() {
-		for _, result := range group.Results {
-			countVerdict(report, result.Status)
-		}
-	}
+	report.tally()
 	return nil
 }
 
@@ -151,10 +137,7 @@ func reportProgress(progress io.Writer, index, total int, group *TemplateReport,
 	line := fmt.Sprintf("[%*d/%d] %s %s:%d:%d %s %s",
 		len(fmt.Sprint(total)), index+1, total,
 		result.Status, group.File, result.Line, result.Column,
-		strconv.Quote(group.Template), result.Operator)
-	if (result.Operator == OperatorOperands || result.Operator == OperatorCondition) && result.Mutated != "" {
-		line += " " + result.Mutated
-	}
+		strconv.Quote(group.Template), result.label())
 	switch {
 	case result.Status == StatusSkipped:
 		line += " (" + result.Reason + ")"
