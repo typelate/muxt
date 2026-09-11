@@ -137,76 +137,73 @@ func (m Mutant) Replacement() string { return m.detail }
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
 func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]Mutant, []budgetNote) {
-	var notes []budgetNote
-	ctx := mutantContext{
+	e := &enumerator{
 		src:       sc.src,
 		template:  sc.template,
 		functions: functions,
 		values:    draw,
 		maxCases:  maxCases,
-		notes:     &notes,
 	}
+	walkActions(sc.src.text, sc.src.regions, sc.dataType, functions, sc.tree.Root, e.variations)
 
-	var all []Mutant
-	walkActions(sc.src.text, sc.src.regions, sc.dataType, functions, sc.tree.Root, func(a action) {
-		ctx.variations(&all, a)
-	})
-
-	slices.SortFunc(all, func(a, b Mutant) int {
+	slices.SortFunc(e.mutants, func(a, b Mutant) int {
 		return cmp.Or(
 			cmp.Compare(a.start(), b.start()),
 			cmp.Compare(a.Operator, b.Operator),
 			cmp.Compare(a.detail, b.detail),
 		)
 	})
-	return all, notes
+	return e.mutants, e.notes
 }
 
-// mutantContext is what every variation needs regardless of which action
-// it applies to.
+// enumerator collects the mutants of one template, holding what every
+// variation needs regardless of which action it applies to.
 //
 // The regions are not held here: they belong to src, and a copy could
 // come to describe a different text than the one the edits are written
 // against.
-type mutantContext struct {
+type enumerator struct {
 	src       *templateSource
 	template  string
 	functions check.Functions
 	values    *values
 	maxCases  int
-	notes     *[]budgetNote
+
+	// mutants and notes are what the variations have found so far.
+	mutants []Mutant
+	notes   []budgetNote
 }
 
 // variations appends the mutants that apply to one action.
 //
 // The walk decided which actions there are and what dot each is rendered
 // with; this decides only what to do with one.
-func (ctx mutantContext) variations(out *[]Mutant, a action) {
+func (e *enumerator) variations(a action) {
 	switch a.node.(type) {
 	case *parse.ActionNode:
-		if zero, typed := zeroLiteral(a.dot, a.pipe, ctx.functions); typed {
-			ctx.addPipeline(out, a, OperatorActionZero, zero)
+		if zero, typed := zeroLiteral(a.dot, a.pipe, e.functions); typed {
+			e.addPipeline(a, OperatorActionZero, zero)
 		} else {
-			ctx.addPipeline(out, a, OperatorActionEmpty, `""`)
+			e.addPipeline(a, OperatorActionEmpty, `""`)
 		}
 		// Emptying the whole action says only that something about it is
 		// watched. Varying its operands says which ones.
-		ctx.addOperandCombinations(out, a)
+		e.addOperandCombinations(a)
 	case *parse.IfNode:
-		ctx.addPipeline(out, a, OperatorIfTrue, "true")
-		ctx.addPipeline(out, a, OperatorIfFalse, "false")
+		e.addPipeline(a, OperatorIfTrue, "true")
+		e.addPipeline(a, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
 		// condition; anything else falls back to the general
 		// combinations over its operands.
-		if !ctx.addConditions(out, a) {
-			ctx.addOperandCombinations(out, a)
+		if !e.addConditions(a) {
+			e.addOperandCombinations(a)
 		}
 	case *parse.WithNode:
-		ctx.addConstructDrop(out, a, OperatorWithEmpty)
+		e.addConstructDrop(a, OperatorWithEmpty)
 	case *parse.RangeNode:
-		ctx.addConstructDrop(out, a, OperatorRangeNever)
+		e.addConstructDrop(a, OperatorRangeNever)
 	case *parse.TemplateNode:
-		ctx.addTemplateDrop(out, a.region)
+		e.addTemplateDrop(a.region)
 	}
 }
 
@@ -216,28 +213,28 @@ func (ctx mutantContext) variations(out *[]Mutant, a action) {
 // A pipeline that declares variables keeps its declarations, so that
 // references to them elsewhere in the template still resolve; only the
 // value assigned changes.
-func (ctx mutantContext) addPipeline(out *[]Mutant, a action, operator Operator, replacement string) {
+func (e *enumerator) addPipeline(a action, operator Operator, replacement string) {
 	r := a.region
 	start := valueStart(a.pipe)
 	if start >= r.innerEnd {
 		return
 	}
-	ctx.appendMutant(out, r, operator, edit{start: start, end: r.innerEnd, text: replacement})
+	e.appendMutant(r, operator, edit{start: start, end: r.innerEnd, text: replacement})
 }
 
 // addConstructDrop appends a mutant replacing a whole construct with its
 // else branch, or with nothing when it has none.
-func (ctx mutantContext) addConstructDrop(out *[]Mutant, a action, operator Operator) {
-	endIndex, elseIndex, ok := matchEnd(ctx.src.regions, a.index)
+func (e *enumerator) addConstructDrop(a action, operator Operator) {
+	endIndex, elseIndex, ok := matchEnd(e.src.regions, a.index)
 	if !ok {
 		return
 	}
 	r := a.region
-	text, end := ctx.src.text, ctx.src.regions[endIndex]
+	text, end := e.src.text, e.src.regions[endIndex]
 	replacement := ""
 	if elseIndex >= 0 {
-		els := ctx.src.regions[elseIndex]
-		left := cmp.Or(ctx.src.leftDelim, "{{")
+		els := e.src.regions[elseIndex]
+		left := cmp.Or(e.src.leftDelim, "{{")
 		content := text[trimLeft(text, els.start+len(left), els.innerEnd):els.innerEnd]
 		if chained := strings.TrimLeft(strings.TrimPrefix(content, "else"), spaceChars); chained != "" {
 			// {{else with .B}} is an else holding a second with, closed
@@ -248,17 +245,17 @@ func (ctx mutantContext) addConstructDrop(out *[]Mutant, a action, operator Oper
 			replacement = text[els.end:end.start]
 		}
 	}
-	ctx.appendMutant(out, r, operator, edit{start: r.start, end: end.end, text: replacement})
+	e.appendMutant(r, operator, edit{start: r.start, end: end.end, text: replacement})
 }
 
 // addTemplateDrop appends a mutant removing a {{template}} call.
-func (ctx mutantContext) addTemplateDrop(out *[]Mutant, r region) {
+func (e *enumerator) addTemplateDrop(r region) {
 	if r.keyword != "template" {
 		// A block defines its body in place, so removing its call
 		// would leave the body and its {{end}} behind.
 		return
 	}
-	ctx.appendMutant(out, r, OperatorTemplateDrop, edit{start: r.start, end: r.end})
+	e.appendMutant(r, OperatorTemplateDrop, edit{start: r.start, end: r.end})
 }
 
 // appendMutant records a mutant made of one substitution.
@@ -266,30 +263,30 @@ func (ctx mutantContext) addTemplateDrop(out *[]Mutant, r region) {
 // The span arrives as an edit rather than as two ints so that a caller
 // naming its bounds cannot swap them: a reversed span is refused here,
 // which would turn a typo into a mutant that is silently never run.
-func (ctx mutantContext) appendMutant(out *[]Mutant, r region, operator Operator, e edit) {
-	if e.start < 0 || e.end > len(ctx.src.text) || e.start > e.end {
+func (e *enumerator) appendMutant(r region, operator Operator, change edit) {
+	if change.start < 0 || change.end > len(e.src.text) || change.start > change.end {
 		return
 	}
-	ctx.appendEdits(out, r, operator, []edit{e}, e.text)
+	e.appendEdits(r, operator, []edit{change}, change.text)
 }
 
 // appendEdits records a mutant made of one or more substitutions.
-func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator Operator, edits []edit, detail string) {
+func (e *enumerator) appendEdits(r region, operator Operator, edits []edit, detail string) {
 	if len(edits) == 0 {
 		return
 	}
-	line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
-	*out = append(*out, Mutant{
+	line, column := e.src.lines.at(e.src.fileOffset(r.start))
+	e.mutants = append(e.mutants, Mutant{
 		Operator: operator,
-		Template: ctx.template,
-		File:     ctx.src.file,
-		Path:     ctx.src.path,
-		src:      ctx.src,
+		Template: e.template,
+		File:     e.src.file,
+		Path:     e.src.path,
+		src:      e.src,
 		Line:     line,
 		Column:   column,
 		edits:    edits,
 		detail:   detail,
-		action:   ctx.src.text[r.start:r.end],
+		action:   e.src.text[r.start:r.end],
 	})
 }
 

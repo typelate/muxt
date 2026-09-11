@@ -274,9 +274,9 @@ func (n *boolNode) conditions() []string {
 
 // addConditions appends a mutant per condition and truth value, and
 // records the conditions simplification proved cannot matter.
-func (ctx mutantContext) addConditions(out *[]Mutant, a action) bool {
+func (e *enumerator) addConditions(a action) bool {
 	r := a.region
-	tree, ok := decision(ctx.src.text, a.pipe)
+	tree, ok := decision(e.src.text, a.pipe)
 	if !ok {
 		return false
 	}
@@ -288,7 +288,7 @@ func (ctx mutantContext) addConditions(out *[]Mutant, a action) bool {
 	}
 
 	live := tree.simplify().conditions()
-	ops := operands(ctx.src.text, a.dot, a.pipe)
+	ops := operands(e.src.text, a.dot, a.pipe)
 
 	for _, name := range written {
 		spans := occurrences(ops, name)
@@ -296,11 +296,11 @@ func (ctx mutantContext) addConditions(out *[]Mutant, a action) bool {
 			continue
 		}
 		if !slices.Contains(live, name) {
-			ctx.appendEdits(out, r, OperatorConditionDead, spans2edits(spans, "false"), name+" cannot change the decision")
+			e.appendEdits(r, OperatorConditionDead, spans2edits(spans, "false"), name+" cannot change the decision")
 			continue
 		}
 		for _, value := range [...]string{"false", "true"} {
-			ctx.appendEdits(out, r, OperatorCondition, spans2edits(spans, value), name+"="+value)
+			e.appendEdits(r, OperatorCondition, spans2edits(spans, value), name+"="+value)
 		}
 	}
 	return true
