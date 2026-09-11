@@ -1,24 +1,12 @@
 # Two identically written actions are two mutants, not one.
 #
-# An action is identified for reuse by its template, its text and the
-# types resolved for it. On its own that does not tell {{.Name}} in one
-# place from {{.Name}} in another, so the second would find the first's
-# verdict recorded and take it instead of being run -- reporting a kill it
-# never earned, which is the sort of lie the skip machinery exists to
-# avoid.
-#
 # TestPage looks only at the first occurrence. Emptying that one is caught;
 # emptying the second changes nothing it asserts on and survives. The two
-# must therefore reach different verdicts.
+# must therefore reach different verdicts, which they can only do if each is
+# run on its own.
 
 muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
-
-# Running again reuses both verdicts, and they are still different ones. A
-# single recorded verdict answering for both actions would show here as two
-# alike: the second recording would have replaced the first.
-muxt test-template-mutations -v --seed 1
-cmp stdout want-reused.txt
 
 -- go.mod --
 module server
@@ -74,13 +62,3 @@ template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
     MISS 1:37 action-zero
 
 2 mutants, 1 killed, 1 missed, 0 skipped
--- want-reused.txt --
-2 mutants across 1 template (complexity 1, seed 1)
-baseline ok
-
-template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
-  "page" templates.gohtml (complexity 1, dot: server.Page)
-    KILL 1:21 action-zero
-    MISS 1:37 action-zero
-
-2 mutants, 1 killed, 1 missed, 0 skipped, 2 reused

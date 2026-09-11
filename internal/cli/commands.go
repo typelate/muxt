@@ -189,7 +189,7 @@ func testTemplateMutationsCommand(workingDirectory *string) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   testTemplateMutationsName + " [packages]",
+		Use:   testTemplateMutationsName + " [packages] [-- go test flags]",
 		Short: "Vary template actions and report the ones no test catches",
 		Long: `Vary each dynamic and control flow action in the project's templates, one
 at a time, and re-run the tests against each variation.
@@ -229,11 +229,18 @@ working tree is never written to.`,
 				}
 				config.Run = pattern
 			}
-			config.Packages = args
+			// Everything before a -- names packages; everything after it
+			// is handed to go test as written.
+			if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+				config.Packages = args[:dash]
+				config.GoTestArgs = args[dash:]
+			} else {
+				config.Packages = args
+			}
+			if err := mutation.CheckGoTestArgs(config.GoTestArgs); err != nil {
+				return err
+			}
 			config.SeedSet = cmd.Flags().Changed("seed")
-			// Recorded verdicts belong to the engine that reached them,
-			// so a muxt upgrade retries rather than trusting them.
-			config.Engine, _ = cliVersion()
 
 			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
 			if err != nil {
@@ -254,7 +261,7 @@ working tree is never written to.`,
 	cmd.Flags().BoolVar(&config.IncludeTests, "include-test-callers", false, "also mutate templates reached only from ExecuteTemplate calls in _test.go files")
 	cmd.Flags().Uint64Var(&config.Seed, "seed", 0, "seed the values substituted for an action's operands (default: drawn and reported)")
 	cmd.Flags().IntVar(&config.MaxCases, "max-cases", mutation.DefaultMaxCases, "most operand combinations one action may contribute")
-	cmd.Flags().StringVar(&config.StatePath, "state", mutation.DefaultStatePath, "record verdicts here and reuse them for actions that have not changed (empty to disable)")
+	cmd.Flags().IntVar(&config.Parallel, "parallel", 1, "how many mutants to run at once; the tests must tolerate running beside themselves")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd

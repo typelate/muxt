@@ -1,0 +1,67 @@
+# --parallel runs several mutants at once. Each is its own go test against its
+# own overlay, so no run can see another's mutation, and the report comes out
+# in plan order however the runs finish. So a parallel run reports exactly
+# what a serial one does.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+
+muxt test-template-mutations -v --seed 1 --parallel 3
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{if .Loud}} !!!{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGreeting(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+3 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+    KILL 1:29 action-zero
+    MISS 1:39 if-false
+    KILL 1:39 if-true
+
+3 mutants, 2 killed, 1 missed, 0 skipped

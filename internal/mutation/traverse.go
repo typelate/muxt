@@ -33,10 +33,9 @@ type scope struct {
 	// invocation rather than named by the call itself.
 	via bool
 
-	// treeLocation is where the template was found and what its own
-	// source digests to. It is embedded rather than copied field by
-	// field so that a scope cannot come to hold a tree from one place
-	// and a digest from another.
+	// treeLocation is where the template was found. It is embedded
+	// rather than copied field by field so that a scope cannot come to
+	// hold a tree from one source and positions from another.
 	treeLocation
 }
 
@@ -45,10 +44,15 @@ type scope struct {
 type treeLocation struct {
 	src  *templateSource
 	tree *parse.Tree
+}
 
-	// sourceDigest is the template's own source, which is what decides
-	// whether its mutants have to be run again.
-	sourceDigest string
+// executionKey names a template rendered with one type of dot, which is
+// the unit mutated once per run.
+//
+// Neither a template name nor a type's string can hold a NUL, so no two
+// pairs run together into one key.
+func executionKey(name string, dot types.Type) string {
+	return name + "\x00" + typeKey(dot)
 }
 
 // trim is a subtree the traversal did not descend into, because the same

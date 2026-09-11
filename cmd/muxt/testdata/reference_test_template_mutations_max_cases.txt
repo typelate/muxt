@@ -12,7 +12,7 @@
 muxt test-template-mutations -v --seed 1 --max-cases 2
 cmp stdout want-skipped.txt
 
-muxt test-template-mutations -v --seed 1 --max-cases 4 --state ""
+muxt test-template-mutations -v --seed 1 --max-cases 4
 cmp stdout want-enumerated.txt
 
 -- go.mod --

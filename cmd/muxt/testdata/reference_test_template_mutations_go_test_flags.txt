@@ -1,24 +1,20 @@
-# Editing a test retries everything.
+# Everything after a -- is handed to go test as written, so mutants run the way
+# the suite does: build tags, -race, -shuffle, whatever it needs.
 #
-# A verdict says the tests caught a mutant. That stops being an answer about
-# anything the moment those tests change, and nothing else in an action's
-# identity notices: the template, the types it reads and the seed all sit
-# still while an assertion is added, weakened or deleted.
-#
-# Without this, the run that proved a new test closed a gap was exactly the run
-# that reported the gap still open.
+# The only test that asserts on the rendered text is behind a build tag. Without
+# the tag it does not exist, so the mutant survives; passed through, it reaches
+# the mutant's run and catches it.
 
 muxt test-template-mutations --seed 1
-cmp stdout want-missed.txt
+cmp stdout want-untagged.txt
 
-# Nothing changed, so nothing is retried.
-muxt test-template-mutations --seed 1
-cmp stdout want-reused.txt
+muxt test-template-mutations --seed 1 -- -tags=extra
+cmp stdout want-tagged.txt
 
-# Now assert on the value the mutation destroys.
-cp covered.txt render_test.go
-muxt test-template-mutations --seed 1
-cmp stdout want-killed.txt
+# -overlay is refused: it is how each mutant reaches the build, and a second
+# one would leave the run measuring templates nobody mutated.
+! muxt test-template-mutations --seed 1 -- -overlay=mine.json
+stderr 'go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant'
 
 -- go.mod --
 module server
@@ -55,13 +51,15 @@ import (
 	"testing"
 )
 
-func TestGreet(t *testing.T) {
+func TestGreetRenders(t *testing.T) {
 	var buf strings.Builder
 	if err := Greet(&buf, Page{Name: "World"}); err != nil {
 		t.Fatal(err)
 	}
 }
--- covered.txt --
+-- tagged_test.go --
+//go:build extra
+
 package server
 
 import (
@@ -69,7 +67,7 @@ import (
 	"testing"
 )
 
-func TestGreet(t *testing.T) {
+func TestGreetText(t *testing.T) {
 	var buf strings.Builder
 	if err := Greet(&buf, Page{Name: "World"}); err != nil {
 		t.Fatal(err)
@@ -78,7 +76,7 @@ func TestGreet(t *testing.T) {
 		t.Errorf("greeting = %q, want %q", got, want)
 	}
 }
--- want-missed.txt --
+-- want-untagged.txt --
 1 mutant across 1 template (complexity 1, seed 1)
 baseline ok
 
@@ -87,16 +85,7 @@ template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
     MISS 1:29 action-zero
 
 1 mutant, 0 killed, 1 missed, 0 skipped
--- want-reused.txt --
-1 mutant across 1 template (complexity 1, seed 1)
-baseline ok
-
-template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
-  "greeting" templates.gohtml (complexity 1, dot: server.Page)
-    MISS 1:29 action-zero
-
-1 mutant, 0 killed, 1 missed, 0 skipped, 1 reused
--- want-killed.txt --
+-- want-tagged.txt --
 1 mutant across 1 template (complexity 1, seed 1)
 baseline ok
 

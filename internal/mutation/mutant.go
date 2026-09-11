@@ -15,11 +15,6 @@ import (
 // No operator renames a template or changes which templates exist, so a
 // mutant never moves a route: only what a template does with its data
 // changes.
-//
-// It is a named type because it is written to the state file and to the
-// JSON report, where a run reads back what an earlier one recorded. A
-// bare string there would let any other string be compared against it
-// and agree with nothing.
 type Operator string
 
 const (
@@ -112,19 +107,7 @@ type Mutant struct {
 	// src is the file the template text was read from, which knows how
 	// to put mutated text back into it.
 	src *templateSource
-
-	// actionIndex is the action's number in the walk, which tells two
-	// identically written actions apart.
-	actionIndex int
-
-	// fingerprint identifies the action this mutation varies, by its
-	// source and by the types resolved for it. A run compares it against
-	// a previous run's state to decide what has to be tried again.
-	fingerprint string
 }
-
-// Fingerprint identifies the action a mutation varies.
-func (m Mutant) Fingerprint() string { return m.fingerprint }
 
 // edit is one substitution within a template's text.
 type edit struct {
@@ -154,13 +137,8 @@ func (m Mutant) Replacement() string { return m.detail }
 
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int, run runIdentity) ([]Mutant, []budgetNote) {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]Mutant, []budgetNote) {
 	var notes []budgetNote
-
-	// One walk, shared with the identifiers: the same actions, in the
-	// same order, with the same dot.
-	scanned := scanTemplate(sc.src, sc.tree, sc.dataType, functions, sc.sourceDigest, run)
-
 	ctx := mutantContext{
 		src:       sc.src,
 		template:  sc.template,
@@ -171,15 +149,9 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 	}
 
 	var all []Mutant
-	for _, a := range scanned.Actions {
+	walkActions(sc.src.text, sc.src.regions, sc.dataType, functions, sc.tree.Root, func(a action) {
 		ctx.variations(&all, a)
-	}
-
-	// The identity accounts for every action in the template, so it is
-	// only complete once the walk is: fingerprints are taken afterwards.
-	for i := range all {
-		all[i].fingerprint = scanned.Identity.fingerprint(all[i].action, all[i].actionIndex)
-	}
+	})
 
 	slices.SortFunc(all, func(a, b Mutant) int {
 		return cmp.Or(
@@ -204,31 +176,15 @@ type mutantContext struct {
 	functions check.Functions
 	values    *values
 	maxCases  int
-	action    int
 	notes     *[]budgetNote
-}
-
-// forAction returns the context for one action, whose pipeline the
-// fingerprint is computed over.
-//
-// Each action also takes the next number in the walk, which is what
-// tells two identically written actions apart. Without it they share a
-// fingerprint, and the second inherits the first's verdict instead of
-// being run -- reporting a kill it never earned.
-func (ctx mutantContext) forAction(a action) mutantContext {
-	ctx.action = a.index
-	ctx.dot = a.dot
-	return ctx
 }
 
 // variations appends the mutants that apply to one action.
 //
 // The walk decided which actions there are and what dot each is rendered
-// with; this decides only what to do with one. Keeping the two apart is
-// what lets the identifiers be taken from the same walk without either
-// side knowing about the other.
+// with; this decides only what to do with one.
 func (ctx mutantContext) variations(out *[]Mutant, a action) {
-	ctx = ctx.forAction(a)
+	ctx.dot = a.dot
 
 	switch a.node.(type) {
 	case *parse.ActionNode:
@@ -325,17 +281,16 @@ func (ctx mutantContext) appendEdits(out *[]Mutant, r region, operator Operator,
 	}
 	line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
 	*out = append(*out, Mutant{
-		Operator:    operator,
-		Template:    ctx.template,
-		File:        ctx.src.file,
-		Path:        ctx.src.path,
-		src:         ctx.src,
-		Line:        line,
-		Column:      column,
-		edits:       edits,
-		detail:      detail,
-		action:      ctx.src.text[r.start:r.end],
-		actionIndex: ctx.action,
+		Operator: operator,
+		Template: ctx.template,
+		File:     ctx.src.file,
+		Path:     ctx.src.path,
+		src:      ctx.src,
+		Line:     line,
+		Column:   column,
+		edits:    edits,
+		detail:   detail,
+		action:   ctx.src.text[r.start:r.end],
 	})
 }
 

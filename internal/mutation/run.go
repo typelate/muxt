@@ -34,6 +34,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/typelate/check"
@@ -83,15 +84,18 @@ type Configuration struct {
 	// An action over the bound contributes none, and says so.
 	MaxCases int
 
-	// StatePath is where the verdicts are recorded and read back, so a
-	// later run only has to try the actions that changed. Empty turns
-	// the record off.
-	StatePath string
+	// Parallel is how many mutants run at once. Each is a separate go
+	// test invocation against its own overlay, so no mutant sees
+	// another's mutation -- but they do share whatever the tests
+	// themselves share, such as a port, a database or a file they write.
+	// Raise it only for a suite that tolerates running beside itself.
+	// Zero or less means one.
+	Parallel int
 
-	// Engine is the muxt version. It feeds every fingerprint, so a
-	// change to the mutation engine retries everything rather than
-	// trusting verdicts an older one reached.
-	Engine string
+	// GoTestArgs are extra flags for every go test invocation, from
+	// everything after a -- on the command line. They reach the
+	// baseline and each mutant alike.
+	GoTestArgs []string
 }
 
 // DefaultMaxCases bounds the combinations one action may contribute.
@@ -139,10 +143,6 @@ type Result struct {
 
 	// Seconds is how long the mutant's test run took.
 	Seconds float64 `json:"seconds,omitempty"`
-
-	// Reused is set when the verdict came from the state file rather
-	// than from a run, because the action had not changed.
-	Reused bool `json:"reused,omitempty"`
 
 	// mutantIndex locates the mutant this result came from, so the run
 	// does not have to carry the mutants inside the report it prints.
@@ -201,9 +201,12 @@ type Report struct {
 	Killed     int               `json:"killed"`
 	Missed     int               `json:"missed"`
 	Skipped    int               `json:"skipped"`
-	Reused     int               `json:"reused"`
 	Groups     []Group           `json:"groups"`
 	Trimmed    []TrimmedTemplate `json:"trimmed"`
+
+	// parallel is how many mutants run at once, which the estimate
+	// divides the work by.
+	parallel int
 }
 
 // BaselineFailedError reports that the tests do not pass before anything
@@ -287,7 +290,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		return report, nil
 	}
 
-	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run}
+	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs}
 
 	started := time.Now()
 	if out, err := tester.run(nil); err != nil {
@@ -298,6 +301,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	baseline := time.Since(started)
 	report.Baseline = BaselineResult{Passed: true, Seconds: baseline.Seconds()}
+	report.parallel = max(config.Parallel, 1)
 
 	if status != nil {
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s, estimated %s\n",
@@ -307,83 +311,26 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	reportTrims(progress, report.Trimmed)
 
-	// The state path is given relative to the project, not to wherever
-	// the command happens to have been started from.
-	statePath := config.StatePath
-	if statePath != "" && !filepath.IsAbs(statePath) {
-		statePath = filepath.Join(workingDirectory, statePath)
-	}
-	state := loadState(statePath)
-
 	scratch, err := os.MkdirTemp("", "muxt-mutation-")
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = os.RemoveAll(scratch) }()
 
-	clock := &estimate{perMutant: baseline, remaining: plan.runnable()}
-	index := 0
-	for group := range report.eachTemplate() {
-		for i := range group.Results {
-			result := &group.Results[i]
-			if result.Status == StatusSkipped {
-				reportProgress(progress, index, plan.total(), group, *result, clock)
-				index++
-				continue
-			}
-
-			mutant := plan.mutants[result.mutantIndex]
-
-			if status, found := state.verdict(mutant.Fingerprint(), result.Operator, result.Mutated); found {
-				// The action's source and its resolved types are what
-				// they were when this verdict was reached, so running it
-				// again could only reach the same one.
-				result.Status = status
-				result.Reused = true
-				report.Reused++
-				countVerdict(report, status)
-				reportProgress(progress, index, plan.total(), group, *result, clock)
-				index++
-				continue
-			}
-
-			overlay, err := writeMutant(scratch, index, mutant)
-			if err != nil {
-				return nil, err
-			}
-
-			runStarted := time.Now()
-			_, testErr := tester.run([]string{"-overlay=" + overlay})
-			elapsed := time.Since(runStarted)
-			if testErr != nil && !isTestFailure(testErr) {
-				return nil, testErr
-			}
-
-			result.Seconds = elapsed.Seconds()
-			if testErr != nil {
-				result.Status = StatusKilled
-			} else {
-				result.Status = StatusMissed
-			}
-			countVerdict(report, result.Status)
-			state.record(mutant.Fingerprint(), group.Template, group.File, result.Operator, result.Mutated, result.Status)
-			clock.observe(elapsed)
-			reportProgress(progress, index, plan.total(), group, *result, clock)
-			index++
-		}
+	runner := &mutantRunner{
+		plan:     plan,
+		tester:   tester,
+		scratch:  scratch,
+		progress: progress,
+		clock:    &estimate{perMutant: baseline, remaining: plan.runnable(), parallel: report.parallel},
 	}
-
-	state.Seed = config.Seed
-	state.Engine = config.Engine
-	state.Suite = plan.run.suite
-	if err := state.save(statePath); err != nil {
+	if err := runner.runAll(report, report.parallel); err != nil {
 		return nil, err
 	}
 	return report, nil
 }
 
-// countVerdict tallies one mutant's outcome, whether it was just run or
-// read back from the state file.
+// countVerdict tallies one mutant's outcome.
 func countVerdict(report *Report, status Status) {
 	switch status {
 	case StatusKilled:
@@ -391,6 +338,115 @@ func countVerdict(report *Report, status Status) {
 	case StatusMissed:
 		report.Missed++
 	}
+}
+
+// mutantRunner runs the mutants a plan enumerated and writes each
+// verdict into the report.
+type mutantRunner struct {
+	plan     *plan
+	tester   goTest
+	scratch  string
+	progress io.Writer
+
+	// mu guards everything below it, which every run updates as it
+	// finishes.
+	mu    sync.Mutex
+	clock *estimate
+	done  int
+	err   error
+}
+
+// runAll runs every mutant in the report, at most parallel at a time.
+//
+// Each mutant writes its own overlay under scratch and runs its own go
+// test, so no run can see another's mutation. A verdict is written into
+// the report's own slot for it, so the report reads in plan order however
+// the runs finish; only the progress stream comes out in the order they
+// complete. The first error that is not a test failure stops new runs
+// starting, and is returned once the ones already running have finished.
+func (r *mutantRunner) runAll(report *Report, parallel int) error {
+	total := 0
+	for group := range report.eachTemplate() {
+		total += len(group.Results)
+	}
+
+	slots := make(chan struct{}, parallel)
+	var running sync.WaitGroup
+	index := 0
+dispatch:
+	for group := range report.eachTemplate() {
+		for i := range group.Results {
+			if r.failed() {
+				break dispatch
+			}
+			slots <- struct{}{}
+			running.Add(1)
+			go func(index int, group *TemplateReport, result *Result) {
+				defer running.Done()
+				defer func() { <-slots }()
+				r.finish(group, result, total, r.run(index, result))
+			}(index, group, &group.Results[i])
+			index++
+		}
+	}
+	running.Wait()
+
+	if r.err != nil {
+		return r.err
+	}
+	for group := range report.eachTemplate() {
+		for _, result := range group.Results {
+			countVerdict(report, result.Status)
+		}
+	}
+	return nil
+}
+
+// run runs one mutant's tests and writes the verdict into result.
+func (r *mutantRunner) run(index int, result *Result) error {
+	if result.Status == StatusSkipped {
+		return nil
+	}
+	overlay, err := writeMutant(r.scratch, index, r.plan.mutants[result.mutantIndex])
+	if err != nil {
+		return err
+	}
+	started := time.Now()
+	_, testErr := r.tester.run([]string{"-overlay=" + overlay})
+	result.Seconds = time.Since(started).Seconds()
+	switch {
+	case testErr == nil:
+		result.Status = StatusMissed
+	case isTestFailure(testErr):
+		result.Status = StatusKilled
+	default:
+		return testErr
+	}
+	return nil
+}
+
+// finish records that one mutant is done, reporting its verdict or
+// keeping the first error.
+func (r *mutantRunner) finish(group *TemplateReport, result *Result, total int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err != nil {
+		if r.err == nil {
+			r.err = err
+		}
+		return
+	}
+	if result.Status != StatusSkipped {
+		r.clock.observe(time.Duration(result.Seconds * float64(time.Second)))
+	}
+	reportProgress(r.progress, r.done, total, group, *result, r.clock)
+	r.done++
+}
+
+func (r *mutantRunner) failed() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.err != nil
 }
 
 // eachTemplate iterates the report's templates in the order they were
@@ -448,6 +504,10 @@ type estimate struct {
 	observed  time.Duration
 	count     int
 	remaining int
+
+	// parallel is how many mutants run at once, so the remaining work
+	// takes that many times fewer rounds.
+	parallel int
 }
 
 func (e *estimate) observe(d time.Duration) {
@@ -460,7 +520,9 @@ func (e *estimate) observe(d time.Duration) {
 }
 
 func (e *estimate) total() time.Duration {
-	return time.Duration(e.remaining) * e.perMutant
+	parallel := max(e.parallel, 1)
+	rounds := (e.remaining + parallel - 1) / parallel
+	return time.Duration(rounds) * e.perMutant
 }
 
 func (e *estimate) left() string {
@@ -503,10 +565,17 @@ type goTest struct {
 	dir      string
 	packages []string
 	match    *regexp.Regexp
+
+	// extra are the caller's own go test flags, passed on every run.
+	extra []string
 }
 
 func (t goTest) run(extra []string) (string, error) {
 	args := []string{"test", "-count=1"}
+	// The caller's flags go first so that muxt's own land last: for a
+	// repeated flag the go command keeps the last, and the overlay
+	// carrying the mutant is not negotiable.
+	args = append(args, t.extra...)
 	args = append(args, extra...)
 	if t.match != nil {
 		args = append(args, "-run="+t.match.String())
@@ -521,10 +590,6 @@ func (t goTest) run(extra []string) (string, error) {
 
 // testedPackages is the package patterns a run tests, with the default
 // applied.
-//
-// The suite digest and the test command have to agree about this: a
-// digest taken over different packages than the ones that run describes a
-// suite nothing was measured against.
 func testedPackages(config Configuration) []string {
 	if len(config.Packages) == 0 {
 		return []string{"./..."}
@@ -555,13 +620,6 @@ type sourceCollector struct {
 	files            map[string]string
 	byKey            map[sourceKey]*templateSource
 	keys             []sourceKey
-
-	// defined holds where each source writes the templates its define
-	// clauses declare, which is what separates one template's source
-	// from the text around it.
-	defined map[*templateSource][]definitionSpan
-
-	digested map[*templateSource]map[string]string
 
 	// delims are the delimiters each source was parsed with, read off the
 	// definitions before any source is built. A source scans its actions
@@ -629,8 +687,6 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []
 		packages:         pl,
 		files:            make(map[string]string),
 		byKey:            make(map[sourceKey]*templateSource),
-		defined:          make(map[*templateSource][]definitionSpan),
-		digested:         make(map[*templateSource]map[string]string),
 		delims:           make(map[sourceKey][2]string),
 	}
 	c.resolveDelimiters(defs)
@@ -642,23 +698,6 @@ func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []
 func (c *sourceCollector) delimitersFor(key sourceKey) (string, string) {
 	pair := c.delims[key]
 	return pair[0], pair[1]
-}
-
-// digests reports a source digest for every template one text carries.
-//
-// This is the single rule for "what is this template's own source", so a
-// run and an identifier calculated ahead of one cannot disagree about
-// whether a template changed. Add every definition a text holds before
-// asking: the answer depends on where the text's define clauses are, and
-// a digest taken early would describe a template that has not been
-// carved up yet.
-func (c *sourceCollector) digests(src *templateSource) map[string]string {
-	if found, ok := c.digested[src]; ok {
-		return found
-	}
-	found := src.sourceDigests(src.rootName, c.defined[src])
-	c.digested[src] = found
-	return found
 }
 
 // add files one definition under the text it was written in, reading
@@ -706,45 +745,7 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 		}
 	}
 
-	if !definition.TemplateName.IsValid() {
-		// The template the text itself carries has no define clause, so
-		// there is no span to record: it is what the others leave.
-		return src, nil
-	}
-	if span, ok := definitionSpanOf(src, definition); ok {
-		c.defined[src] = append(c.defined[src], span)
-	}
 	return src, nil
-}
-
-// definitionSpanOf locates a definition within the text it was written
-// in, from the clause that opens it through the one that closes it.
-func definitionSpanOf(src *templateSource, definition check.Definition) (definitionSpan, bool) {
-	start, ok := src.textOffset(definition.Define.Offset)
-	if !ok {
-		return definitionSpan{}, false
-	}
-	endStart, ok := src.textOffset(definition.End.Offset)
-	if !ok {
-		return definitionSpan{}, false
-	}
-	end := endStart + definition.End.Length
-	if end > len(src.text) || start >= end {
-		return definitionSpan{}, false
-	}
-
-	opening := src.text[start:min(start+definition.Define.Length, len(src.text))]
-	closing := src.text[endStart:end]
-	return definitionSpan{
-		name:  definition.Name,
-		start: start,
-		end:   end,
-		// Only the outward facing markers matter to the surrounding
-		// template: a trim on the far side of either delimiter acts on
-		// text inside the definition.
-		trimsBefore: strings.HasPrefix(opening, "{{-"),
-		trimsAfter:  strings.HasSuffix(closing, "-}}"),
-	}, true
 }
 
 func (c *sourceCollector) source(key sourceKey, build func() (*templateSource, error)) (*templateSource, error) {

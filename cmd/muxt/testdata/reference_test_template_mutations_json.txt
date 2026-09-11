@@ -77,7 +77,6 @@ func TestGreeting(t *testing.T) {
 	"killed": 0,
 	"missed": 0,
 	"skipped": 0,
-	"reused": 0,
 	"groups": [
 		{
 			"call_site": "template.go:20:9",

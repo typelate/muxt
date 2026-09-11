@@ -29,12 +29,11 @@ type plan struct {
 	complexity int
 	runnableN  int
 	overBudget int
-	run        runIdentity
+	seed       uint64
 	draw       *values
 	maxCases   int
 }
 
-func (p *plan) total() int    { return len(p.mutants) }
 func (p *plan) runnable() int { return p.runnableN }
 
 func (p *plan) report() *Report {
@@ -49,7 +48,7 @@ func (p *plan) report() *Report {
 	return &Report{
 		Templates:  p.templates,
 		Complexity: p.complexity,
-		Seed:       p.run.seed,
+		Seed:       p.seed,
 		Total:      len(p.mutants) + p.overBudget,
 		// Skips are decided while planning, not while running, so a dry
 		// run reports them too.
@@ -72,16 +71,8 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		include = config.TemplatePattern.MatchString
 	}
 
-	suite, err := suiteDigest(workingDirectory, testedPackages(config), config.Run)
-	if err != nil {
-		return nil, err
-	}
 	p := &plan{
-		run: runIdentity{
-			seed:   config.Seed,
-			engine: config.Engine,
-			suite:  suite,
-		},
+		seed:     config.Seed,
 		draw:     newValues(config.Seed),
 		maxCases: config.MaxCases,
 	}
@@ -158,7 +149,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
 func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
-	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases, p.run)
+	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases)
 
 	report := TemplateReport{
 		Template:   sc.template,
@@ -291,10 +282,6 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}
-		// A template's identity is its own source, which is what the
-		// definitions in this text carve it into.
-		digests := collector.digests(src)
-
 		for name, tree := range trees {
 			if tree == nil || tree.Root == nil {
 				continue
@@ -302,7 +289,7 @@ func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*
 			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
-			index[name] = treeLocation{src: src, tree: tree, sourceDigest: digests[name]}
+			index[name] = treeLocation{src: src, tree: tree}
 		}
 	}
 

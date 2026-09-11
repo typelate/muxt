@@ -136,21 +136,18 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 		}
 		return
 	}
-	_, _ = fmt.Fprintf(out, "%d %s, %d killed, %d missed, %d skipped",
+	_, _ = fmt.Fprintf(out, "%d %s, %d killed, %d missed, %d skipped\n",
 		r.Total, pluralize(r.Total, "mutant"), r.Killed, r.Missed, r.Skipped)
-	if r.Reused > 0 {
-		// Saying what was not re-run is what keeps an incremental run
-		// from reading as a full one.
-		_, _ = fmt.Fprintf(out, ", %d reused", r.Reused)
-	}
-	_, _ = fmt.Fprintln(out)
 }
 
 // Estimate is how long the whole run is expected to take, from the
-// unmutated run's duration and the number of mutants that will be run.
+// unmutated run's duration, the number of mutants that will be run, and
+// how many run at once.
 func (r *Report) Estimate() string {
 	runnable := r.Total - r.Skipped
-	total := time.Duration(float64(runnable) * r.Baseline.Seconds * float64(time.Second))
+	parallel := max(r.parallel, 1)
+	batches := (runnable + parallel - 1) / parallel
+	total := time.Duration(float64(batches) * r.Baseline.Seconds * float64(time.Second))
 	return roundDuration(total)
 }
 

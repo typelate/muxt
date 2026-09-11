@@ -7,18 +7,9 @@ import (
 	"github.com/typelate/check"
 )
 
-// action is one action of a template, as everything downstream sees it.
-//
-// Both the mutants and the identifiers are built from this: the same
-// actions, in the same order, with the same type of dot. Deriving them
-// from one walk is what keeps them describing the same thing -- two
-// walks would have to agree on traversal order and on how dot narrows,
-// and nothing would notice when they stopped.
+// action is one action of a template, with what the mutations applied to
+// it need to know.
 type action struct {
-	// index is the action's place in the walk, counting from one. It is
-	// what tells two identically written actions apart.
-	index int
-
 	// node is the action itself. Its kind decides which variations
 	// apply, so the walker reports it rather than interpreting it.
 	node parse.Node
@@ -38,30 +29,19 @@ type action struct {
 	text string
 }
 
-// operands returns the leaf inputs the action reads.
-func (a action) operands(templateText string) []operand {
-	return operands(templateText, a.dot, a.pipe)
-}
-
 // walkActions reports every action of a template, in the order they are
 // mutated, with the type of dot in force at each.
 //
 // The order is the walk's own: an action before the bodies it encloses,
-// and a body before the else beside it. Everything that consumes actions
-// depends on that order, since an action's place in it is part of its
-// identity.
+// and a body before the else beside it.
 func walkActions(templateText string, found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
-	seq := 0
-
 	var walk func(parse.Node, types.Type)
 	report := func(node parse.Node, pipe *parse.PipeNode, at int, dot types.Type) {
 		_, r, ok := regionAt(found, at)
 		if !ok {
 			return
 		}
-		seq++
 		visit(action{
-			index:  seq,
 			node:   node,
 			pipe:   pipe,
 			dot:    dot,
@@ -102,22 +82,4 @@ func walkActions(templateText string, found []region, dot types.Type, functions 
 		}
 	}
 	walk(root, dot)
-}
-
-// invocation is a {{template}} call an action makes, with the type of dot
-// it passes on.
-func (a action) invocation(text string, functions check.Functions) (templateCall, bool) {
-	node, ok := a.node.(*parse.TemplateNode)
-	if !ok {
-		return templateCall{}, false
-	}
-	// A call written without an argument renders with no dot at all,
-	// which is a different execution from one passing a value along.
-	var passed types.Type
-	if a.pipe != nil {
-		if resolved, ok := pipelineType(a.dot, a.pipe, functions); ok {
-			passed = resolved
-		}
-	}
-	return templateCall{name: node.Name, dot: passed}, true
 }
