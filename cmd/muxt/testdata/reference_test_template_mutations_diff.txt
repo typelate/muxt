@@ -8,12 +8,18 @@
 # whose .Count went from int to float64. "name" still gets a string and
 # still reads the same, so there is nothing new to learn from it.
 
-git init -q
-git add go.mod
-git commit -q -m empty
-git tag empty
-git add .
-git commit -q -m base
+# Commits are made without the invoking user's git configuration, so a
+# setting such as commit signing cannot change what they do.
+env GIT_CONFIG_GLOBAL=$WORK/gitconfig GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=muxt GIT_AUTHOR_EMAIL=muxt@example.com
+env GIT_COMMITTER_NAME=muxt GIT_COMMITTER_EMAIL=muxt@example.com
+
+exec git init -q
+exec git add go.mod
+exec git commit -q -m empty
+exec git tag empty
+exec git add .
+exec git commit -q -m base
 
 cp template.go.next template.go
 muxt test-template-mutations -v --dry-run --seed 1 --diff HEAD
@@ -22,7 +28,7 @@ cmp stdout want-types.txt
 
 # A template whose text changed is mutated even though its dot did not.
 
-git commit -q -am types
+exec git commit -q -am types
 cp templates.gohtml.next templates.gohtml
 muxt test-template-mutations -v --dry-run --seed 1 --diff HEAD
 cmp stdout want-text.txt
