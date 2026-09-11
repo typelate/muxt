@@ -1,6 +1,9 @@
 package mutation
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // region is one {{...}} action as it is written in a template's text.
 //
@@ -76,12 +79,11 @@ func regions(text, leftDelim, rightDelim string) []region {
 			continue
 		}
 
-		inner := trimLeft(text, content, closing)
 		found = append(found, region{
 			start:    start,
 			innerEnd: trimRight(text, content, closing),
 			end:      closing + len(rightDelim),
-			keyword:  leadingWord(text, inner, closing),
+			keyword:  leadingWord(text[trimLeft(text, content, closing):closing]),
 		})
 		i = closing + len(rightDelim)
 	}
@@ -208,27 +210,25 @@ func trimLeft(text string, content, closing int) int {
 // leadingWord returns the keyword the action opens with, or the empty
 // string when it opens with anything else.
 //
-// Only the words text/template gives a meaning to are reported, so an
-// action calling a function named "endorse" is not mistaken for an end.
-func leadingWord(text string, inner, closing int) string {
-	end := inner
-	for end < closing && isWordByte(text[end]) {
-		end++
+// The word runs as far as text/template's lexer would read one identifier,
+// so an action calling a function named "endorse" or "withDefault" is not
+// mistaken for an end or a with.
+func leadingWord(content string) string {
+	word := content
+	if n := strings.IndexFunc(content, notIdentifier); n >= 0 {
+		word = content[:n]
 	}
-	word := text[inner:end]
 	switch word {
 	case "if", "range", "with", "block", "define", "else", "end", "template":
-		if end < closing && isWordByte(text[end]) {
-			return ""
-		}
 		return word
 	default:
 		return ""
 	}
 }
 
-func isWordByte(c byte) bool {
-	return c >= 'a' && c <= 'z'
+// notIdentifier is text/template's isAlphaNumeric, negated.
+func notIdentifier(r rune) bool {
+	return r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
 }
 
 func isSpace(c byte) bool {

@@ -10,7 +10,7 @@ import "testing"
 // the whitespace the template renders as well as the value, and the
 // mutant then reports on something other than the action. text/template
 // only reads "-" as a marker when whitespace separates it from what it
-// follows, so {{if 1-}} trims and {{$x-}} does not.
+// follows, so {{if 1 -}} trims and {{$x-}} does not.
 func TestRegionsBoundTheActionsContent(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -33,6 +33,15 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 			text:    `{{$x-}}`,
 			content: `$x-`,
 		},
+		{name: "range", text: `{{range .A}}`, content: `range .A`, keyword: "range"},
+		{name: "with", text: `{{with .A}}`, content: `with .A`, keyword: "with"},
+		{name: "template", text: `{{template "x" .}}`, content: `template "x" .`, keyword: "template"},
+		{name: "block", text: `{{block "x" .}}`, content: `block "x" .`, keyword: "block"},
+		{name: "define", text: `{{define "x"}}`, content: `define "x"`, keyword: "define"},
+		{name: "else", text: `{{else}}`, content: `else`, keyword: "else"},
+		{name: "else if", text: `{{else if .A}}`, content: `else if .A`, keyword: "else"},
+		{name: "a trimmed end", text: `{{- end -}}`, content: `end`, keyword: "end"},
+		{name: "a function that starts with a keyword", text: `{{endorse .A}}`, content: `endorse .A`},
 		{
 			name:    "a right delimiter inside a string does not end the action",
 			text:    `{{printf "}}"}}`,
@@ -64,6 +73,26 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 				t.Errorf("keyword = %q, want %q", r.keyword, tt.keyword)
 			}
 		})
+	}
+}
+
+// TestLeadingWordReadsTheWholeIdentifier states that a keyword is only a
+// keyword when it is the whole word. A function may be named endX or
+// withDefault, and text/template lexes those as one identifier.
+func TestLeadingWordReadsTheWholeIdentifier(t *testing.T) {
+	for _, text := range []string{`{{endX}}`, `{{end2}}`, `{{end_x}}`, `{{withDefault .A "x"}}`, `{{ifEmpty .A}}`, `{{rangeOf .A}}`} {
+		if got := regions(text, "", "")[0].keyword; got != "" {
+			t.Errorf("regions(%q) keyword = %q, want none", text, got)
+		}
+	}
+}
+
+// TestMatchEndSkipsAFunctionNamedLikeAKeyword states that such a function
+// does not open a block, so the end is matched at the right depth.
+func TestMatchEndSkipsAFunctionNamedLikeAKeyword(t *testing.T) {
+	const text = `{{range .Items}}{{withDefault . "x"}}{{end}}`
+	if end, _, ok := matchEnd(regions(text, "", ""), 0); !ok || end != 2 {
+		t.Errorf("matchEnd = %d, %t, want 2, true", end, ok)
 	}
 }
 
