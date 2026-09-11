@@ -245,11 +245,22 @@ func (ctx mutantContext) addConstructDrop(out *[]Mutant, r region, operator Oper
 	if !ok {
 		return
 	}
+	text, end := ctx.src.text, ctx.src.regions[endIndex]
 	replacement := ""
 	if elseIndex >= 0 {
-		replacement = ctx.src.text[ctx.src.regions[elseIndex].end:ctx.src.regions[endIndex].start]
+		els := ctx.src.regions[elseIndex]
+		left := cmp.Or(ctx.src.leftDelim, "{{")
+		content := text[trimLeft(text, els.start+len(left), els.innerEnd):els.innerEnd]
+		if chained := strings.TrimLeft(strings.TrimPrefix(content, "else"), spaceChars); chained != "" {
+			// {{else with .B}} is an else holding a second with, closed
+			// by the same end. Dropping the first construct leaves the
+			// second one standing, opened and closed.
+			replacement = left + chained + text[els.innerEnd:end.end]
+		} else {
+			replacement = text[els.end:end.start]
+		}
 	}
-	ctx.appendMutant(out, r, operator, edit{start: r.start, end: ctx.src.regions[endIndex].end, text: replacement})
+	ctx.appendMutant(out, r, operator, edit{start: r.start, end: end.end, text: replacement})
 }
 
 // addTemplateDrop appends a mutant removing a {{template}} call.
