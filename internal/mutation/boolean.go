@@ -96,7 +96,7 @@ func decisionArg(text string, arg parse.Node) (*boolNode, bool) {
 		return &boolNode{kind: boolConst, value: node.True}, true
 	case *parse.FieldNode, *parse.VariableNode, *parse.DotNode:
 		var found []operand
-		appendOperand(&found, text, arg, nil, "")
+		appendOperand(&found, text, arg, nil)
 		if len(found) != 1 {
 			return nil, false
 		}
