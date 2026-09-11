@@ -81,26 +81,37 @@ type trim struct {
 // produce the same mutants and the same verdicts, so the second is
 // trimmed.
 func traverse(lt *asteval.LoadedTemplates, index map[string]treeLocation) ([]scope, []trim) {
-	var (
-		scopes  []scope
-		trimmed []trim
-	)
-	visited := make(map[string]callSite)
+	t := &traversal{lt: lt, index: index, visited: make(map[string]callSite)}
 	for call := range lt.Templates.ExecuteTemplateCalls() {
 		site := callSite{
 			Position: lt.Package.Fset.Position(call.Call.Pos()),
 			Template: call.TemplateName,
 			DataType: call.DataType,
 		}
-		visit(lt, index, site, call.TemplateName, call.DataType, false, visited, &scopes, &trimmed)
+		t.visit(site, call.TemplateName, call.DataType, false)
 	}
-	return scopes, trimmed
+	return t.scopes, t.trimmed
 }
 
-func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site callSite, name string, dot types.Type, via bool, visited map[string]callSite, out *[]scope, trimmed *[]trim) {
+// traversal is the state of one walk: what it reads from, and what it has
+// found so far.
+type traversal struct {
+	lt    *asteval.LoadedTemplates
+	index map[string]treeLocation
+
+	// visited records the call site each template and dot was first
+	// reached from, which a trim reports.
+	visited map[string]callSite
+	scopes  []scope
+	trimmed []trim
+}
+
+// visit records the template name reached from site with dot, then the
+// templates it invokes.
+func (t *traversal) visit(site callSite, name string, dot types.Type, via bool) {
 	key := executionKey(name, dot)
-	if first, seen := visited[key]; seen {
-		*trimmed = append(*trimmed, trim{
+	if first, seen := t.visited[key]; seen {
+		t.trimmed = append(t.trimmed, trim{
 			call:     site,
 			template: name,
 			dataType: dot,
@@ -108,13 +119,13 @@ func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site call
 		})
 		return
 	}
-	visited[key] = site
+	t.visited[key] = site
 
-	location, ok := index[name]
+	location, ok := t.index[name]
 	if !ok {
 		return
 	}
-	*out = append(*out, scope{
+	t.scopes = append(t.scopes, scope{
 		call:         site,
 		template:     name,
 		dataType:     dot,
@@ -122,8 +133,8 @@ func visit(lt *asteval.LoadedTemplates, index map[string]treeLocation, site call
 		treeLocation: location,
 	})
 
-	for _, nested := range templateCalls(lt, location.tree, dot) {
-		visit(lt, index, site, nested.name, nested.dot, true, visited, out, trimmed)
+	for _, nested := range templateCalls(t.lt, location.tree, dot) {
+		t.visit(site, nested.name, nested.dot, true)
 	}
 }
 
@@ -139,25 +150,29 @@ type templateCall struct {
 // dot narrows through a range or a with on the way to the invocation.
 func templateCalls(lt *asteval.LoadedTemplates, tree *parse.Tree, dot types.Type) []templateCall {
 	var found []templateCall
-	lt.Global.InspectTemplateNode = func(node *parse.TemplateNode, _ *parse.Tree, tp types.Type, _ check.Definition) {
-		found = append(found, templateCall{name: node.Name, dot: tp})
-	}
 	// A template that does not check still yields the invocations found
 	// before the failure, which is better than none: muxt check is where
 	// a type error should be reported, not here.
-	_ = check.Execute(lt.Global, tree, dot)
-	lt.Global.InspectTemplateNode = nil
+	_ = executeWith(lt, tree, dot, func(node *parse.TemplateNode, _ *parse.Tree, tp types.Type, _ check.Definition) {
+		found = append(found, templateCall{name: node.Name, dot: tp})
+	})
 	return found
 }
 
 // checks reports whether tree type checks with dot, which is how a mutant
 // is told from a mutation that merely breaks the template.
 func checks(lt *asteval.LoadedTemplates, tree *parse.Tree, dot types.Type) bool {
-	inspector := lt.Global.InspectTemplateNode
-	lt.Global.InspectTemplateNode = nil
-	err := check.Execute(lt.Global, tree, dot)
-	lt.Global.InspectTemplateNode = inspector
-	return err == nil
+	return executeWith(lt, tree, dot, nil) == nil
+}
+
+// executeWith type checks tree with dot, calling inspect on each
+// {{template}} node it passes, then puts back whatever inspector the
+// shared checker held before.
+func executeWith(lt *asteval.LoadedTemplates, tree *parse.Tree, dot types.Type, inspect func(*parse.TemplateNode, *parse.Tree, types.Type, check.Definition)) error {
+	saved := lt.Global.InspectTemplateNode
+	lt.Global.InspectTemplateNode = inspect
+	defer func() { lt.Global.InspectTemplateNode = saved }()
+	return check.Execute(lt.Global, tree, dot)
 }
 
 // typeKey identifies a type exactly, for deciding whether a template has
