@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +34,21 @@ type revision map[string]string
 // template text decides what it reads from them.
 func (r revision) changed(sc scope) bool {
 	text, reached := r[executionKey(sc.template, sc.dataType)]
-	return !reached || text != sc.tree.Root.String()
+	return !reached || text != scopeText(sc)
+}
+
+// scopeText is what a revision compares a scope by: the template as the
+// parser reads it, so reformatting inside an action is not a change.
+func scopeText(sc scope) string { return sc.tree.Root.String() }
+
+// scopesOf records what each scope reads like, keyed by the template and
+// the type of dot it was reached with.
+func scopesOf(scopes []scope) revision {
+	r := make(revision, len(scopes))
+	for _, sc := range scopes {
+		r[executionKey(sc.template, sc.dataType)] = scopeText(sc)
+	}
+	return r
 }
 
 // templatesAt reads the templates in dir, a copy of the working directory
@@ -56,9 +71,7 @@ func templatesAt(config Configuration, dir string) (revision, error) {
 			return nil, err
 		}
 		scopes, _ := traverse(lt, index)
-		for _, sc := range scopes {
-			before[executionKey(sc.template, sc.dataType)] = sc.tree.Root.String()
-		}
+		maps.Copy(before, scopesOf(scopes))
 	}
 	return before, nil
 }

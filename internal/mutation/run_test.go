@@ -147,3 +147,112 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 		t.Errorf("mutated file does not hold %s:\n%s", want, m.Apply())
 	}
 }
+
+// neverRun is a suite that fails the test if anything runs it.
+func neverRun(t *testing.T) (func([]string) (string, error), func(string) (Status, error)) {
+	t.Helper()
+	return func([]string) (string, error) {
+			t.Error("the suite ran")
+			return "", nil
+		}, func(string) (Status, error) {
+			t.Error("a mutant ran")
+			return StatusMissed, nil
+		}
+}
+
+// TestRunPlanDryRun states that a dry run reports the plan and runs
+// nothing: no baseline, no mutant, and nothing on the status stream.
+func TestRunPlanDryRun(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true, false})
+	baseline, verdict := neverRun(t)
+
+	var status strings.Builder
+	report, err := runPlan(p, Configuration{DryRun: true}, &status, baseline, verdict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.DryRun {
+		t.Error("the report does not say it was a dry run")
+	}
+	if status.Len() != 0 {
+		t.Errorf("status = %q, want nothing", status.String())
+	}
+}
+
+// TestRunPlanStopsWhenTheBaselineFails states that tests failing with
+// nothing mutated stop the run before a single mutant is tried, carrying
+// the output that shows what failed.
+func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true})
+	_, verdict := neverRun(t)
+	failed := exitStatusOne(t)
+
+	_, err := runPlan(p, Configuration{}, nil, func([]string) (string, error) {
+		return "--- FAIL: TestIndex (0.00s)\n", failed
+	}, verdict)
+
+	baselineErr, ok := errors.AsType[*BaselineFailedError](err)
+	if !ok {
+		t.Fatalf("runPlan = %v, want a failing baseline", err)
+	}
+	if !strings.Contains(baselineErr.Output, "--- FAIL: TestIndex") {
+		t.Errorf("the error does not carry what failed: %q", baselineErr.Output)
+	}
+}
+
+// TestRunPlanStopsWhenTheSuiteCannotRun states that go test failing to run
+// at all is that error, not a failing baseline: reading it as one would
+// report the tests as broken when the command was.
+func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true})
+	_, verdict := neverRun(t)
+	cannotRun := errors.New("go: no such tool")
+
+	_, err := runPlan(p, Configuration{}, nil, func([]string) (string, error) {
+		return "", cannotRun
+	}, verdict)
+
+	if !errors.Is(err, cannotRun) {
+		t.Fatalf("runPlan = %v, want the error go gave", err)
+	}
+	if _, ok := errors.AsType[*BaselineFailedError](err); ok {
+		t.Error("a command that could not run was reported as a failing baseline")
+	}
+}
+
+// TestRunPlanReportsWhatTheSuiteSaid states a whole run without a suite of
+// its own: the preamble says how much work there is, and each verdict
+// lands in the report.
+func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true, false, true})
+
+	var status strings.Builder
+	got, err := runPlan(p, Configuration{Verbose: true}, &status, func([]string) (string, error) {
+		return "", nil
+	}, func(overlay string) (Status, error) {
+		if strings.Contains(readMutated(t, overlay), "K") {
+			return StatusKilled, nil
+		}
+		return StatusMissed, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Killed != 2 || got.Missed != 1 {
+		t.Errorf("killed %d, missed %d, want 2 and 1", got.Killed, got.Missed)
+	}
+	if !got.Baseline.Passed {
+		t.Error("the report does not say the baseline passed")
+	}
+	if !strings.HasPrefix(status.String(), "3 mutants across 1 template (complexity 0), baseline ") {
+		t.Errorf("status does not open with the preamble:\n%s", status.String())
+	}
+	lines := strings.Count(strings.TrimSpace(status.String()), "\n") + 1
+	if lines != 4 {
+		t.Errorf("status has %d lines, want the preamble and one per mutant:\n%s", lines, status.String())
+	}
+}

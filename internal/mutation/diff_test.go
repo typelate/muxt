@@ -14,24 +14,14 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
-
-	"github.com/typelate/muxt/internal/asteval"
 )
 
 // TestRevisionChanged states which scopes a --diff run mutates: one whose
 // template reads differently, or one reached with a type of dot the
 // revision did not reach it with.
 func TestRevisionChanged(t *testing.T) {
-	scopeOf := func(t *testing.T, text string, dot types.Type) scope {
-		t.Helper()
-		trees, err := asteval.ParseTrees("t", text, "", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return scope{template: "t", dataType: dot, treeLocation: treeLocation{tree: trees["t"]}}
-	}
 	str := types.Typ[types.String]
-	before := revision{executionKey("t", str): scopeOf(t, `<b>{{.}}</b>`, str).tree.Root.String()}
+	before := scopesOf([]scope{scopeOf(t, "t", `<b>{{.}}</b>`, str)})
 
 	for _, tt := range []struct {
 		name string
@@ -45,7 +35,7 @@ func TestRevisionChanged(t *testing.T) {
 		{name: "a type of dot not reached with before", text: `<b>{{.}}</b>`, dot: types.Typ[types.Int], want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := before.changed(scopeOf(t, tt.text, tt.dot)); got != tt.want {
+			if got := before.changed(scopeOf(t, "t", tt.text, tt.dot)); got != tt.want {
 				t.Errorf("changed = %t, want %t", got, tt.want)
 			}
 		})

@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -8,8 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 // This file holds what more than one test needs: a module on disk, a git
@@ -175,6 +179,45 @@ func (r *repo) commit(message string) {
 	r.t.Helper()
 	r.git("add", "-A")
 	r.git("commit", "-q", "-m", message)
+}
+
+// exitStatusOne is the error a command that ran and failed gives. Only a
+// real process carries one, and it is what tells a suite that failed from
+// a command that could not run at all.
+func exitStatusOne(t *testing.T) error {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("false is not a command on Windows")
+	}
+	err := exec.Command("false").Run()
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	if !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("false = %v, want exit status 1", err)
+	}
+	return err
+}
+
+// scopeOf builds the scope a traversal reports for one template: its text
+// parsed, the file it was read from, and the type of dot it renders with.
+//
+// Everything the selection and the revision decide is decided from these,
+// so a test of either needs no module and no loader.
+func scopeOf(t *testing.T, name, text string, dot types.Type) scope {
+	t.Helper()
+	trees, err := asteval.ParseTrees(name, text, "", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, ok := trees[name]
+	if !ok {
+		t.Fatalf("the text does not hold %q", name)
+	}
+	file := name + ".gohtml"
+	return scope{
+		template:     name,
+		dataType:     dot,
+		treeLocation: treeLocation{src: newFileSource(file, file, text, "", ""), tree: tree},
+	}
 }
 
 // mutatedTemplates names each template a plan mutates, with its dot.
