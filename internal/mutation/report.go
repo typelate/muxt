@@ -279,14 +279,15 @@ func (r *Report) writeTrimmed(out *bufio.Writer) {
 // writeDiff says what a --diff run compared with, and how much of the
 // work that took away.
 func (r *Report) writeDiff(out *bufio.Writer) {
-	switch {
-	case r.Diff == "":
-	case r.DiffError != "":
-		_, _ = fmt.Fprintf(out, "every template counts as changed: the templates at %s could not be read (%s)\n", r.Diff, r.DiffError)
-	default:
-		_, _ = fmt.Fprintf(out, "%d %s unchanged since %s\n",
-			len(r.Unchanged), pluralize(len(r.Unchanged), "template"), r.Diff)
+	if r.Diff == "" {
+		return
 	}
+	if r.DiffError != "" {
+		_, _ = fmt.Fprintf(out, "every template counts as changed: the templates at %s could not be read (%s)\n", r.Diff, r.DiffError)
+		return
+	}
+	_, _ = fmt.Fprintf(out, "%d %s unchanged since %s\n",
+		len(r.Unchanged), pluralize(len(r.Unchanged), "template"), r.Diff)
 }
 
 func (r *Report) writeUnchanged(out *bufio.Writer) {
