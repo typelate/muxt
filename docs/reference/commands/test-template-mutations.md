@@ -61,11 +61,11 @@ muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./
 | `--include-test-callers` | bool | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
 | `--seed` | uint64 | _(drawn)_ | Seed the values substituted for an action's operands. Drawn and reported when not given. |
 | `--max-cases` | int | `8` | Most operand combinations one action may contribute. |
-| `--parallel` | int | `1` | How many mutants to run at once. |
+| `--workers` | int | `1` | How many mutants to run at once. |
 | `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to read templates from. |
 | `--format` | string | `text` | `text` or `json`. |
 
-`--parallel` runs that many mutants at once, each as its own `go test` against its own overlay, so no mutant sees another's. They do share whatever your tests share — a port, a database, a file a test writes — so raise it only for a suite that tolerates running beside itself. The report is the same either way; only the `-v` progress lines come out in the order runs finish.
+`--workers` runs that many mutants at once, each as its own `go test` against its own overlay, so no mutant sees another's. They do share whatever your tests share — a port, a database, a file a test writes — so raise it only for a suite that tolerates running beside itself. The report is the same either way; only the `-v` progress lines come out in the order runs finish.
 
 ## Knowing How Long It Will Take
 
@@ -265,7 +265,7 @@ Unresolved means `action-empty` rather than `action-zero`; the mutation still ha
 
 - A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. They are resolved per parsed source, not per file, so a construction chain that calls `Delims` more than once — or one Go file holding several literals parsed differently — reads each source with its own pair. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`; if that leaves a template the set can see actions in and this command cannot, the run fails rather than measuring fewer templates than it was given.
 - `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
-- Each mutant is a full `go test -count=1` run, and every run mutates everything it selects. Narrow it with `--template-pattern`, `--run`, and a package argument, spread it with `--parallel`, and use `--dry-run` first to see the size of the job.
+- Each mutant is a full `go test -count=1` run, and every run mutates everything it selects. Narrow it with `--template-pattern`, `--run`, and a package argument, spread it with `--workers`, and use `--dry-run` first to see the size of the job.
 
 ## Related
 

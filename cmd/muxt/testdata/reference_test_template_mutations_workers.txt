@@ -1,4 +1,4 @@
-# --parallel runs several mutants at once. Each is its own go test against its
+# --workers runs several mutants at once. Each is its own go test against its
 # own overlay, so no run can see another's mutation, and the report comes out
 # in plan order however the runs finish. So a parallel run reports exactly
 # what a serial one does.
@@ -6,7 +6,7 @@
 muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
 
-muxt test-template-mutations -v --seed 1 --parallel 3
+muxt test-template-mutations -v --seed 1 --workers 3
 cmp stdout want.txt
 
 -- go.mod --

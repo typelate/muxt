@@ -35,7 +35,7 @@ func TestCheckGoTestArgs(t *testing.T) {
 // A mutant is recorded as killed when its tests fail, so anything else
 // read as a test failure is a kill the tests did not earn: a usage error
 // in a pass-through flag, or a go test the OS killed for memory under
-// --parallel.
+// --workers.
 func TestIsTestFailureOnlyCountsATestThatRan(t *testing.T) {
 	for _, tt := range []struct {
 		name   string

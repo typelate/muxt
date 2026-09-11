@@ -72,12 +72,12 @@ func readMutated(t *testing.T, overlay string) string {
 // the same as a serial run's.
 func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 	kills := []bool{true, false, true, true, false, false, true, false}
-	for _, parallel := range []int{1, 4} {
+	for _, workers := range []int{1, 4} {
 		report, p := runnerFixture(t, kills)
 		r := &mutantRunner{
 			plan:    p,
 			scratch: t.TempDir(),
-			clock:   &estimate{remaining: len(kills), parallel: parallel},
+			clock:   &estimate{remaining: len(kills), workers: workers},
 			test: func(overlay string) (Status, error) {
 				if strings.Contains(readMutated(t, overlay), "K") {
 					return StatusKilled, nil
@@ -85,8 +85,8 @@ func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 				return StatusMissed, nil
 			},
 		}
-		if err := r.runAll(report, parallel); err != nil {
-			t.Fatalf("parallel %d: runAll = %v", parallel, err)
+		if err := r.runAll(report, workers); err != nil {
+			t.Fatalf("workers %d: runAll = %v", workers, err)
 		}
 
 		results := report.Groups[0].Templates[0].Results
@@ -96,11 +96,11 @@ func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 				want = StatusKilled
 			}
 			if results[i].Status != want {
-				t.Errorf("parallel %d: result %d = %s, want %s", parallel, i, results[i].Status, want)
+				t.Errorf("workers %d: result %d = %s, want %s", workers, i, results[i].Status, want)
 			}
 		}
 		if report.Killed != 4 || report.Missed != 4 {
-			t.Errorf("parallel %d: killed %d, missed %d, want 4 and 4", parallel, report.Killed, report.Missed)
+			t.Errorf("workers %d: killed %d, missed %d, want 4 and 4", workers, report.Killed, report.Missed)
 		}
 	}
 }
@@ -116,7 +116,7 @@ func TestRunAllStopsDispatchingAfterAnError(t *testing.T) {
 	r := &mutantRunner{
 		plan:    p,
 		scratch: t.TempDir(),
-		clock:   &estimate{remaining: 3, parallel: 1},
+		clock:   &estimate{remaining: 3, workers: 1},
 		test: func(string) (Status, error) {
 			calls.Add(1)
 			return "", errors.New("go could not run")
@@ -146,7 +146,7 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 		progress: &progress,
 		// An hour a mutant until a run says otherwise: each run that
 		// finishes has to bring the estimate down with it.
-		clock: &estimate{perMutant: time.Hour, remaining: 2, parallel: 1},
+		clock: &estimate{perMutant: time.Hour, remaining: 2, workers: 1},
 		test: func(overlay string) (Status, error) {
 			if strings.Contains(readMutated(t, overlay), "K") {
 				return StatusKilled, nil

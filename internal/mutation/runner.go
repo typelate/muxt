@@ -31,7 +31,7 @@ type mutantRunner struct {
 	err   error
 }
 
-// runAll runs every mutant in the report, at most parallel at a time.
+// runAll runs every mutant in the report, at most workers at a time.
 //
 // Each mutant writes its own overlay under scratch and runs its own go
 // test, so no run can see another's mutation. A verdict is written into
@@ -39,13 +39,13 @@ type mutantRunner struct {
 // the runs finish; only the progress stream comes out in the order they
 // complete. The first error that is not a test failure stops new runs
 // starting, and is returned once the ones already running have finished.
-func (r *mutantRunner) runAll(report *Report, parallel int) error {
+func (r *mutantRunner) runAll(report *Report, workers int) error {
 	total := 0
 	for group := range report.eachTemplate() {
 		total += len(group.Results)
 	}
 
-	slots := make(chan struct{}, parallel)
+	slots := make(chan struct{}, workers)
 	var running sync.WaitGroup
 dispatch:
 	for group := range report.eachTemplate() {
@@ -157,9 +157,9 @@ type estimate struct {
 	count     int
 	remaining int
 
-	// parallel is how many mutants run at once, so the remaining work
+	// workers is how many mutants run at once, so the remaining work
 	// takes that many times fewer rounds.
-	parallel int
+	workers int
 }
 
 func (e *estimate) observe(d time.Duration) {
@@ -172,8 +172,8 @@ func (e *estimate) observe(d time.Duration) {
 }
 
 func (e *estimate) total() time.Duration {
-	parallel := max(e.parallel, 1)
-	rounds := (e.remaining + parallel - 1) / parallel
+	workers := max(e.workers, 1)
+	rounds := (e.remaining + workers - 1) / workers
 	return time.Duration(rounds) * e.perMutant
 }
 
