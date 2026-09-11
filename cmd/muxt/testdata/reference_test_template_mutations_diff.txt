@@ -1,0 +1,129 @@
+# --diff mutates only what changed since a git revision. The unit is a
+# template rendered with one type of dot, which is what a run mutates
+# once, so a template is mutated when its text changed or when it is now
+# reached with a type of dot it was not reached with at the revision.
+#
+# Here "page" renders "name" with .Name and "count" with .Count. When Page
+# becomes Summary, "page" is reached with a new type, and so is "count",
+# whose .Count went from int to float64. "name" still gets a string and
+# still reads the same, so there is nothing new to learn from it.
+
+git init -q
+git add go.mod
+git commit -q -m empty
+git tag empty
+git add .
+git commit -q -m base
+
+cp template.go.next template.go
+muxt test-template-mutations -v --dry-run --seed 1 --diff HEAD
+cmp stdout want-types.txt
+! stderr .
+
+# A template whose text changed is mutated even though its dot did not.
+
+git commit -q -am types
+cp templates.gohtml.next templates.gohtml
+muxt test-template-mutations -v --dry-run --seed 1 --diff HEAD
+cmp stdout want-text.txt
+! stderr .
+
+# A revision the templates cannot be read at, such as one from before the
+# package existed, leaves nothing to compare with, so everything counts as
+# changed and the report says why.
+
+muxt test-template-mutations --dry-run --seed 1 --diff empty
+stdout '^4 mutants across 3 templates'
+stdout '^every template counts as changed: the templates at empty could not be read'
+
+# A revision git does not know is an error.
+
+! muxt test-template-mutations --dry-run --diff no-such-revision
+stderr 'no-such-revision'
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}{{template "name" .Name}}{{template "count" .Count}}{{end}}
+{{define "name"}}<b>{{.}}</b>{{end}}
+{{define "count"}}<i>{{.}}</i>{{end}}
+-- templates.gohtml.next --
+{{define "page"}}{{template "name" .Name}}{{template "count" .Count}}{{end}}
+{{define "name"}}<b>{{.}}</b>!{{end}}
+{{define "count"}}<i>{{.}}</i>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name  string
+	Count int
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- template.go.next --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Summary struct {
+	Name  string
+	Count float64
+}
+
+func Render(w io.Writer, summary Summary) error {
+	return templates.ExecuteTemplate(w, "page", summary)
+}
+-- want-types.txt --
+3 mutants across 2 templates (complexity 2, seed 1)
+1 template unchanged since HEAD
+dry run: no tests were run
+
+template.go:20:9 ExecuteTemplate "page" (dot: server.Summary)
+  "page" templates.gohtml (complexity 1, dot: server.Summary)
+    PEND 1:18 template-drop
+    PEND 1:43 template-drop
+  "count" templates.gohtml via {{template}} (complexity 1, dot: float64)
+    PEND 3:22 action-zero
+
+unchanged since HEAD, not mutated:
+  "name" templates.gohtml (dot: string)
+
+3 mutants, 3 runnable, 0 skipped
+-- want-text.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+2 templates unchanged since HEAD
+dry run: no tests were run
+
+template.go:20:9 ExecuteTemplate "page" (dot: server.Summary)
+  "name" templates.gohtml via {{template}} (complexity 1, dot: string)
+    PEND 2:21 action-zero
+
+unchanged since HEAD, not mutated:
+  "page" templates.gohtml (dot: server.Summary)
+  "count" templates.gohtml (dot: float64)
+
+1 mutant, 1 runnable, 0 skipped

@@ -90,6 +90,14 @@ type TrimmedTemplate struct {
 	FirstSeenAt string `json:"first_seen_at"`
 }
 
+// UnchangedTemplate is a template a --diff run did not mutate: at the
+// revision it read the same and was reached with the same type of dot.
+type UnchangedTemplate struct {
+	Template string `json:"template"`
+	File     string `json:"file"`
+	DataType string `json:"data_type"`
+}
+
 // BaselineResult records the unmutated run the mutants are compared
 // against.
 type BaselineResult struct {
@@ -116,6 +124,13 @@ type Report struct {
 	Skipped    int               `json:"skipped"`
 	Groups     []Group           `json:"groups"`
 	Trimmed    []TrimmedTemplate `json:"trimmed"`
+
+	// Diff is the revision a --diff run compared with. DiffError says why
+	// the templates there could not be read, in which case every template
+	// counted as changed; otherwise Unchanged lists the ones left alone.
+	Diff      string              `json:"diff,omitempty"`
+	DiffError string              `json:"diff_error,omitempty"`
+	Unchanged []UnchangedTemplate `json:"unchanged,omitempty"`
 }
 
 // eachTemplate iterates the report's templates in the order they were
@@ -174,6 +189,7 @@ func (r *Report) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	r.writeTrimmed(out)
+	r.writeUnchanged(out)
 	r.writeSummary(out)
 
 	if err := out.Flush(); err != nil {
@@ -187,6 +203,7 @@ func (r *Report) writePreamble(out *bufio.Writer) {
 		r.Total, pluralize(r.Total, "mutant"),
 		r.Templates, pluralize(r.Templates, "template"),
 		r.Complexity, r.Seed)
+	r.writeDiff(out)
 
 	switch {
 	case r.DryRun:
@@ -256,6 +273,29 @@ func (r *Report) writeTrimmed(out *bufio.Writer) {
 	for _, trimmed := range r.Trimmed {
 		_, _ = fmt.Fprintf(out, "  %s at %s, first reached from %s\n",
 			strconv.Quote(trimmed.Template), trimmed.CallSite, trimmed.FirstSeenAt)
+	}
+}
+
+// writeDiff says what a --diff run compared with, and how much of the
+// work that took away.
+func (r *Report) writeDiff(out *bufio.Writer) {
+	switch {
+	case r.Diff == "":
+	case r.DiffError != "":
+		_, _ = fmt.Fprintf(out, "every template counts as changed: the templates at %s could not be read (%s)\n", r.Diff, r.DiffError)
+	default:
+		_, _ = fmt.Fprintf(out, "%d %s unchanged since %s\n",
+			len(r.Unchanged), pluralize(len(r.Unchanged), "template"), r.Diff)
+	}
+}
+
+func (r *Report) writeUnchanged(out *bufio.Writer) {
+	if !r.Verbose || len(r.Unchanged) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "\nunchanged since %s, not mutated:\n", r.Diff)
+	for _, u := range r.Unchanged {
+		_, _ = fmt.Fprintf(out, "  %s %s (dot: %s)\n", strconv.Quote(u.Template), u.File, u.DataType)
 	}
 }
 

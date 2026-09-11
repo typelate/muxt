@@ -60,6 +60,7 @@ func Test(t *testing.T) {
 	e.Cmds = scripttest.DefaultCmds()
 	e.Cmds["muxt"] = scriptCommand()
 	e.Cmds["count-matches"] = countRedirectBlocksCommand()
+	e.Cmds["git"] = gitCommand()
 	ctx := t.Context()
 	scripttest.Test(t, ctx, e, nil, filepath.FromSlash("testdata/*.txt"))
 }
@@ -75,6 +76,36 @@ func scriptCommand() script.Cmd {
 				e, _ := state.LookupEnv(s)
 				return e
 			}, &stdout, &stderr)
+			return stdout.String(), stderr.String(), err
+		}, nil
+	})
+}
+
+// gitCommand runs git in the script's directory. The script environment
+// has no PATH, and the invoking user's git configuration is left out so a
+// setting such as commit signing cannot change what a script's commits do.
+func gitCommand() script.Cmd {
+	return script.Command(script.CmdUsage{
+		Summary: "git, without the invoking user's configuration",
+		Args:    "args...",
+	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = state.Getwd()
+		cmd.Env = append(os.Environ(),
+			"GIT_CONFIG_GLOBAL="+os.DevNull,
+			"GIT_CONFIG_NOSYSTEM=1",
+			"GIT_AUTHOR_NAME=muxt",
+			"GIT_AUTHOR_EMAIL=muxt@example.com",
+			"GIT_COMMITTER_NAME=muxt",
+			"GIT_COMMITTER_EMAIL=muxt@example.com",
+		)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		return func(*script.State) (string, string, error) {
+			err := cmd.Wait()
 			return stdout.String(), stderr.String(), err
 		}, nil
 	})

@@ -259,6 +259,7 @@ working tree is never written to.`,
 	cmd.Flags().BoolVar(&config.IncludeTests, "include-test-callers", false, "also mutate templates reached only from ExecuteTemplate calls in _test.go files")
 	cmd.Flags().Uint64Var(&config.Seed, "seed", 0, "seed the values substituted for an action's operands (default: drawn and reported)")
 	cmd.Flags().IntVar(&config.MaxCases, "max-cases", mutation.DefaultMaxCases, "most operand combinations one action may contribute")
+	cmd.Flags().StringVar(&config.Diff, "diff", "", "only mutate templates whose text, or the type of dot they are rendered with, changed since this git revision")
 	cmd.Flags().IntVar(&config.Workers, "workers", 1, "how many mutants to run at once; the tests must tolerate running beside themselves")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
