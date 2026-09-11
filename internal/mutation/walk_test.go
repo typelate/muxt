@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"go/types"
 	"strings"
 	"testing"
 	"text/template/parse"
@@ -42,22 +43,35 @@ func TestWalkActionsOrder(t *testing.T) {
 // TestWalkActionsNarrowsDot states that a body is walked with the dot its
 // construct selects, which is what makes an action's types depend on
 // where it is written rather than only on what it says.
+//
+// An else is the exception: it runs when the construct selected nothing,
+// so it keeps the outer dot.
 func TestWalkActionsNarrowsDot(t *testing.T) {
-	const text = `{{define "t"}}{{range .Items}}{{.}}{{end}}{{end}}`
+	const text = `{{define "t"}}` +
+		`{{range .Items}}{{.}}{{end}}` +
+		`{{range .Tags}}{{.}}{{end}}` +
+		`{{range .Count}}{{.}}{{end}}` +
+		`{{with .Owner}}{{.}}{{else}}{{.}}{{end}}` +
+		`{{end}}`
 	trees, err := parse.Parse("t", text, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// With no type information the narrowing resolves to nothing, which
-	// is still a narrowing: the body must not inherit the outer dot.
-	var bodyDot []string
-	walkActions(text, regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
+	var got []string
+	walkActions(text, regions(text, "", ""), dataType(t, pageSource, "Page"), nil, trees["t"].Root, func(a action) {
 		if a.text == "{{.}}" {
-			bodyDot = append(bodyDot, typeKey(a.dot))
+			got = append(got, types.TypeString(a.dot, nil))
 		}
 	})
-	if len(bodyDot) != 1 {
-		t.Fatalf("body actions = %d, want 1", len(bodyDot))
+	want := []string{
+		"example.com/data.Item",
+		"example.com/data.Item",
+		"int",
+		"*example.com/data.User",
+		"example.com/data.Page",
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("body dots:\n got %v\nwant %v", got, want)
 	}
 }

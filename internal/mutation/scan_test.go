@@ -52,6 +52,9 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 			text:    `{{- /* you'd think "this" ends it }} */ -}}`,
 			content: `/* you'd think "this" ends it }} */`,
 		},
+		{name: "an empty comment", text: `{{/**/}}`, content: `/**/`},
+		{name: "a right delimiter just before the comment closes", text: `{{/*}}*/}}`, content: `/*}}*/`},
+		{name: "a comment whose body opens with a slash", text: `{{/*/}}*/}}`, content: `/*/}}*/`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			found := regions(tt.text, "", "")
@@ -93,6 +96,39 @@ func TestMatchEndSkipsAFunctionNamedLikeAKeyword(t *testing.T) {
 	const text = `{{range .Items}}{{withDefault . "x"}}{{end}}`
 	if end, _, ok := matchEnd(regions(text, "", ""), 0); !ok || end != 2 {
 		t.Errorf("matchEnd = %d, %t, want 2, true", end, ok)
+	}
+}
+
+// TestRegionsIgnoresAnUnfinishedTail states that an action cut off by the
+// end of the text is not reported, and costs the actions before it nothing.
+func TestRegionsIgnoresAnUnfinishedTail(t *testing.T) {
+	for _, text := range []string{`{{.A}}{{`, `{{.A}}{{-`, `{{.A}}{{.B`, `{{.A}}{{/* x`, `{{.A}}{{/* x */`} {
+		if found := regions(text, "", ""); len(found) != 1 || text[found[0].start:found[0].end] != "{{.A}}" {
+			t.Errorf("regions(%q) = %v, want only {{.A}}", text, found)
+		}
+	}
+}
+
+// TestRegionAt states that a position belongs to the action whose
+// delimiters enclose it, from the first byte of the left one to the last
+// of the right one.
+func TestRegionAt(t *testing.T) {
+	const text = `a{{.A}}{{.B}}b`
+	found := regions(text, "", "")
+	for _, tt := range []struct {
+		pos, index int
+		ok         bool
+	}{
+		{pos: 0},
+		{pos: 1, index: 0, ok: true},
+		{pos: 6, index: 0, ok: true},
+		{pos: 7, index: 1, ok: true},
+		{pos: 12, index: 1, ok: true},
+		{pos: 13},
+	} {
+		if index, _, ok := regionAt(found, tt.pos); index != tt.index || ok != tt.ok {
+			t.Errorf("regionAt(%d) = %d, %t, want %d, %t", tt.pos, index, ok, tt.index, tt.ok)
+		}
 	}
 }
 
