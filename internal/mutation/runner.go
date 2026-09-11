@@ -25,9 +25,13 @@ func countVerdict(report *Report, status Status) {
 // verdict into the report.
 type mutantRunner struct {
 	plan     *plan
-	tester   goTest
 	scratch  string
 	progress io.Writer
+
+	// test runs the suite against one mutant's overlay and says whether
+	// the tests caught it. An error means the tests could not be run at
+	// all, which stops the run.
+	test func(overlay string) (Status, error)
 
 	// mu guards everything below it, which every run updates as it
 	// finishes.
@@ -57,10 +61,14 @@ func (r *mutantRunner) runAll(report *Report, parallel int) error {
 dispatch:
 	for group := range report.eachTemplate() {
 		for i := range group.Results {
+			slots <- struct{}{}
+			// Checked only once a slot is free: the run that failed frees
+			// its slot after recording the error, so this is the first
+			// point at which a failure is certain to be seen.
 			if r.failed() {
+				<-slots
 				break dispatch
 			}
-			slots <- struct{}{}
 			running.Add(1)
 			go func(index int, group *TemplateReport, result *Result) {
 				defer running.Done()
@@ -93,16 +101,12 @@ func (r *mutantRunner) run(index int, result *Result) error {
 		return err
 	}
 	started := time.Now()
-	_, testErr := r.tester.run([]string{"-overlay=" + overlay})
+	status, err := r.test(overlay)
 	result.Seconds = time.Since(started).Seconds()
-	switch {
-	case testErr == nil:
-		result.Status = StatusMissed
-	case isTestFailure(testErr):
-		result.Status = StatusKilled
-	default:
-		return testErr
+	if err != nil {
+		return err
 	}
+	result.Status = status
 	return nil
 }
 
