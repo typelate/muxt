@@ -85,7 +85,8 @@ func TestConstructDropKeepsTheElseBranch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, tt.left, tt.right)
 			var out []Mutant
-			mutantContext{src: src, template: "t"}.addConstructDrop(&out, src.regions[0], OperatorWithEmpty)
+			with := action{region: src.regions[0], index: 0}
+			mutantContext{src: src, template: "t"}.addConstructDrop(&out, with, OperatorWithEmpty)
 			if len(out) != 1 {
 				t.Fatalf("mutants = %d, want 1", len(out))
 			}

@@ -22,8 +22,11 @@ type action struct {
 	// by any range or with it is written inside.
 	dot types.Type
 
-	// region is where the action is written.
+	// region is where the action is written, and index is its position
+	// among the source's regions, which is how a construct finds the
+	// else and end that belong to it.
 	region region
+	index  int
 
 	// text is the action as written, delimiters included.
 	text string
@@ -37,7 +40,7 @@ type action struct {
 func walkActions(templateText string, found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
 	var walk func(parse.Node, types.Type)
 	report := func(node parse.Node, pipe *parse.PipeNode, at int, dot types.Type) {
-		_, r, ok := regionAt(found, at)
+		index, r, ok := regionAt(found, at)
 		if !ok {
 			return
 		}
@@ -46,6 +49,7 @@ func walkActions(templateText string, found []region, dot types.Type, functions 
 			pipe:   pipe,
 			dot:    dot,
 			region: r,
+			index:  index,
 			text:   templateText[r.start:r.end],
 		})
 	}

@@ -199,19 +199,13 @@ func combinations(ops []operand, drawn []string) ([][]edit, []string) {
 // addOperandCombinations appends a mutant per combination of the action's
 // operands, or nothing when there is only one operand, which the
 // single-value operators already cover.
-func (ctx mutantContext) addOperandCombinations(out *[]Mutant, pipe *parse.PipeNode, maxCases int) {
-	if pipe == nil {
-		return
-	}
-	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
-	if !ok {
-		return
-	}
-	ops := operands(ctx.src.text, ctx.dot, pipe)
+func (ctx mutantContext) addOperandCombinations(out *[]Mutant, a action) {
+	r := a.region
+	ops := operands(ctx.src.text, a.dot, a.pipe)
 	if len(ops) < 2 {
 		return
 	}
-	if cases := 1<<len(ops) - 1; cases > maxCases {
+	if cases := 1<<len(ops) - 1; cases > ctx.maxCases {
 		line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
 		*ctx.notes = append(*ctx.notes, budgetNote{
 			template: ctx.template,
@@ -219,7 +213,7 @@ func (ctx mutantContext) addOperandCombinations(out *[]Mutant, pipe *parse.PipeN
 			column:   column,
 			inputs:   len(ops),
 			cases:    cases,
-			maxCases: maxCases,
+			maxCases: ctx.maxCases,
 		})
 		return
 	}

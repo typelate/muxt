@@ -274,15 +274,9 @@ func (n *boolNode) conditions() []string {
 
 // addConditions appends a mutant per condition and truth value, and
 // records the conditions simplification proved cannot matter.
-func (ctx mutantContext) addConditions(out *[]Mutant, pipe *parse.PipeNode) bool {
-	if pipe == nil {
-		return false
-	}
-	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
-	if !ok {
-		return false
-	}
-	tree, ok := decision(ctx.src.text, pipe)
+func (ctx mutantContext) addConditions(out *[]Mutant, a action) bool {
+	r := a.region
+	tree, ok := decision(ctx.src.text, a.pipe)
 	if !ok {
 		return false
 	}
@@ -294,7 +288,7 @@ func (ctx mutantContext) addConditions(out *[]Mutant, pipe *parse.PipeNode) bool
 	}
 
 	live := tree.simplify().conditions()
-	ops := operands(ctx.src.text, ctx.dot, pipe)
+	ops := operands(ctx.src.text, a.dot, a.pipe)
 
 	for _, name := range written {
 		spans := occurrences(ops, name)
