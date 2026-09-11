@@ -26,6 +26,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"regexp"
+	"slices"
 	"time"
 )
 
@@ -89,6 +90,20 @@ type Configuration struct {
 	// everything after a -- on the command line. They reach the
 	// baseline and each mutant alike.
 	GoTestArgs []string
+
+	// env is the environment the go command runs in, for both loading
+	// packages and running the tests. Nil is the process's own. There is
+	// no flag for it: a test sets it so that a module it wrote is loaded
+	// and tested as the module it is.
+	env []string
+}
+
+// environment is the environment a go command runs in.
+func (c Configuration) environment() []string {
+	if c.env == nil {
+		return os.Environ()
+	}
+	return slices.Clone(c.env)
 }
 
 // DefaultMaxCases bounds the combinations one action may contribute.
@@ -127,7 +142,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		return report, nil
 	}
 
-	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs}
+	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs, env: config.env}
 
 	started := time.Now()
 	if out, err := tester.run(nil); err != nil {

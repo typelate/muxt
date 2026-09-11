@@ -2,77 +2,14 @@ package mutation
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 )
 
-// module writes a Go module into a temporary directory and returns it. The
-// go command runs without a workspace from the invoking environment.
-func module(t *testing.T, files map[string]string) string {
-	t.Helper()
-	t.Setenv("GOWORK", "off")
-	dir := t.TempDir()
-	for name, content := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
-const goMod = "module server\n\ngo 1.24\n"
-
-// greetingGo holds its template as a raw string literal.
-const greetingGo = `package server
-
-import (
-	"html/template"
-	"io"
-)
-
-var templates = template.Must(template.New("greeting").Parse(` + "`" + `Hello, {{.Name}}!{{if .Loud}} !!!{{end}}` + "`" + `))
-
-type Greeting struct {
-	Name string
-	Loud bool
-}
-
-func Render(w io.Writer, greeting Greeting) error {
-	return templates.ExecuteTemplate(w, "greeting", greeting)
-}
-`
-
-// greetingTest checks the name and never renders with Loud set, so it
-// catches the mutants that change the name or force the exclamation, and
-// misses the one that removes it.
-const greetingTest = `package server
-
-import (
-	"strings"
-	"testing"
-)
-
-func TestGreeting(t *testing.T) {
-	var buf strings.Builder
-	if err := Render(&buf, Greeting{Name: "World"}); err != nil {
-		t.Fatal(err)
-	}
-	if got, want := buf.String(), "Hello, World!"; got != want {
-		t.Errorf("greeting = %q, want %q", got, want)
-	}
-}
-`
-
 func greetingConfig() Configuration {
-	return Configuration{TemplatesVariables: []string{"templates"}, Seed: 1, SeedSet: true}
+	return Configuration{TemplatesVariables: []string{"templates"}, Seed: 1, SeedSet: true, env: goEnv()}
 }
 
 // TestRun states a whole run over a template written as a Go string
@@ -80,6 +17,7 @@ func greetingConfig() Configuration {
 // literal and tested, and every verdict lands in the report while progress
 // streams to status.
 func TestRun(t *testing.T) {
+	t.Parallel()
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
 	config := greetingConfig()
 	config.Verbose = true
@@ -114,6 +52,7 @@ func TestRun(t *testing.T) {
 // TestRunDryRun states that a dry run enumerates and tests nothing: here a
 // test that always fails would otherwise fail the baseline.
 func TestRunDryRun(t *testing.T) {
+	t.Parallel()
 	dir := module(t, map[string]string{
 		"go.mod":         goMod,
 		"template.go":    greetingGo,
@@ -137,6 +76,7 @@ func TestRunDryRun(t *testing.T) {
 // TestRunStopsWhenTheBaselineFails states that tests failing with nothing
 // mutated stop the run, since every mutant would be recorded as caught.
 func TestRunStopsWhenTheBaselineFails(t *testing.T) {
+	t.Parallel()
 	dir := module(t, map[string]string{
 		"go.mod":         goMod,
 		"template.go":    greetingGo,
@@ -156,6 +96,7 @@ func TestRunStopsWhenTheBaselineFails(t *testing.T) {
 // over a flag value it cannot read, is an error of its own rather than a
 // failing baseline.
 func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
+	t.Parallel()
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
 	config := greetingConfig()
 	config.GoTestArgs = []string{"-count=many"}
@@ -173,6 +114,7 @@ func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
 // text is an interpreted string literal, which a mutation is re-quoted
 // into.
 func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
+	t.Parallel()
 	dir := module(t, map[string]string{
 		"go.mod": goMod,
 		"template.go": "package server\n\nimport \"html/template\"\n\n" +

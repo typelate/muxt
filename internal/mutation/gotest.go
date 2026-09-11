@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -15,6 +16,9 @@ type goTest struct {
 
 	// extra are the caller's own go test flags, passed on every run.
 	extra []string
+
+	// env is the environment go test runs in, nil for the process's own.
+	env []string
 }
 
 func (t goTest) run(extra []string) (string, error) {
@@ -32,6 +36,14 @@ func (t goTest) run(extra []string) (string, error) {
 
 	cmd := exec.Command("go", args...)
 	cmd.Dir = t.dir
+	if t.env != nil {
+		// os/exec points PWD at Dir only when it supplies the environment
+		// itself. The go command addresses files the way PWD says, and an
+		// overlay keyed on the paths the loader reported is ignored when
+		// the two disagree -- every mutant then builds unmutated and is
+		// reported as a mutation no test caught.
+		cmd.Env = append(slices.Clip(t.env), "PWD="+t.dir)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
