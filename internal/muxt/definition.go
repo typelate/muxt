@@ -888,9 +888,15 @@ func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[st
 				return true
 			}
 			// A parenthesised pipeline is an argument, not a command of
-			// this pipeline, so it needs the walk of its own.
+			// this pipeline, so it needs the walk of its own. Chaining a
+			// field onto one -- (.Redirect "/x").Header -- leaves the
+			// pipeline inside the chain, where it still has to be walked.
 			for _, arg := range cmd.Args {
-				if pipe, ok := arg.(*parse.PipeNode); ok {
+				pipe, ok := arg.(*parse.PipeNode)
+				if chain, isChain := arg.(*parse.ChainNode); isChain {
+					pipe, ok = chain.Node.(*parse.PipeNode)
+				}
+				if ok {
 					if walkTemplateCommands(pipe, ts, visited, dotIsTemplateData, visit) {
 						return true
 					}
