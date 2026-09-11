@@ -8,6 +8,124 @@ import (
 	"time"
 )
 
+// Status is the verdict on one mutant.
+type Status string
+
+const (
+	// StatusKilled means the tests failed while the mutation was in
+	// place, which is the outcome to want: something asserts on the
+	// behaviour the mutated action controls.
+	StatusKilled Status = "KILL"
+
+	// StatusMissed means the tests still passed, so nothing observes
+	// what the action does.
+	StatusMissed Status = "MISS"
+
+	// StatusSkipped means the mutation was never run, because it does
+	// not survive type checking against the dot it would render with.
+	// Running it would report a kill earned by a render error rather
+	// than by a test observing a behaviour change.
+	StatusSkipped Status = "SKIP"
+
+	// StatusPending means the mutant was enumerated but not run, which
+	// is every mutant in a dry run.
+	StatusPending Status = "PEND"
+)
+
+// Result is one mutant and the verdict its test run produced.
+type Result struct {
+	Status   Status   `json:"status"`
+	Operator Operator `json:"operator"`
+	Line     int      `json:"line"`
+	Column   int      `json:"column"`
+	Original string   `json:"original"`
+	Mutated  string   `json:"mutated"`
+
+	// Reason says why a skipped mutant was not run.
+	Reason string `json:"reason,omitempty"`
+
+	// Seconds is how long the mutant's test run took.
+	Seconds float64 `json:"seconds,omitempty"`
+
+	// mutantIndex locates the mutant this result came from, so the run
+	// does not have to carry the mutants inside the report it prints.
+	mutantIndex int
+}
+
+// TemplateReport gathers the mutants found in one template, rendered with
+// one type of dot.
+type TemplateReport struct {
+	Template   string   `json:"template"`
+	File       string   `json:"file"`
+	DataType   string   `json:"data_type"`
+	Via        bool     `json:"via_template_call"`
+	Complexity int      `json:"complexity"`
+	Results    []Result `json:"results"`
+}
+
+// Group gathers the templates reachable from one ExecuteTemplate call.
+type Group struct {
+	CallSite  string           `json:"call_site"`
+	Entry     string           `json:"entry"`
+	DataType  string           `json:"data_type"`
+	Templates []TemplateReport `json:"templates"`
+}
+
+// TrimmedTemplate is a subtree the traversal did not descend into because
+// the same template had already been reached with the same type of dot.
+type TrimmedTemplate struct {
+	CallSite    string `json:"call_site"`
+	Template    string `json:"template"`
+	DataType    string `json:"data_type"`
+	FirstSeenAt string `json:"first_seen_at"`
+}
+
+// BaselineResult records the unmutated run the mutants are compared
+// against.
+type BaselineResult struct {
+	// Passed is whether the tests pass with no mutation in place. A
+	// mutation run is only meaningful when they do.
+	Passed bool `json:"passed"`
+
+	// Seconds is how long the unmutated run took, which is what the
+	// estimate for the whole run is built from.
+	Seconds float64 `json:"seconds,omitempty"`
+}
+
+// Report is the outcome of a whole mutation run.
+type Report struct {
+	Baseline   BaselineResult    `json:"baseline,omitzero"`
+	DryRun     bool              `json:"dry_run"`
+	Seed       uint64            `json:"seed"`
+	Verbose    bool              `json:"-"`
+	Templates  int               `json:"templates"`
+	Complexity int               `json:"complexity"`
+	Total      int               `json:"total"`
+	Killed     int               `json:"killed"`
+	Missed     int               `json:"missed"`
+	Skipped    int               `json:"skipped"`
+	Groups     []Group           `json:"groups"`
+	Trimmed    []TrimmedTemplate `json:"trimmed"`
+
+	// parallel is how many mutants run at once, which the estimate
+	// divides the work by.
+	parallel int
+}
+
+// eachTemplate iterates the report's templates in the order they were
+// traversed, which is depth first from each call site.
+func (r *Report) eachTemplate() func(func(*TemplateReport) bool) {
+	return func(yield func(*TemplateReport) bool) {
+		for i := range r.Groups {
+			for j := range r.Groups[i].Templates {
+				if !yield(&r.Groups[i].Templates[j]) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // WriteTo renders the report as text.
 //
 // A preamble says how much work there is, so the run can be left alone or
