@@ -199,33 +199,33 @@ func combinations(ops []operand, drawn []string) ([][]edit, []string) {
 // addOperandCombinations appends a mutant per combination of the action's
 // operands, or nothing when there is only one operand, which the
 // single-value operators already cover.
-func (ctx mutantContext) addOperandCombinations(out *[]Mutant, a action) {
+func (e *enumerator) addOperandCombinations(a action) {
 	r := a.region
-	ops := operands(ctx.src.text, a.dot, a.pipe)
+	ops := operands(e.src.text, a.dot, a.pipe)
 	if len(ops) < 2 {
 		return
 	}
-	if cases := 1<<len(ops) - 1; cases > ctx.maxCases {
-		line, column := ctx.src.lines.at(ctx.src.fileOffset(r.start))
-		*ctx.notes = append(*ctx.notes, budgetNote{
-			template: ctx.template,
+	if cases := 1<<len(ops) - 1; cases > e.maxCases {
+		line, column := e.src.lines.at(e.src.fileOffset(r.start))
+		e.notes = append(e.notes, budgetNote{
+			template: e.template,
 			line:     line,
 			column:   column,
 			inputs:   len(ops),
 			cases:    cases,
-			maxCases: ctx.maxCases,
+			maxCases: e.maxCases,
 		})
 		return
 	}
 
 	drawn := make([]string, len(ops))
 	for i, op := range ops {
-		drawn[i] = ctx.values.draw(op.dataType)
+		drawn[i] = e.values.draw(op.dataType)
 	}
 
 	editSets, details := combinations(ops, drawn)
 	for i, edits := range editSets {
-		ctx.appendEdits(out, r, OperatorOperands, edits, details[i])
+		e.appendEdits(r, OperatorOperands, edits, details[i])
 	}
 }
 
