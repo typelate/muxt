@@ -72,13 +72,13 @@ type Configuration struct {
 	// An action over the bound contributes none, and says so.
 	MaxCases int
 
-	// Parallel is how many mutants run at once. Each is a separate go
+	// Workers is how many mutants run at once. Each is a separate go
 	// test invocation against its own overlay, so no mutant sees
 	// another's mutation -- but they do share whatever the tests
 	// themselves share, such as a port, a database or a file they write.
 	// Raise it only for a suite that tolerates running beside itself.
 	// Zero or less means one.
-	Parallel int
+	Workers int
 
 	// GoTestArgs are extra flags for every go test invocation, from
 	// everything after a -- on the command line. They reach the
@@ -133,8 +133,8 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	}
 	baseline := time.Since(started)
 	report.Baseline = BaselineResult{Passed: true, Seconds: baseline.Seconds()}
-	parallel := max(config.Parallel, 1)
-	clock := &estimate{perMutant: baseline, remaining: plan.runnable(), parallel: parallel}
+	workers := max(config.Workers, 1)
+	clock := &estimate{perMutant: baseline, remaining: plan.runnable(), workers: workers}
 
 	if status != nil {
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s, estimated %s\n",
@@ -157,7 +157,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		progress: progress,
 		clock:    clock,
 	}
-	if err := runner.runAll(report, parallel); err != nil {
+	if err := runner.runAll(report, workers); err != nil {
 		return nil, err
 	}
 	return report, nil

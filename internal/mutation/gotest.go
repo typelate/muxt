@@ -63,7 +63,7 @@ func testedPackages(config Configuration) []string {
 // test fails, as opposed to not running at all.
 //
 // Only exit status 1 counts. A usage error exits 2, and a go test the OS
-// killed -- for memory, say, under --parallel -- has no exit status at
+// killed -- for memory, say, under --workers -- has no exit status at
 // all; read as test failures, both would be recorded as mutants the tests
 // caught.
 func isTestFailure(err error) bool {
