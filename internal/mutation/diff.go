@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"archive/tar"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -38,7 +39,9 @@ func (r revision) changed(sc scope) bool {
 // templatesAt reads the templates in dir, a copy of the working directory
 // at the revision being compared with.
 func templatesAt(config Configuration, dir string) (revision, error) {
-	pl, err := loadPackages(dir, config.IncludeTests)
+	// The copy is outside any workspace GOWORK may name, and would fail to
+	// load within one, so it loads as the module it is.
+	pl, err := loadPackages(dir, config.IncludeTests, append(os.Environ(), "GOWORK=off"))
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +94,8 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 	// anything else it imports, may sit above it.
 	archive := exec.Command("git", "archive", "--format=tar", commit)
 	archive.Dir = top
+	var stderr bytes.Buffer
+	archive.Stderr = &stderr
 	stream, err := archive.StdoutPipe()
 	if err != nil {
 		cleanup()
@@ -108,7 +113,7 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 	}
 	if err := archive.Wait(); err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("--diff %s: git archive: %w", ref, err)
+		return "", nil, fmt.Errorf("--diff %s: git archive: %w: %s", ref, err, strings.TrimSpace(stderr.String()))
 	}
 	return filepath.Join(root, filepath.FromSlash(prefix)), cleanup, nil
 }
@@ -151,6 +156,13 @@ func extract(r io.Reader, dir string) error {
 		case tar.TypeReg:
 			err = writeArchived(path, archive, header.FileInfo().Mode().Perm())
 		case tar.TypeSymlink:
+			// A link leaving the tree would read what the revision does
+			// not hold, and a relative one would resolve against the copy
+			// rather than the repository.
+			target := filepath.Join(filepath.Dir(header.Name), header.Linkname)
+			if strings.HasPrefix(header.Linkname, "/") || filepath.IsAbs(header.Linkname) || !filepath.IsLocal(target) {
+				return fmt.Errorf("archive entry %q links outside the tree, to %q", header.Name, header.Linkname)
+			}
 			if err = os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 				err = os.Symlink(header.Linkname, path)
 			}

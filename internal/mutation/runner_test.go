@@ -167,3 +167,33 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 		t.Errorf("progress:\n got %q\nwant %q", got, want)
 	}
 }
+
+// TestReportTrims states the progress line for a trimmed subtree, which
+// says where the same template was already mutated with the same dot. A
+// nil writer means progress is not wanted.
+func TestReportTrims(t *testing.T) {
+	trimmed := []TrimmedTemplate{{CallSite: "page.go:12:9", Template: "row", DataType: "server.Row", FirstSeenAt: "page.go:9:9"}}
+	var out strings.Builder
+	reportTrims(&out, trimmed)
+	if got, want := out.String(), "trimmed \"row\" at page.go:12:9: already mutated with server.Row from page.go:9:9\n"; got != want {
+		t.Errorf("reportTrims wrote %q, want %q", got, want)
+	}
+	reportTrims(nil, trimmed)
+}
+
+// TestRoundDuration states how a duration is shown: to a tenth of a second
+// under a minute, and to the second above.
+func TestRoundDuration(t *testing.T) {
+	for _, tt := range []struct {
+		d    time.Duration
+		want string
+	}{
+		{d: 0, want: "0s"},
+		{d: 1234 * time.Millisecond, want: "1.2s"},
+		{d: 90*time.Second + 600*time.Millisecond, want: "1m31s"},
+	} {
+		if got := roundDuration(tt.d); got != tt.want {
+			t.Errorf("roundDuration(%v) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}

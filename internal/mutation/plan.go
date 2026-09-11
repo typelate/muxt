@@ -71,7 +71,7 @@ func (p *plan) report() *Report {
 // newPlan loads the project, walks the templates each ExecuteTemplate
 // call reaches, and enumerates the variations available in each.
 func newPlan(config Configuration, workingDirectory string) (*plan, error) {
-	pl, err := loadPackages(workingDirectory, config.IncludeTests)
+	pl, err := loadPackages(workingDirectory, config.IncludeTests, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -380,10 +380,11 @@ func countActions(node parse.Node) int {
 
 // loadPackages loads the working directory's package, optionally
 // including its test files so that ExecuteTemplate calls written in tests
-// are visible.
-func loadPackages(workingDirectory string, includeTests bool) ([]*packages.Package, error) {
+// are visible. env is the environment the go command runs in, nil for the
+// process's own.
+func loadPackages(workingDirectory string, includeTests bool, env []string) ([]*packages.Package, error) {
 	if !includeTests {
-		_, pl, err := asteval.LoadPackages(workingDirectory)
+		_, pl, err := asteval.LoadPackagesWithEnv(workingDirectory, env)
 		return pl, err
 	}
 	fileSet := token.NewFileSet()
@@ -394,6 +395,7 @@ func loadPackages(workingDirectory string, includeTests bool) ([]*packages.Packa
 			packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax |
 			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
 		Dir: workingDirectory,
+		Env: env,
 	}, workingDirectory, "encoding", "fmt", "net/http")
 	if err != nil {
 		return nil, err

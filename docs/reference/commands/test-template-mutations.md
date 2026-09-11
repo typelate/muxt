@@ -83,7 +83,7 @@ The unit is a template rendered with one type of dot, the same unit a run mutate
 
 The second rule catches the edges of a diff. Say `page` renders `name` with `.Name` and `count` with `.Count`, and `Page` becomes `Summary` with `Count` changed from `int` to `float64`. Then `page` and `count` are mutated, because each is reached with a new type. `name` still gets a `string` and still reads the same, so it is skipped:
 
-```
+```text
 3 mutants across 2 templates (complexity 2, seed 1)
 1 template unchanged since origin/main
 ```

@@ -14,6 +14,12 @@ import (
 )
 
 func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	return LoadPackagesWithEnv(wd, nil, morePatterns...)
+}
+
+// LoadPackagesWithEnv is LoadPackages with the environment the go command
+// runs in. A nil env is the process's own.
+func LoadPackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
 	patterns := []string{
 		wd, "encoding", "fmt", "net/http",
 	}
@@ -27,6 +33,7 @@ func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*package
 		Fset: fileSet,
 		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
 		Dir:  wd,
+		Env:  env,
 	}, patterns...)
 	if err != nil {
 		return nil, nil, loadFailedError(wd, err)
