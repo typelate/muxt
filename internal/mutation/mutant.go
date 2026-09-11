@@ -2,7 +2,6 @@ package mutation
 
 import (
 	"cmp"
-	"go/types"
 	"slices"
 	"strings"
 	"text/template/parse"
@@ -164,7 +163,7 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 }
 
 // mutantContext is what every variation needs regardless of which action
-// it applies to, plus which action that is.
+// it applies to.
 //
 // The regions are not held here: they belong to src, and a copy could
 // come to describe a different text than the one the edits are written
@@ -172,7 +171,6 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 type mutantContext struct {
 	src       *templateSource
 	template  string
-	dot       types.Type
 	functions check.Functions
 	values    *values
 	maxCases  int
@@ -184,50 +182,43 @@ type mutantContext struct {
 // The walk decided which actions there are and what dot each is rendered
 // with; this decides only what to do with one.
 func (ctx mutantContext) variations(out *[]Mutant, a action) {
-	ctx.dot = a.dot
-
 	switch a.node.(type) {
 	case *parse.ActionNode:
 		if zero, typed := zeroLiteral(a.dot, a.pipe, ctx.functions); typed {
-			ctx.addPipeline(out, a.pipe, OperatorActionZero, zero)
+			ctx.addPipeline(out, a, OperatorActionZero, zero)
 		} else {
-			ctx.addPipeline(out, a.pipe, OperatorActionEmpty, `""`)
+			ctx.addPipeline(out, a, OperatorActionEmpty, `""`)
 		}
 		// Emptying the whole action says only that something about it is
 		// watched. Varying its operands says which ones.
-		ctx.addOperandCombinations(out, a.pipe, ctx.maxCases)
+		ctx.addOperandCombinations(out, a)
 	case *parse.IfNode:
-		ctx.addPipeline(out, a.pipe, OperatorIfTrue, "true")
-		ctx.addPipeline(out, a.pipe, OperatorIfFalse, "false")
+		ctx.addPipeline(out, a, OperatorIfTrue, "true")
+		ctx.addPipeline(out, a, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
 		// condition; anything else falls back to the general
 		// combinations over its operands.
-		if !ctx.addConditions(out, a.pipe) {
-			ctx.addOperandCombinations(out, a.pipe, ctx.maxCases)
+		if !ctx.addConditions(out, a) {
+			ctx.addOperandCombinations(out, a)
 		}
 	case *parse.WithNode:
-		ctx.addConstructDrop(out, a.region, OperatorWithEmpty)
+		ctx.addConstructDrop(out, a, OperatorWithEmpty)
 	case *parse.RangeNode:
-		ctx.addConstructDrop(out, a.region, OperatorRangeNever)
+		ctx.addConstructDrop(out, a, OperatorRangeNever)
 	case *parse.TemplateNode:
 		ctx.addTemplateDrop(out, a.region)
 	}
 }
 
-// addPipeline appends a mutant replacing the value a pipeline evaluates.
+// addPipeline appends a mutant replacing the value an action's pipeline
+// evaluates.
 //
 // A pipeline that declares variables keeps its declarations, so that
 // references to them elsewhere in the template still resolve; only the
 // value assigned changes.
-func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operator Operator, replacement string) {
-	if pipe == nil {
-		return
-	}
-	_, r, ok := regionAt(ctx.src.regions, int(pipe.Position()))
-	if !ok {
-		return
-	}
-	start := ctx.valueStart(pipe, r)
+func (ctx mutantContext) addPipeline(out *[]Mutant, a action, operator Operator, replacement string) {
+	r := a.region
+	start := ctx.valueStart(a.pipe, r)
 	if start >= r.innerEnd {
 		return
 	}
@@ -236,15 +227,12 @@ func (ctx mutantContext) addPipeline(out *[]Mutant, pipe *parse.PipeNode, operat
 
 // addConstructDrop appends a mutant replacing a whole construct with its
 // else branch, or with nothing when it has none.
-func (ctx mutantContext) addConstructDrop(out *[]Mutant, r region, operator Operator) {
-	index, _, ok := regionAt(ctx.src.regions, r.start)
+func (ctx mutantContext) addConstructDrop(out *[]Mutant, a action, operator Operator) {
+	endIndex, elseIndex, ok := matchEnd(ctx.src.regions, a.index)
 	if !ok {
 		return
 	}
-	endIndex, elseIndex, ok := matchEnd(ctx.src.regions, index)
-	if !ok {
-		return
-	}
+	r := a.region
 	text, end := ctx.src.text, ctx.src.regions[endIndex]
 	replacement := ""
 	if elseIndex >= 0 {
