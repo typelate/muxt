@@ -51,6 +51,17 @@ type Result struct {
 	mutantIndex int
 }
 
+// label names the mutation: its operator, and for a combination or
+// condition mutant the operands it substituted, which are the whole
+// content of such a mutant. Without them the lines for one action would
+// be identical.
+func (r Result) label() string {
+	if (r.Operator == OperatorOperands || r.Operator == OperatorCondition) && r.Mutated != "" {
+		return string(r.Operator) + " " + r.Mutated
+	}
+	return string(r.Operator)
+}
+
 // TemplateReport gathers the mutants found in one template, rendered with
 // one type of dot.
 type TemplateReport struct {
@@ -116,6 +127,20 @@ func (r *Report) eachTemplate() func(func(*TemplateReport) bool) {
 				if !yield(&r.Groups[i].Templates[j]) {
 					return
 				}
+			}
+		}
+	}
+}
+
+// tally counts the verdicts a run wrote into the report's results.
+func (r *Report) tally() {
+	for group := range r.eachTemplate() {
+		for _, result := range group.Results {
+			switch result.Status {
+			case StatusKilled:
+				r.Killed++
+			case StatusMissed:
+				r.Missed++
 			}
 		}
 	}
@@ -214,12 +239,7 @@ func (r *Report) writeTemplate(out *bufio.Writer, template TemplateReport) {
 
 	for _, result := range template.Results {
 		line := fmt.Sprintf("    %s %d:%d %s",
-			result.Status, result.Line, result.Column, result.Operator)
-		if (result.Operator == OperatorOperands || result.Operator == OperatorCondition) && result.Mutated != "" {
-			// Which operands were substituted is the whole content of a
-			// combination mutant; without it the lines are identical.
-			line += " " + result.Mutated
-		}
+			result.Status, result.Line, result.Column, result.label())
 		if result.Reason != "" {
 			line += " (" + result.Reason + ")"
 		}
