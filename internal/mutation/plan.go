@@ -71,7 +71,7 @@ func (p *plan) report() *Report {
 // newPlan loads the project, walks the templates each ExecuteTemplate
 // call reaches, and enumerates the variations available in each.
 func newPlan(config Configuration, workingDirectory string) (*plan, error) {
-	pl, err := loadPackages(workingDirectory, config.IncludeTests, nil)
+	pl, err := loadPackages(workingDirectory, config.IncludeTests, config.env)
 	if err != nil {
 		return nil, err
 	}

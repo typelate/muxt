@@ -1,8 +1,6 @@
 package mutation
 
 import (
-	"go/ast"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"testing"
@@ -12,56 +10,6 @@ import (
 
 	"github.com/typelate/muxt/internal/asteval"
 )
-
-// pageSource declares the types the typed tests render against.
-const pageSource = `
-type Page struct {
-	Name  string
-	Count int
-	Price float64
-	Flag  bool
-	Items []Item
-	Tags  map[string]Item
-	Owner *User
-}
-
-type Item struct{ ID int }
-
-type User struct{ Email string }
-
-func (*User) Display() string { return "" }
-
-func (Page) Title() string { return "" }
-
-func (Page) Load() (int, error) { return 0, nil }
-
-func (Page) Lookup(key string) string { return key }
-
-func (Page) Reset() {}
-
-func (Page) secret() string { return "" }
-`
-
-// dataType type checks src as package example.com/data and returns the
-// type it declares under name.
-func dataType(t *testing.T, src, name string) types.Type {
-	t.Helper()
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "data.go", "package data\n"+src, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pkg, err := new(types.Config).Check("example.com/data", fset, []*ast.File{file}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return pkg.Scope().Lookup(name).Type()
-}
-
-func safeHTML() types.Type {
-	pkg := types.NewPackage("html/template", "template")
-	return types.NewNamed(types.NewTypeName(token.NoPos, pkg, "HTML", nil), types.Typ[types.String], nil)
-}
 
 // TestRangeDot states the type of dot inside a range body: one element of
 // what was ranged over, or the integer itself when ranging over one.

@@ -41,7 +41,7 @@ func (r revision) changed(sc scope) bool {
 func templatesAt(config Configuration, dir string) (revision, error) {
 	// The copy is outside any workspace GOWORK may name, and would fail to
 	// load within one, so it loads as the module it is.
-	pl, err := loadPackages(dir, config.IncludeTests, append(os.Environ(), "GOWORK=off"))
+	pl, err := loadPackages(dir, config.IncludeTests, append(config.environment(), "GOWORK=off"))
 	if err != nil {
 		return nil, err
 	}
