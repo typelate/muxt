@@ -59,7 +59,8 @@ func safeHTML() types.Type {
 func TestZeroLiteral(t *testing.T) {
 	page := dataType(t, pageSource, "Page")
 	trusted := types.NewSignatureType(nil, nil, nil, nil, types.NewTuple(types.NewVar(token.NoPos, nil, "", safeHTML())), false)
-	functions := check.Functions{"trusted": trusted}
+	count := types.NewSignatureType(nil, nil, nil, nil, types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])), false)
+	functions := check.Functions{"trusted": trusted, "count": count}
 
 	for _, tt := range []struct {
 		action string
@@ -77,7 +78,8 @@ func TestZeroLiteral(t *testing.T) {
 		{action: `{{len .Items}}`, want: `0`, typed: true},
 		{action: `{{.Count | printf "%d"}}`, want: `""`, typed: true},
 		{action: `{{eq .Count 1}}`, want: `false`, typed: true},
-		{action: `{{trusted}}`}, // a safe string has no literal
+		{action: `{{count}}`, want: `0`, typed: true}, // a registered function, by its signature
+		{action: `{{trusted}}`},                       // a safe string has no literal
 		{action: `{{.Items}}`},
 		{action: `{{index .Items 0}}`},
 		{action: `{{.Missing}}`},
