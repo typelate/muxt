@@ -97,9 +97,6 @@ func appendOperand(out *[]operand, text string, node parse.Node, dataType types.
 // rendering's own length, which is longer than any prefix the position
 // can have skipped.
 func operandStart(text string, pos int, written string) (int, bool) {
-	if written == "" || pos < 0 || len(written) > len(text) {
-		return 0, false
-	}
 	lowest := max(pos-len(written), 0)
 	for start := min(pos, len(text)-len(written)); start >= lowest; start-- {
 		if text[start:start+len(written)] == written {
