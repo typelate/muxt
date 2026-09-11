@@ -47,7 +47,6 @@ func (r *mutantRunner) runAll(report *Report, parallel int) error {
 
 	slots := make(chan struct{}, parallel)
 	var running sync.WaitGroup
-	index := 0
 dispatch:
 	for group := range report.eachTemplate() {
 		for i := range group.Results {
@@ -60,12 +59,11 @@ dispatch:
 				break dispatch
 			}
 			running.Add(1)
-			go func(index int, group *TemplateReport, result *Result) {
+			go func(group *TemplateReport, result *Result) {
 				defer running.Done()
 				defer func() { <-slots }()
-				r.finish(group, result, total, r.run(index, result))
-			}(index, group, &group.Results[i])
-			index++
+				r.finish(group, result, total, r.run(result))
+			}(group, &group.Results[i])
 		}
 	}
 	running.Wait()
@@ -78,11 +76,11 @@ dispatch:
 }
 
 // run runs one mutant's tests and writes the verdict into result.
-func (r *mutantRunner) run(index int, result *Result) error {
+func (r *mutantRunner) run(result *Result) error {
 	if result.Status == StatusSkipped {
 		return nil
 	}
-	overlay, err := writeMutant(r.scratch, index, r.plan.mutants[result.mutantIndex])
+	overlay, err := writeMutant(r.scratch, r.plan.mutants[result.mutantIndex])
 	if err != nil {
 		return err
 	}
@@ -190,11 +188,12 @@ func roundDuration(d time.Duration) string {
 	return d.Round(100 * time.Millisecond).String()
 }
 
-// writeMutant writes the mutated file and the overlay pointing at it,
-// returning the overlay's path.
-func writeMutant(scratch string, index int, mutant Mutant) (string, error) {
-	dir := filepath.Join(scratch, fmt.Sprintf("%06d", index))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+// writeMutant writes the mutated file and the overlay pointing at it into
+// a directory of their own under scratch, returning the overlay's path.
+// No two mutants share a directory, so none can read another's mutation.
+func writeMutant(scratch string, mutant Mutant) (string, error) {
+	dir, err := os.MkdirTemp(scratch, "mutant-")
+	if err != nil {
 		return "", err
 	}
 	mutated := filepath.Join(dir, filepath.Base(mutant.File))
