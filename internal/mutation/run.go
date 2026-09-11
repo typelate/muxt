@@ -571,16 +571,17 @@ type goTest struct {
 }
 
 func (t goTest) run(extra []string) (string, error) {
+	// go test reads [flags] [packages] [flags and test binary flags]. A
+	// flag it does not know -- a test binary's own, such as -update --
+	// ends the package list, so the caller's flags go after the packages,
+	// where they cannot cut it short.
 	args := []string{"test", "-count=1"}
-	// The caller's flags go first so that muxt's own land last: for a
-	// repeated flag the go command keeps the last, and the overlay
-	// carrying the mutant is not negotiable.
-	args = append(args, t.extra...)
 	args = append(args, extra...)
 	if t.match != nil {
 		args = append(args, "-run="+t.match.String())
 	}
 	args = append(args, t.packages...)
+	args = append(args, t.extra...)
 
 	cmd := exec.Command("go", args...)
 	cmd.Dir = t.dir
@@ -597,12 +598,16 @@ func testedPackages(config Configuration) []string {
 	return config.Packages
 }
 
-// isTestFailure reports whether the go command exited non zero, which is
-// what a failing test looks like, as opposed to the command not running
-// at all.
+// isTestFailure reports whether go test exited the way it does when a
+// test fails, as opposed to not running at all.
+//
+// Only exit status 1 counts. A usage error exits 2, and a go test the OS
+// killed -- for memory, say, under --parallel -- has no exit status at
+// all; read as test failures, both would be recorded as mutants the tests
+// caught.
 func isTestFailure(err error) bool {
 	var exitErr *exec.ExitError
-	return errors.As(err, &exitErr)
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
 }
 
 // sourceKey identifies the text a template was written in: a template
