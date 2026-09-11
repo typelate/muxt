@@ -60,10 +60,11 @@ func regions(text, leftDelim, rightDelim string) []region {
 	}
 
 	var found []region
-	for i := 0; i < len(text); {
+	i := 0
+	for {
 		rel := strings.Index(text[i:], leftDelim)
 		if rel < 0 {
-			break
+			return found
 		}
 		start := i + rel
 		content := start + len(leftDelim)
@@ -79,15 +80,15 @@ func regions(text, leftDelim, rightDelim string) []region {
 			continue
 		}
 
+		end := closing + len(rightDelim)
 		found = append(found, region{
 			start:    start,
 			innerEnd: trimRight(text, content, closing),
-			end:      closing + len(rightDelim),
+			end:      end,
 			keyword:  leadingWord(text[trimLeft(text, content, closing):closing]),
 		})
-		i = closing + len(rightDelim)
+		i = end
 	}
-	return found
 }
 
 // closeOffset returns the offset of the right delimiter that closes the
@@ -140,17 +141,11 @@ func closeOffset(text string, content int, rightDelim string) (int, bool) {
 // A trim marker may sit between the left delimiter and the /*, so the
 // marker and the whitespace after it are skipped before looking.
 func commentBody(text string, content int) (int, bool) {
-	i := content
-	if i < len(text) && text[i] == '-' && i+1 < len(text) && isSpace(text[i+1]) {
-		i++
-	}
-	for i < len(text) && isSpace(text[i]) {
-		i++
-	}
+	i := trimLeft(text, content, len(text))
 	if !strings.HasPrefix(text[i:], "/*") {
 		return 0, false
 	}
-	return i + 2, true
+	return i + len("/*"), true
 }
 
 // skipQuoted returns the offset one past the literal that opens at start
@@ -182,29 +177,23 @@ func skipQuoted(text string, start int, quote byte, escapes bool) (int, bool) {
 // trailing trim marker and the whitespace separating it from the pipeline.
 //
 // text/template only reads "-" as a trim marker when whitespace separates
-// it from what precedes it, so "{{if 1-}}" trims and "{{$x-}}" does not.
+// it from what precedes it, so "{{if 1 -}}" trims and "{{$x-}}" does not.
 func trimRight(text string, content, closing int) int {
-	end := closing
-	if end > content && text[end-1] == '-' && end-1 > content && isSpace(text[end-2]) {
-		end--
+	inner := text[content:closing]
+	if n := len(inner); n >= 2 && inner[n-1] == '-' && isSpace(inner[n-2]) {
+		inner = inner[:n-1]
 	}
-	for end > content && isSpace(text[end-1]) {
-		end--
-	}
-	return end
+	return content + len(strings.TrimRight(inner, spaceChars))
 }
 
 // trimLeft returns the offset of the action's first content byte, with a
 // leading trim marker and the whitespace after it skipped.
 func trimLeft(text string, content, closing int) int {
-	start := content
-	if start < closing && text[start] == '-' && start+1 < closing && isSpace(text[start+1]) {
-		start++
+	inner := text[content:closing]
+	if len(inner) >= 2 && inner[0] == '-' && isSpace(inner[1]) {
+		inner = inner[1:]
 	}
-	for start < closing && isSpace(text[start]) {
-		start++
-	}
-	return start
+	return closing - len(strings.TrimLeft(inner, spaceChars))
 }
 
 // leadingWord returns the keyword the action opens with, or the empty

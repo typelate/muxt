@@ -87,23 +87,15 @@ func delimiters(text string, definition check.Definition) (left, right string, o
 		return "", "", false
 	}
 	start, end := definition.End.Offset, definition.End.Offset+definition.End.Length
-	if start < 0 || end > len(text) || start >= end {
+	if start < 0 || end > len(text) {
 		return "", "", false
 	}
-	clause := text[start:end]
-
-	word := strings.Index(clause, "end")
-	if word < 0 {
+	before, after, found := strings.Cut(text[start:end], "end")
+	if !found {
 		return "", "", false
 	}
-	left = strings.TrimRight(clause[:word], spaceChars)
-	left = strings.TrimSuffix(left, "-")
-	left = strings.TrimRight(left, spaceChars)
-
-	right = strings.TrimLeft(clause[word+len("end"):], spaceChars)
-	right = strings.TrimPrefix(right, "-")
-	right = strings.TrimLeft(right, spaceChars)
-
+	left = strings.TrimRight(strings.TrimSuffix(strings.TrimRight(before, spaceChars), "-"), spaceChars)
+	right = strings.TrimLeft(strings.TrimPrefix(strings.TrimLeft(after, spaceChars), "-"), spaceChars)
 	if left == "" || right == "" {
 		return "", "", false
 	}
@@ -247,7 +239,7 @@ func literalOffsets(literal, value string) ([]int, error) {
 			return nil, fmt.Errorf("reading string literal: %w", err)
 		}
 		width := 1
-		if multibyte && r >= utf8.RuneSelf {
+		if multibyte {
 			width = utf8.RuneLen(r)
 		}
 		for range width {

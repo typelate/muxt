@@ -69,7 +69,7 @@ func decisionCommand(text string, command *parse.CommandNode) (*boolNode, bool) 
 		default:
 			return nil, false
 		}
-		kids := make([]*boolNode, 0, len(command.Args)-1)
+		var kids []*boolNode
 		for _, arg := range command.Args[1:] {
 			kid, ok := decisionArg(text, arg)
 			if !ok {
