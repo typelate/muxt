@@ -1,0 +1,101 @@
+# A flag passed through after -- must not change which packages are tested.
+#
+# go test reads [flags] [packages] [flags and test binary flags]. A flag it
+# does not know -- a test binary's own, like -update -- ends the package list,
+# so flags placed before the packages would silently drop every package after
+# the first. Here the only test that catches the mutant is in ./sub, so a
+# dropped package reads as a miss.
+
+muxt test-template-mutations --seed 1
+cmp stdout want-killed.txt
+
+muxt test-template-mutations --seed 1 -- -update=false
+cmp stdout want-killed.txt
+
+# Everything after -args belongs to the test binary. Only the root package is
+# tested here, and its test does not look at the text, so the mutant lives --
+# which it can only do if muxt's own -overlay reached go test rather than the
+# test binary.
+muxt test-template-mutations --seed 1 . -- -args -update
+cmp stdout want-root-only.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Greet(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "greeting", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"flag"
+	"strings"
+	"testing"
+)
+
+var update = flag.Bool("update", false, "rewrite golden files")
+
+func TestGreetRenders(t *testing.T) {
+	var buf strings.Builder
+	if err := Greet(&buf, Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+}
+-- sub/sub_test.go --
+package sub
+
+import (
+	"flag"
+	"strings"
+	"testing"
+
+	"server"
+)
+
+var update = flag.Bool("update", false, "rewrite golden files")
+
+func TestGreetText(t *testing.T) {
+	var buf strings.Builder
+	if err := server.Greet(&buf, server.Page{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, World!"; got != want {
+		t.Errorf("greeting = %q, want %q", got, want)
+	}
+}
+-- want-killed.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+1 mutant, 1 killed, 0 missed, 0 skipped
+-- want-root-only.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:19:9 ExecuteTemplate "greeting" (dot: server.Page)
+  "greeting" templates.gohtml (complexity 1, dot: server.Page)
+    MISS 1:29 action-zero
+
+1 mutant, 0 killed, 1 missed, 0 skipped
