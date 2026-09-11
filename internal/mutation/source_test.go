@@ -59,6 +59,21 @@ func TestLiteralOffsetsMapsEveryByteBack(t *testing.T) {
 			value:   "é",
 			want:    []int{1, 1, 7},
 		},
+		{name: "an empty raw literal", literal: "``", value: "", want: []int{1}},
+		{name: "an empty interpreted literal", literal: `""`, value: "", want: []int{1}},
+		{
+			// U+0080 is the first rune UTF-8 needs two bytes for.
+			name:    "the smallest escaped rune of two bytes",
+			literal: `"\` + `u0080"`,
+			value:   string(rune(0x80)),
+			want:    []int{1, 1, 7},
+		},
+		{
+			name:    "an escaped rune of one byte",
+			literal: `"\` + `u0041"`,
+			value:   "A",
+			want:    []int{1, 7},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// The pair has to be a real one, or the table is asserting

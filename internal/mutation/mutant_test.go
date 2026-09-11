@@ -1,6 +1,53 @@
 package mutation
 
-import "testing"
+import (
+	"testing"
+	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/asteval"
+)
+
+// TestValueStart states where a pipeline's value begins, which is where
+// a substitution starts. A declaration is kept, so that references to the
+// variable still resolve; only what it is assigned changes.
+func TestValueStart(t *testing.T) {
+	for _, tt := range []struct {
+		text, want string
+	}{
+		{text: `{{.A}}`, want: `.A`},
+		{text: `{{$x := .A}}`, want: `.A`},
+		{text: `{{$x:=.A -}}`, want: `.A`},
+		{text: `{{$x := 1}}{{$x = .A}}`, want: `.A`},
+		{text: `{{range $i, $e := .Items}}{{end}}`, want: `.Items`},
+		{text: `{{with $x := .A}}{{end}}`, want: `.A`},
+	} {
+		t.Run(tt.text, func(t *testing.T) {
+			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			nodes := trees["t"].Root.Nodes
+			var pipe *parse.PipeNode
+			switch node := nodes[len(nodes)-1].(type) {
+			case *parse.ActionNode:
+				pipe = node.Pipe
+			case *parse.RangeNode:
+				pipe = node.Pipe
+			case *parse.WithNode:
+				pipe = node.Pipe
+			}
+			src := newFileSource("t.gohtml", "t.gohtml", tt.text, "", "")
+			_, r, ok := regionAt(src.regions, int(pipe.Position()))
+			if !ok {
+				t.Fatalf("no region holds the pipeline at %d", pipe.Position())
+			}
+			start := mutantContext{src: src}.valueStart(pipe, r)
+			if got := tt.text[start:r.innerEnd]; got != tt.want {
+				t.Errorf("value = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 // TestConstructDropKeepsTheElseBranch states what dropping a with or range
 // leaves in its place: its else branch, or nothing.
