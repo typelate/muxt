@@ -71,6 +71,10 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
 	}
+	top, err := git(workingDirectory, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
+	}
 	prefix, err := git(workingDirectory, "rev-parse", "--show-prefix")
 	if err != nil {
 		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
@@ -82,8 +86,11 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 	}
 	cleanup := func() { _ = os.RemoveAll(root) }
 
+	// Run from a subdirectory, git archive writes only that subdirectory.
+	// The whole tree is needed: the go.mod the package loads with, and
+	// anything else it imports, may sit above it.
 	archive := exec.Command("git", "archive", "--format=tar", commit)
-	archive.Dir = workingDirectory
+	archive.Dir = top
 	stream, err := archive.StdoutPipe()
 	if err != nil {
 		cleanup()
@@ -112,11 +119,12 @@ func git(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		// Output keeps what git wrote to stderr, which says why far better
+		// than its exit status does.
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+	}
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-			return "", errors.New(strings.TrimSpace(string(exitErr.Stderr)))
-		}
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil

@@ -4,10 +4,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"errors"
+	"fmt"
 	"go/types"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"testing/iotest"
 
@@ -118,4 +122,236 @@ func TestExtractRefusesAnEntryOutsideTheTree(t *testing.T) {
 			t.Errorf("extract(%q) wrote outside the tree", name)
 		}
 	}
+}
+
+// repo is a git repository in a temporary directory.
+type repo struct {
+	t   *testing.T
+	dir string
+}
+
+// newRepo starts an empty repository. git runs without the invoking
+// user's configuration, so a setting such as commit signing cannot change
+// what the test's commits do, and go list without a workspace from the
+// invoking environment.
+func newRepo(t *testing.T) *repo {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	// git translates its messages, and the test reads one.
+	t.Setenv("LC_ALL", "C")
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "gitconfig"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
+		t.Setenv(name, "muxt")
+	}
+	for _, name := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(name, "muxt@example.com")
+	}
+	r := &repo{t: t, dir: t.TempDir()}
+	r.git("init", "-q")
+	return r
+}
+
+func (r *repo) git(args ...string) {
+	r.t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = r.dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		r.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+func (r *repo) write(files map[string]string) {
+	r.t.Helper()
+	for name, content := range files {
+		path := filepath.Join(r.dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			r.t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			r.t.Fatal(err)
+		}
+	}
+}
+
+func (r *repo) commit(message string) {
+	r.t.Helper()
+	r.git("add", "-A")
+	r.git("commit", "-q", "-m", message)
+}
+
+// diffTemplates has "page" render "name" twice with the same dot, so the
+// second call is trimmed, and "count" once.
+const diffTemplates = `{{define "page"}}{{template "name" .Name}}{{template "name" .Name}}{{template "count" .Count}}{{end}}
+{{define "name"}}<b>{{.}}</b>{{end}}
+{{define "count"}}<i>{{.}}</i>{{end}}
+`
+
+// diffGoFile renders "page" with a struct named by the first argument,
+// whose Count has the type the second names.
+const diffGoFile = `package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type %[1]s struct {
+	Name  string
+	Count %[2]s
+}
+
+func Render(w io.Writer, data %[1]s) error {
+	return templates.ExecuteTemplate(w, "page", data)
+}
+`
+
+// mutatedTemplates names each template a plan mutates, with its dot.
+func mutatedTemplates(p *plan) []string {
+	var names []string
+	for _, group := range p.groups {
+		for _, template := range group.Templates {
+			names = append(names, template.Template+" "+template.DataType)
+		}
+	}
+	return names
+}
+
+func unchangedTemplates(p *plan) []string {
+	var names []string
+	for _, u := range p.unchanged {
+		names = append(names, u.Template+" "+u.DataType)
+	}
+	return names
+}
+
+// reportText renders a plan's report as a verbose dry run would.
+func reportText(t *testing.T, p *plan) string {
+	t.Helper()
+	report := p.report()
+	report.DryRun, report.Verbose = true, true
+	var out strings.Builder
+	if _, err := report.WriteTo(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+// TestNewPlanWithDiff states what a --diff run mutates in a real
+// repository: a template reached with a type of dot it was not reached
+// with at the revision, or whose text changed, and nothing else.
+//
+// The steps run in order, each committing what the one before changed.
+// The package sits below the repository root, as most do.
+func TestNewPlanWithDiff(t *testing.T) {
+	r := newRepo(t)
+	r.write(map[string]string{"README.md": "Not yet a Go package.\n"})
+	r.commit("empty")
+	r.git("tag", "empty")
+	r.write(map[string]string{
+		"web/go.mod":           "module server\n\ngo 1.24\n",
+		"web/templates.gohtml": diffTemplates,
+		"web/template.go":      fmt.Sprintf(diffGoFile, "Page", "int"),
+	})
+	r.commit("base")
+	web := filepath.Join(r.dir, "web")
+	config := Configuration{TemplatesVariables: []string{"templates"}, Seed: 1, SeedSet: true, Diff: "HEAD"}
+
+	t.Run("a type of dot that changed", func(t *testing.T) {
+		// Page becomes Summary, and Count goes from int to float64: "page"
+		// and "count" are reached with new types, "name" is not.
+		r.write(map[string]string{"web/template.go": fmt.Sprintf(diffGoFile, "Summary", "float64")})
+		p, err := newPlan(config, web)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.diffError != "" {
+			t.Fatalf("the templates at HEAD could not be read: %s", p.diffError)
+		}
+		if got, want := mutatedTemplates(p), []string{"page server.Summary", "count float64"}; !slices.Equal(got, want) {
+			t.Errorf("mutated %q, want %q", got, want)
+		}
+		if got, want := unchangedTemplates(p), []string{"name string"}; !slices.Equal(got, want) {
+			t.Errorf("unchanged %q, want %q", got, want)
+		}
+		if len(p.trimmed) != 0 {
+			// The repeated "name" was mutated nowhere, so a trim would
+			// point at a mutation that never happened.
+			t.Errorf("trimmed %v, want none", p.trimmed)
+		}
+		text := reportText(t, p)
+		for _, want := range []string{
+			"4 mutants across 2 templates (complexity 2, seed 1)\n1 template unchanged since HEAD\n",
+			"\nunchanged since HEAD, not mutated:\n  \"name\" templates.gohtml (dot: string)\n",
+			"\n4 mutants, 4 runnable, 0 skipped\n",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("report does not say %q:\n%s", want, text)
+			}
+		}
+	})
+	r.commit("types")
+
+	t.Run("text that changed", func(t *testing.T) {
+		r.write(map[string]string{"web/templates.gohtml": strings.Replace(diffTemplates, "<b>{{.}}</b>", "<b>{{.}}</b>!", 1)})
+		p, err := newPlan(config, web)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.diffError != "" {
+			t.Fatalf("the templates at HEAD could not be read: %s", p.diffError)
+		}
+		if got, want := mutatedTemplates(p), []string{"name string"}; !slices.Equal(got, want) {
+			t.Errorf("mutated %q, want %q", got, want)
+		}
+		if got, want := unchangedTemplates(p), []string{"page server.Summary", "count float64"}; !slices.Equal(got, want) {
+			t.Errorf("unchanged %q, want %q", got, want)
+		}
+		if len(p.trimmed) != 1 {
+			// "name" is mutated now, so its repeat is trimmed as usual.
+			t.Errorf("trimmed %v, want the repeated name", p.trimmed)
+		}
+		if text := reportText(t, p); !strings.Contains(text, "1 mutant across 1 template (complexity 1, seed 1)\n2 templates unchanged since HEAD\n") {
+			t.Errorf("report does not count the unchanged templates:\n%s", text)
+		}
+	})
+
+	t.Run("a revision the templates cannot be read at", func(t *testing.T) {
+		config := config
+		config.Diff = "empty"
+		p, err := newPlan(config, web)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.diffError == "" {
+			t.Error("diffError is empty, want why the templates could not be read")
+		}
+		if got, want := mutatedTemplates(p), []string{"page server.Summary", "name string", "count float64"}; !slices.Equal(got, want) {
+			t.Errorf("mutated %q, want every template", got)
+		}
+		if text := reportText(t, p); !strings.Contains(text, "every template counts as changed: the templates at empty could not be read (") {
+			t.Errorf("report does not say why everything was mutated:\n%s", text)
+		}
+	})
+
+	t.Run("a revision git does not know", func(t *testing.T) {
+		config := config
+		config.Diff = "no-such-revision"
+		_, err := newPlan(config, web)
+		if err == nil || !strings.Contains(err.Error(), "no-such-revision") {
+			t.Fatalf("newPlan = %v, want an error naming the revision", err)
+		}
+		if !strings.Contains(err.Error(), "fatal:") {
+			t.Errorf("newPlan = %v, want what git said", err)
+		}
+	})
 }
