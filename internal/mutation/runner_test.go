@@ -37,12 +37,15 @@ func runnerFixture(t *testing.T, kills []bool) (*Report, *plan) {
 		})
 		results[i] = Result{Status: StatusPending, Operator: OperatorActionEmpty, mutantIndex: i}
 	}
-	report := &Report{Groups: []Group{{Templates: []TemplateReport{{
+	// The group hangs off the plan, so the report a run builds from it
+	// holds these results: a verdict written through one is the other's.
+	p.templates = 1
+	p.groups = []Group{{Templates: []TemplateReport{{
 		Template: "page",
 		File:     "page.gohtml",
 		Results:  results,
-	}}}}}
-	return report, p
+	}}}}
+	return p.report(), p
 }
 
 // readMutated returns the mutated text an overlay points at.

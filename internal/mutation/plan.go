@@ -68,6 +68,83 @@ func (p *plan) report() *Report {
 	}
 }
 
+// selection is what a run decided about the scopes one templates variable
+// reached: which to mutate, which a --diff run left alone, and which
+// repeats to report as trimmed.
+type selection struct {
+	mutate    []scope
+	unchanged []UnchangedTemplate
+	trimmed   []TrimmedTemplate
+}
+
+// selector decides what a run mutates. It holds what that decision needs
+// and nothing else: no loader, no filesystem, no git.
+//
+// seen and unchanged carry across the templates variables of one run, so
+// that a template reached from two of them is mutated once, and a repeat
+// of a template left alone is reported as trimmed nowhere.
+type selector struct {
+	// before is what the templates read like at the --diff revision. Nil
+	// means there is nothing to compare with, so every scope counts as
+	// changed.
+	before revision
+
+	seen      map[string]struct{}
+	unchanged map[string]struct{}
+	include   func(string) bool
+
+	// wd is the directory positions are reported relative to.
+	wd string
+}
+
+// choose decides what to do with the scopes and trims of one traversal.
+func (s selector) choose(scopes []scope, trims []trim) selection {
+	var chosen selection
+	for _, sc := range scopes {
+		if !s.include(sc.template) {
+			continue
+		}
+		key := executionKey(sc.template, sc.dataType)
+		if _, done := s.seen[key]; done {
+			continue
+		}
+		s.seen[key] = struct{}{}
+		if s.before != nil && !s.before.changed(sc) {
+			s.unchanged[key] = struct{}{}
+			chosen.unchanged = append(chosen.unchanged, UnchangedTemplate{
+				Template: sc.template,
+				File:     sc.src.path,
+				DataType: typeDisplay(sc.dataType),
+			})
+			continue
+		}
+		chosen.mutate = append(chosen.mutate, sc)
+	}
+
+	reported := make(map[TrimmedTemplate]struct{})
+	for _, t := range trims {
+		if _, skipped := s.unchanged[executionKey(t.template, t.dataType)]; skipped {
+			// Unchanged means mutated nowhere, so there is no first
+			// mutation for the trim to point at.
+			continue
+		}
+		entry := TrimmedTemplate{
+			CallSite:    relativePosition(s.wd, t.call.Position),
+			Template:    t.template,
+			DataType:    typeDisplay(t.dataType),
+			FirstSeenAt: relativePosition(s.wd, t.firstFor.Position),
+		}
+		if _, said := reported[entry]; said {
+			// One template may invoke a partial several times. That is one
+			// thing to say once, not once per invocation.
+			continue
+		}
+		reported[entry] = struct{}{}
+		chosen.trimmed = append(chosen.trimmed, entry)
+	}
+	return chosen
+}
+
 // newPlan loads the project, walks the templates each ExecuteTemplate
 // call reaches, and enumerates the variations available in each.
 func newPlan(config Configuration, workingDirectory string) (*plan, error) {
@@ -89,8 +166,6 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 	if p.maxCases <= 0 {
 		p.maxCases = DefaultMaxCases
 	}
-	seen := make(map[string]struct{})
-
 	// before is what the templates looked like at the --diff revision.
 	// Nil means there is nothing to compare with, so every template
 	// counts as changed.
@@ -106,7 +181,13 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 			p.diffError = err.Error()
 		}
 	}
-	unchanged := make(map[string]struct{})
+	sel := selector{
+		before:    before,
+		seen:      make(map[string]struct{}),
+		unchanged: make(map[string]struct{}),
+		include:   include,
+		wd:        workingDirectory,
+	}
 
 	for _, templatesVariable := range config.TemplatesVariables {
 		lt, err := asteval.LoadTemplates(workingDirectory, templatesVariable, pl)
@@ -120,50 +201,12 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 			return nil, err
 		}
 
-		scopes, trimmed := traverse(lt, index)
-		for _, sc := range scopes {
-			if !include(sc.template) {
-				continue
-			}
-			key := executionKey(sc.template, sc.dataType)
-			if _, done := seen[key]; done {
-				continue
-			}
-			seen[key] = struct{}{}
-			if before != nil && !before.changed(sc) {
-				unchanged[key] = struct{}{}
-				p.unchanged = append(p.unchanged, UnchangedTemplate{
-					Template: sc.template,
-					File:     sc.src.path,
-					DataType: typeDisplay(sc.dataType),
-				})
-				continue
-			}
+		chosen := sel.choose(traverse(lt, index))
+		for _, sc := range chosen.mutate {
 			p.add(lt, sc, functions, workingDirectory)
 		}
-
-		reported := make(map[TrimmedTemplate]struct{})
-		for _, t := range trimmed {
-			if _, skipped := unchanged[executionKey(t.template, t.dataType)]; skipped {
-				// Unchanged means mutated nowhere, so there is no first
-				// mutation for the trim to point at.
-				continue
-			}
-			entry := TrimmedTemplate{
-				CallSite:    relativePosition(workingDirectory, t.call.Position),
-				Template:    t.template,
-				DataType:    typeDisplay(t.dataType),
-				FirstSeenAt: relativePosition(workingDirectory, t.firstFor.Position),
-			}
-			if _, said := reported[entry]; said {
-				// One template may invoke a partial several times. That
-				// is one thing to say once, not once per invocation.
-				continue
-			}
-			reported[entry] = struct{}{}
-			p.trimmed = append(p.trimmed, entry)
-		}
-
+		p.unchanged = append(p.unchanged, chosen.unchanged...)
+		p.trimmed = append(p.trimmed, chosen.trimmed...)
 	}
 
 	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {

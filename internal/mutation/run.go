@@ -123,11 +123,22 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		// A drawn seed is reported so the run can be repeated exactly.
 		config.Seed = rand.Uint64()
 	}
-	plan, err := newPlan(config, workingDirectory)
+	p, err := newPlan(config, workingDirectory)
 	if err != nil {
 		return nil, err
 	}
+	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs, env: config.env}
+	return runPlan(p, config, status, tester.run, tester.verdict)
+}
 
+// runPlan runs an enumerated plan: the suite once unmutated, and then each
+// mutant against its own overlay.
+//
+// Running the suite arrives as baseline and verdict rather than being
+// built here, because it is the slow part of a run and everything this
+// decides -- what a failing baseline means, what the preamble says, what
+// a dry run returns -- is then worth stating without it.
+func runPlan(p *plan, config Configuration, status io.Writer, baseline func(extra []string) (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
 	// Per mutant lines are noise unless asked for; the preamble is not,
 	// because it is what tells someone whether to wait or walk away.
 	var progress io.Writer
@@ -135,32 +146,30 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		progress = status
 	}
 
-	report := plan.report()
+	report := p.report()
 	report.Verbose = config.Verbose
 	if config.DryRun {
 		report.DryRun = true
 		return report, nil
 	}
 
-	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs, env: config.env}
-
 	started := time.Now()
-	if out, err := tester.run(nil); err != nil {
+	if out, err := baseline(nil); err != nil {
 		if !isTestFailure(err) {
 			return nil, err
 		}
 		return nil, &BaselineFailedError{Output: out}
 	}
-	baseline := time.Since(started)
-	report.Baseline = BaselineResult{Passed: true, Seconds: baseline.Seconds()}
+	took := time.Since(started)
+	report.Baseline = BaselineResult{Passed: true, Seconds: took.Seconds()}
 	workers := max(config.Workers, 1)
-	clock := &estimate{perMutant: baseline, remaining: plan.runnable(), workers: workers}
+	clock := &estimate{perMutant: took, remaining: p.runnable(), workers: workers}
 
 	if status != nil {
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s, estimated %s\n",
 			report.Total, pluralize(report.Total, "mutant"),
 			report.Templates, pluralize(report.Templates, "template"),
-			report.Complexity, roundDuration(baseline), clock.left())
+			report.Complexity, roundDuration(took), clock.left())
 	}
 	reportTrims(progress, report.Trimmed)
 
@@ -171,8 +180,8 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	defer func() { _ = os.RemoveAll(scratch) }()
 
 	runner := &mutantRunner{
-		plan:     plan,
-		test:     tester.verdict,
+		plan:     p,
+		test:     verdict,
 		scratch:  scratch,
 		progress: progress,
 		clock:    clock,
