@@ -1,4 +1,4 @@
-package asteval_test
+package load_test
 
 import (
 	"os"
@@ -10,14 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 )
 
 func TestNoPackageError(t *testing.T) {
 	t.Run("no packages loaded", func(t *testing.T) {
 		t.Setenv("GOWORK", "off")
 		dir := t.TempDir()
-		err := asteval.NoPackageError(dir, nil)
+		err := load.NoPackageError(dir, nil)
 		require.Error(t, err)
 		require.Equal(t, "no Go package found at "+dir, err.Error(), "the short form is a single line")
 		assert.Contains(t, multiLine(t, err), "loaded no packages")
@@ -31,7 +31,7 @@ func TestNoPackageError(t *testing.T) {
 				{Pos: "main.go:25:2", Msg: "undefined: TemplateRoutes"},
 			}},
 		}
-		err := asteval.NoPackageError(t.TempDir(), pl)
+		err := load.NoPackageError(t.TempDir(), pl)
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), "loaded 2 packages: fmt, example.com/broken")
 		assert.Contains(t, multiLine(t, err), "undefined: TemplateRoutes")
@@ -42,7 +42,7 @@ func TestNoPackageError(t *testing.T) {
 		for range 5 {
 			pkg.Errors = append(pkg.Errors, packages.Error{Msg: "boom"})
 		}
-		err := asteval.NoPackageError(t.TempDir(), []*packages.Package{pkg})
+		err := load.NoPackageError(t.TempDir(), []*packages.Package{pkg})
 		require.Error(t, err)
 		assert.Equal(t, 3, strings.Count(multiLine(t, err), "boom"))
 		assert.Contains(t, multiLine(t, err), "more load errors omitted")
@@ -53,7 +53,7 @@ func TestNoPackageError(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
 		dir := filepath.Join(parent, "app")
 		require.NoError(t, os.Mkdir(dir, 0o700))
-		err := asteval.NoPackageError(dir, nil)
+		err := load.NoPackageError(dir, nil)
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), filepath.Join(parent, "go.work"))
 		assert.Contains(t, multiLine(t, err), "GOWORK=off")
@@ -65,14 +65,14 @@ func TestNoPackageError(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
 		dir := filepath.Join(parent, "app")
 		require.NoError(t, os.Mkdir(dir, 0o700))
-		err := asteval.NoPackageError(dir, nil)
+		err := load.NoPackageError(dir, nil)
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), filepath.Join(parent, "go.work"))
 		assert.NotContains(t, multiLine(t, err), "GOWORK=auto is set")
 	})
 	t.Run("an explicit GOWORK is named", func(t *testing.T) {
 		t.Setenv("GOWORK", "/somewhere/go.work")
-		err := asteval.NoPackageError(t.TempDir(), nil)
+		err := load.NoPackageError(t.TempDir(), nil)
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), "GOWORK=/somewhere/go.work is set")
 	})
@@ -84,7 +84,7 @@ func TestNoPackageError(t *testing.T) {
 		pkgDir := filepath.Join(module, "internal", "hypertext")
 		require.NoError(t, os.MkdirAll(pkgDir, 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(module, "go.mod"), []byte("module app\n\ngo 1.24\n"), 0o600))
-		err := asteval.NoPackageError(pkgDir, nil)
+		err := load.NoPackageError(pkgDir, nil)
 		require.Error(t, err)
 		assert.Contains(t, multiLine(t, err), "go work use "+module)
 		assert.NotContains(t, multiLine(t, err), "go work use "+pkgDir)
@@ -93,7 +93,7 @@ func TestNoPackageError(t *testing.T) {
 		t.Setenv("GOWORK", "off")
 		dir := t.TempDir()
 		pl := []*packages.Package{{PkgPath: dir, Errors: []packages.Error{{Msg: "contained in a module that is not one of the workspace modules"}}}}
-		err := asteval.NoPackageError(dir, pl)
+		err := load.NoPackageError(dir, pl)
 		require.Error(t, err)
 		assert.Equal(t, "the Go package at "+dir+" loaded, but with errors", err.Error())
 		assert.NotContains(t, multiLine(t, err), "no Go package found")
@@ -105,7 +105,7 @@ func TestNoPackageError(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module broken\n\ngo 1.24\n"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.work"), []byte("go 1.24\n\nuse (\n\t.\n\t./missing\n)\n"), 0o600))
 		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
-		_, _, err := asteval.LoadPackages(dir)
+		_, _, err := load.Packages(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load Go packages from "+dir)
 		msg := multiLine(t, err)
@@ -115,7 +115,7 @@ func TestNoPackageError(t *testing.T) {
 	})
 	t.Run("GOWORK off adds no workspace note", func(t *testing.T) {
 		t.Setenv("GOWORK", "off")
-		err := asteval.NoPackageError(t.TempDir(), nil)
+		err := load.NoPackageError(t.TempDir(), nil)
 		require.Error(t, err)
 		assert.NotContains(t, multiLine(t, err), "go work use")
 	})

@@ -19,6 +19,7 @@ import (
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -117,7 +118,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		receiver = asteval.NamedEmptyStruct("Receiver", routesPkg.Types)
 	} else {
 		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-		receiver, err = asteval.FindType(pl, receiverPkgPath, config.ReceiverType)
+		receiver, err = load.FindType(pl, receiverPkgPath, config.ReceiverType)
 		if err != nil {
 			return nil, err
 		}

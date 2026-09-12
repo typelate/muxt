@@ -1,4 +1,4 @@
-package asteval
+package load
 
 import (
 	"slices"

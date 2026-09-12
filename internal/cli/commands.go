@@ -24,9 +24,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/load"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/mutation"
 	"github.com/typelate/muxt/internal/muxt"
@@ -76,7 +76,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				return err
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, rootCommandConfig.ReceiverPackage)
+			fileSet, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
 			}
@@ -148,7 +148,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				}
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory)
+			fileSet, pl, err := load.Packages(*workingDirectory)
 			if err != nil {
 				return err
 			}
@@ -344,7 +344,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 			}
 			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
-			fileSet, pl, err := asteval.LoadPackages(*workingDirectory, config.ReceiverPackage)
+			fileSet, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
 				return err
 			}
@@ -549,14 +549,14 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			fileSet, pl, err := asteval.LoadPackages(*wd)
+			fileSet, pl, err := load.Packages(*wd)
 			if err != nil {
 				return err
 			}
 			combined := &analysis.TemplateCallers{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				lt, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := load.Templates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
@@ -602,14 +602,14 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			_, pl, err := asteval.LoadPackages(*wd)
+			_, pl, err := load.Packages(*wd)
 			if err != nil {
 				return err
 			}
 			combined := &analysis.TemplateCalls{}
 			for _, tv := range templatesVariables {
 				config.TemplatesVariable = tv
-				lt, err := asteval.LoadTemplates(*wd, tv, pl)
+				lt, err := load.Templates(*wd, tv, pl)
 				if err != nil {
 					return err
 				}
@@ -673,7 +673,7 @@ func versionCommand() *cobra.Command {
 // the command. What it stops is the silence: without it, a package go
 // build rejects gets the same clean output as one that passes.
 func warnPartialAST(logger *log.Logger, pl []*packages.Package) {
-	if logger == nil || len(asteval.ParseErrors(pl)) == 0 {
+	if logger == nil || len(load.ParseErrors(pl)) == 0 {
 		return
 	}
 	logger.Printf("warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture")
@@ -1001,7 +1001,7 @@ This command is intended for exploratory use only.`,
 					return fmt.Errorf("no muxt-generated package found at %s", dir)
 				}
 
-				_, pl, err := asteval.LoadPackages(pkg.Dir)
+				_, pl, err := load.Packages(pkg.Dir)
 				if err != nil {
 					return err
 				}

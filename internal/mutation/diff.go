@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // revision is what the templates looked like at an earlier commit: the
@@ -62,7 +62,7 @@ func templatesAt(config Configuration, dir string) (revision, error) {
 	}
 	before := make(revision)
 	for _, templatesVariable := range config.TemplatesVariables {
-		lt, err := asteval.LoadTemplates(dir, templatesVariable, pl)
+		lt, err := load.Templates(dir, templatesVariable, pl)
 		if err != nil {
 			return nil, err
 		}

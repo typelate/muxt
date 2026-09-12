@@ -14,6 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // plan is everything decided before a single test is run: which templates
@@ -190,7 +191,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 	}
 
 	for _, templatesVariable := range config.TemplatesVariables {
-		lt, err := asteval.LoadTemplates(workingDirectory, templatesVariable, pl)
+		lt, err := load.Templates(workingDirectory, templatesVariable, pl)
 		if err != nil {
 			return nil, err
 		}
@@ -224,7 +225,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
-func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
+func (p *plan) add(lt *load.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
 	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases)
 
 	report := TemplateReport{
@@ -309,7 +310,7 @@ func (p *plan) add(lt *asteval.LoadedTemplates, sc scope, functions check.Functi
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
+func invalid(lt *load.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
 	mutated := sc.src.mutatedText(mutant.edits)
 	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, functions)
 	if err != nil {
@@ -331,7 +332,7 @@ func invalid(lt *asteval.LoadedTemplates, sc scope, mutant Mutant, functions che
 // The trees are parsed here rather than taken from the template set so
 // that every node position is an offset into text this package holds,
 // which is what a mutation is spliced into.
-func buildTreeIndex(lt *asteval.LoadedTemplates, workingDirectory string, pl []*packages.Package, functions check.Functions) (map[string]treeLocation, error) {
+func buildTreeIndex(lt *load.LoadedTemplates, workingDirectory string, pl []*packages.Package, functions check.Functions) (map[string]treeLocation, error) {
 	// The definitions are gathered before the collector is built: a
 	// source scans its actions as it is constructed, and it can only do
 	// that once the delimiters its file was written with are known,
@@ -427,7 +428,7 @@ func countActions(node parse.Node) int {
 // process's own.
 func loadPackages(workingDirectory string, includeTests bool, env []string) ([]*packages.Package, error) {
 	if !includeTests {
-		_, pl, err := asteval.LoadPackagesWithEnv(workingDirectory, env)
+		_, pl, err := load.PackagesWithEnv(workingDirectory, env)
 		return pl, err
 	}
 	fileSet := token.NewFileSet()

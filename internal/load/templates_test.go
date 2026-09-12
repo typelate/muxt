@@ -1,4 +1,4 @@
-package asteval_test
+package load_test
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // writeModule lays out a scratch module so templates load the way muxt
@@ -51,14 +51,15 @@ func TestTemplates(t *testing.T) {
 		"index.gohtml": `{{define "home"}}Hello, {{upper .Name}}{{end}}`,
 		"form.gohtml":  `{{define "create"}}<form></form>{{end}}`,
 	})
-	_, pl, err := asteval.LoadPackages(dir)
+	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := asteval.PackageAtFilepath(pl, dir)
+	pkg, ok := load.PackageAtFilepath(pl, dir)
 	require.True(t, ok)
 
 	t.Run("parses the embedded files", func(t *testing.T) {
-		ts, functions, err := asteval.Templates("templates", pkg)
+		lt, ts, err := load.HTMLTemplates("templates", pkg)
 		require.NoError(t, err)
+		functions := lt.CollectedFunctions()
 
 		var names []string
 		for _, tmpl := range ts.Templates() {
@@ -73,12 +74,12 @@ func TestTemplates(t *testing.T) {
 	})
 
 	t.Run("unknown variable", func(t *testing.T) {
-		_, _, err := asteval.Templates("nope", pkg)
+		_, _, err := load.HTMLTemplates("nope", pkg)
 		require.ErrorContains(t, err, "variable nope not found")
 	})
 
 	t.Run("load templates wires the global", func(t *testing.T) {
-		lt, err := asteval.LoadTemplates(dir, "templates", pl)
+		lt, err := load.Templates(dir, "templates", pl)
 		require.NoError(t, err)
 		require.NotNil(t, lt.HTML)
 
@@ -100,14 +101,14 @@ var texts = template.Must(template.New("t").Parse(` + "`{{define \"note\"}}hi{{e
 func main() {}
 `,
 	})
-	_, pl, err := asteval.LoadPackages(dir)
+	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := asteval.PackageAtFilepath(pl, dir)
+	pkg, ok := load.PackageAtFilepath(pl, dir)
 	require.True(t, ok)
 
 	// Muxt introspects trees without executing, so a text/template
 	// variable loads through an html/template value with the same trees.
-	ts, _, err := asteval.Templates("texts", pkg)
+	_, ts, err := load.HTMLTemplates("texts", pkg)
 	require.NoError(t, err)
 	require.NotNil(t, ts.Lookup("note"))
 }

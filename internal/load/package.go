@@ -1,4 +1,4 @@
-package asteval
+package load
 
 import (
 	"fmt"
@@ -13,13 +13,13 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
-	return LoadPackagesWithEnv(wd, nil, morePatterns...)
+func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	return PackagesWithEnv(wd, nil, morePatterns...)
 }
 
-// LoadPackagesWithEnv is LoadPackages with the environment the go command
+// PackagesWithEnv is Packages with the environment the go command
 // runs in. A nil env is the process's own.
-func LoadPackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
 	patterns := []string{
 		wd, "encoding", "fmt", "net/http",
 	}
@@ -104,7 +104,7 @@ type LoadedTemplates struct {
 	HTML      *template.Template
 }
 
-func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
+func Templates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
 	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
 		return nil, NoPackageError(wd, pl)
@@ -118,17 +118,6 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*Loade
 	global := check.NewGlobal(pkg.Types, pkg.Fset, lt, lt.Functions())
 	global.Definitions = lt
 	return &LoadedTemplates{Package: pkg, Templates: lt, Global: global, HTML: ts}, nil
-}
-
-// Templates evaluates the package-level template variable through
-// check.LoadTemplates and returns the html/template value together with
-// the functions collected from Funcs calls in its construction chain.
-func Templates(templatesVariable string, pkg *packages.Package) (*template.Template, check.Functions, error) {
-	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
-	if err != nil {
-		return nil, nil, err
-	}
-	return ts, lt.CollectedFunctions(), nil
 }
 
 // HTMLTemplates evaluates the package-level template variable through
