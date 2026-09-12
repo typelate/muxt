@@ -16,8 +16,8 @@ import (
 	"github.com/typelate/check"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -34,16 +34,16 @@ type CheckConfiguration struct {
 // ExecuteTemplate call sites it checked, so the caller can report the
 // count on success.
 func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) (int, error) {
-	routesPkg, ok := asteval.PackageAtFilepath(pl, wd)
+	routesPkg, ok := load.PackageAtFilepath(pl, wd)
 	if !ok {
-		return 0, asteval.NoPackageError(wd, pl)
+		return 0, load.NoPackageError(wd, pl)
 	}
 
 	var errs []error
 	totalChecked := 0
 
 	for _, tv := range config.TemplatesVariables {
-		lt, err := asteval.LoadTemplates(wd, tv, pl)
+		lt, err := load.Templates(wd, tv, pl)
 		if err != nil {
 			return totalChecked, err
 		}
