@@ -1,0 +1,41 @@
+A malformed route template name is reported with its position rather
+than as an unused template.
+-- config.json --
+{"Command": "check", "Verbose": true}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+{{define "TRACE /debug"}}{{end}}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates *template.Template
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/error.txt --
+1 error
+-- want/log.txt --
+  TRACE /debug
+  ^^^^^
+index.gohtml:2:11: TRACE method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE
+
+checking endpoint index
+-- want/stdout.txt --
+checked 1

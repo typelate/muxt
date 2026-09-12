@@ -1,0 +1,37 @@
+The route listing shows each route template's name and source, and the
+receiver's methods.
+-- config.json --
+{"Command": "routes", "ReceiverType": "T"}
+-- index.gohtml --
+{{define "GET /{$} Home()"}}<h1>{{.Result}}</h1>{{end}}
+{{define "POST /save Save(form)"}}{{.Err}}{{end}}
+{{define "partial"}}not a route{{end}}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"net/url"
+)
+
+var templates *template.Template
+
+type T struct{}
+
+func (T) Home() string                { return "" }
+func (*T) Save(form url.Values) error { return nil }
+-- want/stdout.txt --
+
+Receiver Type: example.com/server.T
+
+Receiver Methods:
+  - func (example.com/server.T) Home() string
+  - func (example.com/server.T) Save(form net/url.Values) error
+
+
+Template Routes:
+  - POST /save Save(form)
+  - GET /{$} Home()
+
+Template Functions:
+

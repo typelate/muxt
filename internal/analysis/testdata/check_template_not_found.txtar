@@ -1,0 +1,37 @@
+An ExecuteTemplate call naming a template the set does not define.
+-- config.json --
+{"Command": "check"}
+-- index.gohtml --
+{{define "main"}}{{end}}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates *template.Template
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:21:9 ExecuteTemplate "index" Page
+ -  template "index" not found
+
+-- want/stdout.txt --
+checked 1

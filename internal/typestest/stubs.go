@@ -63,6 +63,43 @@ func Sprintln(a ...any) string { return "" }
 func Errorf(format string, a ...any) error { return nil }
 `,
 
+	"embed": `package embed
+
+type FS struct{}
+`,
+
+	"html/template": `package template
+
+import (
+	"fmt"
+	"io"
+)
+
+type Template struct{}
+
+type FuncMap map[string]any
+
+func New(name string) *Template { return nil }
+
+func Must(t *Template, err error) *Template { return t }
+
+func (t *Template) Parse(text string) (*Template, error) { return t, nil }
+
+func (t *Template) Funcs(funcMap FuncMap) *Template { return t }
+
+func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error { return nil }
+
+func HTMLEscaper(args ...any) string { return "" }
+
+func JSEscaper(args ...any) string { return "" }
+
+func URLQueryEscaper(args ...any) string { return "" }
+
+// The real package reaches fmt through its imports; check.DefaultFunctions
+// finds print, printf and println there.
+var _ fmt.Stringer
+`,
+
 	"io": `package io
 
 type Reader interface {

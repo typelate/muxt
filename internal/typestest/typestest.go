@@ -33,16 +33,43 @@ var FileSet = token.NewFileSet()
 // entry maps a file name to its source. Imports resolve to the stub
 // standard library packages; importing anything else is an error.
 func Check(path string, files map[string]string) (*types.Package, error) {
+	checked, err := CheckSyntax(path, files)
+	if err != nil {
+		return nil, err
+	}
+	return checked.Types, nil
+}
+
+// Checked is a package type checked by CheckSyntax, with the syntax and
+// type information a test walks to find what the source does.
+type Checked struct {
+	Types  *types.Package
+	Syntax []*ast.File
+	Info   *types.Info
+}
+
+// CheckSyntax is Check, also returning the parsed files, in file name
+// order, and the type information recorded for them.
+func CheckSyntax(path string, files map[string]string) (*Checked, error) {
 	std, err := stdlib()
 	if err != nil {
 		return nil, err
 	}
-	return check(path, files, importerFunc(func(p string) (*types.Package, error) {
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+		Defs:  make(map[*ast.Ident]types.Object),
+		Uses:  make(map[*ast.Ident]types.Object),
+	}
+	pkg, syntax, err := checkWithInfo(path, files, importerFunc(func(p string) (*types.Package, error) {
 		if pkg, ok := std[p]; ok {
 			return pkg, nil
 		}
 		return nil, fmt.Errorf("typestest has no stub for package %q", p)
-	}))
+	}), info)
+	if err != nil {
+		return nil, err
+	}
+	return &Checked{Types: pkg, Syntax: syntax, Info: info}, nil
 }
 
 // MustCheck is Check for a single file, failing t when the source does
@@ -96,6 +123,11 @@ type importerFunc func(path string) (*types.Package, error)
 func (fn importerFunc) Import(path string) (*types.Package, error) { return fn(path) }
 
 func check(path string, files map[string]string, importer types.Importer) (*types.Package, error) {
+	pkg, _, err := checkWithInfo(path, files, importer, nil)
+	return pkg, err
+}
+
+func checkWithInfo(path string, files map[string]string, importer types.Importer, info *types.Info) (*types.Package, []*ast.File, error) {
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -105,12 +137,13 @@ func check(path string, files map[string]string, importer types.Importer) (*type
 	for _, name := range names {
 		file, err := parser.ParseFile(FileSet, name, files[name], parser.SkipObjectResolution)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		syntax = append(syntax, file)
 	}
 	config := types.Config{Importer: importer}
-	return config.Check(path, FileSet, syntax, nil)
+	pkg, err := config.Check(path, FileSet, syntax, info)
+	return pkg, syntax, err
 }
 
 var stdlib = sync.OnceValues(func() (map[string]*types.Package, error) {

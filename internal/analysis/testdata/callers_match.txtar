@@ -1,0 +1,40 @@
+Where the matching templates are executed or called from.
+-- config.json --
+{"Command": "callers", "Match": ["^head"]}
+-- index.gohtml --
+{{define "page"}}{{template "header" .Title}}{{range .Items}}{{template "item" .}}{{end}}{{end}}
+{{define "header"}}<h1>{{.}}</h1>{{end}}
+{{define "item"}}<li>{{.Name}}</li>{{end}}
+{{define "alone"}}{{template "header" "Alone"}}{{end}}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates *template.Template
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct{ Name string }
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+
+func RenderAlone(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "alone", nil)
+}
+-- want/stdout.txt --
+
+template "header" called by:
+
+  - index.gohtml:4:30 template "alone" string
+  - index.gohtml:1:29 template "page" string
+
+

@@ -1,0 +1,42 @@
+A template nothing executes is reported; a route template is reported
+as waiting for muxt generate, along with the partials only it uses.
+-- config.json --
+{"Command": "check"}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+{{define "orphan"}}<p>never rendered</p>{{end}}
+{{define "GET /items Items()"}}{{template "row" .}}{{end}}
+{{define "row"}}<tr></tr>{{end}}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates *template.Template
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/error.txt --
+2 errors
+-- want/log.txt --
+Route templates with no generated handler; run muxt generate to wire them up:
+  - index.gohtml:3:32: "GET /items Items()"
+Unused templates:
+  - index.gohtml:2:20: "orphan"
+-- want/stdout.txt --
+checked 1
