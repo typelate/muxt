@@ -1,0 +1,16 @@
+A template may not set the status of a route whose method took the
+response.
+-- config.json --
+{"ReceiverType": "T"}
+-- index.gohtml --
+{{define "GET /download Download(response)"}}{{.StatusCode 404}}{{end}}
+-- server.go --
+package server
+
+import "net/http"
+
+type T struct{}
+
+func (T) Download(w http.ResponseWriter) string { return "" }
+-- want/error.txt --
+index.gohtml:1:11: template "GET /download Download(response)" calls StatusCode but Download takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method

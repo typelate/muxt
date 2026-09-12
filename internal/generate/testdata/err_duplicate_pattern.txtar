@@ -1,0 +1,10 @@
+Two templates may not register the same pattern.
+-- index.gohtml --
+{{define "GET /a"}}{{end}}
+{{define "GET  /a"}}{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+duplicate route pattern "GET /a"
+index.gohtml:1:11: first defined here
+index.gohtml:2:11: also defined here

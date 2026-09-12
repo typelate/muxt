@@ -1,0 +1,13 @@
+--output-exported-default-identifiers=false names the generated
+identifiers unexported, as the command line spells them.
+-- config.json --
+{"OutputExportedDefaultIdentifiers": false, "RoutesFunction": "templateRoutes", "ReceiverInterface": "routesReceiver", "TemplateDataType": "templateData", "SSETemplateDataType": "sseTemplateData", "TemplateRoutePathsTypeName": "templateRoutePaths"}
+-- index.gohtml --
+{{define "GET /events sse(Events(execute))"}}{{.Result}}{{end}}
+{{define "GET /{$}"}}home{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+  GET /events sse(Events(execute))
+                         ^^^^^^^
+index.gohtml:1:34: method Events using the execute callback must be defined on the receiver type

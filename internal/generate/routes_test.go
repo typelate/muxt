@@ -7,33 +7,6 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-const pathParamReceiver = `package server
-
-type T struct{}
-
-type Article struct{ Title string }
-
-func (T) Article(id int) (Article, error) { return Article{}, nil }
-`
-
-func TestTemplateRoutesFilesInMemory(t *testing.T) {
-	config := testConfig()
-	config.ReceiverType = "T"
-	src := testSource(t, pathParamReceiver, "T", `{{define "GET /article/{id} Article(id)"}}{{.Result.Title}}{{end}}`)
-
-	content, _ := generateOne(t, config, src)
-
-	t.Run("the path value parses into the method's parameter type", func(t *testing.T) {
-		got := function(t, content, "func (routePaths TemplateRoutePaths) Article(")
-		want := `func (routePaths TemplateRoutePaths) Article(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "article", strconv.Itoa(idPathParam))
-}`
-		if got != want {
-			t.Errorf("route path method:\n%s\nwant:\n%s", got, want)
-		}
-	})
-}
-
 // TestHandlerGenerationLeavesTheRouteAsResolved generates one handler
 // twice. Rendering argument parsing rewrites the call to the locals it
 // declares; were that done to the route itself, the second handler would

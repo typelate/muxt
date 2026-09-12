@@ -1,0 +1,227 @@
+A form struct binds each field from the form, parsing scalars and
+slices, renaming inputs with the name tag, and validating from the
+input a template tag names.
+-- config.json --
+{"ReceiverType": "T"}
+-- index.gohtml --
+{{define "POST /signup Signup(form)"}}{{end}}
+{{define "signup-form"}}
+<input type="number" name="age" min="13" max="130">
+<input type="text" name="handle" pattern="[a-z]+" minlength="2" maxlength="20">
+{{end}}
+-- server.go --
+package server
+
+type Signup struct {
+	Age      int      `name:"age" template:"signup-form"`
+	Handle   string   `name:"handle" template:"signup-form"`
+	Tags     []string `name:"tag"`
+	Score    float64
+	Verified bool
+	Count    uint32
+}
+
+type T struct{}
+
+func (T) Signup(form Signup) error { return nil }
+-- want/template_routes.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"path"
+	"regexp"
+	"strconv"
+	"sync"
+)
+
+type RoutesReceiver interface {
+	Signup(form Signup) error
+}
+
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+	pathsPrefix := ""
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.HandleFunc("POST /signup", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var form Signup
+		{
+			value, err := strconv.Atoi(request.FormValue("age"))
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusBadRequest
+			} else {
+				if value < 13 {
+					td.errList = append(td.errList, errors.New("age must not be less than 13"))
+					td.errStatusCode = http.StatusBadRequest
+				}
+				if value > 130 {
+					td.errList = append(td.errList, errors.New("age must not be more than 130"))
+					td.errStatusCode = http.StatusBadRequest
+				}
+			}
+			form.Age = value
+		}
+		{
+			value := request.FormValue("handle")
+			if !regexp.MustCompile("[a-z]+").MatchString(value) {
+				td.errList = append(td.errList, errors.New("handle must match \"[a-z]+\""))
+				td.errStatusCode = http.StatusBadRequest
+			}
+			if len(value) < 2 {
+				td.errList = append(td.errList, errors.New("handle is too short (the min length is 2)"))
+				td.errStatusCode = http.StatusBadRequest
+			}
+			if len(value) > 20 {
+				td.errList = append(td.errList, errors.New("handle is too long (the max length is 20)"))
+				td.errStatusCode = http.StatusBadRequest
+			}
+			form.Handle = value
+		}
+		for _, val := range request.Form["tag"] {
+			form.Tags = append(form.Tags, val)
+		}
+		{
+			value, err := strconv.ParseFloat(request.FormValue("Score"), 64)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusBadRequest
+			}
+			form.Score = value
+		}
+		{
+			value, err := strconv.ParseBool(request.FormValue("Verified"))
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusBadRequest
+			}
+			form.Verified = value
+		}
+		{
+			value, err := strconv.ParseUint(request.FormValue("Count"), 10, 32)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusBadRequest
+			}
+			form.Count = uint32(value)
+		}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Signup(form)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "POST /signup Signup(form)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+}
+
+type TemplateData[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Result() T {
+	return data.result
+}
+
+func (data *TemplateData[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *TemplateData[R, T]) Header(key, value string) *TemplateData[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *TemplateData[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *TemplateData[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *TemplateData[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *TemplateData[R, T]) RedirectMultipleChoices(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *TemplateData[R, T]) RedirectMovedPermanently(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *TemplateData[R, T]) RedirectFound(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *TemplateData[R, T]) RedirectSeeOther(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
+type TemplateRoutePaths struct {
+	pathsPrefix string
+}
+
+func (routePaths TemplateRoutePaths) Signup() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "signup")
+}

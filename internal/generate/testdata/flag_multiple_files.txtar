@@ -1,0 +1,277 @@
+--output-multiple-files writes the routes for each template file into
+its own file; routes from templates with no file stay in the main one.
+-- config.json --
+{"ReceiverType": "T", "OutputMultipleFiles": true, "Middleware": true}
+-- index.gohtml --
+{{define "GET /{$} Home()"}}{{.Result}}{{end}}
+-- user-profile.gohtml --
+{{define "GET /user/{id} User(id)"}}{{.Result}}{{end}}
+{{define "POST /user/{id} Save(id, form)"}}{{.Result}}{{end}}
+-- server.go --
+package server
+
+import "net/url"
+
+type T struct{}
+
+func (T) Home() string                           { return "" }
+func (T) User(id int) string                     { return "" }
+func (T) Save(id int, form url.Values) error      { return nil }
+-- want/index_template_routes_gen.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"sync"
+)
+
+type indexRoutesReceiver interface {
+	Home() string
+}
+
+func indexTemplateRoutes(mux *http.ServeMux, receiver indexRoutesReceiver, pathsPrefix string, middleware func(next http.Handler) http.Handler) {
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.Handle("GET /{$}", middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[indexRoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Home()
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /{$} Home()", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})))
+}
+-- want/template_routes.go --
+package server
+
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"net/http"
+	"path"
+	"strconv"
+)
+
+type RoutesReceiver interface {
+	indexRoutesReceiver
+	userProfileRoutesReceiver
+}
+
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, middleware func(next http.Handler) http.Handler) TemplateRoutePaths {
+	pathsPrefix := ""
+	if middleware == nil {
+		middleware = func(next http.Handler) http.Handler {
+			return next
+		}
+	}
+	indexTemplateRoutes(mux, receiver, pathsPrefix, middleware)
+	userProfileTemplateRoutes(mux, receiver, pathsPrefix, middleware)
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+}
+
+type TemplateData[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Result() T {
+	return data.result
+}
+
+func (data *TemplateData[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *TemplateData[R, T]) Header(key, value string) *TemplateData[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *TemplateData[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *TemplateData[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *TemplateData[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *TemplateData[R, T]) RedirectMultipleChoices(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *TemplateData[R, T]) RedirectMovedPermanently(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *TemplateData[R, T]) RedirectFound(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *TemplateData[R, T]) RedirectSeeOther(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
+type TemplateRoutePaths struct {
+	pathsPrefix string
+}
+
+func (routePaths TemplateRoutePaths) User(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
+}
+
+func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
+}
+
+func (routePaths TemplateRoutePaths) Home() string {
+	return "/"
+}
+-- want/user-profile_template_routes_gen.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strconv"
+	"sync"
+)
+
+type userProfileRoutesReceiver interface {
+	User(id int) string
+	Save(id int, form url.Values) error
+}
+
+func userProfileTemplateRoutes(mux *http.ServeMux, receiver userProfileRoutesReceiver, pathsPrefix string, middleware func(next http.Handler) http.Handler) {
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.Handle("GET /user/{id}", middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[userProfileRoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		idParsed, err := strconv.Atoi(request.PathValue("id"))
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		idPathParam := idParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.User(idPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /user/{id} User(id)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})))
+	mux.Handle("POST /user/{id}", middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[userProfileRoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		idParsed, err := strconv.Atoi(request.PathValue("id"))
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		idPathParam := idParsed
+		if err := request.ParseForm(); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var form url.Values = request.Form
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Save(idPathParam, form)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "POST /user/{id} Save(id, form)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})))
+}

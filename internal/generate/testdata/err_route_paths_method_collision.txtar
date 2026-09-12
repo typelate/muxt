@@ -1,0 +1,11 @@
+Handlers whose names export to the same TemplateRoutePaths method
+collide.
+-- index.gohtml --
+{{define "GET /a list()"}}{{end}}
+{{define "GET /b List()"}}{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"
+index.gohtml:1:11: "list" is defined here
+index.gohtml:2:11: "List" is defined here

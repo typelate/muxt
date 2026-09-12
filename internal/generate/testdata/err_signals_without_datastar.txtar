@@ -1,0 +1,7 @@
+signals is Datastar's request body, so it needs --output-datastar.
+-- index.gohtml --
+{{define "POST /count Count(signals)"}}{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+the signals argument in "POST /count Count(signals)" requires --output-datastar; it is shorthand for unmarshalJSON(body)
