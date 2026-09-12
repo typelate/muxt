@@ -229,17 +229,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, src muxt.Sou
 		},
 	})
 
-	is := file.ImportSpecs()
-	importSpecs := make([]ast.Spec, 0, len(is))
-	for _, s := range is {
-		importSpecs = append(importSpecs, s)
-	}
+	// The import declaration is filled in last: building the other
+	// declarations is what registers the imports they use.
+	importDecl := &ast.GenDecl{Tok: token.IMPORT}
 	decls := []ast.Decl{
-		// import
-		&ast.GenDecl{
-			Tok:   token.IMPORT,
-			Specs: importSpecs,
-		},
+		importDecl,
 
 		// type
 		&ast.GenDecl{
@@ -261,6 +255,9 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, src muxt.Sou
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
+	for _, spec := range file.ImportSpecs() {
+		importDecl.Specs = append(importDecl.Specs, spec)
+	}
 	outputFile := &ast.File{
 		Name:  ast.NewIdent(config.PackageName),
 		Decls: decls,
