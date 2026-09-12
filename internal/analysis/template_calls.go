@@ -10,8 +10,7 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 )
 
 type TemplateCallsConfiguration struct {
@@ -33,7 +32,7 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, lt *asteval.LoadedTemplates) (*TemplateCalls, error) {
+func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplates) (*TemplateCalls, error) {
 	global, ts := lt.Global, lt.HTML
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls

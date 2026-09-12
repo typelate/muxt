@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -58,9 +58,9 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 }
 
 func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) ([]*Routes, error) {
-	pkg, ok := asteval.PackageAtFilepath(pl, wd)
+	pkg, ok := load.PackageAtFilepath(pl, wd)
 	if !ok {
-		return nil, asteval.NoPackageError(wd, pl)
+		return nil, load.NoPackageError(wd, pl)
 	}
 
 	config.PackagePath = pkg.PkgPath
@@ -69,7 +69,7 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var receiver *types.Named
 	if config.ReceiverType != "" {
 		var err error
-		receiver, err = asteval.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
+		receiver, err = load.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +78,7 @@ func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl 
 	var results []*Routes
 
 	for _, tv := range config.TemplatesVariables {
-		lt, ts, err := asteval.HTMLTemplates(tv, pkg)
+		lt, ts, err := load.HTMLTemplates(tv, pkg)
 		if err != nil {
 			return nil, err
 		}

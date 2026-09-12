@@ -1,4 +1,4 @@
-package asteval
+package load
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"html/template"
 	"path/filepath"
+	"strings"
 
 	"github.com/typelate/check"
 
@@ -13,13 +14,13 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func LoadPackages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
-	return LoadPackagesWithEnv(wd, nil, morePatterns...)
+func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	return PackagesWithEnv(wd, nil, morePatterns...)
 }
 
-// LoadPackagesWithEnv is LoadPackages with the environment the go command
+// PackagesWithEnv is Packages with the environment the go command
 // runs in. A nil env is the process's own.
-func LoadPackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
 	patterns := []string{
 		wd, "encoding", "fmt", "net/http",
 	}
@@ -39,6 +40,42 @@ func LoadPackagesWithEnv(wd string, env []string, morePatterns ...string) (*toke
 		return nil, nil, loadFailedError(wd, err)
 	}
 	return fileSet, pl, err
+}
+
+// PackagesWithTests is PackagesWithEnv, loading each package with its
+// in-package test files too.
+//
+// With tests, go list reports a package twice: once as it is written and
+// once compiled with its test files. The second holds a test's
+// ExecuteTemplate calls, so the test variants come first, ahead of the
+// packages as written, and a package picked by directory is the one with
+// its tests. Unlike PackagesWithEnv, a load failure is returned as the
+// loader reported it.
+func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
+	pl, err := packages.Load(&packages.Config{
+		Fset:  token.NewFileSet(),
+		Tests: true,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName |
+			packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax |
+			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
+		Dir: wd,
+		Env: env,
+	}, wd, "encoding", "fmt", "net/http")
+	if err != nil {
+		return nil, err
+	}
+	ordered := make([]*packages.Package, 0, len(pl))
+	for _, pkg := range pl {
+		if strings.HasSuffix(pkg.ID, ".test]") {
+			ordered = append(ordered, pkg)
+		}
+	}
+	for _, pkg := range pl {
+		if !strings.HasSuffix(pkg.ID, ".test]") {
+			ordered = append(ordered, pkg)
+		}
+	}
+	return ordered, nil
 }
 
 // ParseErrors returns the syntax errors the loader recovered from.
@@ -104,7 +141,7 @@ type LoadedTemplates struct {
 	HTML      *template.Template
 }
 
-func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
+func Templates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
 	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
 		return nil, NoPackageError(wd, pl)
@@ -118,17 +155,6 @@ func LoadTemplates(wd, templatesVariable string, pl []*packages.Package) (*Loade
 	global := check.NewGlobal(pkg.Types, pkg.Fset, lt, lt.Functions())
 	global.Definitions = lt
 	return &LoadedTemplates{Package: pkg, Templates: lt, Global: global, HTML: ts}, nil
-}
-
-// Templates evaluates the package-level template variable through
-// check.LoadTemplates and returns the html/template value together with
-// the functions collected from Funcs calls in its construction chain.
-func Templates(templatesVariable string, pkg *packages.Package) (*template.Template, check.Functions, error) {
-	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
-	if err != nil {
-		return nil, nil, err
-	}
-	return ts, lt.CollectedFunctions(), nil
 }
 
 // HTMLTemplates evaluates the package-level template variable through

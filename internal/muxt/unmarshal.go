@@ -39,7 +39,7 @@ const (
 // UnmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
-// encoding.TextUnmarshaler. asteval.LoadPackages always loads the encoding
+// encoding.TextUnmarshaler. load.Packages always loads the encoding
 // package (like fmt), so detection needs nothing from user code.
 func UnmarshalMethodFor(pl []*packages.Package, tp types.Type) UnmarshalMethod {
 	switch t := tp.(type) {
