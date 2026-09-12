@@ -1,28 +1,20 @@
 package muxt
 
 import (
-	"go/token"
 	"go/types"
 	"html/template"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/typestest"
 )
 
 func TestArgument(t *testing.T) {
-	// The testdata module is never part of a workspace; a GOWORK from the
-	// invoking environment must not leak into its package loading.
-	t.Setenv("GOWORK", "off")
-	fileSet := token.NewFileSet()
-	packageList, err := packages.Load(&packages.Config{
-		Fset: fileSet,
-		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
-		Dir:  "testdata/example",
-	}, ".")
-	require.NoError(t, err)
-
-	examplePkg := packageList[0].Types
+	examplePkg := exampleTypes(t)
+	pkg := Package{Fset: typestest.FileSet, Types: examplePkg, Lookup: typestest.Lookup}
 	require.NotNil(t, examplePkg)
 
 	httpPkg := findImport(examplePkg, "net/http")
@@ -480,7 +472,7 @@ func TestArgument(t *testing.T) {
 			}
 
 			for i := range defs {
-				err = ResolveCall(&defs[i], Package{Fset: fileSet, Types: examplePkg}, tc.Receiver)
+				err = ResolveCall(&defs[i], pkg, tc.Receiver)
 				if err != nil {
 					break
 				}
@@ -516,4 +508,19 @@ func findImport(example *types.Package, pkg string) *types.Package {
 		}
 	}
 	return nil
+}
+
+// exampleTypes type checks the package in testdata/example against the
+// stub standard library.
+func exampleTypes(t *testing.T) *types.Package {
+	t.Helper()
+	files := make(map[string]string)
+	for _, name := range []string{"functions.go", "methods.go"} {
+		src, err := os.ReadFile(filepath.Join("testdata", "example", name))
+		require.NoError(t, err)
+		files[name] = string(src)
+	}
+	pkg, err := typestest.Check("example.com", files)
+	require.NoError(t, err)
+	return pkg
 }
