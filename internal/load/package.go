@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"html/template"
 	"path/filepath"
+	"strings"
 
 	"github.com/typelate/check"
 
@@ -39,6 +40,42 @@ func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.Fi
 		return nil, nil, loadFailedError(wd, err)
 	}
 	return fileSet, pl, err
+}
+
+// PackagesWithTests is PackagesWithEnv, loading each package with its
+// in-package test files too.
+//
+// With tests, go list reports a package twice: once as it is written and
+// once compiled with its test files. The second holds a test's
+// ExecuteTemplate calls, so the test variants come first, ahead of the
+// packages as written, and a package picked by directory is the one with
+// its tests. Unlike PackagesWithEnv, a load failure is returned as the
+// loader reported it.
+func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
+	pl, err := packages.Load(&packages.Config{
+		Fset:  token.NewFileSet(),
+		Tests: true,
+		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName |
+			packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax |
+			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
+		Dir: wd,
+		Env: env,
+	}, wd, "encoding", "fmt", "net/http")
+	if err != nil {
+		return nil, err
+	}
+	ordered := make([]*packages.Package, 0, len(pl))
+	for _, pkg := range pl {
+		if strings.HasSuffix(pkg.ID, ".test]") {
+			ordered = append(ordered, pkg)
+		}
+	}
+	for _, pkg := range pl {
+		if !strings.HasSuffix(pkg.ID, ".test]") {
+			ordered = append(ordered, pkg)
+		}
+	}
+	return ordered, nil
 }
 
 // ParseErrors returns the syntax errors the loader recovered from.

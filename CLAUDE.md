@@ -19,16 +19,21 @@
 ## Architecture Overview
 
 ```
-Template Name (with route pattern and method call)
+go list (golang.org/x/tools/go/packages)      ./internal/load
+    ↓  load.Source / load.AnalysisSource
+muxt.Source: go/types + template sets          ./internal/muxt (package.go)
+    ↓  muxt.Definitions, muxt.ResolveCall
+Resolved routes (muxt.Definition)              ./internal/muxt
     ↓
-Parser (./internal/muxt/parse)
-    ↓
-Type Checker (go/types ./internal/analysis)
-    ↓
-Generator (./internal/muxt/generate)
-    ↓
-HTTP Handler Code
+Generated files / check reports                ./internal/generate, ./internal/analysis
 ```
+
+**The package load stops at `internal/load`.** It is the only package that
+calls `packages.Load` (the go command, seconds per run). Everything below it
+takes plain values — a `*types.Package`, a `*token.FileSet`, template sets —
+so it can be tested with inputs built in memory. `internal/typestest` type
+checks Go source against stub standard library packages in microseconds; use
+it rather than loading a module in unit tests.
 
 **Key concept:** Muxt reads template names like `"GET /{id} GetUser(ctx, id)"` and generates `http.Handler` implementations that:
 - Parse URL parameters to the correct Go types
@@ -82,10 +87,18 @@ go test ./...
 
 ### 4. Implement Changes
 
-Update the generator code in order:
-1. `internal/muxt/` — Core generation logic
-2. `internal/source/` — AST helpers (if needed)
-3. `internal/cli/` — CLI handling (if needed)
+Update the code in order:
+1. `internal/muxt/` — Route name parsing and call resolution
+2. `internal/generate/` or `internal/analysis/` — What is written or reported
+3. `internal/load/` — Only if a run needs something new from the loaded packages
+4. `internal/cli/` — CLI handling (if needed)
+
+Before adding an integration script, see whether a unit test can state it:
+`internal/generate/testdata/*.txtar` and `internal/analysis/testdata/*.txtar`
+snapshot generated files and check reports from in-memory inputs in
+milliseconds. Rewrite them with `go test ./internal/generate -run TestSnapshots -update`
+and review the diff. Integration scripts are for what needs the go command:
+generated code compiling and serving requests, flags, and files on disk.
 
 ### 5. Verify Your Changes
 
@@ -150,8 +163,11 @@ ls cmd/muxt/testdata/err_*.txt
 ## Key Files and Directories
 
 ### Source Code
-- `internal/muxt/` — Generator logic (parse, type check, generate)
-- `internal/source/` — AST analysis helpers
+- `internal/load/` — Package loading (the only `go/packages` caller) and its diagnostics
+- `internal/muxt/` — Template name parsing and route resolution against go/types
+- `internal/generate/` — Routes file generation
+- `internal/analysis/` — `muxt check` and the template listings
+- `internal/typestest/` — In-memory type checking against stub standard library packages, for tests
 - `internal/cli/` — Command-line interface
 - `cmd/muxt/` — Command entry point
 

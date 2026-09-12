@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"text/template/parse"
 
 	"github.com/typelate/check"
@@ -431,35 +430,7 @@ func loadPackages(workingDirectory string, includeTests bool, env []string) ([]*
 		_, pl, err := load.PackagesWithEnv(workingDirectory, env)
 		return pl, err
 	}
-	fileSet := token.NewFileSet()
-	pl, err := packages.Load(&packages.Config{
-		Fset:  fileSet,
-		Tests: true,
-		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName |
-			packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax |
-			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
-		Dir: workingDirectory,
-		Env: env,
-	}, workingDirectory, "encoding", "fmt", "net/http")
-	if err != nil {
-		return nil, err
-	}
-	// With Tests set, go list reports the package twice: once as it is
-	// written and once compiled with its in-package test files. The
-	// second is the one holding a test's ExecuteTemplate calls, so it
-	// has to come first when a package is picked by directory.
-	slices := make([]*packages.Package, 0, len(pl))
-	for _, pkg := range pl {
-		if strings.HasSuffix(pkg.ID, ".test]") {
-			slices = append(slices, pkg)
-		}
-	}
-	for _, pkg := range pl {
-		if !strings.HasSuffix(pkg.ID, ".test]") {
-			slices = append(slices, pkg)
-		}
-	}
-	return slices, nil
+	return load.PackagesWithTests(workingDirectory, env)
 }
 
 func relativePosition(workingDirectory string, position token.Position) string {
