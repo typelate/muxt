@@ -128,6 +128,7 @@ func ResolveCall(def *Definition, pkg Package, receiver *types.Named) error {
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
+	recordPathValueTypes(def.pathValueTypes, args, make(map[string]bool))
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		// Result-shape errors are about the method contract, so the
@@ -136,6 +137,31 @@ func ResolveCall(def *Definition, pkg Package, receiver *types.Named) error {
 	}
 	def.resultShape = shape
 	return def.finishNameError(resolveCallbackShapes(def), def.handlerSpan())
+}
+
+// recordPathValueTypes records the type each path parameter parses into.
+//
+// A parameter is parsed once per request, where the call first passes it
+// -- depth first, in argument order -- so that occurrence decides its
+// type: the parameter's type, unless a string is assignable to it, in
+// which case the value is passed along unparsed and stays a string.
+// Later occurrences reuse the first one's value. An sse-prefixed name is a
+// render callback wherever it appears, never a parsed value.
+func recordPathValueTypes(into map[string]types.Type, args []Argument, seen map[string]bool) {
+	for _, arg := range args {
+		switch arg.Type {
+		case ArgumentTypeCall:
+			recordPathValueTypes(into, arg.args, seen)
+		case ArgumentTypeRequestPathValue:
+			if seen[arg.Identifier] || IsSSEArgument(arg.Identifier) {
+				continue
+			}
+			seen[arg.Identifier] = true
+			if !isStringAssignable(arg.ParamType) {
+				into[arg.Identifier] = arg.ParamType
+			}
+		}
+	}
 }
 
 // resolveCallbackShapes validates each render-callback argument against the

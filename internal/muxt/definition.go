@@ -462,7 +462,9 @@ func (def Definition) SignalsCallback() (string, bool) {
 	return def.signalsCallback, def.signalsCallback != ""
 }
 
-func (def Definition) SetArgumentType(name string, tp types.Type) { def.pathValueTypes[name] = tp }
+// ArgumentType returns the type a path parameter parses into. It is
+// unset for a parameter that is passed along as the string it arrived
+// as, or is not passed to the call at all.
 func (def Definition) ArgumentType(name string) (types.Type, bool) {
 	tp, ok := def.pathValueTypes[name]
 	return tp, ok
