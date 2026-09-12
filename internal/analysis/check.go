@@ -17,6 +17,7 @@ import (
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/templateset"
 )
 
 // executeTemplateFunc names the method the endpoint scan reports call
@@ -31,7 +32,7 @@ type CheckConfiguration struct {
 // Check validates the package's templates and returns how many
 // ExecuteTemplate call sites it checked, so the caller can report the
 // count on success.
-func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templates []Templates) (int, error) {
+func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templates []templateset.Variable) (int, error) {
 	fileSet := pkg.Fset
 
 	var errs []error
@@ -41,7 +42,7 @@ func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templat
 		if lt.Err != nil {
 			return totalChecked, lt.Err
 		}
-		global, ts := lt.global(pkg), lt.Set
+		global, ts := lt.Global(pkg), lt.Set
 
 		// Route template names are validated here so a malformed name
 		// surfaces with its position instead of leaving the template to

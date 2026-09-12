@@ -1,0 +1,22 @@
+A templates variable no ExecuteTemplate call renders has nothing to
+mutate from.
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+var _ io.Writer
+
+-- page.gohtml --
+{{define "page"}}{{.}}{{end}}
+-- want/error.txt --
+no templates.ExecuteTemplate calls found: mutation testing needs a call site to know the type of dot

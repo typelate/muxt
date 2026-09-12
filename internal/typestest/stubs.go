@@ -65,7 +65,11 @@ func Errorf(format string, a ...any) error { return nil }
 
 	"embed": `package embed
 
+import "io/fs"
+
 type FS struct{}
+
+func (f FS) Open(name string) (fs.File, error) { return nil, nil }
 `,
 
 	"html/template": `package template
@@ -73,6 +77,7 @@ type FS struct{}
 import (
 	"fmt"
 	"io"
+	"io/fs"
 )
 
 type Template struct{}
@@ -83,9 +88,19 @@ func New(name string) *Template { return nil }
 
 func Must(t *Template, err error) *Template { return t }
 
+func ParseFS(fsys fs.FS, patterns ...string) (*Template, error) { return nil, nil }
+
+func (t *Template) New(name string) *Template { return t }
+
 func (t *Template) Parse(text string) (*Template, error) { return t, nil }
 
+func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) { return t, nil }
+
 func (t *Template) Funcs(funcMap FuncMap) *Template { return t }
+
+func (t *Template) Delims(left, right string) *Template { return t }
+
+func (t *Template) Option(opt ...string) *Template { return t }
 
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error { return nil }
 
@@ -98,6 +113,25 @@ func URLQueryEscaper(args ...any) string { return "" }
 // The real package reaches fmt through its imports; check.DefaultFunctions
 // finds print, printf and println there.
 var _ fmt.Stringer
+`,
+
+	"io/fs": `package fs
+
+type FileInfo interface {
+	Name() string
+	Size() int64
+	IsDir() bool
+}
+
+type File interface {
+	Stat() (FileInfo, error)
+	Read([]byte) (int, error)
+	Close() error
+}
+
+type FS interface {
+	Open(name string) (File, error)
+}
 `,
 
 	"io": `package io

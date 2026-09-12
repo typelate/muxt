@@ -1,0 +1,22 @@
+A templates variable the package does not declare.
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+func RenderPage(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "page", nil)
+}
+-- page.gohtml --
+{{define "page"}}{{.}}{{end}}
+-- want/error.txt --
+variable pages not found in package example.com/server

@@ -11,6 +11,7 @@ import (
 
 	"github.com/typelate/check"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/templateset"
 )
 
 type TemplateCallsConfiguration struct {
@@ -32,11 +33,11 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt Templates) (*TemplateCalls, error) {
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCalls, error) {
 	if lt.Err != nil {
 		return nil, lt.Err
 	}
-	global, ts := lt.global(pkg), lt.Set
+	global, ts := lt.Global(pkg), lt.Set
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 

@@ -573,7 +573,7 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pkg, templates, err := load.AnalysisSource(*wd, pl, templatesVariables)
+			pkg, templates, err := load.TemplateSets(*wd, pl, templatesVariables)
 			if err != nil {
 				return err
 			}
@@ -626,7 +626,7 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pkg, templates, err := load.AnalysisSource(*wd, pl, templatesVariables)
+			pkg, templates, err := load.TemplateSets(*wd, pl, templatesVariables)
 			if err != nil {
 				return err
 			}
@@ -701,7 +701,7 @@ func warnPartialAST(logger *log.Logger, pl []*packages.Package) {
 
 // check loads what analysis.Check reads from the packages loaded for wd.
 func check(config analysis.CheckConfiguration, wd string, logger *log.Logger, pl []*packages.Package) (int, error) {
-	pkg, templates, err := load.AnalysisSource(wd, pl, config.TemplatesVariables)
+	pkg, templates, err := load.TemplateSets(wd, pl, config.TemplatesVariables)
 	if err != nil {
 		return 0, err
 	}

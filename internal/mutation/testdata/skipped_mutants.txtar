@@ -1,0 +1,45 @@
+A mutant that would not type check is skipped rather than run: emptying
+the action that declares $inner leaves its use undefined. So is a
+condition simplification proves cannot change the decision.
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Inner struct{ Name string }
+
+type Page struct {
+	Inner  Inner
+	Banned bool
+	Loud   bool
+}
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}{{$inner := .Inner}}{{$inner.Name}}{{if or .Banned (and .Banned .Loud)}}B{{end}}{{end}}
+-- want/report.txt --
+7 mutants across 1 template (complexity 3, seed 1)
+dry run: no tests were run
+
+server.go:23:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" page.gohtml (complexity 3, dot: server.Page)
+    SKIP 1:18 action-empty (does not type check against server.Page)
+    PEND 1:38 action-empty
+    PEND 1:53 condition .Banned=false
+    PEND 1:53 condition .Banned=true
+    SKIP 1:53 condition-dead (.Loud cannot change the decision)
+    PEND 1:53 if-false
+    PEND 1:53 if-true
+
+7 mutants, 5 runnable, 2 skipped

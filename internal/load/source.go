@@ -10,8 +10,8 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/templateset"
 )
 
 // SourceConfiguration names what Source reads from the loaded packages.
@@ -76,14 +76,14 @@ func TemplatesVariable(pkg *packages.Package, variable string) muxt.Templates {
 	return templates(variable, lt, ts)
 }
 
-// AnalysisTemplates evaluates the templates variable in pkg along with
+// TemplateSet evaluates the templates variable in pkg along with
 // what type checking its templates needs.
-func AnalysisTemplates(pkg *packages.Package, variable string) analysis.Templates {
+func TemplateSet(pkg *packages.Package, variable string) templateset.Variable {
 	lt, ts, err := HTMLTemplates(variable, pkg)
 	if err != nil {
-		return analysis.Templates{Templates: muxt.Templates{Variable: variable, Err: err}}
+		return templateset.Variable{Templates: muxt.Templates{Variable: variable, Err: err}}
 	}
-	return analysis.Templates{
+	return templateset.Variable{
 		Templates:   templates(variable, lt, ts),
 		Trees:       lt,
 		Definitions: lt,
@@ -128,17 +128,17 @@ func findPackageTypes(pl []*packages.Package, path string) (*types.Package, bool
 	return nil, false
 }
 
-// AnalysisSource is Source for the commands that type check templates:
+// TemplateSets is Source for the commands that type check templates:
 // the package at wd and each templates variable, in order, with what
 // checking it needs.
-func AnalysisSource(wd string, pl []*packages.Package, variables []string) (muxt.Package, []analysis.Templates, error) {
+func TemplateSets(wd string, pl []*packages.Package, variables []string) (muxt.Package, []templateset.Variable, error) {
 	pkg, ok := PackageAtFilepath(pl, wd)
 	if !ok {
 		return muxt.Package{}, nil, NoPackageError(wd, pl)
 	}
-	templates := make([]analysis.Templates, 0, len(variables))
+	templates := make([]templateset.Variable, 0, len(variables))
 	for _, variable := range variables {
-		templates = append(templates, AnalysisTemplates(pkg, variable))
+		templates = append(templates, TemplateSet(pkg, variable))
 	}
 	return Package(pkg, pl), templates, nil
 }

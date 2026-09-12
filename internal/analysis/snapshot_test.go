@@ -24,6 +24,7 @@ import (
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/templateset"
 	"github.com/typelate/muxt/internal/typestest"
 )
 
@@ -141,7 +142,7 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 	case "check":
 		var logs strings.Builder
 		var n int
-		n, runErr = Check(CheckConfiguration{Verbose: config.Verbose, TemplatesVariables: []string{"templates"}}, log.New(&logs, "", 0), pkg, []Templates{templates})
+		n, runErr = Check(CheckConfiguration{Verbose: config.Verbose, TemplatesVariables: []string{"templates"}}, log.New(&logs, "", 0), pkg, []templateset.Variable{templates})
 		fmt.Fprintf(&stdout, "checked %d\n", n)
 		if logs.Len() > 0 {
 			got["log.txt"] = logs.String()
@@ -204,7 +205,7 @@ func patterns(t *testing.T, sources []string) []*regexp.Regexp {
 // does, from a template set parsed in memory: the checked package's
 // templates.ExecuteTemplate calls, and trees and definitions found in the
 // set.
-func memoryTemplates(t *testing.T, checked *typestest.Checked, set *template.Template, files []txtar.File) Templates {
+func memoryTemplates(t *testing.T, checked *typestest.Checked, set *template.Template, files []txtar.File) templateset.Variable {
 	t.Helper()
 	variable := checked.Types.Scope().Lookup("templates")
 	if variable == nil {
@@ -279,7 +280,7 @@ func memoryTemplates(t *testing.T, checked *typestest.Checked, set *template.Tem
 		})
 	}
 
-	return Templates{
+	return templateset.Variable{
 		Templates: muxt.Templates{
 			Variable:     "templates",
 			Set:          set,

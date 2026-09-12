@@ -1,0 +1,65 @@
+With --diff, a template whose text and dot are unchanged since the
+revision is left alone and reported; one that reads differently is
+mutated.
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ Title, Body string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}{{template "header" .}}{{template "body" .}}{{end}}
+{{define "header"}}<h1>{{.Title}}</h1>{{end}}
+{{define "body"}}<main>{{.Body}}{{if .Title}}!{{end}}</main>{{end}}
+-- before/server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ Title, Body string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- before/page.gohtml --
+{{define "page"}}{{template "header" .}}{{template "body" .}}{{end}}
+{{define "header"}}<h1>{{.Title}}</h1>{{end}}
+{{define "body"}}<main>{{.Body}}</main>{{end}}
+-- want/report.txt --
+3 mutants across 1 template (complexity 2, seed 1)
+2 templates unchanged since main
+dry run: no tests were run
+
+server.go:17:9 ExecuteTemplate "page" (dot: server.Page)
+  "body" page.gohtml via {{template}} (complexity 2, dot: server.Page)
+    PEND 3:24 action-zero
+    PEND 3:33 if-false
+    PEND 3:33 if-true
+
+unchanged since main, not mutated:
+  "page" page.gohtml (dot: server.Page)
+  "header" page.gohtml (dot: server.Page)
+
+3 mutants, 3 runnable, 0 skipped

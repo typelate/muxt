@@ -56,9 +56,13 @@ func CheckSyntax(path string, files map[string]string) (*Checked, error) {
 		return nil, err
 	}
 	info := &types.Info{
-		Types: make(map[ast.Expr]types.TypeAndValue),
-		Defs:  make(map[*ast.Ident]types.Object),
-		Uses:  make(map[*ast.Ident]types.Object),
+		Types:      make(map[ast.Expr]types.TypeAndValue),
+		Instances:  make(map[*ast.Ident]types.Instance),
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
+		Implicits:  make(map[ast.Node]types.Object),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+		Scopes:     make(map[ast.Node]*types.Scope),
 	}
 	pkg, syntax, err := checkWithInfo(path, files, importerFunc(func(p string) (*types.Package, error) {
 		if pkg, ok := std[p]; ok {
@@ -135,7 +139,7 @@ func checkWithInfo(path string, files map[string]string, importer types.Importer
 	sort.Strings(names)
 	syntax := make([]*ast.File, 0, len(files))
 	for _, name := range names {
-		file, err := parser.ParseFile(FileSet, name, files[name], parser.SkipObjectResolution)
+		file, err := parser.ParseFile(FileSet, name, files[name], parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
 			return nil, nil, err
 		}

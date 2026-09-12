@@ -6,7 +6,6 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/load"
 )
 
 // callSite is one templates.ExecuteTemplate call, which is where a
@@ -79,11 +78,11 @@ type trim struct {
 // input, or two {{template}} invocations passing the same type, would
 // produce the same mutants and the same verdicts, so the second is
 // trimmed.
-func traverse(lt *load.LoadedTemplates, index map[string]treeLocation) ([]scope, []trim) {
+func traverse(lt *checked, index map[string]treeLocation) ([]scope, []trim) {
 	t := &traversal{lt: lt, index: index, visited: make(map[string]callSite)}
-	for call := range lt.Templates.ExecuteTemplateCalls() {
+	for _, call := range lt.Calls {
 		site := callSite{
-			Position: lt.Package.Fset.Position(call.Call.Pos()),
+			Position: lt.pkg.Fset.Position(call.Call.Pos()),
 			Template: call.TemplateName,
 			DataType: call.DataType,
 		}
@@ -95,7 +94,7 @@ func traverse(lt *load.LoadedTemplates, index map[string]treeLocation) ([]scope,
 // traversal is the state of one walk: what it reads from, and what it has
 // found so far.
 type traversal struct {
-	lt    *load.LoadedTemplates
+	lt    *checked
 	index map[string]treeLocation
 
 	// visited records the call site each template and dot was first
@@ -147,7 +146,7 @@ type templateCall struct {
 //
 // The types come from the checker, which is the only thing that knows how
 // dot narrows through a range or a with on the way to the invocation.
-func templateCalls(lt *load.LoadedTemplates, tree *parse.Tree, dot types.Type) []templateCall {
+func templateCalls(lt *checked, tree *parse.Tree, dot types.Type) []templateCall {
 	var found []templateCall
 	// A template that does not check still yields the invocations found
 	// before the failure, which is better than none: muxt check is where
@@ -160,18 +159,18 @@ func templateCalls(lt *load.LoadedTemplates, tree *parse.Tree, dot types.Type) [
 
 // checks reports whether tree type checks with dot, which is how a mutant
 // is told from a mutation that merely breaks the template.
-func checks(lt *load.LoadedTemplates, tree *parse.Tree, dot types.Type) bool {
+func checks(lt *checked, tree *parse.Tree, dot types.Type) bool {
 	return executeWith(lt, tree, dot, nil) == nil
 }
 
 // executeWith type checks tree with dot, calling inspect on each
 // {{template}} node it passes, then puts back whatever inspector the
 // shared checker held before.
-func executeWith(lt *load.LoadedTemplates, tree *parse.Tree, dot types.Type, inspect func(*parse.TemplateNode, *parse.Tree, types.Type, check.Definition)) error {
-	saved := lt.Global.InspectTemplateNode
-	lt.Global.InspectTemplateNode = inspect
-	defer func() { lt.Global.InspectTemplateNode = saved }()
-	return check.Execute(lt.Global, tree, dot)
+func executeWith(lt *checked, tree *parse.Tree, dot types.Type, inspect func(*parse.TemplateNode, *parse.Tree, types.Type, check.Definition)) error {
+	saved := lt.global.InspectTemplateNode
+	lt.global.InspectTemplateNode = inspect
+	defer func() { lt.global.InspectTemplateNode = saved }()
+	return check.Execute(lt.global, tree, dot)
 }
 
 // typeKey identifies a type exactly, for deciding whether a template has

@@ -1,0 +1,23 @@
+Templates that were reached but hold no action to vary are an error, not
+a pass.
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+func RenderPage(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "page", nil)
+}
+-- page.gohtml --
+{{define "page"}}<p>static</p>{{end}}
+-- want/error.txt --
+no mutations available: the 1 template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything

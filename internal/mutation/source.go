@@ -3,6 +3,7 @@ package mutation
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"path/filepath"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
 )
 
 // templateSource is a file whose bytes hold template text, together with
@@ -254,39 +254,37 @@ func literalOffsets(literal, value string) ([]int, error) {
 	return offsets, nil
 }
 
-// findStringLiteral returns the Go string literal covering offset in the
-// named file, which is the literal a template written in Go source was
-// written as.
-func findStringLiteral(pl []*packages.Package, filename string, offset int) (start, end int, ok bool) {
-	seen := make(map[*ast.File]struct{})
-	for _, pkg := range pl {
-		for _, file := range pkg.Syntax {
-			if _, done := seen[file]; done {
-				continue
-			}
-			seen[file] = struct{}{}
-			tokenFile := pkg.Fset.File(file.Pos())
-			if tokenFile == nil || tokenFile.Name() != filename {
-				continue
-			}
-			ast.Inspect(file, func(node ast.Node) bool {
-				lit, isLit := node.(*ast.BasicLit)
-				if !isLit || lit.Kind != token.STRING {
-					return true
-				}
-				litStart, litEnd := tokenFile.Offset(lit.Pos()), tokenFile.Offset(lit.End())
-				if offset < litStart || offset >= litEnd {
-					return true
-				}
-				// Nested literals do not occur, so the first match is
-				// the one wanted.
-				start, end, ok = litStart, litEnd, true
-				return false
-			})
-			if ok {
-				return start, end, true
-			}
-		}
+// findStringLiteral returns the bounds of the Go string literal covering
+// offset in the named file's text, which is the literal a template written
+// in Go source was written as.
+//
+// The file is parsed again rather than taken from the loaded package: the
+// text is already in hand, parsing one file is cheap, and it leaves the
+// plan needing nothing from the loader. A file that does not fully parse
+// still yields the literals the parser read.
+func findStringLiteral(filename, text string, offset int) (start, end int, ok bool) {
+	fset := token.NewFileSet()
+	file, _ := parser.ParseFile(fset, filename, text, parser.SkipObjectResolution)
+	if file == nil {
+		return 0, 0, false
 	}
-	return 0, 0, false
+	tokenFile := fset.File(file.FileStart)
+	ast.Inspect(file, func(node ast.Node) bool {
+		if ok {
+			return false
+		}
+		lit, isLit := node.(*ast.BasicLit)
+		if !isLit || lit.Kind != token.STRING {
+			return true
+		}
+		litStart, litEnd := tokenFile.Offset(lit.Pos()), tokenFile.Offset(lit.End())
+		if offset < litStart || offset >= litEnd {
+			return true
+		}
+		// Nested literals do not occur, so the first match is the one
+		// wanted.
+		start, end, ok = litStart, litEnd, true
+		return false
+	})
+	return start, end, ok
 }

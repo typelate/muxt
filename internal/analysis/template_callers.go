@@ -11,6 +11,7 @@ import (
 
 	"github.com/typelate/check"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/templateset"
 )
 
 type TemplateCallersConfiguration struct {
@@ -32,12 +33,12 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, pkg muxt.Package, lt Templates) (*TemplateCallers, error) {
+func NewTemplateCallers(config TemplateCallersConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCallers, error) {
 	if lt.Err != nil {
 		return nil, lt.Err
 	}
 	fileSet := pkg.Fset
-	global, ts := lt.global(pkg), lt.Set
+	global, ts := lt.Global(pkg), lt.Set
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls

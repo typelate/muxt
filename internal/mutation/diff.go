@@ -11,8 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/typelate/muxt/internal/load"
 )
 
 // revision is what the templates looked like at an earlier commit: the
@@ -56,17 +54,23 @@ func scopesOf(scopes []scope) revision {
 func templatesAt(config Configuration, dir string) (revision, error) {
 	// The copy is outside any workspace GOWORK may name, and would fail to
 	// load within one, so it loads as the module it is.
-	pl, err := loadPackages(dir, config.IncludeTests, append(config.environment(), "GOWORK=off"))
+	in, err := loadInput(dir, config, append(config.environment(), "GOWORK=off"))
 	if err != nil {
 		return nil, err
 	}
+	return revisionOf(in)
+}
+
+// revisionOf records what each template reached in the input reads like,
+// which is what a --diff run compares the working tree with.
+func revisionOf(in input) (revision, error) {
 	before := make(revision)
-	for _, templatesVariable := range config.TemplatesVariables {
-		lt, err := load.Templates(dir, templatesVariable, pl)
-		if err != nil {
-			return nil, err
+	for _, variable := range in.variables {
+		if variable.Err != nil {
+			return nil, variable.Err
 		}
-		index, err := buildTreeIndex(lt, dir, pl, lt.Templates.Functions())
+		lt := newChecked(in.pkg, variable)
+		index, err := buildTreeIndex(lt, in.dir)
 		if err != nil {
 			return nil, err
 		}
