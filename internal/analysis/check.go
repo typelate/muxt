@@ -14,10 +14,8 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/astgen"
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -33,26 +31,22 @@ type CheckConfiguration struct {
 // Check validates the package's templates and returns how many
 // ExecuteTemplate call sites it checked, so the caller can report the
 // count on success.
-func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token.FileSet, pl []*packages.Package) (int, error) {
-	routesPkg, ok := load.PackageAtFilepath(pl, wd)
-	if !ok {
-		return 0, load.NoPackageError(wd, pl)
-	}
+func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templates []Templates) (int, error) {
+	fileSet := pkg.Fset
 
 	var errs []error
 	totalChecked := 0
 
-	for _, tv := range config.TemplatesVariables {
-		lt, err := load.Templates(wd, tv, pl)
-		if err != nil {
-			return totalChecked, err
+	for _, lt := range templates {
+		if lt.Err != nil {
+			return totalChecked, lt.Err
 		}
-		global, ts := lt.Global, lt.HTML
+		global, ts := lt.global(pkg), lt.Set
 
 		// Route template names are validated here so a malformed name
 		// surfaces with its position instead of leaving the template to
 		// be reported as merely unused below.
-		if _, err := muxt.Definitions(ts, tv, lt.Templates); err != nil {
+		if _, err := muxt.Definitions(lt.Templates); err != nil {
 			if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
 				log.Println(multiLine.MultiLineError())
 				log.Println()
@@ -65,13 +59,13 @@ func Check(config CheckConfiguration, wd string, log *log.Logger, fileSet *token
 		executedTemplates := make(map[string][]TemplateExecution)
 		checkedTemplates := 0
 
-		for c := range lt.Templates.ExecuteTemplateCalls() {
+		for _, c := range lt.Calls {
 			checkedTemplates++
 			templateName, dataType := c.TemplateName, c.DataType
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
-			qualifier := astgen.NewTypeFormatter(routesPkg.PkgPath).Qualifier
+			qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
 			if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, c.Call, templateName, dataType); err != nil {
 				log.Println(fileSet.Position(c.Call.Pos()), executeTemplateFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
 				if checkErr, ok := errors.AsType[*check.Error](err); ok {

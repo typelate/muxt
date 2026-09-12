@@ -474,13 +474,13 @@ func TestArgument(t *testing.T) {
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))
-			defs, err := Definitions(ts, "templates", nil)
+			defs, err := Definitions(Templates{Variable: "templates", Set: ts})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			for i := range defs {
-				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList)
+				err = ResolveCall(&defs[i], Package{Fset: fileSet, Types: examplePkg}, tc.Receiver)
 				if err != nil {
 					break
 				}

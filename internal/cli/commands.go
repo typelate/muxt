@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/fakeserver"
 	"github.com/typelate/muxt/internal/load"
 	"golang.org/x/tools/go/packages"
 
@@ -76,11 +77,20 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				return err
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
+			_, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
 			}
-			results, err := analysis.NewRoutes(rootCommandConfig, *workingDirectory, fileSet, pl)
+			src, err := load.Source(*workingDirectory, pl, load.SourceConfiguration{
+				ReceiverType:       rootCommandConfig.ReceiverType,
+				ReceiverPackage:    rootCommandConfig.ReceiverPackage,
+				TemplatesVariables: rootCommandConfig.TemplatesVariables,
+			})
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			results, err := analysis.NewRoutes(src)
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err
@@ -148,13 +158,13 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				}
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory)
+			_, pl, err := load.Packages(*workingDirectory)
 			if err != nil {
 				return err
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
 			warnPartialAST(logger, pl)
-			checked, err := analysis.Check(config, *workingDirectory, logger, fileSet, pl)
+			checked, err := check(config, *workingDirectory, logger, pl)
 			if err != nil {
 				if printMultiLineError(cmd, err) {
 					return err
@@ -344,12 +354,22 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 			}
 			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
+			_, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
 				return err
 			}
 			warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
+			// The routes file belongs to the package in its own directory.
+			src, err := load.Source(filepath.Dir(filepath.Join(*workingDirectory, config.OutputFileName)), pl, load.SourceConfiguration{
+				ReceiverType:       config.ReceiverType,
+				ReceiverPackage:    config.ReceiverPackage,
+				TemplatesVariables: config.TemplatesVariables,
+			})
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, src, log.New(stdout, "", 0))
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err
@@ -549,18 +569,18 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			fileSet, pl, err := load.Packages(*wd)
+			_, pl, err := load.Packages(*wd)
+			if err != nil {
+				return err
+			}
+			pkg, templates, err := load.AnalysisSource(*wd, pl, templatesVariables)
 			if err != nil {
 				return err
 			}
 			combined := &analysis.TemplateCallers{}
-			for _, tv := range templatesVariables {
-				config.TemplatesVariable = tv
-				lt, err := load.Templates(*wd, tv, pl)
-				if err != nil {
-					return err
-				}
-				result, err := analysis.NewTemplateCallers(config, fileSet, lt)
+			for _, lt := range templates {
+				config.TemplatesVariable = lt.Variable
+				result, err := analysis.NewTemplateCallers(config, pkg, lt)
 				if err != nil {
 					return err
 				}
@@ -606,14 +626,14 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			pkg, templates, err := load.AnalysisSource(*wd, pl, templatesVariables)
+			if err != nil {
+				return err
+			}
 			combined := &analysis.TemplateCalls{}
-			for _, tv := range templatesVariables {
-				config.TemplatesVariable = tv
-				lt, err := load.Templates(*wd, tv, pl)
-				if err != nil {
-					return err
-				}
-				result, err := analysis.NewTemplateCalls(config, lt)
+			for _, lt := range templates {
+				config.TemplatesVariable = lt.Variable
+				result, err := analysis.NewTemplateCalls(config, pkg, lt)
 				if err != nil {
 					return err
 				}
@@ -677,6 +697,15 @@ func warnPartialAST(logger *log.Logger, pl []*packages.Package) {
 		return
 	}
 	logger.Printf("warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture")
+}
+
+// check loads what analysis.Check reads from the packages loaded for wd.
+func check(config analysis.CheckConfiguration, wd string, logger *log.Logger, pl []*packages.Package) (int, error) {
+	pkg, templates, err := load.AnalysisSource(wd, pl, config.TemplatesVariables)
+	if err != nil {
+		return 0, err
+	}
+	return analysis.Check(config, logger, pkg, templates)
 }
 
 func cliVersion() (string, bool) {
@@ -1006,7 +1035,7 @@ This command is intended for exploratory use only.`,
 					return err
 				}
 
-				config := generate.FakeServerConfig{
+				config := fakeserver.Config{
 					PackagePath:       pkg.Path,
 					PackageDir:        pkg.Dir,
 					RoutesFunction:    pkg.Config.RoutesFunction,
@@ -1017,7 +1046,7 @@ This command is intended for exploratory use only.`,
 					FakeImportPath:    fakeImportPath,
 				}
 
-				files, err := generate.GenerateFakeServer(config, pl)
+				files, err := fakeserver.Generate(config, pl)
 				if err != nil {
 					return err
 				}

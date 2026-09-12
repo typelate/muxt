@@ -10,7 +10,7 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 type TemplateCallsConfiguration struct {
@@ -32,8 +32,11 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplates) (*TemplateCalls, error) {
-	global, ts := lt.Global, lt.HTML
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt Templates) (*TemplateCalls, error) {
+	if lt.Err != nil {
+		return nil, lt.Err
+	}
+	global, ts := lt.global(pkg), lt.Set
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
@@ -47,7 +50,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplate
 	}
 
 	// Analyze all templates
-	for c := range lt.Templates.ExecuteTemplateCalls() {
+	for _, c := range lt.Calls {
 		t := ts.Lookup(c.TemplateName)
 		if t != nil && t.Tree != nil {
 			_ = check.Execute(global, t.Tree, c.DataType)
@@ -60,7 +63,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplate
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
 	}
 
 	return &result, nil

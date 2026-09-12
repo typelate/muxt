@@ -8,38 +8,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/check"
 )
-
-// definitionAt is a check.DefinitionFinder reporting a fixed name literal position.
-type definitionAt struct {
-	name string
-	pos  token.Position
-}
-
-func (d definitionAt) FindDefinition(name string) (check.Definition, bool) {
-	if name != d.name {
-		return check.Definition{}, false
-	}
-	return check.Definition{
-		Name:         name,
-		TemplateName: check.Span{Position: d.pos, Length: len(name) + 2},
-	}, true
-}
 
 func TestDefinitionsErrorPosition(t *testing.T) {
 	const name = "OPTIONS / F()"
 	ts := template.Must(template.New("index.gohtml").Parse(`{{define "` + name + `"}}{{end}}`))
-	finder := definitionAt{name: name, pos: token.Position{
-		Filename: "index.gohtml",
-		Offset:   9,
-		Line:     1,
-		Column:   10,
-	}}
+	namePosition := func(templateName string) (token.Position, bool) {
+		if templateName != name {
+			return token.Position{}, false
+		}
+		// The name starts one byte past the opening quote at column 10.
+		return token.Position{Filename: "index.gohtml", Offset: 10, Line: 1, Column: 11}, true
+	}
 
-	_, err := Definitions(ts, "templates", finder)
-	// The name literal's content starts one byte past the opening quote at
-	// column 11; the failing METHOD segment starts at the first byte of the name.
+	_, err := Definitions(Templates{Variable: "templates", Set: ts, NamePosition: namePosition})
+	// The failing METHOD segment starts at the first byte of the name.
 	require.EqualError(t, err, "index.gohtml:1:11: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 
 	nameErr, ok := err.(*NameError)

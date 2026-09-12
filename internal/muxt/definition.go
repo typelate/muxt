@@ -16,16 +16,14 @@ import (
 	"strings"
 	"text/template/parse"
 
-	"github.com/typelate/check"
-
 	"github.com/typelate/muxt/internal/astgen"
 )
 
-// Definitions parses route definitions from the template names in ts.
-// The optional definitions finder locates each template's define clause
-// so template name errors carry a file position; pass nil when the
-// source locations are unknown.
-func Definitions(ts *template.Template, templatesVariable string, definitions check.DefinitionFinder) ([]Definition, error) {
+// Definitions parses route definitions from the template names in a
+// templates variable's set. When the set's NamePosition is known,
+// template name errors carry a file position.
+func Definitions(templates Templates) ([]Definition, error) {
+	ts, templatesVariable := templates.Set, templates.Variable
 	var defs []Definition
 	type nameFailure struct {
 		def Definition
@@ -37,12 +35,8 @@ func Definitions(ts *template.Template, templatesVariable string, definitions ch
 		if !ok {
 			continue
 		}
-		if definitions != nil {
-			if d, found := definitions.FindDefinition(t.Name()); found && d.TemplateName.IsValid() {
-				// The span includes the quotes; the name starts one byte in.
-				pos := d.TemplateName.Position
-				pos.Column++
-				pos.Offset++
+		if templates.NamePosition != nil {
+			if pos, found := templates.NamePosition(t.Name()); found {
 				mt.namePosition = pos
 			}
 		}

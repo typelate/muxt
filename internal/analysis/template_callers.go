@@ -2,7 +2,6 @@ package analysis
 
 import (
 	"bytes"
-	"go/token"
 	"go/types"
 	"io"
 	"maps"
@@ -11,7 +10,7 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 type TemplateCallersConfiguration struct {
@@ -33,8 +32,12 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, lt *load.LoadedTemplates) (*TemplateCallers, error) {
-	global, ts := lt.Global, lt.HTML
+func NewTemplateCallers(config TemplateCallersConfiguration, pkg muxt.Package, lt Templates) (*TemplateCallers, error) {
+	if lt.Err != nil {
+		return nil, lt.Err
+	}
+	fileSet := pkg.Fset
+	global, ts := lt.global(pkg), lt.Set
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -49,7 +52,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 	}
 
 	{
-		for c := range lt.Templates.ExecuteTemplateCalls() {
+		for _, c := range lt.Calls {
 			templateName, dataType := c.TemplateName, c.DataType
 
 			refs[templateName] = append(refs[templateName], TemplateReference{
@@ -73,7 +76,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
 	}
 
 	return &result, nil

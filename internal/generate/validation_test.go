@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/types"
 	"html/template"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -301,14 +300,7 @@ func Test_inputValidations(t *testing.T) {
 			require.NoError(t, err)
 			fragment := dom.NewDocumentFragment(nodes)
 
-			pl, err := loadPkg()
-			require.NoError(t, err)
-			fSet := fileSet()
-			wd, err := workingDir()
-			require.NoError(t, err)
-
-			file, err := newFile(filepath.Join(wd, "tr.go"), fSet, pl)
-			require.NoError(t, err)
+			file := outputFile()
 
 			input := fragment.QuerySelector(`[name="field"]`)
 			require.NotNil(t, input)
