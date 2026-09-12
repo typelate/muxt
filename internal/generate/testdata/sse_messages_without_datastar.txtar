@@ -1,6 +1,4 @@
 An sse method returning nothing, with a data-less callback.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /ticks/{id} sse(Ticks(request, id, execute))"}}tick{{end}}
 -- server.go --
@@ -95,6 +93,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

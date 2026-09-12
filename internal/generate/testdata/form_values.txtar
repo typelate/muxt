@@ -1,6 +1,4 @@
 A url.Values parameter receives the parsed form as it is.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "POST /values Values(form)"}}{{end}}
 {{define "POST /unmarshal Values(unmarshalForm(body))"}}{{end}}
@@ -113,6 +111,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

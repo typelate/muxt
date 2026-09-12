@@ -1,6 +1,4 @@
 Where the matching templates are executed or called from.
--- config.json --
-{"Command": "callers", "Match": ["^head"]}
 -- index.gohtml --
 {{define "page"}}{{template "header" .Title}}{{range .Items}}{{template "item" .}}{{end}}{{end}}
 {{define "header"}}<h1>{{.}}</h1>{{end}}

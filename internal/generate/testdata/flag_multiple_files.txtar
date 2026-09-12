@@ -1,7 +1,5 @@
 --output-multiple-files writes the routes for each template file into
 its own file; routes from templates with no file stay in the main one.
--- config.json --
-{"ReceiverType": "T", "OutputMultipleFiles": true, "Middleware": true}
 -- index.gohtml --
 {{define "GET /{$} Home()"}}{{.Result}}{{end}}
 -- user-profile.gohtml --
@@ -104,6 +102,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

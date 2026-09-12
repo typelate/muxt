@@ -1,7 +1,5 @@
 Resolution errors from every route are reported together, pointing at
 the argument or method at fault, with where the method is defined.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /{id} Float(id)"}}{{end}}
 {{define "GET /ctx Context(request)"}}{{end}}

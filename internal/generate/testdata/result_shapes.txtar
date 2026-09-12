@@ -1,6 +1,4 @@
 A method returns a value, a value and an error, or a value and a bool.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /value Value()"}}{{.Result}}{{end}}
 {{define "GET /error ValueError()"}}{{.Result}}{{end}}
@@ -168,6 +166,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

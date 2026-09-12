@@ -1,7 +1,5 @@
 marshalJSON writes the result as JSON, rendering the template for its
 side effects and on errors.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /api/{id} marshalJSON(Get(id))"}}{{.Err}}{{end}}
 -- server.go --
@@ -97,6 +95,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

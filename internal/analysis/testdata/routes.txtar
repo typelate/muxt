@@ -1,7 +1,5 @@
 The route listing shows each route template's name and source, and the
 receiver's methods.
--- config.json --
-{"Command": "routes", "ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /{$} Home()"}}<h1>{{.Result}}</h1>{{end}}
 {{define "POST /save Save(form)"}}{{.Err}}{{end}}

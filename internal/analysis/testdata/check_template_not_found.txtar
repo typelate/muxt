@@ -1,6 +1,4 @@
 An ExecuteTemplate call naming a template the set does not define.
--- config.json --
-{"Command": "check"}
 -- index.gohtml --
 {{define "main"}}{{end}}
 -- server.go --

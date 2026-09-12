@@ -1,8 +1,6 @@
 A form struct binds each field from the form, parsing scalars and
 slices, renaming inputs with the name tag, and validating from the
 input a template tag names.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "POST /signup Signup(form)"}}{{end}}
 {{define "signup-form"}}
@@ -154,6 +152,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

@@ -1,7 +1,5 @@
 The body is passed as an io.Reader, or decoded as JSON into the
 parameter's type.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "POST /raw Raw(body)"}}{{end}}
 {{define "POST /json Decode(ctx, unmarshalJSON(body))"}}{{end}}
@@ -120,6 +118,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

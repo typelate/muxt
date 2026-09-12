@@ -1,8 +1,6 @@
 package generate
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"go/token"
 	"go/types"
@@ -25,9 +23,9 @@ var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot
 // TestSnapshots generates the routes files for each archive in testdata
 // and compares them with the archive's want/ files.
 //
-// An archive holds a case's inputs and what it generates:
+// An archive holds a case's inputs and what it generates, and snapshots,
+// in snapshots_test.go, the configuration it is generated with:
 //
-//   - config.json overrides fields of testConfig, by field name.
 //   - Go files are type checked, as example.com/server, against the stub
 //     standard library in internal/typestest.
 //   - .gohtml files are parsed into the templates variable, each under its
@@ -46,12 +44,19 @@ func TestSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, archivePath := range archives {
-		t.Run(strings.TrimSuffix(filepath.Base(archivePath), ".txtar"), func(t *testing.T) {
+		name := strings.TrimSuffix(filepath.Base(archivePath), ".txtar")
+		if !slices.ContainsFunc(snapshots, func(c snapshotCase) bool { return c.archive == name }) {
+			t.Errorf("testdata/%s.txtar has no configuration in snapshots", name)
+		}
+	}
+	for _, tt := range snapshots {
+		t.Run(tt.archive, func(t *testing.T) {
+			archivePath := filepath.Join("testdata", tt.archive+".txtar")
 			archive, err := txtar.ParseFile(archivePath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := snapshot(t, archive)
+			got := snapshot(t, tt.config, archive)
 			if *update {
 				writeSnapshot(t, archivePath, archive, got)
 				return
@@ -73,21 +78,14 @@ func TestSnapshots(t *testing.T) {
 
 // snapshot runs generation over an archive's inputs and returns the
 // want/ files it produces, by name.
-func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
+func snapshot(t *testing.T, config RoutesFileConfiguration, archive *txtar.Archive) map[string]string {
 	t.Helper()
-	config := testConfig()
 	goFiles := make(map[string]string)
 	set := template.New("templates")
 	var templateFiles []txtar.File
 	for _, file := range archive.Files {
 		switch {
 		case strings.HasPrefix(file.Name, "want/"):
-		case file.Name == "config.json":
-			decoder := json.NewDecoder(bytes.NewReader(file.Data))
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&config); err != nil {
-				t.Fatalf("config.json: %v", err)
-			}
 		case filepath.Ext(file.Name) == ".go":
 			goFiles[file.Name] = string(file.Data)
 		case filepath.Ext(file.Name) == ".gohtml":
@@ -96,7 +94,7 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 			}
 			templateFiles = append(templateFiles, file)
 		default:
-			t.Fatalf("archive file %s is not config.json, Go, .gohtml, or want/", file.Name)
+			t.Fatalf("archive file %s is not Go, .gohtml, or want/", file.Name)
 		}
 	}
 	pkg, err := typestest.Check("example.com/server", goFiles)
@@ -114,7 +112,7 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 	if config.ReceiverType != "" {
 		obj := pkg.Scope().Lookup(config.ReceiverType)
 		if obj == nil {
-			t.Fatalf("config.json names receiver %s, which the Go files do not declare", config.ReceiverType)
+			t.Fatalf("the configuration names receiver %s, which the Go files do not declare", config.ReceiverType)
 		}
 		src.Receiver = obj.Type().(*types.Named)
 	}

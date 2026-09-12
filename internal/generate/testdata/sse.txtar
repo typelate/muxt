@@ -1,7 +1,5 @@
 An sse route streams an event per callback, from the route template or
 a same-named one, and reads lastEventID.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /events sse(Events(ctx, lastEventID, execute, sseClock))"}}{{.Result}}{{end}}
 {{define "sseClock"}}{{.Result}}{{end}}
@@ -123,6 +121,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

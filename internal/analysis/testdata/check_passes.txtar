@@ -1,7 +1,5 @@
 Each ExecuteTemplate call type checks the template it names, and the
 templates it reaches through {{template}}.
--- config.json --
-{"Command": "check"}
 -- index.gohtml --
 {{define "index"}}<h1>{{.Title}}</h1>{{range .Items}}{{template "item" .}}{{end}}{{end}}
 {{define "item"}}<li>{{.Name}}: {{printf "%d" .Price}}</li>{{end}}

@@ -1,7 +1,5 @@
 A malformed route template name is reported with its position rather
 than as an unused template.
--- config.json --
-{"Command": "check", "Verbose": true}
 -- index.gohtml --
 {{define "index"}}<h1>{{.Title}}</h1>{{end}}
 {{define "TRACE /debug"}}{{end}}

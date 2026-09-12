@@ -1,7 +1,5 @@
 lastEventID reads the Last-Event-Id header, parsed into the parameter
 type.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /resume Resume(lastEventID)"}}{{.Result}}{{end}}
 -- server.go --
@@ -80,6 +78,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

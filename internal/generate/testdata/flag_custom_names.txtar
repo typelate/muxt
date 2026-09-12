@@ -1,6 +1,4 @@
 The output flags rename the generated file and identifiers.
--- config.json --
-{"ReceiverType": "Server", "OutputFileName": "routes.go", "RoutesFunction": "Routes", "ReceiverInterface": "Handlers", "TemplateDataType": "Data", "TemplateRoutePathsTypeName": "Paths"}
 -- index.gohtml --
 {{define "GET /{id} Show(id)"}}{{.Result}}{{end}}
 -- server.go --
@@ -75,6 +73,11 @@ type Data[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *Data[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *Data[R, T]) Path() Paths {

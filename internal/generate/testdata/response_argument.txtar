@@ -1,6 +1,4 @@
 A method taking the response writes it itself: muxt writes no status.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /download Download(response, request)"}}{{end}}
 -- server.go --
@@ -66,6 +64,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

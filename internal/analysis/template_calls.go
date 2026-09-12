@@ -15,8 +15,12 @@ import (
 )
 
 type TemplateCallsConfiguration struct {
-	TemplatesVariable string
-	FilterTemplates   []*regexp.Regexp
+	// TemplatesVariables are listed in order.
+	TemplatesVariables []string
+
+	// FilterTemplates, when set, limits the listing to templates whose
+	// name matches one of them.
+	FilterTemplates []*regexp.Regexp
 }
 
 type TemplateCalls struct {
@@ -33,7 +37,19 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCalls, error) {
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, variables []templateset.Variable) (*TemplateCalls, error) {
+	combined := &TemplateCalls{}
+	for _, lt := range variables {
+		result, err := templateCalls(config, pkg, lt)
+		if err != nil {
+			return nil, err
+		}
+		combined.Templates = append(combined.Templates, result.Templates...)
+	}
+	return combined, nil
+}
+
+func templateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCalls, error) {
 	if lt.Err != nil {
 		return nil, lt.Err
 	}

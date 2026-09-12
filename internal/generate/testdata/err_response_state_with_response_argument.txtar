@@ -1,7 +1,5 @@
 A template may not set the status of a route whose method took the
 response.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /download Download(response)"}}{{.StatusCode 404}}{{end}}
 -- server.go --

@@ -1,7 +1,5 @@
 A field the data type does not have is reported at the call and in the
 template.
--- config.json --
-{"Command": "check"}
 -- index.gohtml --
 {{define "index"}}<h1>{{.Heading}}</h1>{{range .Items}}{{template "item" .}}{{end}}{{end}}
 {{define "item"}}<li>{{.Cost}}</li>{{end}}

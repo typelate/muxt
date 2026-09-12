@@ -1,7 +1,5 @@
 The status a route writes: one named in the template name, one the
 result reports with a StatusCode method or field, or 200.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "POST /created 201 Create()"}}{{end}}
 {{define "GET /constant http.StatusTeapot Create()"}}{{end}}
@@ -159,6 +157,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

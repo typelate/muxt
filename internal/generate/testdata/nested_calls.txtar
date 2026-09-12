@@ -1,7 +1,5 @@
 A call's argument may be the result of another call, a receiver method
 or a package function, which runs first.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /article/{id} Show(ctx, Load(ctx, id))"}}{{.Result}}{{end}}
 {{define "GET /user Show(ctx, Current(request))"}}{{.Result}}{{end}}
@@ -130,6 +128,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

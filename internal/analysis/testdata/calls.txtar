@@ -1,6 +1,4 @@
 The templates each template calls, with the data type.
--- config.json --
-{"Command": "calls"}
 -- index.gohtml --
 {{define "page"}}{{template "header" .Title}}{{range .Items}}{{template "item" .}}{{end}}{{end}}
 {{define "header"}}<h1>{{.}}</h1>{{end}}

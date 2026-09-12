@@ -85,6 +85,11 @@ type TemplateData[R any, T any] struct {
 	pathsPrefix   string
 }
 
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
+}
+
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
 	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
 }

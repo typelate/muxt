@@ -1,7 +1,5 @@
 A template nothing executes is reported; a route template is reported
 as waiting for muxt generate, along with the partials only it uses.
--- config.json --
-{"Command": "check"}
 -- index.gohtml --
 {{define "index"}}<h1>{{.Title}}</h1>{{end}}
 {{define "orphan"}}<p>never rendered</p>{{end}}

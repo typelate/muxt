@@ -1,7 +1,5 @@
 With --use-receiver-type, a method the receiver does not define is
 inferred, and generation says so.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /{id} Missing(ctx, id)"}}{{.Result}}{{end}}
 {{define "GET /defined Defined()"}}{{.Result}}{{end}}
@@ -109,6 +107,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

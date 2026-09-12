@@ -1,7 +1,5 @@
 With --output-datastar an sse route frames datastar patch events, and
 signals decodes the request body.
--- config.json --
-{"ReceiverType": "T", "OutputDatastar": true}
 -- index.gohtml --
 {{define "POST /count sse(Count(signals, execute, countsSignals))"}}{{.Result}}{{end}}
 -- server.go --
@@ -117,6 +115,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

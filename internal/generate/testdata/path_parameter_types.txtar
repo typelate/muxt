@@ -1,7 +1,5 @@
 Each path parameter parses into the type of the parameter it is passed
 to, and the route path helper takes that type.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /int/{id} Int(id)"}}{{.Result}}{{end}}
 {{define "GET /small/{a}/{b}/{c} Small(a, b, c)"}}{{.Result}}{{end}}
@@ -291,6 +289,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

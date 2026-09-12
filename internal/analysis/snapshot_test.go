@@ -2,7 +2,6 @@ package analysis
 
 import (
 	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -13,7 +12,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,27 +28,13 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot archives in testdata")
 
-// snapshotConfig is an archive's config.json.
-type snapshotConfig struct {
-	// Command is what runs: check, routes, callers or calls.
-	Command string
-
-	// Verbose is check's --verbose.
-	Verbose bool
-
-	// ReceiverType names the receiver type for routes.
-	ReceiverType string
-
-	// Match filters callers and calls by template name.
-	Match []string
-}
-
 // TestSnapshots runs an analysis for each archive in testdata and
 // compares what it reports with the archive's want/ files.
 //
-// An archive holds a case's inputs and what the analysis reports:
+// An archive holds a case's inputs and what the analysis reports, and
+// snapshots, in snapshots_test.go, the configuration it runs with -- which
+// also says which analysis runs:
 //
-//   - config.json is a snapshotConfig.
 //   - Go files are type checked, as example.com/server, against the stub
 //     standard library in internal/typestest. The package declares the
 //     templates variable, and its templates.ExecuteTemplate calls are the
@@ -68,12 +52,19 @@ func TestSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, archivePath := range archives {
-		t.Run(strings.TrimSuffix(filepath.Base(archivePath), ".txtar"), func(t *testing.T) {
+		name := strings.TrimSuffix(filepath.Base(archivePath), ".txtar")
+		if !slices.ContainsFunc(snapshots, func(c snapshotCase) bool { return c.archive == name }) {
+			t.Errorf("testdata/%s.txtar has no configuration in snapshots", name)
+		}
+	}
+	for _, tt := range snapshots {
+		t.Run(tt.archive, func(t *testing.T) {
+			archivePath := filepath.Join("testdata", tt.archive+".txtar")
 			archive, err := txtar.ParseFile(archivePath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := snapshot(t, archive)
+			got := snapshot(t, tt.config, archive)
 			if *update {
 				files := slices.DeleteFunc(slices.Clone(archive.Files), func(file txtar.File) bool {
 					return strings.HasPrefix(file.Name, "want/")
@@ -102,21 +93,14 @@ func TestSnapshots(t *testing.T) {
 	}
 }
 
-func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
+func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]string {
 	t.Helper()
-	var config snapshotConfig
 	goFiles := make(map[string]string)
 	set := template.New("templates")
 	var templateFiles []txtar.File
 	for _, file := range archive.Files {
 		switch {
 		case strings.HasPrefix(file.Name, "want/"):
-		case file.Name == "config.json":
-			decoder := json.NewDecoder(bytes.NewReader(file.Data))
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&config); err != nil {
-				t.Fatalf("config.json: %v", err)
-			}
 		case filepath.Ext(file.Name) == ".go":
 			goFiles[file.Name] = string(file.Data)
 		case filepath.Ext(file.Name) == ".gohtml":
@@ -125,7 +109,7 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 			}
 			templateFiles = append(templateFiles, file)
 		default:
-			t.Fatalf("archive file %s is not config.json, Go, .gohtml, or want/", file.Name)
+			t.Fatalf("archive file %s is not Go, .gohtml, or want/", file.Name)
 		}
 	}
 	checked, err := typestest.CheckSyntax("example.com/server", goFiles)
@@ -138,16 +122,16 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 	got := make(map[string]string)
 	var stdout bytes.Buffer
 	var runErr error
-	switch config.Command {
-	case "check":
+	switch config := config.(type) {
+	case CheckConfiguration:
 		var logs strings.Builder
 		var n int
-		n, runErr = Check(CheckConfiguration{Verbose: config.Verbose, TemplatesVariables: []string{"templates"}}, log.New(&logs, "", 0), pkg, []templateset.Variable{templates})
+		n, runErr = Check(config, log.New(&logs, "", 0), pkg, []templateset.Variable{templates})
 		fmt.Fprintf(&stdout, "checked %d\n", n)
 		if logs.Len() > 0 {
 			got["log.txt"] = logs.String()
 		}
-	case "routes":
+	case DefinitionsConfiguration:
 		src := muxt.Source{Package: pkg, Templates: []muxt.Templates{templates.Templates}}
 		if config.ReceiverType != "" {
 			src.Receiver = checked.Types.Scope().Lookup(config.ReceiverType).Type().(*types.Named)
@@ -157,20 +141,20 @@ func snapshot(t *testing.T, archive *txtar.Archive) map[string]string {
 		for _, result := range results {
 			writeTo(t, &stdout, result)
 		}
-	case "callers":
+	case TemplateCallersConfiguration:
 		var result *TemplateCallers
-		result, runErr = NewTemplateCallers(TemplateCallersConfiguration{TemplatesVariable: "templates", FilterTemplates: patterns(t, config.Match)}, pkg, templates)
+		result, runErr = NewTemplateCallers(config, pkg, []templateset.Variable{templates})
 		if result != nil {
 			writeTo(t, &stdout, result)
 		}
-	case "calls":
+	case TemplateCallsConfiguration:
 		var result *TemplateCalls
-		result, runErr = NewTemplateCalls(TemplateCallsConfiguration{TemplatesVariable: "templates", FilterTemplates: patterns(t, config.Match)}, pkg, templates)
+		result, runErr = NewTemplateCalls(config, pkg, []templateset.Variable{templates})
 		if result != nil {
 			writeTo(t, &stdout, result)
 		}
 	default:
-		t.Fatalf("config.json Command %q is not check, routes, callers or calls", config.Command)
+		t.Fatalf("no analysis runs with a %T", config)
 	}
 	if stdout.Len() > 0 {
 		got["stdout.txt"] = stdout.String()
@@ -190,15 +174,6 @@ func writeTo(t *testing.T, w io.Writer, result io.WriterTo) {
 	if _, err := result.WriteTo(w); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func patterns(t *testing.T, sources []string) []*regexp.Regexp {
-	t.Helper()
-	var list []*regexp.Regexp
-	for _, source := range sources {
-		list = append(list, regexp.MustCompile(source))
-	}
-	return list
 }
 
 // memoryTemplates wires the templates variable the way internal/load

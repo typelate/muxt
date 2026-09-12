@@ -1,7 +1,5 @@
 A multipart struct binds text fields and file headers; a
 *multipart.Form parameter receives the parsed form.
--- config.json --
-{"ReceiverType": "T", "MultipartMaxMemory": 1048576}
 -- index.gohtml --
 {{define "POST /upload Upload(multipart)"}}{{end}}
 {{define "POST /raw Raw(multipart)"}}{{end}}
@@ -131,6 +129,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

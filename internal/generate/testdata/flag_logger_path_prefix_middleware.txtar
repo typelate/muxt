@@ -1,6 +1,4 @@
 The routes function takes a logger, a path prefix, and a middleware.
--- config.json --
-{"ReceiverType": "T", "Logger": true, "PathPrefix": true, "Middleware": true}
 -- index.gohtml --
 {{define "GET /{$}"}}home{{end}}
 {{define "GET /article/{id} Article(id)"}}{{.Result}}{{end}}
@@ -109,6 +107,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

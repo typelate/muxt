@@ -1,8 +1,6 @@
 Methods are found through embedded fields and pointer receivers;
 functions in the package are called directly and never join the
 receiver interface.
--- config.json --
-{"ReceiverType": "Server"}
 -- index.gohtml --
 {{define "GET /embedded Embedded()"}}{{.Result}}{{end}}
 {{define "GET /pointer Pointer()"}}{{.Result}}{{end}}
@@ -136,6 +134,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

@@ -1,6 +1,5 @@
-With a version to record, TemplateData reports it.
--- config.json --
-{"OutputMuxtVersion": true, "MuxtVersion": "v1.2.3"}
+With --output-muxt-version=false, TemplateData has no MuxtVersion method,
+so a template calling it does not compile.
 -- index.gohtml --
 {{define "GET /{$}"}}{{.MuxtVersion}}{{end}}
 -- server.go --
@@ -64,11 +63,6 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
-}
-
-func (data *TemplateData[R, T]) MuxtVersion() string {
-	const muxtVersion = "v1.2.3"
-	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

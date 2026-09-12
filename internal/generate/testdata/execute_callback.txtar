@@ -1,7 +1,5 @@
 A method taking execute renders the template when it calls back, with
 the data it passes or none.
--- config.json --
-{"ReceiverType": "T"}
 -- index.gohtml --
 {{define "GET /with-data Render(ctx, execute)"}}{{.Result}}{{end}}
 {{define "GET /without-data Plain(execute)"}}{{end}}
@@ -119,6 +117,11 @@ type TemplateData[R any, T any] struct {
 	errList       []error
 	redirectURL   string
 	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {

@@ -93,12 +93,20 @@ Update the code in order:
 3. `internal/load/` — Only if a run needs something new from the loaded packages
 4. `internal/cli/` — CLI handling (if needed)
 
-Before adding an integration script, see whether a unit test can state it:
-`internal/generate/testdata/*.txtar` and `internal/analysis/testdata/*.txtar`
-snapshot generated files and check reports from in-memory inputs in
-milliseconds. Rewrite them with `go test ./internal/generate -run TestSnapshots -update`
-and review the diff. Integration scripts are for what needs the go command:
-generated code compiling and serving requests, flags, and files on disk.
+Before adding an integration script, see whether a unit test can state it,
+at the layer that owns the behavior:
+- **Flags:** `internal/cli/configurations_test.go` states what a command line
+  parses into, and which command lines are rejected, without loading anything.
+- **What a command does with a valid configuration:**
+  `internal/{generate,analysis,mutation}/testdata/*.txtar` snapshot generated
+  files, check reports and mutation dry runs from in-memory packages in
+  milliseconds. Each archive's configuration is a literal in that package's
+  `snapshots_test.go`, copied from the command line case it stands for.
+  Rewrite snapshots with `go test ./internal/generate -run TestSnapshots -update`
+  and review the diff.
+
+Integration scripts are for what needs the go command: generated code
+compiling and serving requests, and files on disk.
 
 ### 5. Verify Your Changes
 
@@ -168,6 +176,7 @@ ls cmd/muxt/testdata/err_*.txt
 - `internal/generate/` — Routes file generation
 - `internal/analysis/` — `muxt check` and the template listings
 - `internal/typestest/` — In-memory type checking against stub standard library packages, for tests
+- `internal/load/loadtest/` — A loaded package built in memory, for tests that go through `internal/load`
 - `internal/cli/` — Command-line interface
 - `cmd/muxt/` — Command entry point
 
