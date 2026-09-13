@@ -19,9 +19,6 @@ type ImportManager interface {
 
 	// TypeASTExpression converts a types.Type to an AST expression
 	TypeASTExpression(tp types.Type) (ast.Expr, error)
-
-	// Types looks up a types.Package by path
-	Types(pkgPath string) (*types.Package, bool)
 }
 
 // ExportedIdentifier creates a selector expression for an exported identifier

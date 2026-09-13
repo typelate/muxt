@@ -2,10 +2,15 @@ package generate_test
 
 import (
 	"flag"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -130,6 +135,9 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, receiver, log.New(&logs, "", 0))
 	for _, file := range generated {
 		got[relative(file.Path)] = file.Content
+		for _, name := range unusedImports(t, file.Content) {
+			t.Errorf("%s imports %s without using it", relative(file.Path), name)
+		}
 	}
 	if logs.Len() > 0 {
 		got["log.txt"] = relative(logs.String())
@@ -165,4 +173,41 @@ func sortedKeys(maps ...map[string]string) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+// unusedImports names the imports a generated file declares but does not
+// refer to. Generated code that compiles has none; a file that did would
+// be a generator registering an import for a declaration it did not write.
+func unusedImports(t *testing.T, content string) []string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "generated.go", content, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenced := make(map[string]bool)
+	ast.Inspect(file, func(node ast.Node) bool {
+		if sel, ok := node.(*ast.SelectorExpr); ok {
+			// A package name resolves to nothing in the file; a local
+			// variable of the same name does.
+			if id, ok := sel.X.(*ast.Ident); ok && id.Obj == nil {
+				referenced[id.Name] = true
+			}
+		}
+		return true
+	})
+	var unused []string
+	for _, spec := range file.Imports {
+		importPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := path.Base(importPath)
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if !referenced[name] {
+			unused = append(unused, importPath)
+		}
+	}
+	return unused
 }

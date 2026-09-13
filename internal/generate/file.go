@@ -17,6 +17,13 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
+// File is one generated Go file: the package it is written into, which the
+// types it names are qualified against, and the imports its declarations
+// register as they are built.
+//
+// Every generated file has a File of its own. The imports a file declares
+// are then the ones something in it registered, so a file never carries a
+// package another file needed.
 type File struct {
 	pkg                source.Package
 	packageIdentifiers map[string]string
@@ -44,10 +51,6 @@ func (file *File) pkgQualifier(pkg *types.Package) string {
 		return ""
 	}
 	return file.Import(pkg.Name(), pkg.Path())
-}
-
-func (file *File) Types(pkgPath string) (*types.Package, bool) {
-	return file.pkg.Import(pkgPath)
 }
 
 func (file *File) Import(pkgIdent, pkgPath string) string {

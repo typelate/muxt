@@ -359,7 +359,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, file, routesFuncName, receiverInterfaceName, logger, config, receiver)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config, receiver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
