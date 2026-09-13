@@ -181,3 +181,18 @@ var stdlib = sync.OnceValues(func() (map[string]*types.Package, error) {
 	}
 	return checked, nil
 })
+
+// Packages returns the stub standard library packages by import path, the
+// shape of source.Package's Imports. The map is a copy; the packages are
+// shared.
+func Packages() map[string]*types.Package {
+	std, err := stdlib()
+	if err != nil {
+		panic(err)
+	}
+	packages := make(map[string]*types.Package, len(std))
+	for path, pkg := range std {
+		packages[path] = pkg
+	}
+	return packages
+}

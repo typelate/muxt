@@ -6,12 +6,7 @@ template.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"io"
-)
-
-var templates *template.Template
+import "io"
 
 type Page struct {
 	Title string
@@ -30,7 +25,7 @@ func RenderIndex(w io.Writer, page Page) error {
 -- want/error.txt --
 1 error
 -- want/log.txt --
-server.go:21:9 ExecuteTemplate "index" Page
+server.go:16:9 ExecuteTemplate "index" Page
 index.gohtml:1:25: executing "index" at <.Heading>: field or method Heading not found on Page
 
   type Page struct {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/typelate/dom"
+	"github.com/typelate/muxt/internal/source"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -41,7 +42,7 @@ const (
 // encoding.TextUnmarshaler. The encoding package is found through pkg.Import;
 // load.Packages always loads it (like fmt), so detection needs nothing from
 // user code.
-func UnmarshalMethodFor(pkg Package, tp types.Type) UnmarshalMethod {
+func UnmarshalMethodFor(pkg source.Package, tp types.Type) UnmarshalMethod {
 	switch t := tp.(type) {
 	case *types.Basic:
 		switch t.Name() {
@@ -108,7 +109,7 @@ func unsupportedTypeError(tp types.Type, qual types.Qualifier, supported string)
 
 // checkUnmarshalable reports whether tp parses from a form field's
 // string value.
-func checkUnmarshalable(pkg Package, tp types.Type, qual types.Qualifier) error {
+func checkUnmarshalable(pkg source.Package, tp types.Type, qual types.Qualifier) error {
 	if UnmarshalMethodFor(pkg, tp) != UnmarshalUnsupported {
 		return nil
 	}
@@ -124,7 +125,7 @@ func isStringAssignable(tp types.Type) bool {
 // checkParsedArgument validates a path value or lastEventID parameter:
 // it either receives the raw string or parses from one. Floats are
 // rejected here even though form fields accept them.
-func checkParsedArgument(pkg Package, paramType types.Type, qual types.Qualifier) error {
+func checkParsedArgument(pkg source.Package, paramType types.Type, qual types.Qualifier) error {
 	if isStringAssignable(paramType) {
 		return nil
 	}
@@ -176,7 +177,7 @@ type FieldBinding struct {
 // field (nil in raw mode). Struct fields must be a supported scalar or slice
 // of scalars; multipart structs may also bind *multipart.FileHeader and
 // []*multipart.FileHeader fields.
-func checkFormArgument(def *Definition, pkg Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
+func checkFormArgument(def *Definition, pkg source.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	at, err := stdlibType(pkg, packagePath, identifier, pointer)
 	if err != nil {
 		return nil, err
@@ -191,7 +192,7 @@ func checkFormArgument(def *Definition, pkg Package, paramType types.Type, argNa
 	return formStructBindings(def, pkg, st, argName, qual, allowFileFields)
 }
 
-func formStructBindings(def *Definition, pkg Package, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
+func formStructBindings(def *Definition, pkg source.Package, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	var fileHeaderPtr types.Type
 	if allowFileFields {
 		if mp, ok := pkg.Import("mime/multipart"); ok {

@@ -1,6 +1,10 @@
-package analysis
+package analysis_test
 
-import "regexp"
+import (
+	"regexp"
+
+	"github.com/typelate/muxt/internal/analysis"
+)
 
 // snapshots names the configuration each archive in testdata runs with,
 // which also says which analysis runs: the configuration the command line
@@ -19,46 +23,46 @@ var snapshots = []snapshotCase{
 	{
 		// muxt list-template-callers
 		archive: "callers",
-		config:  TemplateCallersConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.TemplateCallersConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt list-template-callers --match=^head
 		archive: "callers_match",
-		config:  TemplateCallersConfiguration{TemplatesVariables: []string{"templates"}, FilterTemplates: []*regexp.Regexp{regexp.MustCompile("^head")}},
+		config:  analysis.TemplateCallersConfiguration{TemplatesVariables: []string{"templates"}, FilterTemplates: []*regexp.Regexp{regexp.MustCompile("^head")}},
 	},
 	{
 		// muxt list-template-calls
 		archive: "calls",
-		config:  TemplateCallsConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.TemplateCallsConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt check -v
 		archive: "check_bad_route_name",
-		config:  CheckConfiguration{Verbose: true, TemplatesVariables: []string{"templates"}},
+		config:  analysis.CheckConfiguration{Verbose: true, TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt check
 		archive: "check_passes",
-		config:  CheckConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt check
 		archive: "check_template_not_found",
-		config:  CheckConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt check
 		archive: "check_unused_templates",
-		config:  CheckConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt check
 		archive: "check_wrong_field",
-		config:  CheckConfiguration{TemplatesVariables: []string{"templates"}},
+		config:  analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}},
 	},
 	{
 		// muxt --use-receiver-type=T
 		archive: "routes",
-		config:  DefinitionsConfiguration{ReceiverType: "T", TemplatesVariables: []string{"templates"}},
+		config:  analysis.DefinitionsConfiguration{ReceiverType: "T", TemplatesVariables: []string{"templates"}},
 	},
 }

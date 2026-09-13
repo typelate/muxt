@@ -17,13 +17,14 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // Definitions parses route definitions from the template names in a
-// templates variable's set. When the set's NamePosition is known,
-// template name errors carry a file position.
-func Definitions(templates Templates) ([]Definition, error) {
-	ts, templatesVariable := templates.Set, templates.Variable
+// templates variable's set. When the variable locates a template's
+// definition, errors about its name carry a file position.
+func Definitions(variable source.Variable) ([]Definition, error) {
+	ts, templatesVariable := variable.Set, variable.Name
 	var defs []Definition
 	type nameFailure struct {
 		def Definition
@@ -35,10 +36,8 @@ func Definitions(templates Templates) ([]Definition, error) {
 		if !ok {
 			continue
 		}
-		if templates.NamePosition != nil {
-			if pos, found := templates.NamePosition(t.Name()); found {
-				mt.namePosition = pos
-			}
+		if pos, found := variable.NamePosition(t.Name()); found {
+			mt.namePosition = pos
 		}
 		if err != nil {
 			// Collect every malformed name so one run reports them all.

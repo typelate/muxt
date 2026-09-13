@@ -65,10 +65,7 @@ func templatesAt(config Configuration, dir string) (revision, error) {
 // which is what a --diff run compares the working tree with.
 func revisionOf(in input) (revision, error) {
 	before := make(revision)
-	for _, variable := range in.variables {
-		if variable.Err != nil {
-			return nil, variable.Err
-		}
+	for _, variable := range in.pkg.Variables {
 		lt := newChecked(in.pkg, variable)
 		index, err := buildTreeIndex(lt, in.dir)
 		if err != nil {

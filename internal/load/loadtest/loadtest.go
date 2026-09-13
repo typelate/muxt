@@ -24,7 +24,9 @@ import (
 )
 
 // Package writes files into dir and returns them loaded as the package
-// with import path pkgPath, the way load.Packages would report it for dir.
+// with import path pkgPath, the way load.Packages would report a load of
+// dir: that package, then the standard library packages every load
+// includes.
 //
 // Go files are type checked against the stub standard library in
 // internal/typestest. Every other file is embedded, as a //go:embed
@@ -58,7 +60,7 @@ func Package(t testing.TB, dir, pkgPath string, files map[string]string) []*pack
 	if err != nil {
 		t.Fatal(err)
 	}
-	return []*packages.Package{{
+	pl := []*packages.Package{{
 		ID:         pkgPath,
 		Name:       checked.Types.Name(),
 		PkgPath:    pkgPath,
@@ -70,4 +72,15 @@ func Package(t testing.TB, dir, pkgPath string, files map[string]string) []*pack
 		Types:      checked.Types,
 		TypesInfo:  checked.Info,
 	}}
+	// load.Packages always loads these alongside the working directory's
+	// package, so what a route argument binds to is found even when the
+	// package does not import it.
+	for _, path := range []string{"encoding", "fmt", "net/http"} {
+		std, ok := typestest.Lookup(path)
+		if !ok {
+			t.Fatalf("typestest has no stub for %s", path)
+		}
+		pl = append(pl, &packages.Package{ID: path, Name: std.Name(), PkgPath: path, Fset: typestest.FileSet, Types: std})
+	}
+	return pl
 }

@@ -7,12 +7,7 @@ receiver's methods.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"net/url"
-)
-
-var templates *template.Template
+import "net/url"
 
 type T struct{}
 

@@ -2,143 +2,113 @@ package load
 
 import (
 	"cmp"
-	"go/token"
 	"go/types"
-	"html/template"
-	"slices"
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/templateset"
+	"github.com/typelate/muxt/internal/source"
 )
 
-// SourceConfiguration names what Source reads from the loaded packages.
-type SourceConfiguration struct {
-	// ReceiverType names the receiver type; when it is empty no
-	// receiver is looked up.
-	ReceiverType string
-
-	// ReceiverPackage is the import path of the package declaring
-	// ReceiverType. It defaults to the package in the working directory.
-	ReceiverPackage string
-
-	// TemplatesVariables are loaded in order.
-	TemplatesVariables []string
-}
-
-// Source adapts the packages loaded for wd into what route resolution
-// reads. It is where a go/packages result stops: past it, a run holds
-// go/types values and template sets and nothing that needs the go
-// command.
+// Package reads the package at dir among pl, with the templates variables
+// named, in order, into a source.Package. It is where a go/packages result
+// stops: past it, a run holds go/types values and template sets and
+// nothing that needs the go command.
 //
-// A templates variable that fails to load does not fail Source; its
-// error is carried on the variable, so a caller reports it at the point
-// it reaches that variable.
-func Source(wd string, pl []*packages.Package, config SourceConfiguration) (muxt.Source, error) {
-	pkg, ok := PackageAtFilepath(pl, wd)
+// It fails when no loaded package is at dir, or at the first variable that
+// does not evaluate to a template set.
+func Package(dir string, pl []*packages.Package, variables []string) (source.Package, error) {
+	pkg, ok := PackageAtFilepath(pl, dir)
 	if !ok {
-		return muxt.Source{}, NoPackageError(wd, pl)
+		return source.Package{}, NoPackageError(dir, pl)
 	}
-	src := muxt.Source{Package: Package(pkg, pl)}
-	if config.ReceiverType != "" {
-		receiver, err := FindType(pl, cmp.Or(config.ReceiverPackage, pkg.PkgPath), config.ReceiverType)
+	result := source.Package{
+		Fset:    pkg.Fset,
+		Types:   pkg.Types,
+		Imports: imports(pl),
+	}
+	for _, name := range variables {
+		variable, err := Variable(pkg, name)
 		if err != nil {
-			return muxt.Source{}, err
+			return source.Package{}, err
 		}
-		src.Receiver = receiver
+		result.Variables = append(result.Variables, variable)
 	}
-	for _, variable := range config.TemplatesVariables {
-		src.Templates = append(src.Templates, TemplatesVariable(pkg, variable))
-	}
-	return src, nil
+	return result, nil
 }
 
-// Package returns pkg as route resolution reads it. Lookup finds any
-// package in pl, or one a package in pl imports.
-func Package(pkg *packages.Package, pl []*packages.Package) muxt.Package {
-	return muxt.Package{
-		Fset:  pkg.Fset,
-		Types: pkg.Types,
-		Lookup: func(path string) (*types.Package, bool) {
-			return findPackageTypes(pl, path)
-		},
-	}
-}
-
-// TemplatesVariable evaluates the templates variable in pkg.
-func TemplatesVariable(pkg *packages.Package, variable string) muxt.Templates {
-	lt, ts, err := HTMLTemplates(variable, pkg)
+// Variable evaluates the templates variable name in pkg: its template set,
+// the functions its templates may call, where each template was defined,
+// and the ExecuteTemplate calls made on it.
+func Variable(pkg *packages.Package, name string) (source.Variable, error) {
+	lt, ts, err := HTMLTemplates(name, pkg)
 	if err != nil {
-		return muxt.Templates{Variable: variable, Err: err}
+		return source.Variable{}, err
 	}
-	return templates(variable, lt, ts)
-}
-
-// TemplateSet evaluates the templates variable in pkg along with
-// what type checking its templates needs.
-func TemplateSet(pkg *packages.Package, variable string) templateset.Variable {
-	lt, ts, err := HTMLTemplates(variable, pkg)
-	if err != nil {
-		return templateset.Variable{Templates: muxt.Templates{Variable: variable, Err: err}}
-	}
-	return templateset.Variable{
-		Templates:   templates(variable, lt, ts),
-		Trees:       lt,
-		Definitions: lt,
+	variable := source.Variable{
+		Name:        name,
+		Set:         ts,
 		Functions:   lt.Functions(),
-		Calls:       slices.Collect(lt.ExecuteTemplateCalls()),
+		Funcs:       lt.CollectedFunctions(),
+		Definitions: make(map[string]source.Definition),
 	}
-}
-
-func templates(variable string, lt *check.Templates, ts *template.Template) muxt.Templates {
-	return muxt.Templates{
-		Variable:  variable,
-		Set:       ts,
-		Functions: lt.CollectedFunctions(),
-		NamePosition: func(templateName string) (token.Position, bool) {
-			d, found := lt.FindDefinition(templateName)
-			if !found || !d.TemplateName.IsValid() {
-				return token.Position{}, false
-			}
-			// The span includes the quotes; the name starts one byte in.
-			pos := d.TemplateName.Position
-			pos.Column++
-			pos.Offset++
-			return pos, true
-		},
-	}
-}
-
-func findPackageTypes(pl []*packages.Package, path string) (*types.Package, bool) {
-	for _, pkg := range pl {
-		if pkg.Types != nil && pkg.Types.Path() == path {
-			return pkg.Types, true
+	for _, t := range ts.Templates() {
+		d, ok := lt.FindDefinition(t.Name())
+		if !ok {
+			continue
+		}
+		variable.Definitions[t.Name()] = source.Definition{
+			Name:         d.Name,
+			Define:       source.Span{Position: d.Define.Position, Length: d.Define.Length},
+			End:          source.Span{Position: d.End.Position, Length: d.End.Length},
+			TemplateName: source.Span{Position: d.TemplateName.Position, Length: d.TemplateName.Length},
+			Tree:         d.Tree,
 		}
 	}
+	for call := range lt.ExecuteTemplateCalls() {
+		variable.Calls = append(variable.Calls, source.Call{
+			Position: pkg.Fset.Position(call.Call.Pos()),
+			Template: call.TemplateName,
+			Data:     call.DataType,
+		})
+	}
+	return variable, nil
+}
+
+// Receiver finds the receiver type named ident in the package at dir among
+// pl, or in the package with import path packagePath when it is set.
+func Receiver(dir string, pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
+	pkg, ok := PackageAtFilepath(pl, dir)
+	if !ok {
+		return nil, NoPackageError(dir, pl)
+	}
+	return FindType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
+}
+
+// imports indexes, by import path, every package in pl and every package
+// they import. A path loaded more than once -- a package and its test
+// variant -- keeps the first in pl.
+func imports(pl []*packages.Package) map[string]*types.Package {
+	index := make(map[string]*types.Package)
+	var queue []*types.Package
 	for _, pkg := range pl {
 		if pkg.Types == nil {
 			continue
 		}
-		if p, ok := muxt.SearchImports(pkg.Types, path); ok {
-			return p, true
+		if _, seen := index[pkg.Types.Path()]; !seen {
+			index[pkg.Types.Path()] = pkg.Types
+			queue = append(queue, pkg.Types)
 		}
 	}
-	return nil, false
-}
-
-// TemplateSets is Source for the commands that type check templates:
-// the package at wd and each templates variable, in order, with what
-// checking it needs.
-func TemplateSets(wd string, pl []*packages.Package, variables []string) (muxt.Package, []templateset.Variable, error) {
-	pkg, ok := PackageAtFilepath(pl, wd)
-	if !ok {
-		return muxt.Package{}, nil, NoPackageError(wd, pl)
+	for len(queue) > 0 {
+		pkg := queue[0]
+		queue = queue[1:]
+		for _, imported := range pkg.Imports() {
+			if _, seen := index[imported.Path()]; seen {
+				continue
+			}
+			index[imported.Path()] = imported
+			queue = append(queue, imported)
+		}
 	}
-	templates := make([]templateset.Variable, 0, len(variables))
-	for _, variable := range variables {
-		templates = append(templates, TemplateSet(pkg, variable))
-	}
-	return Package(pkg, pl), templates, nil
+	return index
 }

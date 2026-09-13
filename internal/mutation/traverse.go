@@ -82,11 +82,11 @@ func traverse(lt *checked, index map[string]treeLocation) ([]scope, []trim) {
 	t := &traversal{lt: lt, index: index, visited: make(map[string]callSite)}
 	for _, call := range lt.Calls {
 		site := callSite{
-			Position: lt.pkg.Fset.Position(call.Call.Pos()),
-			Template: call.TemplateName,
-			DataType: call.DataType,
+			Position: call.Position,
+			Template: call.Template,
+			DataType: call.Data,
 		}
-		t.visit(site, call.TemplateName, call.DataType, false)
+		t.visit(site, call.Template, call.Data, false)
 	}
 	return t.scopes, t.trimmed
 }

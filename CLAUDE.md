@@ -20,20 +20,23 @@
 
 ```
 go list (golang.org/x/tools/go/packages)      ./internal/load
-    ↓  load.Source / load.AnalysisSource
-muxt.Source: go/types + template sets          ./internal/muxt (package.go)
+    ↓  load.Package, load.GenerateSource, load.RoutesSource
+source.Package: types + templates variables    ./internal/source
     ↓  muxt.Definitions, muxt.ResolveCall
 Resolved routes (muxt.Definition)              ./internal/muxt
     ↓
-Generated files / check reports                ./internal/generate, ./internal/analysis
+Generated files / check reports / mutations    ./internal/generate, ./internal/analysis, ./internal/mutation
 ```
 
 **The package load stops at `internal/load`.** It is the only package that
-calls `packages.Load` (the go command, seconds per run). Everything below it
-takes plain values — a `*types.Package`, a `*token.FileSet`, template sets —
-so it can be tested with inputs built in memory. `internal/typestest` type
-checks Go source against stub standard library packages in microseconds; use
-it rather than loading a module in unit tests.
+calls `packages.Load` (the go command, seconds per run). It hydrates a
+command's configuration into a `source.Package`: plain data holding the
+package's types, and each templates variable's template set, functions,
+definitions and ExecuteTemplate calls. Everything below it reads only that,
+so it can be tested with inputs built in memory: `internal/typestest` type
+checks Go source against stub standard library packages in microseconds, and
+`internal/load/loadtest` builds a loaded package from it for tests that go
+through `internal/load`. Use them rather than loading a module in unit tests.
 
 **Key concept:** Muxt reads template names like `"GET /{id} GetUser(ctx, id)"` and generates `http.Handler` implementations that:
 - Parse URL parameters to the correct Go types
@@ -171,7 +174,8 @@ ls cmd/muxt/testdata/err_*.txt
 ## Key Files and Directories
 
 ### Source Code
-- `internal/load/` — Package loading (the only `go/packages` caller) and its diagnostics
+- `internal/load/` — Package loading (the only `go/packages` caller), hydration into `source.Package`, and load diagnostics
+- `internal/source/` — The loaded package as plain data: what everything after the load reads
 - `internal/muxt/` — Template name parsing and route resolution against go/types
 - `internal/generate/` — Routes file generation
 - `internal/analysis/` — `muxt check` and the template listings

@@ -34,23 +34,19 @@ func Render(w io.Writer, name string) error {
 		"page.gohtml": `{{define "page"}}<p>{{.}}</p>{{end}}`,
 	})
 
-	pkg, sets, err := load.TemplateSets(dir, pl, []string{"templates", "inline"})
+	pkg, err := load.Package(dir, pl, []string{"templates", "inline"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pkg.Types.Path() != "example.com/server" {
 		t.Errorf("package %s, want example.com/server", pkg.Types.Path())
 	}
-	for _, set := range sets {
-		if set.Err != nil {
-			t.Fatalf("%s: %v", set.Variable, set.Err)
-		}
-	}
+	sets := pkg.Variables
 
 	if sets[0].Set.Lookup("page") == nil {
 		t.Error("templates does not hold the page ParseFS read")
 	}
-	definition, ok := sets[0].Definitions.FindDefinition("page")
+	definition, ok := sets[0].Definitions["page"]
 	if !ok || definition.Define.Filename != filepath.Join(dir, "page.gohtml") {
 		t.Errorf("page defined at %+v, want in page.gohtml", definition.Define)
 	}

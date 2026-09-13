@@ -1,4 +1,6 @@
-package generate
+package generate_test
+
+import "github.com/typelate/muxt/internal/generate"
 
 // snapshots names the configuration each archive in testdata is generated
 // with: the configuration the command line in the comment parses into.
@@ -10,14 +12,14 @@ package generate
 // work is the command line's job, so nothing here tests one.
 type snapshotCase struct {
 	archive string
-	config  RoutesFileConfiguration
+	config  generate.RoutesFileConfiguration
 }
 
 var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "err_duplicate_pattern",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -34,7 +36,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "err_name_errors",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -51,7 +53,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "err_resolution",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -69,7 +71,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "err_response_state_with_response_argument",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -87,7 +89,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "err_route_paths_method_collision",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -104,7 +106,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "err_signals_without_datastar",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -121,7 +123,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "execute_callback",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -139,7 +141,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=Server --output-file=routes.go --output-routes-func=Routes --output-receiver-interface=Handlers --output-template-data-type=Data --output-template-route-paths-type=Paths
 		archive: "flag_custom_names",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "Routes",
@@ -157,7 +159,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --output-htmx
 		archive: "flag_htmx",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -175,7 +177,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T --output-routes-func-with-logger-param --output-routes-func-with-path-prefix-param --output-routes-func-with-middleware-param
 		archive: "flag_logger_path_prefix_middleware",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -196,7 +198,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T --output-multiple-files --output-routes-func-with-middleware-param
 		archive: "flag_multiple_files",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -216,7 +218,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --output-exported-default-identifiers=false
 		archive: "flag_unexported_identifiers",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                "v1.2.3",
 			PackageName:                "main",
 			RoutesFunction:             "templateRoutes",
@@ -232,7 +234,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --output-muxt-version=false
 		archive: "flag_without_muxt_version",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
 			ReceiverInterface:                "RoutesReceiver",
@@ -247,7 +249,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "form_struct",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -265,7 +267,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "form_values",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -283,7 +285,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "inferred_methods",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -300,7 +302,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "last_event_id",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -318,7 +320,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "marshal_json",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -336,7 +338,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T --output-multipart-max-memory=1MiB
 		archive: "multipart",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -355,7 +357,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "nested_calls",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -373,7 +375,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "path_parameter_types",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -391,7 +393,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=Server
 		archive: "receiver_method_sets",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -409,7 +411,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "redirect",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -427,7 +429,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "request_body",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -445,7 +447,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "response_argument",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -463,7 +465,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "result_shapes",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -481,7 +483,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate
 		archive: "route_without_call",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -498,7 +500,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T --output-datastar
 		archive: "sse_datastar",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -517,7 +519,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "sse_messages_without_datastar",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -535,7 +537,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "sse",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -553,7 +555,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "status_codes",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",
@@ -571,7 +573,7 @@ var snapshots = []snapshotCase{
 	{
 		// muxt generate --use-receiver-type=T
 		archive: "synthesized_method_note",
-		config: RoutesFileConfiguration{
+		config: generate.RoutesFileConfiguration{
 			MuxtVersion:                      "v1.2.3",
 			PackageName:                      "main",
 			RoutesFunction:                   "TemplateRoutes",

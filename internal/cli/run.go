@@ -27,12 +27,12 @@ func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfigu
 	if err != nil {
 		return err
 	}
-	src, err := load.RoutesSource(wd, pl, config)
+	pkg, receiver, err := load.RoutesSource(wd, pl, config)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
 	}
-	results, err := analysis.NewRoutes(src)
+	results, err := analysis.NewRoutes(pkg, receiver)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
@@ -53,11 +53,11 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	logger := log.New(cmd.ErrOrStderr(), "", 0)
 	warnPartialAST(logger, pl)
 	checked, err := func() (int, error) {
-		pkg, templates, err := load.TemplateSets(wd, pl, config.TemplatesVariables)
+		pkg, err := load.Package(wd, pl, config.TemplatesVariables)
 		if err != nil {
 			return 0, err
 		}
-		return analysis.Check(config, logger, pkg, templates)
+		return analysis.Check(config, logger, pkg)
 	}()
 	if err != nil {
 		if printMultiLineError(cmd, err) {
@@ -78,11 +78,11 @@ func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateC
 	if err != nil {
 		return err
 	}
-	pkg, templates, err := load.TemplateSets(wd, pl, config.TemplatesVariables)
+	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
-	result, err := analysis.NewTemplateCallers(config, pkg, templates)
+	result, err := analysis.NewTemplateCallers(config, pkg)
 	if err != nil {
 		return err
 	}
@@ -94,11 +94,11 @@ func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCal
 	if err != nil {
 		return err
 	}
-	pkg, templates, err := load.TemplateSets(wd, pl, config.TemplatesVariables)
+	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
-	result, err := analysis.NewTemplateCalls(config, pkg, templates)
+	result, err := analysis.NewTemplateCalls(config, pkg)
 	if err != nil {
 		return err
 	}
@@ -121,12 +121,12 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		return err
 	}
 	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-	src, err := load.GenerateSource(wd, pl, config)
+	pkg, receiver, err := load.GenerateSource(wd, pl, config)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
 	}
-	files, err := generate.TemplateRoutesFiles(wd, config, src, log.New(stdout, "", 0))
+	files, err := generate.TemplateRoutesFiles(wd, config, pkg, receiver, log.New(stdout, "", 0))
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err

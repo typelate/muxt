@@ -7,12 +7,7 @@ Where each template is executed or called from, with the data type.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"io"
-)
-
-var templates *template.Template
+import "io"
 
 type Page struct {
 	Title string
@@ -32,7 +27,7 @@ func RenderAlone(w io.Writer) error {
 
 template "alone" called by:
 
-  - server.go:22:9 execute_template "alone" untyped nil
+  - server.go:17:9 execute_template "alone" untyped nil
 
 
 template "header" called by:
@@ -48,6 +43,6 @@ template "item" called by:
 
 template "page" called by:
 
-  - server.go:18:9 execute_template "page" Page
+  - server.go:13:9 execute_template "page" Page
 
 

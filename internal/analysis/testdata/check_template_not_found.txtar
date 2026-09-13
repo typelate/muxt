@@ -4,12 +4,7 @@ An ExecuteTemplate call naming a template the set does not define.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"io"
-)
-
-var templates *template.Template
+import "io"
 
 type Page struct {
 	Title string
@@ -28,7 +23,7 @@ func RenderIndex(w io.Writer, page Page) error {
 -- want/error.txt --
 1 error
 -- want/log.txt --
-server.go:21:9 ExecuteTemplate "index" Page
+server.go:16:9 ExecuteTemplate "index" Page
  -  template "index" not found
 
 -- want/stdout.txt --

@@ -8,20 +8,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func TestDefinitionsErrorPosition(t *testing.T) {
 	const name = "OPTIONS / F()"
 	ts := template.Must(template.New("index.gohtml").Parse(`{{define "` + name + `"}}{{end}}`))
-	namePosition := func(templateName string) (token.Position, bool) {
-		if templateName != name {
-			return token.Position{}, false
-		}
-		// The name starts one byte past the opening quote at column 10.
-		return token.Position{Filename: "index.gohtml", Offset: 10, Line: 1, Column: 11}, true
-	}
+	variable := source.Variable{Name: "templates", Set: ts, Definitions: map[string]source.Definition{
+		name: {
+			Name: name,
+			// The quoted name starts at column 10, so the name itself
+			// starts one byte in, at column 11.
+			TemplateName: source.Span{Position: token.Position{Filename: "index.gohtml", Offset: 9, Line: 1, Column: 10}, Length: len(name) + 2},
+		},
+	}}
 
-	_, err := Definitions(Templates{Variable: "templates", Set: ts, NamePosition: namePosition})
+	_, err := Definitions(variable)
 	// The failing METHOD segment starts at the first byte of the name.
 	require.EqualError(t, err, "index.gohtml:1:11: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 

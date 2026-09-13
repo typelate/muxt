@@ -78,15 +78,17 @@ func TestTemplates(t *testing.T) {
 		require.ErrorContains(t, err, "variable nope not found")
 	})
 
-	t.Run("load templates wires the global", func(t *testing.T) {
-		lt, err := load.Templates(dir, "templates", pl)
+	t.Run("a variable locates its definitions and calls", func(t *testing.T) {
+		variable, err := load.Variable(pkg, "templates")
 		require.NoError(t, err)
-		require.NotNil(t, lt.HTML)
+		require.NotNil(t, variable.Set)
 
-		def, ok := lt.Global.Definitions.FindDefinition("home")
+		def, ok := variable.Definitions["home"]
 		require.True(t, ok, "definitions resolve for file-parsed templates")
 		require.True(t, def.Define.IsValid())
 		assert.Equal(t, "index.gohtml", filepath.Base(def.Define.Filename))
+		_, ok = variable.Funcs["upper"]
+		assert.True(t, ok, "Funcs holds the Funcs-registered functions")
 	})
 }
 

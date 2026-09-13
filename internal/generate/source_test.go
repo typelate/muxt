@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"testing"
 
-	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/internal/typestest"
 )
 
@@ -31,23 +31,26 @@ func testConfig() RoutesFileConfiguration {
 
 // testSource type checks goSource as example.com/server and parses
 // templates into the templates variable. When receiverType is not empty
-// it names the receiver, as --use-receiver-type would.
-func testSource(t *testing.T, goSource, receiverType, templates string) muxt.Source {
+// it returns that type as the receiver, as --use-receiver-type would name
+// it.
+func testSource(t *testing.T, goSource, receiverType, templates string) (source.Package, *types.Named) {
 	t.Helper()
 	pkg := typestest.MustCheck(t, "example.com/server", goSource)
-	src := muxt.Source{
-		Package: muxt.Package{Fset: typestest.FileSet, Types: pkg, Lookup: typestest.Lookup},
-		Templates: []muxt.Templates{{
-			Variable: "templates",
-			Set:      template.Must(template.New("templates").Parse(templates)),
+	src := source.Package{
+		Fset:    typestest.FileSet,
+		Types:   pkg,
+		Imports: typestest.Packages(),
+		Variables: []source.Variable{{
+			Name: "templates",
+			Set:  template.Must(template.New("templates").Parse(templates)),
 		}},
 	}
-	if receiverType != "" {
-		obj := pkg.Scope().Lookup(receiverType)
-		if obj == nil {
-			t.Fatalf("source declares no %s", receiverType)
-		}
-		src.Receiver = obj.Type().(*types.Named)
+	if receiverType == "" {
+		return src, nil
 	}
-	return src
+	obj := pkg.Scope().Lookup(receiverType)
+	if obj == nil {
+		t.Fatalf("source declares no %s", receiverType)
+	}
+	return src, obj.Type().(*types.Named)
 }

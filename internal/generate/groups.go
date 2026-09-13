@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type templateGroups struct {
@@ -14,15 +15,11 @@ type templateGroups struct {
 	all    []muxt.Definition
 }
 
-func groupTemplates(config RoutesFileConfiguration, templates []muxt.Templates) (templateGroups, error) {
+func groupTemplates(config RoutesFileConfiguration, variables []source.Variable) (templateGroups, error) {
 	result := templateGroups{
 		byFile: make(map[string][]muxt.Definition),
 	}
-	for _, tv := range templates {
-		if tv.Err != nil {
-			return result, tv.Err
-		}
-
+	for _, tv := range variables {
 		defs, err := muxt.Definitions(tv)
 		if err != nil {
 			return result, err

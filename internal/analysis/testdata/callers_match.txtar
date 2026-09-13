@@ -7,12 +7,7 @@ Where the matching templates are executed or called from.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"io"
-)
-
-var templates *template.Template
+import "io"
 
 type Page struct {
 	Title string

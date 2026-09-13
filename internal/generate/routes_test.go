@@ -14,7 +14,7 @@ import (
 func TestHandlerGenerationLeavesTheRouteAsResolved(t *testing.T) {
 	config := testConfig()
 	config.ReceiverType = "T"
-	src := testSource(t, `package server
+	pkg, receiver := testSource(t, `package server
 
 type T struct{}
 
@@ -23,13 +23,13 @@ func (T) Article(id int, title string) (string, error) { return "", nil }
 func (T) Title(id int) string { return "" }
 `, "T", `{{define "GET /article/{id} Article(id, Title(id))"}}{{end}}`)
 
-	groups, err := groupTemplates(config, src.Templates)
+	groups, err := groupTemplates(config, pkg.Variables)
 	if err != nil {
 		t.Fatal(err)
 	}
-	file := newFile(src.Package)
+	file := newFile(pkg)
 	def := groups.all[0]
-	if err := muxt.ResolveCall(&def, src.Package, src.Receiver); err != nil {
+	if err := muxt.ResolveCall(&def, pkg, receiver); err != nil {
 		t.Fatal(err)
 	}
 

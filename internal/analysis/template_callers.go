@@ -10,8 +10,7 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/templateset"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type TemplateCallersConfiguration struct {
@@ -37,9 +36,9 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, pkg muxt.Package, variables []templateset.Variable) (*TemplateCallers, error) {
+func NewTemplateCallers(config TemplateCallersConfiguration, pkg source.Package) (*TemplateCallers, error) {
 	combined := &TemplateCallers{}
-	for _, lt := range variables {
+	for _, lt := range pkg.Variables {
 		result, err := templateCallers(config, pkg, lt)
 		if err != nil {
 			return nil, err
@@ -49,12 +48,8 @@ func NewTemplateCallers(config TemplateCallersConfiguration, pkg muxt.Package, v
 	return combined, nil
 }
 
-func templateCallers(config TemplateCallersConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCallers, error) {
-	if lt.Err != nil {
-		return nil, lt.Err
-	}
-	fileSet := pkg.Fset
-	global, ts := lt.Global(pkg), lt.Set
+func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt source.Variable) (*TemplateCallers, error) {
+	global, ts := newGlobal(pkg, lt), lt.Set
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -70,10 +65,10 @@ func templateCallers(config TemplateCallersConfiguration, pkg muxt.Package, lt t
 
 	{
 		for _, c := range lt.Calls {
-			templateName, dataType := c.TemplateName, c.DataType
+			templateName, dataType := c.Template, c.Data
 
 			refs[templateName] = append(refs[templateName], TemplateReference{
-				Position: fileSet.Position(c.Call.Pos()),
+				Position: c.Position,
 				Kind:     ExecuteTemplateNode,
 				Name:     templateName,
 				data:     dataType,

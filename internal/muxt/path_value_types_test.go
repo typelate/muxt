@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/internal/typestest"
 )
 
@@ -55,11 +56,11 @@ func TestPathValueTypes(t *testing.T) {
 			pkg := typestest.MustCheck(t, "example.com/server", pathValueReceiver)
 			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
 			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
-			defs, err := muxt.Definitions(muxt.Templates{Variable: "templates", Set: ts})
+			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := muxt.ResolveCall(&defs[0], muxt.Package{Fset: typestest.FileSet, Types: pkg, Lookup: typestest.Lookup}, receiver); err != nil {
+			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: typestest.FileSet, Types: pkg, Imports: typestest.Packages()}, receiver); err != nil {
 				t.Fatal(err)
 			}
 			tp, ok := defs[0].ArgumentType(tt.param)

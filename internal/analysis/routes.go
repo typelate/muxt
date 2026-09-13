@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type DefinitionsConfiguration struct {
@@ -54,16 +55,11 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 
 // NewRoutes lists each templates variable's route definitions and
 // functions, and the receiver's methods when a receiver type was named.
-func NewRoutes(src muxt.Source) ([]*Routes, error) {
-	receiver := src.Receiver
-
+func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
 	var results []*Routes
 
-	for _, tv := range src.Templates {
-		if tv.Err != nil {
-			return nil, tv.Err
-		}
-		functions := tv.Functions
+	for _, tv := range pkg.Variables {
+		functions := tv.Funcs
 
 		definitions, err := muxt.Definitions(tv)
 		if err != nil {

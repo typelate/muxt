@@ -111,7 +111,10 @@ func dryRunSnapshot(t *testing.T, config Configuration, archive *txtar.Archive) 
 	}
 
 	dir := t.TempDir()
-	in := inputFrom(dir, loadtest.Package(t, dir, "example.com/server", current), config.TemplatesVariables)
+	in, err := inputFrom(dir, loadtest.Package(t, dir, "example.com/server", current), config.TemplatesVariables)
+	if err != nil {
+		return fail(err)
+	}
 
 	var (
 		previous  revision
@@ -119,8 +122,10 @@ func dryRunSnapshot(t *testing.T, config Configuration, archive *txtar.Archive) 
 	)
 	if config.Diff != "" {
 		beforeDir := t.TempDir()
-		var err error
-		previous, err = revisionOf(inputFrom(beforeDir, loadtest.Package(t, beforeDir, "example.com/server", before), config.TemplatesVariables))
+		beforeInput, err := inputFrom(beforeDir, loadtest.Package(t, beforeDir, "example.com/server", before), config.TemplatesVariables)
+		if err == nil {
+			previous, err = revisionOf(beforeInput)
+		}
 		if err != nil {
 			diffError = err.Error()
 		}

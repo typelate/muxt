@@ -3,7 +3,6 @@ package analysis
 import (
 	"errors"
 	"fmt"
-	"go/ast"
 	"go/token"
 	"go/types"
 	"html/template"
@@ -17,7 +16,7 @@ import (
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/templateset"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // executeTemplateFunc names the method the endpoint scan reports call
@@ -32,22 +31,17 @@ type CheckConfiguration struct {
 // Check validates the package's templates and returns how many
 // ExecuteTemplate call sites it checked, so the caller can report the
 // count on success.
-func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templates []templateset.Variable) (int, error) {
-	fileSet := pkg.Fset
-
+func Check(config CheckConfiguration, log *log.Logger, pkg source.Package) (int, error) {
 	var errs []error
 	totalChecked := 0
 
-	for _, lt := range templates {
-		if lt.Err != nil {
-			return totalChecked, lt.Err
-		}
-		global, ts := lt.Global(pkg), lt.Set
+	for _, lt := range pkg.Variables {
+		global, ts := newGlobal(pkg, lt), lt.Set
 
 		// Route template names are validated here so a malformed name
 		// surfaces with its position instead of leaving the template to
 		// be reported as merely unused below.
-		if _, err := muxt.Definitions(lt.Templates); err != nil {
+		if _, err := muxt.Definitions(lt); err != nil {
 			if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
 				log.Println(multiLine.MultiLineError())
 				log.Println()
@@ -62,13 +56,13 @@ func Check(config CheckConfiguration, log *log.Logger, pkg muxt.Package, templat
 
 		for _, c := range lt.Calls {
 			checkedTemplates++
-			templateName, dataType := c.TemplateName, c.DataType
+			templateName, dataType := c.Template, c.Data
 			if config.Verbose {
 				log.Println("checking endpoint", templateName)
 			}
 			qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
-			if err := findTemplateExecution(executedTemplates, global, fileSet, qualifier, ts, c.Call, templateName, dataType); err != nil {
-				log.Println(fileSet.Position(c.Call.Pos()), executeTemplateFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
+			if err := findTemplateExecution(executedTemplates, global, qualifier, ts, c.Position, templateName, dataType); err != nil {
+				log.Println(c.Position, executeTemplateFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
 				if checkErr, ok := errors.AsType[*check.Error](err); ok {
 					var sb strings.Builder
 					if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
@@ -261,8 +255,8 @@ func newTemplateExecution(pos token.Position, n any, templateName string, dataTy
 	}
 }
 
-func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, fileSet *token.FileSet, qualifier types.Qualifier, ts *template.Template, node ast.Node, templateName string, dataType types.Type) error {
-	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(fileSet.Position(node.Pos()), node, templateName, dataType))
+func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, qualifier types.Qualifier, ts *template.Template, position token.Position, templateName string, dataType types.Type) error {
+	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(position, nil, templateName, dataType))
 	ts2 := ts.Lookup(templateName)
 	if ts2 == nil {
 		return fmt.Errorf("template %q not found", templateName)
@@ -276,4 +270,16 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 		return err
 	}
 	return nil
+}
+
+// newGlobal wires a check.Global for type checking a templates variable's
+// templates in pkg.
+func newGlobal(pkg source.Package, variable source.Variable) *check.Global {
+	return check.NewGlobal(pkg.Types, pkg.Fset, check.FindTreeFunc(func(name string) (*parse.Tree, bool) {
+		t := variable.Set.Lookup(name)
+		if t == nil || t.Tree == nil {
+			return nil, false
+		}
+		return t.Tree, true
+	}), check.Functions(variable.Functions))
 }

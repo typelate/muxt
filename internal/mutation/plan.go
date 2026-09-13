@@ -12,6 +12,7 @@ import (
 	"github.com/typelate/check"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // plan is everything decided before a single test is run: which templates
@@ -199,10 +200,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		wd:        in.dir,
 	}
 
-	for _, variable := range in.variables {
-		if variable.Err != nil {
-			return nil, variable.Err
-		}
+	for _, variable := range in.pkg.Variables {
 		lt := newChecked(in.pkg, variable)
 
 		index, err := buildTreeIndex(lt, in.dir)
@@ -346,9 +344,9 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 	// source scans its actions as it is constructed, and it can only do
 	// that once the delimiters its file was written with are known,
 	// which is something the definitions say.
-	var defs []check.Definition
+	var defs []source.Definition
 	for _, t := range lt.Set.Templates() {
-		definition, ok := lt.Definitions.FindDefinition(t.Name())
+		definition, ok := lt.Definitions[t.Name()]
 		if !ok {
 			continue
 		}

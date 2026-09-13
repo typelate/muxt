@@ -9,12 +9,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/internal/typestest"
 )
 
 func TestArgument(t *testing.T) {
 	examplePkg := exampleTypes(t)
-	pkg := Package{Fset: typestest.FileSet, Types: examplePkg, Lookup: typestest.Lookup}
+	pkg := source.Package{Fset: typestest.FileSet, Types: examplePkg, Imports: typestest.Packages()}
 	require.NotNil(t, examplePkg)
 
 	httpPkg := findImport(examplePkg, "net/http")
@@ -466,7 +467,7 @@ func TestArgument(t *testing.T) {
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))
-			defs, err := Definitions(Templates{Variable: "templates", Set: ts})
+			defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 			if err != nil {
 				t.Fatal(err)
 			}

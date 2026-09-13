@@ -10,8 +10,7 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/templateset"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type TemplateCallsConfiguration struct {
@@ -37,9 +36,9 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, variables []templateset.Variable) (*TemplateCalls, error) {
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg source.Package) (*TemplateCalls, error) {
 	combined := &TemplateCalls{}
-	for _, lt := range variables {
+	for _, lt := range pkg.Variables {
 		result, err := templateCalls(config, pkg, lt)
 		if err != nil {
 			return nil, err
@@ -49,11 +48,8 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg muxt.Package, varia
 	return combined, nil
 }
 
-func templateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt templateset.Variable) (*TemplateCalls, error) {
-	if lt.Err != nil {
-		return nil, lt.Err
-	}
-	global, ts := lt.Global(pkg), lt.Set
+func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) (*TemplateCalls, error) {
+	global, ts := newGlobal(pkg, lt), lt.Set
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
@@ -68,9 +64,9 @@ func templateCalls(config TemplateCallsConfiguration, pkg muxt.Package, lt templ
 
 	// Analyze all templates
 	for _, c := range lt.Calls {
-		t := ts.Lookup(c.TemplateName)
+		t := ts.Lookup(c.Template)
 		if t != nil && t.Tree != nil {
-			_ = check.Execute(global, t.Tree, c.DataType)
+			_ = check.Execute(global, t.Tree, c.Data)
 		}
 	}
 

@@ -1,10 +1,7 @@
-package generate
+package generate_test
 
 import (
 	"flag"
-	"go/token"
-	"go/types"
-	"html/template"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,11 +11,28 @@ import (
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/load/loadtest"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/typestest"
 )
 
 var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot archives in testdata")
+
+// templatesGo declares the templates variable for an archive that does not
+// declare its own: every template file, parsed as ParseFS would.
+const templatesGo = `package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+`
 
 // TestSnapshots generates the routes files for each archive in testdata
 // and compares them with the archive's want/ files.
@@ -26,13 +40,18 @@ var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot
 // An archive holds a case's inputs and what it generates, and snapshots,
 // in snapshots_test.go, the configuration it is generated with:
 //
-//   - Go files are type checked, as example.com/server, against the stub
-//     standard library in internal/typestest.
-//   - .gohtml files are parsed into the templates variable, each under its
-//     file name, as ParseFS would.
+//   - Go files and .gohtml files are loaded as example.com/server by
+//     internal/load/loadtest -- type checked against the stub standard
+//     library, without the go command -- and hydrated by
+//     load.GenerateSource, as muxt generate does. An archive with no
+//     templates.go gets one declaring the templates variable over every
+//     .gohtml file.
 //   - want/ files are the expected output: one per generated file, named
 //     for it, and want/log.txt and want/error.txt for what generation
-//     logged and the error it returned.
+//     logged and the error loading or generating returned.
+//
+// Paths in the output are relative to the directory the package was
+// written to.
 //
 // Run with -update to rewrite the want/ files from the generator, then
 // read the diff: the snapshot says what the generator does, not what it
@@ -76,92 +95,49 @@ func TestSnapshots(t *testing.T) {
 	}
 }
 
-// snapshot runs generation over an archive's inputs and returns the
+// snapshot loads an archive's package, generates from it, and returns the
 // want/ files it produces, by name.
-func snapshot(t *testing.T, config RoutesFileConfiguration, archive *txtar.Archive) map[string]string {
+func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *txtar.Archive) map[string]string {
 	t.Helper()
-	goFiles := make(map[string]string)
-	set := template.New("templates")
-	var templateFiles []txtar.File
+	files := make(map[string]string)
 	for _, file := range archive.Files {
-		switch {
-		case strings.HasPrefix(file.Name, "want/"):
-		case filepath.Ext(file.Name) == ".go":
-			goFiles[file.Name] = string(file.Data)
-		case filepath.Ext(file.Name) == ".gohtml":
-			if _, err := set.New(file.Name).Parse(string(file.Data)); err != nil {
-				t.Fatalf("%s: %v", file.Name, err)
-			}
-			templateFiles = append(templateFiles, file)
-		default:
-			t.Fatalf("archive file %s is not Go, .gohtml, or want/", file.Name)
+		if strings.HasPrefix(file.Name, "want/") {
+			continue
 		}
+		files[file.Name] = string(file.Data)
 	}
-	pkg, err := typestest.Check("example.com/server", goFiles)
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := muxt.Source{
-		Package: muxt.Package{Fset: typestest.FileSet, Types: pkg, Lookup: typestest.Lookup},
-		Templates: []muxt.Templates{{
-			Variable:     "templates",
-			Set:          set,
-			NamePosition: namePositions(templateFiles),
-		}},
-	}
-	if config.ReceiverType != "" {
-		obj := pkg.Scope().Lookup(config.ReceiverType)
-		if obj == nil {
-			t.Fatalf("the configuration names receiver %s, which the Go files do not declare", config.ReceiverType)
-		}
-		src.Receiver = obj.Type().(*types.Named)
+	if _, declared := files["templates.go"]; !declared {
+		files["templates.go"] = templatesGo
 	}
 
-	var logs strings.Builder
-	files, err := TemplateRoutesFiles("/work", config, src, log.New(&logs, "", 0))
+	dir := t.TempDir()
+	relative := func(text string) string { return strings.ReplaceAll(text, dir+string(filepath.Separator), "") }
 	got := make(map[string]string)
-	for _, file := range files {
-		got[strings.TrimPrefix(file.Path, "/work/")] = file.Content
+	fail := func(err error) map[string]string {
+		text := err.Error()
+		if multiLine, ok := err.(muxt.MultiLineError); ok {
+			text = multiLine.MultiLineError()
+		}
+		got["error.txt"] = relative(text) + "\n"
+		return got
+	}
+
+	pkg, receiver, err := load.GenerateSource(dir, loadtest.Package(t, dir, "example.com/server", files), config)
+	if err != nil {
+		return fail(err)
+	}
+	var logs strings.Builder
+	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, receiver, log.New(&logs, "", 0))
+	for _, file := range generated {
+		got[relative(file.Path)] = file.Content
 	}
 	if logs.Len() > 0 {
-		got["log.txt"] = logs.String()
+		got["log.txt"] = relative(logs.String())
 	}
 	if err != nil {
-		got["error.txt"] = errorText(err) + "\n"
+		return fail(err)
 	}
 	return got
-}
-
-// errorText is what the command line prints for err: the multi-line
-// form when there is one.
-func errorText(err error) string {
-	if multiLine, ok := err.(muxt.MultiLineError); ok {
-		return multiLine.MultiLineError()
-	}
-	return err.Error()
-}
-
-// namePositions finds where each template name is written in the
-// template files, the way the loader reports it: at the first byte
-// inside the name's quotes.
-func namePositions(files []txtar.File) func(string) (token.Position, bool) {
-	return func(name string) (token.Position, bool) {
-		for _, file := range files {
-			text := string(file.Data)
-			for _, keyword := range []string{"define", "block"} {
-				needle := keyword + ` "` + name + `"`
-				i := strings.Index(text, needle)
-				if i < 0 {
-					continue
-				}
-				offset := i + len(keyword) + len(` "`)
-				line := 1 + strings.Count(text[:offset], "\n")
-				column := offset - strings.LastIndex(text[:offset], "\n")
-				return token.Position{Filename: file.Name, Offset: offset, Line: line, Column: column}, true
-			}
-		}
-		return token.Position{}, false
-	}
 }
 
 func writeSnapshot(t *testing.T, archivePath string, archive *txtar.Archive, got map[string]string) {

@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/astgen"
-	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // outputFile is a File for a package that imports nothing: what the
 // import bookkeeping needs, and no more.
 func outputFile() *File {
-	return newFile(muxt.Package{Types: types.NewPackage("example.com/server", "server")})
+	return newFile(source.Package{Types: types.NewPackage("example.com/server", "server")})
 }
 
 func TestImports(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type Argument struct {
@@ -117,7 +118,7 @@ const (
 	ResultShapeError
 )
 
-func ResolveCall(def *Definition, pkg Package, receiver *types.Named) error {
+func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named) error {
 	if def.call == nil || def.fun == nil {
 		return nil
 	}
@@ -298,7 +299,7 @@ func checkNestedCallResultShape(name string, sig *types.Signature, qual types.Qu
 // definedHere returns a "file:line:col: name is defined here" note for
 // object, or "" when its source position is unknown (synthesized
 // methods, for instance, have no position).
-func definedHere(pkg Package, object types.Object) string {
+func definedHere(pkg source.Package, object types.Object) string {
 	if object == nil || !object.Pos().IsValid() || pkg.Fset == nil {
 		return ""
 	}
@@ -317,7 +318,7 @@ func definedHere(pkg Package, object types.Object) string {
 // When the call identifier is neither a receiver method nor a package-scope
 // function, its signature is synthesized from the call scope and attached to
 // the receiver so it appears in the generated RoutesReceiver interface.
-func resolveCall(def *Definition, call *ast.CallExpr, pkg Package, receiver *types.Named) (*types.Signature, bool, []Argument, error) {
+func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named) (*types.Signature, bool, []Argument, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, false, nil, errAt(call.Fun, "expected a function identifier, got: %s", astgen.Format(call.Fun))
@@ -427,7 +428,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg Package, receiver *typ
 // defined on the receiver, inferring each parameter type from the argument
 // scope. Nested calls are resolved (so their own methods are synthesized too)
 // but do not contribute a parameter, mirroring the pre-hydration generator.
-func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg Package, receiver *types.Named) (*types.Signature, error) {
+func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named) (*types.Signature, error) {
 	var params []*types.Var
 	hasSSE := false
 	// Each argument becomes a parameter named after it, so a repeated
@@ -492,7 +493,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg Package, r
 	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil
 }
 
-func DefaultScopeType(pkg Package, def *Definition, argumentIdentifier string) (types.Type, bool) {
+func DefaultScopeType(pkg source.Package, def *Definition, argumentIdentifier string) (types.Type, bool) {
 	stdlibType := func(pkgPath, name string, pointer bool) (types.Type, bool) {
 		imported, ok := pkg.Import(pkgPath)
 		if !ok {
@@ -576,7 +577,7 @@ func typeQualifier(receiverPkg *types.Package) types.Qualifier {
 	}
 }
 
-func newArgumentFromIdentifier(def *Definition, pkg Package, arg *ast.Ident, param types.Type, qual types.Qualifier) (Argument, error) {
+func newArgumentFromIdentifier(def *Definition, pkg source.Package, arg *ast.Ident, param types.Type, qual types.Qualifier) (Argument, error) {
 	a := Argument{
 		Identifier: arg.Name,
 		ParamType:  param,
@@ -666,7 +667,7 @@ func newArgumentFromIdentifier(def *Definition, pkg Package, arg *ast.Ident, par
 	return a, nil
 }
 
-func stdlibType(pkg Package, pkgPath, name string, pointer bool) (types.Type, error) {
+func stdlibType(pkg source.Package, pkgPath, name string, pointer bool) (types.Type, error) {
 	imported, ok := pkg.Import(pkgPath)
 	if !ok {
 		return nil, fmt.Errorf("could not find package %q for %s", pkgPath, name)
@@ -678,7 +679,7 @@ func stdlibType(pkg Package, pkgPath, name string, pointer bool) (types.Type, er
 	return t, nil
 }
 
-func isAssignable(pkg Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier) error {
+func isAssignable(pkg source.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier) error {
 	at, err := stdlibType(pkg, packagePath, identifier, pointer)
 	if err != nil {
 		return err
@@ -755,7 +756,7 @@ const (
 // checkRequestBodyParameter requires the parameter bound to the reserved body
 // argument to be exactly io.Reader. The request body is a single-use stream,
 // so the method must not be able to assume more than one read.
-func checkRequestBodyParameter(pkg Package, param types.Type, qual types.Qualifier) error {
+func checkRequestBodyParameter(pkg source.Package, param types.Type, qual types.Qualifier) error {
 	readerType, err := stdlibType(pkg, "io", "Reader", false)
 	if err != nil {
 		return err

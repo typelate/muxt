@@ -19,6 +19,7 @@ import (
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 const (
@@ -96,27 +97,26 @@ type RoutesFileConfiguration struct {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
-// TemplateRoutesFiles generates the routes files for the package in src,
-// written into wd. src.Package is the package the files belong to, which
-// is the one in the output file's directory.
-func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, src muxt.Source, logger *log.Logger) ([]GeneratedFile, error) {
+// TemplateRoutesFiles generates the routes files for pkg, written into wd:
+// the package the files belong to, which is the one in the output file's
+// directory. receiver is the type --use-receiver-type named, or nil when
+// handler methods are inferred from the templates.
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, receiver *types.Named, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
 
-	file := newFile(src.Package)
-	routesPkg := src.Package
+	file := newFile(pkg)
 
-	config.PackagePath = routesPkg.Types.Path()
-	config.PackageName = routesPkg.Types.Name()
+	config.PackagePath = pkg.Types.Path()
+	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
 
-	receiver := src.Receiver
 	if receiver == nil {
-		receiver = asteval.NamedEmptyStruct("Receiver", routesPkg.Types)
+		receiver = asteval.NamedEmptyStruct("Receiver", pkg.Types)
 	}
 
-	groups, err := groupTemplates(config, src.Templates)
+	groups, err := groupTemplates(config, pkg.Variables)
 	if err != nil {
 		return nil, err
 	}

@@ -14,16 +14,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type File struct {
-	pkg                muxt.Package
+	pkg                source.Package
 	packageIdentifiers map[string]string
 	importSpecs        []*ast.ImportSpec
 }
 
-func newFile(pkg muxt.Package) *File {
+func newFile(pkg source.Package) *File {
 	return &File{
 		pkg:                pkg,
 		packageIdentifiers: make(map[string]string),
@@ -31,7 +31,7 @@ func newFile(pkg muxt.Package) *File {
 }
 
 // OutputPackage is the package the generated file is written into.
-func (file *File) OutputPackage() muxt.Package { return file.pkg }
+func (file *File) OutputPackage() source.Package { return file.pkg }
 
 func (file *File) TypeASTExpression(tp types.Type) (ast.Expr, error) {
 	s := types.TypeString(tp, file.pkgQualifier)

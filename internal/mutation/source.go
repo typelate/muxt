@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // templateSource is a file whose bytes hold template text, together with
@@ -81,7 +81,7 @@ const spaceChars = " \t\r\n"
 // an optional trim marker, the word end, another optional marker, and
 // the right delimiter. Nothing else in it varies, so whatever surrounds
 // the word is the pair.
-func delimiters(text string, definition check.Definition) (left, right string, ok bool) {
+func delimiters(text string, definition source.Definition) (left, right string, ok bool) {
 	if !definition.TemplateName.IsValid() {
 		// A template with no define clause has no end clause either.
 		return "", "", false

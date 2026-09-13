@@ -1,32 +1,42 @@
-package analysis
+package analysis_test
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/token"
-	"go/types"
-	"html/template"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
-	"text/template/parse"
 
-	"github.com/typelate/check"
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/load/loadtest"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/templateset"
-	"github.com/typelate/muxt/internal/typestest"
 )
 
 var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot archives in testdata")
+
+// templatesGo declares the templates variable for an archive that does not
+// declare its own: every template file, parsed as ParseFS would.
+const templatesGo = `package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+`
 
 // TestSnapshots runs an analysis for each archive in testdata and
 // compares what it reports with the archive's want/ files.
@@ -35,17 +45,18 @@ var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot
 // snapshots, in snapshots_test.go, the configuration it runs with -- which
 // also says which analysis runs:
 //
-//   - Go files are type checked, as example.com/server, against the stub
-//     standard library in internal/typestest. The package declares the
-//     templates variable, and its templates.ExecuteTemplate calls are the
-//     ones checked.
-//   - .gohtml files are parsed into the templates variable, each under its
-//     file name, as ParseFS would.
+//   - Go files and .gohtml files are loaded as example.com/server by
+//     internal/load/loadtest -- type checked against the stub standard
+//     library, without the go command -- and hydrated by internal/load, as
+//     the command does. An archive with no templates.go gets one declaring
+//     the templates variable over every .gohtml file.
 //   - want/ files are what was reported: want/stdout.txt for a command's
 //     output, want/log.txt for what check logged, and want/error.txt for
 //     the error returned.
 //
-// Run with -update to rewrite the want/ files, then read the diff.
+// Paths in the output are relative to the directory the package was
+// written to. Run with -update to rewrite the want/ files, then read the
+// diff.
 func TestSnapshots(t *testing.T) {
 	archives, err := filepath.Glob(filepath.Join("testdata", "*.txtar"))
 	if err != nil {
@@ -95,76 +106,80 @@ func TestSnapshots(t *testing.T) {
 
 func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]string {
 	t.Helper()
-	goFiles := make(map[string]string)
-	set := template.New("templates")
-	var templateFiles []txtar.File
+	files := make(map[string]string)
 	for _, file := range archive.Files {
-		switch {
-		case strings.HasPrefix(file.Name, "want/"):
-		case filepath.Ext(file.Name) == ".go":
-			goFiles[file.Name] = string(file.Data)
-		case filepath.Ext(file.Name) == ".gohtml":
-			if _, err := set.New(file.Name).Parse(string(file.Data)); err != nil {
-				t.Fatalf("%s: %v", file.Name, err)
-			}
-			templateFiles = append(templateFiles, file)
-		default:
-			t.Fatalf("archive file %s is not Go, .gohtml, or want/", file.Name)
+		if strings.HasPrefix(file.Name, "want/") {
+			continue
 		}
+		files[file.Name] = string(file.Data)
 	}
-	checked, err := typestest.CheckSyntax("example.com/server", goFiles)
-	if err != nil {
-		t.Fatal(err)
+	if _, declared := files["templates.go"]; !declared {
+		files["templates.go"] = templatesGo
 	}
-	pkg := muxt.Package{Fset: typestest.FileSet, Types: checked.Types, Lookup: typestest.Lookup}
-	templates := memoryTemplates(t, checked, set, templateFiles)
+	dir := t.TempDir()
+	pl := loadtest.Package(t, dir, "example.com/server", files)
+	relative := func(text string) string { return strings.ReplaceAll(text, dir+string(filepath.Separator), "") }
 
 	got := make(map[string]string)
 	var stdout bytes.Buffer
 	var runErr error
 	switch config := config.(type) {
-	case CheckConfiguration:
+	case analysis.CheckConfiguration:
+		pkg, err := load.Package(dir, pl, config.TemplatesVariables)
+		if err != nil {
+			runErr = err
+			break
+		}
 		var logs strings.Builder
 		var n int
-		n, runErr = Check(config, log.New(&logs, "", 0), pkg, []templateset.Variable{templates})
+		n, runErr = analysis.Check(config, log.New(&logs, "", 0), pkg)
 		fmt.Fprintf(&stdout, "checked %d\n", n)
 		if logs.Len() > 0 {
-			got["log.txt"] = logs.String()
+			got["log.txt"] = relative(logs.String())
 		}
-	case DefinitionsConfiguration:
-		src := muxt.Source{Package: pkg, Templates: []muxt.Templates{templates.Templates}}
-		if config.ReceiverType != "" {
-			src.Receiver = checked.Types.Scope().Lookup(config.ReceiverType).Type().(*types.Named)
+	case analysis.DefinitionsConfiguration:
+		pkg, receiver, err := load.RoutesSource(dir, pl, config)
+		if err != nil {
+			runErr = err
+			break
 		}
-		var results []*Routes
-		results, runErr = NewRoutes(src)
+		var results []*analysis.Routes
+		results, runErr = analysis.NewRoutes(pkg, receiver)
 		for _, result := range results {
 			writeTo(t, &stdout, result)
 		}
-	case TemplateCallersConfiguration:
-		var result *TemplateCallers
-		result, runErr = NewTemplateCallers(config, pkg, []templateset.Variable{templates})
-		if result != nil {
+	case analysis.TemplateCallersConfiguration:
+		pkg, err := load.Package(dir, pl, config.TemplatesVariables)
+		if err != nil {
+			runErr = err
+			break
+		}
+		var result *analysis.TemplateCallers
+		if result, runErr = analysis.NewTemplateCallers(config, pkg); result != nil {
 			writeTo(t, &stdout, result)
 		}
-	case TemplateCallsConfiguration:
-		var result *TemplateCalls
-		result, runErr = NewTemplateCalls(config, pkg, []templateset.Variable{templates})
-		if result != nil {
+	case analysis.TemplateCallsConfiguration:
+		pkg, err := load.Package(dir, pl, config.TemplatesVariables)
+		if err != nil {
+			runErr = err
+			break
+		}
+		var result *analysis.TemplateCalls
+		if result, runErr = analysis.NewTemplateCalls(config, pkg); result != nil {
 			writeTo(t, &stdout, result)
 		}
 	default:
 		t.Fatalf("no analysis runs with a %T", config)
 	}
 	if stdout.Len() > 0 {
-		got["stdout.txt"] = stdout.String()
+		got["stdout.txt"] = relative(stdout.String())
 	}
 	if runErr != nil {
 		text := runErr.Error()
-		if multiLine, ok := runErr.(muxt.MultiLineError); ok {
+		if multiLine, ok := errors.AsType[muxt.MultiLineError](runErr); ok {
 			text = multiLine.MultiLineError()
 		}
-		got["error.txt"] = text + "\n"
+		got["error.txt"] = relative(text) + "\n"
 	}
 	return got
 }
@@ -173,98 +188,6 @@ func writeTo(t *testing.T, w io.Writer, result io.WriterTo) {
 	t.Helper()
 	if _, err := result.WriteTo(w); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// memoryTemplates wires the templates variable the way internal/load
-// does, from a template set parsed in memory: the checked package's
-// templates.ExecuteTemplate calls, and trees and definitions found in the
-// set.
-func memoryTemplates(t *testing.T, checked *typestest.Checked, set *template.Template, files []txtar.File) templateset.Variable {
-	t.Helper()
-	variable := checked.Types.Scope().Lookup("templates")
-	if variable == nil {
-		t.Fatal("the Go files declare no templates variable")
-	}
-	namePosition := func(name string) (token.Position, bool) {
-		for _, file := range files {
-			text := string(file.Data)
-			for _, keyword := range []string{"define", "block"} {
-				i := strings.Index(text, keyword+` "`+name+`"`)
-				if i < 0 {
-					continue
-				}
-				offset := i + len(keyword) + len(` "`)
-				line := 1 + strings.Count(text[:offset], "\n")
-				column := offset - strings.LastIndex(text[:offset], "\n")
-				return token.Position{Filename: file.Name, Offset: offset, Line: line, Column: column}, true
-			}
-		}
-		return token.Position{}, false
-	}
-	findTree := func(name string) (*parse.Tree, bool) {
-		found := set.Lookup(name)
-		if found == nil || found.Tree == nil {
-			return nil, false
-		}
-		return found.Tree, true
-	}
-	findDefinition := func(name string) (check.Definition, bool) {
-		pos, ok := namePosition(name)
-		if !ok {
-			return check.Definition{}, false
-		}
-		tree, _ := findTree(name)
-		// The name span includes its quotes.
-		pos.Offset--
-		pos.Column--
-		return check.Definition{Name: name, TemplateName: check.Span{Position: pos, Length: len(name) + 2}, Tree: tree}, true
-	}
-
-	var calls []check.ExecuteTemplateCall
-	for _, file := range checked.Syntax {
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok || len(call.Args) != 3 {
-				return true
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "ExecuteTemplate" {
-				return true
-			}
-			receiver, ok := sel.X.(*ast.Ident)
-			if !ok || checked.Info.Uses[receiver] != variable {
-				return true
-			}
-			literal, ok := call.Args[1].(*ast.BasicLit)
-			if !ok || literal.Kind != token.STRING {
-				return true
-			}
-			name, err := strconv.Unquote(literal.Value)
-			if err != nil {
-				return true
-			}
-			definition, _ := findDefinition(name)
-			calls = append(calls, check.ExecuteTemplateCall{
-				Call:         call,
-				TemplateName: name,
-				DataType:     checked.Info.TypeOf(call.Args[2]),
-				Definition:   definition,
-			})
-			return true
-		})
-	}
-
-	return templateset.Variable{
-		Templates: muxt.Templates{
-			Variable:     "templates",
-			Set:          set,
-			NamePosition: namePosition,
-		},
-		Trees:       check.FindTreeFunc(findTree),
-		Definitions: check.FindDefinitionFunc(findDefinition),
-		Functions:   check.DefaultFunctions(checked.Types),
-		Calls:       calls,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/source"
 )
 
 func mustParseCall(t *testing.T, src string) *ast.CallExpr {
@@ -67,7 +68,7 @@ func TestDefinitionsBodyArgumentErrors(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tt.template))
-			_, err := Definitions(Templates{Variable: "templates", Set: ts})
+			_, err := Definitions(source.Variable{Name: "templates", Set: ts})
 			if err == nil {
 				t.Fatalf("Definitions(%q) = nil error, want %q", tt.template, tt.wantErr)
 			}
@@ -161,7 +162,7 @@ func TestRewriteSignalsArguments(t *testing.T) {
 func TestDefinitionsSignals(t *testing.T) {
 	t.Run("signals marks the definition", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
-		defs, err := Definitions(Templates{Variable: "templates", Set: ts})
+		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +175,7 @@ func TestDefinitionsSignals(t *testing.T) {
 	})
 	t.Run("a signals path wildcard keeps its path-value meaning", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
-		defs, err := Definitions(Templates{Variable: "templates", Set: ts})
+		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +202,7 @@ func TestIsSignalsCallbackArgument(t *testing.T) {
 
 func TestDefinitionsSignalsCallback(t *testing.T) {
 	ts := template.Must(template.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
-	defs, err := Definitions(Templates{Variable: "templates", Set: ts})
+	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,12 +8,7 @@ as waiting for muxt generate, along with the partials only it uses.
 -- server.go --
 package server
 
-import (
-	"html/template"
-	"io"
-)
-
-var templates *template.Template
+import "io"
 
 type Page struct {
 	Title string

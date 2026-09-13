@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // sourceKey identifies the text a template was written in: a template
@@ -45,7 +45,7 @@ type sourceCollector struct {
 // Within one source the pair is fixed, so the first definition that
 // reveals it answers for the whole source. A source whose only template
 // has no define clause reveals nothing and keeps the defaults.
-func (c *sourceCollector) resolveDelimiters(defs []check.Definition) {
+func (c *sourceCollector) resolveDelimiters(defs []source.Definition) {
 	for _, definition := range defs {
 		file := definition.Define.Position.Filename
 		if file == "" {
@@ -72,7 +72,7 @@ func (c *sourceCollector) resolveDelimiters(defs []check.Definition) {
 //
 // It is the same key add files the definition under, so the delimiters
 // resolved here reach the source they were read from.
-func (c *sourceCollector) keyFor(definition check.Definition) (sourceKey, bool) {
+func (c *sourceCollector) keyFor(definition source.Definition) (sourceKey, bool) {
 	file := definition.Define.Position.Filename
 	if filepath.Ext(file) != ".go" {
 		return sourceKey{file: file}, true
@@ -88,7 +88,7 @@ func (c *sourceCollector) keyFor(definition check.Definition) (sourceKey, bool) 
 	return sourceKey{file: file, litStart: litStart}, true
 }
 
-func newSourceCollector(workingDirectory string, defs []check.Definition) *sourceCollector {
+func newSourceCollector(workingDirectory string, defs []source.Definition) *sourceCollector {
 	c := &sourceCollector{
 		workingDirectory: workingDirectory,
 		files:            make(map[string]string),
@@ -112,7 +112,7 @@ func (c *sourceCollector) delimitersFor(key sourceKey) (string, string) {
 // A definition the collector cannot place -- an offset in a Go file that
 // is not inside a string literal -- is reported as no source rather than as an error,
 // since the caller may hold others it can still use.
-func (c *sourceCollector) add(definition check.Definition) (*templateSource, error) {
+func (c *sourceCollector) add(definition source.Definition) (*templateSource, error) {
 	file := definition.Define.Position.Filename
 	if file == "" {
 		return nil, nil
