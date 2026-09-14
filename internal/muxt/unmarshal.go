@@ -10,8 +10,6 @@ import (
 	"github.com/typelate/dom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
-
-	"github.com/typelate/muxt/internal/source"
 )
 
 // UnmarshalMethod identifies how a request value (path value, lastEventID
@@ -37,13 +35,11 @@ const (
 	UnmarshalTextUnmarshaler
 )
 
-// UnmarshalMethodFor classifies how tp parses from its string form: a basic
+// unmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
-// encoding.TextUnmarshaler. The encoding package is found through pkg.Import;
-// load.Packages always loads it (like fmt), so detection needs nothing from
-// user code.
-func UnmarshalMethodFor(pkg source.Package, tp types.Type) UnmarshalMethod {
+// encoding.TextUnmarshaler, which checker decides.
+func unmarshalMethodFor(checker Checker, tp types.Type) UnmarshalMethod {
 	switch t := tp.(type) {
 	case *types.Basic:
 		switch t.Name() {
@@ -77,11 +73,8 @@ func UnmarshalMethodFor(pkg source.Package, tp types.Type) UnmarshalMethod {
 			return UnmarshalFloat64
 		}
 	case *types.Named:
-		if encPkg, ok := pkg.Import("encoding"); ok {
-			textUnmarshaler := encPkg.Scope().Lookup("TextUnmarshaler").Type().Underlying().(*types.Interface)
-			if types.Implements(types.NewPointer(t), textUnmarshaler) {
-				return UnmarshalTextUnmarshaler
-			}
+		if checker.TextUnmarshaler(t) {
+			return UnmarshalTextUnmarshaler
 		}
 	}
 	return UnmarshalUnsupported
@@ -110,8 +103,8 @@ func unsupportedTypeError(tp types.Type, qual types.Qualifier, supported string)
 
 // checkUnmarshalable reports whether tp parses from a form field's
 // string value.
-func checkUnmarshalable(pkg source.Package, tp types.Type, qual types.Qualifier) error {
-	if UnmarshalMethodFor(pkg, tp) != UnmarshalUnsupported {
+func checkUnmarshalable(checker Checker, tp types.Type, qual types.Qualifier) error {
+	if unmarshalMethodFor(checker, tp) != UnmarshalUnsupported {
 		return nil
 	}
 	return unsupportedTypeError(tp, qual, supportedUnmarshalFieldTypes)
@@ -123,16 +116,19 @@ func isStringAssignable(tp types.Type) bool {
 	return types.AssignableTo(types.Universe.Lookup("string").Type(), tp)
 }
 
-// checkParsedArgument validates a path value or lastEventID parameter:
-// it either receives the raw string or parses from one. Floats are
-// rejected here even though form fields accept them.
-func checkParsedArgument(pkg source.Package, paramType types.Type, qual types.Qualifier) error {
-	if isStringAssignable(paramType) {
+// bindParsedArgument validates a path value or lastEventID parameter: it
+// either receives the raw string or parses from one. Floats are rejected
+// here even though form fields accept them.
+func bindParsedArgument(a *Argument, checker Checker, qual types.Qualifier) error {
+	a.scopeType = types.Universe.Lookup("string").Type()
+	if isStringAssignable(a.ParamType) {
+		a.direct = true
 		return nil
 	}
-	switch UnmarshalMethodFor(pkg, paramType) {
+	a.method = unmarshalMethodFor(checker, a.ParamType)
+	switch a.method {
 	case UnmarshalUnsupported, UnmarshalFloat32, UnmarshalFloat64:
-		return unsupportedTypeError(paramType, qual, supportedUnmarshalTypes)
+		return unsupportedTypeError(a.ParamType, qual, supportedUnmarshalTypes)
 	default:
 		return nil
 	}
@@ -172,34 +168,39 @@ type FieldBinding struct {
 	Validations []InputValidation
 }
 
-// checkFormArgument permits a form or multipart parameter to either receive
+// bindFormArgument permits a form or multipart parameter to either receive
 // the raw request value (url.Values / *multipart.Form) or be a struct whose
-// fields parse from the submitted form, returning one FieldBinding per struct
-// field (nil in raw mode). Struct fields must be a supported scalar or slice
+// fields parse from the submitted form, recording one FieldBinding per struct
+// field (none in raw mode). Struct fields must be a supported scalar or slice
 // of scalars; multipart structs may also bind *multipart.FileHeader and
 // []*multipart.FileHeader fields.
-func checkFormArgument(def *Definition, pkg source.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
-	at, err := stdlibType(pkg, packagePath, identifier, pointer)
+func bindFormArgument(a *Argument, def *Definition, checker Checker, qual types.Qualifier, allowFileFields bool) error {
+	at, err := checker.ScopeType(a.Identifier)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if types.AssignableTo(at, paramType) {
-		return nil, nil
+	a.scopeType = at
+	if types.AssignableTo(at, a.ParamType) {
+		a.direct = true
+		return nil
 	}
-	st, ok := paramType.Underlying().(*types.Struct)
+	st, ok := a.ParamType.Underlying().(*types.Struct)
 	if !ok {
-		return nil, fmt.Errorf("expected %s parameter type to be a struct", argName)
+		return fmt.Errorf("expected %s parameter type to be a struct", a.Identifier)
 	}
-	return formStructBindings(def, pkg, st, argName, qual, allowFileFields)
+	bindings, err := formStructBindings(def, checker, st, a.Identifier, qual, allowFileFields)
+	if err != nil {
+		return err
+	}
+	a.formFields = bindings
+	return nil
 }
 
-func formStructBindings(def *Definition, pkg source.Package, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
+func formStructBindings(def *Definition, checker Checker, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	var fileHeaderPtr types.Type
 	if allowFileFields {
-		if mp, ok := pkg.Import("mime/multipart"); ok {
-			if obj := mp.Scope().Lookup("FileHeader"); obj != nil {
-				fileHeaderPtr = types.NewPointer(obj.Type())
-			}
+		if fileHeader, err := checker.FileHeader(); err == nil {
+			fileHeaderPtr = fileHeader
 		}
 	}
 	bindings := make([]FieldBinding, 0, st.NumFields())
@@ -232,10 +233,10 @@ func formStructBindings(def *Definition, pkg source.Package, st *types.Struct, a
 			return nil, err
 		}
 		fb.Validations = validations
-		if err := checkUnmarshalable(pkg, fb.Elem, qual); err != nil {
+		if err := checkUnmarshalable(checker, fb.Elem, qual); err != nil {
 			return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
 		}
-		fb.Method = UnmarshalMethodFor(pkg, fb.Elem)
+		fb.Method = unmarshalMethodFor(checker, fb.Elem)
 		bindings = append(bindings, fb)
 	}
 	return bindings, nil
