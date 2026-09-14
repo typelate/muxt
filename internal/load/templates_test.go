@@ -140,9 +140,8 @@ func TestPackageInADirectoryNamedLikeAGoFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "scratch", pkg.Types.Path())
 
-	// The mutation run still reads Templates, and it looks the package up
-	// the same way.
-	lt, err := load.Templates(dir, "templates", pl)
-	require.NoError(t, err)
-	require.NotNil(t, lt.HTML.Lookup("home"))
+	// Every command reads the package through Package now, the mutation
+	// run included.
+	require.Len(t, pkg.Variables, 1)
+	require.NotNil(t, pkg.Variables[0].Set.Lookup("home"))
 }
