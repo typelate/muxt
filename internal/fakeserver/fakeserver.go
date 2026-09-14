@@ -3,11 +3,11 @@ package fakeserver
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"text/template"
 
 	"github.com/maxbrunsfeld/counterfeiter/v6/generator"
 	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/imports"
 )
 
 // Config holds the configuration for generating a fake server.
@@ -92,9 +92,9 @@ func Generate(config Config, pl []*packages.Package) (*Files, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("executing main template: %w", err)
 	}
-	mainBytes, err := imports.Process("main.go", mainBuf.Bytes(), nil)
+	mainBytes, err := format.Source(mainBuf.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("goimports main.go: %w", err)
+		return nil, fmt.Errorf("formatting main.go: %w", err)
 	}
 
 	return &Files{

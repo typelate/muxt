@@ -81,7 +81,10 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
 	// The result type is per-callback; arg parsing only needs ctx/lastEventID/path
 	// (it ignores the result type), so pass an empty struct here.
-	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, def.CallExpression(), validationFailureBlock, parseErrBlock)
+	// Parsing rewrites the call's arguments to the locals it declares,
+	// so it works on a copy and the definition stays as resolved.
+	call := cloneCall(def.CallExpression())
+	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, call, validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +117,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		}}}},
 	)
 
-	callArgs := slices.Clone(def.CallExpression().Args)
+	callArgs := slices.Clone(call.Args)
 	for i, arg := range def.Arguments {
 		switch arg.Type {
 		case muxt.ArgumentTypeExecute:

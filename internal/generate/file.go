@@ -21,6 +21,13 @@ import (
 	"github.com/typelate/muxt/internal/load"
 )
 
+// File is one generated Go file: the package it is written into, the
+// loaded packages the types it names resolve against, and the imports its
+// declarations register as they are built.
+//
+// Every generated file has a File of its own. The imports a file declares
+// are then the ones something in it registered, so a file never carries a
+// package another file needed.
 type File struct {
 	fileSet            *token.FileSet
 	typesCache         map[string]*types.Package
@@ -51,6 +58,19 @@ func newFile(filePath string, fileSet *token.FileSet, list []*packages.Package) 
 	}
 	file.outPkg = pkg
 	return file, nil
+}
+
+// sibling returns a File for another generated file in the same package:
+// the same loaded packages, and imports of its own.
+func (file *File) sibling() *File {
+	return &File{
+		fileSet:            file.fileSet,
+		typesCache:         file.typesCache,
+		files:              file.files,
+		packages:           file.packages,
+		outPkg:             file.outPkg,
+		packageIdentifiers: make(map[string]string),
+	}
 }
 
 func (file *File) Package(path string) (*packages.Package, bool) {
