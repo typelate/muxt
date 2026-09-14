@@ -2,25 +2,19 @@ package analysis
 
 import (
 	"bytes"
-	"cmp"
-	"go/token"
 	"go/types"
 	"io"
 	"maps"
 	"slices"
 	"strings"
 
-	"golang.org/x/tools/go/packages"
-
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type DefinitionsConfiguration struct {
 	Verbose            bool
 	ReceiverPackage    string
-	PackageName        string
-	PackagePath        string
 	ReceiverType       string
 	TemplatesVariables []string
 }
@@ -57,34 +51,15 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 	return io.Copy(w, &buf)
 }
 
-func NewRoutes(config DefinitionsConfiguration, wd string, _ *token.FileSet, pl []*packages.Package) ([]*Routes, error) {
-	pkg, ok := load.PackageAtFilepath(pl, wd)
-	if !ok {
-		return nil, load.NoPackageError(wd, pl)
-	}
-
-	config.PackagePath = pkg.PkgPath
-	config.PackageName = pkg.Name
-
-	var receiver *types.Named
-	if config.ReceiverType != "" {
-		var err error
-		receiver, err = load.FindType(pl, cmp.Or(config.ReceiverPackage, config.PackagePath), config.ReceiverType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+// NewRoutes lists each templates variable's route definitions and
+// functions, and the receiver's methods when a receiver type was named.
+func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
 	var results []*Routes
 
-	for _, tv := range config.TemplatesVariables {
-		lt, ts, err := load.HTMLTemplates(tv, pkg)
-		if err != nil {
-			return nil, err
-		}
-		functions := lt.CollectedFunctions()
+	for _, tv := range pkg.Variables {
+		functions := tv.Funcs
 
-		definitions, err := muxt.Definitions(ts, tv, lt)
+		definitions, err := muxt.Definitions(tv)
 		if err != nil {
 			return nil, err
 		}

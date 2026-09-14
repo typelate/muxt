@@ -53,7 +53,7 @@ func TestTemplates(t *testing.T) {
 	})
 	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := load.PackageAtFilepath(pl, dir)
+	pkg, ok := load.PackageInDirectory(pl, dir)
 	require.True(t, ok)
 
 	t.Run("parses the embedded files", func(t *testing.T) {
@@ -78,15 +78,19 @@ func TestTemplates(t *testing.T) {
 		require.ErrorContains(t, err, "variable nope not found")
 	})
 
-	t.Run("load templates wires the global", func(t *testing.T) {
-		lt, err := load.Templates(dir, "templates", pl)
+	t.Run("a variable locates its definitions and functions", func(t *testing.T) {
+		variable, err := load.Variable(pkg, "templates")
 		require.NoError(t, err)
-		require.NotNil(t, lt.HTML)
+		require.NotNil(t, variable.Set)
 
-		def, ok := lt.Global.Definitions.FindDefinition("home")
+		def, ok := variable.Definitions["home"]
 		require.True(t, ok, "definitions resolve for file-parsed templates")
 		require.True(t, def.Define.IsValid())
 		assert.Equal(t, "index.gohtml", filepath.Base(def.Define.Filename))
+		assert.Contains(t, variable.Funcs, "upper", "Funcs holds the Funcs-registered functions")
+		assert.Len(t, variable.Funcs, 1, "Funcs holds only what Funcs registered")
+		assert.Contains(t, variable.Functions, "upper")
+		assert.Contains(t, variable.Functions, "printf", "Functions holds the builtins a template may call too")
 	})
 }
 
@@ -103,7 +107,7 @@ func main() {}
 	})
 	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := load.PackageAtFilepath(pl, dir)
+	pkg, ok := load.PackageInDirectory(pl, dir)
 	require.True(t, ok)
 
 	// Muxt introspects trees without executing, so a text/template
@@ -111,4 +115,34 @@ func main() {}
 	_, ts, err := load.HTMLTemplates("texts", pkg)
 	require.NoError(t, err)
 	require.NotNil(t, ts.Lookup("note"))
+}
+
+// TestPackageInADirectoryNamedLikeAGoFile states that the package a command
+// runs on is found by its directory, even when the directory's name ends in
+// .go.
+func TestPackageInADirectoryNamedLikeAGoFile(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	dir := filepath.Join(root, "app.go")
+	require.NoError(t, os.Mkdir(dir, 0o755))
+	for name, content := range map[string]string{
+		"go.mod":       "module scratch\n\ngo 1.24\n",
+		"main.go":      templatesGo,
+		"index.gohtml": `{{define "home"}}Hello{{end}}`,
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+	}
+	_, pl, err := load.Packages(dir)
+	require.NoError(t, err)
+
+	pkg, err := load.Package(dir, pl, []string{"templates"})
+	require.NoError(t, err)
+	assert.Equal(t, "scratch", pkg.Types.Path())
+
+	// The mutation run still reads Templates, and it looks the package up
+	// the same way.
+	lt, err := load.Templates(dir, "templates", pl)
+	require.NoError(t, err)
+	require.NotNil(t, lt.HTML.Lookup("home"))
 }

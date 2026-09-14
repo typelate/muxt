@@ -15,12 +15,11 @@ import (
 	"strings"
 
 	"github.com/ettle/strcase"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 const (
@@ -98,33 +97,26 @@ type RoutesFileConfiguration struct {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
-func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *token.FileSet, pl []*packages.Package, logger *log.Logger) ([]GeneratedFile, error) {
+// TemplateRoutesFiles generates the routes files for pkg, written into wd:
+// the package the files belong to, which is the one in the output file's
+// directory. receiver is the type --use-receiver-type named, or nil when
+// handler methods are inferred from the templates.
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, receiver *types.Named, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
 
-	file, err := newFile(filepath.Join(wd, config.OutputFileName), fileSet, pl)
-	if err != nil {
-		return nil, err
-	}
-	routesPkg := file.OutputPackage()
+	file := newFile(pkg)
 
-	config.PackagePath = routesPkg.PkgPath
-	config.PackageName = routesPkg.Name
+	config.PackagePath = pkg.Types.Path()
+	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
 
-	var receiver *types.Named
-	if config.ReceiverType == "" {
-		receiver = asteval.NamedEmptyStruct("Receiver", routesPkg.Types)
-	} else {
-		receiverPkgPath := cmp.Or(config.ReceiverPackage, config.PackagePath)
-		receiver, err = load.FindType(pl, receiverPkgPath, config.ReceiverType)
-		if err != nil {
-			return nil, err
-		}
+	if receiver == nil {
+		receiver = asteval.NamedEmptyStruct("Receiver", pkg.Types)
 	}
 
-	groups, err := groupTemplates(wd, config, routesPkg)
+	groups, err := groupTemplates(config, pkg.Variables)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +178,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		generatedFiles         []GeneratedFile
 	)
 	if config.OutputMultipleFiles {
-		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiver, routesPkg, receiverInterface, routesFunc)
+		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiver, receiverInterface, routesFunc)
 		if err != nil {
 			return files, err
 		}
@@ -201,7 +193,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -290,7 +282,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 // signatures — one line per method and the explanation once after the
 // list; the default mode synthesizes every method by design, so it
 // stays quiet.
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, templatesPackage *types.Package, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized, warnResponse bool) error {
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized, warnResponse bool) error {
 	var resolveErrs []error
 	synthesized := 0
 	for i := range defs {
@@ -302,7 +294,7 @@ func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, tem
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
-		if err := muxt.ResolveCall(&defs[i], templatesPackage, receiver, file.Packages()); err != nil {
+		if err := muxt.ResolveCall(&defs[i], file.OutputPackage(), receiver); err != nil {
 			resolveErrs = append(resolveErrs, err)
 			continue
 		}
@@ -355,7 +347,7 @@ func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool,
 	return nil
 }
 
-func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, routesPkg *packages.Package, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
+func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
 	var generatedFiles []GeneratedFile
 	for _, sourceFile := range templateSourceFiles {
 		definitions := groups.byFile[sourceFile]
@@ -367,7 +359,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, file.sibling(), routesFuncName, receiverInterfaceName, logger, config, receiver, routesPkg)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config, receiver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
@@ -489,7 +481,6 @@ func generatePerFileRouteFunction(
 	config RoutesFileConfiguration,
 	receiver *types.Named,
 	receiverInterface *ast.InterfaceType,
-	routesPkg *packages.Package,
 ) (*ast.FuncDecl, error) {
 	if sourceFile == "" {
 		return nil, fmt.Errorf("sourceFile cannot be empty")
@@ -534,7 +525,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, routesPkg.Types, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
+	if err := hydrateGroup(defs, file, receiver, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for i := range defs {
@@ -569,7 +560,6 @@ func generatePerFileAST(
 	logger *log.Logger,
 	config RoutesFileConfiguration,
 	receiver *types.Named,
-	routesPkg *packages.Package,
 ) (*ast.File, error) {
 	if sourceFile == "" {
 		return nil, fmt.Errorf("sourceFile cannot be empty")
@@ -590,7 +580,6 @@ func generatePerFileAST(
 		config,
 		receiver,
 		scopedReceiverInterface,
-		routesPkg,
 	)
 	if err != nil {
 		return nil, err
@@ -860,7 +849,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				continue
 			}
 			name := arg.Name
-			argType, ok := muxt.DefaultScopeType(file.Packages(), &def, name)
+			argType, ok := muxt.DefaultScopeType(file.OutputPackage(), &def, name)
 			if !ok {
 				return nil, fmt.Errorf("failed to determine type for %s", name)
 			}
@@ -1164,7 +1153,7 @@ func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp s
 			Args: []ast.Expr{exp},
 		})
 	}
-	switch muxt.UnmarshalMethodFor(file.Packages(), valueType) {
+	switch muxt.UnmarshalMethodFor(file.OutputPackage(), valueType) {
 	case muxt.UnmarshalBool:
 		return parseBlock(tmp, astgen.StrconvParseBoolCall(file, str), validations, errBlock, assignment), nil
 	case muxt.UnmarshalInt:

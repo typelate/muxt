@@ -2,7 +2,6 @@ package analysis
 
 import (
 	"bytes"
-	"go/token"
 	"go/types"
 	"io"
 	"maps"
@@ -11,12 +10,17 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/load"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
 type TemplateCallersConfiguration struct {
-	TemplatesVariable string
-	FilterTemplates   []*regexp.Regexp
+	// TemplatesVariables are listed in order.
+	TemplatesVariables []string
+
+	// FilterTemplates, when set, limits the listing to templates whose
+	// name matches one of them.
+	FilterTemplates []*regexp.Regexp
 }
 
 type TemplateCallers struct {
@@ -33,8 +37,20 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCallers shows where templates are referenced
-func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.FileSet, lt *load.LoadedTemplates) (*TemplateCallers, error) {
-	global, ts := lt.Global, lt.HTML
+func NewTemplateCallers(config TemplateCallersConfiguration, pkg source.Package) (*TemplateCallers, error) {
+	combined := &TemplateCallers{}
+	for _, lt := range pkg.Variables {
+		result, err := templateCallers(config, pkg, lt)
+		if err != nil {
+			return nil, err
+		}
+		combined.Templates = append(combined.Templates, result.Templates...)
+	}
+	return combined, nil
+}
+
+func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt source.Variable) (*TemplateCallers, error) {
+	global, ts := newGlobal(pkg, lt), lt.Set
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	// Track {{template}} calls
@@ -49,11 +65,11 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 	}
 
 	{
-		for c := range lt.Templates.ExecuteTemplateCalls() {
-			templateName, dataType := c.TemplateName, c.DataType
+		for _, c := range lt.Calls {
+			templateName, dataType := c.Template, c.Data
 
 			refs[templateName] = append(refs[templateName], TemplateReference{
-				Position: fileSet.Position(c.Call.Pos()),
+				Position: c.Position,
 				Kind:     ExecuteTemplateNode,
 				Name:     templateName,
 				data:     dataType,
@@ -73,7 +89,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, fileSet *token.File
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
 	}
 
 	return &result, nil

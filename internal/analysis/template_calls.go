@@ -10,12 +10,17 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"github.com/typelate/muxt/internal/load"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
 type TemplateCallsConfiguration struct {
-	TemplatesVariable string
-	FilterTemplates   []*regexp.Regexp
+	// TemplatesVariables are listed in order.
+	TemplatesVariables []string
+
+	// FilterTemplates, when set, limits the listing to templates whose
+	// name matches one of them.
+	FilterTemplates []*regexp.Regexp
 }
 
 type TemplateCalls struct {
@@ -32,8 +37,20 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 }
 
 // NewTemplateCalls shows what templates use (other templates they call)
-func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplates) (*TemplateCalls, error) {
-	global, ts := lt.Global, lt.HTML
+func NewTemplateCalls(config TemplateCallsConfiguration, pkg source.Package) (*TemplateCalls, error) {
+	combined := &TemplateCalls{}
+	for _, lt := range pkg.Variables {
+		result, err := templateCalls(config, pkg, lt)
+		if err != nil {
+			return nil, err
+		}
+		combined.Templates = append(combined.Templates, result.Templates...)
+	}
+	return combined, nil
+}
+
+func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) (*TemplateCalls, error) {
+	global, ts := newGlobal(pkg, lt), lt.Set
 	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
@@ -47,10 +64,10 @@ func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplate
 	}
 
 	// Analyze all templates
-	for c := range lt.Templates.ExecuteTemplateCalls() {
-		t := ts.Lookup(c.TemplateName)
+	for _, c := range lt.Calls {
+		t := ts.Lookup(c.Template)
 		if t != nil && t.Tree != nil {
-			_ = check.Execute(global, t.Tree, c.DataType)
+			_ = check.Execute(global, t.Tree, c.Data)
 		}
 	}
 
@@ -60,7 +77,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, lt *load.LoadedTemplate
 		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
 			continue
 		}
-		result.Templates = append(result.Templates, NewNamedReferences(lt.Package.PkgPath, name, refs[name]))
+		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
 	}
 
 	return &result, nil

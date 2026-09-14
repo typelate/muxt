@@ -8,38 +8,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/check"
+
+	"github.com/typelate/muxt/internal/source"
 )
-
-// definitionAt is a check.DefinitionFinder reporting a fixed name literal position.
-type definitionAt struct {
-	name string
-	pos  token.Position
-}
-
-func (d definitionAt) FindDefinition(name string) (check.Definition, bool) {
-	if name != d.name {
-		return check.Definition{}, false
-	}
-	return check.Definition{
-		Name:         name,
-		TemplateName: check.Span{Position: d.pos, Length: len(name) + 2},
-	}, true
-}
 
 func TestDefinitionsErrorPosition(t *testing.T) {
 	const name = "OPTIONS / F()"
 	ts := template.Must(template.New("index.gohtml").Parse(`{{define "` + name + `"}}{{end}}`))
-	finder := definitionAt{name: name, pos: token.Position{
-		Filename: "index.gohtml",
-		Offset:   9,
-		Line:     1,
-		Column:   10,
+	variable := source.Variable{Name: "templates", Set: ts, Definitions: map[string]source.Definition{
+		name: {
+			Name: name,
+			// The quoted name starts at column 10, so the name itself
+			// starts one byte in, at column 11.
+			TemplateName: source.Span{Position: token.Position{Filename: "index.gohtml", Offset: 9, Line: 1, Column: 10}, Length: len(name) + 2},
+		},
 	}}
 
-	_, err := Definitions(ts, "templates", finder)
-	// The name literal's content starts one byte past the opening quote at
-	// column 11; the failing METHOD segment starts at the first byte of the name.
+	_, err := Definitions(variable)
+	// The failing METHOD segment starts at the first byte of the name.
 	require.EqualError(t, err, "index.gohtml:1:11: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 
 	nameErr, ok := err.(*NameError)

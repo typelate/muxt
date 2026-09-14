@@ -19,16 +19,21 @@
 ## Architecture Overview
 
 ```
-Template Name (with route pattern and method call)
+go list (golang.org/x/tools/go/packages)      ./internal/load
+    ↓  load.Package, load.GenerateSource, load.RoutesSource
+source.Package: types + templates variables    ./internal/source
+    ↓  muxt.Definitions, muxt.ResolveCall
+Resolved routes (muxt.Definition)              ./internal/muxt
     ↓
-Parser (./internal/muxt/parse)
-    ↓
-Type Checker (go/types ./internal/analysis)
-    ↓
-Generator (./internal/muxt/generate)
-    ↓
-HTTP Handler Code
+Generated files / check reports                ./internal/generate, ./internal/analysis
 ```
+
+**The package load stops at `internal/load`.** It is the only package that
+calls `packages.Load` (the go command, seconds per run). It hydrates a
+command's configuration into a `source.Package`: plain data holding the
+package's types, and each templates variable's template set, functions,
+definitions and ExecuteTemplate calls. Route resolution, generation and the
+template checks read only that, so they can be handed values built in memory.
 
 **Key concept:** Muxt reads template names like `"GET /{id} GetUser(ctx, id)"` and generates `http.Handler` implementations that:
 - Parse URL parameters to the correct Go types
@@ -82,10 +87,11 @@ go test ./...
 
 ### 4. Implement Changes
 
-Update the generator code in order:
-1. `internal/muxt/` — Core generation logic
-2. `internal/source/` — AST helpers (if needed)
-3. `internal/cli/` — CLI handling (if needed)
+Update the code in order:
+1. `internal/muxt/` — Route name parsing and call resolution
+2. `internal/generate/` or `internal/analysis/` — What is written or reported
+3. `internal/load/` — Only if a run needs something new from the loaded packages
+4. `internal/cli/` — CLI handling (if needed)
 
 ### 5. Verify Your Changes
 
@@ -150,8 +156,11 @@ ls cmd/muxt/testdata/err_*.txt
 ## Key Files and Directories
 
 ### Source Code
-- `internal/muxt/` — Generator logic (parse, type check, generate)
-- `internal/source/` — AST analysis helpers
+- `internal/load/` — Package loading (the only `go/packages` caller), hydration into `source.Package`, and load diagnostics
+- `internal/source/` — The loaded package as plain data: what everything after the load reads
+- `internal/muxt/` — Template name parsing and route resolution against go/types
+- `internal/generate/` — Routes file generation
+- `internal/analysis/` — `muxt check` and the template listings
 - `internal/cli/` — Command-line interface
 - `cmd/muxt/` — Command entry point
 
