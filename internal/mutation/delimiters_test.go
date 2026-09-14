@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // TestDelimitersReadsThemOffTheEndClause states how the delimiters a
@@ -51,11 +51,11 @@ func TestDelimitersReadsThemOffTheEndClause(t *testing.T) {
 			// trivially at offset zero.
 			const prefix = "hello "
 			text := prefix + tt.end
-			definition := check.Definition{
+			definition := source.Definition{
 				Name:         "x",
-				Define:       check.Span{Position: token.Position{Filename: "t.gohtml"}, Length: 1},
-				TemplateName: check.Span{Position: token.Position{Filename: "t.gohtml", Offset: 1, Line: 1}, Length: 3},
-				End: check.Span{
+				Define:       source.Span{Position: token.Position{Filename: "t.gohtml"}, Length: 1},
+				TemplateName: source.Span{Position: token.Position{Filename: "t.gohtml", Offset: 1, Line: 1}, Length: 3},
+				End: source.Span{
 					Position: token.Position{Filename: "t.gohtml", Offset: len(prefix)},
 					Length:   len(tt.end),
 				},
@@ -82,9 +82,9 @@ func TestDelimitersDeclinesWhatItCannotRead(t *testing.T) {
 	const text = `{{define "x"}}{{end}}`
 
 	t.Run("a template with no define clause", func(t *testing.T) {
-		definition := check.Definition{
+		definition := source.Definition{
 			Name: "t.gohtml",
-			End:  check.Span{Position: token.Position{Filename: "t.gohtml", Offset: len(text)}},
+			End:  source.Span{Position: token.Position{Filename: "t.gohtml", Offset: len(text)}},
 		}
 		if _, _, ok := delimiters(text, definition); ok {
 			t.Error("delimiters accepted a definition with no end clause to read")
@@ -92,10 +92,10 @@ func TestDelimitersDeclinesWhatItCannotRead(t *testing.T) {
 	})
 
 	t.Run("a span outside the text", func(t *testing.T) {
-		definition := check.Definition{
+		definition := source.Definition{
 			Name:         "x",
-			TemplateName: check.Span{Position: token.Position{Filename: "t.gohtml", Offset: 9, Line: 1}, Length: 3},
-			End: check.Span{
+			TemplateName: source.Span{Position: token.Position{Filename: "t.gohtml", Offset: 9, Line: 1}, Length: 3},
+			End: source.Span{
 				Position: token.Position{Filename: "t.gohtml", Offset: len(text)},
 				Length:   99,
 			},
@@ -116,11 +116,11 @@ func TestDelimitersAgreeWithTheScanner(t *testing.T) {
 	const text = `[[define "greeting"]]Hello, [[.Name]]![[end]]`
 
 	endAt := strings.LastIndex(text, "[[end]]")
-	definition := check.Definition{
+	definition := source.Definition{
 		Name:         "greeting",
-		Define:       check.Span{Position: token.Position{Filename: "t.gohtml"}, Length: 21},
-		TemplateName: check.Span{Position: token.Position{Filename: "t.gohtml", Offset: 9, Line: 1}, Length: 10},
-		End:          check.Span{Position: token.Position{Filename: "t.gohtml", Offset: endAt}, Length: len("[[end]]")},
+		Define:       source.Span{Position: token.Position{Filename: "t.gohtml"}, Length: 21},
+		TemplateName: source.Span{Position: token.Position{Filename: "t.gohtml", Offset: 9, Line: 1}, Length: 10},
+		End:          source.Span{Position: token.Position{Filename: "t.gohtml", Offset: endAt}, Length: len("[[end]]")},
 	}
 
 	left, right, ok := delimiters(text, definition)
