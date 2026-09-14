@@ -1,0 +1,369 @@
+--output-exported-default-identifiers=false names the generated
+identifiers unexported, as the command line spells them.
+
+Command line: muxt generate --use-receiver-type=Server --output-exported-default-identifiers=false
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "templateRoutes",
+	"ReceiverType": "Server",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "routesReceiver",
+	"TemplateDataType": "templateData",
+	"SSETemplateDataType": "sseTemplateData",
+	"TemplateRoutePathsTypeName": "templateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": false,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /events sse(Stream(ctx, execute))"}}{{.Result}}{{end}}
+{{define "GET /{$}"}}home{{end}}
+-- server.go --
+package server
+
+import "context"
+
+type Server struct{}
+
+func (Server) Stream(ctx context.Context, execute func(data string) error) {}
+-- want/template_routes.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+type routesReceiver interface {
+	Stream(ctx context.Context, execute func(data string) error)
+}
+
+func templateRoutes(mux *http.ServeMux, receiver routesReceiver) templateRoutePaths {
+	pathsPrefix := ""
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.HandleFunc("GET /events", func(response http.ResponseWriter, request *http.Request) {
+		defer func() {
+			_ = request.Body.Close()
+		}()
+		flusher, ok := response.(http.Flusher)
+		if !ok {
+			http.Error(response, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		ctx := request.Context()
+		h := response.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Connection", "keep-alive")
+		h.Set("Cache-Control", "no-store")
+		response.WriteHeader(http.StatusOK)
+		flusher.Flush()
+		var mut sync.Mutex
+		receiver.Stream(ctx, func(result string) error {
+			if err := request.Context().Err(); err != nil {
+				return err
+			}
+			buf := bytesBufferPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bytesBufferPool.Put(buf)
+			td := sseTemplateData[routesReceiver, string]{receiver: receiver, request: request, pathsPrefix: pathsPrefix, result: result}
+			if err := templates.ExecuteTemplate(buf, "GET /events sse(Stream(ctx, execute))", &td); err != nil {
+				slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+				return err
+			}
+			td.data = buf
+			mut.Lock()
+			defer mut.Unlock()
+			if _, err := td.WriteTo(response); err != nil {
+				return err
+			}
+			flusher.Flush()
+			return nil
+		})
+	})
+	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
+		var td = templateData[routesReceiver, struct {
+		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if err := templates.ExecuteTemplate(buf, "GET /{$}", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	return templateRoutePaths{pathsPrefix: pathsPrefix}
+}
+
+type templateData[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *templateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
+}
+
+func (data *templateData[R, T]) Path() templateRoutePaths {
+	return templateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *templateData[R, T]) Result() T {
+	return data.result
+}
+
+func (data *templateData[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *templateData[R, T]) StatusCode(statusCode int) *templateData[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *templateData[R, T]) Header(key, value string) *templateData[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *templateData[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *templateData[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *templateData[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *templateData[R, T]) Redirect(url string, code int) (*templateData[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *templateData[R, T]) RedirectMultipleChoices(url string) (*templateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *templateData[R, T]) RedirectMovedPermanently(url string) (*templateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *templateData[R, T]) RedirectFound(url string) (*templateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *templateData[R, T]) RedirectSeeOther(url string) (*templateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *templateData[R, T]) String() string {
+	return ""
+}
+
+type sseTemplateData[R, T any] struct {
+	receiver          R
+	request           *http.Request
+	result            T
+	pathsPrefix       string
+	event, id         *string
+	retryMilliseconds *int
+	errList           []error
+	data              *bytes.Buffer
+}
+
+func (m *sseTemplateData[R, T]) String() string {
+	return ""
+}
+
+func (m *sseTemplateData[R, T]) Receiver() R {
+	return m.receiver
+}
+
+func (m *sseTemplateData[R, T]) Request() *http.Request {
+	return m.request
+}
+
+func (m *sseTemplateData[R, T]) Result() T {
+	return m.result
+}
+
+func (m *sseTemplateData[R, T]) Err() error {
+	return errors.Join(m.errList...)
+}
+
+func (m *sseTemplateData[R, T]) Event(event string) *sseTemplateData[R, T] {
+	m.event = &event
+	return m
+}
+
+func (m *sseTemplateData[R, T]) ID(id string) *sseTemplateData[R, T] {
+	m.id = &id
+	return m
+}
+
+func (m *sseTemplateData[R, T]) Retry(retryMilliseconds int) *sseTemplateData[R, T] {
+	m.retryMilliseconds = &retryMilliseconds
+	return m
+}
+
+func (m *sseTemplateData[R, T]) Path() templateRoutePaths {
+	return templateRoutePaths{pathsPrefix: m.pathsPrefix}
+}
+
+func (m *sseTemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
+	if m.id != nil && strings.ContainsAny(*m.id, "\r\n\x00") {
+		return 0, errors.New("sse: id contains a forbidden character")
+	}
+	if m.event != nil && strings.ContainsAny(*m.event, "\r\n") {
+		return 0, errors.New("sse: event contains a forbidden character")
+	}
+	var bytesWritten int
+	if m.id != nil {
+		if n, err := io.WriteString(w, "id: "); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if n, err := io.WriteString(w, *m.id); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if n, err := w.Write([]byte{'\n'}); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+	}
+	if m.event != nil {
+		if n, err := io.WriteString(w, "event: "); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if n, err := io.WriteString(w, *m.event); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if n, err := w.Write([]byte{'\n'}); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+	}
+	if m.retryMilliseconds != nil {
+		if n, err := io.WriteString(w, "retry: "); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		var retryBuf [20]byte
+		if n, err := w.Write(strconv.AppendInt(retryBuf[:0], int64(*m.retryMilliseconds), 10)); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if n, err := w.Write([]byte{'\n'}); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+	}
+	data := m.data.Bytes()
+	if bytes.IndexByte(data, '\r') >= 0 {
+		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+		data = bytes.ReplaceAll(data, []byte("\r"), []byte("\n"))
+	}
+	data = bytes.TrimSuffix(data, []byte{'\n'})
+	for line := range bytes.SplitSeq(data, []byte{'\n'}) {
+		if n, err := io.WriteString(w, "data: "); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+		if len(line) > 0 {
+			if n, err := w.Write(line); err != nil {
+				return int64(bytesWritten + n), err
+			} else {
+				bytesWritten += n
+			}
+		}
+		if n, err := w.Write([]byte{'\n'}); err != nil {
+			return int64(bytesWritten + n), err
+		} else {
+			bytesWritten += n
+		}
+	}
+	if n, err := w.Write([]byte{'\n'}); err != nil {
+		return int64(bytesWritten + n), err
+	} else {
+		bytesWritten += n
+	}
+	return int64(bytesWritten), nil
+}
+
+type templateRoutePaths struct {
+	pathsPrefix string
+}
+
+func (routePaths templateRoutePaths) Stream() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "events")
+}
+
+func (routePaths templateRoutePaths) ReadExact() string {
+	return "/"
+}
