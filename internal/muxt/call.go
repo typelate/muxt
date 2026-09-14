@@ -39,7 +39,28 @@ type Argument struct {
 	// argument binds to the request (nil for the raw url.Values /
 	// *multipart.Form mode).
 	formFields []FieldBinding
+
+	// scopeType, direct and method describe a request value argument: the
+	// type the identifier binds to, whether that value is assignable to the
+	// parameter as it is, and otherwise how it parses from its string form.
+	scopeType types.Type
+	direct    bool
+	method    UnmarshalMethod
 }
+
+// ScopeType returns the type a request value argument binds to before any
+// parsing: *http.Request for request, string for a path value, and so on.
+func (a Argument) ScopeType() types.Type { return a.scopeType }
+
+// Direct reports whether a request value argument is assignable to its
+// parameter as it is. A path value or lastEventID that is not assignable
+// parses with UnmarshalMethod; a form or multipart argument that is not
+// assignable binds a struct through FormFields.
+func (a Argument) Direct() bool { return a.direct }
+
+// UnmarshalMethod returns how a path value or lastEventID argument that is
+// not Direct parses from its string form.
+func (a Argument) UnmarshalMethod() UnmarshalMethod { return a.method }
 
 // Signature returns the resolved signature of a nested call argument
 // (Type == ArgumentTypeCall), or nil for a leaf argument.
@@ -118,18 +139,20 @@ const (
 	ResultShapeError
 )
 
-func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named) error {
+// ResolveCall resolves def's call against the receiver type and the package's
+// functions, asking checker what it needs to know about the standard library.
+func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, checker Checker) error {
 	if def.call == nil || def.fun == nil {
 		return nil
 	}
-	sig, isMethod, args, err := resolveCall(def, def.call, pkg, receiver)
+	sig, isMethod, args, err := resolveCall(def, def.call, pkg, receiver, checker)
 	if err != nil {
 		return def.finishNameError(err, def.handlerSpan())
 	}
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
-	recordPathValueTypes(def.pathValueTypes, args, make(map[string]bool))
+	recordPathValueTypes(def.pathValueTypes, def.pathValueMarshalers, checker, args, make(map[string]bool))
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		// Result-shape errors are about the method contract, so the
@@ -148,11 +171,11 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named) err
 // which case the value is passed along unparsed and stays a string.
 // Later occurrences reuse the first one's value. An sse-prefixed name is a
 // render callback wherever it appears, never a parsed value.
-func recordPathValueTypes(into map[string]types.Type, args []Argument, seen map[string]bool) {
+func recordPathValueTypes(into map[string]types.Type, marshalers map[string]bool, checker Checker, args []Argument, seen map[string]bool) {
 	for _, arg := range args {
 		switch arg.Type {
 		case ArgumentTypeCall:
-			recordPathValueTypes(into, arg.args, seen)
+			recordPathValueTypes(into, marshalers, checker, arg.args, seen)
 		case ArgumentTypeRequestPathValue:
 			if seen[arg.Identifier] || IsSSEArgument(arg.Identifier) {
 				continue
@@ -160,6 +183,7 @@ func recordPathValueTypes(into map[string]types.Type, args []Argument, seen map[
 			seen[arg.Identifier] = true
 			if !isStringAssignable(arg.ParamType) {
 				into[arg.Identifier] = arg.ParamType
+				marshalers[arg.Identifier] = checker.TextMarshaler(arg.ParamType)
 			}
 		}
 	}
@@ -318,7 +342,7 @@ func definedHere(pkg source.Package, object types.Object) string {
 // When the call identifier is neither a receiver method nor a package-scope
 // function, its signature is synthesized from the call scope and attached to
 // the receiver so it appears in the generated RoutesReceiver interface.
-func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named) (*types.Signature, bool, []Argument, error) {
+func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named, checker Checker) (*types.Signature, bool, []Argument, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, false, nil, errAt(call.Fun, "expected a function identifier, got: %s", astgen.Format(call.Fun))
@@ -330,7 +354,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 			object = m
 			isMethod = false
 		} else {
-			ms, err := synthesizeCallSignature(def, call, pkg, receiver)
+			ms, err := synthesizeCallSignature(def, call, pkg, receiver, checker)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -379,7 +403,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 				args = append(args, Argument{Identifier: argument.Name})
 				continue
 			}
-			arg, err := newArgumentFromIdentifier(def, pkg, argument, paramType, qual)
+			arg, err := newArgumentFromIdentifier(def, checker, argument, paramType, qual)
 			if err != nil {
 				return nil, false, nil, errAtNode(argument, err)
 			}
@@ -404,7 +428,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 				})
 				continue
 			}
-			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, pkg, receiver)
+			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, pkg, receiver, checker)
 			if err != nil {
 				return nil, false, nil, err
 			}
@@ -428,7 +452,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 // defined on the receiver, inferring each parameter type from the argument
 // scope. Nested calls are resolved (so their own methods are synthesized too)
 // but do not contribute a parameter, mirroring the pre-hydration generator.
-func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named) (*types.Signature, error) {
+func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named, checker Checker) (*types.Signature, error) {
 	var params []*types.Var
 	hasSSE := false
 	// Each argument becomes a parameter named after it, so a repeated
@@ -461,7 +485,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 				}
 				continue
 			}
-			tp, ok := DefaultScopeType(pkg, def, arg.Name)
+			tp, ok := defaultScopeType(checker, def, arg.Name)
 			if !ok {
 				return nil, errAt(arg, "could not determine a type for %s", arg.Name)
 			}
@@ -472,7 +496,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 			if isCallTo(arg, callWrapperUnmarshalJSON) {
 				// Template-first iteration: without a defined method the decode
 				// target is unknown, so pass the raw payload through.
-				tp, err := stdlibType(pkg, "encoding/json", "RawMessage", false)
+				tp, err := checker.RawJSON()
 				if err != nil {
 					return nil, err
 				}
@@ -481,7 +505,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 				}
 				continue
 			}
-			if _, _, _, err := resolveCall(def, arg, pkg, receiver); err != nil {
+			if _, _, _, err := resolveCall(def, arg, pkg, receiver, checker); err != nil {
 				return nil, err
 			}
 		}
@@ -493,33 +517,17 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil
 }
 
-func DefaultScopeType(pkg source.Package, def *Definition, argumentIdentifier string) (types.Type, bool) {
-	stdlibType := func(pkgPath, name string, pointer bool) (types.Type, bool) {
-		imported, ok := pkg.Import(pkgPath)
-		if !ok {
-			return nil, false
-		}
-		t := imported.Scope().Lookup(name).Type()
-		if pointer {
-			t = types.NewPointer(t)
-		}
-		return t, true
-	}
+// defaultScopeType returns the type an argument identifier binds to: a
+// reserved identifier's, as checker reports it, or string for lastEventID and
+// a path value.
+func defaultScopeType(checker Checker, def *Definition, argumentIdentifier string) (types.Type, bool) {
 	switch argumentIdentifier {
-	case TemplateNameScopeIdentifierHTTPRequest:
-		return stdlibType("net/http", "Request", true)
-	case TemplateNameScopeIdentifierHTTPResponse:
-		return stdlibType("net/http", "ResponseWriter", false)
-	case TemplateNameScopeIdentifierContext:
-		return stdlibType("context", "Context", false)
-	case TemplateNameScopeIdentifierForm:
-		return stdlibType("net/url", "Values", false)
-	case TemplateNameScopeIdentifierMultipart:
-		return stdlibType("mime/multipart", "Form", true)
 	case TemplateNameScopeIdentifierLastEventID:
 		return types.Universe.Lookup("string").Type(), true
-	case TemplateNameScopeIdentifierRequestBody:
-		return stdlibType("io", "Reader", false)
+	case TemplateNameScopeIdentifierHTTPRequest, TemplateNameScopeIdentifierHTTPResponse, TemplateNameScopeIdentifierContext,
+		TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart, TemplateNameScopeIdentifierRequestBody:
+		tp, err := checker.ScopeType(argumentIdentifier)
+		return tp, err == nil
 	default:
 		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
@@ -577,7 +585,7 @@ func typeQualifier(receiverPkg *types.Package) types.Qualifier {
 	}
 }
 
-func newArgumentFromIdentifier(def *Definition, pkg source.Package, arg *ast.Ident, param types.Type, qual types.Qualifier) (Argument, error) {
+func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident, param types.Type, qual types.Qualifier) (Argument, error) {
 	a := Argument{
 		Identifier: arg.Name,
 		ParamType:  param,
@@ -585,36 +593,32 @@ func newArgumentFromIdentifier(def *Definition, pkg source.Package, arg *ast.Ide
 	switch arg.Name {
 	case TemplateNameScopeIdentifierContext:
 		a.Type = ArgumentTypeRequestContext
-		if err := isAssignable(pkg, param, arg.Name, "context", "Context", false, qual); err != nil {
+		if err := bindScopeValue(&a, checker, qual); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierForm:
 		a.Type = ArgumentTypeRequestForm
-		bindings, err := checkFormArgument(def, pkg, param, arg.Name, "net/url", "Values", false, qual, false)
-		if err != nil {
+		if err := bindFormArgument(&a, def, checker, qual, false); err != nil {
 			return a, err
 		}
-		a.formFields = bindings
 	case TemplateNameScopeIdentifierMultipart:
 		a.Type = ArgumentTypeRequestMultipartForm
-		bindings, err := checkFormArgument(def, pkg, param, arg.Name, "mime/multipart", "Form", true, qual, true)
-		if err != nil {
+		if err := bindFormArgument(&a, def, checker, qual, true); err != nil {
 			return a, err
 		}
-		a.formFields = bindings
 	case TemplateNameScopeIdentifierHTTPRequest:
 		a.Type = ArgumentTypeRequest
-		if err := isAssignable(pkg, param, arg.Name, "net/http", "Request", true, qual); err != nil {
+		if err := bindScopeValue(&a, checker, qual); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierHTTPResponse:
 		a.Type = ArgumentTypeResponse
-		if err := isAssignable(pkg, param, arg.Name, "net/http", "ResponseWriter", false, qual); err != nil {
+		if err := bindScopeValue(&a, checker, qual); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierLastEventID:
 		a.Type = ArgumentTypeLastEventID
-		if err := checkParsedArgument(pkg, param, qual); err != nil {
+		if err := bindParsedArgument(&a, checker, qual); err != nil {
 			return a, err
 		}
 	case TemplateNameScopeIdentifierExecute:
@@ -622,13 +626,13 @@ func newArgumentFromIdentifier(def *Definition, pkg source.Package, arg *ast.Ide
 		a.template = def.template
 	case TemplateNameScopeIdentifierRequestBody:
 		a.Type = ArgumentTypeRequestBody
-		if err := checkRequestBodyParameter(pkg, param, qual); err != nil {
+		if err := checkRequestBodyParameter(&a, checker, qual); err != nil {
 			return a, err
 		}
 	default:
 		if slices.Contains(def.pathValueNames, arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
-			if err := checkParsedArgument(pkg, param, qual); err != nil {
+			if err := bindParsedArgument(&a, checker, qual); err != nil {
 				return a, err
 			}
 			return a, nil
@@ -667,26 +671,18 @@ func newArgumentFromIdentifier(def *Definition, pkg source.Package, arg *ast.Ide
 	return a, nil
 }
 
-func stdlibType(pkg source.Package, pkgPath, name string, pointer bool) (types.Type, error) {
-	imported, ok := pkg.Import(pkgPath)
-	if !ok {
-		return nil, fmt.Errorf("could not find package %q for %s", pkgPath, name)
-	}
-	t := imported.Scope().Lookup(name).Type()
-	if pointer {
-		t = types.NewPointer(t)
-	}
-	return t, nil
-}
-
-func isAssignable(pkg source.Package, paramType types.Type, argName, packagePath, identifier string, pointer bool, qual types.Qualifier) error {
-	at, err := stdlibType(pkg, packagePath, identifier, pointer)
+// bindScopeValue requires a request value -- ctx, request or response -- to
+// be assignable to its parameter as it is.
+func bindScopeValue(a *Argument, checker Checker, qual types.Qualifier) error {
+	at, err := checker.ScopeType(a.Identifier)
 	if err != nil {
 		return err
 	}
-	if !types.AssignableTo(at, paramType) {
-		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(paramType, qual), argName, types.TypeString(at, qual))
+	a.scopeType = at
+	if !types.AssignableTo(at, a.ParamType) {
+		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(a.ParamType, qual), a.Identifier, types.TypeString(at, qual))
 	}
+	a.direct = true
 	return nil
 }
 
@@ -756,14 +752,16 @@ const (
 // checkRequestBodyParameter requires the parameter bound to the reserved body
 // argument to be exactly io.Reader. The request body is a single-use stream,
 // so the method must not be able to assume more than one read.
-func checkRequestBodyParameter(pkg source.Package, param types.Type, qual types.Qualifier) error {
-	readerType, err := stdlibType(pkg, "io", "Reader", false)
+func checkRequestBodyParameter(a *Argument, checker Checker, qual types.Qualifier) error {
+	readerType, err := checker.ScopeType(TemplateNameScopeIdentifierRequestBody)
 	if err != nil {
 		return err
 	}
-	if !types.Identical(param, readerType) {
-		return fmt.Errorf("%s parameter must have type io.Reader, got %s", TemplateNameScopeIdentifierRequestBody, types.TypeString(param, qual))
+	a.scopeType = readerType
+	if !types.Identical(a.ParamType, readerType) {
+		return fmt.Errorf("%s parameter must have type io.Reader, got %s", TemplateNameScopeIdentifierRequestBody, types.TypeString(a.ParamType, qual))
 	}
+	a.direct = true
 	return nil
 }
 

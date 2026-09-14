@@ -1,31 +1,21 @@
 package example
 
-import (
-	"context"
-	"encoding"
-	"encoding/json"
-	"io"
-	"mime/multipart"
-	"net/http"
-	"net/url"
-)
-
 type Empty struct{}
 
 type Server struct{}
 
-func (srv *Server) M() any                                     { return nil }
-func (srv *Server) HTTPRequest(*http.Request) any              { return nil }
-func (srv *Server) HTTPResponseWriter(http.ResponseWriter) any { return nil }
-func (srv *Server) Context(context.Context) any                { return nil }
-func (srv *Server) String(string) any                          { return nil }
-func (srv *Server) Any(any) any                                { return nil }
-func (srv *Server) URLValues(url.Values) any                   { return nil }
-func (srv *Server) MultipartForm(multipart.Form) any           { return nil }
-func (srv *Server) MultipartFormPtr(*multipart.Form) any       { return nil }
-func (srv *Server) PtrServer(*Server) any                      { return nil }
-func (srv *Server) Reader(io.Reader) any                       { return nil }
-func (srv *Server) RawJSON(json.RawMessage) any                { return nil }
+func (srv *Server) M() any                                { return nil }
+func (srv *Server) HTTPRequest(*Request) any              { return nil }
+func (srv *Server) HTTPResponseWriter(ResponseWriter) any { return nil }
+func (srv *Server) Context(Context) any                   { return nil }
+func (srv *Server) String(string) any                     { return nil }
+func (srv *Server) Any(any) any                           { return nil }
+func (srv *Server) URLValues(Values) any                  { return nil }
+func (srv *Server) MultipartForm(Form) any                { return nil }
+func (srv *Server) MultipartFormPtr(*Form) any            { return nil }
+func (srv *Server) PtrServer(*Server) any                 { return nil }
+func (srv *Server) Reader(Reader) any                     { return nil }
+func (srv *Server) RawJSON(RawMessage) any                { return nil }
 
 // CustomError implements error to prove signals callbacks require the exact
 // error result type.
@@ -43,7 +33,7 @@ func (srv *Server) FormStruct(In) any { return nil }
 
 func (srv *Server) NoParams() error { return nil }
 
-func (srv *Server) FieldList(ctx context.Context, postID, commentID string) any { return nil }
+func (srv *Server) FieldList(ctx Context, postID, commentID string) any { return nil }
 
 func (srv *Server) NoResults()                                     {}
 func (srv *Server) TwoResultsSecondNotErrorOrBool() (int, float64) { return 0, 0 }
@@ -68,33 +58,31 @@ func (srv *Server) ThreeResults() (int, int, error) { return 0, 0, nil }
 
 func (srv *Server) TwoErrors() (error, error) { return nil, nil }
 
-func (srv *Server) Float64(float64) any  { return nil }
-func (srv *Server) URLParam(url.URL) any { return nil }
+func (srv *Server) Float64(float64) any { return nil }
+func (srv *Server) URLParam(URL) any    { return nil }
 
-// ID implements encoding.TextUnmarshaler; the interface assertion also keeps
-// the encoding package in the load graph for classification.
+// ID parses from text: the tests' checker says a pointer to it is a
+// TextUnmarshaler.
 type ID [16]byte
 
 func (id *ID) UnmarshalText([]byte) error { return nil }
 
-var _ encoding.TextUnmarshaler = (*ID)(nil)
-
 func (srv *Server) TextUnmarshalerParam(ID) any { return nil }
 
-type FormWithURL struct{ href url.URL }
+type FormWithURL struct{ href URL }
 
 func (srv *Server) FormUnsupportedField(FormWithURL) any { return nil }
 
 type UploadForm struct {
 	Name  string
 	Tags  []string
-	File  *multipart.FileHeader
-	Files []*multipart.FileHeader
+	File  *FileHeader
+	Files []*FileHeader
 }
 
 func (srv *Server) Upload(UploadForm) any { return nil }
 
-type BadUploadForm struct{ File multipart.File }
+type BadUploadForm struct{ File File }
 
 func (srv *Server) BadUpload(BadUploadForm) any { return nil }
 

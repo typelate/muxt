@@ -360,7 +360,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 				printMultiLineError(cmd, err)
 				return err
 			}
-			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, pkg, receiver, log.New(stdout, "", 0))
+			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, pkg, receiver, load.StandardLibrary(pl), log.New(stdout, "", 0))
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err
