@@ -1,0 +1,446 @@
+Each path parameter parses into the type of the parameter it is passed
+to, and the route path helper takes that type.
+
+Command line: muxt generate --use-receiver-type=T
+-- config.json --
+{
+	"command": "generate",
+	"config": {
+		"MuxtVersion": "v1.2.3",
+		"PackageName": "main",
+		"PackagePath": "",
+		"RoutesFunction": "TemplateRoutes",
+		"ReceiverType": "T",
+		"ReceiverPackage": "",
+		"ReceiverInterface": "RoutesReceiver",
+		"TemplateDataType": "TemplateData",
+		"SSETemplateDataType": "SSETemplateData",
+		"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+		"TemplatesVariables": [
+			"templates"
+		],
+		"OutputFileName": "template_routes.go",
+		"PathPrefix": false,
+		"Logger": false,
+		"Middleware": false,
+		"Verbose": false,
+		"OutputMultipleFiles": false,
+		"OutputHTMX": false,
+		"OutputDatastar": false,
+		"OutputExportedDefaultIdentifiers": true,
+		"OutputMuxtVersion": true,
+		"MultipartMaxMemory": 0,
+		"SilenceHTTPResponseWarning": false
+	}
+}
+-- index.gohtml --
+{{define "GET /int/{id} Int(id)"}}{{.Result}}{{end}}
+{{define "GET /small/{a}/{b}/{c} Small(a, b, c)"}}{{.Result}}{{end}}
+{{define "GET /bool/{flag} Bool(flag)"}}{{.Result}}{{end}}
+{{define "GET /string/{name} String(name)"}}{{.Result}}{{end}}
+{{define "GET /at/{at} At(at)"}}{{.Result}}{{end}}
+{{define "GET /files/{path...} Files(path)"}}{{.Result}}{{end}}
+{{define "GET /exact/{$} Exact()"}}{{.Result}}{{end}}
+-- server.go --
+package server
+
+import "time"
+
+type T struct{}
+
+func (T) Int(id int) int                          { return id }
+func (T) Small(a int8, b uint16, c int64) int64   { return c }
+func (T) Bool(flag bool) bool                     { return flag }
+func (T) String(name string) string               { return name }
+func (T) At(at time.Time) time.Time               { return at }
+func (T) Files(path string) string                { return path }
+func (T) Exact() string                           { return "" }
+-- want/template_routes.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+type RoutesReceiver interface {
+	At(at time.Time) time.Time
+	Bool(flag bool) bool
+	Exact() string
+	Files(path string) string
+	Int(id int) int
+	Small(a int8, b uint16, c int64) int64
+	String(name string) string
+}
+
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+	pathsPrefix := ""
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.HandleFunc("GET /at/{at}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, time.Time]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var atParsed time.Time
+		if err := atParsed.UnmarshalText([]byte(request.PathValue("at"))); err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		atPathParam := atParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.At(atPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /at/{at} At(at)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /bool/{flag}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, bool]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		flagParsed, err := strconv.ParseBool(request.PathValue("flag"))
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		flagPathParam := flagParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Bool(flagPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /bool/{flag} Bool(flag)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /exact/{$}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Exact()
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /exact/{$} Exact()", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /files/{path...}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		pathPathParam := request.PathValue("path")
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Files(pathPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /files/{path...} Files(path)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /int/{id}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		idParsed, err := strconv.Atoi(request.PathValue("id"))
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		idPathParam := idParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Int(idPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /int/{id} Int(id)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /small/{a}/{b}/{c}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int64]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		aParsed, err := strconv.ParseInt(request.PathValue("a"), 10, 8)
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		aPathParam := int8(aParsed)
+		bParsed, err := strconv.ParseUint(request.PathValue("b"), 10, 16)
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		bPathParam := uint16(bParsed)
+		cParsed, err := strconv.ParseInt(request.PathValue("c"), 10, 64)
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		cPathParam := cParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Small(aPathParam, bPathParam, cPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /small/{a}/{b}/{c} Small(a, b, c)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /string/{name}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		namePathParam := request.PathValue("name")
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.String(namePathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /string/{name} String(name)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+}
+
+type TemplateData[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
+}
+
+func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Result() T {
+	return data.result
+}
+
+func (data *TemplateData[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *TemplateData[R, T]) Header(key, value string) *TemplateData[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *TemplateData[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *TemplateData[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *TemplateData[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *TemplateData[R, T]) RedirectMultipleChoices(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *TemplateData[R, T]) RedirectMovedPermanently(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *TemplateData[R, T]) RedirectFound(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *TemplateData[R, T]) RedirectSeeOther(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
+type TemplateRoutePaths struct {
+	pathsPrefix string
+}
+
+func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
+	segment2_06e81700, err := atPathParam.MarshalText()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
+	}
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "at", routePaths.escapePathSegment(string(segment2_06e81700))), nil
+}
+
+func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))
+}
+
+func (routePaths TemplateRoutePaths) Exact() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "exact") + "/"
+}
+
+func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "files", routePaths.escapePathSegments(pathPathParam))
+}
+
+func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))
+}
+
+func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))
+}
+
+func (routePaths TemplateRoutePaths) String(namePathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "string", routePaths.escapePathSegment(namePathParam))
+}
+
+func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+	switch value {
+	case ".":
+		return "%2E"
+	case "..":
+		return "%2E%2E"
+	}
+	return url.PathEscape(value)
+}
+
+func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+	segments := strings.Split(value, "/")
+	for i, segment := range segments {
+		segments[i] = routePaths.escapePathSegment(segment)
+	}
+	return strings.Join(segments, "/")
+}

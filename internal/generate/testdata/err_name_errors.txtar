@@ -1,0 +1,52 @@
+Every malformed name is reported, each at its position.
+
+Command line: muxt generate
+-- config.json --
+{
+	"command": "generate",
+	"config": {
+		"MuxtVersion": "v1.2.3",
+		"PackageName": "main",
+		"PackagePath": "",
+		"RoutesFunction": "TemplateRoutes",
+		"ReceiverType": "",
+		"ReceiverPackage": "",
+		"ReceiverInterface": "RoutesReceiver",
+		"TemplateDataType": "TemplateData",
+		"SSETemplateDataType": "SSETemplateData",
+		"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+		"TemplatesVariables": [
+			"templates"
+		],
+		"OutputFileName": "template_routes.go",
+		"PathPrefix": false,
+		"Logger": false,
+		"Middleware": false,
+		"Verbose": false,
+		"OutputMultipleFiles": false,
+		"OutputHTMX": false,
+		"OutputDatastar": false,
+		"OutputExportedDefaultIdentifiers": true,
+		"OutputMuxtVersion": true,
+		"MultipartMaxMemory": 0,
+		"SilenceHTTPResponseWarning": false
+	}
+}
+-- index.gohtml --
+{{define "OPTIONS /a"}}{{end}}
+{{define "GET /b//c"}}{{end}}
+{{define "GET /{id}/{id} F(id)"}}{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+  OPTIONS /a
+  ^^^^^^^
+index.gohtml:1:11: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE
+
+  GET /b//c
+         ^
+index.gohtml:2:18: path has an empty segment
+
+  GET /{id}/{id} F(id)
+             ^^
+index.gohtml:3:22: path parameter name "id" is used more than once; parameter names must be unique within a path
