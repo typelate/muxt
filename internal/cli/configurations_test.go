@@ -216,6 +216,23 @@ func TestCommandLineConfigurations(t *testing.T) {
 			},
 		},
 		{
+			name: "unexported default identifiers with a receiver type",
+			args: "generate --use-receiver-type=Server --output-exported-default-identifiers=false",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                "v1.2.3",
+				PackageName:                "main",
+				RoutesFunction:             "templateRoutes",
+				ReceiverType:               "Server",
+				ReceiverInterface:          "routesReceiver",
+				TemplateDataType:           "templateData",
+				SSETemplateDataType:        "sseTemplateData",
+				TemplateRoutePathsTypeName: "templateRoutePaths",
+				TemplatesVariables:         []string{"templates"},
+				OutputFileName:             "template_routes.go",
+				OutputMuxtVersion:          true,
+			},
+		},
+		{
 			name: "unexported default identifiers keep an explicit name",
 			args: "generate --output-exported-default-identifiers=false --output-routes-func=Routes",
 			want: generate.RoutesFileConfiguration{
