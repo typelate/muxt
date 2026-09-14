@@ -104,6 +104,14 @@ Update the code in order:
 3. `internal/load/` — Only if a run needs something new from the loaded packages
 4. `internal/cli/` — CLI handling (if needed)
 
+Before adding an integration script, see whether a unit test can state it,
+at the layer that owns the behavior:
+- **Flags:** `internal/cli/configurations_test.go` states what a command line
+  parses into, and which command lines are rejected, without loading anything.
+
+Integration scripts are for what needs the go command: generated code
+compiling and serving requests, and files on disk.
+
 ### 5. Verify Your Changes
 
 ```bash
