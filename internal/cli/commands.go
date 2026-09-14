@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"cmp"
 	_ "embed"
 	"encoding/json"
@@ -44,6 +43,36 @@ const (
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
+	return commands(wd, args, getEnv, cliVersion, stdout, stderr, runners{
+		routes:    runRoutes,
+		check:     runCheck,
+		generate:  runGenerate,
+		callers:   runTemplateCallers,
+		calls:     runTemplateCalls,
+		mutations: runTemplateMutations,
+	})
+}
+
+// runners are what each command does once its flags have become a
+// configuration.
+//
+// Parsing the flags, applying their defaults and rejecting what cannot
+// work is the command line's job, and for these six commands it is decided
+// before a package is loaded; --format alone is still read when a result is
+// written. Commands runs the real runners; a test runs ones that record the
+// configuration, which is how what a command line means is stated without
+// loading anything. generate-fake-server and explore-module load packages
+// in their own RunE and have no runner yet.
+type runners struct {
+	routes    func(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error
+	check     func(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error
+	generate  func(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error
+	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
+	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
+	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
+}
+
+func commands(wd string, args []string, getEnv func(string) string, version func() (string, bool), stdout, stderr io.Writer, run runners) error {
 	var changeDir string
 	workingDirectory := &wd
 
@@ -76,26 +105,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				return err
 			}
 			cmd.SilenceUsage = true
-			_, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
-			if err != nil {
-				return err
-			}
-			pkg, receiver, err := load.RoutesSource(*workingDirectory, pl, rootCommandConfig)
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			results, err := analysis.NewRoutes(pkg, receiver)
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			for _, result := range results {
-				if err := writeResult(cmd, cmd.OutOrStdout(), result); err != nil {
-					return err
-				}
-			}
-			return nil
+			return run.routes(cmd, *workingDirectory, rootCommandConfig)
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
@@ -111,14 +121,14 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	rootCmd.SetErr(stderr)
 
 	rootCmd.AddCommand(
-		generateCommand(workingDirectory, getEnv),
+		generateCommand(workingDirectory, getEnv, version, run.generate),
 		versionCommand(),
-		checkCommand(workingDirectory),
-		listTemplateCallersCommand(workingDirectory),
-		listTemplateCallsCommand(workingDirectory),
+		checkCommand(workingDirectory, run.check),
+		listTemplateCallersCommand(workingDirectory, run.callers),
+		listTemplateCallsCommand(workingDirectory, run.calls),
 		exploreModuleCommand(workingDirectory),
 		generateFakeServerCommand(workingDirectory),
-		testTemplateMutationsCommand(workingDirectory),
+		testTemplateMutationsCommand(workingDirectory, run.mutations),
 	)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr
@@ -132,7 +142,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 	return rootCmd.Execute()
 }
 
-func checkCommand(workingDirectory *string) *cobra.Command {
+func checkCommand(workingDirectory *string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
 		config analysis.CheckConfiguration
 		rt,
@@ -153,26 +163,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				}
 			}
 			cmd.SilenceUsage = true
-			_, pl, err := load.Packages(*workingDirectory)
-			if err != nil {
-				return err
-			}
-			logger := log.New(cmd.ErrOrStderr(), "", 0)
-			warnPartialAST(logger, pl)
-			pkg, err := load.Package(*workingDirectory, pl, config.TemplatesVariables)
-			if err != nil {
-				return checkFailure(cmd, err)
-			}
-			checked, err := analysis.Check(config, logger, pkg)
-			if err != nil {
-				return checkFailure(cmd, err)
-			}
-			if checked == 1 {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "ok: 1 template")
-			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %d templates\n", checked)
-			}
-			return nil
+			return run(cmd, *workingDirectory, config)
 		},
 	}
 
@@ -186,7 +177,7 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 // testTemplateMutationsCommand varies each dynamic and control flow
 // action in the project's templates and reports the variations the tests
 // let through.
-func testTemplateMutationsCommand(workingDirectory *string) *cobra.Command {
+func testTemplateMutationsCommand(workingDirectory *string, run func(*cobra.Command, string, mutation.Configuration) error) *cobra.Command {
 	var (
 		config                 mutation.Configuration
 		templatePattern        string
@@ -247,13 +238,7 @@ working tree is never written to.`,
 				return err
 			}
 			config.SeedSet = cmd.Flags().Changed("seed")
-
-			report, err := mutation.Run(config, *workingDirectory, cmd.ErrOrStderr())
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			return writeResult(cmd, cmd.OutOrStdout(), report)
+			return run(cmd, *workingDirectory, config)
 		},
 	}
 
@@ -299,7 +284,7 @@ func addGenerateFlagsForModule(flagSet *pflag.FlagSet, config *generate.RoutesFi
 // the response argument when set to a true value.
 const envSilenceHTTPResponseWarning = "MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT"
 
-func generateCommand(workingDirectory *string, getEnv func(string) string) *cobra.Command {
+func generateCommand(workingDirectory *string, getEnv func(string) string, version func() (string, bool), run func(*cobra.Command, string, generate.RoutesFileConfiguration) error) *cobra.Command {
 	var (
 		config                 generate.RoutesFileConfiguration
 		deprecatedTemplatesVar string
@@ -314,7 +299,6 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 				return err
 			}
 			config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
-			stdout := cmd.OutOrStdout()
 			for _, tv := range config.TemplatesVariables {
 				if tv != "" && !token.IsIdentifier(tv) {
 					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
@@ -345,106 +329,12 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 				return fmt.Errorf("output filename must use .go extension")
 			}
 
-			if v, ok := cliVersion(); ok && config.OutputMuxtVersion {
+			if v, ok := version(); ok && config.OutputMuxtVersion {
 				config.MuxtVersion = v
 			}
 			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
-			_, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
-			if err != nil {
-				return err
-			}
-			warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-			pkg, receiver, err := load.GenerateSource(*workingDirectory, pl, config)
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, pkg, receiver, load.StandardLibrary(pl), log.New(stdout, "", 0))
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-
-			// CLEANUP HEURISTIC:
-			// We automatically delete muxt-generated files that are no longer needed to avoid
-			// manual cleanup when template files are renamed or generation modes change.
-			//
-			// Files are identified by:
-			// 1. Presence of "// Code generated by muxt generate" comment
-			// 2. Matching --output-routes-func value (to differentiate multiple route sets)
-			//
-			// Cleanup scenarios:
-			// - Template renamed: old_template_routes_gen.go deleted when template renamed to new.gohtml
-			// - Switch to single-file: all per-file *_template_routes_gen.go files deleted
-			// - Switch to multi-file: old single template_routes.go overwritten (if same filename)
-			// - Routes function unchanged: only deletes files matching current routes function
-			//
-			// IMPORTANT: If you change --output-routes-func value, old files with the previous
-			// routes function name will NOT be deleted (to allow multiple route sets to coexist).
-			// To clean up after changing routes function name, manually delete old files or
-			// temporarily use the old --output-routes-func value with current templates.
-
-			// Find existing generated files for cleanup
-			oldGeneratedFiles, err := generate.FileArguments(*workingDirectory, config.RoutesFunction)
-			if err != nil {
-				return err
-			}
-
-			for oldFilePath, oldArgs := range oldGeneratedFiles {
-				var (
-					oldConfig                 generate.RoutesFileConfiguration
-					oldDeprecatedTemplatesVar string
-				)
-				set := pflag.NewFlagSet("parse-old", pflag.ContinueOnError)
-				addGenerateFlags(set, &oldConfig, &oldDeprecatedTemplatesVar)
-				set.SetOutput(io.Discard)
-				if err := set.Parse(oldArgs); err != nil {
-					log.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", oldFilePath, err)
-					continue
-				}
-				if oldConfig.RoutesFunction != config.RoutesFunction {
-					delete(oldGeneratedFiles, oldFilePath)
-				}
-				if oldDeprecatedTemplatesVar != "" {
-					oldConfig.TemplatesVariables = []string{oldDeprecatedTemplatesVar}
-				}
-			}
-
-			// Write new files
-			newGeneratedFiles := make(map[string]bool)
-			for i, file := range files {
-				var sb bytes.Buffer
-				writeCodeGenerationComment(&sb, configToArgs(config), config.OutputMuxtVersion)
-				sb.WriteString(file.Content)
-				if err := os.WriteFile(file.Path, sb.Bytes(), 0o644); err != nil {
-					for _, f := range files[:i] {
-						if rmErr := os.Remove(f.Path); rmErr != nil {
-							err = errors.Join(err, rmErr)
-						}
-					}
-					return err
-				}
-				// Always include the count — a uniform line parses reliably.
-				if file.Routes == 1 {
-					_, _ = fmt.Fprintf(stdout, "wrote %s: 1 route\n", filepath.Base(file.Path))
-				} else {
-					_, _ = fmt.Fprintf(stdout, "wrote %s: %d routes\n", filepath.Base(file.Path), file.Routes)
-				}
-				newGeneratedFiles[file.Path] = true
-			}
-
-			// Clean up orphaned files
-			// Only deletes files that match the current routes function name but weren't regenerated
-			for oldFile := range oldGeneratedFiles {
-				if !newGeneratedFiles[oldFile] {
-					if err := os.Remove(oldFile); err != nil && !os.IsNotExist(err) {
-						return fmt.Errorf("failed to remove orphaned file %s: %w", oldFile, err)
-					}
-				}
-			}
-
-			return nil
+			return run(cmd, *workingDirectory, config)
 		},
 	}
 
@@ -524,18 +414,21 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	return args
 }
 
-func writeCodeGenerationComment(w io.StringWriter, args []string, includeVersion bool) {
+// writeCodeGenerationComment writes the header of a generated file: the
+// flags that produced it, and the version that wrote it when there is one
+// to record.
+func writeCodeGenerationComment(w io.StringWriter, args []string, version string) {
 	_, _ = w.WriteString(fmt.Sprintf(codeGenerationComment, strings.TrimSpace(strings.Join(args, " "))))
-	if v, ok := cliVersion(); ok && includeVersion {
+	if version != "" {
 		_, _ = w.WriteString("// muxt version: ")
-		_, _ = w.WriteString(v)
+		_, _ = w.WriteString(version)
 		_, _ = w.WriteString("\n")
 	}
 	// The blank line keeps the header out of the package doc comment.
 	_, _ = w.WriteString("\n")
 }
 
-func listTemplateCallersCommand(wd *string) *cobra.Command {
+func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
 		deprecatedTemplatesVar string
@@ -559,19 +452,7 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			_, pl, err := load.Packages(*wd)
-			if err != nil {
-				return err
-			}
-			pkg, err := load.Package(*wd, pl, config.TemplatesVariables)
-			if err != nil {
-				return err
-			}
-			result, err := analysis.NewTemplateCallers(config, pkg)
-			if err != nil {
-				return err
-			}
-			return writeResult(cmd, cmd.OutOrStdout(), result)
+			return run(cmd, *wd, config)
 		},
 	}
 
@@ -582,7 +463,7 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 	return cmd
 }
 
-func listTemplateCallsCommand(wd *string) *cobra.Command {
+func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analysis.TemplateCallsConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallsConfiguration
 		patterns               []string
@@ -606,19 +487,7 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 				config.FilterTemplates = append(config.FilterTemplates, pat)
 			}
 
-			_, pl, err := load.Packages(*wd)
-			if err != nil {
-				return err
-			}
-			pkg, err := load.Package(*wd, pl, config.TemplatesVariables)
-			if err != nil {
-				return err
-			}
-			result, err := analysis.NewTemplateCalls(config, pkg)
-			if err != nil {
-				return err
-			}
-			return writeResult(cmd, cmd.OutOrStdout(), result)
+			return run(cmd, *wd, config)
 		},
 	}
 
