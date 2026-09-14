@@ -59,7 +59,7 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 
 func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper, usesSegmentsEscaper bool, _ error) {
 	const methodReceiverName = routePathsReceiverName
-	encodingPkg, ok := file.Types("encoding")
+	encodingPkg, ok := file.OutputPackage().Import("encoding")
 	if !ok {
 		return nil, false, false, fmt.Errorf(`the "encoding" package must be loaded`)
 	}

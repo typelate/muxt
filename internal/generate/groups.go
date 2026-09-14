@@ -5,10 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/tools/go/packages"
-
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 type templateGroups struct {
@@ -17,17 +15,12 @@ type templateGroups struct {
 	all    []muxt.Definition
 }
 
-func groupTemplates(wd string, config RoutesFileConfiguration, routesPkg *packages.Package) (templateGroups, error) {
+func groupTemplates(config RoutesFileConfiguration, variables []source.Variable) (templateGroups, error) {
 	result := templateGroups{
 		byFile: make(map[string][]muxt.Definition),
 	}
-	for _, tv := range config.TemplatesVariables {
-		lt, ts, err := load.HTMLTemplates(tv, routesPkg)
-		if err != nil {
-			return result, err
-		}
-
-		defs, err := muxt.Definitions(ts, tv, lt)
+	for _, tv := range variables {
+		defs, err := muxt.Definitions(tv)
 		if err != nil {
 			return result, err
 		}

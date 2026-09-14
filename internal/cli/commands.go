@@ -76,11 +76,16 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 				return err
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
+			_, pl, err := load.Packages(*workingDirectory, rootCommandConfig.ReceiverPackage)
 			if err != nil {
 				return err
 			}
-			results, err := analysis.NewRoutes(rootCommandConfig, *workingDirectory, fileSet, pl)
+			pkg, receiver, err := load.RoutesSource(*workingDirectory, pl, rootCommandConfig)
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			results, err := analysis.NewRoutes(pkg, receiver)
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err
@@ -148,18 +153,19 @@ func checkCommand(workingDirectory *string) *cobra.Command {
 				}
 			}
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory)
+			_, pl, err := load.Packages(*workingDirectory)
 			if err != nil {
 				return err
 			}
 			logger := log.New(cmd.ErrOrStderr(), "", 0)
 			warnPartialAST(logger, pl)
-			checked, err := analysis.Check(config, *workingDirectory, logger, fileSet, pl)
+			pkg, err := load.Package(*workingDirectory, pl, config.TemplatesVariables)
 			if err != nil {
-				if printMultiLineError(cmd, err) {
-					return err
-				}
-				return fmt.Errorf("fail: %s", err)
+				return checkFailure(cmd, err)
+			}
+			checked, err := analysis.Check(config, logger, pkg)
+			if err != nil {
+				return checkFailure(cmd, err)
 			}
 			if checked == 1 {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "ok: 1 template")
@@ -344,12 +350,17 @@ func generateCommand(workingDirectory *string, getEnv func(string) string) *cobr
 			}
 			applyDefaults(&config, cmd.Flags())
 			cmd.SilenceUsage = true
-			fileSet, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
+			_, pl, err := load.Packages(*workingDirectory, config.ReceiverPackage)
 			if err != nil {
 				return err
 			}
 			warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, fileSet, pl, log.New(stdout, "", 0))
+			pkg, receiver, err := load.GenerateSource(*workingDirectory, pl, config)
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			files, err := generate.TemplateRoutesFiles(*workingDirectory, config, pkg, receiver, log.New(stdout, "", 0))
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err
@@ -527,7 +538,6 @@ func writeCodeGenerationComment(w io.StringWriter, args []string, includeVersion
 func listTemplateCallersCommand(wd *string) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
-		templatesVariables     []string
 		deprecatedTemplatesVar string
 		patterns               []string
 	)
@@ -537,60 +547,7 @@ func listTemplateCallersCommand(wd *string) *cobra.Command {
 		Aliases: []string{"callers"},
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := fixTemplateVariables(&templatesVariables, deprecatedTemplatesVar); err != nil {
-				return err
-			}
-			cmd.SilenceUsage = true
-			for _, pattern := range patterns {
-				pat, err := regexp.Compile(pattern)
-				if err != nil {
-					return err
-				}
-				config.FilterTemplates = append(config.FilterTemplates, pat)
-			}
-
-			fileSet, pl, err := load.Packages(*wd)
-			if err != nil {
-				return err
-			}
-			combined := &analysis.TemplateCallers{}
-			for _, tv := range templatesVariables {
-				config.TemplatesVariable = tv
-				lt, err := load.Templates(*wd, tv, pl)
-				if err != nil {
-					return err
-				}
-				result, err := analysis.NewTemplateCallers(config, fileSet, lt)
-				if err != nil {
-					return err
-				}
-				combined.Templates = append(combined.Templates, result.Templates...)
-			}
-			return writeResult(cmd, cmd.OutOrStdout(), combined)
-		},
-	}
-
-	addUseTemplatesVarToFlagSet(cmd.Flags(), &templatesVariables, &deprecatedTemplatesVar)
-	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
-	cmd.Flags().String("format", "text", "output format (text or json)")
-
-	return cmd
-}
-
-func listTemplateCallsCommand(wd *string) *cobra.Command {
-	var (
-		config                 analysis.TemplateCallsConfiguration
-		templatesVariables     []string
-		patterns               []string
-		deprecatedTemplatesVar string
-	)
-
-	cmd := &cobra.Command{
-		Use:     listTemplateCallsCommandName,
-		Aliases: []string{"calls"},
-		Short:   "List template calls",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := fixTemplateVariables(&templatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
 			cmd.SilenceUsage = true
@@ -606,24 +563,66 @@ func listTemplateCallsCommand(wd *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			combined := &analysis.TemplateCalls{}
-			for _, tv := range templatesVariables {
-				config.TemplatesVariable = tv
-				lt, err := load.Templates(*wd, tv, pl)
-				if err != nil {
-					return err
-				}
-				result, err := analysis.NewTemplateCalls(config, lt)
-				if err != nil {
-					return err
-				}
-				combined.Templates = append(combined.Templates, result.Templates...)
+			pkg, err := load.Package(*wd, pl, config.TemplatesVariables)
+			if err != nil {
+				return err
 			}
-			return writeResult(cmd, cmd.OutOrStdout(), combined)
+			result, err := analysis.NewTemplateCallers(config, pkg)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
 		},
 	}
 
-	addUseTemplatesVarToFlagSet(cmd.Flags(), &templatesVariables, &deprecatedTemplatesVar)
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
+	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
+	cmd.Flags().String("format", "text", "output format (text or json)")
+
+	return cmd
+}
+
+func listTemplateCallsCommand(wd *string) *cobra.Command {
+	var (
+		config                 analysis.TemplateCallsConfiguration
+		patterns               []string
+		deprecatedTemplatesVar string
+	)
+
+	cmd := &cobra.Command{
+		Use:     listTemplateCallsCommandName,
+		Aliases: []string{"calls"},
+		Short:   "List template calls",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+				return err
+			}
+			cmd.SilenceUsage = true
+			for _, pattern := range patterns {
+				pat, err := regexp.Compile(pattern)
+				if err != nil {
+					return err
+				}
+				config.FilterTemplates = append(config.FilterTemplates, pat)
+			}
+
+			_, pl, err := load.Packages(*wd)
+			if err != nil {
+				return err
+			}
+			pkg, err := load.Package(*wd, pl, config.TemplatesVariables)
+			if err != nil {
+				return err
+			}
+			result, err := analysis.NewTemplateCalls(config, pkg)
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, cmd.OutOrStdout(), result)
+		},
+	}
+
+	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
@@ -802,6 +801,17 @@ func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *[]string, deprecat
 	// For backward compatibility, also handle the deprecated flag as a single string
 	flagSet.StringVar(deprecated, deprecatedTemplatesVariable, "", "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
+}
+
+// checkFailure reports why muxt check could not finish: a multi-line
+// error prints as its own diagram and is returned as it is, and anything
+// else -- a package that would not load, a templates variable that does
+// not evaluate -- is returned as a fail line.
+func checkFailure(cmd *cobra.Command, err error) error {
+	if printMultiLineError(cmd, err) {
+		return err
+	}
+	return fmt.Errorf("fail: %s", err)
 }
 
 // printMultiLineError renders err's verbose form to stderr — an

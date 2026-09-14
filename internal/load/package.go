@@ -10,8 +10,9 @@ import (
 
 	"github.com/typelate/check"
 
-	"github.com/typelate/muxt/internal/astgen"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/astgen"
 )
 
 func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
@@ -110,22 +111,11 @@ func ParseErrors(pl []*packages.Package) []packages.Error {
 	return found
 }
 
-func PackageAtFilepath(list []*packages.Package, dir string) (*packages.Package, bool) {
-	d := dir
-	if filepath.Ext(d) == ".go" {
-		d = filepath.Dir(dir)
-	}
+// PackageInDirectory returns the package whose files are in dir, which is
+// always a directory, even one whose name ends in .go.
+func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package, bool) {
 	for _, pkg := range list {
-		if len(pkg.GoFiles) > 0 && filepath.Dir(pkg.GoFiles[0]) == d {
-			return pkg, true
-		}
-	}
-	return nil, false
-}
-
-func PackageWithPath(list []*packages.Package, path string) (*packages.Package, bool) {
-	for _, pkg := range list {
-		if pkg.PkgPath == path {
+		if len(pkg.GoFiles) > 0 && filepath.Dir(pkg.GoFiles[0]) == dir {
 			return pkg, true
 		}
 	}
@@ -142,7 +132,7 @@ type LoadedTemplates struct {
 }
 
 func Templates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
-	pkg, ok := PackageAtFilepath(pl, wd)
+	pkg, ok := PackageInDirectory(pl, wd)
 	if !ok {
 		return nil, NoPackageError(wd, pl)
 	}

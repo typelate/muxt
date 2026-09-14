@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
 func TestArgument(t *testing.T) {
@@ -474,13 +476,13 @@ func TestArgument(t *testing.T) {
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))
-			defs, err := Definitions(ts, "templates", nil)
+			defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			for i := range defs {
-				err = ResolveCall(&defs[i], examplePkg, tc.Receiver, packageList)
+				err = ResolveCall(&defs[i], source.Package{Fset: fileSet, Types: examplePkg}, tc.Receiver)
 				if err != nil {
 					break
 				}
