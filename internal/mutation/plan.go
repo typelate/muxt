@@ -10,10 +10,9 @@ import (
 	"text/template/parse"
 
 	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/asteval"
-	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // plan is everything decided before a single test is run: which templates
@@ -145,65 +144,73 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-// newPlan loads the project, walks the templates each ExecuteTemplate
-// call reaches, and enumerates the variations available in each.
+// newPlan loads the project, then plans from it.
 func newPlan(config Configuration, workingDirectory string) (*plan, error) {
-	pl, err := loadPackages(workingDirectory, config.IncludeTests, config.env)
+	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
 		return nil, err
-	}
-
-	include := func(string) bool { return true }
-	if config.TemplatePattern != nil {
-		include = config.TemplatePattern.MatchString
-	}
-
-	p := &plan{
-		seed:     config.Seed,
-		draw:     newValues(config.Seed),
-		maxCases: config.MaxCases,
-	}
-	if p.maxCases <= 0 {
-		p.maxCases = DefaultMaxCases
 	}
 	// before is what the templates looked like at the --diff revision.
 	// Nil means there is nothing to compare with, so every template
 	// counts as changed.
-	var before revision
+	var (
+		before    revision
+		diffError string
+	)
 	if config.Diff != "" {
-		p.diff = config.Diff
 		dir, cleanup, err := checkout(workingDirectory, config.Diff)
 		if err != nil {
 			return nil, err
 		}
 		defer cleanup()
 		if before, err = templatesAt(config, dir); err != nil {
-			p.diffError = err.Error()
+			diffError = err.Error()
 		}
+	}
+	return planFrom(config, in, before, diffError)
+}
+
+// planFrom walks the templates each ExecuteTemplate call in the input
+// reaches and enumerates the variations available in each.
+//
+// It is everything a plan decides, from inputs that hold no loader: before
+// is what the templates read like at the --diff revision, nil when there
+// is none, and diffError why that revision could not be read.
+func planFrom(config Configuration, in input, before revision, diffError string) (*plan, error) {
+	include := func(string) bool { return true }
+	if config.TemplatePattern != nil {
+		include = config.TemplatePattern.MatchString
+	}
+
+	p := &plan{
+		seed:      config.Seed,
+		draw:      newValues(config.Seed),
+		maxCases:  config.MaxCases,
+		diff:      config.Diff,
+		diffError: diffError,
+	}
+	if p.maxCases <= 0 {
+		p.maxCases = DefaultMaxCases
 	}
 	sel := selector{
 		before:    before,
 		seen:      make(map[string]struct{}),
 		unchanged: make(map[string]struct{}),
 		include:   include,
-		wd:        workingDirectory,
+		wd:        in.dir,
 	}
 
-	for _, templatesVariable := range config.TemplatesVariables {
-		lt, err := load.Templates(workingDirectory, templatesVariable, pl)
-		if err != nil {
-			return nil, err
-		}
-		functions := lt.Templates.Functions()
+	for _, variable := range in.pkg.Variables {
+		lt := newChecked(in.pkg, variable)
 
-		index, err := buildTreeIndex(lt, workingDirectory, pl, functions)
+		index, err := buildTreeIndex(lt, in.dir)
 		if err != nil {
 			return nil, err
 		}
 
 		chosen := sel.choose(traverse(lt, index))
 		for _, sc := range chosen.mutate {
-			p.add(lt, sc, functions, workingDirectory)
+			p.add(lt, sc, lt.Functions, in.dir)
 		}
 		p.unchanged = append(p.unchanged, chosen.unchanged...)
 		p.trimmed = append(p.trimmed, chosen.trimmed...)
@@ -224,7 +231,7 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
-func (p *plan) add(lt *load.LoadedTemplates, sc scope, functions check.Functions, workingDirectory string) {
+func (p *plan) add(lt *checked, sc scope, functions check.Functions, workingDirectory string) {
 	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases)
 
 	report := TemplateReport{
@@ -309,7 +316,7 @@ func (p *plan) add(lt *load.LoadedTemplates, sc scope, functions check.Functions
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *load.LoadedTemplates, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
+func invalid(lt *checked, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
 	mutated := sc.src.mutatedText(mutant.edits)
 	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, functions)
 	if err != nil {
@@ -331,21 +338,22 @@ func invalid(lt *load.LoadedTemplates, sc scope, mutant Mutant, functions check.
 // The trees are parsed here rather than taken from the template set so
 // that every node position is an offset into text this package holds,
 // which is what a mutation is spliced into.
-func buildTreeIndex(lt *load.LoadedTemplates, workingDirectory string, pl []*packages.Package, functions check.Functions) (map[string]treeLocation, error) {
+func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocation, error) {
+	functions := lt.Functions
 	// The definitions are gathered before the collector is built: a
 	// source scans its actions as it is constructed, and it can only do
 	// that once the delimiters its file was written with are known,
 	// which is something the definitions say.
-	var defs []check.Definition
-	for _, t := range lt.HTML.Templates() {
-		definition, ok := lt.Templates.FindDefinition(t.Name())
+	var defs []source.Definition
+	for _, t := range lt.Set.Templates() {
+		definition, ok := lt.Definitions[t.Name()]
 		if !ok {
 			continue
 		}
 		defs = append(defs, definition)
 	}
 
-	collector := newSourceCollector(workingDirectory, pl, defs)
+	collector := newSourceCollector(workingDirectory, defs)
 	for _, definition := range defs {
 		if _, err := collector.add(definition); err != nil {
 			return nil, err
@@ -419,18 +427,6 @@ func countActions(node parse.Node) int {
 	default:
 		return 0
 	}
-}
-
-// loadPackages loads the working directory's package, optionally
-// including its test files so that ExecuteTemplate calls written in tests
-// are visible. env is the environment the go command runs in, nil for the
-// process's own.
-func loadPackages(workingDirectory string, includeTests bool, env []string) ([]*packages.Package, error) {
-	if !includeTests {
-		_, pl, err := load.PackagesWithEnv(workingDirectory, env)
-		return pl, err
-	}
-	return load.PackagesWithTests(workingDirectory, env)
 }
 
 func relativePosition(workingDirectory string, position token.Position) string {

@@ -1,0 +1,77 @@
+A page renders partials through {{template}}, narrowing dot through a
+range. A partial reached twice with the same dot is mutated once, and the
+repeat is reported as trimmed.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 -v
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": null,
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": true,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+
+func RenderAgain(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}<h1>{{.Title}}</h1>{{range .Items}}{{template "item" .}}{{end}}{{template "item" (index .Items 0)}}{{end}}
+{{define "item"}}<li>{{.Name}}{{if gt .Price 10}} (sale){{end}}</li>{{end}}
+-- want/report.txt --
+7 mutants across 2 templates (complexity 4, seed 1)
+dry run: no tests were run
+
+server.go:25:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" page.gohtml (complexity 2, dot: server.Page)
+    PEND 1:22 action-zero
+    PEND 1:37 range-never
+    PEND 1:53 template-drop
+    PEND 1:81 template-drop
+  "item" page.gohtml via {{template}} (complexity 2, dot: server.Item)
+    PEND 2:22 action-zero
+    PEND 2:31 if-false
+    PEND 2:31 if-true
+
+trimmed 2 subtrees already mutated with the same dot:
+  "item" at server.go:25:9, first reached from server.go:25:9
+  "page" at server.go:29:9, first reached from server.go:25:9
+
+7 mutants, 7 runnable, 0 skipped

@@ -122,31 +122,6 @@ func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package
 	return nil, false
 }
 
-// LoadedTemplates bundles a package's loaded template variable with the
-// analysis wiring built from it.
-type LoadedTemplates struct {
-	Package   *packages.Package
-	Templates *check.Templates
-	Global    *check.Global
-	HTML      *template.Template
-}
-
-func Templates(wd, templatesVariable string, pl []*packages.Package) (*LoadedTemplates, error) {
-	pkg, ok := PackageInDirectory(pl, wd)
-	if !ok {
-		return nil, NoPackageError(wd, pl)
-	}
-
-	lt, ts, err := HTMLTemplates(templatesVariable, pkg)
-	if err != nil {
-		return nil, err
-	}
-
-	global := check.NewGlobal(pkg.Types, pkg.Fset, lt, lt.Functions())
-	global.Definitions = lt
-	return &LoadedTemplates{Package: pkg, Templates: lt, Global: global, HTML: ts}, nil
-}
-
 // HTMLTemplates evaluates the package-level template variable through
 // check.LoadTemplates and returns the loaded handle alongside the
 // html/template value; muxt introspects template names and trees without
