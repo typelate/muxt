@@ -1,0 +1,56 @@
+A field the data type does not have is reported at the call and in the
+template.
+
+Command line: muxt check
+-- config.json --
+{
+	"command": "check",
+	"config": {
+		"Verbose": false,
+		"TemplatesVariables": [
+			"templates"
+		]
+	}
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Heading}}</h1>{{range .Items}}{{template "item" .}}{{end}}{{end}}
+{{define "item"}}<li>{{.Cost}}</li>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:16:9 ExecuteTemplate "index" Page
+index.gohtml:1:25: executing "index" at <.Heading>: field or method Heading not found on Page
+
+  type Page struct {
+    Title string
+    Items []Item
+  }
+
+index.gohtml:2:24: executing "item" at <.Cost>: field or method Cost not found on Item
+
+  type Item struct {
+    Name  string
+    Price int
+  }
+

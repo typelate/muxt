@@ -111,11 +111,13 @@ at the layer that owns the behavior:
 - **Flags:** `internal/cli/configurations_test.go` states what a command line
   parses into, and which command lines are rejected, without loading anything.
 - **What a command does with a valid configuration:**
-  `internal/generate/testdata/*.txtar` snapshot generated files from packages
-  loaded in memory in milliseconds. Each archive's configuration is a literal
-  in `snapshots_test.go`, copied from the command line case it stands for.
-  Rewrite snapshots with `go test ./internal/generate -run TestSnapshots -update`
-  and review the diff.
+  `internal/{generate,analysis}/testdata/*.txtar` snapshot generated files,
+  check reports and the route and template listings, from packages loaded in
+  memory in milliseconds. Each archive's configuration is a literal in that
+  package's `snapshots_test.go`, copied from the command line case it stands
+  for. Rewrite snapshots with
+  `go test ./internal/{generate,analysis} -run TestSnapshots -update` and
+  review the diff.
 
 Integration scripts are for what needs the go command: generated code
 compiling and serving requests, and files on disk.
