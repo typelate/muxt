@@ -1,0 +1,61 @@
+Resolution errors from every route are reported together, pointing at
+the argument or method at fault, with where the method is defined.
+
+Command line: muxt generate --use-receiver-type=T
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "TemplateRoutes",
+	"ReceiverType": "T",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "RoutesReceiver",
+	"TemplateDataType": "TemplateData",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /{id} Float(id)"}}{{end}}
+{{define "GET /ctx Context(request)"}}{{end}}
+{{define "GET /none NoResults()"}}{{end}}
+-- server.go --
+package server
+
+import "context"
+
+type T struct{}
+
+func (T) Float(id float64) string            { return "" }
+func (T) Context(ctx context.Context) string   { return "" }
+func (T) NoResults()                           {}
+-- want/error.txt --
+  GET /ctx Context(request)
+                   ^^^^^^^
+index.gohtml:2:28: method expects type context.Context but request is *http.Request
+server.go:8:10: Context is defined here
+
+  GET /none NoResults()
+            ^^^^^^^^^
+index.gohtml:3:21: method NoResults() has no results; it should have one or two
+server.go:9:10: NoResults is defined here
+
+  GET /{id} Float(id)
+                  ^^
+index.gohtml:1:27: method param type float64 not supported (supported: string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler; bind as string and parse it yourself for other values)
+server.go:7:10: Float is defined here

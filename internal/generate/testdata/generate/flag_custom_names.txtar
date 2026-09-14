@@ -1,0 +1,191 @@
+The output flags rename the generated file and identifiers.
+
+Command line: muxt generate --use-receiver-type=Server --output-file=routes.go --output-routes-func=Routes --output-receiver-interface=Handlers --output-template-data-type=Data --output-template-route-paths-type=Paths
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "Routes",
+	"ReceiverType": "Server",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "Handlers",
+	"TemplateDataType": "Data",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "Paths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /{id} Show(id)"}}{{.Result}}{{end}}
+-- server.go --
+package server
+
+type Server struct{}
+
+func (*Server) Show(id string) string { return id }
+-- want/routes.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"path"
+	"strconv"
+	"sync"
+)
+
+type Handlers interface {
+	Show(id string) string
+}
+
+func Routes(mux *http.ServeMux, receiver Handlers) Paths {
+	pathsPrefix := ""
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.HandleFunc("GET /{id}", func(response http.ResponseWriter, request *http.Request) {
+		var td = Data[Handlers, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		idPathParam := request.PathValue("id")
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Show(idPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /{id} Show(id)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	return Paths{pathsPrefix: pathsPrefix}
+}
+
+type Data[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *Data[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
+}
+
+func (data *Data[R, T]) Path() Paths {
+	return Paths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *Data[R, T]) Result() T {
+	return data.result
+}
+
+func (data *Data[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *Data[R, T]) StatusCode(statusCode int) *Data[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *Data[R, T]) Header(key, value string) *Data[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *Data[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *Data[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *Data[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *Data[R, T]) Redirect(url string, code int) (*Data[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *Data[R, T]) RedirectMultipleChoices(url string) (*Data[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *Data[R, T]) RedirectMovedPermanently(url string) (*Data[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *Data[R, T]) RedirectFound(url string) (*Data[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *Data[R, T]) RedirectSeeOther(url string) (*Data[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *Data[R, T]) String() string {
+	return ""
+}
+
+type Paths struct {
+	pathsPrefix string
+}
+
+func (routePaths Paths) Show(idPathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
+}
+
+func (routePaths Paths) escapePathSegment(value string) string {
+	switch value {
+	case ".":
+		return "%2E"
+	case "..":
+		return "%2E%2E"
+	}
+	return url.PathEscape(value)
+}
