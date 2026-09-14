@@ -3,6 +3,8 @@ package muxt
 import (
 	"go/ast"
 	"go/parser"
+	"go/token"
+	"go/types"
 	"html/template"
 	"testing"
 
@@ -209,5 +211,25 @@ func TestDefinitionsSignalsCallback(t *testing.T) {
 	name, ok := defs[0].SignalsCallback()
 	if !ok || name != "countsSignals" {
 		t.Errorf("SignalsCallback() = %q, %t; want %q, true", name, ok, "countsSignals")
+	}
+}
+
+// TestTypeQualifier states how a type is named in a message about a route:
+// a type the receiver's own package declares is named on its own, and one
+// from anywhere else carries its package name.
+func TestTypeQualifier(t *testing.T) {
+	receiverPkg := types.NewPackage("example.com/server", "server")
+	otherPkg := types.NewPackage("example.com/other/models", "models")
+	qual := typeQualifier(receiverPkg)
+
+	named := func(pkg *types.Package, name string) types.Type {
+		obj := types.NewTypeName(token.NoPos, pkg, name, nil)
+		return types.NewNamed(obj, types.NewStruct(nil, nil), nil)
+	}
+	if got := types.TypeString(named(receiverPkg, "Page"), qual); got != "Page" {
+		t.Errorf("a receiver package type is %q, want %q", got, "Page")
+	}
+	if got := types.TypeString(named(otherPkg, "Page"), qual); got != "models.Page" {
+		t.Errorf("another package's type is %q, want %q", got, "models.Page")
 	}
 }
