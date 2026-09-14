@@ -75,7 +75,10 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		},
 	}
 
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sig, def.Arguments, nil, resultDataIdent, config, def.CallExpression(), func(s string) *ast.BlockStmt {
+	// Parsing rewrites the call's arguments to the locals it declares,
+	// so it works on a copy and the definition stays as resolved.
+	call := cloneCall(def.CallExpression())
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sig, def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
@@ -98,7 +101,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 			Tok:   token.VAR,
 			Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(guardIdent)}, Type: astgen.ExportedIdentifier(file, "", "sync/atomic", "Bool")}},
 		}})
-		callArgs := slices.Clone(def.CallExpression().Args)
+		callArgs := slices.Clone(call.Args)
 		callArgs[execIdx] = closure
 		if config.Logger {
 			handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
@@ -130,7 +133,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 			Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
 		}, sig, def.FunctionIdentifier().Name, &ast.CallExpr{
 			Fun:  callFun,
-			Args: slices.Clone(def.CallExpression().Args),
+			Args: slices.Clone(call.Args),
 		}, errBody)
 		if err != nil {
 			return nil, err

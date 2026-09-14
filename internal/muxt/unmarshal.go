@@ -115,11 +115,17 @@ func checkUnmarshalable(pl []*packages.Package, tp types.Type, qual types.Qualif
 	return unsupportedTypeError(tp, qual, supportedUnmarshalFieldTypes)
 }
 
+// isStringAssignable reports whether a request string can be passed to a
+// parameter of type tp without parsing it.
+func isStringAssignable(tp types.Type) bool {
+	return types.AssignableTo(types.Universe.Lookup("string").Type(), tp)
+}
+
 // checkParsedArgument validates a path value or lastEventID parameter:
 // it either receives the raw string or parses from one. Floats are
 // rejected here even though form fields accept them.
 func checkParsedArgument(pl []*packages.Package, paramType types.Type, qual types.Qualifier) error {
-	if types.AssignableTo(types.Universe.Lookup("string").Type(), paramType) {
+	if isStringAssignable(paramType) {
 		return nil
 	}
 	switch UnmarshalMethodFor(pl, paramType) {

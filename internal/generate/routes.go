@@ -237,17 +237,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		},
 	})
 
-	is := file.ImportSpecs()
-	importSpecs := make([]ast.Spec, 0, len(is))
-	for _, s := range is {
-		importSpecs = append(importSpecs, s)
-	}
+	// The import declaration is filled in last: building the other
+	// declarations is what registers the imports they use.
+	importDecl := &ast.GenDecl{Tok: token.IMPORT}
 	decls := []ast.Decl{
-		// import
-		&ast.GenDecl{
-			Tok:   token.IMPORT,
-			Specs: importSpecs,
-		},
+		importDecl,
 
 		// type
 		&ast.GenDecl{
@@ -269,13 +263,16 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, fileSet *tok
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
+	for _, spec := range file.ImportSpecs() {
+		importDecl.Specs = append(importDecl.Specs, spec)
+	}
 	outputFile := &ast.File{
 		Name:  ast.NewIdent(config.PackageName),
 		Decls: decls,
 	}
 
 	filePath := filepath.Join(wd, config.OutputFileName)
-	content, err := astgen.FormatFile(filePath, outputFile)
+	content, err := formatFile(filePath, outputFile)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +367,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, file, routesFuncName, receiverInterfaceName, logger, config, receiver, routesPkg)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, file.sibling(), routesFuncName, receiverInterfaceName, logger, config, receiver, routesPkg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
@@ -381,7 +378,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		outputFileName := baseFileName + "_template_routes_gen.go"
 		outputFilePath := filepath.Join(wd, outputFileName)
 
-		content, err := astgen.FormatFile(outputFilePath, perFileAST)
+		content, err := formatFile(outputFilePath, perFileAST)
 		if err != nil {
 			return nil, fmt.Errorf("failed to format %s: %w", outputFileName, err)
 		}
@@ -761,6 +758,27 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
+// cloneCall copies a template name's call expression deeply enough that
+// rewriting the copy's arguments, or a nested call's function, leaves the
+// original untouched. A template name's call has only identifiers and
+// nested calls for arguments.
+func cloneCall(call *ast.CallExpr) *ast.CallExpr {
+	clone := *call
+	clone.Args = make([]ast.Expr, len(call.Args))
+	for i, arg := range call.Args {
+		switch arg := arg.(type) {
+		case *ast.CallExpr:
+			clone.Args[i] = cloneCall(arg)
+		case *ast.Ident:
+			ident := *arg
+			clone.Args[i] = &ident
+		default:
+			clone.Args[i] = arg
+		}
+	}
+	return &clone
+}
+
 func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, signature *types.Signature, args []muxt.Argument, parsed map[string]struct{}, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	if parseErrBlock == nil {
 		// Normal handlers accumulate scalar-parse failures into the template
@@ -891,7 +909,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					return nil, err
 				}
 				statements = append(statements, s...)
-				def.SetArgumentType(name, param.Type())
 			case name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[name] = struct{}{}
 				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
@@ -899,7 +916,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					return nil, err
 				}
 				statements = append(statements, s...)
-				def.SetArgumentType(name, param.Type())
 			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
 				s, err := appendParseFormToStructStatements(statements, def, file, resultType, arg, args[i], validationFailureBlock, parseErrBlock)
 				if err != nil {
