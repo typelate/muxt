@@ -6,8 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // sourceKey identifies the text a template was written in: a template
@@ -21,10 +20,13 @@ type sourceKey struct {
 // distinct texts holding them, reading each file once.
 type sourceCollector struct {
 	workingDirectory string
-	packages         []*packages.Package
 	files            map[string]string
 	byKey            map[sourceKey]*templateSource
 	keys             []sourceKey
+
+	// literals are where the string literals of each Go file sit, read
+	// once per file: a run asks for every definition written in it.
+	literals map[string][]literalSpan
 
 	// delims are the delimiters each source was parsed with, read off the
 	// definitions before any source is built. A source scans its actions
@@ -47,7 +49,7 @@ type sourceCollector struct {
 // Within one source the pair is fixed, so the first definition that
 // reveals it answers for the whole source. A source whose only template
 // has no define clause reveals nothing and keeps the defaults.
-func (c *sourceCollector) resolveDelimiters(defs []check.Definition) {
+func (c *sourceCollector) resolveDelimiters(defs []source.Definition) {
 	for _, definition := range defs {
 		file := definition.Define.Position.Filename
 		if file == "" {
@@ -74,23 +76,38 @@ func (c *sourceCollector) resolveDelimiters(defs []check.Definition) {
 //
 // It is the same key add files the definition under, so the delimiters
 // resolved here reach the source they were read from.
-func (c *sourceCollector) keyFor(definition check.Definition) (sourceKey, bool) {
+func (c *sourceCollector) keyFor(definition source.Definition) (sourceKey, bool) {
 	file := definition.Define.Position.Filename
 	if filepath.Ext(file) != ".go" {
 		return sourceKey{file: file}, true
 	}
-	litStart, _, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
+	text, err := c.read(file)
+	if err != nil {
+		return sourceKey{}, false
+	}
+	litStart, _, ok := c.literalAt(file, text, definition.Define.Offset)
 	if !ok {
 		return sourceKey{}, false
 	}
 	return sourceKey{file: file, litStart: litStart}, true
 }
 
-func newSourceCollector(workingDirectory string, pl []*packages.Package, defs []check.Definition) *sourceCollector {
+// literalAt returns the bounds of the Go string literal covering offset in
+// file, reading the file's literals the first time it is asked about it.
+func (c *sourceCollector) literalAt(file, text string, offset int) (start, end int, ok bool) {
+	spans, read := c.literals[file]
+	if !read {
+		spans = stringLiterals(file, text)
+		c.literals[file] = spans
+	}
+	return literalAt(spans, offset)
+}
+
+func newSourceCollector(workingDirectory string, defs []source.Definition) *sourceCollector {
 	c := &sourceCollector{
 		workingDirectory: workingDirectory,
-		packages:         pl,
 		files:            make(map[string]string),
+		literals:         make(map[string][]literalSpan),
 		byKey:            make(map[sourceKey]*templateSource),
 		delims:           make(map[sourceKey][2]string),
 	}
@@ -108,10 +125,10 @@ func (c *sourceCollector) delimitersFor(key sourceKey) (string, string) {
 // add files one definition under the text it was written in, reading
 // that text at most once, and reports the source it was filed under.
 //
-// A definition the collector cannot place -- a Go string literal it has
-// no package for -- is reported as no source rather than as an error,
+// A definition the collector cannot place -- an offset in a Go file that
+// is not inside a string literal -- is reported as no source rather than as an error,
 // since the caller may hold others it can still use.
-func (c *sourceCollector) add(definition check.Definition) (*templateSource, error) {
+func (c *sourceCollector) add(definition source.Definition) (*templateSource, error) {
 	file := definition.Define.Position.Filename
 	if file == "" {
 		return nil, nil
@@ -131,7 +148,7 @@ func (c *sourceCollector) add(definition check.Definition) (*templateSource, err
 			return nil, err
 		}
 	} else {
-		litStart, litEnd, ok := findStringLiteral(c.packages, file, definition.Define.Offset)
+		litStart, litEnd, ok := c.literalAt(file, fileText, definition.Define.Offset)
 		if !ok {
 			return nil, nil
 		}

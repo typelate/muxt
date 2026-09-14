@@ -7,10 +7,10 @@
 //
 // internal/load builds a Package from a go/packages load; that is the only
 // step that runs the go command. Everything muxt does after it -- route
-// resolution, generation, type checking templates -- reads a Package. It
-// is plain data, with no function fields and no loader behind it, so a
-// test can write one as a literal or build one from source type checked in
-// memory.
+// resolution, generation, type checking templates, planning mutations --
+// reads a Package. It is plain data, with no function fields and no loader
+// behind it, so a test can write one as a literal or build one from source
+// type checked in memory.
 package source
 
 import (

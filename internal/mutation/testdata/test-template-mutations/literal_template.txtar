@@ -1,0 +1,51 @@
+A template written as a Go string literal: its actions and branches are
+mutated where they are written in the literal.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 -v
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": null,
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": true,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates = template.Must(template.New("greeting").Parse(`Hello, {{.Name}}!{{if .Loud}} !!!{{end}}`))
+
+type Greeting struct {
+	Name string
+	Loud bool
+}
+
+func Render(w io.Writer, greeting Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", greeting)
+}
+-- want/report.txt --
+3 mutants across 1 template (complexity 2, seed 1)
+dry run: no tests were run
+
+server.go:16:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" server.go (complexity 2, dot: server.Greeting)
+    PEND 8:70 action-zero
+    PEND 8:80 if-false
+    PEND 8:80 if-true
+
+3 mutants, 3 runnable, 0 skipped
