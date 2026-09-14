@@ -3,14 +3,14 @@ package mutation
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/typelate/check"
-	"golang.org/x/tools/go/packages"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // templateSource is a file whose bytes hold template text, together with
@@ -81,7 +81,7 @@ const spaceChars = " \t\r\n"
 // an optional trim marker, the word end, another optional marker, and
 // the right delimiter. Nothing else in it varies, so whatever surrounds
 // the word is the pair.
-func delimiters(text string, definition check.Definition) (left, right string, ok bool) {
+func delimiters(text string, definition source.Definition) (left, right string, ok bool) {
 	if !definition.TemplateName.IsValid() {
 		// A template with no define clause has no end clause either.
 		return "", "", false
@@ -254,38 +254,44 @@ func literalOffsets(literal, value string) ([]int, error) {
 	return offsets, nil
 }
 
-// findStringLiteral returns the Go string literal covering offset in the
-// named file, which is the literal a template written in Go source was
-// written as.
-func findStringLiteral(pl []*packages.Package, filename string, offset int) (start, end int, ok bool) {
-	seen := make(map[*ast.File]struct{})
-	for _, pkg := range pl {
-		for _, file := range pkg.Syntax {
-			if _, done := seen[file]; done {
-				continue
-			}
-			seen[file] = struct{}{}
-			tokenFile := pkg.Fset.File(file.Pos())
-			if tokenFile == nil || tokenFile.Name() != filename {
-				continue
-			}
-			ast.Inspect(file, func(node ast.Node) bool {
-				lit, isLit := node.(*ast.BasicLit)
-				if !isLit || lit.Kind != token.STRING {
-					return true
-				}
-				litStart, litEnd := tokenFile.Offset(lit.Pos()), tokenFile.Offset(lit.End())
-				if offset < litStart || offset >= litEnd {
-					return true
-				}
-				// Nested literals do not occur, so the first match is
-				// the one wanted.
-				start, end, ok = litStart, litEnd, true
-				return false
-			})
-			if ok {
-				return start, end, true
-			}
+// literalSpan is where one string literal sits in its file's text.
+type literalSpan struct{ start, end int }
+
+// stringLiterals returns where every string literal in the file sits, in
+// the order they were written, which is how a template written in Go
+// source is found in its file's text.
+//
+// The file is parsed here rather than taken from the loaded package: the
+// text is already in hand, and it leaves the plan needing nothing from the
+// loader. AllErrors keeps a file that does not fully parse yielding the
+// literals the parser did read -- without it the parser gives up after ten
+// syntax errors and returns nothing, and a run over a broken file would
+// report its templates as unreadable rather than the file as unparsed.
+func stringLiterals(filename, text string) []literalSpan {
+	fset := token.NewFileSet()
+	file, _ := parser.ParseFile(fset, filename, text, parser.SkipObjectResolution|parser.AllErrors)
+	if file == nil {
+		return nil
+	}
+	tokenFile := fset.File(file.FileStart)
+	var spans []literalSpan
+	ast.Inspect(file, func(node ast.Node) bool {
+		lit, isLit := node.(*ast.BasicLit)
+		if !isLit || lit.Kind != token.STRING {
+			return true
+		}
+		spans = append(spans, literalSpan{start: tokenFile.Offset(lit.Pos()), end: tokenFile.Offset(lit.End())})
+		return false
+	})
+	return spans
+}
+
+// literalAt returns the bounds of the literal covering offset. Literals do
+// not nest, so the first match is the one wanted.
+func literalAt(spans []literalSpan, offset int) (start, end int, ok bool) {
+	for _, span := range spans {
+		if offset >= span.start && offset < span.end {
+			return span.start, span.end, true
 		}
 	}
 	return 0, 0, false

@@ -1,0 +1,53 @@
+An action with more operand combinations than --max-cases allows
+contributes none, and says so where its mutants would have been.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 -v --max-cases=2
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": null,
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": true,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 2,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ A, B, C int }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}{{printf "%d %d %d" .A .B .C}}{{end}}
+-- want/report.txt --
+2 mutants across 1 template (complexity 1, seed 1)
+dry run: no tests were run
+
+server.go:17:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" page.gohtml (complexity 1, dot: server.Page)
+    PEND 1:18 action-zero
+    SKIP 1:18 operands (3 operands need 7 cases, over --max-cases=2)
+
+2 mutants, 1 runnable, 1 skipped
