@@ -1,0 +1,35 @@
+Each ExecuteTemplate call type checks the template it names, and the
+templates it reaches through {{template}}.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{range .Items}}{{template "item" .}}{{end}}{{end}}
+{{define "item"}}<li>{{.Name}}: {{printf "%d" .Price}}</li>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/checked.txt --
+1

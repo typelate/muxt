@@ -1,0 +1,57 @@
+Where each template is executed or called from, with the data type.
+
+Command line: muxt list-template-callers
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"FilterTemplates": null
+}
+-- index.gohtml --
+{{define "page"}}{{template "header" .Title}}{{range .Items}}{{template "item" .}}{{end}}{{end}}
+{{define "header"}}<h1>{{.}}</h1>{{end}}
+{{define "item"}}<li>{{.Name}}</li>{{end}}
+{{define "alone"}}{{template "header" "Alone"}}{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct{ Name string }
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+
+func RenderAlone(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "alone", nil)
+}
+-- want/stdout.txt --
+
+template "alone" called by:
+
+  - server.go:17:9 execute_template "alone" untyped nil
+
+
+template "header" called by:
+
+  - index.gohtml:4:30 template "alone" string
+  - index.gohtml:1:29 template "page" string
+
+
+template "item" called by:
+
+  - index.gohtml:1:73 template "page" Item
+
+
+template "page" called by:
+
+  - server.go:13:9 execute_template "page" Page
+
+

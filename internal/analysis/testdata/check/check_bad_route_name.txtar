@@ -1,0 +1,42 @@
+A malformed route template name is reported with its position.
+
+Command line: muxt check -v
+-- config.json --
+{
+	"Verbose": true,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+{{define "TRACE /debug"}}{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+  TRACE /debug
+  ^^^^^
+index.gohtml:2:11: TRACE method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE
+
+checking endpoint index
