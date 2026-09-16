@@ -3,7 +3,8 @@ package cli
 import (
 	"cmp"
 	_ "embed"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"go/token"
@@ -927,6 +928,19 @@ This command is intended for exploratory use only.`,
 	return cmd
 }
 
+// resultJSON writes a --format=json result as encoding/json wrote it before
+// muxt moved to encoding/json/v2, so a script reading it sees no change:
+// map members sorted by key, a nil list or map as null, and <, >, &, U+2028
+// and U+2029 escaped.
+var resultJSON = json.JoinOptions(
+	jsontext.WithIndent("\t"),
+	json.Deterministic(true),
+	json.FormatNilSliceAsNull(true),
+	json.FormatNilMapAsNull(true),
+	jsontext.EscapeForHTML(true),
+	jsontext.EscapeForJS(true),
+)
+
 func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 	format, err := cmd.Flags().GetString("format")
 	if err != nil {
@@ -934,7 +948,7 @@ func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 	}
 	switch format {
 	case "json":
-		buf, err := json.MarshalIndent(result, "", "\t")
+		buf, err := json.Marshal(result, resultJSON)
 		if err != nil {
 			return err
 		}
