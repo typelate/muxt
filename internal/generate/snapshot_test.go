@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -199,17 +200,13 @@ func writeSnapshot(t *testing.T, archivePath string, archive *txtar.Archive, got
 	}
 }
 
-func sortedKeys(maps ...map[string]string) []string {
+func sortedKeys(ms ...map[string]string) []string {
 	var keys []string
-	for _, m := range maps {
-		for key := range m {
-			if !slices.Contains(keys, key) {
-				keys = append(keys, key)
-			}
-		}
+	for _, m := range ms {
+		keys = slices.AppendSeq(keys, maps.Keys(m))
 	}
 	slices.Sort(keys)
-	return keys
+	return slices.Compact(keys)
 }
 
 // unusedImports names the imports a generated file declares but does not
