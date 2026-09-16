@@ -2,6 +2,9 @@
 // templates variable it declares with where its templates were written and
 // where they are executed.
 //
+// It holds nothing about the standard library. What route resolution needs
+// to know about that is asked of a muxt.Checker.
+//
 // internal/load builds a Package from a go/packages load; that is the only
 // step that runs the go command. Everything muxt does after it -- route
 // resolution, generation, type checking templates -- reads a Package. It
@@ -19,56 +22,17 @@ import (
 
 // Package is a loaded Go package.
 type Package struct {
-	// Fset positions every object in Types and Imports, and every
-	// position in the variables.
+	// Fset positions every object in Types and every position in the
+	// variables.
 	Fset *token.FileSet
 
 	// Types is the package: the one declaring the templates variables,
 	// whose package-scope functions a template name may call.
 	Types *types.Package
 
-	// Imports holds, by import path, the packages loaded with Types and
-	// every package they import: where the standard library types a
-	// route argument binds to (net/http, context, encoding, ...) are
-	// found. It may be nil, in which case Import searches Types' own
-	// imports.
-	Imports map[string]*types.Package
-
 	// Variables are the templates variables that were asked for, in the
 	// order they were named.
 	Variables []Variable
-}
-
-// Import finds the package with path: Types itself, then Imports, then --
-// when Imports is nil -- Types' imports, transitively.
-func (pkg Package) Import(path string) (*types.Package, bool) {
-	if pkg.Types != nil && pkg.Types.Path() == path {
-		return pkg.Types, true
-	}
-	if pkg.Imports != nil {
-		imported, ok := pkg.Imports[path]
-		return imported, ok
-	}
-	if pkg.Types == nil {
-		return nil, false
-	}
-	return SearchImports(pkg.Types, path)
-}
-
-// SearchImports looks for the package with path among the imports of pt,
-// the direct imports before any of theirs.
-func SearchImports(pt *types.Package, path string) (*types.Package, bool) {
-	for _, imported := range pt.Imports() {
-		if imported.Path() == path {
-			return imported, true
-		}
-	}
-	for _, imported := range pt.Imports() {
-		if found, ok := SearchImports(imported, path); ok {
-			return found, true
-		}
-	}
-	return nil, false
 }
 
 // Variable is one package-level templates variable.

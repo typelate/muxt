@@ -357,8 +357,9 @@ type Definition struct {
 
 	template *template.Template
 
-	pathValueTypes map[string]types.Type
-	pathValueNames []string
+	pathValueTypes      map[string]types.Type
+	pathValueMarshalers map[string]bool
+	pathValueNames      []string
 
 	identifier string
 
@@ -461,6 +462,11 @@ func (def Definition) SignalsCallback() (string, bool) {
 	return def.signalsCallback, def.signalsCallback != ""
 }
 
+// PathValueTextMarshaler reports whether the type a path parameter parses
+// into implements encoding.TextMarshaler, so a route path formats it with
+// MarshalText.
+func (def Definition) PathValueTextMarshaler(name string) bool { return def.pathValueMarshalers[name] }
+
 // ArgumentType returns the type a path parameter parses into. It is
 // unset for a parameter that is passed along as the string it arrived
 // as, or is not passed to the call at all.
@@ -498,17 +504,18 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
 	def := Definition{
-		name:              in,
-		method:            matches[templateNameMux.SubexpIndex("METHOD")],
-		host:              matches[templateNameMux.SubexpIndex("HOST")],
-		path:              matches[templateNameMux.SubexpIndex("PATH")],
-		handler:           strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
-		pattern:           matches[templateNameMux.SubexpIndex("pattern")],
-		fileSet:           token.NewFileSet(),
-		defaultStatusCode: http.StatusOK,
-		pathValueTypes:    make(map[string]types.Type),
-		template:          t,
-		spans:             newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
+		name:                in,
+		method:              matches[templateNameMux.SubexpIndex("METHOD")],
+		host:                matches[templateNameMux.SubexpIndex("HOST")],
+		path:                matches[templateNameMux.SubexpIndex("PATH")],
+		handler:             strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
+		pattern:             matches[templateNameMux.SubexpIndex("pattern")],
+		fileSet:             token.NewFileSet(),
+		defaultStatusCode:   http.StatusOK,
+		pathValueTypes:      make(map[string]types.Type),
+		pathValueMarshalers: make(map[string]bool),
+		template:            t,
+		spans:               newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
 	}
 	if def.handler != "" && def.spans.call[0] >= 0 {
 		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)

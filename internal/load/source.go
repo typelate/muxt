@@ -22,9 +22,8 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 		return source.Package{}, NoPackageError(dir, pl)
 	}
 	result := source.Package{
-		Fset:    pkg.Fset,
-		Types:   pkg.Types,
-		Imports: imports(pl),
+		Fset:  pkg.Fset,
+		Types: pkg.Types,
 	}
 	for _, name := range variables {
 		variable, err := Variable(pkg, name)
@@ -82,33 +81,4 @@ func Receiver(dir string, pl []*packages.Package, packagePath, ident string) (*t
 		return nil, NoPackageError(dir, pl)
 	}
 	return FindType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
-}
-
-// imports indexes, by import path, every package in pl and every package
-// they import. A path loaded more than once -- a package and its test
-// variant -- keeps the first in pl.
-func imports(pl []*packages.Package) map[string]*types.Package {
-	index := make(map[string]*types.Package)
-	var queue []*types.Package
-	for _, pkg := range pl {
-		if pkg.Types == nil {
-			continue
-		}
-		if _, seen := index[pkg.Types.Path()]; !seen {
-			index[pkg.Types.Path()] = pkg.Types
-			queue = append(queue, pkg.Types)
-		}
-	}
-	for len(queue) > 0 {
-		pkg := queue[0]
-		queue = queue[1:]
-		for _, imported := range pkg.Imports() {
-			if _, seen := index[imported.Path()]; seen {
-				continue
-			}
-			index[imported.Path()] = imported
-			queue = append(queue, imported)
-		}
-	}
-	return index
 }

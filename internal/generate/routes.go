@@ -100,8 +100,9 @@ const DefaultMultipartMaxMemory int64 = 32 << 20
 // TemplateRoutesFiles generates the routes files for pkg, written into wd:
 // the package the files belong to, which is the one in the output file's
 // directory. receiver is the type --use-receiver-type named, or nil when
-// handler methods are inferred from the templates.
-func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, receiver *types.Named, logger *log.Logger) ([]GeneratedFile, error) {
+// handler methods are inferred from the templates. checker answers what
+// resolving routes needs to know about the standard library.
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, receiver *types.Named, checker muxt.Checker, logger *log.Logger) ([]GeneratedFile, error) {
 	if !token.IsIdentifier(config.PackageName) {
 		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
 	}
@@ -178,7 +179,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		generatedFiles         []GeneratedFile
 	)
 	if config.OutputMultipleFiles {
-		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiver, receiverInterface, routesFunc)
+		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiver, checker, receiverInterface, routesFunc)
 		if err != nil {
 			return files, err
 		}
@@ -193,7 +194,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	}
 
 	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
+	if err := hydrateGroup(topLevelTemplateRoutes, file, receiver, checker, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -282,7 +283,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 // signatures — one line per method and the explanation once after the
 // list; the default mode synthesizes every method by design, so it
 // stays quiet.
-func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized, warnResponse bool) error {
+func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, checker muxt.Checker, receiverInterface *ast.InterfaceType, logger *log.Logger, noteSynthesized, warnResponse bool) error {
 	var resolveErrs []error
 	synthesized := 0
 	for i := range defs {
@@ -294,7 +295,7 @@ func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, rec
 		if defs[i].FunctionIdentifier() == nil {
 			continue
 		}
-		if err := muxt.ResolveCall(&defs[i], file.OutputPackage(), receiver); err != nil {
+		if err := muxt.ResolveCall(&defs[i], file.OutputPackage(), receiver, checker); err != nil {
 			resolveErrs = append(resolveErrs, err)
 			continue
 		}
@@ -347,7 +348,7 @@ func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool,
 	return nil
 }
 
-func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
+func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, templateSourceFiles []string, groups templateGroups, logger *log.Logger, file *File, receiver *types.Named, checker muxt.Checker, receiverInterface *ast.InterfaceType, routesFunc *ast.FuncDecl) ([]GeneratedFile, error) {
 	var generatedFiles []GeneratedFile
 	for _, sourceFile := range templateSourceFiles {
 		definitions := groups.byFile[sourceFile]
@@ -359,7 +360,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config, receiver)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config, receiver, checker)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
@@ -480,6 +481,7 @@ func generatePerFileRouteFunction(
 	logger *log.Logger,
 	config RoutesFileConfiguration,
 	receiver *types.Named,
+	checker muxt.Checker,
 	receiverInterface *ast.InterfaceType,
 ) (*ast.FuncDecl, error) {
 	if sourceFile == "" {
@@ -525,7 +527,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, receiver, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
+	if err := hydrateGroup(defs, file, receiver, checker, receiverInterface, logger, config.ReceiverType != "" && logger != nil, logger != nil && !config.SilenceHTTPResponseWarning); err != nil {
 		return nil, err
 	}
 	for i := range defs {
@@ -560,6 +562,7 @@ func generatePerFileAST(
 	logger *log.Logger,
 	config RoutesFileConfiguration,
 	receiver *types.Named,
+	checker muxt.Checker,
 ) (*ast.File, error) {
 	if sourceFile == "" {
 		return nil, fmt.Errorf("sourceFile cannot be empty")
@@ -579,6 +582,7 @@ func generatePerFileAST(
 		logger,
 		config,
 		receiver,
+		checker,
 		scopedReceiverInterface,
 	)
 	if err != nil {
@@ -849,17 +853,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				continue
 			}
 			name := arg.Name
-			argType, ok := muxt.DefaultScopeType(file.OutputPackage(), &def, name)
-			if !ok {
-				return nil, fmt.Errorf("failed to determine type for %s", name)
-			}
+			argument := args[i]
 			src := requestArgumentSource(def, name)
 			ident := name
 			if slices.Contains(def.PathValueIdentifiers(), name) {
 				ident = pathParamIdent(name)
 				call.Args[i] = ast.NewIdent(ident)
 			}
-			if types.AssignableTo(argType, param.Type()) {
+			if argument.Direct() {
 				if _, ok := parsed[name]; !ok {
 					parsed[name] = struct{}{}
 					switch name {
@@ -893,14 +894,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			switch {
 			case slices.Contains(def.PathValueIdentifiers(), name):
 				parsed[name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
+				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
 			case name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
+				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
@@ -918,8 +919,11 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				}
 				statements = s
 			default:
+				if argument.ScopeType() == nil {
+					return nil, fmt.Errorf("failed to determine type for %s", name)
+				}
 				pt, _ := file.TypeASTExpression(param.Type())
-				at, _ := file.TypeASTExpression(argType)
+				at, _ := file.TypeASTExpression(argument.ScopeType())
 				return nil, fmt.Errorf("method expects type %s but %s is %s", astgen.Format(pt), arg.Name, astgen.Format(at))
 			}
 		}
@@ -964,7 +968,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}, expr)},
 				}
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, ast.NewIdent("val"), fb.Elem, validations, parseResult, parseErrBlock())
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, ast.NewIdent("val"), fb.Elem, fb.Method, validations, parseResult, parseErrBlock())
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
 			}
@@ -984,7 +988,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, def muxt.Definition
 				}
 			}
 			str := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}}}
-			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, fb.Elem, validations, parseResult, parseErrBlock())
+			parseStatements, err := generateParseValueFromStringStatements(file, def, parsedVariableName, resultType, str, fb.Elem, fb.Method, validations, parseResult, parseErrBlock())
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
 			}
@@ -1144,7 +1148,7 @@ func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
 // errBlock, which callers supply so the failure can be handled differently per
 // context (normal handlers accumulate into the template data; SSE handlers
 // respond 400 before establishing the stream).
-func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
+func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp string, _ types.Type, str ast.Expr, valueType types.Type, method muxt.UnmarshalMethod, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
 	// convert wraps the parsed value in a conversion to the target basic type
 	// for the strconv functions that return a wider type (ParseInt/ParseUint).
 	convert := func(exp ast.Expr) ast.Stmt {
@@ -1153,7 +1157,7 @@ func generateParseValueFromStringStatements(file *File, _ muxt.Definition, tmp s
 			Args: []ast.Expr{exp},
 		})
 	}
-	switch muxt.UnmarshalMethodFor(file.OutputPackage(), valueType) {
+	switch method {
 	case muxt.UnmarshalBool:
 		return parseBlock(tmp, astgen.StrconvParseBoolCall(file, str), validations, errBlock, assignment), nil
 	case muxt.UnmarshalInt:

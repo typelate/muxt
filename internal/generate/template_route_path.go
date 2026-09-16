@@ -59,16 +59,6 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 
 func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper, usesSegmentsEscaper bool, _ error) {
 	const methodReceiverName = routePathsReceiverName
-	encodingPkg, ok := file.OutputPackage().Import("encoding")
-	if !ok {
-		return nil, false, false, fmt.Errorf(`the "encoding" package must be loaded`)
-	}
-	scope := encodingPkg.Scope()
-	textMarshalerObject := scope.Lookup("TextMarshaler")
-	textMarshalerType := textMarshalerObject.Type()
-	textMarshalerUnderlying := textMarshalerType.Underlying()
-	textMarshalerInterface := textMarshalerUnderlying.(*types.Interface)
-
 	ident, err := def.ExportedPathIdentifier()
 	if err != nil {
 		return nil, false, false, err
@@ -176,7 +166,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		summer.Write([]byte(def.Name()))
 		pathHash := hex.EncodeToString(summer.Sum(nil))
 
-		if types.Implements(pathValueType, textMarshalerInterface) {
+		if def.PathValueTextMarshaler(name) {
 			hasErrorResult = true
 			if len(method.Type.Results.List) == 1 {
 				method.Type.Results.List = append(method.Type.Results.List, &ast.Field{
