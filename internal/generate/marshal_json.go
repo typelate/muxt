@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"go/types"
 	"net/http"
+	"slices"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -19,10 +20,10 @@ import (
 // result is written as application/json; on any recorded error the rendered
 // output is sent as the usual text/html fallback.
 func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent string) (*ast.FuncLit, error) {
-	for _, arg := range def.Arguments {
-		if arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute {
-			return nil, fmt.Errorf("marshalJSON does not support the execute callback")
-		}
+	if slices.ContainsFunc(def.Arguments, func(arg muxt.Argument) bool {
+		return arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute
+	}) {
+		return nil, fmt.Errorf("marshalJSON does not support the execute callback")
 	}
 	return executeHTMLTemplateHandler(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent, marshalJSONRespondStmts(file, resultDataIdent, bufIdent)...)
 }

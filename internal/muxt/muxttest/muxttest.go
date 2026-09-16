@@ -20,8 +20,8 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"maps"
 	"slices"
-	"sort"
 	"testing"
 
 	"github.com/typelate/muxt/internal/muxt"
@@ -37,11 +37,7 @@ var FileSet = token.NewFileSet()
 // package is declared in it.
 func Check(t testing.TB, path string, files map[string]string) *types.Package {
 	t.Helper()
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(files))
 	syntax := make([]*ast.File, 0, len(names))
 	for _, name := range names {
 		file, err := parser.ParseFile(FileSet, name, files[name], parser.SkipObjectResolution)
