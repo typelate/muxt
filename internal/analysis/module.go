@@ -3,7 +3,7 @@ package analysis
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"os"
 	"os/exec"
@@ -38,11 +38,11 @@ type PackageConfig struct {
 	ReceiverType           string `json:"receiverType,omitempty"`
 	ReceiverPackage        string `json:"receiverPackage,omitempty"`
 	TemplateRoutePathsType string `json:"templateRoutePathsType"`
-	OutputHTMX             bool   `json:"outputHTMX,omitempty"`
-	OutputDatastar         bool   `json:"outputDatastar,omitempty"`
-	Logger                 bool   `json:"logger,omitempty"`
-	PathPrefix             bool   `json:"pathPrefix,omitempty"`
-	Middleware             bool   `json:"middleware,omitempty"`
+	OutputHTMX             bool   `json:"outputHTMX,omitzero"`
+	OutputDatastar         bool   `json:"outputDatastar,omitzero"`
+	Logger                 bool   `json:"logger,omitzero"`
+	PathPrefix             bool   `json:"pathPrefix,omitzero"`
+	Middleware             bool   `json:"middleware,omitzero"`
 }
 
 type PackageCommands struct {
