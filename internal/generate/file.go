@@ -62,7 +62,7 @@ func (file *File) Import(pkgIdent, pkgPath string) string {
 }
 
 func (file *File) ImportSpecs() []*ast.ImportSpec {
-	result := append(make([]*ast.ImportSpec, 0, len(file.importSpecs)), file.importSpecs...)
+	result := slices.Clone(file.importSpecs)
 	slices.SortFunc(result, func(a, b *ast.ImportSpec) int { return strings.Compare(a.Path.Value, b.Path.Value) })
 	return slices.CompactFunc(result, func(a, b *ast.ImportSpec) bool { return a.Path.Value == b.Path.Value })
 }

@@ -124,9 +124,8 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 
 	var (
 		receiverInterface   = &ast.InterfaceType{Methods: new(ast.FieldList)}
-		templateSourceFiles = slices.Collect(maps.Keys(groups.byFile))
+		templateSourceFiles = slices.Sorted(maps.Keys(groups.byFile))
 	)
-	slices.Sort(templateSourceFiles)
 
 	// Build main routes function
 	routesFunc := &ast.FuncDecl{
@@ -332,9 +331,9 @@ func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool,
 	if !isMethod {
 		return nil
 	}
-	if i := slices.IndexFunc(receiverInterface.Methods.List, func(field *ast.Field) bool {
+	if slices.ContainsFunc(receiverInterface.Methods.List, func(field *ast.Field) bool {
 		return field.Names[0].Name == name
-	}); i >= 0 {
+	}) {
 		return nil
 	}
 	exp, err := file.TypeASTExpression(sig)

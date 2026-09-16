@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"encoding/json/v2"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -155,14 +156,8 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 		return nil, err
 	}
 
-	dirs := make([]string, 0, len(dirMap))
-	for dir := range dirMap {
-		dirs = append(dirs, dir)
-	}
-	sort.Strings(dirs)
-
 	var packages []PackageInfo
-	for _, dir := range dirs {
+	for _, dir := range slices.Sorted(maps.Keys(dirMap)) {
 		entry := dirMap[dir]
 		var config generate.RoutesFileConfiguration
 		set := pflag.NewFlagSet("parse-header", pflag.ContinueOnError)
