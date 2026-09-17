@@ -44,7 +44,7 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 
 	// Seconds is how long the mutant's test run took.
-	Seconds float64 `json:"seconds,omitempty"`
+	Seconds float64 `json:"seconds,omitzero"`
 
 	// mutantIndex locates the mutant this result came from, so the run
 	// does not have to carry the mutants inside the report it prints.
@@ -107,7 +107,7 @@ type BaselineResult struct {
 
 	// Seconds is how long the unmutated run took, which is what the
 	// estimate for the whole run is built from.
-	Seconds float64 `json:"seconds,omitempty"`
+	Seconds float64 `json:"seconds,omitzero"`
 }
 
 // Report is the outcome of a whole mutation run.

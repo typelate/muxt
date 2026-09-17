@@ -1,7 +1,8 @@
 package astgen
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -24,8 +25,12 @@ func NewTypeFormatter(outputPkgPath string) *TypeFormatter {
 	}
 }
 
-func (tf *TypeFormatter) MarshalJSON() ([]byte, error) {
-	return json.MarshalIndent(tf.Imports, "", "  ")
+// MarshalJSONTo writes the imports the formatter collected. It writes
+// through the encoder it is handed, so whatever the whole document is
+// written with -- the indentation, and the key order a reproducible listing
+// needs -- holds for the imports too.
+func (tf *TypeFormatter) MarshalJSONTo(encoder *jsontext.Encoder) error {
+	return json.MarshalEncode(encoder, tf.Imports)
 }
 
 func (tf *TypeFormatter) Qualifier(pkg *types.Package) string {

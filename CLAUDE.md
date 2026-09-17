@@ -25,15 +25,16 @@ source.Package: types + templates variables    ./internal/source
     ↓  muxt.Definitions, muxt.ResolveCall
 Resolved routes (muxt.Definition)              ./internal/muxt
     ↓
-Generated files / check reports                ./internal/generate, ./internal/analysis
+Generated files / check reports / mutations    ./internal/generate, ./internal/analysis, ./internal/mutation
 ```
 
 **The package load stops at `internal/load`.** It is the only package that
 calls `packages.Load` (the go command, seconds per run). It hydrates a
 command's configuration into a `source.Package`: plain data holding the
 package's types, and each templates variable's template set, functions,
-definitions and ExecuteTemplate calls. Route resolution, generation and the
-template checks read only that, so they can be handed values built in memory.
+definitions and ExecuteTemplate calls. Everything below it reads only that;
+the mutation run, which loads again for `--diff` and with test files, loads
+through `internal/load` too.
 
 **The standard library is asked, not copied.** Route resolution asks a
 `muxt.Checker` what a reserved argument binds to and which types marshal to
@@ -44,7 +45,12 @@ use `internal/muxt/muxttest`, which builds the counterfeiter fake in
 source (`muxttest.StandInChecker(t, pkg)`, or `muxttest.NewChecker()` with
 `Binds`, `ParsesFromText` and `FormatsAsText`), so they state muxt's rules
 rather than one library version's shape. Regenerate the fake with
-`go generate ./internal/muxt`.
+`go generate ./internal/muxt`. Tests that need real types use
+`internal/load/loadtest`, which type checks package source against the
+official standard library's export data without loading the package graph.
+It loads one package whose imports are all in the standard library, embeds
+only its top-level files, and has no test variants; behavior that depends on
+more stays in `cmd/muxt` scripts.
 
 **Key concept:** Muxt reads template names like `"GET /{id} GetUser(ctx, id)"` and generates `http.Handler` implementations that:
 - Parse URL parameters to the correct Go types
@@ -104,41 +110,81 @@ Update the code in order:
 3. `internal/load/` — Only if a run needs something new from the loaded packages
 4. `internal/cli/` — CLI handling (if needed)
 
+Before adding an integration script, see whether a unit test can state it,
+at the layer that owns the behavior:
+- **Flags:** `internal/cli/configurations_test.go` states what a command line
+  parses into, and which command lines are rejected, without loading anything.
+  (`generate-fake-server` and `explore-module` do not go through it yet.)
+- **What a command does with a valid configuration:**
+  `internal/{generate,analysis,mutation}/testdata/<command>/*.txtar` snapshot
+  generated files, check reports, the route and template listings, and
+  mutation dry runs, from packages loaded in memory in milliseconds. Each
+  archive is self-contained: the directory it is in names the command, its
+  `config.json` holds the configuration the command line in its header parses
+  into, and its `want/` files are what that produced. Run one with
+  `go test ./internal/analysis -run TestSnapshots/list-template-calls/calls`,
+  and rewrite them with
+  `go test ./internal/{generate,analysis,mutation} -run TestSnapshots -update`,
+  then review the diff.
+- **Route names and call resolution:** `internal/muxt` tests type check source
+  in memory and resolve against a checker from `muxttest`.
+
+To add a snapshot case, write the archive in the command's directory: a
+`config.json` holding what the command line parses into
+(`internal/cli/configurations_test.go` states that parse), the package's files,
+and no `want/` files. Then run the package's `TestSnapshots -update` and read
+what it wrote.
+
+Integration scripts are for what needs the go command: generated code
+compiling and serving requests, and files on disk.
+
 ### 5. Verify Your Changes
 
 ```bash
 # Check for build/type errors
 go test ./cmd/muxt
 
-# Run the formatter
+# Run the formatters. goimports -local keeps this module's imports in
+# their own group, after the third-party one; gofumpt does not group.
 go fmt ./...
 gofumpt -w .
+goimports -local github.com/typelate/muxt -w .
 ```
 
 ## Common Tasks
 
 ### Adding a New Feature
 
-1. Create a test file: `cmd/muxt/testdata/reference_my_feature.txt`
-2. Define the expected input (template) and output (generated code)
-3. Run the test to see it fail
-4. Update `internal/muxt/` generator functions
-5. Run `go test ./cmd/muxt` until it passes
+1. State it at the layer that owns it (see step 4 above): a snapshot archive
+   in `internal/generate/testdata/` for what is generated,
+   `internal/analysis/testdata/` for what is reported,
+   `internal/mutation/testdata/` for what a run mutates, a test in
+   `internal/muxt/` for how a name resolves, and a flag case in
+   `internal/cli/configurations_test.go` for a new flag
+2. Run the test to see it fail
+3. Update the package that owns the behavior: `internal/muxt/`,
+   `internal/generate/`, `internal/analysis/` or `internal/mutation/`
+4. Rewrite the snapshot with `-update` and review the diff
+5. Add `cmd/muxt/testdata/reference_my_feature.txt` when the generated code
+   must compile and serve requests, and run `go test ./cmd/muxt`
 
 ### Fixing a Bug
 
-1. Create a test file: `cmd/muxt/testdata/err_bug_description.txt` or update an existing test
-2. Reproduce the bug in the test
-3. Run `go test ./cmd/muxt` to confirm failure
-4. Fix the bug in `internal/muxt/`
-5. Run `go test ./cmd/muxt` to confirm the fix
+1. Reproduce it in the lowest test that can: a snapshot archive, an
+   `internal/muxt/` test, or, when it needs the go command,
+   `cmd/muxt/testdata/err_bug_description.txt`
+2. Run the test to confirm failure
+3. Fix the bug
+4. Run the test, then `go test ./...`, to confirm the fix
 
 ### Adding Error Detection
 
-1. Create a test: `cmd/muxt/testdata/err_error_name.txt`
-2. Define input that should produce an error
-3. Add validation logic to `internal/muxt/`
-4. Verify the error message is clear
+1. Add an `err_` snapshot archive (in `internal/generate/testdata/`,
+   `internal/analysis/testdata/` or `internal/mutation/testdata/`) whose
+   `want/error.txt` is the message
+2. Add the validation to the package that reports it: `internal/muxt/` for a
+   route name, otherwise the package the archive belongs to
+3. Verify the error message is clear
 
 ### Improving Documentation
 
@@ -174,6 +220,7 @@ ls cmd/muxt/testdata/err_*.txt
 - `internal/analysis/` — `muxt check` and the template listings
 - `internal/muxt/muxtfakes/` — The counterfeiter fake of `muxt.Checker`, generated by `go generate ./internal/muxt`
 - `internal/muxt/muxttest/` — Builds that fake from what a test says the standard library looks like, plus import-free type checking
+- `internal/load/loadtest/` — A loaded package type checked against the official standard library, for tests that go through `internal/load`
 - `internal/cli/` — Command-line interface
 - `cmd/muxt/` — Command entry point
 
@@ -242,7 +289,8 @@ go -C ./cmd/muxt/testdata/debug-test test -v
 ## Pull Request Checklist
 
 - [ ] Tests pass: `go test ./...`
-- [ ] Code formatted: `go fmt ./...` and `gofumpt -w .`
+- [ ] Code formatted: `go fmt ./...`, `gofumpt -w .` and
+      `goimports -local github.com/typelate/muxt -w .`
 - [ ] New features have test files with clear naming
 - [ ] Error conditions are documented with `err_*` tests
 - [ ] No unnecessary changes to generated output

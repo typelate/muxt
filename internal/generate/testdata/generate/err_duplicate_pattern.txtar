@@ -1,0 +1,40 @@
+Two templates may not register the same pattern.
+
+Command line: muxt generate
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "TemplateRoutes",
+	"ReceiverType": "",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "RoutesReceiver",
+	"TemplateDataType": "TemplateData",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /a"}}{{end}}
+{{define "GET  /a"}}{{end}}
+-- server.go --
+package server
+-- want/error.txt --
+duplicate route pattern "GET /a"
+index.gohtml:1:11: first defined here
+index.gohtml:2:11: also defined here

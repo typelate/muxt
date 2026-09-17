@@ -3,13 +3,14 @@ package analysis
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -38,11 +39,11 @@ type PackageConfig struct {
 	ReceiverType           string `json:"receiverType,omitempty"`
 	ReceiverPackage        string `json:"receiverPackage,omitempty"`
 	TemplateRoutePathsType string `json:"templateRoutePathsType"`
-	OutputHTMX             bool   `json:"outputHTMX,omitempty"`
-	OutputDatastar         bool   `json:"outputDatastar,omitempty"`
-	Logger                 bool   `json:"logger,omitempty"`
-	PathPrefix             bool   `json:"pathPrefix,omitempty"`
-	Middleware             bool   `json:"middleware,omitempty"`
+	OutputHTMX             bool   `json:"outputHTMX,omitzero"`
+	OutputDatastar         bool   `json:"outputDatastar,omitzero"`
+	Logger                 bool   `json:"logger,omitzero"`
+	PathPrefix             bool   `json:"pathPrefix,omitzero"`
+	Middleware             bool   `json:"middleware,omitzero"`
 }
 
 type PackageCommands struct {
@@ -155,14 +156,8 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 		return nil, err
 	}
 
-	dirs := make([]string, 0, len(dirMap))
-	for dir := range dirMap {
-		dirs = append(dirs, dir)
-	}
-	sort.Strings(dirs)
-
 	var packages []PackageInfo
-	for _, dir := range dirs {
+	for _, dir := range slices.Sorted(maps.Keys(dirMap)) {
 		entry := dirMap[dir]
 		var config generate.RoutesFileConfiguration
 		set := pflag.NewFlagSet("parse-header", pflag.ContinueOnError)

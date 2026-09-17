@@ -1,0 +1,43 @@
+A literal parsed with other delimiters is read with them.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 -v
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": null,
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": true,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates = template.Must(template.New("page").Delims("[[", "]]").Parse(`[[define "note"]]<p>[[.]]</p>[[end]]`))
+
+func RenderNote(w io.Writer, note string) error {
+	return templates.ExecuteTemplate(w, "note", note)
+}
+-- want/report.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+dry run: no tests were run
+
+server.go:11:9 ExecuteTemplate "note" (dot: string)
+  "note" server.go (complexity 1, dot: string)
+    PEND 8:98 action-zero
+
+1 mutant, 1 runnable, 0 skipped
