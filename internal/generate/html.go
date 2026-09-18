@@ -73,14 +73,7 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
 
-	if !def.HasResponseWriterArg() {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
-			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
-		})...)
-	} else {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
-	}
-	return handlerFunc, nil
+	return writeHeadersAndStatusCode(file, handlerFunc, def, resultType, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
@@ -121,14 +114,7 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
 
-	if !def.HasResponseWriterArg() {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
-			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
-		})...)
-	} else {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
-	}
-	return handlerFunc, nil
+	return writeHeadersAndStatusCode(file, handlerFunc, def, resultType, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
 func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType types.Type) (*ast.FuncLit, *ast.CallExpr, *ast.FuncLit, error) {
@@ -179,6 +165,17 @@ func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIde
 			},
 		},
 	}
+}
+
+func writeHeadersAndStatusCode(file *File, handlerFunc *ast.FuncLit, def muxt.Definition, resultType types.Type, statusCodeIdent string, bufIdent string, resultDataIdent string) (*ast.FuncLit, error) {
+	if !def.HasResponseWriterArg() {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
+		})...)
+	} else {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
+	}
+	return handlerFunc, nil
 }
 
 func callFuncExpression(def muxt.Definition) ast.Expr {
