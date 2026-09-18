@@ -456,6 +456,11 @@ func (def Definition) IsMethod() bool                 { return def.isMethod }
 func (def Definition) ResultShape() ResultShape       { return def.resultShape }
 func (def Definition) UsesSignals() bool              { return def.usesSignals }
 
+func (def Definition) IsIndex() bool {
+	p := def.Path()
+	return p == "/" || p == "/{$}"
+}
+
 // SignalsCallback returns the first Signals-suffixed callback argument name,
 // if the route has one.
 func (def Definition) SignalsCallback() (string, bool) {

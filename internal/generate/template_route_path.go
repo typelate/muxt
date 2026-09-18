@@ -80,23 +80,8 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		},
 	}
 
-	if def.Path() == "/" || def.Path() == "/{$}" {
-		if config.PathPrefix {
-			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-				astgen.Call(file, "path", "path", "Join",
-					astgen.Call(file, "cmp", "cmp", "Or",
-						&ast.SelectorExpr{
-							X:   ast.NewIdent(methodReceiverName),
-							Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
-						},
-						astgen.String("/"),
-					),
-				),
-			}}}
-		} else {
-			method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
-		}
-		return method, usesEscaper, usesSegmentsEscaper, nil
+	if def.IsIndex() {
+		return indexRoutePath(file, config, method, methodReceiverName, usesEscaper, usesSegmentsEscaper)
 	}
 
 	templatePath, hasDollarSuffix := strings.CutSuffix(def.Path(), "{$}")
@@ -263,6 +248,25 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	method.Type.Params.List = fields
 
+	return method, usesEscaper, usesSegmentsEscaper, nil
+}
+
+func indexRoutePath(file *File, config RoutesFileConfiguration, method *ast.FuncDecl, methodReceiverName string, usesEscaper bool, usesSegmentsEscaper bool) (*ast.FuncDecl, bool, bool, error) {
+	if config.PathPrefix {
+		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
+			astgen.Call(file, "path", "path", "Join",
+				astgen.Call(file, "cmp", "cmp", "Or",
+					&ast.SelectorExpr{
+						X:   ast.NewIdent(methodReceiverName),
+						Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
+					},
+					astgen.String("/"),
+				),
+			),
+		}}}
+	} else {
+		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
+	}
 	return method, usesEscaper, usesSegmentsEscaper, nil
 }
 
