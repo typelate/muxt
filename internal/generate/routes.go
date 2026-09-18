@@ -679,7 +679,7 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 	case muxt.RepresentationMarshalJSON:
 		return marshalJSONHandlerFunc(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	default:
-		return executeHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
+		return newHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	}
 }
 

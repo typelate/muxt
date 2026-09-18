@@ -12,40 +12,155 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
-// executeHTMLTemplateHandler assembles a rendered-route handler: template
+// newHTMLTemplateHandler assembles a rendered-route handler: template
 // data, argument parsing, the method call, and template execution into the
 // response buffer. The optional respond statements run after execution and
 // before the status/body write, letting another representation (marshalJSON)
 // replace the buffered output on success without duplicating the assembly.
-func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
+func newHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
+	if execIdx, ok := def.ExecuteArgumentIndex(); ok {
+		return newExecuteHTMLTemplateHandler(file, config, def, execIdx, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent, respond...)
+	}
+	return newResultHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent, respond...)
+}
+
+func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, execIdx int, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
-	var (
-		execIdx    = -1
-		hasExecute = false
-		resultType types.Type
-		execHasArg bool
-	)
-	for i, arg := range def.Arguments {
-		if arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute {
-			// The callback contract (func() error or func(T) error) is
-			// validated by muxt.ResolveCall, which records T and whether the
-			// callback takes the data argument.
-			execIdx = i
-			hasExecute = true
-			resultType = arg.CallbackResultType()
-			execHasArg = arg.CallbackHasArg()
-			break
-		}
+	resultType := def.Arguments[execIdx].CallbackResultType()
+	execHasArg := def.Arguments[execIdx].CallbackHasArg()
+	typeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, err
 	}
-	if !hasExecute {
-		resultType = def.Signature().Results().At(0).Type()
+	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
+
+	// Parsing rewrites the call's arguments to the locals it declares,
+	// so it works on a copy and the definition stays as resolved.
+	call := cloneCall(def.CallExpression())
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
+		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
+		return errBlock
+	}, nil); err != nil {
+		return nil, err
 	}
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+
+	const guardIdent = "executed"
+	closure, err := executeClosure(file, def, resultDataIdent, bufIdent, guardIdent, resultType, execHasArg)
+	if err != nil {
+		return nil, err
+	}
+	// The render callback may be invoked more than once (possibly from
+	// another goroutine); guard with an atomic.Bool so it renders at most
+	// once (see executeClosure).
+	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.DeclStmt{Decl: &ast.GenDecl{
+		Tok:   token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(guardIdent)}, Type: astgen.ExportedIdentifier(file, "", "sync/atomic", "Bool")}},
+	}})
+	callArgs := slices.Clone(call.Args)
+	callArgs[execIdx] = closure
+	if config.Logger {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
+	}
+	renderCheck := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
+	renderCheck.Init = &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(errIdent)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CallExpr{Fun: callFun, Args: callArgs}},
+	}
+	setOkay := &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay)}},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{astgen.Bool(true)},
+	}
+	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  astgen.CallBuiltinLen(&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}),
+			Op: token.EQL,
+			Y:  astgen.Int(0),
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{renderCheck, setOkay}},
+	})
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
+
+	if !def.HasResponseWriterArg() {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
+		})...)
+	} else {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
+	}
+	return handlerFunc, nil
+}
+
+func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
+	callFun := callFuncExpression(def)
+	resultType := def.Signature().Results().At(0).Type()
 	typeExpr, err := file.TypeASTExpression(resultType)
 	if err != nil {
 		return nil, err
 	}
 
-	handlerFunc := &ast.FuncLit{
+	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
+
+	// Parsing rewrites the call's arguments to the locals it declares,
+	// so it works on a copy and the definition stays as resolved.
+	call := cloneCall(def.CallExpression())
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
+		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
+		return errBlock
+	}, nil); err != nil {
+		return nil, err
+	}
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+
+	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
+	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
+	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
+		X:   ast.NewIdent(resultDataIdent),
+		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
+	}, def.Signature(), def.FunctionIdentifier().Name, &ast.CallExpr{
+		Fun:  callFun,
+		Args: slices.Clone(call.Args),
+	}, errBody)
+	if err != nil {
+		return nil, err
+	}
+	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X: astgen.CallBuiltinLen(&ast.SelectorExpr{
+				X:   ast.NewIdent(resultDataIdent),
+				Sel: ast.NewIdent(TemplateDataFieldIdentifierError),
+			}),
+			Op: token.EQL,
+			Y:  astgen.Int(0),
+		},
+		Body: &ast.BlockStmt{
+			List: receiverCall.Stmts(),
+		},
+	})
+
+	callExecuteTemplate(file, config, def, handlerFunc, bufIdent, resultDataIdent)
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
+
+	if !def.HasResponseWriterArg() {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
+		})...)
+	} else {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
+	}
+	return handlerFunc, nil
+}
+
+func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIdent, receiverInterfaceName string, typeExpr ast.Expr) *ast.FuncLit {
+	return &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
 			List: []ast.Stmt{
@@ -69,97 +184,6 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 			},
 		},
 	}
-
-	// Parsing rewrites the call's arguments to the locals it declares,
-	// so it works on a copy and the definition stays as resolved.
-	call := cloneCall(def.CallExpression())
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
-		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
-		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
-		return errBlock
-	}, nil); err != nil {
-		return nil, err
-	}
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
-
-	if hasExecute {
-		const guardIdent = "executed"
-		closure, err := executeClosure(file, def, resultDataIdent, bufIdent, guardIdent, resultType, execHasArg)
-		if err != nil {
-			return nil, err
-		}
-		// The render callback may be invoked more than once (possibly from
-		// another goroutine); guard with an atomic.Bool so it renders at most
-		// once (see executeClosure).
-		handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.DeclStmt{Decl: &ast.GenDecl{
-			Tok:   token.VAR,
-			Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(guardIdent)}, Type: astgen.ExportedIdentifier(file, "", "sync/atomic", "Bool")}},
-		}})
-		callArgs := slices.Clone(call.Args)
-		callArgs[execIdx] = closure
-		if config.Logger {
-			handlerFunc.Body.List = append(handlerFunc.Body.List, logDebugStatement(file, "handling request", def.RawPattern()))
-		}
-		renderCheck := checkExecuteTemplateError(file, config.Logger, def.RawPattern())
-		renderCheck.Init = &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(errIdent)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.CallExpr{Fun: callFun, Args: callArgs}},
-		}
-		setOkay := &ast.AssignStmt{
-			Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay)}},
-			Tok: token.ASSIGN,
-			Rhs: []ast.Expr{astgen.Bool(true)},
-		}
-		handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  astgen.CallBuiltinLen(&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}),
-				Op: token.EQL,
-				Y:  astgen.Int(0),
-			},
-			Body: &ast.BlockStmt{List: []ast.Stmt{renderCheck, setOkay}},
-		})
-	} else {
-		errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
-		errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
-		receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
-			X:   ast.NewIdent(resultDataIdent),
-			Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
-		}, def.Signature(), def.FunctionIdentifier().Name, &ast.CallExpr{
-			Fun:  callFun,
-			Args: slices.Clone(call.Args),
-		}, errBody)
-		if err != nil {
-			return nil, err
-		}
-		handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X: astgen.CallBuiltinLen(&ast.SelectorExpr{
-					X:   ast.NewIdent(resultDataIdent),
-					Sel: ast.NewIdent(TemplateDataFieldIdentifierError),
-				}),
-				Op: token.EQL,
-				Y:  astgen.Int(0),
-			},
-			Body: &ast.BlockStmt{
-				List: receiverCall.Stmts(),
-			},
-		})
-
-		callExecuteTemplate(file, config, def, handlerFunc, bufIdent, resultDataIdent)
-	}
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
-
-	if !def.HasResponseWriterArg() {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
-			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
-		})...)
-	} else {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
-	}
-	return handlerFunc, nil
 }
 
 func callFuncExpression(def muxt.Definition) ast.Expr {

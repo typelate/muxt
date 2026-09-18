@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/configjson"
@@ -112,9 +113,7 @@ func runSnapshot(t *testing.T, archivePath string) {
 			}
 		}
 		for _, name := range sortedKeys(got, want) {
-			if got[name] != want[name] {
-				t.Errorf("want/%s differs (run go test -run TestSnapshots -update to rewrite):\n--- got\n%s\n--- want\n%s", name, got[name], want[name])
-			}
+			assert.Equal(t, want[name], got[name], "want/%s differs (run go test -run TestSnapshots -update to rewrite)")
 		}
 	})
 }

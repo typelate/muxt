@@ -24,7 +24,7 @@ func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt
 	}) {
 		return nil, fmt.Errorf("marshalJSON does not support the execute callback")
 	}
-	return executeHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent, marshalJSONRespondStmts(file, resultDataIdent, bufIdent)...)
+	return newHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent, marshalJSONRespondStmts(file, resultDataIdent, bufIdent)...)
 }
 
 // marshalJSONRespondStmts builds:

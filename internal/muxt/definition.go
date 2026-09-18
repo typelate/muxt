@@ -1109,3 +1109,13 @@ func isSafeTemplateDataMethod(methodName string) bool {
 	}
 	return safeMethodsSet[methodName]
 }
+
+func (def Definition) ExecuteArgumentIndex() (int, bool) {
+	for i, arg := range def.Arguments {
+		if arg.Type == ArgumentTypeExecute &&
+			arg.Identifier == TemplateNameScopeIdentifierExecute {
+			return i, true
+		}
+	}
+	return 0, false
+}
