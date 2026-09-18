@@ -447,7 +447,7 @@ func (def Definition) DefaultStatusCode() int         { return def.defaultStatus
 func (def Definition) MayRedirect() bool              { return def.canRedirect }
 func (def Definition) Template() *template.Template   { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
-func (def Definition) CallExpression() *ast.CallExpr  { return def.call }
+func (def Definition) CallExpression() *ast.CallExpr  { return cloneCall(def.call) }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
 func (def Definition) Identifier() string             { return def.identifier }
 func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
@@ -1118,4 +1118,21 @@ func (def Definition) ExecuteArgumentIndex() (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func cloneCall(call *ast.CallExpr) *ast.CallExpr {
+	clone := *call
+	clone.Args = make([]ast.Expr, len(call.Args))
+	for i, arg := range call.Args {
+		switch arg := arg.(type) {
+		case *ast.CallExpr:
+			clone.Args[i] = cloneCall(arg)
+		case *ast.Ident:
+			ident := *arg
+			clone.Args[i] = &ident
+		default:
+			clone.Args[i] = arg
+		}
+	}
+	return &clone
 }
