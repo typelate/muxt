@@ -28,24 +28,11 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 	callFun := callFuncExpression(def)
 	resultType := def.Arguments[execIdx].CallbackResultType()
 	execHasArg := def.Arguments[execIdx].CallbackHasArg()
-	typeExpr, err := file.TypeASTExpression(resultType)
+
+	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
-		return nil, err
+		return lit, err
 	}
-	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
-
-	// Parsing rewrites the call's arguments to the locals it declares,
-	// so it works on a copy and the definition stays as resolved.
-	call := cloneCall(def.CallExpression())
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
-		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
-		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
-		return errBlock
-	}, nil); err != nil {
-		return nil, err
-	}
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 
 	const guardIdent = "executed"
 	closure, err := executeClosure(file, def, resultDataIdent, bufIdent, guardIdent, resultType, execHasArg)
@@ -99,25 +86,10 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
 	resultType := def.Signature().Results().At(0).Type()
-	typeExpr, err := file.TypeASTExpression(resultType)
+	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
-		return nil, err
+		return lit, err
 	}
-
-	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
-
-	// Parsing rewrites the call's arguments to the locals it declares,
-	// so it works on a copy and the definition stays as resolved.
-	call := cloneCall(def.CallExpression())
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
-		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
-		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
-		return errBlock
-	}, nil); err != nil {
-		return nil, err
-	}
-
-	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
 
 	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
 	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
@@ -157,6 +129,29 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
 	}
 	return handlerFunc, nil
+}
+
+func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType types.Type) (*ast.FuncLit, *ast.CallExpr, *ast.FuncLit, error) {
+	typeExpr, err := file.TypeASTExpression(resultType)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
+
+	// Parsing rewrites the call's arguments to the locals it declares,
+	// so it works on a copy and the definition stays as resolved.
+	call := def.CallExpression()
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
+		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
+		return errBlock
+	}, nil); err != nil {
+		return nil, nil, nil, err
+	}
+
+	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
+	return handlerFunc, call, nil, nil
 }
 
 func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIdent, receiverInterfaceName string, typeExpr ast.Expr) *ast.FuncLit {

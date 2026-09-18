@@ -83,7 +83,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	// (it ignores the result type), so pass an empty struct here.
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
-	call := cloneCall(def.CallExpression())
+	call := def.CallExpression()
 	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), def.Signature(), def.Arguments, nil, "", config, call, validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
@@ -136,6 +136,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 				return nil, err
 			}
 			callArgs[i] = closure
+		default:
 		}
 	}
 	callExpr := &ast.CallExpr{Fun: callFun, Args: callArgs}

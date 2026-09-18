@@ -750,27 +750,6 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-// cloneCall copies a template name's call expression deeply enough that
-// rewriting the copy's arguments, or a nested call's function, leaves the
-// original untouched. A template name's call has only identifiers and
-// nested calls for arguments.
-func cloneCall(call *ast.CallExpr) *ast.CallExpr {
-	clone := *call
-	clone.Args = make([]ast.Expr, len(call.Args))
-	for i, arg := range call.Args {
-		switch arg := arg.(type) {
-		case *ast.CallExpr:
-			clone.Args[i] = cloneCall(arg)
-		case *ast.Ident:
-			ident := *arg
-			clone.Args[i] = &ident
-		default:
-			clone.Args[i] = arg
-		}
-	}
-	return &clone
-}
-
 func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, resultType types.Type, signature *types.Signature, args []muxt.Argument, parsed map[string]struct{}, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	if parseErrBlock == nil {
 		// Normal handlers accumulate scalar-parse failures into the template
