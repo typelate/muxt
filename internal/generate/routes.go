@@ -669,17 +669,17 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 		statusCodeIdent = "statusCode"
 		resultDataIdent = "td"
 	)
-	sig := def.Signature()
-	if sig == nil {
+
+	if sig := def.Signature(); sig == nil {
 		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())
 	}
 	switch def.Representation {
 	case muxt.RepresentationSSE:
-		return sseMethodHandlerFunc(file, config, def, sig, receiverInterfaceName)
+		return sseMethodHandlerFunc(file, config, def, receiverInterfaceName)
 	case muxt.RepresentationMarshalJSON:
-		return marshalJSONHandlerFunc(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
+		return marshalJSONHandlerFunc(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	default:
-		return executeHTMLTemplateHandler(file, config, def, sig, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
+		return executeHTMLTemplateHandler(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent)
 	}
 }
 

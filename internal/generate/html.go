@@ -17,33 +17,28 @@ import (
 // response buffer. The optional respond statements run after execution and
 // before the status/body write, letting another representation (marshalJSON)
 // replace the buffered output on success without duplicating the assembly.
-func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
-	var callFun ast.Expr
-	isMethodCall := sig.Recv() != nil
-	if isMethodCall {
-		callFun = &ast.SelectorExpr{
-			X:   ast.NewIdent(receiverIdent),
-			Sel: ast.NewIdent(def.FunctionIdentifier().Name),
-		}
-	} else {
-		callFun = ast.NewIdent(def.FunctionIdentifier().Name)
-	}
-
-	execIdx, hasExecute := -1, false
-	var resultType types.Type
-	var execHasArg bool
+func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
+	callFun := callFuncExpression(def)
+	var (
+		execIdx    = -1
+		hasExecute = false
+		resultType types.Type
+		execHasArg bool
+	)
 	for i, arg := range def.Arguments {
 		if arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute {
 			// The callback contract (func() error or func(T) error) is
 			// validated by muxt.ResolveCall, which records T and whether the
 			// callback takes the data argument.
-			execIdx, hasExecute = i, true
-			resultType, execHasArg = arg.CallbackResultType(), arg.CallbackHasArg()
+			execIdx = i
+			hasExecute = true
+			resultType = arg.CallbackResultType()
+			execHasArg = arg.CallbackHasArg()
 			break
 		}
 	}
 	if !hasExecute {
-		resultType = sig.Results().At(0).Type()
+		resultType = def.Signature().Results().At(0).Type()
 	}
 	typeExpr, err := file.TypeASTExpression(resultType)
 	if err != nil {
@@ -78,7 +73,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := cloneCall(def.CallExpression())
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, sig, def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, resultType, def.Signature(), def.Arguments, nil, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
@@ -131,7 +126,7 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
 			X:   ast.NewIdent(resultDataIdent),
 			Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
-		}, sig, def.FunctionIdentifier().Name, &ast.CallExpr{
+		}, def.Signature(), def.FunctionIdentifier().Name, &ast.CallExpr{
 			Fun:  callFun,
 			Args: slices.Clone(call.Args),
 		}, errBody)
@@ -165,6 +160,18 @@ func executeHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def 
 		handlerFunc.Body.List = append(handlerFunc.Body.List, callWriteOnResponse(bufIdent))
 	}
 	return handlerFunc, nil
+}
+
+func callFuncExpression(def muxt.Definition) ast.Expr {
+	sig := def.Signature()
+	isMethodCall := sig.Recv() != nil
+	if !isMethodCall {
+		return ast.NewIdent(def.FunctionIdentifier().Name)
+	}
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(receiverIdent),
+		Sel: ast.NewIdent(def.FunctionIdentifier().Name),
+	}
 }
 
 func callExecuteTemplate(file *File, config RoutesFileConfiguration, def muxt.Definition, handlerFunc *ast.FuncLit, bufIdent string, dataIdent string) {

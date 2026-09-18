@@ -16,7 +16,7 @@ import (
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
-func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, sig *types.Signature, receiverInterfaceName string) (*ast.FuncLit, error) {
+func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
 	const (
 		flusherIdent = "flusher"
 		okIdent      = "ok"
@@ -84,7 +84,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := cloneCall(def.CallExpression())
-	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), sig, def.Arguments, nil, "", config, call, validationFailureBlock, parseErrBlock)
+	body, err := appendParseArgumentStatements(body, def, file, types.NewStruct(nil, nil), def.Signature(), def.Arguments, nil, "", config, call, validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
