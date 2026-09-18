@@ -698,3 +698,22 @@ func TestNewTemplateName(t *testing.T) {
 		})
 	}
 }
+
+func TestDefinition_IsIndex(t *testing.T) {
+	t.Run("not index", func(t *testing.T) {
+		def := Definition{path: "/foo"}
+		require.False(t, def.IsIndex())
+	})
+	t.Run("slash", func(t *testing.T) {
+		def := Definition{path: "/"}
+		require.True(t, def.IsIndex())
+	})
+	t.Run("slash dollar", func(t *testing.T) {
+		def := Definition{path: "/{$}"}
+		require.True(t, def.IsIndex())
+	})
+	t.Run("malformed path", func(t *testing.T) {
+		def := Definition{path: " / "}
+		require.True(t, def.IsIndex())
+	})
+}
