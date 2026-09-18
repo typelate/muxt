@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"testing"
 
-	"github.com/typelate/muxt/internal/muxt/muxttest"
+	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -36,9 +36,9 @@ func testConfig() RoutesFileConfiguration {
 // a muxttest checker.
 func testSource(t *testing.T, goSource, receiverType, templates string) (source.Package, *types.Named) {
 	t.Helper()
-	pkg := muxttest.Check(t, "example.com/server", map[string]string{"server.go": goSource})
+	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": goSource})
 	src := source.Package{
-		Fset:  muxttest.FileSet,
+		Fset:  fake.FileSet,
 		Types: pkg,
 		Variables: []source.Variable{{
 			Name: "templates",
@@ -48,5 +48,5 @@ func testSource(t *testing.T, goSource, receiverType, templates string) (source.
 	if receiverType == "" {
 		return src, nil
 	}
-	return src, muxttest.Lookup(t, pkg, receiverType).(*types.Named)
+	return src, fake.Lookup(t, pkg, receiverType).(*types.Named)
 }

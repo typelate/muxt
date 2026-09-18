@@ -5,8 +5,8 @@ import (
 	"html/template"
 	"testing"
 
+	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/muxt/muxttest"
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -57,14 +57,14 @@ func TestPathValueTypes(t *testing.T) {
 		{name: "an sse-prefixed name is a callback, not a value", template: "GET /{sseID} Int(sseID)", param: "sseID"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			pkg := muxttest.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
 			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: muxttest.FileSet, Types: pkg}, receiver, muxttest.NewChecker().ParsesFromText(muxttest.Lookup(t, pkg, "Time")).Fake()); err != nil {
+			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()); err != nil {
 				t.Fatal(err)
 			}
 			tp, ok := defs[0].ArgumentType(tt.param)
@@ -83,9 +83,9 @@ func TestPathValueTypes(t *testing.T) {
 // the string it arrived as, or parsed by the method resolution recorded.
 // Generation reads both rather than working them out again.
 func TestPathValueParsing(t *testing.T) {
-	pkg := muxttest.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
-	checker := muxttest.NewChecker().ParsesFromText(muxttest.Lookup(t, pkg, "Time")).Fake()
+	checker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
 	for _, tt := range []struct {
 		name       string
 		template   string
@@ -103,7 +103,7 @@ func TestPathValueParsing(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: muxttest.FileSet, Types: pkg}, receiver, checker); err != nil {
+			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
 				t.Fatal(err)
 			}
 			argument := defs[0].Arguments[0]
@@ -121,10 +121,10 @@ func TestPathValueParsing(t *testing.T) {
 // with MarshalText exactly when the type it parses into is a
 // TextMarshaler, as the checker says.
 func TestPathValueTextMarshaler(t *testing.T) {
-	pkg := muxttest.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
-	timeType := muxttest.Lookup(t, pkg, "Time")
-	checker := muxttest.NewChecker().ParsesFromText(timeType).FormatsAsText(timeType).Fake()
+	timeType := fake.Lookup(t, pkg, "Time")
+	checker := fake.NewChecker().ParsesFromText(timeType).FormatsAsText(timeType).Fake()
 	for _, tt := range []struct {
 		template, param string
 		want            bool
@@ -139,7 +139,7 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: muxttest.FileSet, Types: pkg}, receiver, checker); err != nil {
+			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
 				t.Fatal(err)
 			}
 			if got := defs[0].PathValueTextMarshaler(tt.param); got != tt.want {

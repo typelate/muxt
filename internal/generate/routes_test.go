@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/muxt/muxttest"
 )
 
 // TestHandlerGenerationLeavesTheRouteAsResolved generates one handler
@@ -33,7 +33,7 @@ func (T) Title(id int) string { return "" }
 	}
 	file := newFile(pkg)
 	def := groups.all[0]
-	if err := muxt.ResolveCall(&def, pkg, receiver, muxttest.NewChecker().Fake()); err != nil {
+	if err := muxt.ResolveCall(&def, pkg, receiver, fake.NewChecker().Fake()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ type T struct{}
 func (T) Stream(string) {}
 `, "T", `{{define "GET /x sse(Stream(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`)
 
-	_, err := TemplateRoutesFiles(".", config, pkg, receiver, muxttest.NewChecker().Fake(), log.New(io.Discard, "", 0))
+	_, err := TemplateRoutesFiles(".", config, pkg, receiver, fake.NewChecker().Fake(), log.New(io.Discard, "", 0))
 	if err == nil || !strings.Contains(err.Error(), "failed to determine type for fooMessage") {
 		t.Errorf("got error %v, want it to say it failed to determine type for fooMessage", err)
 	}

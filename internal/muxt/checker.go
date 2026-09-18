@@ -4,7 +4,7 @@ import "go/types"
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 
-//counterfeiter:generate -o muxtfakes/fake_checker.go . Checker
+//counterfeiter:generate --fake-name=Checker -o ../fake/checker.go . Checker
 
 // Checker answers what route resolution needs to know about the standard
 // library: the types the reserved argument identifiers bind to, and which

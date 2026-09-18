@@ -9,25 +9,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/muxt/muxttest"
 	"github.com/typelate/muxt/internal/source"
 )
 
 func TestArgument(t *testing.T) {
 	examplePkg := exampleTypes(t)
-	pkg := source.Package{Fset: muxttest.FileSet, Types: examplePkg}
+	pkg := source.Package{Fset: fake.FileSet, Types: examplePkg}
 
-	httpRequestPtrType := types.NewPointer(muxttest.Lookup(t, examplePkg, "Request"))
-	httpResponseWriterType := muxttest.Lookup(t, examplePkg, "ResponseWriter")
-	contextContextType := muxttest.Lookup(t, examplePkg, "Context")
-	netURLValuesType := muxttest.Lookup(t, examplePkg, "Values")
-	multipartFormType := muxttest.Lookup(t, examplePkg, "Form")
-	ioReaderType := muxttest.Lookup(t, examplePkg, "Reader")
+	httpRequestPtrType := types.NewPointer(fake.Lookup(t, examplePkg, "Request"))
+	httpResponseWriterType := fake.Lookup(t, examplePkg, "ResponseWriter")
+	contextContextType := fake.Lookup(t, examplePkg, "Context")
+	netURLValuesType := fake.Lookup(t, examplePkg, "Values")
+	multipartFormType := fake.Lookup(t, examplePkg, "Form")
+	ioReaderType := fake.Lookup(t, examplePkg, "Reader")
 	// The stand-ins this package declares are what the reserved argument
 	// identifiers bind to, and ID is the one type that parses from text.
-	checker := muxttest.StandInChecker(t, examplePkg).
-		ParsesFromText(muxttest.Lookup(t, examplePkg, "ID")).
+	checker := fake.StandInChecker(t, examplePkg).
+		ParsesFromText(fake.Lookup(t, examplePkg, "ID")).
 		Fake()
 
 	serverType := examplePkg.Scope().Lookup("Server").Type().(*types.Named)
@@ -518,5 +518,5 @@ func exampleTypes(t *testing.T) *types.Package {
 		require.NoError(t, err)
 		files[name] = string(src)
 	}
-	return muxttest.Check(t, "example.com", files)
+	return fake.Check(t, "example.com", files)
 }
