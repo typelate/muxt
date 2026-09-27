@@ -319,6 +319,26 @@ func TestArgument(t *testing.T) {
 		{Name: "nested call with no results", Receiver: serverType, Template: `{{define "GET / Any(NoResults())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "method NoResults() has no results; it should have one or two")
 		}},
+		{Name: "result with a StatusCode method", Receiver: serverType, Template: `{{define "GET / Coded()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.StatusCodeSourceMethod, defs[0].ResultStatusCode())
+		}},
+		{Name: "result with a StatusCode field", Receiver: serverType, Template: `{{define "GET / WithField()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.StatusCodeSourceField, defs[0].ResultStatusCode())
+		}},
+		{Name: "result without a StatusCode", Receiver: serverType, Template: `{{define "GET / StringError()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.StatusCodeSourceNone, defs[0].ResultStatusCode())
+		}},
+		{Name: "execute callback data with a StatusCode method", Receiver: serverType, Template: `{{define "GET / ExecuteCoded(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.StatusCodeSourceMethod, defs[0].ResultStatusCode())
+		}},
+		{Name: "execute callback without data", Receiver: serverType, Template: `{{define "GET / ExecuteNoArg(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.StatusCodeSourceNone, defs[0].ResultStatusCode())
+		}},
 		{Name: "nested call with data and ok results", Receiver: serverType, Template: `{{define "GET / Any(StringOK())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Equal(t, muxt.ResultShapeDataOK, defs[0].Arguments[0].ResultShape())
