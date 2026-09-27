@@ -57,7 +57,7 @@ type T struct{}
 
 func (T) WithResponse(ctx context.Context, response http.ResponseWriter) any { return nil }
 func (T) WithStatus(ctx context.Context, response http.ResponseWriter) any   { return nil }
-func (T) WithoutResponse(ctx context.Context) any                           { return nil }
+func (T) WithoutResponse(ctx context.Context) any                            { return nil }
 -- want-err.txt --
 Error:
 $WORK/template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" calls StatusCode but WithStatus takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method
