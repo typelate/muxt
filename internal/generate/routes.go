@@ -834,7 +834,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			argument := args[i]
 			src := requestArgumentSource(def, name)
 			ident := name
-			if slices.Contains(def.PathValueIdentifiers(), name) {
+			if def.ArgumentIsPathParameter(name) {
 				ident = pathParamIdent(name)
 				call.Args[i] = ast.NewIdent(ident)
 			}
@@ -859,7 +859,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					case muxt.TemplateNameScopeIdentifierRequestBody:
 						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(ident))(src))
 					default:
-						if slices.Contains(def.PathValueIdentifiers(), name) || name == muxt.TemplateNameScopeIdentifierLastEventID {
+						if def.ArgumentIsPathParameter(name) || name == muxt.TemplateNameScopeIdentifierLastEventID {
 							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(ident))(src))
 						}
 					}
@@ -870,7 +870,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				continue
 			}
 			switch {
-			case slices.Contains(def.PathValueIdentifiers(), name):
+			case def.ArgumentIsPathParameter(name):
 				parsed[name] = struct{}{}
 				s, err := generateParseValueFromStringStatements(file, def, name+"Parsed", resultType, src, param.Type(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
@@ -1377,7 +1377,7 @@ func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
 			Sel: ast.NewIdent("Body"),
 		}
 	}
-	if name == muxt.TemplateNameScopeIdentifierLastEventID && !slices.Contains(def.PathValueIdentifiers(), name) {
+	if def.ArgumentIsLastEventID(name) {
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Header")},

@@ -1,9 +1,12 @@
 package muxt_test
 
 import (
+	"fmt"
 	"go/types"
 	"html/template"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
@@ -36,45 +39,104 @@ func (T) Pair(int, int) any             { return nil }
 
 // TestPathValueTypes states which type a path parameter parses into: the
 // parameter type of the first place the call passes it, unless a string
-// can be passed there as it is.
+// can be passed there as it is, in which case it stays a string.
 func TestPathValueTypes(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		template string
-		param    string
-		want     string // "" when the parameter stays the string it arrived as
+		name       string
+		definition string
+		param      string
+		want       string
 	}{
-		{name: "parsed into an int parameter", template: "GET /{id} Int(id)", param: "id", want: "int"},
-		{name: "a string parameter needs no parsing", template: "GET /{id} String(id)", param: "id"},
-		{name: "a string is assignable to any", template: "GET /{id} Any(id)", param: "id"},
-		{name: "a text unmarshaler", template: "GET /{at} Time(at)", param: "at", want: "server.Time"},
-		{name: "the first occurrence decides when it parses", template: "GET /{id} IntString(id, id)", param: "id", want: "int"},
-		{name: "the first occurrence decides when it does not", template: "GET /{id} StringInt(id, id)", param: "id"},
-		{name: "a nested call is walked where it is passed", template: "GET /{id} Outer(Inner(id), id)", param: "id", want: "int"},
-		{name: "a nested call that takes a string decides before a later int", template: "GET /{id} Wrap(Echo(id), id)", param: "id"},
-		{name: "two parameters", template: "GET /{a}/{b} Pair(a, b)", param: "b", want: "int"},
-		{name: "a parameter the call does not pass", template: "GET /{a}/{b} Int(a)", param: "b"},
-		{name: "an sse-prefixed name is a callback, not a value", template: "GET /{sseID} Int(sseID)", param: "sseID"},
+		{
+			name:       "parsed into an int parameter",
+			definition: "GET /{id} Int(id)",
+			param:      "id",
+			want:       "int",
+		},
+		{
+			name:       "a string parameter needs no parsing",
+			definition: "GET /{id} String(id)",
+			param:      "id",
+			want:       "string",
+		},
+		{
+			name:       "a string is assignable to any",
+			definition: "GET /{id} Any(id)",
+			param:      "id",
+			want:       "string",
+		},
+		{
+			name:       "a text unmarshaler",
+			definition: "GET /{at} Time(at)",
+			param:      "at",
+			want:       "server.Time",
+		},
+		{
+			name:       "the first occurrence decides when it parses",
+			definition: "GET /{id} IntString(id, id)",
+			param:      "id",
+			want:       "int",
+		},
+		{
+			name:       "the first occurrence decides when it does not",
+			definition: "GET /{id} StringInt(id, id)",
+			param:      "id",
+			want:       "string",
+		},
+		{
+			name:       "a nested call is walked where it is passed",
+			definition: "GET /{id} Outer(Inner(id), id)",
+			param:      "id",
+			want:       "int",
+		},
+		{
+			name:       "a nested call that takes a string decides before a later int",
+			definition: "GET /{id} Wrap(Echo(id), id)",
+			param:      "id",
+			want:       "string",
+		},
+		{
+			name:       "two parameters",
+			definition: "GET /{a}/{b} Pair(a, b)",
+			param:      "b",
+			want:       "int",
+		},
+		{
+			name:       "a parameter the call does not pass",
+			definition: "GET /{a}/{b} Int(a)",
+			param:      "b",
+			want:       "string",
+		},
+		{
+			name:       "an sse-prefixed name is a callback, not a value",
+			definition: "GET /{sseID} Int(sseID)",
+			param:      "sseID",
+			want:       "string",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
-			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
+
+			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
-			if err != nil {
+			require.NoError(t, err)
+			require.NotEmpty(t, defs)
+			def := &defs[0]
+			require.NotNil(t, def)
+
+			srcPkg := source.Package{Fset: fake.FileSet, Types: pkg}
+			fakeChecker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
+
+			if err := muxt.ResolveCall(def, srcPkg, receiver, fakeChecker); err != nil {
 				t.Fatal(err)
 			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()); err != nil {
-				t.Fatal(err)
-			}
-			tp, ok := defs[0].ArgumentType(tt.param)
-			got := ""
-			if ok {
-				got = types.TypeString(tp, (*types.Package).Name)
-			}
-			if got != tt.want {
-				t.Errorf("ArgumentType(%q) = %q, want %q", tt.param, got, tt.want)
-			}
+
+			segment, ok := def.PathParameter(tt.param)
+			require.True(t, ok, "path parameter %q not found", tt.param)
+			got := types.TypeString(segment.Type(), (*types.Package).Name)
+			require.Equal(t, tt.want, got, "wrong path parameter type")
 		})
 	}
 }
@@ -142,8 +204,12 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
 				t.Fatal(err)
 			}
-			if got := defs[0].PathValueTextMarshaler(tt.param); got != tt.want {
-				t.Errorf("PathValueTextMarshaler(%q) = %t, want %t", tt.param, got, tt.want)
+			segment, ok := defs[0].PathParameter(tt.param)
+			if !ok {
+				t.Fatalf("path parameter %q not found", tt.param)
+			}
+			if got := segment.TextMarshaler(); got != tt.want {
+				t.Errorf("PathParameter(%q).TextMarshaler() = %t, want %t", tt.param, got, tt.want)
 			}
 		})
 	}

@@ -152,7 +152,7 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
-	recordPathValueTypes(def.pathValueTypes, def.pathValueMarshalers, checker, args, make(map[string]bool))
+	recordPathValueTypes(def, checker, args, make(map[string]bool))
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		// Result-shape errors are about the method contract, so the
@@ -171,19 +171,25 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 // which case the value is passed along unparsed and stays a string.
 // Later occurrences reuse the first one's value. An sse-prefixed name is a
 // render callback wherever it appears, never a parsed value.
-func recordPathValueTypes(into map[string]types.Type, marshalers map[string]bool, checker Checker, args []Argument, seen map[string]bool) {
+func recordPathValueTypes(def *Definition, checker Checker, args []Argument, seen map[string]bool) {
 	for _, arg := range args {
 		switch arg.Type {
 		case ArgumentTypeCall:
-			recordPathValueTypes(into, marshalers, checker, arg.args, seen)
+			recordPathValueTypes(def, checker, arg.args, seen)
 		case ArgumentTypeRequestPathValue:
 			if seen[arg.Identifier] || IsSSEArgument(arg.Identifier) {
 				continue
 			}
 			seen[arg.Identifier] = true
-			if !isStringAssignable(arg.ParamType) {
-				into[arg.Identifier] = arg.ParamType
-				marshalers[arg.Identifier] = checker.TextMarshaler(arg.ParamType)
+			if isStringAssignable(arg.ParamType) {
+				continue
+			}
+			for i := range def.Segments {
+				segment := &def.Segments[i]
+				if segment.IsWildcard() && segment.value == arg.Identifier {
+					segment.tp = arg.ParamType
+					segment.textMarshaler = checker.TextMarshaler(arg.ParamType)
+				}
 			}
 		}
 	}
@@ -529,7 +535,7 @@ func defaultScopeType(checker Checker, def *Definition, argumentIdentifier strin
 		tp, err := checker.ScopeType(argumentIdentifier)
 		return tp, err == nil
 	default:
-		if slices.Contains(def.PathValueIdentifiers(), argumentIdentifier) {
+		if def.ArgumentIsPathParameter(argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
@@ -630,7 +636,7 @@ func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident,
 			return a, err
 		}
 	default:
-		if slices.Contains(def.pathValueNames, arg.Name) {
+		if def.ArgumentIsPathParameter(arg.Name) {
 			a.Type = ArgumentTypeRequestPathValue
 			if err := bindParsedArgument(&a, checker, qual); err != nil {
 				return a, err
@@ -696,7 +702,7 @@ func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
 func (def *Definition) IsSignalsCallback(name string) bool {
 	return def.Representation == RepresentationSSE &&
 		IsSignalsCallbackArgument(name) &&
-		!slices.Contains(def.pathValueNames, name)
+		!def.ArgumentIsPathParameter(name)
 }
 
 // IsSignalsCallbackArgument reports whether name is a datastar patch-signals
@@ -822,8 +828,8 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 // request body, so the sugar and the explicit spelling bind identically. A
 // path wildcard named signals keeps its path-value meaning. It reports
 // whether anything was rewritten.
-func rewriteSignalsArguments(call *ast.CallExpr, pathValueNames []string) bool {
-	if slices.Contains(pathValueNames, TemplateNameScopeIdentifierSignals) {
+func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
+	if _, ok := pathParameter(segments, TemplateNameScopeIdentifierSignals); ok {
 		return false
 	}
 	rewritten := false
@@ -838,7 +844,7 @@ func rewriteSignalsArguments(call *ast.CallExpr, pathValueNames []string) bool {
 				rewritten = true
 			}
 		case *ast.CallExpr:
-			if rewriteSignalsArguments(arg, pathValueNames) {
+			if rewriteSignalsArguments(arg, segments) {
 				rewritten = true
 			}
 		}

@@ -146,7 +146,7 @@ func (e *ResponseWriterTemplateStateError) Error() string {
 	if isRedirectMethod(e.Method) {
 		remedy = "call http.Redirect in the method"
 	}
-	fmt.Fprintf(&sb, "template %q calls %s but %s takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or %s",
+	_, _ = fmt.Fprintf(&sb, "template %q calls %s but %s takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or %s",
 		e.Template, e.Method, e.Function, remedy)
 	return sb.String()
 }
@@ -317,7 +317,7 @@ func (e *DuplicatePatternError) MultiLineError() string {
 		if location == "" {
 			continue
 		}
-		fmt.Fprintf(&sb, "\n%s: %s", location, note)
+		_, _ = fmt.Fprintf(&sb, "\n%s: %s", location, note)
 		note = "also defined here"
 	}
 	return sb.String()
@@ -356,10 +356,6 @@ type Definition struct {
 	fileSet *token.FileSet
 
 	template *template.Template
-
-	pathValueTypes      map[string]types.Type
-	pathValueMarshalers map[string]bool
-	pathValueNames      []string
 
 	identifier string
 
@@ -401,6 +397,7 @@ type Definition struct {
 
 	Representation Representation
 
+	Segments  []Segment
 	Arguments []Argument
 }
 
@@ -461,23 +458,33 @@ func (def Definition) IsIndex() bool {
 	return p == "/" || p == "/{$}"
 }
 
+// HasPathEndWildcard reports when the special path has the "{$}" wildcard
+func (def Definition) HasPathEndWildcard() bool {
+	return strings.HasSuffix(def.Path(), "{$}")
+}
+
+// ArgumentIsLastEventID reports whether name binds to the Last-Event-ID
+// request header rather than to a path parameter of the same name.
+func (def Definition) ArgumentIsLastEventID(name string) bool {
+	return name == TemplateNameScopeIdentifierLastEventID && !def.ArgumentIsPathParameter(name)
+}
+
+// ArgumentIsPathParameter reports whether name is a wildcard segment of the
+// path.
+func (def Definition) ArgumentIsPathParameter(name string) bool {
+	_, ok := pathParameter(def.Segments, name)
+	return ok
+}
+
+// PathParameter returns the wildcard segment that names the path parameter.
+func (def Definition) PathParameter(name string) (Segment, bool) {
+	return pathParameter(def.Segments, name)
+}
+
 // SignalsCallback returns the first Signals-suffixed callback argument name,
 // if the route has one.
 func (def Definition) SignalsCallback() (string, bool) {
 	return def.signalsCallback, def.signalsCallback != ""
-}
-
-// PathValueTextMarshaler reports whether the type a path parameter parses
-// into implements encoding.TextMarshaler, so a route path formats it with
-// MarshalText.
-func (def Definition) PathValueTextMarshaler(name string) bool { return def.pathValueMarshalers[name] }
-
-// ArgumentType returns the type a path parameter parses into. It is
-// unset for a parameter that is passed along as the string it arrived
-// as, or is not passed to the call at all.
-func (def Definition) ArgumentType(name string) (types.Type, bool) {
-	tp, ok := def.pathValueTypes[name]
-	return tp, ok
 }
 
 // SynthesizedMethods lists the signatures ResolveCall inferred for
@@ -509,18 +516,16 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	}
 	matches := templateNameMux.FindStringSubmatch(in)
 	def := Definition{
-		name:                in,
-		method:              matches[templateNameMux.SubexpIndex("METHOD")],
-		host:                matches[templateNameMux.SubexpIndex("HOST")],
-		path:                matches[templateNameMux.SubexpIndex("PATH")],
-		handler:             strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
-		pattern:             matches[templateNameMux.SubexpIndex("pattern")],
-		fileSet:             token.NewFileSet(),
-		defaultStatusCode:   http.StatusOK,
-		pathValueTypes:      make(map[string]types.Type),
-		pathValueMarshalers: make(map[string]bool),
-		template:            t,
-		spans:               newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
+		name:              in,
+		method:            matches[templateNameMux.SubexpIndex("METHOD")],
+		host:              matches[templateNameMux.SubexpIndex("HOST")],
+		path:              matches[templateNameMux.SubexpIndex("PATH")],
+		handler:           strings.TrimSpace(matches[templateNameMux.SubexpIndex("CALL")]),
+		pattern:           matches[templateNameMux.SubexpIndex("pattern")],
+		fileSet:           token.NewFileSet(),
+		defaultStatusCode: http.StatusOK,
+		template:          t,
+		spans:             newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
 	}
 	if def.handler != "" && def.spans.call[0] >= 0 {
 		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)
@@ -557,21 +562,13 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	}
 
-	pathValueNames := def.PathValueIdentifiers()
-	if err := def.checkPathValueNames(pathValueNames); err != nil {
+	if err := def.initializeSegments(); err != nil {
 		return def, err, true
 	}
-	def.pathValueNames = pathValueNames
 
-	err := parseHandler(def.fileSet, &def, def.pathValueNames)
+	err := parseHandler(def.fileSet, &def, def.Segments)
 	if err != nil {
 		return def, err, true
-	}
-
-	if def.fun == nil {
-		for _, name := range def.pathValueNames {
-			def.pathValueTypes[name] = types.Universe.Lookup("string").Type()
-		}
 	}
 
 	if httpStatusCode != "" && !def.callWriteHeader(nil) {
@@ -584,23 +581,7 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	return def, nil, true
 }
 
-var (
-	pathSegmentPattern = regexp.MustCompile(`/\{([^}]*)}`)
-	templateNameMux    = regexp.MustCompile(`^(?P<pattern>((?P<METHOD>[A-Z]+)\s+)?(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
-)
-
-func (def Definition) PathValueIdentifiers() []string {
-	var result []string
-	for _, match := range pathSegmentPattern.FindAllStringSubmatch(def.path, strings.Count(def.path, "/")) {
-		n := match[1]
-		if n == "$" && strings.Count(def.path, "$") == 1 && strings.HasSuffix(def.path, "{$}") {
-			continue
-		}
-		n = strings.TrimSuffix(n, "...")
-		result = append(result, n)
-	}
-	return result
-}
+var templateNameMux = regexp.MustCompile(`^(?P<pattern>((?P<METHOD>[A-Z]+)\s+)?(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
 
 func hasHTTPResponseWriterArgument(call *ast.CallExpr) bool {
 	for _, a := range call.Args {
@@ -618,21 +599,6 @@ func hasHTTPResponseWriterArgument(call *ast.CallExpr) bool {
 	return false
 }
 
-func (def *Definition) checkPathValueNames(in []string) error {
-	for i, n := range in {
-		if !token.IsIdentifier(n) {
-			return def.pathParamErrorf(n, 0, "path parameter name not permitted: %q is not a Go identifier", n)
-		}
-		if slices.Contains(in[:i], n) {
-			return def.pathParamErrorf(n, 1, "path parameter name %q is used more than once; parameter names must be unique within a path", n)
-		}
-		if slices.Contains(patternScope(), n) {
-			return def.pathParamErrorf(n, 0, "path parameter name %s conflicts with a reserved identifier (%s)", n, strings.Join(patternScope(), ", "))
-		}
-	}
-	return nil
-}
-
 func (def Definition) byPathThenMethod(d Definition) int {
 	if n := cmp.Compare(def.path, d.path); n != 0 {
 		return n
@@ -643,7 +609,7 @@ func (def Definition) byPathThenMethod(d Definition) int {
 	return cmp.Compare(def.handler, d.handler)
 }
 
-func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []string) error {
+func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) error {
 	if def.handler == "" {
 		return nil
 	}
@@ -669,7 +635,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		return errAt(call, "unexpected ellipsis")
 	}
 
-	def.usesSignals = rewriteSignalsArguments(call, pathParameterNames)
+	def.usesSignals = rewriteSignalsArguments(call, segments)
 	if def.Representation == RepresentationSSE {
 		for _, a := range call.Args {
 			if ident, ok := a.(*ast.Ident); ok && def.IsSignalsCallback(ident.Name) {
@@ -679,7 +645,12 @@ func parseHandler(fileSet *token.FileSet, def *Definition, pathParameterNames []
 		}
 	}
 
-	scope := append(patternScope(), pathParameterNames...)
+	scope := patternScope()
+	for _, segment := range segments {
+		if segment.IsWildcard() {
+			scope = append(scope, segment.value)
+		}
+	}
 	slices.Sort(scope)
 	if err := checkArguments(scope, call, def.Representation == RepresentationSSE); err != nil {
 		return err
