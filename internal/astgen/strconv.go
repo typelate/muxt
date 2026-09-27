@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
-// ConvertToString converts a variable to its string representation based on its basic kind
-func ConvertToString(im ImportManager, variable ast.Expr, kind types.BasicKind) (ast.Expr, error) {
+// ConvertToString formats variable, whose type is tp, as a string.
+func ConvertToString(im ImportManager, variable ast.Expr, tp source.Type) (ast.Expr, error) {
+	kind, ok := tp.Basic()
+	if !ok {
+		return nil, fmt.Errorf("unsupported type for path parameters")
+	}
 	switch kind {
 	case types.Bool, types.UntypedBool:
 		return FormatBool(im, variable), nil
