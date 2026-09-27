@@ -10,6 +10,8 @@ import (
 	"github.com/typelate/dom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
 // UnmarshalMethod identifies how a request value (path value, lastEventID
@@ -121,14 +123,14 @@ func isStringAssignable(tp types.Type) bool {
 // here even though form fields accept them.
 func bindParsedArgument(a *Argument, checker Checker, qual types.Qualifier) error {
 	a.scopeType = types.Universe.Lookup("string").Type()
-	if isStringAssignable(a.ParamType) {
+	if isStringAssignable(a.paramType) {
 		a.direct = true
 		return nil
 	}
-	a.method = unmarshalMethodFor(checker, a.ParamType)
+	a.method = unmarshalMethodFor(checker, a.paramType)
 	switch a.method {
 	case UnmarshalUnsupported, UnmarshalFloat32, UnmarshalFloat64:
-		return unsupportedTypeError(a.ParamType, qual, supportedUnmarshalTypes)
+		return unsupportedTypeError(a.paramType, qual, supportedUnmarshalTypes)
 	default:
 		return nil
 	}
@@ -146,16 +148,14 @@ const (
 // FieldBinding describes how one struct field of a form or multipart
 // parameter binds to the request.
 type FieldBinding struct {
-	// Field is the bound struct field.
-	Field *types.Var
+	// Name is the bound struct field's name.
+	Name string
 	// InputName is the form input name: the name struct tag or the field name.
 	InputName string
 	// Template is the field's validation template (template struct tag), or
 	// nil when the tag is absent or names an undefined template.
 	Template *template.Template
-	// Elem is the type parsed from one string value: the field type, or the
-	// slice element type when Slice is set. Undefined for FileHeader fields.
-	Elem types.Type
+	elem     types.Type
 	// Slice binds every request value for InputName, not just the first.
 	Slice bool
 	// FileHeader binds the field from request.MultipartForm.File instead of a
@@ -180,11 +180,11 @@ func bindFormArgument(a *Argument, def *Definition, checker Checker, qual types.
 		return err
 	}
 	a.scopeType = at
-	if types.AssignableTo(at, a.ParamType) {
+	if types.AssignableTo(at, a.paramType) {
 		a.direct = true
 		return nil
 	}
-	st, ok := a.ParamType.Underlying().(*types.Struct)
+	st, ok := a.paramType.Underlying().(*types.Struct)
 	if !ok {
 		return fmt.Errorf("expected %s parameter type to be a struct", a.Identifier)
 	}
@@ -207,7 +207,7 @@ func formStructBindings(def *Definition, checker Checker, st *types.Struct, argN
 	for i := 0; i < st.NumFields(); i++ {
 		field, tags := st.Field(i), reflect.StructTag(st.Tag(i))
 		fb := FieldBinding{
-			Field:     field,
+			Name:      field.Name(),
 			InputName: field.Name(),
 		}
 		if name, found := tags.Lookup(InputAttributeNameStructTag); found {
@@ -223,20 +223,20 @@ func formStructBindings(def *Definition, checker Checker, st *types.Struct, argN
 		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
 			fb.Template = def.template.Lookup(name)
 		}
-		fb.Elem = ft
+		fb.elem = ft
 		if slice, ok := ft.(*types.Slice); ok {
 			fb.Slice = true
-			fb.Elem = slice.Elem()
+			fb.elem = slice.Elem()
 		}
 		validations, err := fieldTemplateValidations(fb)
 		if err != nil {
 			return nil, err
 		}
 		fb.Validations = validations
-		if err := checkUnmarshalable(checker, fb.Elem, qual); err != nil {
+		if err := checkUnmarshalable(checker, fb.elem, qual); err != nil {
 			return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
 		}
-		fb.Method = unmarshalMethodFor(checker, fb.Elem)
+		fb.Method = unmarshalMethodFor(checker, fb.elem)
 		bindings = append(bindings, fb)
 	}
 	return bindings, nil
@@ -258,5 +258,9 @@ func fieldTemplateValidations(fb FieldBinding) ([]InputValidation, error) {
 	if input == nil {
 		return nil, nil
 	}
-	return ParseInputValidations(fb.InputName, input, fb.Elem)
+	return ParseInputValidations(fb.InputName, input, fb.elem)
 }
+
+// Elem is the type parsed from one string value: the field type, or the
+// slice element type when Slice is set. Undefined for FileHeader fields.
+func (fb FieldBinding) Elem() source.Type { return source.NewType(fb.elem) }

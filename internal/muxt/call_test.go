@@ -68,7 +68,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "HTTPRequest", defs[0].Identifier())
 			require.Equal(t, "request", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequest, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(httpRequestPtrType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(httpRequestPtrType)))
 		}},
 		{Name: "context", Receiver: serverType, Template: `{{define "GET / Context(ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "Context", defs[0].Identifier())
 			require.Equal(t, "ctx", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestContext, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(contextContextType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(contextContextType)))
 		}},
 		{Name: "response writer", Receiver: serverType, Template: `{{define "GET / HTTPResponseWriter(response)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "HTTPResponseWriter", defs[0].Identifier())
 			require.Equal(t, "response", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeResponse, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(httpResponseWriterType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(httpResponseWriterType)))
 		}},
 		{Name: "form", Receiver: serverType, Template: `{{define "GET / URLValues(form)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "URLValues", defs[0].Identifier())
 			require.Equal(t, "form", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(netURLValuesType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(netURLValuesType)))
 		}},
 		{Name: "multipart value form param is parsed as a field struct and rejected", Receiver: serverType, Template: `{{define "GET / MultipartForm(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			// A non-pointer multipart.Form falls into struct field-binding mode,
@@ -106,7 +106,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, defs, 1)
 			require.Equal(t, "MultipartFormPtr", defs[0].Identifier())
 			require.Equal(t, muxt.ArgumentTypeRequestMultipartForm, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(types.NewPointer(multipartFormType), defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(types.NewPointer(multipartFormType))))
 		}},
 		{Name: "multipart param neither struct nor pointer", Receiver: serverType, Template: `{{define "GET / String(multipart)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "expected multipart parameter type to be a struct")
@@ -116,7 +116,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, defs, 1)
 			require.Equal(t, "FormStruct", defs[0].Identifier())
 			require.Equal(t, muxt.ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
-			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType().Format(unqualified))
 		}},
 		{Name: "form param neither struct nor the form values type", Receiver: serverType, Template: `{{define "GET / String(form)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "expected form parameter type to be a struct")
@@ -127,9 +127,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "String", defs[0].Identifier())
 			require.Equal(t, "id", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestPathValue, defs[0].Arguments[0].Type)
-			basic, ok := defs[0].Arguments[0].ParamType.(*types.Basic)
-			require.True(t, ok)
-			require.Equal(t, types.String, basic.Kind())
+			require.True(t, defs[0].Arguments[0].ParamType().IsString())
 		}},
 		{Name: "last event id", Receiver: serverType, Template: `{{define "GET / String(lastEventID)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -138,9 +136,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "String", defs[0].Identifier())
 			require.Equal(t, "lastEventID", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeLastEventID, defs[0].Arguments[0].Type)
-			basic, ok := defs[0].Arguments[0].ParamType.(*types.Basic)
-			require.True(t, ok)
-			require.Equal(t, types.String, basic.Kind())
+			require.True(t, defs[0].Arguments[0].ParamType().IsString())
 		}},
 		{Name: "body", Receiver: serverType, Template: `{{define "POST / Reader(body)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -148,7 +144,7 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, "Reader", defs[0].Identifier())
 			require.Equal(t, "body", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestBody, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(ioReaderType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(ioReaderType)))
 		}},
 		{Name: "body param must be exactly the reader type", Receiver: serverType, Template: `{{define "POST / String(body)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "body parameter must have type io.Reader, got string")
@@ -157,27 +153,27 @@ func TestArgument(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
 			require.Equal(t, muxt.ArgumentTypeRequestBody, defs[0].Arguments[0].Type)
-			require.True(t, types.Identical(ioReaderType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(ioReaderType)))
 		}},
 		{Name: "unmarshalJSON body decodes into the parameter type", Receiver: serverType, Template: `{{define "POST / FormStruct(unmarshalJSON(body))"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
 			require.Equal(t, "body", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestBodyJSON, defs[0].Arguments[0].Type)
-			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType().Format(unqualified))
 		}},
 		{Name: "unmarshalJSON body on a synthesized method is the raw JSON type", Receiver: emptyStruct, Template: `{{define "POST / SaveJSON(unmarshalJSON(body))"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
 			require.Equal(t, muxt.ArgumentTypeRequestBodyJSON, defs[0].Arguments[0].Type)
-			require.Equal(t, "example.com.RawMessage", types.TypeString(defs[0].Arguments[0].ParamType, nil))
+			require.Equal(t, "example.com.RawMessage", defs[0].Arguments[0].ParamType().Format(pathQualified))
 		}},
 		{Name: "unmarshalForm body is the form binding", Receiver: serverType, Template: `{{define "POST / FormStruct(unmarshalForm(body))"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
 			require.Equal(t, "form", defs[0].Arguments[0].Identifier)
 			require.Equal(t, muxt.ArgumentTypeRequestForm, defs[0].Arguments[0].Type)
-			require.Equal(t, "In", defs[0].Arguments[0].ParamType.(*types.Named).Obj().Name())
+			require.Equal(t, "In", defs[0].Arguments[0].ParamType().Format(unqualified))
 		}},
 		{Name: "marshalJSON with data result", Receiver: serverType, Template: `{{define "GET / marshalJSON(M())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -221,7 +217,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, defs[0].Arguments, 1)
 
 			require.NotEmpty(t, defs[0].Arguments[0].Identifier)
-			isTypeAny(t, defs[0].Arguments[0].ParamType)
+			isTypeAny(t, defs[0].Arguments[0].ParamType())
 
 			nested := defs[0].Arguments[0]
 
@@ -231,18 +227,18 @@ func TestArgument(t *testing.T) {
 
 			require.Equal(t, muxt.ArgumentTypeCall, defs[0].Arguments[0].Type)
 			require.Equal(t, "Context", defs[0].Arguments[0].Identifier)
-			isTypeAny(t, defs[0].Arguments[0].ParamType)
+			isTypeAny(t, defs[0].Arguments[0].ParamType())
 
 			require.Len(t, defs[0].Arguments[0].Arguments(), 1)
 			require.Equal(t, muxt.ArgumentTypeRequestContext, defs[0].Arguments[0].Arguments()[0].Type)
 			require.Equal(t, "ctx", defs[0].Arguments[0].Arguments()[0].Identifier)
-			require.Equal(t, contextContextType, defs[0].Arguments[0].Arguments()[0].ParamType)
+			require.True(t, defs[0].Arguments[0].Arguments()[0].ParamType().Identical(source.NewType(contextContextType)))
 		}},
 		{Name: "nested package function call", Receiver: serverType, Template: `{{define "GET / Any(FunctionContext(ctx))"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
 
-			isTypeAny(t, defs[0].Arguments[0].ParamType)
+			isTypeAny(t, defs[0].Arguments[0].ParamType())
 
 			requireArgument(t, defs[0].Arguments, 0, "FunctionContext", muxt.ArgumentTypeCall, "any")
 			nested := defs[0].Arguments[0]
@@ -258,7 +254,7 @@ func TestArgument(t *testing.T) {
 			require.True(t, defs[0].IsMethod(), "a synthesized call becomes a required receiver method")
 
 			require.Equal(t, "ctx", defs[0].Arguments[0].Identifier)
-			require.True(t, types.Identical(contextContextType, defs[0].Arguments[0].ParamType))
+			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(contextContextType)))
 		}},
 		{Name: "synthesized method with a repeated argument", Receiver: emptyStruct, Template: `{{define "GET / RepeatedArg(request, request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "cannot infer a signature for RepeatedArg: the request argument is passed more than once; define the method on the receiver to use repeated arguments")
@@ -436,7 +432,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, fields, 2)
 
 			count := fields[0]
-			require.Equal(t, "Count", count.Field.Name())
+			require.Equal(t, "Count", count.Name)
 			require.Equal(t, "count-input", count.InputName)
 			require.NotNil(t, count.Template)
 			require.Equal(t, "count-template", count.Template.Name())
@@ -450,14 +446,12 @@ func TestArgument(t *testing.T) {
 			require.Equal(t, 1, minLength.MinLength)
 
 			tags := fields[1]
-			require.Equal(t, "Tags", tags.Field.Name())
+			require.Equal(t, "Tags", tags.Name)
 			require.Equal(t, "tag", tags.InputName)
 			require.Nil(t, tags.Template)
 			require.True(t, tags.Slice)
 			require.Equal(t, muxt.UnmarshalString, tags.Method)
-			basic, ok := tags.Elem.(*types.Basic)
-			require.True(t, ok)
-			require.Equal(t, types.String, basic.Kind())
+			require.True(t, tags.Elem().IsString())
 		}},
 		{Name: "form field validation attribute is invalid", Receiver: serverType, Template: `{{define "GET / TaggedForm(form)"}}{{end}}{{define "count-template"}}<input name="count-input" minlength="abc">{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "minlength must be an integer")
@@ -466,14 +460,14 @@ func TestArgument(t *testing.T) {
 			require.NoError(t, err)
 			fields := defs[0].Arguments[0].FormFields()
 			require.Len(t, fields, 4)
-			require.Equal(t, "Name", fields[0].Field.Name())
+			require.Equal(t, "Name", fields[0].Name)
 			require.False(t, fields[0].FileHeader)
-			require.Equal(t, "Tags", fields[1].Field.Name())
+			require.Equal(t, "Tags", fields[1].Name)
 			require.True(t, fields[1].Slice)
-			require.Equal(t, "File", fields[2].Field.Name())
+			require.Equal(t, "File", fields[2].Name)
 			require.True(t, fields[2].FileHeader)
 			require.False(t, fields[2].Slice)
-			require.Equal(t, "Files", fields[3].Field.Name())
+			require.Equal(t, "Files", fields[3].Name)
 			require.True(t, fields[3].FileHeader)
 			require.True(t, fields[3].Slice)
 		}},
@@ -521,11 +515,9 @@ func TestArgument(t *testing.T) {
 	}
 }
 
-func isTypeAny(t *testing.T, tp types.Type) {
+func isTypeAny(t *testing.T, tp source.Type) {
 	t.Helper()
-	anyAliasType, ok := tp.(*types.Alias)
-	require.True(t, ok)
-	require.Equal(t, "any", anyAliasType.Obj().Name())
+	require.Equal(t, "any", tp.Format(unqualified))
 }
 
 // requireArgument asserts that the argument at index i has the expected
@@ -536,8 +528,7 @@ func requireArgument(t *testing.T, args []muxt.Argument, i int, identifier strin
 	arg := args[i]
 	require.Equal(t, identifier, arg.Identifier, "muxt.Argument[%d].Identifier", i)
 	require.Equal(t, argType, arg.Type, "muxt.Argument[%d].Type", i)
-	require.NotNil(t, arg.ParamType, "muxt.Argument[%d].ParamType", i)
-	require.Equal(t, paramType, arg.ParamType.String(), "muxt.Argument[%d].ParamType", i)
+	require.Equal(t, paramType, arg.ParamType().Format(pathQualified), "muxt.Argument[%d].ParamType", i)
 }
 
 // exampleTypes type checks the package in testdata/example, which declares
@@ -552,3 +543,7 @@ func exampleTypes(t *testing.T) *types.Package {
 	}
 	return fake.Check(t, "example.com", files)
 }
+
+func unqualified(string, string) string { return "" }
+
+func pathQualified(_, path string) string { return path }
