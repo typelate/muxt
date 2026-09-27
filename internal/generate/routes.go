@@ -801,11 +801,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			funcIdent := arg.Fun.(*ast.Ident).Name
 
-			callSig := nestedArg.Signature()
-			if callSig == nil {
-				return nil, fmt.Errorf("call %s was not resolved to a signature", funcIdent)
-			}
-
 			if nestedArg.IsMethod() {
 				arg.Fun = &ast.SelectorExpr{
 					X:   ast.NewIdent(receiverIdent),
@@ -817,7 +812,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			errBody := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
 			errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
-			nestedCall, err := callReceiverMethod(rdIdent, ast.NewIdent(resultVarIdent), callSig, funcIdent, arg, errBody)
+			nestedCall, err := callReceiverMethod(rdIdent, ast.NewIdent(resultVarIdent), nestedArg.ResultShape(), funcIdent, arg, errBody)
 			if err != nil {
 				return nil, err
 			}
@@ -1273,14 +1268,12 @@ func (r *receiverMethodCall) Stmts() []ast.Stmt {
 	return stmts
 }
 
-func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signature, callIdent string, call *ast.CallExpr, errBody *ast.BlockStmt) (*receiverMethodCall, error) {
-	const (
-		okIdent = "ok"
-	)
-	switch method.Results().Len() {
+func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape, callIdent string, call *ast.CallExpr, errBody *ast.BlockStmt) (*receiverMethodCall, error) {
+	const okIdent = "ok"
+	switch shape {
 	default:
 		return nil, fmt.Errorf("method %s has no results it should have one or two", callIdent)
-	case 1:
+	case muxt.ResultShapeData:
 		return &receiverMethodCall{
 			Assign: &ast.AssignStmt{Lhs: []ast.Expr{dataVar}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
 			SetOkay: &ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
@@ -1288,42 +1281,28 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 				Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
 			}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}},
 		}, nil
-	case 2:
-		lastResult := method.Results().At(method.Results().Len() - 1).Type()
-
-		errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-
-		if types.Implements(lastResult, errorType) {
-			return &receiverMethodCall{
-				VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
-				Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
-				Check: &ast.IfStmt{
-					Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-					Body: errBody,
-				},
-			}, nil
-		}
-
-		if basic, ok := lastResult.(*types.Basic); ok && basic.Kind() == types.Bool {
-			return &receiverMethodCall{
-				VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("ok")}, Type: ast.NewIdent("bool")}}}},
-				Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(okIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
-				Check: &ast.IfStmt{
-					Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.ReturnStmt{},
-						},
-					},
-				},
-				SetOkay: &ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
-					X:   ast.NewIdent(rdIdent),
-					Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
-				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}},
-			}, nil
-		}
-
-		return nil, fmt.Errorf("expected last result to be either an error or a bool")
+	case muxt.ResultShapeDataError:
+		return &receiverMethodCall{
+			VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(errIdent)}, Type: ast.NewIdent("error")}}}},
+			Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(errIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+			Check: &ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: errBody,
+			},
+		}, nil
+	case muxt.ResultShapeDataOK:
+		return &receiverMethodCall{
+			VarDecl: &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(okIdent)}, Type: ast.NewIdent("bool")}}}},
+			Assign:  &ast.AssignStmt{Lhs: []ast.Expr{dataVar, ast.NewIdent(okIdent)}, Tok: token.ASSIGN, Rhs: []ast.Expr{call}},
+			Check: &ast.IfStmt{
+				Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{}}},
+			},
+			SetOkay: &ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+				X:   ast.NewIdent(rdIdent),
+				Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
+			}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}},
+		}, nil
 	}
 }
 

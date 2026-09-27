@@ -319,6 +319,18 @@ func TestArgument(t *testing.T) {
 		{Name: "nested call with no results", Receiver: serverType, Template: `{{define "GET / Any(NoResults())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "method NoResults() has no results; it should have one or two")
 		}},
+		{Name: "nested call with data and ok results", Receiver: serverType, Template: `{{define "GET / Any(StringOK())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.ResultShapeDataOK, defs[0].Arguments[0].ResultShape())
+		}},
+		{Name: "nested call with data and error results", Receiver: serverType, Template: `{{define "GET / Any(StringError())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.ResultShapeDataError, defs[0].Arguments[0].ResultShape())
+		}},
+		{Name: "nested call with a data result", Receiver: serverType, Template: `{{define "GET / Any(M())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Equal(t, muxt.ResultShapeData, defs[0].Arguments[0].ResultShape())
+		}},
 		{Name: "execute callback with data parameter", Receiver: serverType, Template: `{{define "GET / ExecuteTD(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.True(t, defs[0].Arguments[0].CallbackHasArg())

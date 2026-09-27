@@ -89,7 +89,7 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
 		X:   ast.NewIdent(resultDataIdent),
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),
-	}, def.Signature(), def.FunctionIdentifier().Name, &ast.CallExpr{
+	}, def.ResultShape(), def.FunctionIdentifier().Name, &ast.CallExpr{
 		Fun:  callFun,
 		Args: slices.Clone(call.Args),
 	}, errBody)

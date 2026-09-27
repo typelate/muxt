@@ -24,9 +24,10 @@ type Argument struct {
 	// sig, args, and isMethod describe a nested call argument
 	// (Type == ArgumentTypeCall): the nested call's signature, its own
 	// hydrated arguments, and whether it resolves to a receiver method.
-	sig      *types.Signature
-	args     []Argument
-	isMethod bool
+	sig         *types.Signature
+	args        []Argument
+	isMethod    bool
+	resultShape ResultShape
 
 	// callbackResult and callbackHasArg describe a validated render-callback
 	// argument (Type == ArgumentTypeExecute): the template data type T the
@@ -72,6 +73,9 @@ func (a Argument) IsMethod() bool { return a.isMethod }
 
 // Arguments returns the hydrated arguments of a nested call argument.
 func (a Argument) Arguments() []Argument { return a.args }
+
+// ResultShape classifies a nested call argument's results.
+func (a Argument) ResultShape() ResultShape { return a.resultShape }
 
 // Template returns the template a render-callback argument (ArgumentTypeExecute)
 // renders: the route template for the base execute callback, or the same-named
@@ -303,26 +307,26 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 
 // checkNestedCallResultShape validates a nested call's results: one value,
 // optionally followed by an error or bool.
-func checkNestedCallResultShape(name string, sig *types.Signature, qual types.Qualifier) error {
+func classifyNestedCallResultShape(name string, sig *types.Signature, qual types.Qualifier) (ResultShape, error) {
 	results := sig.Results()
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 	sigStr := name + strings.TrimPrefix(types.TypeString(sig, qual), "func")
 	switch results.Len() {
 	case 1:
-		return nil
+		return ResultShapeData, nil
 	case 2:
 		last := results.At(1).Type()
 		if types.Implements(last, errIface) {
-			return nil
+			return ResultShapeDataError, nil
 		}
 		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
-			return nil
+			return ResultShapeDataOK, nil
 		}
-		return fmt.Errorf("the second result of %s must be an error or a bool, got %s", sigStr, types.TypeString(last, qual))
+		return ResultShapeInvalid, fmt.Errorf("the second result of %s must be an error or a bool, got %s", sigStr, types.TypeString(last, qual))
 	case 0:
-		return fmt.Errorf("method %s has no results; it should have one or two", sigStr)
+		return ResultShapeInvalid, fmt.Errorf("method %s has no results; it should have one or two", sigStr)
 	default:
-		return fmt.Errorf("method %s has %d results; it should have one or two", sigStr, results.Len())
+		return ResultShapeInvalid, fmt.Errorf("method %s has %d results; it should have one or two", sigStr, results.Len())
 	}
 }
 
@@ -438,16 +442,18 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 			if err != nil {
 				return nil, false, nil, err
 			}
-			if err := checkNestedCallResultShape(name, nestedSig, qual); err != nil {
+			nestedShape, err := classifyNestedCallResultShape(name, nestedSig, qual)
+			if err != nil {
 				return nil, false, nil, errAtNode(argument.Fun, err)
 			}
 			args = append(args, Argument{
-				Identifier: name,
-				Type:       ArgumentTypeCall,
-				ParamType:  paramType,
-				sig:        nestedSig,
-				isMethod:   nestedIsMethod,
-				args:       nestedArgs,
+				Identifier:  name,
+				Type:        ArgumentTypeCall,
+				ParamType:   paramType,
+				sig:         nestedSig,
+				isMethod:    nestedIsMethod,
+				args:        nestedArgs,
+				resultShape: nestedShape,
 			})
 		}
 	}
