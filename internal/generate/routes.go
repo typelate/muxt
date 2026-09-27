@@ -184,8 +184,8 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
-	// Generate handlers for parse-based templates (empty sourceFile)
-	if err := hydrateGroup(topLevelTemplateRoutes, file, config, receiverInterface, logger); err != nil {
+	logResolution(topLevelTemplateRoutes, config, logger)
+	if err := collectReceiverMethods(topLevelTemplateRoutes, file, receiverInterface); err != nil {
 		return nil, err
 	}
 	for _, def := range topLevelTemplateRoutes {
@@ -274,35 +274,43 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 // signatures — one line per method and the explanation once after the
 // list; the default mode synthesizes every method by design, so it
 // stays quiet.
-// hydrateGroup logs what resolution found for defs and collects the receiver
-// methods their calls need into receiverInterface.
-func hydrateGroup(defs []muxt.Definition, file *File, config RoutesFileConfiguration, receiverInterface *ast.InterfaceType, logger *log.Logger) error {
-	noteSynthesized := config.ReceiverType != "" && logger != nil
-	warnResponse := logger != nil && !config.SilenceHTTPResponseWarning
+// logResolution reports what resolution found for defs.
+func logResolution(defs []muxt.Definition, config RoutesFileConfiguration, logger *log.Logger) {
+	if logger == nil {
+		return
+	}
 	synthesized := 0
 	for _, def := range defs {
-		if warnResponse && def.HasResponseWriterArg() {
+		if !config.SilenceHTTPResponseWarning && def.HasResponseWriterArg() {
 			// Taking over the http.ResponseWriter is an escape hatch:
 			// muxt then leaves the response entirely to the method.
 			logger.Printf("warning: %s uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true", def.Pattern())
 		}
-		if def.FunctionIdentifier() == nil {
+		if config.ReceiverType == "" {
 			continue
 		}
-		if noteSynthesized {
-			for _, sig := range def.SynthesizedMethods() {
-				logger.Printf("note: %s does not define %s", config.ReceiverType, sig)
-				synthesized++
-			}
-		}
-		if err := accumulateReceiverMethods(def.FunctionIdentifier().Name, def.Signature(), def.IsMethod(), def.Arguments, file, receiverInterface); err != nil {
-			return err
+		for _, sig := range def.SynthesizedMethods() {
+			logger.Printf("note: %s does not define %s", config.ReceiverType, sig)
+			synthesized++
 		}
 	}
 	if synthesized > 0 {
 		// The results are any until the methods exist, so field checks
 		// on .Result are deferred; say so once.
 		logger.Printf("note: the inferred signatures return any — implement the methods to type-check the templates against real types")
+	}
+}
+
+// collectReceiverMethods adds the receiver methods the calls in defs need to
+// receiverInterface.
+func collectReceiverMethods(defs []muxt.Definition, file *File, receiverInterface *ast.InterfaceType) error {
+	for _, def := range defs {
+		if def.FunctionIdentifier() == nil {
+			continue
+		}
+		if err := accumulateReceiverMethods(def.FunctionIdentifier().Name, def.Signature(), def.IsMethod(), def.Arguments, file, receiverInterface); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -515,7 +523,8 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	if err := hydrateGroup(defs, file, config, receiverInterface, logger); err != nil {
+	logResolution(defs, config, logger)
+	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
 		return nil, err
 	}
 	for i := range defs {
