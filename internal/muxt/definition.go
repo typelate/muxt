@@ -442,15 +442,20 @@ func (def Definition) Host() string { return strings.ToLower(strings.TrimSpace(d
 // HTTPMethod does normalization based on the convention (not requirement) that method characters are ASCII and uppercase
 func (def Definition) HTTPMethod() string { return strings.ToUpper(strings.TrimSpace(def.method)) }
 
-func (def Definition) DefaultStatusCode() int             { return def.defaultStatusCode }
-func (def Definition) MayRedirect() bool                  { return def.canRedirect }
-func (def Definition) Template() *template.Template       { return def.template }
-func (def Definition) FunctionIdentifier() *ast.Ident     { return def.fun }
-func (def Definition) CallExpression() *ast.CallExpr      { return cloneCall(def.call) }
-func (def Definition) HasResponseWriterArg() bool         { return def.hasResponseWriterArg }
-func (def Definition) Identifier() string                 { return def.identifier }
-func (def Definition) TemplatesVariable() string          { return def.templatesVariable }
-func (def Definition) Signature() *types.Signature        { return def.sig }
+func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
+func (def Definition) MayRedirect() bool              { return def.canRedirect }
+func (def Definition) Template() *template.Template   { return def.template }
+func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
+func (def Definition) CallExpression() *ast.CallExpr  { return cloneCall(def.call) }
+func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
+func (def Definition) Identifier() string             { return def.identifier }
+func (def Definition) TemplatesVariable() string      { return def.templatesVariable }
+func (def Definition) Signature() source.Type {
+	if def.sig == nil {
+		return source.Type{}
+	}
+	return source.NewType(def.sig)
+}
 func (def Definition) IsMethod() bool                     { return def.isMethod }
 func (def Definition) ResultShape() ResultShape           { return def.resultShape }
 func (def Definition) ResultStatusCode() StatusCodeSource { return def.resultStatusCode }
