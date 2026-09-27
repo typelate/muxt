@@ -1,135 +1,53 @@
-# Type Checking Reference
+# Type Checking
 
-How `muxt check` validates template actions at compile time.
+[`muxt check`](commands/check.md) uses [github.com/typelate/check](https://pkg.go.dev/github.com/typelate/check).
 
-## Overview
+## Preconditions
 
-`muxt check` performs static analysis of Go templates. Since `html/template` uses reflection at runtime, static analysis cannot catch all errors. Use concrete types to maximize type checking coverage.
+An `ExecuteTemplate` call is checked when its template name is a literal and its data argument has a statically known type.
 
-The contract, precisely: check validates **templates against Go types** — it is not `go build`. A package with Go syntax or type errors does not fail check on its own (the compiler owns that); run `go build` alongside check in CI. Route templates that have no generated handler yet fail check with `run muxt generate to wire them up`, so generate must run before check in a fresh checkout.
-
-## How It Works
-
-1. **Resolve the templates variable:** `muxt check` fails if the configured variable (default `templates`) isn't found
-2. **Find templates:** Scan for `ExecuteTemplate` calls with string literal names
-3. **Extract data types:** Infer data type from call site (the third `ExecuteTemplate` argument)
-4. **Parse template:** Parse template source to AST
-5. **Type check actions:** Validate field accesses, method calls, function calls against Go types
-
-`muxt check` also reports **unused templates** as errors: a defined template that no route or `ExecuteTemplate` call renders fails the check (empty helper templates outside `{{define}}` blocks are exempt).
-
-## Type Resolution
-
-**Concrete types (checked):**
 ```go
-func (s Server) GetUser(ctx context.Context) (User, error) {
-    return User{Name: "Alice", Email: "alice@example.com"}, nil
-}
+templates.ExecuteTemplate(w, "user-profile", data) // checked
+templates.ExecuteTemplate(w, name, data)           // not checked: name is not a literal
 ```
+
+Generated handlers meet both conditions, so every route template is checked.
+
+## What is checked
+
+Each action is resolved against the type of dot at that point: field accesses, method calls (including on interface-typed values), registered template functions, and `{{template}}` calls with the type they pass along.
+
 ```gotmpl
 {{define "GET /user GetUser(ctx)"}}
-<h1>{{.Result.Name}}</h1>       <!-- OK: User has Name field -->
-<p>{{.Result.Email}}</p>        <!-- OK: User has Email field -->
-<p>{{.Result.Phone}}</p>        <!-- ERROR: User has no Phone field -->
+<p>{{.Result.Email}}</p>  <!-- ok -->
+<p>{{.Result.Phone}}</p>  <!-- error: User has no Phone field -->
 {{end}}
 ```
 
-**Interface types (unchecked):**
-```go
-func (s Server) GetData(ctx context.Context) (any, error) {
-    return SomeData{}, nil
-}
-```
-```gotmpl
-{{define "GET /data GetData(ctx)"}}
-{{.Result.Anything}}  <!-- No error: any disables type checking -->
-{{end}}
-```
+Each error names the call site, the template position, then the type:
 
-## Limitations
+```text
+/home/me/app/template_routes.go:38:13 ExecuteTemplate "GET /user GetUser(ctx)" *TemplateData[RoutesReceiver, User]
+/home/me/app/template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: field or method Phone not found on User
 
-**Not supported:**
-- `any` / `interface{}` fields — Type checking disabled
-- Dynamic template names — `ExecuteTemplate(w, getTemplateName(), data)`
-- JetBrains GoLand `gotype` comments — Not consulted
-
-**Partially supported:**
-- Range over maps — Key/value types inferred when map type is concrete
-- Method calls on interfaces — Checked if interface type is known
-- Template functions — Checked if registered in `Funcs()` call
-
-## Best Practices
-
-**Use concrete types:**
-```go
-// Good
-func (s Server) GetUser(ctx context.Context) (User, error)
-func (s Server) GetPosts(ctx context.Context) ([]Post, error)
-func (s Server) GetStats(ctx context.Context) (map[string]int, error)
-
-// Avoid
-func (s Server) GetUser(ctx context.Context) (any, error)
-func (s Server) GetData(ctx context.Context) (interface{}, error)
-```
-
-**Static template names:**
-```go
-// Good
-templates.ExecuteTemplate(w, "user-profile", data)
-
-// Cannot check
-templateName := getTemplateName(r)
-templates.ExecuteTemplate(w, templateName, data)
-```
-
-**Type all struct fields:**
-```go
-// Good
-type User struct {
-    Name  string
+  type User struct {
     Email string
-}
+  }
 
-// Avoid
-type User struct {
-    Name string
-    Data any  // Disables checking for .Data accesses
-}
-```
-
-## Example
-
-**Method:**
-```go
-type Post struct {
-    Title   string
-    Author  string
-    Content string
-}
-
-func (s Server) GetPost(ctx context.Context, id int) (Post, error) {
-    return s.db.GetPost(ctx, id)
-}
-```
-
-**Template:**
-```gotmpl
-{{define "GET /posts/{id} GetPost(ctx, id)"}}
-<h1>{{.Result.Title}}</h1>         <!-- OK -->
-<p>By {{.Result.Author}}</p>       <!-- OK -->
-<div>{{.Result.Content}}</div>     <!-- OK -->
-<span>{{.Result.PublishedAt}}</span>  <!-- ERROR: Post has no PublishedAt field -->
-{{end}}
-```
-
-**Check output:**
-```
-index.gohtml:4:15: executing "GET /posts/{id} GetPost(ctx, id)" at <.Result.PublishedAt>: field or method PublishedAt not found on app.Post
 Error: fail: 1 error
 ```
 
-## Related
+[reference_check_types.txt](../../cmd/muxt/testdata/reference_check_types.txt) · [err_check_with_wrong_field.txt](../../cmd/muxt/testdata/err_check_with_wrong_field.txt)
 
-- [reference_check_types.txt](../../cmd/muxt/testdata/reference_check_types.txt) — Type checking test cases
-- [github.com/typelate/check](https://pkg.go.dev/github.com/typelate/check) — Type checker implementation
-- [known-issues.md](known-issues.md) — Known type checking limitations
+Check also fails on:
+
+- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt))
+- content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
+- a field or method access on an `any` value: `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt))
+
+## What is not checked
+
+| Case | Effect |
+|------|--------|
+| Anything after the initializer (`init`, a later `templates = ...`) | Not evaluated. Only the variable's initializer expression is read; a `Funcs`/`ParseFS` chain in `init` leaves `muxt check` reporting `ok: 0 templates` and `muxt generate` writing 0 routes. |
+| GoLand `gotype` comments | Not read. |

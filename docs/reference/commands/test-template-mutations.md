@@ -1,240 +1,176 @@
 # muxt test-template-mutations
 
-Vary each dynamic and control flow action in your templates, one at a time, and re-run the tests against each variation.
-
-A variation the tests still pass through is a **miss**: nothing the suite asserts on depends on what that action does. A variation that makes a test fail is **caught**, which is the outcome to want.
+Varies each dynamic and control-flow action in your templates, one at a time, and re-runs the tests against each variation.
 
 ```bash
-muxt test-template-mutations
+muxt test-template-mutations -v --seed 1
 ```
 
-```
-20 mutants across 6 templates (complexity 10)
+```text
+3 mutants across 1 template (complexity 2, seed 1)
 baseline ok
 
-template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[main.RoutesReceiver, int64])
-  "/ Count()" template.gohtml (complexity 1, dot: *main.TemplateData[main.RoutesReceiver, int64])
-    MISS 14:2 template-drop
-  "count" template.gohtml via {{template}} (complexity 1, dot: int64)
-    MISS 62:19 action-zero
+template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+    KILL 1:29 action-zero
+    MISS 1:39 if-false
+    KILL 1:39 if-true
 
-20 mutants, 18 killed, 2 missed, 0 skipped
+3 mutants, 2 killed, 1 missed, 0 skipped
 ```
 
-Each `MISS` line names a template, a place in it, and the variation nothing noticed — enough to write the missing assertion.
-
-## Mutation Happens in the Context of a Render
-
-A template action means nothing on its own. `{{.Total}}` is a field access only because of what dot is where the template is rendered, so traversal starts at each `templates.ExecuteTemplate` call and walks `{{template}}` invocations depth first from there, carrying dot along.
-
-Depth first is what keeps the report readable: everything about one template, then the partials it renders, before moving to the next call site.
-
-Two consequences:
-
-- **A template nothing renders is not mutated.** If no `ExecuteTemplate` call is found at all, the command says so rather than reporting an empty run.
-- **A template is mutated once per type of dot**, across the whole run. Two calls rendering it with the same input would produce the same mutants and the same verdicts, so the second subtree is trimmed. `-v` lists what was trimmed and where it was first reached.
-
-Calls in `_test.go` files are ignored by default — a template rendered only by a test is not rendered in production, and mutating it measures the tests against themselves. Pass `--include-test-callers` to opt in.
+The [tutorial](../../tutorials/find-untested-template-behavior.md) turns a miss into an assertion.
 
 ## Usage
 
-```
-muxt test-template-mutations [flags] [packages] [-- go test flags]
+```text
+muxt test-template-mutations [packages] [-- go test flags] [flags]
 ```
 
-Package patterns default to `./...`, so a mutation caught only by a test in another package is still reported as caught. Everything after `--` is handed to `go test` as written, so mutants run the way your tests do:
+Packages default to `./...`. Everything after `--` is passed to `go test` as written, except `-overlay`.
 
 ```bash
 muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web/... -- -tags=integration -race
 ```
 
-`-overlay` cannot be passed through: it is how each mutant reaches the build.
-
 ## Flags
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--dry-run` | bool | `false` | Enumerate and report the mutants without running any tests. |
-| `--verbose`, `-v` | bool | `false` | Report every mutant, not only the misses, and stream progress with an ETA. |
-| `--template-pattern` | string | _(all)_ | Only mutate templates whose name matches this regular expression. |
-| `--run` | string | _(all)_ | Only run tests matching this regular expression. Passed to `go test -run`. |
-| `--include-test-callers` | bool | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
-| `--seed` | uint64 | _(drawn)_ | Seed the values substituted for an action's operands. Drawn and reported when not given. |
-| `--max-cases` | int | `8` | Most operand combinations one action may contribute. |
-| `--workers` | int | `1` | How many mutants to run at once. |
-| `--diff` | string | _(none)_ | Only mutate templates that changed since this git revision. |
-| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to read templates from. |
-| `--format` | string | `text` | `text` or `json`. |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dry-run` | `false` | Enumerate and report the mutants without running tests. |
+| `--verbose`, `-v` | `false` | Report every mutant, not only misses, and stream progress. |
+| `--template-pattern` | all | Mutate only templates whose name matches this regular expression. |
+| `--run` | all | Passed to `go test -run`. |
+| `--include-test-callers` | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
+| `--seed` | random; printed in the preamble | Seed for the values substituted by `operands`. |
+| `--max-cases` | `8` | Most operand combinations one action may contribute. |
+| `--workers` | `1` | Mutants to run at once, each in its own `go test`; the tests must tolerate running beside themselves. |
+| `--diff` | none | Mutate only templates that changed since this git revision. |
 
-`--workers` runs that many mutants at once, each as its own `go test` against its own overlay, so no mutant sees another's. They do share whatever your tests share — a port, a database, a file a test writes — so raise it only for a suite that tolerates running beside itself. The report is the same either way; only the `-v` progress lines come out in the order runs finish.
+Common flags (`--format`, `--use-templates-variable`, `-C`): [cli.md](../cli.md#flags).
 
-## Mutating Only What Changed
+## What is mutated
 
-`--diff` names a git revision and mutates only what changed since then, as `gremlins --diff` does for Go code:
+Traversal starts at each `ExecuteTemplate` call that meets the [type-checking preconditions](../type-checking.md#preconditions) and walks `{{template}}` calls depth first, carrying dot along.
+
+- A template nothing renders is not mutated.
+- A template is mutated once per type of dot. A second subtree reached with the same dot is trimmed; `-v` lists what was trimmed. [reference_test_template_mutations_trimmed.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_trimmed.txt)
+- Calls in `_test.go` files are ignored unless `--include-test-callers` is set. [reference_test_template_mutations_test_callers.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_test_callers.txt)
+- Templates written as Go string literals are mutated too. Positions are reported in the `.go` file. [reference_test_template_mutations_string_literal.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_string_literal.txt)
+- Templates parsed with custom `Delims` are mutated like any other. [reference_test_template_mutations_custom_delimiters.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_custom_delimiters.txt)
+
+Mutants reach the build through `go test -overlay`, which also reaches `//go:embed` content, so the working tree is never written to.
+
+## Operators
+
+One mutant per applicable action. No operator renames a template, so a mutant never moves a route.
+
+| Operator | Applies to | Variation |
+|----------|-----------|-----------|
+| `action-zero` | An action whose type resolved to a string, bool, integer or float | Substitutes the type's zero value: `""`, `0`, `false`. |
+| `action-empty` | Any other action | Prints nothing. |
+| `if-true` | `{{if}}` | Takes the then branch. |
+| `if-false` | `{{if}}` | Takes the else branch, or nothing. |
+| `with-empty` | `{{with}}` | Treats the value as absent. |
+| `range-never` | `{{range}}` | Iterates zero times. |
+| `template-drop` | `{{template}}` | Removes the call. `{{block}}` is never dropped. |
+| `operands` | An action reading two or more inputs | Substitutes drawn values into one combination of its leaf operands. |
+| `condition` | One condition of an `and`/`or`/`not` decision | Forces that condition true or false while the others read real data. |
+| `condition-dead` | A condition the simplifier removed | Reported as `SKIP`, never run. |
+
+A pipeline that declares variables keeps the declarations; only the value is replaced.
+
+### Type resolution
+
+A pipeline is typed from its last command. Field paths off dot resolve through struct fields, no-argument methods and pointers. Calls resolve from the registered function's signature; `len` is `int`, comparisons and `not` are `bool`, the print and escape families are `string`. `and`, `or`, `index`, `slice`, `call` and variables are left unresolved. The `html/template` safe string types (`HTML`, `JS`, `URL`, ...) resolve but have no literal. All of these get `action-empty`. [reference_test_template_mutations_function_types.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_function_types.txt)
+
+### Operands
+
+`operands` reports which input a test depends on:
+
+```text
+MISS 12:5 operands .First="nard"
+KILL 12:5 operands .First="nard" .Last="xeqr"
+KILL 12:5 operands .Last="xeqr"
+```
+
+Leaf operands are the field accesses, variables and dots a pipeline reads. Function names and literals are not operands. [reference_test_template_mutations_operands.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_operands.txt)
+
+An action needing more than `--max-cases` combinations is skipped with the arithmetic:
+
+```text
+SKIP 1:22 operands (2 operands need 3 cases, over --max-cases=2)
+```
+
+### Conditions
+
+A decision written with `and`, `or` and `not` is simplified first (flattening, constant folding, idempotence, complement, absorption), then gets one mutant per condition. A condition that cannot change the outcome is reported dead:
+
+```text
+SKIP 1:50 condition-dead (.Loud cannot change the decision)
+```
+
+Comparisons, calls and multi-command pipelines fall back to `operands`. [reference_test_template_mutations_conditions.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_conditions.txt)
+
+## Statuses
+
+| Status | Meaning |
+|--------|---------|
+| `KILL` | A test failed. |
+| `MISS` | Every test passed: a missing assertion, an untested branch, or an equivalent mutant whose output cannot differ. |
+| `SKIP` | Not run: the mutant does not parse or type check (else its render error would count as a kill), is `condition-dead`, or exceeds `--max-cases`. [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
+| `PEND` | Enumerated but not run (`--dry-run`). |
+
+## Exit status
+
+The command exits non-zero when:
+
+- the baseline (unmutated) test run fails. Nothing is mutated.
+  [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
+- the templates reached hold no dynamic or control-flow action.
+  [err_test_template_mutations_no_actions.txt](../../../cmd/muxt/testdata/err_test_template_mutations_no_actions.txt)
+- no `ExecuteTemplate` call is found; the type of dot comes from the call site.
+- `--diff` names a revision git does not know.
+
+Misses do not change the exit status.
+
+## Timing
+
+The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline run, stderr reports the baseline duration and an estimate for the whole run:
+
+```text
+20 mutants across 6 templates (complexity 10), baseline 1.9s, estimated 38s
+```
+
+With `-v` each mutant prints its duration and the time left:
+
+```text
+[ 2/20] MISS template.gohtml:17:2 "/ Count()" template-drop (1.8s, ~34.3s left)
+```
+
+## `--diff`
 
 ```bash
 muxt test-template-mutations --diff origin/main
 ```
 
-The unit is a template rendered with one type of dot, the same unit a run mutates once. A template is mutated when:
-
-- **its text changed**, as the parser reads it. Reformatting inside an action, or moving the template to another file, is not a change.
-- **it is reached with a type of dot it was not reached with at the revision.**
-
-The second rule catches the edges of a diff. Say `page` renders `name` with `.Name` and `count` with `.Count`, and `Page` becomes `Summary` with `Count` changed from `int` to `float64`. Then `page` and `count` are mutated, because each is reached with a new type. `name` still gets a `string` and still reads the same, so it is skipped:
+The unit is a template rendered with one type of dot. It is mutated when its text changed as parsed (reformatting inside an action or moving the file is not a change) or when it is reached with a dot type it was not reached with at the revision. Types are compared by name.
 
 ```text
 3 mutants across 2 templates (complexity 2, seed 1)
 1 template unchanged since origin/main
 ```
 
-`-v` lists the unchanged templates. Types are compared by name, so a template that still receives the same named type is unchanged even if that type gained or lost fields.
+The revision is read with `git archive`. If the templates cannot be read there, every template counts as changed and the preamble says why. [reference_test_template_mutations_diff.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_diff.txt)
 
-The templates at the revision are read from a copy made with `git archive`, which writes nothing into your repository. If they cannot be read there — the package is new on this branch, say — there is nothing to compare with. Every template then counts as changed, and the preamble says why.
+## JSON
 
-## Knowing How Long It Will Take
-
-The preamble reports how many mutants there are, across how many templates, and their total [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) — one, plus one per branch point. Complexity and mutant count move together, because every branch is somewhere a mutation applies.
-
-After the unmutated run, the command prints its duration and an estimate for the whole run to stderr:
-
-```
-20 mutants across 6 templates (complexity 10), baseline 1.9s, estimated 38s
-```
-
-That is the number to set a CI timeout from, and the signal for whether to wait or walk away. With `-v` the estimate is reprinted after each mutant and converges on what the suite actually costs:
-
-```
-[ 1/20] KILL template.gohtml:14:2 "/ Count()" template-drop (1.9s, ~36.1s left)
-[ 2/20] MISS template.gohtml:17:2 "/ Count()" template-drop (1.8s, ~34.3s left)
-```
-
-`--dry-run` does the whole enumeration — including type checking every mutant — and runs nothing, which takes about as long as `muxt check`.
-
-## Operators
-
-One mutant is produced per applicable action. No operator renames a template or changes which templates exist, so a mutant never moves a route.
-
-| Operator | Applies to | Variation |
-|----------|-----------|-----------|
-| `action-zero` | An action whose type resolved | Substitutes that type's zero value: `""`, `0`, `false`. |
-| `action-empty` | An action whose type did not | Prints nothing. |
-| `if-true` | `{{if}}` | Takes the then branch unconditionally. |
-| `if-false` | `{{if}}` | Takes the else branch, or none, unconditionally. |
-| `with-empty` | `{{with}}` | Behaves as though the value were absent, leaving the else branch. |
-| `range-never` | `{{range}}` | Iterates zero times, leaving the else branch. |
-| `template-drop` | `{{template}}` | Removes the call. |
-| `operands` | An action reading two or more inputs | Substitutes drawn values into one combination of its leaf operands. |
-| `condition` | A condition of an `and`/`or`/`not` decision | Forces that one condition true or false, leaving the others reading real data. |
-| `condition-dead` | A condition simplification removed | Reported, never run: it cannot change the decision. |
-
-A pipeline that declares variables keeps its declarations and has only its value replaced, so `{{range $i, $item := .Items}}` is mutated without leaving `$item` undefined.
-
-`{{block}}` is not dropped: a block defines its body in place, so removing its call would orphan the body's `{{end}}`.
-
-`with-empty` and `range-never` replace the whole construct rather than the pipeline. Substituting `false` into a `{{with}}` would rebind dot to a boolean and stop every field access in the body from type checking, and there is no literal for an empty sequence.
-
-## Is Each Input Coupled to a Failure?
-
-Emptying a whole action says only that *something* about it is watched. An action reading more than one input also gets a mutant per combination of its leaf operands, which says *which* of them nothing is watching:
-
-```
-MISS 12:5 operands .First="nard"
-KILL 12:5 operands .First="nard" .Last="xeqr"
-KILL 12:5 operands .Last="xeqr"
-```
-
-Here nothing depends on `.First` on its own. The values are drawn per type from a seeded generator; the seed is reported, and drawn when `--seed` is not given, so any run can be repeated exactly.
-
-Leaf operands are the field accesses, variables and dots a pipeline reads, including inside a nested pipeline. A function name is not one and neither is a literal — neither carries data into the template.
-
-### Boolean Decisions
-
-Forcing every condition of a decision at once only ever produces the then branch or the else branch, which `if-true` and `if-false` already cover. So a decision written with `and`, `or` and `not` gets one mutant per condition, forcing **that one** true or false while the others keep reading real data. The decision is then still a function of the data, so whether a test notices depends on what it renders with — which is what says whether anything is coupled to that condition. It is also linear in the number of conditions rather than exponential.
-
-```
-MISS 1:18 condition .Admin=false
-KILL 1:18 condition .Admin=true
-MISS 1:18 condition .Owner=false
-MISS 1:18 condition .Owner=true
-```
-
-`.Owner` survives both: with `{{if and .Admin .Owner}}` and a test that never renders with `.Admin` true, nothing can observe `.Owner` at all.
-
-The decision is simplified first — flattening, constant folding, idempotence, complement and absorption. A condition simplification removes is reported `condition-dead` and never run, because nothing could have been coupled to something that cannot change the outcome:
-
-```
-SKIP 1:50 condition-dead (.Loud cannot change the decision)
-```
-
-`{{or .Banned (and .Banned .Loud)}}` is just `.Banned`.
-
-Anything the model does not cover exactly — a comparison, a call, a multi-command pipeline — falls back to the general operand combinations.
-
-### Cost
-
-Every case is a full test run, so `--max-cases` bounds what one action may contribute. An action over the bound contributes nothing and says so, rather than quietly turning a two-minute run into an hour:
-
-```
-SKIP 18:3 operands (7 operands need 127 cases, over --max-cases=8)
-```
-
-## Skipped Mutants
-
-A mutation that stops the template parsing or type checking is reported as `SKIP` and never run:
-
-```
-SKIP 1:18 action-empty (does not type check against server.Page)
-```
-
-Running it would fail the tests with a render error, and that failure would be recorded as the mutation being caught — a kill it did not earn. Knowing the type of dot is what makes this decidable before anything runs.
-
-## Baseline
-
-The tests run once unmutated before anything is varied. If that baseline fails, nothing is mutated and the command exits non-zero:
-
-```
-Error: baseline tests failed before mutation; fix them first:
---- FAIL: TestIndex (0.00s)
-```
-
-Every mutant would otherwise be recorded as caught — by the failure that was already there.
-
-## Nothing To Mutate
-
-If every template reached holds only static text, the command exits non-zero rather than reporting a run of zero mutants:
-
-```
-Error: no mutations available: the 3 template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything
-```
-
-A report of `0 mutants, 0 missed` reads as the tests catching everything. It is an error so that a project whose templates were never read cannot be mistaken for one whose tests are thorough.
-
-## How Variations Are Delivered
-
-Mutants reach the test run through the go command's `-overlay` flag, which replaces a file for the build without writing to your working tree. The overlay reaches `//go:embed` content, so an embedded template is varied without touching the checkout.
-
-Templates written as Go string literals are mutated too: the variation is spliced into the literal's text and the literal is re-encoded, so the overlay replaces the `.go` file. Positions are reported in that file.
-
-> `golang.org/x/tools/go/packages` has an `Overlay` field of its own, but it does not reach `//go:embed` content — `go list` reports the original path for an embedded file, so anything reading that path still sees the unmutated bytes.
-
-## Interpreting a Report
-
-A miss is not automatically a bug. It means one of:
-
-- **A missing assertion.** The common case: the test renders the template but never checks the part that action controls.
-- **An untested branch.** `if-false` surviving usually means no test renders with that condition false.
-- **An equivalent mutant.** The variation genuinely cannot change observable output.
-
-Work down the misses; each one closed is an assertion the suite did not have.
-
-## JSON Output
-
-`--format json` carries the same report, plus the mutated action's source, its replacement, and per-mutant durations:
+`--format json` carries the text report plus each mutant's source, replacement and duration:
 
 ```json
 {
 	"dry_run": true,
+	"seed": 1,
 	"templates": 1,
 	"complexity": 2,
 	"total": 3,
@@ -271,32 +207,12 @@ Work down the misses; each one closed is an assertion the suite did not have.
 }
 ```
 
-Statuses are `KILL`, `MISS`, `SKIP`, and `PEND` for a mutant that was enumerated but not run.
-
-A `--diff` run adds `diff`, the revision compared with, and either `unchanged`, the templates left alone, or `diff_error`, why the revision could not be read.
-
-## How an Action's Type Is Resolved
-
-A pipeline's value is whatever its **last** command produces, so `{{.Name | printf "%s"}}` is typed from `printf`, not from `.Name`.
-
-- **A field path off dot** — `{{.User.Email}}` — is resolved structurally, through struct fields and no-argument methods, following pointers.
-- **A call** is resolved from the function's signature. The template set carries one for every function it registered, so a project's own `{{upper .Name}}` is typed from `upper`. The builtins the checker verifies by shape rather than by signature are answered from their fixed result types: `len` is an `int`, the comparisons and `not` are `bool`, the print and escape families are `string`.
-- **`and`, `or`, `index`, `slice` and `call` are deliberately left unresolved.** What they produce depends on their arguments, and guessing would put a wrong replacement in a mutant.
-- **A pipeline reading a variable** — `{{$item}}` — is left unresolved.
-
-Unresolved means `action-empty` rather than `action-zero`; the mutation still happens, it just substitutes an empty string instead of a type-directed value.
-
-`html/template`'s safe string types — `HTML`, `HTMLAttr`, `CSS`, `JS`, `JSStr`, `Srcset`, `URL` — are named types over `string`, and get `action-empty` too. A template has no way to write a literal of one: `""` in template source is an ordinary string the escaper treats differently, so calling it that type's zero value would claim more than the substitution delivers.
+A run adds `seconds` per result and a top-level `baseline` object with `passed` and `seconds`. A `--diff` run adds `diff`, plus `unchanged` when any template was left alone or `diff_error` when the revision could not be read. [reference_test_template_mutations_json.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_json.txt)
 
 ## Limitations
 
-- A template set built with `Delims` is mutated like any other. The delimiters are not exposed by `text/template`, so they are read back from the `{{end}}` clause of a definition, whose span runs from one delimiter through the other. They are resolved per parsed source, not per file, so a construction chain that calls `Delims` more than once — or one Go file holding several literals parsed differently — reads each source with its own pair. A source whose only template has no define clause has no such clause to read and falls back to `{{` and `}}`; if that leaves a template the set can see actions in and this command cannot, the run fails rather than measuring fewer templates than it was given.
-- `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity but not for whether their operands are comparable, so a mutant that breaks a comparison type-checks, runs, and is recorded as caught by the render error it causes.
-- Each mutant is a full `go test -count=1` run, and every run mutates everything it selects. Narrow it with `--diff`, `--template-pattern`, `--run`, and a package argument, spread it with `--workers`, and use `--dry-run` first to see the size of the job.
+- `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity, not operand comparability, so a mutant that breaks a comparison runs and is recorded as killed by the render error.
+- Each mutant is a full `go test -count=1` run.
+- A source parsed with `Delims` that holds no `{{define}}` is read with the default delimiters.
 
-## Related
-
-- [Find Untested Template Behavior](../../tutorials/find-untested-template-behavior.md) — a walkthrough: read a miss, write the assertion it asks for, watch it turn green
-- [HTML is the API](../../explanation/html-is-the-api.md) — why the rendered markup is the contract these mutations probe
-- [muxt check](check.md) — Type-check templates without running them
-- [muxt list-template-callers](list-template-callers.md) — List callers of a template
+Related: [muxt check](check.md) type-checks templates without running them; [muxt list-template-callers](list-template-callers.md) lists the call sites traversal starts from.

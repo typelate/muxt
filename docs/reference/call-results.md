@@ -1,320 +1,114 @@
-# Call Results Reference
+# Call Results
 
-Receiver method return values control template data and HTTP status.
+What the method returns sets `.Result`, `.Err`, and the status code.
 
-## Return Patterns Quick Reference
+## Result Shapes
 
-| Pattern | `.Result` Type | `.Err` from method | Use When |
-|---------|----------------|--------------------|----------|
-| `T` | `T` | Never | Infallible operations (static pages) |
-| `(T, error)` | `T` (zero if error) | `error` or `nil` | Most endpoints (can fail) |
-| `(T, bool)` | `T` | Never | Early exit/redirect (bool=false skips template) |
-| `error` (with `execute` callback) | callback's `T` (`struct{}` for `func() error`) | Never (a returned error becomes a plain `500`) | No data needed (health checks) |
+| Method results | `.Result` | `.Err` | `.Ok` |
+|---|---|---|---|
+| `T` | the value | nil | true |
+| `(T, error)` | the value, even on error | the error; status 500 | always false |
+| `(T, bool)` | the value | nil | true; on `false` the handler responds 200 with an empty body |
+| `error`, with an `execute` argument | the callback's argument, `struct{}` for `func() error` | nil; a returned error responds `500 failed to render page` and discards any rendered output | true after a successful call |
 
-Use `(T, error)` for 90% of endpoints. It's the idiomatic Go pattern and enables proper error handling.
-
-Two caveats apply to every shape. First, request parse and validation failures
-populate `.Err` (with status 400) before the method is called, so `.Err` can be
-non-nil even for shapes whose methods never return an error. Second, a method
-whose only result is `error` on a route *without* an `execute` callback is
-treated as the single-value pattern: the error value itself becomes `.Result`
-and `.Err` stays nil.
-
-[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt)
-
-## Pattern 1: Single Value (Infallible)
-
-**Use:** Static pages, configuration, data that can't fail
+The second of two results must be `error` or `bool`. Zero results, or three or more, fail generation outside `sse`. A lone `error` result without `execute` is the `T` shape: the error is `.Result`.
 
 ```go
-func (s Server) About() AboutPage {
-    return AboutPage{Version: s.version}
-}
+func (s Server) About() AboutPage
+func (s Server) GetUser(ctx context.Context, id int) (User, error)
+func (s Server) Download(response http.ResponseWriter, id int) (File, bool)
 ```
+
 ```gotmpl
-{{define "GET /about About()"}}
-<h1>{{.Result.Version}}</h1>
-{{end}}
+{{define "GET /user/{id} GetUser(ctx, id)"}}{{with .Err}}<p>{{.}}</p>{{else}}<h1>{{.Result.Name}}</h1>{{end}}{{end}}
 ```
 
-**Behavior:** `.Result` = value, `.Err` = nil (always)
+The template renders on a method error, so branch on `.Err`.
 
-## Pattern 2: Value and Error (Standard)
+[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt) · [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)
 
-**Use:** Most endpoints (database queries, API calls, anything fallible)
+## The `execute` Callback
 
-```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error) {
-    user, err := s.db.FindUser(ctx, id)
-    if err != nil {
-        return User{}, fmt.Errorf("user not found: %w", err)
-    }
-    return user, nil
-}
-```
+With `execute` in the call, muxt passes a render closure to the method instead of rendering after it returns.
+
 ```gotmpl
-{{define "GET /user/{id} GetUser(ctx, id)"}}
-{{with $err := .Err}}
-  <div class="error">{{$err.Error}}</div>
-{{else}}
-  <h1>{{.Result.Name}}</h1>
-{{end}}
-{{end}}
+{{define "GET /count Count(execute)"}}<p>{{.Result}}</p>{{end}}
 ```
 
-**Behavior:** `.Result` = value (zero value if error), `.Err` = error (nil if success)
-
-Always check `{{if .Err}}` or `{{with .Err}}` in templates when method returns error. Template executes even on error.
-
-[reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt)
-
-## Pattern 3: Value and Boolean (Early Exit)
-
-**Use:** Custom response already written (redirects, cache hits, streaming)
-
 ```go
-func (s Server) Download(response http.ResponseWriter, request *http.Request, id int) (File, bool) {
-    file, ok := s.cache.Get(id)
-    if ok {
-        http.ServeContent(response, request, file.Name, file.ModTime, file.Reader)
-        return file, false  // I handled it, skip template
-    }
-    return file, true  // Continue to template execution
+func (s *Server) Count(execute func(int) error) error {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    return execute(s.n)
 }
 ```
 
-**Behavior:** If bool = `false`, handler returns immediately (you already wrote the response). If bool = `true`, execute template normally with `.Ok()` = true.
+- The callback renders at most once; a second call returns an error ([reference_execute_callback_multiple_calls.txt](../../cmd/muxt/testdata/reference_execute_callback_multiple_calls.txt)).
+- Returning nil without calling it responds with an empty body and the name's status, or 204 when the name has none.
 
-[reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)
+[reference_execute_callback.txt](../../cmd/muxt/testdata/reference_execute_callback.txt) · [reference_execute_callback_no_arg.txt](../../cmd/muxt/testdata/reference_execute_callback_no_arg.txt)
 
-## Pattern 4: Error Only (No Data)
+## JSON Responses
 
-**Use:** Health checks, webhooks, operations that return no data
-
-A method may return only `error` when it takes the `execute` render callback —
-the callback controls rendering, and the returned error reports failure:
-
-```go
-func (s Server) Healthcheck(execute func() error) error {
-    if err := s.db.Ping(); err != nil {
-        return err // logged; the client gets a plain 500 "failed to render page"
-    }
-    return execute() // renders the template
-}
-```
-```gotmpl
-{{define "GET /health Healthcheck(execute)"}}OK{{end}}
-```
-
-**Behavior:** calling `execute` renders the template with `.Result` =
-`struct{}` (200 OK). Returning a non-nil error instead sends a plain
-`500 Internal Server Error` — the template does not run, so it never sees the
-error through `.Err`. Returning nil without ever calling `execute` responds
-`204 No Content`.
-
-**Warning:** without `execute` in the call, a bare `error` result is treated as
-Pattern 1 — the error value lands in `.Result` and `.Err` stays nil.
-
-## JSON Responses: `marshalJSON(GetUser(ctx))`
-
-Wrapping the call in `marshalJSON` makes the route respond
-`application/json` with the marshaled result instead of rendered HTML:
+`marshalJSON(GetUser(ctx))` responds `application/json` with the marshaled result instead of the rendered template.
 
 ```gotmpl
 {{define "GET /api/user 201 marshalJSON(GetUser(ctx))"}}{{end}}
 ```
-```go
-func (s Server) GetUser(ctx context.Context) (User, error)
-```
 
 | Method results | Outcome |
 |---|---|
-| `(T)` or `(T, error)` | valid — `T` is marshaled |
-| none | generation error: nothing to marshal |
-| only `error` | generation error: no non-error result |
-| `(T, U)` where `U` is not `error` | generation error: second result must be `error` |
-| `(E, error)` where `E` implements `error` | generation error: the marshaled result must be non-error |
-| three or more results | generation error: too many results |
+| `T` or `(T, error)` | `T` is marshaled with `encoding/json` |
+| `(T, bool)`, `error` alone, or a `T` implementing `error` | generation error |
 
-- **The define body still executes** against the template data; on success its
-  rendered output is discarded and the response is the marshaled result. That
-  lets the template call side-effect helpers — status code and response
-  headers reach the JSON response.
-- **On a method error the route falls back to the rendered output**: the
-  `{{if .Err}}` branch renders and is sent as `text/html` with muxt's usual
-  error status. Render JSON in that branch yourself if you want JSON errors.
-- A marshal failure responds `500` with the status text only.
-- The route's declared status code applies to the success response; parameter
-  binding inside the call (path values, `ctx`, `form`, `unmarshalJSON(body)`,
-  …) is unchanged, and binding failures respond 400 before any JSON concerns.
-- A `response` argument inside the wrapper is a generation error.
-- Marshaling uses `encoding/json`.
-- `marshalJSON` is reserved at the outermost call position; a package-scope
-  function named `marshalJSON` may still be called as a plain route method.
+- The template body still executes, so `.StatusCode` and `.Header` calls reach the JSON response. Its output is discarded on success.
+- On a method error the rendered output is sent as `text/html` with status 500; render JSON in the `{{if .Err}}` branch if you need JSON errors.
+- A marshal failure responds 500 with the status text.
+- A `response` argument inside the wrapper fails generation.
 
-[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) · [reference_marshal_json_args.txt](../../cmd/muxt/testdata/reference_marshal_json_args.txt) · [reference_marshal_json_side_effects.txt](../../cmd/muxt/testdata/reference_marshal_json_side_effects.txt) · [reference_marshal_json_method_error.txt](../../cmd/muxt/testdata/reference_marshal_json_method_error.txt) · [reference_marshal_json_marshal_error.txt](../../cmd/muxt/testdata/reference_marshal_json_marshal_error.txt)
+[reference_marshal_json.txt](../../cmd/muxt/testdata/reference_marshal_json.txt) · [reference_marshal_json_side_effects.txt](../../cmd/muxt/testdata/reference_marshal_json_side_effects.txt) · [reference_marshal_json_method_error.txt](../../cmd/muxt/testdata/reference_marshal_json_method_error.txt) · [reference_marshal_json_marshal_error.txt](../../cmd/muxt/testdata/reference_marshal_json_marshal_error.txt) · [err_marshal_json_with_response.txt](../../cmd/muxt/testdata/err_marshal_json_with_response.txt)
 
-## TemplateData API
+## TemplateData
 
-Templates receive `TemplateData[R, T]` where `R` is the receiver interface and
-`T` is the method's first return value:
+Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and `T` the method's first result.
 
-| Method | Type | Description |
-|--------|------|-------------|
-| `.Result` | `T` | Returned value (zero value if error) |
-| `.Err` | `error` | Returned error, joined with any parse/validation errors (nil if none) |
-| `.Ok()` | `bool` | True after a single-value method, a `(T, bool)` method returning true, or a successful `execute` call. Never true for `(T, error)` methods — branch on `.Err` instead |
-| `.Request()` | `*http.Request` | HTTP request |
-| `.Receiver()` | `R` | The receiver passed to `TemplateRoutes` |
-| `.Path()` | `TemplateRoutePaths` | Route URL builders (one method per route); takes no argument. String and `TextMarshaler` path parameters are escaped with `net/url.PathEscape`; a trailing `{name...}` wildcard value is spliced without escaping, and the joined path is cleaned by `path.Join` |
-| `.MuxtVersion()` | `string` | The muxt version that generated the code (not generated when `--output-muxt-version=false`) |
-| `.StatusCode(code)` | `*TemplateData` | Set HTTP status (returns the data for chaining) |
-| `.Header(key, val)` | `*TemplateData` | Set response header (returns the data for chaining) |
-| `.Redirect(url, code)` | `*TemplateData, error` | Redirect with custom status code; the code must be in 300–399 or an error is returned |
-| `.RedirectMultipleChoices(url)` | `*TemplateData, error` | Redirect with 300 status |
-| `.RedirectMovedPermanently(url)` | `*TemplateData, error` | Redirect with 301 status |
-| `.RedirectFound(url)` | `*TemplateData, error` | Redirect with 302 status |
-| `.RedirectSeeOther(url)` | `*TemplateData, error` | Redirect with 303 status |
-| `.String()` | `string` | Returns `""` (implements `fmt.Stringer`) |
-
-**Why `{{.}}` outputs nothing:**
-
-`TemplateData` implements `fmt.Stringer` returning an empty string. This allows methods that return `*TemplateData` (like `.Header()` and `.StatusCode()`) to be called directly in templates without outputting anything:
+| Method | Returns |
+|---|---|
+| `.Result` | `T` |
+| `.Err` | the method error joined with any [parse errors](call-parameters.md#parse-failures), or nil |
+| `.Ok` | `bool`, per the shape table above |
+| `.Request` | `*http.Request` |
+| `.Receiver` | `R` |
+| `.Path` | `TemplateRoutePaths`, one method per route named after the method with its first letter uppercased, taking one argument per path wildcard in order: `{{.Path.GetUser .Result.ID}}`. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)) |
+| `.MuxtVersion` | the generating muxt version |
+| `.StatusCode code` | the data, for chaining |
+| `.Header key value` | the data, for chaining |
+| `.Redirect url code` | the data and an error when `code` is outside 300 to 399 |
+| `.RedirectMultipleChoices url`, `.RedirectMovedPermanently url`, `.RedirectFound url`, `.RedirectSeeOther url` | `.Redirect` with 300, 301, 302, or 303 |
+| `.String` | `""`, so `{{.Header "HX-Trigger" "saved"}}` prints nothing |
 
 ```gotmpl
-{{.Header "HX-Trigger" "contact-sent"}}
+{{define "GET /profile Profile(ctx)"}}{{if .Request.Header.Get "HX-Request"}}{{.Result.Name}}{{else}}<html>...</html>{{end}}{{end}}
+{{define "GET /user/{id} GetUser(ctx, id)"}}<a href="{{.Path.GetUser .Result.ID}}">{{.Request.PathValue "id"}}</a>{{end}}
 ```
 
-Without `String()`, this would output the struct's internal fields. Previously you needed the workaround `{{with .Header "HX-Trigger" "contact-sent"}}{{end}}` to suppress output.
-
-To access the receiver method's return value, use `{{.Result}}` explicitly.
-
-[reference_template_data_stringer.txt](../../cmd/muxt/testdata/reference_template_data_stringer.txt)
-
-**Chaining examples:**
-```gotmpl
-{{with and (.StatusCode 404) (.Header "X-Error" "not-found")}}
-  <div>User not found</div>
-{{end}}
-```
-
-Every entry is a method. In templates, call the zero-argument ones without arguments (`{{.Result}}`, `{{.Err}}`, `{{.Request}}`); pass arguments to the rest (`{{.StatusCode 404}}`, `{{.Header "X-Error" "not-found"}}`).
+[reference_template_data_stringer.txt](../../cmd/muxt/testdata/reference_template_data_stringer.txt) · [reference_redirect_helpers.txt](../../cmd/muxt/testdata/reference_redirect_helpers.txt)
 
 ## Status Code Control
 
-The generated handler resolves the status with `cmp.Or` — the first non-zero value in this list wins, highest to lowest:
+The first non-zero value wins:
 
-| Priority | Source | Set by |
-|----------|--------|--------|
-| 1 | `.StatusCode(int)` template call | `{{.StatusCode 404}}` in the template |
-| 2 | Error status | `400` on a parse/path/form error, `500` when the method returns a non-nil error |
-| 3 | Result `StatusCode()` method, else result `StatusCode` field | the return type |
-| 4 | Template-name code, else `200` — or `204` when the body is empty | `{{define "POST /user 201 ..."}}` |
+| Priority | Source |
+|---|---|
+| 1 | `{{.StatusCode 404}}` in the template |
+| 2 | 400 on a [parse error](call-parameters.md#parse-failures), 500 on a method error |
+| 3 | the result's `StatusCode() int` method, else its `StatusCode` field |
+| 4 | the template name's code, else 200, or 204 when the rendered body is empty |
 
-There is no error-`StatusCode()` hook: a returned error is always `500`, regardless of the error's own methods. To return a status other than `500` for a failure, set it in the template with `.StatusCode`.
+An error's own `StatusCode` method is not consulted.
 
-**Result with StatusCode() method:**
-```go
-type UserResult struct {
-    User User
-    code int
-}
-
-func (r UserResult) StatusCode() int { return r.code }
-```
-
-**Result with StatusCode field:**
-```go
-type UserResult struct {
-    User       User
-    StatusCode int
-}
-```
-
-**Template status override** (priority 1 — overrides everything, including the `500` from an error):
 ```gotmpl
-{{if .Err}}
-  {{with .StatusCode 404}}
-    <div>Not found</div>
-  {{end}}
-{{end}}
+{{if .Err}}{{.StatusCode 404}}<p>not found</p>{{end}}
 ```
 
-Prefer the template-name code for static codes (`201` for POST). Use a result `StatusCode` field or method for dynamic success codes, and `.StatusCode` in the template for dynamic error codes (`404` when not found, `422` for validation).
-
-[reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
-
-## Request Access in Templates
-
-**Access headers, URL, cookies:**
-```gotmpl
-{{define "GET /profile Profile(ctx)"}}
-{{if .Request.Header.Get "HX-Request"}}
-  <div>{{.Result.Name}}</div>  <!-- HTMX partial -->
-{{else}}
-  <!DOCTYPE html><html>...</html>  <!-- Full page -->
-{{end}}
-{{end}}
-```
-
-**Path parameters:** the parsed value reaches the method as an argument, so read it from `.Result`. To read the raw string in the template, use `.Request.PathValue`:
-```gotmpl
-{{define "GET /user/{id} GetUser(ctx, id)"}}
-<p>User ID from path: {{.Request.PathValue "id"}}</p>
-<h1>{{.Result.Name}}</h1>
-{{end}}
-```
-
-`.Path` is unrelated: it takes no argument and returns the generated route URL builders (e.g. `{{.Path.GetUser .Result.ID}}` to build a link).
-
-## Type Safety Requirements
-
-**Use concrete types for compile-time checking:**
-
-**Good:**
-```go
-func (s Server) GetUser(ctx context.Context) (User, error)
-func (s Server) GetUsers(ctx context.Context) ([]User, error)
-func (s Server) GetStats(ctx context.Context) (map[string]int, error)
-```
-
-**Avoid:**
-```go
-func (s Server) GetUser(ctx context.Context) (any, error)          // No type checking
-func (s Server) GetUser(ctx context.Context) (interface{}, error)  // No type checking
-```
-
-Concrete types enable `muxt check` to catch template errors at build time. Always return specific types.
-
-## Constraints
-
-**Second return value must be `error` or `bool`:**
-
-**Allowed:**
-```go
-func (s Server) Method() (T, error)
-func (s Server) Method() (T, bool)
-```
-
-**Not allowed:**
-```go
-func (s Server) Method() (T, chan error)         // Channels unsupported
-func (s Server) Method() (T, []error)            // Slices unsupported
-func (s Server) Method() (T, map[string]error)   // Maps unsupported
-```
-
-## Test Files by Category
-
-**Return patterns:**
-- [howto_call_with_error.txt](../../cmd/muxt/testdata/howto_call_with_error.txt) — `(T, error)` pattern
-- [reference_call_with_error_return.txt](../../cmd/muxt/testdata/reference_call_with_error_return.txt) — Error handling
-- [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt) — Early exit with bool
-- [reference_path_param_with_bool_return.txt](../../cmd/muxt/testdata/reference_path_param_with_bool_return.txt) — Boolean returns
-
-**Result types:**
-- [reference_result_with_import_type.txt](../../cmd/muxt/testdata/reference_result_with_import_type.txt) — Imported result types
-- [reference_result_with_named_type.txt](../../cmd/muxt/testdata/reference_result_with_named_type.txt) — Named return values
-- [reference_result_with_name_collision.txt](../../cmd/muxt/testdata/reference_result_with_name_collision.txt) — Handling name collisions
-- [reference_call_with_complex_package.txt](../../cmd/muxt/testdata/reference_call_with_complex_package.txt) — Complex package paths
-
-**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
+[reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) · [reference_empty_body_status.txt](../../cmd/muxt/testdata/reference_empty_body_status.txt)

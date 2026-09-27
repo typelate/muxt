@@ -1,41 +1,20 @@
 # muxt list-template-callers
 
-List the places that call each template — Go call sites (`ExecuteTemplate`) and template call sites (`{{template "X" .}}`). Filter templates with `--match`.
-
-**Aliases:** `callers`
+Lists, for each template, the Go `ExecuteTemplate` call sites and the `{{template}}` actions that render it.
 
 ```bash
-muxt list-template-callers
-muxt list-template-callers --match "GET /users"
+muxt list-template-callers --match=error --match='^GET'
 ```
 
-## Flags
+```text
+template "GET /{$} ListTodos(form, execute)" called by:
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--use-templates-variable` | string[] | `templates` | Global `*template.Template` variable name(s) to search for. Pass multiple times to combine results across template sets. |
-| `--match` | string[] | _(all)_ | Filter by template name. Can specify multiple regular expressions. Omit to list callers for all templates. |
-| `--format` | string | `text` | Output format: `text` or `json`. |
+  - template_routes.go:223:12 execute_template "GET /{$} ListTodos(form, execute)" *TemplateData[RoutesReceiver, TodoPage]
 
-## Examples
 
-**List callers for all templates:**
-```bash
-muxt list-template-callers
+template "error" called by:
+
+  - template.gohtml:84:44 template "PATCH /todos/{id} ToggleTodo(id)" error
 ```
 
-**Filter by pattern:**
-```bash
-muxt list-template-callers --match "GET /users"
-muxt list-template-callers --match "POST" --match "DELETE"
-```
-
-**JSON output:**
-```bash
-muxt list-template-callers --format json
-```
-
-## Related
-
-- [muxt list-template-calls](list-template-calls.md) — List templates called by a template
-- [muxt generate](generate.md) — Generate handlers from templates
+Paths are absolute; shortened here. Each line is the position, the kind of call, a template name (the enclosing template for `template`; the executed template for `execute_template`), and the type passed as dot. `--match` filters by a regular expression on the template name; repeatable. Flags: [cli.md](../cli.md#flags). Inverse: [`list-template-calls`](list-template-calls.md). Script: [howto_list_template_callers.txt](../../../cmd/muxt/testdata/howto_list_template_callers.txt).

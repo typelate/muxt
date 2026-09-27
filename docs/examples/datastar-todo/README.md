@@ -1,44 +1,29 @@
 # Datastar Todo
 
-A todo list served over [Datastar](https://data-star.dev) patches. It demonstrates the `--output-datastar` flag with form binding: every mutation streams one patch-elements event that refreshes the list and the footer together.
+A todo list over [Datastar](https://data-star.dev) patches, generated with [`--output-datastar`](../../reference/cli.md#generate-output-flags). Every mutation streams one patch-elements event that carries the list and the footer together.
 
-## How it works
-
-The page and every mutation render the same `sseTodos` fragment — two elements, morphed by id:
-
-```gotmpl
-{{define "sseTodos"}}<ul id="todo-list">…</ul>
-<footer id="todo-footer">{{.Result.Remaining}} of {{.Result.Total}} remaining</footer>{{end}}
-```
-
-The form posts itself as a Datastar action, the checkbox and delete button carry per-todo actions:
-
-```gotmpl
-<form data-on:submit="evt.preventDefault(); @post('{{.Path.CreateTodo}}', {contentType: 'form'}); el.reset()">
-<input type="checkbox" data-on:change="@post('{{$.Path.ToggleTodo .ID}}')">
-<button data-on:click="@delete('{{$.Path.DeleteTodo .ID}}')">✕</button>
-```
-
-The URLs come from the generated `TemplateRoutePaths` helpers — change a route pattern and the compiler finds every stale action. html/template treats `data-on:*` as JavaScript, so the rendered page shows each `/` as `\/`; the strings are identical once evaluated.
-
-Each route binds its inputs and streams the snapshot through the `sseTodos` callback:
-
-```gotmpl
-{{define "POST /todos sse(CreateTodo(ctx, form, sseTodos))"}}{{end}}
-{{define "POST /todos/{id}/toggle sse(ToggleTodo(ctx, id, sseTodos))"}}{{end}}
-{{define "DELETE /todos/{id} sse(DeleteTodo(ctx, id, sseTodos))"}}{{end}}
-```
-
-```go
-func (s *Server) CreateTodo(_ context.Context, form TodoForm, sseTodos func(Todos) error)
-```
-
-## Run it
+## Run
 
 ```bash
 go generate ./...
 go run .
-# open http://localhost:8002
 ```
 
-The tests are Given/When/Then subtests over [domtest](https://pkg.go.dev/github.com/typelate/dom/domtest): `patchElements` in [template_test.go](template_test.go) asserts the wire contract and hands back a queryable fragment, so the same selectors cover the full page and every patch.
+Open http://localhost:8002. `PORT` overrides the port.
+
+## Read in this order
+
+1. [template.gohtml](template.gohtml): the `sseTodos` fragment rendered by the page and every patch, and the form, checkbox and delete button sending Datastar actions through `.Path` helpers.
+2. [main.go](main.go): each mutation taking a snapshot under the mutex and handing it to `sseTodos`.
+3. [template_test.go](template_test.go): `patchElements`, which asserts the wire contract and returns a fragment the same selectors can query.
+
+## Routes
+
+| Template name | Method |
+|---|---|
+| `GET / List(ctx)` | `List(context.Context) (Todos, error)` |
+| `POST /todos sse(CreateTodo(ctx, form, sseTodos))` | `CreateTodo(context.Context, TodoForm, func(Todos) error)` |
+| `POST /todos/{id}/toggle sse(ToggleTodo(ctx, id, sseTodos))` | `ToggleTodo(context.Context, int, func(Todos) error)` |
+| `DELETE /todos/{id} sse(DeleteTodo(ctx, id, sseTodos))` | `DeleteTodo(context.Context, int, func(Todos) error)` |
+
+The form posts with `{contentType: 'form'}` so [`form`](../../reference/call-parameters.md#form-structs) binds as for a plain submit.

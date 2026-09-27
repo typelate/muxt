@@ -1,260 +1,127 @@
-# Call Parameters Reference
+# Call Parameters
 
-Parameters in call expressions determine how Muxt generates handlers and parses request data.
+Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and calls to other receiver methods are allowed; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
 
-## Parameter Binding Quick Reference
+```gotmpl
+{{define "POST /user/{id} UpdateUser(ctx, id, form)"}}{{end}}
+```
 
-| Parameter Name | Type | Source | Parsed | Use When |
-|----------------|------|--------|--------|----------|
-| `ctx` | `context.Context` | `request.Context()` | N/A | Need request context (always recommended first param) |
-| `request` | `*http.Request` | Direct | N/A | Need headers, cookies, or full request |
-| `response` | `http.ResponseWriter` | Direct | N/A | Streaming, file downloads, custom headers |
-| `form` | struct or `url.Values` | `request.Form` | Yes | Bind query parameters and, on POST/PUT/PATCH, the `application/x-www-form-urlencoded` body |
-| `multipart` | struct or `*multipart.Form` | `request.MultipartForm` | Yes | Bind form fields with file uploads (`multipart/form-data`) |
-| `execute` | `func(T) error` or `func() error` | render callback | N/A | Render under a lock or control when the template runs |
-| `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes | Resume an SSE stream from the client's last event |
-| `body` | `io.Reader` (exactly) | `request.Body` | No | Read the raw request body stream |
-| `unmarshalJSON(body)` | Any JSON-unmarshalable | `request.Body` | Yes | Decode a JSON request body into a struct parameter |
-| `unmarshalForm(body)` | struct or `url.Values` | `request.Form` | Yes | Explicit spelling of `form`; same binding |
-| `signals` | Any JSON-unmarshalable | `request.Body` | Yes | Shorthand for `unmarshalJSON(body)`; requires `--output-datastar` |
-| Path param | Any parseable | `request.PathValue(name)` | Yes | Extract from URL path |
+```go
+func (s Server) UpdateUser(ctx context.Context, id int, form UpdateUserForm) (User, error)
+```
 
-These names (plus path parameters) are the only identifiers allowed as call
-arguments — anything else fails generation with `unknown argument`. Individual
-form fields cannot be passed as arguments; bind them through `form` or
-`multipart`. Arguments bind to method parameters by position; the method's own
-parameter names don't need to match.
+Value and pointer receivers both work ([reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt)). Methods promoted from embedded fields are found ([reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt)).
 
-[howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt) · [howto_arg_response.txt](../../cmd/muxt/testdata/howto_arg_response.txt)
+## Arguments
+
+| Argument | Parameter type | Bound from |
+|---|---|---|
+| `ctx` | `context.Context` | `request.Context()` ([howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)) |
+| `request` | `*http.Request` | the request ([howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt)) |
+| `response` | `http.ResponseWriter` | the response; muxt sets no status code or headers, and still renders the template after the method returns. Generate [warns](commands/generate.md#warnings) |
+| path wildcard | a [parseable type](#parseable-types) | `request.PathValue(name)` ([howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)) |
+| `form` | struct or `url.Values` | `request.Form`: the query string plus a url-encoded body on POST, PUT, and PATCH |
+| `unmarshalForm(body)` | same as `form` | the same binding, spelled out ([reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)) |
+| `multipart` | struct or `*multipart.Form` | `request.MultipartForm` |
+| `body` | `io.Reader`, exactly | `request.Body` ([err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt)) |
+| `unmarshalJSON(body)` | any type `encoding/json` decodes | `request.Body` |
+| `signals` | same as `unmarshalJSON(body)` | shorthand for it, and diagnostics print that form; requires `--output-datastar` ([err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt) · [datastar-live-view.md](../how-to/datastar-live-view.md)) |
+| `lastEventID` | a [parseable type](#parseable-types) | the `Last-Event-Id` header ([reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)) |
+| `execute` | `func(T) error` or `func() error` | a callback that renders the template: [the `execute` callback](call-results.md#the-execute-callback), or [below](#server-sent-events) inside `sse` |
+| a receiver method call, such as `Author(id)` | its first result | called before the outer method under the same argument rules, except that `execute` and sse callbacks cannot be nested; a second `error` or `bool` result ends the handler as in [Result Shapes](call-results.md#result-shapes) ([reference_call_with_expression_arg.txt](../../cmd/muxt/testdata/reference_call_with_expression_arg.txt) · [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)) |
+
+Form fields are not arguments; bind them through `form` or `multipart`.
 
 ## Type Resolution
 
-**Without `--use-receiver-type`:** Path params are `string`, return types are `any`
-
-```gotmpl
-{{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}
-```
-```go
-type RoutesReceiver interface {
-    GetUser(ctx context.Context, id string) any  // id: string, return: any
-}
-```
-
-This allows you to stub out Go code while iterating in template source.
-
-[howto_arg_no_receiver.txt](../../cmd/muxt/testdata/howto_arg_no_receiver.txt)
-
-**With `--use-receiver-type=Server`:** Muxt looks up method signature, uses actual types
-
-```go
-func (s Server) GetUser(ctx context.Context, id int) (_ User, _ error) { return  }
-```
-```go
-type RoutesReceiver interface {
-    GetUser(ctx context.Context, id int) (User, error)  // id: int, return: (User, error)
-}
-```
-
-Generated handler parses `id` from string to `int` automatically. Parse failures return 400 Bad Request.
-
-Use `--use-receiver-type` once your receiver methods exist: muxt then binds arguments against the real signatures instead of inferring untyped ones.
-
-[howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)
+Without `--use-receiver-type` ([cli.md](cli.md#flags)), muxt infers the signature: path values and `lastEventID` are `string`, `form` is `url.Values`, `multipart` is `*multipart.Form`, `body` is `io.Reader`, `unmarshalJSON(body)` is `json.RawMessage`, and the method returns `any`. With it, muxt parses each argument to the method's declared parameter type ([howto_arg_no_receiver.txt](../../cmd/muxt/testdata/howto_arg_no_receiver.txt) · [howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)).
 
 ## Parseable Types
 
-Muxt auto-parses path and form parameters to these types:
+| Parameter type | Parser |
+|---|---|
+| `string` | none |
+| `int`, `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt`, base 10 |
+| `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint`, base 10 |
+| `bool` | `strconv.ParseBool` |
+| `float32`, `float64` | `strconv.ParseFloat`; form and multipart fields only, never path values or `lastEventID` |
+| a type whose pointer implements `encoding.TextUnmarshaler` | `UnmarshalText`; `time.Time` qualifies |
 
-| Type Category | Types | Parser | Notes |
-|---------------|-------|--------|-------|
-| **Integers** | `int`, `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt` | Base 10 |
-| **Unsigned** | `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint` | Base 10 |
-| **Boolean** | `bool` | `strconv.ParseBool` | Accepts: `1`, `t`, `T`, `true`, `True`, `TRUE` and the `0`/`f`/`false` equivalents |
-| **String** | `string` | None | Passed through |
-| **Floats** | `float64`, `float32` | `strconv.ParseFloat` | Form and multipart fields only; path values and `lastEventID` reject floats by design |
-| **Custom** | Implements `encoding.TextUnmarshaler` | `UnmarshalText()` | Define custom parsing; `time.Time` qualifies (`*time.Time` implements it) |
+[reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt) · [reference_form_float_fields.txt](../../cmd/muxt/testdata/reference_form_float_fields.txt) · [howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt)
 
-**Parse failures:** Return 400 Bad Request automatically. What renders depends on where parsing failed:
+## Parse Failures
 
-- A typed value that fails to parse (path value, typed form or multipart field, `lastEventID`) sets status 400 and, on a plain route, still renders the route template with a zero-value `.Result` and the error appended to `.Err`. An sse route responds 400 before the stream is established.
-- A request body that `request.ParseForm` itself rejects responds 400 via `http.Error` and returns without rendering ([reference_form_parse_error.txt](../../cmd/muxt/testdata/reference_form_parse_error.txt)).
+A path value, typed form field, or `lastEventID` that fails to parse responds 400. The method is not called. The template still renders with a zero [`.Result`](call-results.md#templatedata) and the error in `.Err`. On an `execute` route nothing renders; the response is an empty 400. On an sse route the 400 is sent before the stream opens ([reference_sse_with_typed_form_field.txt](../../cmd/muxt/testdata/reference_sse_with_typed_form_field.txt)).
 
-[reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
+A url-encoded body that `request.ParseForm` rejects responds 400 through `http.Error` without rendering ([reference_form_parse_error.txt](../../cmd/muxt/testdata/reference_form_parse_error.txt)). A malformed multipart body sets `.Err` and responds 400 ([reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)).
 
-**Custom parsing example:**
-```go
-type UserID string
+## Form Structs
 
-func (id *UserID) UnmarshalText(text []byte) error {
-    *id = UserID(strings.ToLower(string(text)))
-    return nil
-}
-```
-
-[howto_arg_with_text_unmarshaler.txt](../../cmd/muxt/testdata/howto_arg_with_text_unmarshaler.txt)
-
-## Form Parameters
-
-**Generic url.Values for fields:**
-```gotmpl
-{{define "POST /login Login(ctx, form)"}}{{end}}
-```
-```go
-func (s Server) Login(ctx context.Context, form url.Values) (Session, error) {
-    // username, password from request.Form.Get("username"), request.Form.Get("password")
-}
-```
-
-[howto_form_basic.txt](../../cmd/muxt/testdata/howto_form_basic.txt)
-
-**Struct binding:**
-```gotmpl
-{{define "POST /login Login(ctx, form)"}}{{end}}
-```
 ```go
 type LoginForm struct {
-    Username string
-    Password string
+    Username string `name:"user-name"` // bound from the "user-name" field
+    Password string                    // bound from "Password", case-sensitive
     Remember bool
-}
-
-func (s Server) Login(ctx context.Context, form LoginForm) (Session, error) {
-    // All fields populated from request.Form
+    Tags     []string                  // every value for "Tags"
 }
 ```
 
-**Struct tags for field mapping:**
-```go
-type LoginForm struct {
-    Username string `name:"user-name"`  // Maps to form field "user-name"
-    Password string `name:"user-pass"`  // Maps to form field "user-pass"
-}
-```
+[howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) · [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt) · [howto_form_with_slice.txt](../../cmd/muxt/testdata/howto_form_with_slice.txt)
 
-Struct field names must match form field names exactly (case-sensitive) unless using the `name` tag.
+A `template:"name"` tag names the template that holds the field's `<input>`, matched by the field's bound name. Muxt then generates validation from that input's `min`, `max`, `minlength`, `maxlength` and `pattern` attributes and responds 400 before the method runs. `min` and `max` apply to numeric and temporal input types; `pattern` applies to textual ones. Attribute values must be literals ([Known Issues](known-issues.md)).
 
-[howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) · [howto_form_with_field_tag.txt](../../cmd/muxt/testdata/howto_form_with_field_tag.txt)
-
-## Multipart Parameters
-
-Use `multipart` instead of `form` when the request body is `multipart/form-data` — required for `<input type="file">` uploads. Muxt calls `request.ParseMultipartForm` and binds both text fields and file fields.
-
-`form` and `multipart` are **mutually exclusive** in the same call — `ParseMultipartForm` populates `request.PostForm`, so `multipart` is a strict superset of `form` for routes that accept multipart bodies.
-
-**Struct binding with file fields:**
 ```gotmpl
-{{define "POST /upload 201 Upload(ctx, multipart)"}}{{end}}
+{{define "age-field"}}<input type="number" name="age" min="0" max="120">{{end}}
 ```
-```go
-import "mime/multipart"
 
+```go
+type SignupForm struct {
+    Age int `name:"age" template:"age-field"` // age=200 responds 400
+}
+```
+
+[reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt) · [reference_validation_pattern.txt](../../cmd/muxt/testdata/reference_validation_pattern.txt)
+
+## Multipart
+
+Use `multipart` for `multipart/form-data` bodies, which file inputs require. The [struct rules](#form-structs) apply; file fields are `*multipart.FileHeader` or `[]*multipart.FileHeader`.
+
+```go
 type UploadForm struct {
     Title  string                  `name:"title"`
-    Tags   []string                `name:"tag"`
-    Avatar *multipart.FileHeader   `name:"avatar"`  // single file
-    Photos []*multipart.FileHeader `name:"photos"`  // multiple files for the same name
-}
-
-func (s Server) Upload(ctx context.Context, form UploadForm) (Result, error) {
-    f, err := form.Avatar.Open()
-    if err != nil { return Result{}, err }
-    defer f.Close()
-    // ... read and store the file ...
+    Avatar *multipart.FileHeader   `name:"avatar"`
+    Photos []*multipart.FileHeader `name:"photos"`
 }
 ```
 
-[howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) · [reference_multipart_basic.txt](../../cmd/muxt/testdata/reference_multipart_basic.txt) · [reference_multipart_multiple_files.txt](../../cmd/muxt/testdata/reference_multipart_multiple_files.txt) · [reference_multipart_mixed.txt](../../cmd/muxt/testdata/reference_multipart_mixed.txt)
+- `--output-multipart-max-memory` ([cli.md](cli.md#generate-output-flags)) sets the `ParseMultipartForm` limit.
+- A url-encoded body still binds the text fields; file fields stay nil ([reference_multipart_url_encoded_fallback.txt](../../cmd/muxt/testdata/reference_multipart_url_encoded_fallback.txt)).
+- `form` and `multipart` in the same call fail generation ([err_multipart_with_form_in_nested_call.txt](../../cmd/muxt/testdata/err_multipart_with_form_in_nested_call.txt)).
 
-**Raw `*multipart.Form` access:**
-```gotmpl
-{{define "POST /upload Upload(ctx, multipart)"}}{{end}}
-```
-```go
-func (s Server) Upload(ctx context.Context, form *multipart.Form) error {
-    for name, files := range form.File { ... }
-    return nil
-}
-```
-
-[reference_multipart_raw.txt](../../cmd/muxt/testdata/reference_multipart_raw.txt)
-
-**Max upload size:** Defaults to 32 MiB. Override with `--output-multipart-max-memory=<size>` (e.g. `64MB`, `128MiB`). Data exceeding this limit spills to the OS temp directory per the standard `mime/multipart` semantics.
-
-**Parse errors:** A malformed multipart body sets `.Err` and responds `400 Bad Request` (unlike `form`, which silently ignores body parse errors).
-
-[reference_multipart_max_memory_flag.txt](../../cmd/muxt/testdata/reference_multipart_max_memory_flag.txt) · [reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)
+[howto_multipart_file_upload.txt](../../cmd/muxt/testdata/howto_multipart_file_upload.txt) · [reference_multipart_raw.txt](../../cmd/muxt/testdata/reference_multipart_raw.txt)
 
 ## Request Body
 
-The request body is a **single-use stream**. `body` and `unmarshalJSON(body)`
-each read it directly; `form`, `multipart`, and `unmarshalForm(body)` parse it
-once through `request.ParseForm` / `request.ParseMultipartForm` (repeats reuse
-the cached result). A call that reads the body more than once — for example
-`(form, body)` or `(multipart, unmarshalJSON(body))` — fails generation.
+A call that reads the body twice, such as `(form, body)` or `(body, unmarshalJSON(body))`, fails generation ([err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt)).
 
-### `body`
-
-Binds `request.Body` as an `io.Reader`. The method parameter must be exactly
-`io.Reader`; any other type fails generation. Use it for payloads the handler
-must not reinterpret (webhooks, proxied uploads). Like the other reserved
-names, `body` cannot be used as a path wildcard name.
-
-```gotmpl
-{{define "POST /hooks Save(ctx, body)"}}{{.Result}}{{end}}
-```
-```go
-func (s Server) Save(ctx context.Context, body io.Reader) (string, error)
-```
-
-[reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt) · [err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [err_body_consumed_twice.txt](../../cmd/muxt/testdata/err_body_consumed_twice.txt) · [err_form_and_body.txt](../../cmd/muxt/testdata/err_form_and_body.txt)
-
-### `unmarshalJSON(body)`
-
-Decodes the JSON request body into the Go type of the method parameter at that
-position. The wrapper's only valid argument is `body`. The decode target comes
-from the receiver method signature, so `muxt check` verifies it.
+`unmarshalJSON(body)` does not check `Content-Type`. A malformed or empty body responds 400 without calling the method.
 
 ```gotmpl
 {{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{.Result.Name}}{{end}}
 ```
-```go
-func (s Server) CreateUser(ctx context.Context, u User) (User, error)
-```
 
-- A malformed (or empty) body responds 400 Bad Request and the method is not
-  called. The wrapper does not check the request `Content-Type`.
-- Decodes with `encoding/json`.
-- If the receiver method is not yet defined, the parameter synthesizes as
-  `json.RawMessage` so template-first iteration passes the raw payload through.
-
-Diagnostics echo `signals` in its desugared form: an error about the call may print `unmarshalJSON(body)` where your template says `signals`.
-
-Under `--output-datastar` the reserved `signals` argument is shorthand for
-`unmarshalJSON(body)` — Datastar sends the page's signal state as the JSON
-request body, so both spellings bind identically. Without the flag, `signals`
-fails generation with an error naming the shorthand.
-
-[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt) · [err_unmarshal_json_bad_arg.txt](../../cmd/muxt/testdata/err_unmarshal_json_bad_arg.txt) · [reference_output_datastar_signals.txt](../../cmd/muxt/testdata/reference_output_datastar_signals.txt) · [err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt)
-
-### `unmarshalForm(body)`
-
-The explicit spelling of the existing `form` binding — **not** a separate body
-decoder. Both spellings generate the identical `request.Form` binding
-(`request.ParseForm` semantics, URL query merge included), so behavior is the
-same by construction. On GET the bound values are the query string and the
-`(body)` spelling is misleading; prefer `form` there.
-
-[reference_unmarshal_form.txt](../../cmd/muxt/testdata/reference_unmarshal_form.txt) · [reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)
+[reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt)
 
 ## Server-Sent Events
 
-Wrapping the method call in `sse` — `sse(Stream(ctx, execute))` — makes the route stream [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events). The handler sets the event-stream headers, flushes, then calls your method with a render callback at the `execute` argument's position. The method calls the callback once per event; each call renders the template into a fresh frame and flushes it.
+Wrap the call in `sse` to stream events. The handler sets `Content-Type: text/event-stream`, `Cache-Control: no-store`, and `Connection: keep-alive`, flushes, then calls the method. Each `execute` call renders the template as one event and flushes it.
 
 ```gotmpl
-{{define "GET /clock sse(Clock(ctx, execute))"}}{{.Result}}{{end}}
+{{define "GET /clock sse(Clock(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
 ```
+
 ```go
-func (s Server) Clock(ctx context.Context, execute func(string) error) {
+func (s Server) Clock(ctx context.Context, lastEventID string, execute func(time.Time) error) {
     t := time.NewTicker(time.Second)
     defer t.Stop()
     for {
@@ -262,98 +129,32 @@ func (s Server) Clock(ctx context.Context, execute func(string) error) {
         case <-ctx.Done():
             return
         case now := <-t.C:
-            if err := execute(now.Format(time.RFC3339)); err != nil {
-                return // client disconnected
+            if err := execute(now); err != nil {
+                return
             }
         }
     }
 }
 ```
 
+Return when `ctx` is done or `execute` returns an error: the client is gone, the template failed, or the write failed.
+
 | Rule | Detail |
-|------|--------|
-| Callback shape | `func(T) error` (`T` is `.Result`) or `func() error` |
-| Method results | Nothing, or only `error` (a returned error is logged; the stream closes) |
-| Not allowed | a `response` argument |
-| Frame fields | `SSETemplateData` adds chainable `.Event`, `.ID`, `.Retry` setters alongside `.Result`, `.Request`, `.Err` |
-| Under `--output-datastar` | `.Event` is replaced by the fixed `datastar-patch-elements` event name; `.Selector`, `.Mode`, and `.UseViewTransition` setters become the patch option lines. |
-| `Signals`-suffixed callbacks | The suffix is load-bearing: under `--output-datastar`, a callback argument whose name ends in `Signals` (`countsSignals func(T) error`) marshals its argument as a `datastar-patch-signals` event instead of rendering a template. The shape must be exactly `func(T) error`. Renaming away the suffix reclassifies the argument as an sse render callback that wants a `{{define}}` of its own name. An sse route may omit the render callback entirely — the stream then carries only signal patches |
-| Response headers | `Content-Type: text/event-stream`, `Cache-Control: no-store`, `Connection: keep-alive` |
-| Undefined method | Synthesized as `func(any) error` |
-| Extra callbacks | `sse`-prefixed arguments (`sse(Events(sseClock, execute, sseMetrics))`) each render the same-named template |
+|---|---|
+| Wrapper | exactly one method call; any other shape, such as `sse()`, is an ordinary call to a function named `sse` ([reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt)) |
+| Callback | `func(T) error` or `func() error`, inline or a named or aliased func type ([reference_callback_named_func_type.txt](../../cmd/muxt/testdata/reference_callback_named_func_type.txt)) |
+| Method results | none, or `error`; a returned error is logged and the stream closes ([reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt)) |
+| `response` argument | not allowed ([err_sse_with_response.txt](../../cmd/muxt/testdata/err_sse_with_response.txt)) |
+| Undefined method | fails generation: `method NAME using the execute callback must be defined on the receiver type` |
+| Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
+| Template data | `*SSETemplateData[R, T]`: `.Result`, `.Err`, `.Request`, `.Receiver`, `.Path`, `.String`, and chainable `.Event`, `.ID`, and `.Retry` setters. No `.Ok`, `.StatusCode`, `.Header`, or `.Redirect` |
 
-Pair the wrapper with `lastEventID` to resume after a reconnect. `lastEventID` reads the `Last-Event-Id` header and parses it like a path value (defaults to `string`); a typed parse failure returns 400 before the stream opens.
+### Datastar
 
-```gotmpl
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
-```
+Under `--output-datastar`:
 
-[reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_sse_no_arg.txt](../../cmd/muxt/testdata/reference_sse_no_arg.txt) · [reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt) · [reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
-
-## Advanced Patterns
-
-**Mixing path, form, and special parameters:**
-```gotmpl
-{{define "POST /user/{id}/update UpdateUser(ctx, id, form)"}}{{end}}
-```
-```go
-func (s Server) UpdateUser(ctx context.Context, id int, form UpdateUserForm) error {
-    // id from path, form fields from request body, ctx from request context
-}
-```
-
-**Pointer receivers (both work):**
-```go
-func (s Server) GetUser(ctx context.Context, id int) (User, error)   // Value
-func (s *Server) GetUser(ctx context.Context, id int) (User, error)  // Pointer
-```
-
-[reference_receiver_with_pointer.txt](../../cmd/muxt/testdata/reference_receiver_with_pointer.txt)
-
-**Embedded fields (method promotion):**
-```go
-type Auth struct{}
-func (Auth) Login(ctx context.Context, username, password string) (Session, error)
-
-type Server struct {
-    Auth  // Login promoted to Server
-}
-```
-
-[reference_receiver_with_embedded_method.txt](../../cmd/muxt/testdata/reference_receiver_with_embedded_method.txt)
-
-## Validation and Error Handling
-
-**Muxt handles type parsing. Your methods handle validation:**
-
-```go
-type CreateUserForm struct {
-    Email    string
-    Password string
-}
-
-func (s Server) CreateUser(ctx context.Context, form CreateUserForm) (User, error) {
-    if !isValidEmail(form.Email) {
-        return User{}, errors.New("invalid email")
-    }
-    if len(form.Password) < 8 {
-        return User{}, errors.New("password too short")
-    }
-    // ...
-}
-```
-
-**Parse errors return 400 automatically:**
-- Request to `/user/abc` with `GetUser(ctx, id int)` → 400 Bad Request
-- Form field "age=xyz" bound to an `Age int` form struct field → 400 Bad Request
-
-Validation errors should return from your method. Display them in templates with `{{if .Err}}`.
-
-[reference_path_with_typed_param.txt](../../cmd/muxt/testdata/reference_path_with_typed_param.txt)
-
-## Test Files
-
-Every binding above links its test archives inline; browse
-[cmd/muxt/testdata](../../cmd/muxt/testdata) for the full catalog —
-`howto_*` for task-oriented examples, `reference_*` for feature
-documentation, and `err_*` for pinned error messages.
+| Rule | Detail |
+|---|---|
+| Events | `datastar-patch-elements`, with each rendered line as a `data: elements` line; `.Selector`, `.Mode`, and `.UseViewTransition` replace `.Event` ([reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt)) |
+| `Signals` suffix | a callback named like `countsSignals`, typed `func(T) error`, marshals its argument as a `datastar-patch-signals` event instead of rendering; the prefix is only a label ([reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt) · [err_signals_callback_without_datastar.txt](../../cmd/muxt/testdata/err_signals_callback_without_datastar.txt)) |
+| `--output-htmx` | mutually exclusive ([err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)) |

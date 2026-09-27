@@ -1,43 +1,30 @@
-# HTMX Helpers: Counter
+# htmx Counter
 
-A counter you increment and decrement over HTMX. It demonstrates the `--output-htmx` flag, which generates HTMX header methods on `TemplateData` so you can set and read HTMX headers from inside a template.
+A counter you increment and decrement over htmx. It shows [`--output-htmx`](../../reference/cli.md#generate-output-flags), which adds htmx header methods to the generated `TemplateData`.
 
-## Run it
+## Run
 
 ```bash
 go generate ./...
 go run .
 ```
 
-Open [http://localhost:8000](http://localhost:8000). Set `PORT` to use a different port.
+Open http://localhost:8000. `PORT` overrides the port.
 
-## How the helpers are generated
+## Read in this order
 
-`main.go` carries the directive:
-
-```go
-//go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server --output-htmx
-```
-
-`--output-htmx` adds methods to the generated `TemplateData`: response-header setters (`HXLocation`, `HXPushURL`, `HXRedirect`, `HXReswap`, `HXRetarget`, `HXTrigger`, …) and request-header readers (`HXRequest`, `HXBoosted`, `HXTriggerElementID`, …). This example's `POST /count` template calls one:
-
-```gotmpl
-{{- if eq .HXTriggerElementID "decrement"}}
-  {{- template "count" .Receiver.Decrement}}
-{{- else if eq .HXTriggerElementID "increment"}}
-  {{- template "count" .Receiver.Increment}}
-{{- end}}
-```
-
-`htmx_test.go` exercises each one against the generated type. Earlier muxt versions had no flag — you copied these methods in by hand; the flag replaces that.
+1. [template.gohtml](template.gohtml): the `POST /count` template reading `.HXTriggerElementID` to choose between `.Receiver.Increment`, `.Receiver.Decrement`, and `.Receiver.Count`.
+2. [main.go](main.go): `Server` keeping the count in an `int64` guarded by `sync/atomic`, and the `//go:generate` directive passing `--output-htmx`.
+3. [htmx_test.go](htmx_test.go): a subtest for each generated header method.
+4. [template_test.go](template_test.go): `muxt check` run as a test.
 
 ## Routes
 
-| Template name | Receiver method |
-|---------------|-----------------|
+| Template name | Method |
+|---|---|
 | `/ Count()` | `Count() int64` |
 | `/increment-count Increment()` | `Increment() int64` |
 | `/decrement-count Decrement()` | `Decrement() int64` |
-| `POST /count` | none — the template dispatches on `.HXTriggerElementID` to `.Receiver.Increment`, `.Receiver.Decrement`, or `.Receiver.Count` |
+| `POST /count` | none |
 
-Both page buttons post to `/count`; the template reads which button triggered the request from the `HX-Trigger` header helper and calls the matching receiver method — that dispatch is the point of the example. The `/increment-count` and `/decrement-count` routes expose the same operations as standalone endpoints. The `Server` holds the count in an `int64` it reads and updates with `sync/atomic`.
+The `POST /count` dispatch is the point of the example, not a recommended design. The `/increment-count` and `/decrement-count` routes show the plain alternative and render a full page when `.HXRequest` is false.

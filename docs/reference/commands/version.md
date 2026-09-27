@@ -1,31 +1,14 @@
 # muxt version
 
-Print the muxt version number. Use `-v` for verbose output including the Go version used to compile muxt.
-
-**Aliases:** `v`
+Prints the binary's module version: `(devel)` under `go run`, the VCS pseudo-version after `go build` or `go install` from a checkout.
 
 ```bash
-muxt version
-muxt version -v  # Shows Go version used to compile muxt
+muxt version -v
 ```
 
-## Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-v, --verbose` | bool | `false` | Show Go version used to compile muxt. |
-
-## Example Output
-
-A released binary prints its module version; a build from source prints `(devel)`:
-
-```
-v0.17.0
-```
-
-With `--verbose`:
-
-```
+```text
 v0.17.0
 go version: go1.25.0
 ```
+
+`-v` adds the Go version muxt was compiled with.

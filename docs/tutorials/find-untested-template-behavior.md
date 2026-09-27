@@ -1,13 +1,8 @@
 # Find Untested Template Behavior
 
-A passing test suite tells you the templates render. It does not tell you whether any test would notice if they rendered something *else*. `muxt test-template-mutations` answers that: it changes one action at a time, re-runs your tests against each change, and reports the changes nothing caught.
+`muxt test-template-mutations` ([reference](../reference/commands/test-template-mutations.md)) reports the template actions no test depends on. This tutorial turns one miss into an assertion.
 
-In this tutorial you run it against an example that already passes its tests, watch it report that nothing is covered, and write one test that turns two of those reports green.
-
-## Prerequisites
-
-- The muxt repository checked out, and Go installed.
-- 5 minutes. Each variation is a full `go test` run.
+Prerequisites: a checkout of the muxt repository; the commands run its muxt through `go run`. A full run of the example takes about half a minute.
 
 ## Step 1: Confirm the example passes
 
@@ -16,19 +11,13 @@ cd docs/examples/htmx-counter
 go test ./...
 ```
 
-```
-ok  	github.com/typelate/muxt/docs/examples/htmx-counter
-```
-
-Green. The suite runs `muxt check`, so the templates are type-correct, and the HTMX helper tests pass.
-
-## Step 2: Ask what the tests actually pin down
+## Step 2: Run the mutations
 
 ```bash
-muxt test-template-mutations --seed 1
+go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
-```
+```text
 20 mutants across 6 templates (complexity 10, seed 1)
 baseline ok
 
@@ -42,31 +31,19 @@ template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[ma
 20 mutants, 0 killed, 20 missed, 0 skipped
 ```
 
-**Zero killed.** Twenty ways to change what these templates render, and not one of them makes a test fail. The suite proves the templates compile; it asserts nothing about the HTML they produce.
-
-`--seed 1` makes the run reproducible, so your output matches this page. Before mutating anything the command runs the tests once unmutated — that is the `baseline ok` line. A red baseline stops the run, because every mutant would otherwise look caught by the failure that was already there.
+Twenty changes to the rendered HTML pass every test. `--seed 1` makes the run reproducible.
 
 ## Step 3: Read one miss
 
-Take this one:
-
-```
+```text
 MISS 17:2 template-drop
 ```
 
-Line 17 of `template.gohtml` is the counter on the home page:
+Line 17 of `template.gohtml` is `{{template "count" .Result}}`. `template-drop` renders that partial as nothing, and every test still passes: nothing asserts on something only that partial produces.
 
-```gotemplate
-{{template "count" .Result}}
-```
+## Step 4: Write the test
 
-`template-drop` renders that partial as nothing at all. The page comes back with no counter in it, every test still passes. So no test looks at the counter.
-
-The operator names the assertion you are missing. `template-drop` says *assert on something that partial produces*.
-
-## Step 4: Write the test it is asking for
-
-Create `docs/examples/htmx-counter/counter_page_test.go`:
+Create `counter_page_test.go`:
 
 ```go
 package main
@@ -96,86 +73,68 @@ func TestCounterPage(t *testing.T) {
 ```
 
 ```bash
-go test ./...
-muxt test-template-mutations --seed 1
+go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
-```
+```text
 20 mutants, 1 killed, 19 missed, 0 skipped
 ```
 
-`MISS 17:2 template-drop` is gone. Dropping the partial now removes `#count` from the document, `QuerySelector` returns nil, and `require.NotNil` fails the test. The mutant is killed.
+Dropping the partial now removes `#count`, so `require.NotNil` fails.
 
-## Step 5: Notice the one it still misses
+## Step 5: Fix the fixture
 
 This one survived:
 
-```
+```text
 MISS 62:19 action-zero
 ```
 
-Line 62 is inside the partial you just asserted on:
-
-```gotemplate
-{{define "count" -}}
-		<div id='count'>{{.}}</div>
-{{- end}}
-```
-
-`action-zero` replaces the value with the zero value of its own type — and the type is `int64`, so it renders `0`. Your fixture starts the counter at zero and asserts `"0"`. The mutation changes zero to zero. The test cannot tell the difference.
-
-**A fixture at the zero value cannot detect a mutation to the zero value.** Give the counter a value:
+Line 62, in the `count` partial, is `<div id='count'>{{.}}</div>`. `action-zero` renders `{{.}}` as `0`, the `int64` zero. The fixture starts at zero and asserts `"0"`, so the test cannot see the change. Replace the `TemplateRoutes` line with:
 
 ```go
-	mux := http.NewServeMux()
 	srv := new(Server)
 	srv.Increment()
 	TemplateRoutes(mux, srv)
 ```
 
-and assert on it:
+and change the assertion to:
 
 ```go
 	assert.Equal(t, "1", count.TextContent())
 ```
 
 ```bash
-go test ./...
-muxt test-template-mutations --seed 1
+go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
-```
+```text
 20 mutants, 2 killed, 18 missed, 0 skipped
 ```
 
-Two killed. The test asks the same question of the same element; it just asks it about a value the mutation can destroy. This is the kind of gap that reading a test cannot show you and coverage percentages cannot either: the line was covered the whole time.
-
 ## Step 6: Work through the rest
 
-Eighteen are left. Most are the other routes, whose HTMX and non-HTMX branches nothing exercises, but one is still on this page: line 14 drops the shared `imports` partial, and no test looks at the script tag it writes. Narrow the run to one template while you work on it:
+Narrow the run to one template while you add assertions:
 
 ```bash
-muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
+go run github.com/typelate/muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
 ```
 
-Each operator asks for a particular assertion:
+The operator names the missing assertion:
 
-| Operator | The change it makes | What to assert |
-|----------|--------------------|----------------|
-| `action-zero` | the value renders as the zero value of its own type | that value's text or attribute — from a fixture that is *not* the zero value |
-| `action-empty` | the value renders as nothing, when its type could not be resolved | that value's text or attribute |
-| `if-true`, `if-false` | the branch is taken unconditionally | one case per side of the condition |
-| `range-never` | the loop body never runs, so the `{{else}}` runs instead | the number of rows, not just the first |
-| `with-empty` | the `with` body is skipped, so the `{{else}}` runs instead | something only the body produces |
-| `template-drop` | the partial renders nothing at all | something only that partial produces |
-| `operands` | one named input is replaced | that input specifically |
+| Operator | What to assert |
+|----------|----------------|
+| `action-zero` | that value's text or attribute, from a fixture that is not the zero value |
+| `action-empty` | that value's text or attribute |
+| `if-true`, `if-false` | one case per side of the condition |
+| `range-never` | the number of rows, not only the first |
+| `with-empty` | something only the body produces |
+| `template-drop` | something only that partial produces |
+| `operands` | that input specifically |
 
-Each mutant is its own `go test` run, so on a larger project this belongs in CI. On a pull request, `--diff origin/main` mutates only the templates the branch changed. If your suite tolerates running beside itself, `--workers 4` runs four mutants at once.
+Not every miss needs a test. For CI, the [reference](../reference/commands/test-template-mutations.md) covers `--diff` and `--workers`.
 
-Not every miss is worth a test. A mutation to a decorative wrapper may be one you accept. The report tells you what is unasserted; you decide what deserves an assertion.
+## Next
 
-## What's next
-
-- [HTML is the API](../explanation/html-is-the-api.md) — why the rendered markup is the contract worth asserting on, and what domtest gives you to assert with
-- [Structure a project for testing](../how-to/receiver-package-and-testing.md) — receiver in a library package, faking the service layer, testing through the generated routes
-- [`muxt test-template-mutations`](../reference/commands/test-template-mutations.md) — every flag, the operators in full, and how mutants reach the build
+- [HTML is the API](../explanation/html-is-the-api.md): why the rendered markup is the contract to assert on.
+- [Structure a project for testing](../how-to/receiver-package-and-testing.md): put the receiver where a test can fake it.

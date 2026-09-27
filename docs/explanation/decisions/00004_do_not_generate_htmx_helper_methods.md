@@ -2,32 +2,20 @@
 
 ## Context
 
-Generated `TemplateData` methods now include helpers to interact with the Receiver, Request, and Redirect
-from template actions.
-I exclusively use Muxt with HTMX (although it can work well with fixi).
-I am not sure what the method signatures for HTMX should be or what the implication of having those
-methods called in templates is on long term template maintainability.
+Generated `TemplateData` methods let template actions reach the receiver, the request and redirects. I did not know what the htmx method signatures should be, or what calling them from templates would do to template maintainability.
 
 ## Decision
 
-Do not Generate HTMX Helper Methods on TemplateData; document (copyable) helper methods to add to packages manually.  
+Do not generate htmx helper methods on `TemplateData`. Document copyable helper methods to add to a package by hand.
 
 ## Status
 
-Superseded. Muxt now generates HTMX helper methods, opt-in via the `--output-htmx` flag
-(`--output-htmx-helpers` is a deprecated alias).
+Superseded by `--output-htmx` (`--output-htmx-helpers` is a deprecated alias).
 
 ## Consequences
 
-*(Written before the flag shipped — see Update below.)*
-
-Once I learn about how to properly interact with HTMX headers from templates, I might add a `--htmx` flag to add the
-existing documented `htmx*.go` files to the target package.
+Once I learn how templates should use htmx headers, I might add a `--htmx` flag that adds the documented `htmx*.go` files to the target package.
 
 ## Update
 
-The flag shipped as `--output-htmx-helpers` (not `--htmx`) and is now spelled `--output-htmx`
-(the old name remains a deprecated alias). When set, generation adds `HX*` helper methods to
-`TemplateData` for writing response headers (`HX-Location`, `HX-Trigger`, etc.) and reading request headers
-(`HX-Request`, `HX-Boosted`, etc.). It is off by default, so the original decision still holds unless you opt in.
-See [reference_output_htmx.txt](../../../cmd/muxt/testdata/reference_output_htmx.txt).
+`--output-htmx` ([CLI](../../reference/cli.md)) adds `HX*` methods to `TemplateData`; the [htmx-counter example](../../examples/htmx-counter/template_routes.go) has the full list.
