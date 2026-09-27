@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"go/types"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 const (
@@ -85,7 +85,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 
 	var (
 		fields []*ast.Field
-		last   types.Type
+		last   source.Type
 	)
 
 	hasErrorResult := false
@@ -122,11 +122,11 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		ident := pathParamIdent(name)
 		wildcard := segment.IsRemainder()
 		pathValueType := segment.Type()
-		tpNode, err := file.TypeASTExpression(pathValueType)
+		tpNode, err := file.TypeExpr(pathValueType)
 		if err != nil {
 			return nil, false, false, err
 		}
-		if last != nil && len(fields) > 0 && types.Identical(last, pathValueType) {
+		if len(fields) > 0 && last.Identical(pathValueType) {
 			fields[len(fields)-1].Names = append(fields[len(fields)-1].Names, ast.NewIdent(ident))
 		} else {
 			fields = append(fields, &ast.Field{
@@ -191,15 +191,15 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 			continue
 		}
 
-		basicType, ok := pathValueType.Underlying().(*types.Basic)
+		kind, ok := pathValueType.Basic()
 		if !ok {
 			return nil, false, false, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
 		}
-		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), basicType.Kind())
+		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), kind)
 		if err != nil {
 			return nil, false, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
-		if basicType.Info()&types.IsString != 0 {
+		if pathValueType.IsString() {
 			if wildcard {
 				usesSegmentsEscaper = true
 				exp = escapedPathSegments(exp)
