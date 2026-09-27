@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -988,4 +989,30 @@ func patternScope() []string {
 		TemplateNameScopeIdentifierLastEventID,
 		TemplateNameScopeIdentifierRequestBody,
 	}
+}
+
+// Resolve parses the route definitions of every templates variable in pkg
+// and resolves each call against receiver, or against an empty struct named
+// Receiver when there is none, so handler methods are inferred.
+func Resolve(pkg source.Package, receiver *types.Named, checker Checker) ([]Definition, error) {
+	if receiver == nil {
+		receiver = asteval.NamedEmptyStruct("Receiver", pkg.Types)
+	}
+	var (
+		result []Definition
+		errs   []error
+	)
+	for _, variable := range pkg.Variables {
+		defs, err := Definitions(variable)
+		if err != nil {
+			return nil, err
+		}
+		for i := range defs {
+			if err := ResolveCall(&defs[i], pkg, receiver, checker); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		result = append(result, defs...)
+	}
+	return result, CombineErrors(errs)
 }
