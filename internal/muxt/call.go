@@ -363,8 +363,8 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 	}
 }
 
-// checkNestedCallResultShape validates a nested call's results: one value,
-// optionally followed by an error or bool.
+// classifyNestedCallResultShape validates a nested call's results: one
+// value, optionally followed by an error or bool.
 func classifyNestedCallResultShape(name string, sig *types.Signature, qual types.Qualifier) (ResultShape, error) {
 	results := sig.Results()
 	errIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
