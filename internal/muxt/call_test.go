@@ -350,16 +350,12 @@ func TestArgument(t *testing.T) {
 		{Name: "execute callback with data parameter", Receiver: serverType, Template: `{{define "GET / ExecuteTD(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.True(t, defs[0].Arguments[0].CallbackHasArg())
-			named, ok := defs[0].Arguments[0].CallbackResultType().(*types.Named)
-			require.True(t, ok)
-			require.Equal(t, "TD", named.Obj().Name())
+			require.Equal(t, "TD", defs[0].Arguments[0].CallbackResultType().Format(unqualified))
 		}},
 		{Name: "execute callback without data parameter", Receiver: serverType, Template: `{{define "GET / ExecuteNoArg(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.False(t, defs[0].Arguments[0].CallbackHasArg())
-			st, ok := defs[0].Arguments[0].CallbackResultType().(*types.Struct)
-			require.True(t, ok)
-			require.Zero(t, st.NumFields())
+			require.Equal(t, "struct{}", defs[0].Arguments[0].CallbackResultType().Format(unqualified))
 		}},
 		{Name: "execute callback parameter is not a function", Receiver: serverType, Template: `{{define "GET / ExecuteNotFunc(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "execute argument for ExecuteNotFunc must be a func(...) error")

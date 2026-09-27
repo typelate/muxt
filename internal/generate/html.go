@@ -3,13 +3,13 @@ package generate
 import (
 	"go/ast"
 	"go/token"
-	"go/types"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // newHTMLTemplateHandler assembles a rendered-route handler: template
@@ -26,7 +26,7 @@ func newHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt
 
 func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, execIdx int, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
-	resultType := def.Arguments[execIdx].CallbackResultType()
+	resultType := def.ResultDataType()
 	execHasArg := def.Arguments[execIdx].CallbackHasArg()
 
 	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
@@ -73,12 +73,12 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
 
-	return writeHeadersAndStatusCode(file, handlerFunc, def, resultType, statusCodeIdent, bufIdent, resultDataIdent)
+	return writeHeadersAndStatusCode(file, handlerFunc, def, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
-	resultType := def.Signature().Results().At(0).Type()
+	resultType := def.ResultDataType()
 	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
 		return lit, err
@@ -114,11 +114,11 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, respond...)
 
-	return writeHeadersAndStatusCode(file, handlerFunc, def, resultType, statusCodeIdent, bufIdent, resultDataIdent)
+	return writeHeadersAndStatusCode(file, handlerFunc, def, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
-func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType types.Type) (*ast.FuncLit, *ast.CallExpr, *ast.FuncLit, error) {
-	typeExpr, err := file.TypeASTExpression(resultType)
+func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType source.Type) (*ast.FuncLit, *ast.CallExpr, *ast.FuncLit, error) {
+	typeExpr, err := file.TypeExpr(resultType)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -167,7 +167,7 @@ func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIde
 	}
 }
 
-func writeHeadersAndStatusCode(file *File, handlerFunc *ast.FuncLit, def muxt.Definition, resultType types.Type, statusCodeIdent string, bufIdent string, resultDataIdent string) (*ast.FuncLit, error) {
+func writeHeadersAndStatusCode(file *File, handlerFunc *ast.FuncLit, def muxt.Definition, statusCodeIdent string, bufIdent string, resultDataIdent string) (*ast.FuncLit, error) {
 	if !def.HasResponseWriterArg() {
 		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
 			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
@@ -226,7 +226,7 @@ func callExecuteTemplate(file *File, config RoutesFileConfiguration, def muxt.De
 // than once gets an error on the later calls rather than a second render. The
 // guard is an atomic.Bool compared-and-swapped so a callback invoked from
 // another goroutine still renders exactly once.
-func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIdent string, resultType types.Type, hasArg bool) (*ast.FuncLit, error) {
+func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIdent string, resultType source.Type, hasArg bool) (*ast.FuncLit, error) {
 	const dataIdent = "data"
 	var params []*ast.Field
 	body := []ast.Stmt{
@@ -241,7 +241,7 @@ func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIde
 		},
 	}
 	if hasArg {
-		tExpr, err := file.TypeASTExpression(resultType)
+		tExpr, err := file.TypeExpr(resultType)
 		if err != nil {
 			return nil, err
 		}

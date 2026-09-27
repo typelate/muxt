@@ -454,7 +454,10 @@ func (def Definition) Signature() *types.Signature        { return def.sig }
 func (def Definition) IsMethod() bool                     { return def.isMethod }
 func (def Definition) ResultShape() ResultShape           { return def.resultShape }
 func (def Definition) ResultStatusCode() StatusCodeSource { return def.resultStatusCode }
-func (def Definition) UsesSignals() bool                  { return def.usesSignals }
+
+// ResultDataType is the type of the template data's Result field.
+func (def Definition) ResultDataType() source.Type { return source.NewType(def.resultDataType()) }
+func (def Definition) UsesSignals() bool           { return def.usesSignals }
 
 func (def Definition) IsIndex() bool {
 	p := def.Path()
