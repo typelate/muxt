@@ -776,7 +776,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			nestedArg := args[i]
 			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
 				const bodyValueIdent = "bodyValue"
-				decodeStatements, err := decodeJSONBodyStatements(file, bodyValueIdent, nestedArg.ParamType, parseErrBlock)
+				decodeStatements, err := decodeJSONBodyStatements(file, bodyValueIdent, nestedArg.ParamType(), parseErrBlock)
 				if err != nil {
 					return nil, err
 				}
@@ -831,13 +831,13 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					parsed[name] = struct{}{}
 					switch name {
 					case muxt.TemplateNameScopeIdentifierForm:
-						declareFormVar, err := formVariableAssignment(file, arg, argument.ParamType)
+						declareFormVar, err := formVariableAssignment(file, arg, argument.ParamType())
 						if err != nil {
 							return nil, err
 						}
 						statements = append(statements, callParseForm(file), declareFormVar)
 					case muxt.TemplateNameScopeIdentifierMultipart:
-						declareMultipartVar, err := multipartVariableAssignment(file, arg, argument.ParamType)
+						declareMultipartVar, err := multipartVariableAssignment(file, arg, argument.ParamType())
 						if err != nil {
 							return nil, err
 						}
@@ -860,14 +860,14 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 			switch {
 			case def.ArgumentIsPathParameter(name):
 				parsed[name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType, argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
+				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
 			case name == muxt.TemplateNameScopeIdentifierLastEventID:
 				parsed[name] = struct{}{}
-				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType, argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
+				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
@@ -888,7 +888,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				if argument.ScopeType() == nil {
 					return nil, fmt.Errorf("failed to determine type for %s", name)
 				}
-				pt, _ := file.TypeASTExpression(argument.ParamType)
+				pt, _ := file.TypeExpr(argument.ParamType())
 				at, _ := file.TypeASTExpression(argument.ScopeType())
 				return nil, fmt.Errorf("method expects type %s but %s is %s", astgen.Format(pt), arg.Name, astgen.Format(at))
 			}
@@ -909,7 +909,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 	const parsedVariableName = "value"
 	statements = append(statements, parseCall)
 
-	declareVar, err := formVariableDeclaration(file, arg, argument.ParamType)
+	declareVar, err := formVariableDeclaration(file, arg, argument.ParamType())
 	if err != nil {
 		return nil, err
 	}
@@ -918,9 +918,9 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 	for _, fb := range argument.FormFields() {
 		if fb.FileHeader {
 			if fb.Slice {
-				statements = append(statements, fileHeaderSliceAssignment(arg, fb.Field.Name(), fb.InputName))
+				statements = append(statements, fileHeaderSliceAssignment(arg, fb.Name, fb.InputName))
 			} else {
-				statements = append(statements, fileHeaderSingleAssignment(arg, fb.Field.Name(), fb.InputName))
+				statements = append(statements, fileHeaderSingleAssignment(arg, fb.Name, fb.InputName))
 			}
 			continue
 		}
@@ -929,14 +929,14 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 		if fb.Slice {
 			parseResult := func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Name)}},
 					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}, expr)},
+					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Name)}, expr)},
 				}
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, ast.NewIdent("val"), fb.Elem, fb.Method, validations, parseResult, parseErrBlock())
+			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, ast.NewIdent("val"), fb.Elem(), fb.Method, validations, parseResult, parseErrBlock())
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Name, err)
 			}
 			statements = append(statements, &ast.RangeStmt{
 				Key:   ast.NewIdent("_"),
@@ -948,15 +948,15 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 		} else {
 			parseResult := func(expr ast.Expr) ast.Stmt {
 				return &ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Field.Name())}},
+					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Name)}},
 					Tok: token.ASSIGN,
 					Rhs: []ast.Expr{expr},
 				}
 			}
 			str := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}}}
-			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, str, fb.Elem, fb.Method, validations, parseResult, parseErrBlock())
+			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, str, fb.Elem(), fb.Method, validations, parseResult, parseErrBlock())
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Field.Name(), err)
+				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Name, err)
 			}
 			if len(parseStatements) > 1 {
 				statements = append(statements, &ast.BlockStmt{
@@ -1051,8 +1051,8 @@ func wrapInMultipartFormNotNil(stmt ast.Stmt) ast.Stmt {
 	}
 }
 
-func formVariableDeclaration(file *File, arg *ast.Ident, tp types.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeASTExpression(tp)
+func formVariableDeclaration(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
+	typeExp, err := file.TypeExpr(tp)
 	if err != nil {
 		return nil, err
 	}
@@ -1069,8 +1069,8 @@ func formVariableDeclaration(file *File, arg *ast.Ident, tp types.Type) (*ast.De
 	}, nil
 }
 
-func formVariableAssignment(file *File, arg *ast.Ident, tp types.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeASTExpression(tp)
+func formVariableAssignment(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
+	typeExp, err := file.TypeExpr(tp)
 	if err != nil {
 		return nil, err
 	}
@@ -1114,12 +1114,16 @@ func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
 // errBlock, which callers supply so the failure can be handled differently per
 // context (normal handlers accumulate into the template data; SSE handlers
 // respond 400 before establishing the stream).
-func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr, valueType types.Type, method muxt.UnmarshalMethod, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
+func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr, valueType source.Type, method muxt.UnmarshalMethod, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
+	typeExpr, err := file.TypeExpr(valueType)
+	if err != nil {
+		return nil, err
+	}
 	// convert wraps the parsed value in a conversion to the target basic type
 	// for the strconv functions that return a wider type (ParseInt/ParseUint).
 	convert := func(exp ast.Expr) ast.Stmt {
 		return assignment(&ast.CallExpr{
-			Fun:  ast.NewIdent(valueType.(*types.Basic).Name()),
+			Fun:  typeExpr,
 			Args: []ast.Expr{exp},
 		})
 	}
@@ -1163,7 +1167,6 @@ func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr
 		}}, validations, []ast.Stmt{assignment(ast.NewIdent(tmp))})
 		return statements, nil
 	case muxt.UnmarshalTextUnmarshaler:
-		tp, _ := file.TypeASTExpression(valueType)
 		return []ast.Stmt{
 			&ast.DeclStmt{
 				Decl: &ast.GenDecl{
@@ -1171,7 +1174,7 @@ func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr
 					Specs: []ast.Spec{
 						&ast.ValueSpec{
 							Names: []*ast.Ident{ast.NewIdent(tmp)},
-							Type:  tp,
+							Type:  typeExpr,
 						},
 					},
 				},
@@ -1203,8 +1206,7 @@ func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr
 			assignment(ast.NewIdent(tmp)),
 		}, nil
 	default:
-		tp, _ := file.TypeASTExpression(valueType)
-		return nil, fmt.Errorf("unsupported type: %s", astgen.Format(tp))
+		return nil, fmt.Errorf("unsupported type: %s", astgen.Format(typeExpr))
 	}
 }
 
@@ -1304,8 +1306,8 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape
 //
 //	var bodyValue T
 //	if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { <parseErrBlock> }
-func decodeJSONBodyStatements(file *File, valueIdent string, paramType types.Type, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
-	typeExpr, err := file.TypeASTExpression(paramType)
+func decodeJSONBodyStatements(file *File, valueIdent string, paramType source.Type, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+	typeExpr, err := file.TypeExpr(paramType)
 	if err != nil {
 		return nil, err
 	}
@@ -1443,8 +1445,8 @@ func callParseMultipartForm(file *File, config RoutesFileConfiguration, errBlock
 
 // multipartVariableAssignment emits `var <arg> <Type> = request.MultipartForm`
 // for raw-mode multipart binding.
-func multipartVariableAssignment(file *File, arg *ast.Ident, tp types.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeASTExpression(tp)
+func multipartVariableAssignment(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
+	typeExp, err := file.TypeExpr(tp)
 	if err != nil {
 		return nil, err
 	}

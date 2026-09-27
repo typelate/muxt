@@ -17,7 +17,7 @@ import (
 type Argument struct {
 	Identifier string
 	Type       ArgumentType
-	ParamType  types.Type
+	paramType  types.Type
 
 	template *template.Template
 
@@ -74,6 +74,9 @@ func (a Argument) IsMethod() bool { return a.isMethod }
 // Arguments returns the hydrated arguments of a nested call argument.
 func (a Argument) Arguments() []Argument { return a.args }
 
+// ParamType is the type of the parameter the argument is passed to.
+func (a Argument) ParamType() source.Type { return source.NewType(a.paramType) }
+
 // ResultShape classifies a nested call argument's results.
 func (a Argument) ResultShape() ResultShape { return a.resultShape }
 
@@ -85,10 +88,10 @@ func (a Argument) Template() *template.Template { return a.template }
 // CallbackSignature returns a render-callback argument's function signature
 // (from its parameter type), or nil if the parameter type is not a function.
 func (a Argument) CallbackSignature() *types.Signature {
-	if a.ParamType == nil {
+	if a.paramType == nil {
 		return nil
 	}
-	sig, _ := a.ParamType.Underlying().(*types.Signature)
+	sig, _ := a.paramType.Underlying().(*types.Signature)
 	return sig
 }
 
@@ -234,14 +237,14 @@ func recordPathValueTypes(def *Definition, checker Checker, args []Argument, see
 				continue
 			}
 			seen[arg.Identifier] = true
-			if isStringAssignable(arg.ParamType) {
+			if isStringAssignable(arg.paramType) {
 				continue
 			}
 			for i := range def.Segments {
 				segment := &def.Segments[i]
 				if segment.IsWildcard() && segment.value == arg.Identifier {
-					segment.tp = arg.ParamType
-					segment.textMarshaler = checker.TextMarshaler(arg.ParamType)
+					segment.tp = arg.paramType
+					segment.textMarshaler = checker.TextMarshaler(arg.paramType)
 				}
 			}
 		}
@@ -483,7 +486,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 				args = append(args, Argument{
 					Identifier: TemplateNameScopeIdentifierRequestBody,
 					Type:       ArgumentTypeRequestBodyJSON,
-					ParamType:  paramType,
+					paramType:  paramType,
 				})
 				continue
 			}
@@ -498,7 +501,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 			args = append(args, Argument{
 				Identifier:  name,
 				Type:        ArgumentTypeCall,
-				ParamType:   paramType,
+				paramType:   paramType,
 				sig:         nestedSig,
 				isMethod:    nestedIsMethod,
 				args:        nestedArgs,
@@ -649,7 +652,7 @@ func typeQualifier(receiverPkg *types.Package) types.Qualifier {
 func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident, param types.Type, qual types.Qualifier) (Argument, error) {
 	a := Argument{
 		Identifier: arg.Name,
-		ParamType:  param,
+		paramType:  param,
 	}
 	switch arg.Name {
 	case TemplateNameScopeIdentifierContext:
@@ -740,8 +743,8 @@ func bindScopeValue(a *Argument, checker Checker, qual types.Qualifier) error {
 		return err
 	}
 	a.scopeType = at
-	if !types.AssignableTo(at, a.ParamType) {
-		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(a.ParamType, qual), a.Identifier, types.TypeString(at, qual))
+	if !types.AssignableTo(at, a.paramType) {
+		return fmt.Errorf("method expects type %s but %s is %s", types.TypeString(a.paramType, qual), a.Identifier, types.TypeString(at, qual))
 	}
 	a.direct = true
 	return nil
@@ -819,8 +822,8 @@ func checkRequestBodyParameter(a *Argument, checker Checker, qual types.Qualifie
 		return err
 	}
 	a.scopeType = readerType
-	if !types.Identical(a.ParamType, readerType) {
-		return fmt.Errorf("%s parameter must have type io.Reader, got %s", TemplateNameScopeIdentifierRequestBody, types.TypeString(a.ParamType, qual))
+	if !types.Identical(a.paramType, readerType) {
+		return fmt.Errorf("%s parameter must have type io.Reader, got %s", TemplateNameScopeIdentifierRequestBody, types.TypeString(a.paramType, qual))
 	}
 	a.direct = true
 	return nil

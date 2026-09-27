@@ -40,6 +40,19 @@ func newFile(pkg source.Package) *File {
 // OutputPackage is the package the generated file is written into.
 func (file *File) OutputPackage() source.Package { return file.pkg }
 
+// TypeExpr spells t as the generated file refers to it, importing what it
+// needs.
+func (file *File) TypeExpr(t source.Type) (ast.Expr, error) {
+	return parser.ParseExpr(t.Format(file.qualify))
+}
+
+func (file *File) qualify(pkgName, pkgPath string) string {
+	if pkgPath == file.pkg.Types.Path() {
+		return ""
+	}
+	return file.Import(pkgName, pkgPath)
+}
+
 func (file *File) TypeASTExpression(tp types.Type) (ast.Expr, error) {
 	s := types.TypeString(tp, file.pkgQualifier)
 	return parser.ParseExpr(s)
