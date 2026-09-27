@@ -50,13 +50,19 @@ func FuzzNewDefinition(f *testing.F) {
 		// intentionally not asserted here so the fuzzer keeps hunting
 		// for panics and inconsistent error paths.
 		_ = def.DefaultStatusCode()
-		// PathValueIdentifiers must not panic and must be unique.
+		// Wildcard segments must name unique path parameters.
 		seen := make(map[string]struct{})
-		for _, id := range def.PathValueIdentifiers() {
-			if _, dup := seen[id]; dup {
-				t.Fatalf("duplicate path value identifier %q in %q", id, name)
+		for _, segment := range def.Segments {
+			if segment.Kind() == SegmentKindUnknown {
+				t.Fatalf("segment of unknown kind %q in %q", segment.Value(), name)
 			}
-			seen[id] = struct{}{}
+			if !segment.IsWildcard() {
+				continue
+			}
+			if _, dup := seen[segment.Value()]; dup {
+				t.Fatalf("duplicate path value identifier %q in %q", segment.Value(), name)
+			}
+			seen[segment.Value()] = struct{}{}
 		}
 	})
 }

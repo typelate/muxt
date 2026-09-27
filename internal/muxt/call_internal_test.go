@@ -138,19 +138,19 @@ func TestPeelRepresentationWrapper(t *testing.T) {
 
 func TestRewriteSignalsArguments(t *testing.T) {
 	for _, tt := range []struct {
-		expr           string
-		pathValueNames []string
-		want           string
-		rewritten      bool
+		expr      string
+		segments  []Segment
+		want      string
+		rewritten bool
 	}{
 		{expr: `Save(ctx, signals)`, want: `Save(ctx, unmarshalJSON(body))`, rewritten: true},
 		{expr: `sse(Search(ctx, signals, sseResults))`, want: `sse(Search(ctx, unmarshalJSON(body), sseResults))`, rewritten: true},
 		{expr: `Save(ctx, form)`, want: `Save(ctx, form)`},
-		{expr: `Show(ctx, signals)`, pathValueNames: []string{"signals"}, want: `Show(ctx, signals)`},
+		{expr: `Show(ctx, signals)`, segments: []Segment{newSegment("{signals}")}, want: `Show(ctx, signals)`},
 	} {
 		t.Run(tt.expr, func(t *testing.T) {
 			call := mustParseCall(t, tt.expr)
-			rewritten := rewriteSignalsArguments(call, tt.pathValueNames)
+			rewritten := rewriteSignalsArguments(call, tt.segments)
 			if rewritten != tt.rewritten {
 				t.Errorf("rewriteSignalsArguments(%q) = %t, want %t", tt.expr, rewritten, tt.rewritten)
 			}

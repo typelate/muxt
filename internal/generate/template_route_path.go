@@ -8,7 +8,6 @@ import (
 	"go/token"
 	"go/types"
 	"strconv"
-	"strings"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -84,15 +83,9 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		return indexRoutePath(file, config, method, methodReceiverName, usesEscaper, usesSegmentsEscaper)
 	}
 
-	templatePath, hasDollarSuffix := strings.CutSuffix(def.Path(), "{$}")
-	segmentStrings := strings.Split(templatePath, "/")
 	var (
 		fields []*ast.Field
 		last   types.Type
-
-		identIndex = 0
-
-		segmentIdentifiers = def.PathValueIdentifiers()
 	)
 
 	hasErrorResult := false
@@ -105,34 +98,30 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 			astgen.String("/"),
 		),
 	}
-	for si, segment := range segmentStrings {
-		if len(segment) < 1 {
-			continue
-		}
-		if segment[0] != '{' || segment[len(segment)-1] != '}' {
+	for i, segment := range def.Segments {
+		// si numbers the segment as the path splits on "/", with the empty
+		// segment before the leading "/" at 0.
+		si := i + 1
+		if segment.IsLiteral() {
 			if len(segmentExpressions) > 0 {
 				prev := segmentExpressions[len(segmentExpressions)-1]
 				if prevBasic, ok := prev.(*ast.BasicLit); ok {
 					prevVal, _ := strconv.Unquote(prevBasic.Value)
-					prevBasic.Value = strconv.Quote(prevVal + "/" + segment)
+					prevBasic.Value = strconv.Quote(prevVal + "/" + segment.Value())
 					continue
 				}
 			}
 			segmentExpressions = append(segmentExpressions, &ast.BasicLit{
 				Kind:  token.STRING,
-				Value: strconv.Quote(segment),
+				Value: strconv.Quote(segment.Value()),
 			})
 			continue
 		}
 
-		name := segmentIdentifiers[identIndex]
+		name := segment.Value()
 		ident := pathParamIdent(name)
-		wildcard := si == len(segmentStrings)-1 && isWildcardSegment(segment)
-		pathValueType, ok := def.ArgumentType(name)
-		identIndex++
-		if !ok {
-			pathValueType = types.Universe.Lookup("string").Type()
-		}
+		wildcard := segment.IsRemainder()
+		pathValueType := segment.Type()
 		tpNode, err := file.TypeASTExpression(pathValueType)
 		if err != nil {
 			return nil, false, false, err
@@ -151,7 +140,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		summer.Write([]byte(def.Name()))
 		pathHash := hex.EncodeToString(summer.Sum(nil))
 
-		if def.PathValueTextMarshaler(name) {
+		if segment.TextMarshaler() {
 			hasErrorResult = true
 			if len(method.Type.Results.List) == 1 {
 				method.Type.Results.List = append(method.Type.Results.List, &ast.Field{
@@ -229,7 +218,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		},
 		Args: segmentExpressions,
 	})
-	if hasDollarSuffix {
+	if def.HasPathEndWildcard() {
 		returnStmt = &ast.BinaryExpr{
 			X:  returnStmt,
 			Op: token.ADD,
@@ -268,13 +257,6 @@ func indexRoutePath(file *File, config RoutesFileConfiguration, method *ast.Func
 		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
 	}
 	return method, usesEscaper, usesSegmentsEscaper, nil
-}
-
-// isWildcardSegment reports whether segment is a {name...} pattern; only the
-// trailing segment of a pattern may be one, and its value names a path suffix
-// spliced without escaping.
-func isWildcardSegment(segment string) bool {
-	return strings.HasSuffix(strings.TrimSuffix(segment, "}"), "...")
 }
 
 // pathParamIdent names the generated local for a path parameter. The suffix
