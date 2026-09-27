@@ -1,46 +1,29 @@
-# Package layout
+# Package Layout
 
-Large Muxt applications converge on this structure:
+A muxt package past a few routes settles into this shape:
 
-```
+```text
 internal/hypertext/
-├── server.go                     # Server type, interface definitions
-├── template.go                   # Template config, custom functions, go:generate directive
-├── functions.go                  # Template function implementations
-├── template_data.go              # TemplateData method extensions
-├── errors.go                     # Domain errors with StatusCode() methods
-├── {domain}_*.go                 # Receiver method implementations (portfolio.go, security.go)
-├── {domain}_*.gohtml             # Route templates grouped by domain
-├── _*.gohtml                     # Shared partials (prefix convention)
-├── template_routes.go            # Generated: main orchestration, shared types
-├── *_template_routes_gen.go      # Generated with --output-multiple-files: per-source-file handlers
-├── *_test.go                     # Table-driven tests using counterfeiter fakes
-└── internal/fake/                # Generated: counterfeiter test doubles
-    ├── database.go
-    └── securities_provider.go
+├── server.go                  # Server type and the interfaces it depends on
+├── template.go                # templates variable, go:generate directive
+├── functions.go               # template functions
+├── template_data.go           # TemplateData method extensions
+├── errors.go                  # domain errors with StatusCode() methods
+├── portfolio.go               # receiver methods, one file per domain
+├── portfolio_list.gohtml      # route templates, prefixed by domain
+├── _header.gohtml             # shared partials, prefixed with _ (a bare-directory //go:embed skips them; use a glob or all:)
+├── template_routes.go         # generated
+├── portfolio_list_template_routes_gen.go   # generated with --output-multiple-files
+├── portfolio_test.go          # receiver tests against fakes, route tests through httptest
+└── internal/fake/             # counterfeiter fakes of the interfaces in server.go
 ```
 
-## File naming conventions
+| File | See |
+|------|-----|
+| `portfolio.go` | [Call Results](call-results.md) |
+| `template_data.go` | [Extend TemplateData](../how-to/extend-template-data.md) |
+| `functions.go` | [Template functions](../how-to/template-functions.md) |
+| `errors.go` | [Domain error status codes](../how-to/domain-error-status-codes.md) |
+| `portfolio_test.go` | [Structure a project for testing](../how-to/receiver-package-and-testing.md) |
 
-- `portfolio_list.gohtml`, `portfolio_edit.gohtml` — domain-grouped templates
-- `_header.gohtml`, `_navigation.gohtml` — shared partials (underscore prefix)
-- `portfolio.go` — receiver methods for portfolio routes
-- `portfolio_test.go` — tests for portfolio receivers
-
-## Separation of concerns
-
-| File | Holds |
-|------|-------|
-| `{domain}.go` | Business logic; methods return domain types |
-| `template_data.go` | Request-aware presentation logic ([how-to](../how-to/extend-template-data.md)) |
-| `*.gohtml` | HTML structure; calls to methods and template functions |
-| `functions.go` | Pure formatters and converters ([how-to](../how-to/template-functions.md)) |
-| `errors.go` | Domain errors with HTTP status semantics ([how-to](../how-to/domain-error-status-codes.md)) |
-
-## Generated code
-
-Muxt produces `template_routes.go` (shared types, route registration); with `--output-multiple-files` it additionally splits handlers into one `*_template_routes_gen.go` per source template file. Check generated files into version control and review them in code review — they're your code.
-
-## Testing
-
-Unit test receiver methods with fakes of the server's service interfaces (fast, isolated); integration test the generated routes with `httptest` (routing, status codes, HTML structure). The [testing how-to](../how-to/receiver-package-and-testing.md) covers the layout and the fake-vs-mock tradeoffs.
+Commit the generated files.

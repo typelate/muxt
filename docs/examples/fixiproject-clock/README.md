@@ -1,37 +1,26 @@
 # fixi + SSE Clock
 
-A server clock that streams the current time once a second over Server-Sent Events, rendered with [fixi](https://www.npmjs.com/package/the-fixi-project). It demonstrates the `sse(...)` template-name wrapper and the `lastEventID` parameter, with no third-party SSE library on either side.
+A clock that streams the time once a second over Server-Sent Events, rendered with [fixi](https://www.npmjs.com/package/the-fixi-project). It shows the [`sse(...)`](../../reference/call-parameters.md#server-sent-events) wrapper and a `{tz...}` wildcard route whose path helper escapes each segment. `Time` logs `lastEventID` and does not resume from it.
 
-## Run it
+## Run
 
 ```bash
 go generate ./...
 go run .
 ```
 
-Open [http://localhost:8080](http://localhost:8080). Set `PORT` to use a different port.
+Open http://localhost:8080. `PORT` overrides the port.
+
+## Read in this order
+
+1. [index.gohtml](index.gohtml): the `<body>` tag's `fx-*` attributes, which open the stream on load and swap each frame in, and an `fx:config` listener turning on `sseReconnect` and `ssePauseOnHidden`.
+2. [main.go](main.go): `Time`, looping on a ticker and calling the `execute` callback (`updateTime`) until the request context is cancelled or the callback returns an error.
+3. [main_test.go](main_test.go): per-segment escaping in the `InZone` path helper.
 
 ## Routes
 
-| Template name | Receiver method |
-|---------------|-----------------|
+| Template name | Method |
+|---|---|
 | `GET /{$} Index()` | `Index() string` |
 | `GET /time sse(Time(ctx, lastEventID, execute))` | `Time(context.Context, string, func(string) error)` |
-
-Wrapping the call in `sse(...)` makes `Time` an SSE handler. Muxt establishes the event stream, then hands the method a closure at the `execute` argument's position that renders the route template into one SSE frame per call. The method loops on a one-second ticker, calling the closure with each new timestamp until the request context is cancelled.
-
-`lastEventID` is bound from the `Last-Event-Id` request header — the value a browser replays when reconnecting a stream. See [Call Parameters](../../reference/call-parameters.md).
-
-## How fixi drives it
-
-The page loads the fixi script from a CDN, then wires the stream on the body:
-
-```html
-<body fx-action='{{.Path.Time}}' fx-trigger="fx:inited" fx-swap='innerHTML'>
-{{block `GET /time sse(Time(ctx, lastEventID, execute))` .}}
-    <time>{{.Result}}</time>
-{{end}}
-</body>
-```
-
-`fx-action='{{.Path.Time}}'` points at the `/time` route using the generated URL builder, so the link survives a route rename. `fx-trigger="fx:inited"` opens the stream as soon as fixi initialises, and each SSE frame replaces the body's inner HTML. A small `fx:config` listener turns on `sseReconnect` and `ssePauseOnHidden`.
+| `GET /zone/{tz...} InZone(tz)` | `InZone(string) (string, error)` |

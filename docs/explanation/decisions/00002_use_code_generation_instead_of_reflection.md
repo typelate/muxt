@@ -2,13 +2,11 @@
 
 ## Context
 
-I am superstitious about the potential performance costs incurred by a handler fully using reflection.
-I don't like how the entrypoint to a web-service is convoluted by reflection.
-I want a simple code file that I can easily read.
+I am superstitious about the performance cost of reflection, and I dislike a convoluted entry point to a web service. I want one code file I can read.
 
 ## Decision
 
-Re-write the package to generate a handler instead of using reflection.
+Rewrite the package to generate a handler instead of using reflection.
 
 ## Status
 
@@ -16,9 +14,8 @@ Decided
 
 ## Consequences
 
-I won't be able to use [jba/templatecheck](https://github.com/jba/templatecheck),
-so I will need to write my own template checker to get the safety of pre-execution template validation.
+[jba/templatecheck](https://github.com/jba/templatecheck) no longer fits, so muxt needs its own template checker.
 
-Reflection is unclear to read, but code that generates code can be even more convoluted — so muxt itself will become harder to iterate on.
+Code that generates code can be harder to read than reflection, so muxt itself becomes harder to iterate on.
 
-Testing `muxt` requires tests that run `go test` or `go build` and cannot just test an `http.Handler`.
+Testing muxt requires running `go test` or `go build` on generated output; testing an `http.Handler` directly is not enough.

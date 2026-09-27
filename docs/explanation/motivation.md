@@ -1,24 +1,18 @@
 # Motivation
 
-## The Problem I Actually Have
+The [manifesto](manifesto.md) states the principles.
 
-I'm not a huge fan of TypeScript or modern frontend frameworks. Partly it's a skill gap—I haven't invested the time to learn them deeply. But also, I don't want to.
+## The problem
 
-I want to ship features. I don't want to write boilerplate. I don't want an entire extra hand-rolled layer in my stack.
+I want to ship features without writing boilerplate or learning a frontend framework. Years in regulated environments, where every dependency update triggers a compliance review, taught me to take fewer dependencies.
 
-After years in regulated environments where every dependency update triggers compliance reviews, I've developed strong opinions about dependencies. Specifically: fewer is better.
+## htmx
 
-## HTMX Changed Things
+[htmx](https://htmx.org/) showed that a dynamic interface does not need a frontend framework: attributes on the HTML supply the interactivity.
 
-**[HTMX](http://htmx.org/)** showed me you don't need a frontend framework to build dynamic interfaces.
+## The server side was still boilerplate
 
-HTML is actually a pretty good interface. Browsers are good at rendering it. The problem was never HTML. The problem was the lack of interactivity without JavaScript frameworks.
-
-HTMX solved this by extending HTML with attributes. Want to fetch data? `hx-get="/data"`. Want to update part of the page? `hx-target="#result"`.
-
-## The Missing Piece
-
-HTMX handles the browser side. But server-side, I was still writing boilerplate:
+Every route looked like this:
 
 ```go
 func handleGetArticle(w http.ResponseWriter, r *http.Request) {
@@ -32,66 +26,16 @@ func handleGetArticle(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Multiply this by 50 routes and you're drowning in nearly identical functions.
+Fifty routes means fifty near-copies. [sqlc](https://sqlc.dev) showed the pattern for SQL; muxt declares the route in the template name and generates the handler.
 
-**sqlc** showed me the pattern: declare what you want (SQL queries), generate the boring, easy-to-read Go code.
+## Why not reflection
 
-Why not the same for HTTP handlers? Declare what you want (routes in templates), generate the boring code (handlers).
+The first version was a [reflection-based handler](https://github.com/typelate/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go). [Reflection is never clear](https://youtu.be/PAAkCSZUG1c?si=gT_ga16SMOKNshqp&t=922), and debugging it meant holding the runtime's behavior in your head. [Decision 2](decisions/00002_use_code_generation_instead_of_reflection.md) records the switch.
 
-## Why Not Just Use Reflection?
+## Why not an LLM
 
-[Initially `muxt` was written as a function to generate reflection-based handlers](https://github.com/typelate/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go).
+An LLM writes one handler well enough. Across a team, each person prompts differently and fifty handlers drift. A generator makes them identical, and improving it improves all of them.
 
-Then I tried to debug it.
+## The stack
 
-[Reflection is never clear](https://youtu.be/PAAkCSZUG1c?si=gT_ga16SMOKNshqp&t=922). You can step through it, but you still need to consider the runtime oddities (yes Go has those) and (dare I say) performance.
-You can't easily see what's happening. When it breaks, good luck figuring out why.
-
-Code generation produces code you can read. Code you can debug. Code you can modify if you *need* to.
-
-Go proverb: "Clear is better than clever."
-
-## Why Not Just Use LLMs?
-
-I've experimented with LLM prompts to generate handler boilerplate. It works for one-off generation.
-
-But it doesn't scale across a team.
-Claude Code is great — I've used it since early in muxt's development — but in team code reviews I noticed each of us interacts with the agent differently.
-Different prompts, different allow/ask settings, different iteration cycles, different generated code.
-There's no shared contract.
-How do you keep 50 handlers consistent when they were all generated separately by an LLM?
-A tool that standardizes an important interface in a piece of software is not a bad idea.
-
-Code generation from templates gives you consistency. Improve the generator, regenerate everything, done.
-
-## The Joy of Boring Code
-
-I **love** writing Go. It's a straightforward language that compiles to a single binary.
-
-It exposes developers to minimal runtime complexity. No package manager that downloads the internet. Just a binary that runs.
-
-Muxt generates boring Go code. No framework. No magic. Just functions that match templates to HTTP routes.
-
-This lets me focus on the interesting parts: the domain logic, the user experience, the actual problem I'm solving.
-
-## The Stack That Works
-
-My current stack (in prod):
-- **Go** for the server
-- **HTMX** for interactivity
-- **html/template** for rendering
-
-Locally I have these tools installed in most projects:
-- **sqlc** for database queries
-- **muxt** for routing
-- **counterfeiter** for test double generation
-
-This stack fits in my head. Each piece maps to steps in implementing a CRUD app. The pieces compose cleanly.
-
-I can hand this to a junior Go developer, and they'll understand it quickly. Try that with Node, Typescript, Next.js + React + Prisma + tRPC/Protobuf + Zod + ...
-
-## Time to Touch Grass
-
-I use `muxt` because it lets me write and understand code quickly, which means I spend less time debugging framework magic and more time building features.
-
-Or eating wild blackberries. 
+In production: Go, htmx and `html/template`. In most projects: sqlc for queries, muxt for routes and [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) for test doubles.

@@ -1,354 +1,62 @@
-# Template Name Syntax Reference
+# Template Name Syntax
 
-Complete specification for Muxt template naming.
+A template named in this shape becomes a route:
 
-## Syntax
-
-```
-[METHOD ][HOST]/PATH[ HTTP_STATUS][ CALL]
+```text
+[METHOD ][HOST]/PATH[ STATUS][ CALL]
 ```
 
-**All components:**
 ```gotmpl
 {{define "GET example.com/greet/{language} 200 Greeting(ctx, language)"}}{{end}}
-```
-
-**Minimal (path only):**
-```gotmpl
 {{define "/"}}{{end}}
 ```
 
-**Key rules:**
-- Templates without matching names are ignored (not an error) — except `HEAD`, which matches the pattern but is rejected with `HEAD method not allowed`
-- Path is required, all other components optional
-- Space-separated components, order matters
-- Uses Go 1.22+ `http.ServeMux` pattern matching
+| Component | Values | Default |
+|-----------|--------|---------|
+| METHOD | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | all methods |
+| HOST | any text before the first `/` | all hosts |
+| PATH | a `net/http` pattern starting with `/` | required |
+| STATUS | `201` or `http.StatusCreated` | `200` |
+| CALL | `Method(arg, ...)` | render with no call; dot is [TemplateData](call-results.md#templatedata) with an empty `.Result` |
 
-## Quick Reference Table
+Templates whose names do not match are ordinary templates. Any other all-caps word in the METHOD position, `HEAD` included, fails with `HEAD method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE`.
 
-| Component | Format | Example | Required |
-|-----------|--------|---------|----------|
-| METHOD | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `GET` | No |
-| HOST | `example.com` | `api.example.com` | No |
-| PATH | `/path/{param}` | `/user/{id}` | **Yes** |
-| STATUS | `200` or `http.StatusOK` | `201` | No |
-| CALL | `Method(args...)` | `GetUser(ctx, id)` | No |
+[tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt)
 
-## Path Patterns
+## Path
 
-### Basic Paths
+Muxt registers the METHOD, HOST and PATH text on an `http.ServeMux`, so [its pattern rules](https://pkg.go.dev/net/http#hdr-Patterns-ServeMux) apply.
 
 ```gotmpl
-{{define "GET /"}}{{end}}              <!-- Root -->
-{{define "GET /about"}}{{end}}         <!-- Static path -->
-{{define "GET /user/{id}"}}{{end}}     <!-- Path parameter -->
-{{define "GET /user/{id}/post/{postID}"}}{{end}}  <!-- Multiple parameters -->
+{{define "GET /{$}"}}{{end}}
+{{define "GET /user/{id}/post/{postID}"}}{{end}}
+{{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}
 ```
 
-[tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt)
+Muxt adds three rules. A path other than `/` may not contain an empty segment, a trailing `/` or `//` (`path has an empty segment`), so ServeMux's trailing-slash prefix matching is reachable only through `/`, which matches every path, or a `{name...}` wildcard. A wildcard name must be a Go identifier, unique within the path, and not one of `ctx`, `request`, `response`, `form`, `multipart`, `body`, `execute`, `lastEventID` (`path parameter name NAME conflicts with a reserved identifier`). The same pattern in two templates fails with `duplicate route pattern`.
 
-### Path Matching Modes
+[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) · [err_duplicate_pattern.txt](../../cmd/muxt/testdata/err_duplicate_pattern.txt)
+
+## Status
 
 ```gotmpl
-{{define "GET /{$}"}}{{end}}           <!-- Exact: "/" only, not "/foo" -->
-{{define "GET /static/"}}{{end}}       <!-- Prefix: "/static/", "/static/foo", "/static/foo/bar" -->
-{{define "GET /files/{path...}"}}{{end}}  <!-- Wildcard: captures "/files/a/b/c" as path="a/b/c" -->
+{{define "POST /user 201 CreateUser(ctx, form)"}}{{end}}
+{{define "GET /admin http.StatusUnauthorized"}}{{end}}
 ```
 
-**Note:** `/{$}` vs `/` behavior differs. Former is exact match, latter matches prefix.
-
-[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt)
-
-### Path Parameters Are Type-Safe
-
-```gotmpl
-{{define "GET /article/{id} GetArticle(ctx, id)"}}{{end}}
-```
-
-```go
-func (s Server) GetArticle(ctx context.Context, id int) (Article, error) {
-    // id auto-parsed from string → int
-    // Parse failure → 400 Bad Request (automatic)
-}
-```
-
-**Note:** Call arguments must use the path wildcard names; they bind to method parameters by position. Type conversion is automatic based on the method signature.
-
-[howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)
-
-## HTTP Methods
-
-```gotmpl
-{{define "GET /posts"}}{{end}}          <!-- Read -->
-{{define "POST /posts"}}{{end}}         <!-- Create -->
-{{define "PUT /posts/{id}"}}{{end}}     <!-- Replace -->
-{{define "PATCH /posts/{id}"}}{{end}}   <!-- Update -->
-{{define "DELETE /posts/{id}"}}{{end}}  <!-- Delete -->
-```
-
-**Without method prefix:** Matches all methods (GET, POST, PUT, PATCH, DELETE, etc.)
-
-[howto_patch_method.txt](../../cmd/muxt/testdata/howto_patch_method.txt)
-
-## Status Codes
-
-**Three formats:**
-
-```gotmpl
-{{define "POST /user 201 CreateUser(ctx, form)"}}{{end}}      <!-- Integer with method -->
-{{define "GET /admin http.StatusUnauthorized"}}{{end}}        <!-- Constant -->
-{{define "GET /error 400"}}{{end}}                             <!-- Integer -->
-```
-
-A template-name status code cannot be combined with a `response` argument —
-when your method writes the response itself, muxt cannot also set the status,
-and generation fails.
-
-**Status code precedence** (first non-zero wins, highest to lowest):
-1. Template `.StatusCode(int)` call
-2. Error status: `400` on a parse/path/form error, `500` when the method returns a non-nil error
-3. Result type `StatusCode()` method, else result type `StatusCode` field
-4. Template-name code (shown above), else `200` — or `204` when the rendered body is empty
-
-A returned error is always `500`; the error's own methods are not consulted. To return another code for a failure, set it in the template with `.StatusCode`. Use the template name for static codes (`201` for POST). Full precedence and examples: [Call Results](call-results.md#status-code-control).
+The name sets the default; [Call Results](call-results.md#status-code-control) lists what overrides it. A status in the name plus a `response` argument fails generation.
 
 [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
-## Call Expressions
-
-### Syntax
-
-```
-MethodName(arg1, arg2, ...)
-```
-
-Arguments are comma-separated identifiers or nested calls (the call is parsed
-with Go's expression parser, so Go spacing rules apply).
-
-### Parameter Sources
-
-| Parameter Name | Type | Source | Auto-parsed |
-|----------------|------|--------|-------------|
-| `ctx` | `context.Context` | `request.Context()` | N/A |
-| `request` | `*http.Request` | Direct | N/A |
-| `response` | `http.ResponseWriter` | Direct | N/A |
-| `form` | struct or `url.Values` | `request.Form` (after `ParseForm`) | Yes |
-| `multipart` | struct or `*multipart.Form` | `request.MultipartForm` (after `ParseMultipartForm`) | Yes |
-| `execute` | `func(T) error` or `func() error` | render callback (see below) | N/A |
-| `lastEventID` | Any parseable | `request.Header.Get("Last-Event-Id")` | Yes |
-| Path param | Any parseable | `request.PathValue(name)` | Yes |
-
-These names (plus path parameters) are the only identifiers allowed as call
-arguments — anything else fails generation with `unknown argument`. Individual
-form fields cannot be passed as arguments; bind them through `form` or
-`multipart`.
-
-`form` and `multipart` are mutually exclusive in the same call site. `form`
-binds `request.Form`: URL query parameters and, on POST/PUT/PATCH, the
-`application/x-www-form-urlencoded` body. Use `multipart` for routes that
-handle `multipart/form-data` (file uploads, etc.).
-In struct-binding mode, `multipart` additionally supports
-`*multipart.FileHeader` and `[]*multipart.FileHeader` fields, sourced from
-`request.MultipartForm.File`. The default `maxMemory` for `ParseMultipartForm`
-is 32 MiB; override with the `--output-multipart-max-memory=<size>` generator
-flag (e.g. `64MB`, `128MiB`). Per `mime/multipart`'s standard semantics,
-upload data exceeding `maxMemory` spills to the OS temp directory.
-
-`execute` is the render callback. Instead of muxt rendering the template after
-the method returns, muxt passes a closure into the method at `execute`'s
-position and the method decides when (and whether) to render. The method param
-must be `func(T) error` — `T` becomes `.Result` in the template — or
-`func() error` (then `T` is `struct{}`). A method using `execute` must return
-only `error`. Because the receiver controls when the closure runs, you can
-render while holding a lock so the template observes a consistent snapshot of
-state. If the callback is never invoked the response body is empty and muxt
-returns `204 No Content`.
-
-To stream **Server-Sent Events**, wrap the whole method call in `sse`, as in
-`sse(Stream(ctx, execute))`:
+## Call
 
 ```gotmpl
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{.Result}}{{end}}
+{{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}
+{{define "POST /login Login(ctx, form)"}}{{end}}
+{{define "GET /api/user marshalJSON(GetUser(ctx))"}}{{end}}
+{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{end}}
 ```
 
-Inside the wrapper, `execute` is the event-render callback. The handler first
-establishes an event stream (`Content-Type: text/event-stream`, initial flush)
-and the method may call the closure many times — once per event. The param must
-be `func(T) error` (`T` becomes `.Result`) or `func() error`. Each call renders
-the route's template into a pooled buffer and writes one SSE frame, then
-flushes. The method returns nothing or only `error` (a returned error is logged
-and closes the stream). An sse route cannot use a `response` argument. The
-template data is an `SSETemplateData` value: alongside `.Result`, `.Request`,
-and `.Err` it exposes chainable `.Event`, `.ID`, and `.Retry` setters for the
-SSE frame fields. When the method is not defined on the receiver, muxt
-synthesizes the callback as `func(any) error`.
+The call is parsed as a Go expression. [Call Parameters](call-parameters.md) lists every argument and the `sse`, `unmarshalJSON` and `unmarshalForm` wrappers. [Call Results](call-results.md) covers what the method may return and the [`marshalJSON`](call-results.md#json-responses) wrapper.
 
-An sse route may take **additional `sse`-prefixed callbacks** —
-`sse(Events(sseClock, execute, sseMetrics))`. Each gets its own closure in
-the method call and renders a different template: `execute` renders the
-route's own template, while a prefixed callback renders the template named
-exactly after the argument (`sseClock` renders `{{define "sseClock"}}`). Those
-templates must exist at generate time. Each callback has its own result type and
-builds its own `SSETemplateData`, so they need not share a `T`. The order of
-these callback arguments within the call doesn't matter — but this is true of
-sse callbacks only. Everywhere else, arguments bind to the method's parameters
-by position, so reordering `form` or `ctx` past a callback binds the wrong
-parameter.
-
-Under `--output-datastar` each event is instead framed with
-[Datastar](https://data-star.dev)'s patch-elements protocol: the event name is
-fixed to `datastar-patch-elements` (there is no `.Event` setter), the
-chainable `.Selector`, `.Mode`, and `.UseViewTransition` setters become the
-patch option lines, and each rendered line is written as a `data: elements`
-line. The flag also enables the `signals` argument, shorthand for
-`unmarshalJSON(body)`, which decodes the signal state Datastar sends as the
-JSON request body — and `Signals`-suffixed callbacks, for example
-`countsSignals func(T) error`, which marshal their argument as a
-`datastar-patch-signals` event so a stream can update client signals
-alongside element patches. The
-text before the suffix is only a label; muxt never derives an identifier
-from it.
-
-[reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) · [err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)
-
-The wrapper form requires exactly one method call inside the parentheses. If
-`sse` names a package-level function in your package, `sse()` as a route's call
-is an ordinary function call, not an event stream.
-
-[reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)
-
-The `execute` and SSE callback parameters may be a **named or aliased func
-type** — `type RenderFunc func(T) error` or `type RenderFunc = func(T) error` —
-not only an inline `func(T) error`. Muxt resolves the underlying signature, so
-`T` is read from it the same way.
-
-[reference_callback_named_func_type.txt](../../cmd/muxt/testdata/reference_callback_named_func_type.txt)
-
-`lastEventID` reads the `Last-Event-Id` request header — the value a browser
-replays when reconnecting an SSE stream — and parses it to the method param type
-like a path value (`string` by default, or any parseable type). Because
-`lastEventID` is a reserved identifier, it cannot be used as a path wildcard
-name.
-
-**Parseable types:** `string`, `int*`, `uint*`, `bool`, `encoding.TextUnmarshaler`
-
-### Examples
-
-```gotmpl
-{{define "GET /profile Profile(ctx)"}}{{end}}
-{{define "POST /login Login(ctx, form)"}}{{end}}  <!-- Form binding -->
-{{define "POST /users CreateUser(ctx, unmarshalJSON(body))"}}{{end}}  <!-- JSON body binding -->
-{{define "POST /hooks Save(ctx, body)"}}{{end}}  <!-- Raw body stream -->
-{{define "GET /api/user marshalJSON(GetUser(ctx))"}}{{end}}  <!-- JSON response -->
-{{define "GET /user/{id} GetUser(ctx, id)"}}{{end}}  <!-- Path param -->
-{{define "GET /user/{userID}/post/{postID} GetPost(ctx, userID, postID)"}}{{end}}  <!-- Multiple path params -->
-{{define "POST /upload Upload(ctx, response, request)"}}{{end}}  <!-- HTTP primitives -->
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{end}}  <!-- Server-Sent Events -->
-```
-
-Call arguments bind to method parameters by position. Argument names must be
-reserved identifiers or path parameter names (case-sensitive); the method's own
-parameter names don't need to match them.
-
-[howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) · [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) · [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) · [reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt) · [reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)
-
-## Host Matching
-
-```gotmpl
-{{define "api.example.com/v1/users ListUsers(ctx)"}}{{end}} <!-- Specific host -->
-{{define "admin.example.com/ AdminHome(ctx)"}}{{end}}       <!-- Admin subdomain -->
-{{define "example.com/{$} Home(ctx)"}}{{end}}               <!-- Exact host + path -->
-```
-
-Host patterns enable multi-tenant apps or API versioning by subdomain. Omit host to match all.
-
-## Common Patterns
-
-**REST resources:**
-```gotmpl
-{{define "GET /posts ListPosts(ctx)"}}{{end}}
-{{define "POST /posts 201 CreatePost(ctx, form)"}}{{end}}
-{{define "GET /posts/{id} GetPost(ctx, id)"}}{{end}}
-{{define "PUT /posts/{id} UpdatePost(ctx, id, form)"}}{{end}}
-{{define "DELETE /posts/{id} 204 DeletePost(ctx, id)"}}{{end}}
-```
-
-**Nested resources:**
-```gotmpl
-{{define "GET /users/{userID}/posts/{postID} GetUserPost(ctx, userID, postID)"}}{{end}}
-```
-
-**File serving:**
-```gotmpl
-{{define "GET /static/ ServeStatic(response, request)"}}{{end}}
-```
-
-**Wildcards for paths:**
-```gotmpl
-{{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}  <!-- path captures "a/b/c.txt" -->
-```
-
-[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt)
-
-## Go 1.22+ ServeMux Behavior
-
-Muxt uses `http.ServeMux` pattern matching ([docs](https://pkg.go.dev/net/http#hdr-Patterns-ServeMux)):
-
-- `"/index.html"` — path only, any host/method
-- `"GET /static/"` — method + path prefix
-- `"example.com/"` — host + any path
-- `"example.com/{$}"` — host + exact path "/"
-- `"/b/{bucket}/o/{name...}"` — segments + wildcard
-
-**Precedence:** Most specific pattern wins. `GET /posts/{id}` beats `/posts/{id}` beats `/{path...}`.
-
-## Formal Grammar (BNF)
-
-```bnf
-<route>        ::= [<method> " "] [<host>] <path> [" " <status>] [" " <call-expr>]
-<method>       ::= "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
-<host>         ::= <hostname> | <ipv4>
-<path>         ::= "/" [<segment> [<path>] ["/"]]
-<status>       ::= <integer> | "http.Status" <identifier>
-<call-expr>    ::= <call>
-<call>         ::= <identifier> "(" [<arg> {"," <arg>}] ")"
-<arg>          ::= <identifier> | <call>
-<identifier>   ::= <letter> {<letter> | <digit> | "_"}
-```
-
-**Notes:** Path segments may include `{param}` or `{param...}`. Unreserved chars: `[a-zA-Z0-9-_.~]`.
-Wrappers like `sse(Stream(ctx, execute))` and `marshalJSON(GetUser(ctx))` are
-not separate productions — they are ordinary `<call>` syntax whose names are
-recognized semantically at the outermost position (each takes exactly one
-`<call>` argument).
-
-## Test Files by Category
-
-**Basics:**
-- [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt) — GET with no params
-- [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) — Path parameters
-- [howto_patch_method.txt](../../cmd/muxt/testdata/howto_patch_method.txt) — PATCH method
-
-**Path patterns:**
-- [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) — `/{$}` exact match
-- [reference_path_prefix.txt](../../cmd/muxt/testdata/reference_path_prefix.txt) — Prefix matching
-
-**Call expressions:**
-- [howto_call_method.txt](../../cmd/muxt/testdata/howto_call_method.txt) — Basic call
-- [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt) — Multiple args
-- [howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt) — `ctx` parameter
-- [howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt) — Path param parsing
-
-**Status codes:**
-- [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) — Various status patterns
-
-**Forms:**
-- [howto_form_with_struct.txt](../../cmd/muxt/testdata/howto_form_with_struct.txt) — Struct form binding
-
-**Complete apps:**
-- [tutorial_blog_example.txt](../../cmd/muxt/testdata/tutorial_blog_example.txt) — Full blog application
-
-**Error cases:**
-- [err_duplicate_pattern.txt](../../cmd/muxt/testdata/err_duplicate_pattern.txt) — Duplicate route pattern
-
-**Browse all:** [cmd/muxt/testdata/](../../cmd/muxt/testdata/)
+[howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt)

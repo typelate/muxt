@@ -1,150 +1,80 @@
 # CLI Reference
 
-Complete specification for the `muxt` command-line interface.
-
-muxt loads Go packages the way the `go` command does and inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
-
-`MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true` silences the per-route warning `muxt generate` prints when a route's method takes the `response` argument (the escape hatch that makes the method responsible for the whole response).
-
-## Quick Reference
-
-| Command | Purpose | Common Flags |
-|---------|---------|--------------|
-| `generate` | Generate HTTP handlers from templates | `--use-receiver-type`, `--output-routes-func-with-logger-param`, `--output-file` |
-| `check` | Type-check templates without generating | `--use-templates-variable`, `--verbose` |
-| `list-template-callers` | List callers of a template | `--match`, `--format` |
-| `list-template-calls` | List templates called by a template | `--match`, `--format` |
-| `explore-module` | List every muxt package in the module | `--format` |
-| `generate-fake-server` | Generate a fake-server `main.go` for exploring routes | `--output` |
-| `test-template-mutations` | Vary template actions and report the ones no test catches | `--template-pattern`, `--run`, `--diff`, `--format` |
-| `version` | Print muxt version | `-v, --verbose` |
-| _(no subcommand)_ | Print a routes overview for the working directory | `--format`, `--use-templates-variable`, `--use-receiver-type` |
-
-## Flag Categories
-
-Muxt flags fall into two categories:
-
-- **Use Flags** (`--use-*`) — Specify what to use from your existing code
-- **Output Flags** (`--output-*`) — Control the generated code
+`muxt` loads the working directory's package like the `go` command, honoring `GOWORK`, `GOFLAGS`, and `GOROOT`. Failures print to stderr and exit `1`.
 
 ## Commands
 
-### `muxt generate`
+| Command | Aliases | Does |
+|---|---|---|
+| [`generate`](commands/generate.md) | `gen`, `g` | Write the routes file. |
+| [`check`](commands/check.md) | `c` | Type-check each template against the data it receives. |
+| [`list-template-callers`](commands/list-template-callers.md) | `callers` | List what renders each template. |
+| [`list-template-calls`](commands/list-template-calls.md) | `calls` | List the `{{template}}` calls each template makes. |
+| [`explore-module`](commands/explore-module.md) | `explore` | List every muxt package in the module. |
+| [`generate-fake-server`](commands/generate-fake-server.md) | | Write a fake server for browsing routes. |
+| [`test-template-mutations`](commands/test-template-mutations.md) | | Report template actions no test catches. |
+| [`version`](commands/version.md) | `v` | Print the version. |
+| `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |
 
-Generates type-safe HTTP handlers from HTML templates.
+`muxt` with no subcommand prints the package's routes and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods:
 
-**Aliases:** `gen`, `g`
-
-**Output:**
-- Default (single-file mode): `template_routes.go` — All routes in one file
-- With `--output-multiple-files`: `template_routes.go` + `*_template_routes_gen.go` per source file
-
-```bash
-muxt generate --use-receiver-type=App --output-routes-func-with-logger-param
-```
-
-Full flag tables (use, output, and deprecated flags), automatic file
-cleanup, generated function signatures, and logging behavior:
-[`muxt generate`](commands/generate.md). The command also accepts
-`-v, --verbose` for debug output during generation.
-
----
-
-### `muxt check`
-
-Type-check templates without generating code. Use in CI or during development.
-
-**Aliases:** `c`
-
-```bash
-muxt check --verbose
-```
-
-Flags, verbose output, and CI usage: [`muxt check`](commands/check.md).
-[type-checking.md](type-checking.md) explains how type checking works.
-
----
-
-### `muxt version`
-
-Print muxt version. Use `-v` for verbose output including Go version.
-
-**Aliases:** `v`
-
-```bash
-muxt version
-muxt version -v  # Shows Go version used to compile muxt
-```
-
-#### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-v, --verbose` | bool | `false` | Show Go version used to compile muxt. |
-
----
-
-### `muxt` (no subcommand)
-
-Prints an overview of the working directory's package: its template routes (with method calls) and the registered template functions.
-
-```bash
-muxt
-muxt --format json
-```
-
-**Flags:** `--format` (`text` or `json`), `--use-templates-variable`, `--use-receiver-type`, `--use-receiver-type-package`, `-v, --verbose`.
-
-```
+```text
 Template Routes:
-  - GET /fruits/{id}/edit GetFormEditRow(id)
   - GET /{$} List(ctx)
 
 Template Functions:
-  - func printf(format string, a ...any) string
 ```
 
----
+## Flags
 
-## Global Flags
+`--use-*` flags name code muxt reads. `--output-*` flags shape code `generate` writes. Single-command flags (`--match`, `-o`, the mutation flags) are on that command's page.
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-C, --change-directory` | string | _(current dir)_ | Change directory before running command. |
+| Flag | Default | Description |
+|---|---|---|
+| `-C, --change-directory` | | Change directory before running. Accepted anywhere on the line. |
+| `--use-templates-variable` | `templates` | Package-level `*template.Template` variable. Repeatable ([templates-variable.md](templates-variable.md#multiple-template-variables)). Not accepted by `explore-module`, `generate-fake-server`, or `version`. |
+| `--use-receiver-type` | | Type whose method signatures give each call its parameter and result types ([type resolution](call-parameters.md#type-resolution)). Accepted by the root command and `generate`; `check` reads it from the generated file. |
+| `--use-receiver-type-package` | current package | Import path that holds `--use-receiver-type`. Accepted by the root command and `generate`. |
+| `--format` | `text` | `text` or `json`. Accepted by the root command, `explore-module`, the list commands, and `test-template-mutations`. |
+| `-v, --verbose` | `false` | More output; each command page says what. Accepted by the root command, `generate`, `check`, `version`, and `test-template-mutations`. |
 
 ```bash
 muxt -C ./web generate --use-receiver-type=Server
 ```
 
----
+### `generate` output flags
 
-## Exit Codes
+| Flag | Default | Description |
+|---|---|---|
+| `--output-file` | `template_routes.go` | File to write. |
+| `--output-routes-func` | `TemplateRoutes` | Function that registers handlers on an `*http.ServeMux`. |
+| `--output-receiver-interface` | `RoutesReceiver` | Interface listing the methods the routes call. |
+| `--output-template-data-type` | `TemplateData` | Type passed to route templates. |
+| `--output-sse-template-data-type` | `SSETemplateData` | Type passed to Server-Sent Events route templates. |
+| `--output-template-route-paths-type` | `TemplateRoutePaths` | Type whose methods build route paths. |
+| `--output-routes-func-with-logger-param` | `false` | Add a `*slog.Logger` parameter. |
+| `--output-routes-func-with-path-prefix-param` | `false` | Add a `pathsPrefix string` parameter. |
+| `--output-routes-func-with-middleware-param` | `false` | Add a `middleware func(http.Handler) http.Handler` parameter. |
+| `--output-multiple-files` | `false` | Write one generated file per template source file. |
+| `--output-multipart-max-memory` | `32 MiB` | Memory limit passed to `ParseMultipartForm` for `multipart` arguments. Accepts `32MB`, `64MiB`, `1GB`. |
+| `--output-htmx` | `false` | Add HTMX request and response header helpers to the template data type ([reference_output_htmx.txt](../../cmd/muxt/testdata/reference_output_htmx.txt)). |
+| `--output-datastar` | `false` | Frame Server-Sent Events as Datastar `datastar-patch-elements` events and enable `signals` ([Server-Sent Events](call-parameters.md#server-sent-events)). Excludes `--output-htmx`. |
+| `--output-exported-default-identifiers` | `true` | `false` makes the default names above unexported. Explicit `--output-*` names are used as given. |
+| `--output-muxt-version` | `true` | `false` omits the `// muxt version:` header and the `MuxtVersion` method. |
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Error (message on stderr); every failure exits `1` |
+### Deprecated flags
 
-`muxt check` does not accept `--use-receiver-type`: it resolves receiver types from the generated routes file, so run `muxt generate` first.
+Each still works and prints `Flag --old has been deprecated, use --new instead`.
 
----
-
-## Command Reference Pages
-
-- [`muxt generate`](commands/generate.md) — Full generate command reference
-- [`muxt check`](commands/check.md) — Full check command reference
-- [`muxt list-template-callers`](commands/list-template-callers.md) — List template callers
-- [`muxt list-template-calls`](commands/list-template-calls.md) — List template call sites
-- [`muxt explore-module`](commands/explore-module.md) — List every muxt package in the module
-- [`muxt generate-fake-server`](commands/generate-fake-server.md) — Generate a fake server for exploring routes
-- [`muxt test-template-mutations`](commands/test-template-mutations.md) — Find template behaviour no test covers
-- [`muxt version`](commands/version.md) — Version command reference
-
-## Related
-
-- [Template Name Syntax](template-names.md) — Route naming syntax
-- [Call Parameters](call-parameters.md) — Method parameter parsing
-- [Call Results](call-results.md) — Return value handling
-- [Templates Variable](templates-variable.md) — Template variable requirements
-- [Type Checking](type-checking.md) — Type checking behavior
-- [Add Logging](../tutorials/add-logging.md) — Structured logging with `log/slog`
+| Old | New |
+|---|---|
+| `--templates-variable`, `--find-templates-variable` | `--use-templates-variable` |
+| `--receiver-type`, `--find-receiver-type` | `--use-receiver-type` |
+| `--receiver-type-package`, `--find-receiver-type-package` | `--use-receiver-type-package` |
+| `--receiver-interface` | `--output-receiver-interface` |
+| `--routes-func` | `--output-routes-func` |
+| `--template-data-type` | `--output-template-data-type` |
+| `--template-route-paths-type` | `--output-template-route-paths-type` |
+| `--logger` | `--output-routes-func-with-logger-param` |
+| `--path-prefix` | `--output-routes-func-with-path-prefix-param` |
+| `--output-htmx-helpers` | `--output-htmx` |

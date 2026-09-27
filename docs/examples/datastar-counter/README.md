@@ -1,58 +1,26 @@
 # Datastar Counter
 
-A counter you increment and decrement over [Datastar](https://data-star.dev). It demonstrates the `--output-datastar` flag, which frames Server-Sent Events with the Datastar patch-elements protocol.
+A counter you increment and decrement over [Datastar](https://data-star.dev). It shows the [`--output-datastar`](../../reference/cli.md#generate-output-flags) flag: each click streams one `datastar-patch-elements` event and one `datastar-patch-signals` event.
 
-## How it works
-
-The page renders the count through the `sseCount` template. Each button posts a Datastar action:
-
-```gotmpl
-<button id="increment" data-on:click="@post('{{.Path.Increment}}')">+</button>
-```
-
-`.Path.Increment` is the generated `TemplateRoutePaths` helper, so renaming the route breaks the build instead of the button. html/template treats `data-on:*` as JavaScript and renders the path as `\/increment` — the same string once the browser evaluates it.
-
-The route streams one patch event whose payload is the same `sseCount` fragment — the `sseCount` callback argument names the template it renders:
-
-```gotmpl
-{{define "sseCount"}}<output id="count">{{.Result}}</output>{{end}}
-
-{{define "POST /increment sse(Increment(ctx, sseCount))"}}{{end}}
-```
-
-```go
-func (s *Server) Increment(_ context.Context, sseCount func(int64) error) {
-	_ = sseCount(s.count.Add(1))
-}
-```
-
-Each click also updates a client signal: the `Signals`-suffixed callback marshals its argument as a `datastar-patch-signals` event, and `data-text="$delta"` renders it on the page.
-
-```go
-func (s *Server) Increment(_ context.Context, sseCount func(int64) error, deltaSignals func(Delta) error) {
-	_ = sseCount(s.count.Add(1))
-	_ = deltaSignals(Delta{Delta: "+1"})
-}
-```
-
-On the wire that is:
-
-```
-event: datastar-patch-elements
-data: elements <output id="count">1</output>
-
-event: datastar-patch-signals
-data: signals {"delta":"+1"}
-```
-
-Datastar morphs the element in by id — no selector needed — and merges the signal patch into the page's signals. The generated closures for both callbacks are in [template_routes.go](template_routes.go): the render callback executes the `sseCount` template into an SSE frame, the signals callback `json.Marshal`s its argument into the patch-signals frame.
-
-## Run it
+## Run
 
 ```bash
 go generate ./...
 go run .
-# open http://localhost:8001
 ```
 
-The tests parse the page and the patch payloads with [domtest](https://pkg.go.dev/github.com/typelate/dom/domtest); `patchElements` in [template_test.go](template_test.go) is the reusable assertion for the wire contract.
+Open http://localhost:8001. `PORT` overrides the port.
+
+## Read in this order
+
+1. [template.gohtml](template.gohtml): the `sseCount` fragment, the buttons posting through `{{.Path.Increment}}` and `{{.Path.Decrement}}`, and `data-signals-delta` plus `data-text="$delta"` showing the signal patch.
+2. [main.go](main.go): `Increment` calling `sseCount` with the new count and `deltaSignals` with the signal patch ([Datastar callbacks](../../reference/call-parameters.md#datastar)).
+3. [template_test.go](template_test.go): `readEventStream` and `elementsFragment`, so the same selectors work on the page and on a patch.
+
+## Routes
+
+| Template name | Method |
+|---|---|
+| `GET / Home(ctx)` | `Home(context.Context) (int64, error)` |
+| `POST /increment sse(Increment(ctx, sseCount, deltaSignals))` | `Increment(context.Context, func(int64) error, func(Delta) error)` |
+| `POST /decrement sse(Decrement(ctx, sseCount, deltaSignals))` | `Decrement(context.Context, func(int64) error, func(Delta) error)` |

@@ -1,44 +1,26 @@
 # Datastar Search
 
-Live search over the Go proverbs, driven by [Datastar](https://data-star.dev) signals. Datastar sends the page's signal state as a JSON request body; the reserved `signals` argument (available under `--output-datastar`) decodes it — it is shorthand for `unmarshalJSON(body)`, so both spellings bind identically.
+Live search over the Go proverbs, driven by [Datastar](https://data-star.dev) signals, generated with [`--output-datastar`](../../reference/cli.md#generate-output-flags). It shows the [`signals`](../../reference/call-parameters.md#arguments) argument and the same search served as JSON through [`marshalJSON`](../../reference/call-results.md#json-responses).
 
-## How it works
-
-`data-bind:query` creates the signal; typing posts it (debounced) to the search route:
-
-```gotmpl
-<input type="search" data-bind:query
-       data-on:input__debounce.300ms="@post('{{.Path.SearchProverbs}}')">
-```
-
-The route decodes the signals from the body and streams one patch with the results and footer:
-
-```gotmpl
-{{define "POST /search sse(SearchProverbs(ctx, signals, sseResults))"}}{{end}}
-```
-
-```go
-type SearchSignals struct {
-	Query string `json:"query"`
-}
-
-func (Server) SearchProverbs(_ context.Context, signals SearchSignals, sseResults func(SearchResults) error) {
-	_ = sseResults(search(signals.Query))
-}
-```
-
-Matches split around the hit so the highlight is server-rendered (`{{.Prefix}}<mark>{{.Match}}</mark>{{.Suffix}}`), and the same search is exposed as JSON with the `marshalJSON(...)` wrapper — one receiver, two representations:
-
-```gotmpl
-{{define "GET /api/proverbs marshalJSON(ProverbsAPI(ctx, form))"}}{{end}}
-```
-
-## Run it
+## Run
 
 ```bash
 go generate ./...
 go run .
-# open http://localhost:8003
 ```
 
-The tests are Given/When/Then subtests over [domtest](https://pkg.go.dev/github.com/typelate/dom/domtest), covering the page affordances, the signal round trip (including case-insensitivity, misses, and a malformed body responding 400), and the JSON endpoint.
+Open http://localhost:8003. `PORT` overrides the port.
+
+## Read in this order
+
+1. [template.gohtml](template.gohtml): `data-bind:query` creating the signal and a debounced `data-on:input` posting it to the search route.
+2. [main.go](main.go): `SearchSignals`, the JSON shape Datastar sends, and `search`, which splits each hit so the template can wrap it in `<mark>`.
+3. [template_test.go](template_test.go): the signal round trip, case-insensitivity, a malformed body responding 400, and the JSON endpoint.
+
+## Routes
+
+| Template name | Method |
+|---|---|
+| `GET / Index(ctx)` | `Index(context.Context) (SearchResults, error)` |
+| `POST /search sse(SearchProverbs(ctx, signals, sseResults))` | `SearchProverbs(context.Context, SearchSignals, func(SearchResults) error)` |
+| `GET /api/proverbs marshalJSON(ProverbsAPI(ctx, form))` | `ProverbsAPI(context.Context, APIForm) (SearchResults, error)` |

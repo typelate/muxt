@@ -2,14 +2,11 @@
 
 ## Context
 
-I had not really considered the design around flag names.
-I noticed how Claude grouped the flags in a generated document.
-I thought I could express that division so that the purpose of the flags was more intuitive.
+I had not designed the flag names. Grouping them by purpose was worth expressing in the names.
 
 ## Decision
 
-Prefix flags that identify source queries with `--use-`
-Prefix flags that specify generated identifiers with `--output-`
+Prefix flags that name what muxt reads with `--use-` (`--use-receiver-type`, `--use-templates-variable`). Prefix flags that name what it writes with `--output-` (`--output-file`, `--output-htmx`).
 
 ## Status
 
@@ -17,4 +14,4 @@ Decided
 
 ## Consequences
 
-I need to maintain deprecated flags for a while.
+The old names stay as deprecated aliases ([CLI](../../reference/cli.md#deprecated-flags)).
