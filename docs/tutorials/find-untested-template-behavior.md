@@ -2,7 +2,9 @@
 
 `muxt test-template-mutations` ([reference](../reference/commands/test-template-mutations.md)) reports the template actions no test depends on. This tutorial turns one miss into an assertion.
 
-Prerequisites: a checkout of the muxt repository; the commands run its muxt through `go run`. A full run of the example takes about half a minute.
+Prerequisites: `muxt` installed and a checkout of this repository for the example. A full run takes about half a minute.
+
+> `test-template-mutations` ships in v0.21.0. Until then, install muxt from main: `go install github.com/typelate/muxt@main`.
 
 ## Step 1: Confirm the example passes
 
@@ -14,7 +16,7 @@ go test ./...
 ## Step 2: Run the mutations
 
 ```bash
-go run github.com/typelate/muxt test-template-mutations --seed 1
+muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -73,7 +75,7 @@ func TestCounterPage(t *testing.T) {
 ```
 
 ```bash
-go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
+go test ./... && muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -105,7 +107,7 @@ and change the assertion to:
 ```
 
 ```bash
-go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
+go test ./... && muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -117,7 +119,7 @@ go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 
 Narrow the run to one template while you add assertions:
 
 ```bash
-go run github.com/typelate/muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
+muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
 ```
 
 The operator names the missing assertion:
