@@ -51,7 +51,7 @@ type Argument struct {
 
 // ScopeType returns the type a request value argument binds to before any
 // parsing: *http.Request for request, string for a path value, and so on.
-func (a Argument) ScopeType() types.Type { return a.scopeType }
+func (a Argument) ScopeType() source.Type { return source.NewType(a.scopeType) }
 
 // Direct reports whether a request value argument is assignable to its
 // parameter as it is. A path value or lastEventID that is not assignable
@@ -97,7 +97,7 @@ func (a Argument) CallbackSignature() *types.Signature {
 
 // CallbackResultType returns the template data type T a validated
 // render-callback argument receives (struct{} for a func() error callback).
-func (a Argument) CallbackResultType() types.Type { return a.callbackResult }
+func (a Argument) CallbackResultType() source.Type { return source.NewType(a.callbackResult) }
 
 // CallbackHasArg reports whether a validated render-callback argument's
 // callback takes the template data argument (func(T) error vs func() error).

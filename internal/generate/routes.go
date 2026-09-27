@@ -885,11 +885,11 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				}
 				statements = s
 			default:
-				if argument.ScopeType() == nil {
+				if argument.ScopeType().IsZero() {
 					return nil, fmt.Errorf("failed to determine type for %s", name)
 				}
 				pt, _ := file.TypeExpr(argument.ParamType())
-				at, _ := file.TypeASTExpression(argument.ScopeType())
+				at, _ := file.TypeExpr(argument.ScopeType())
 				return nil, fmt.Errorf("method expects type %s but %s is %s", astgen.Format(pt), arg.Name, astgen.Format(at))
 			}
 		}

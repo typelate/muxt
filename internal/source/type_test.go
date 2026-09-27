@@ -80,3 +80,8 @@ func TestTypeIdentical(t *testing.T) {
 	require.False(t, source.NewType(id).Identical(source.NewType(types.Typ[types.String])), "a named type is not its underlying type")
 	require.False(t, source.NewType(types.Typ[types.Int]).Identical(source.NewType(types.Typ[types.String])))
 }
+
+func TestTypeIsZero(t *testing.T) {
+	require.True(t, source.Type{}.IsZero())
+	require.False(t, source.NewType(types.Typ[types.Int]).IsZero())
+}

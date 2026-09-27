@@ -3,13 +3,13 @@ package generate
 import (
 	"go/ast"
 	"go/token"
-	"go/types"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
@@ -169,7 +169,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //		flusher.Flush()
 //		return nil
 //	}
-func signalsClosure(file *File, resultType types.Type, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func signalsClosure(file *File, resultType source.Type, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		resultIdent  = "result"
 		payloadIdent = "payload"
@@ -177,7 +177,7 @@ func signalsClosure(file *File, resultType types.Type, flusherIdent, mutexIdent 
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	resultTypeExpr, err := file.TypeExpr(resultType)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 //	}
 //
 // For the zero-arg form it omits the parameter and the result field.
-func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType types.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
+func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType source.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
 	const (
 		bufIdent    = "buf"
 		tdIdent     = "td"
@@ -264,7 +264,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
-	resultTypeExpr, err := file.TypeASTExpression(resultType)
+	resultTypeExpr, err := file.TypeExpr(resultType)
 	if err != nil {
 		return nil, err
 	}

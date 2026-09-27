@@ -20,6 +20,8 @@ func (t Type) Format(qualify func(pkgName, pkgPath string) string) string {
 	})
 }
 
+func (t Type) IsZero() bool { return t.tp == nil }
+
 func (t Type) Identical(u Type) bool { return types.Identical(t.tp, u.tp) }
 
 // IsString reports whether the underlying type is string.
