@@ -2,7 +2,6 @@ package astgen
 
 import (
 	"go/ast"
-	"go/types"
 )
 
 // ImportManager interface abstracts the import management functionality
@@ -16,9 +15,6 @@ type ImportManager interface {
 
 	// ImportSpecs returns all registered import specs
 	ImportSpecs() []*ast.ImportSpec
-
-	// TypeASTExpression converts a types.Type to an AST expression
-	TypeASTExpression(tp types.Type) (ast.Expr, error)
 }
 
 // ExportedIdentifier creates a selector expression for an exported identifier
