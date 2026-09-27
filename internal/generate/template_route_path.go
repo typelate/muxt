@@ -191,11 +191,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 			continue
 		}
 
-		kind, ok := pathValueType.Basic()
-		if !ok {
-			return nil, false, false, fmt.Errorf("unsupported type %s for path parameters: %s", astgen.Format(tpNode), ident)
-		}
-		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), kind)
+		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), pathValueType)
 		if err != nil {
 			return nil, false, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
 		}
