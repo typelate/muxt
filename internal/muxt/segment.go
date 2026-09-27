@@ -5,6 +5,8 @@ import (
 	"go/types"
 	"slices"
 	"strings"
+
+	"github.com/typelate/muxt/internal/source"
 )
 
 // SegmentKind classifies one "/"-separated part of a route pattern's path.
@@ -116,11 +118,11 @@ func (s Segment) IsRemainder() bool { return s.kind == SegmentKindWildcardRemain
 // Type returns the type a wildcard segment's value parses into: the
 // parameter type where the call first passes it, or string when the value
 // is passed along as it arrived or is not passed to the call at all.
-func (s Segment) Type() types.Type {
+func (s Segment) Type() source.Type {
 	if s.tp == nil {
-		return types.Universe.Lookup("string").Type()
+		return source.NewType(types.Universe.Lookup("string").Type())
 	}
-	return s.tp
+	return source.NewType(s.tp)
 }
 
 // TextMarshaler reports whether Type implements encoding.TextMarshaler, so

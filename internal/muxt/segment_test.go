@@ -141,7 +141,7 @@ func TestPathValueTypes(t *testing.T) {
 
 			segment, ok := def.PathParameter(tt.param)
 			require.True(t, ok, "path parameter %q not found", tt.param)
-			got := types.TypeString(segment.Type(), (*types.Package).Name)
+			got := segment.Type().Format(func(name, _ string) string { return name })
 			require.Equal(t, tt.want, got, "wrong path parameter type")
 		})
 	}
