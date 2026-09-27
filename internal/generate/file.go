@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"log"
 	"maps"
 	"path"
@@ -51,19 +50,6 @@ func (file *File) qualify(pkgName, pkgPath string) string {
 		return ""
 	}
 	return file.Import(pkgName, pkgPath)
-}
-
-func (file *File) TypeASTExpression(tp types.Type) (ast.Expr, error) {
-	s := types.TypeString(tp, file.pkgQualifier)
-	return parser.ParseExpr(s)
-}
-
-// pkgQualifier implements types.Qualifier
-func (file *File) pkgQualifier(pkg *types.Package) string {
-	if pkg.Path() == file.pkg.Types.Path() {
-		return ""
-	}
-	return file.Import(pkg.Name(), pkg.Path())
 }
 
 func (file *File) Import(pkgIdent, pkgPath string) string {
