@@ -105,6 +105,6 @@ func (c Coded) StatusCode() int { return c.code }
 
 type WithField struct{ StatusCode int }
 
-func (srv *Server) Coded() Coded                          { return Coded{} }
-func (srv *Server) WithField() WithField                  { return WithField{} }
+func (srv *Server) Coded() Coded                         { return Coded{} }
+func (srv *Server) WithField() WithField                 { return WithField{} }
 func (srv *Server) ExecuteCoded(func(Coded) error) error { return nil }
