@@ -65,7 +65,12 @@ func (a Argument) UnmarshalMethod() UnmarshalMethod { return a.method }
 
 // Signature returns the resolved signature of a nested call argument
 // (Type == ArgumentTypeCall), or nil for a leaf argument.
-func (a Argument) Signature() *types.Signature { return a.sig }
+func (a Argument) Signature() source.Type {
+	if a.sig == nil {
+		return source.Type{}
+	}
+	return source.NewType(a.sig)
+}
 
 // IsMethod reports whether a nested call argument resolves to a receiver method
 // (as opposed to a package-scope function).

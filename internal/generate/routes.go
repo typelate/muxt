@@ -316,7 +316,7 @@ func hydrateGroup(defs []muxt.Definition, file *File, receiver *types.Named, che
 	return muxt.CombineErrors(resolveErrs)
 }
 
-func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool, args []muxt.Argument, file *File, receiverInterface *ast.InterfaceType) error {
+func accumulateReceiverMethods(name string, sig source.Type, isMethod bool, args []muxt.Argument, file *File, receiverInterface *ast.InterfaceType) error {
 	// Recurse into nested call arguments regardless of whether this call is a
 	// receiver method: a package-scope function may receive nested receiver
 	// method calls that must appear in the interface.
@@ -336,7 +336,7 @@ func accumulateReceiverMethods(name string, sig *types.Signature, isMethod bool,
 	}) {
 		return nil
 	}
-	exp, err := file.TypeASTExpression(sig)
+	exp, err := file.TypeExpr(sig)
 	if err != nil {
 		return err
 	}
@@ -670,7 +670,7 @@ func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Defini
 		resultDataIdent = "td"
 	)
 
-	if sig := def.Signature(); sig == nil {
+	if def.Signature().IsZero() {
 		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())
 	}
 	switch def.Representation {

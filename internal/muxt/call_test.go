@@ -44,7 +44,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, defs, 1)
 			require.Len(t, defs[0].Arguments, 0)
 			require.Equal(t, "M", defs[0].Identifier())
-			require.NotNil(t, defs[0].Signature())
+			require.False(t, defs[0].Signature().IsZero())
 		}},
 		{Name: "receiver method call", Receiver: serverType, Template: `{{define "GET / M()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestArgument(t *testing.T) {
 		{Name: "request", Receiver: serverType, Template: `{{define "GET / HTTPRequest(request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
-			require.NotNil(t, defs[0].Signature())
+			require.False(t, defs[0].Signature().IsZero())
 			require.Len(t, defs[0].Arguments, 1)
 			require.Equal(t, "HTTPRequest", defs[0].Identifier())
 			require.Equal(t, "request", defs[0].Arguments[0].Identifier)
@@ -223,7 +223,7 @@ func TestArgument(t *testing.T) {
 
 			require.Equal(t, "Context", defs[0].Arguments[0].Identifier)
 			require.True(t, nested.IsMethod(), "Context is a receiver method")
-			require.NotNil(t, nested.Signature(), "nested call signature")
+			require.False(t, nested.Signature().IsZero(), "nested call signature")
 
 			require.Equal(t, muxt.ArgumentTypeCall, defs[0].Arguments[0].Type)
 			require.Equal(t, "Context", defs[0].Arguments[0].Identifier)
@@ -250,7 +250,7 @@ func TestArgument(t *testing.T) {
 			require.Len(t, defs, 1)
 			// The receiver has no DoesNotExist method and it is not a package
 			// function, so its signature is synthesized from the call scope.
-			require.NotNil(t, defs[0].Signature())
+			require.False(t, defs[0].Signature().IsZero())
 			require.True(t, defs[0].IsMethod(), "a synthesized call becomes a required receiver method")
 
 			require.Equal(t, "ctx", defs[0].Arguments[0].Identifier)

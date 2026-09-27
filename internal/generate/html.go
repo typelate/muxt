@@ -179,9 +179,7 @@ func writeHeadersAndStatusCode(file *File, handlerFunc *ast.FuncLit, def muxt.De
 }
 
 func callFuncExpression(def muxt.Definition) ast.Expr {
-	sig := def.Signature()
-	isMethodCall := sig.Recv() != nil
-	if !isMethodCall {
+	if !def.IsMethod() {
 		return ast.NewIdent(def.FunctionIdentifier().Name)
 	}
 	return &ast.SelectorExpr{
