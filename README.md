@@ -1,6 +1,8 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt)
 
-**Build with `html/template` power tools: `http.Handler` generation and static type-checking of `*.gohtml` files.**
+Muxt is a command-line tool for Go's `html/template` and `net/http`. Not a framework. Not a router. No runtime. Two commands do most of the work: `generate` and `check`.
+
+A template name defines the contract between the hypermedia and the `http.Handler`:
 
 ```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
@@ -12,13 +14,11 @@
 func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 ```
 
-The template name is the route, the handler call, and the parameter list. Muxt reads it, parses the request into those arguments, calls your method, and renders the result.
+`muxt generate` reads the name and writes an `http.Handler` that calls your method. The handler is plain Go you can read in a diff.
 
-You can stay in hypermedia-land and drive a significant amount of behavior from your template source files.
+`muxt check` type-checks a template against the data it receives. It checks each `ExecuteTemplate` call on the templates variable whose template name is a literal and whose data has a statically known type. Generated handlers meet both conditions. Rename a field and the template that still uses it fails the check, not the page.
 
-Muxt plays super well with fixi, htmx, Datastar, and plain server-rendered HTML.
-
-Making templates statically analyzable was a key development goal of Muxt and the original inspiration. The generated handlers call `ExecuteTemplate` with a string-literal template name and data of a known static type, so `muxt check` can type-check each template and its actions against the data it actually receives.
+The simplest web-app architecture is a single binary with an HTTP server. The Go standard library has all the runtime you need for the HTTP endpoints and hypermedia generation. When you need more complicated front-end interaction, reach for fixi, htmx, and Datastar. What it lacks is statically type-checked coupling between your Go code and HTML templates.
 
 ## Install
 
