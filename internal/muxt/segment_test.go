@@ -113,6 +113,12 @@ func TestPathValueTypes(t *testing.T) {
 			param:      "sseID",
 			want:       "string",
 		},
+		{
+			name:       "a remainder wildcard parses like any parameter",
+			definition: "GET /files/{path...} Int(path)",
+			param:      "path",
+			want:       "int",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
@@ -213,4 +219,74 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSegments states how a pattern's path splits into segments and which
+// wildcard spellings are rejected.
+func TestSegments(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		definition string
+		want       []string
+		wantErr    string
+	}{
+		{name: "literals and wildcards", definition: "GET /users/{id}/files/{path...}", want: []string{"literal users", "wildcard id", "literal files", "remainder path"}},
+		{name: "the end wildcard is not a segment", definition: "GET /users/{$}", want: []string{"literal users"}},
+		{name: "the root has no segments", definition: "GET /"},
+		{name: "a literal may repeat a wildcard name", definition: "GET /id/{id}", want: []string{"literal id", "wildcard id"}},
+		{name: "an unclosed wildcard", definition: "GET /{id", wantErr: "path segment {id is not permitted"},
+		{name: "a wildcard followed by text", definition: "GET /{id}x", wantErr: "path segment {id}x is not permitted"},
+		{name: "an empty wildcard name", definition: "GET /{}", wantErr: `"" is not a Go identifier`},
+		{name: "an empty remainder name", definition: "GET /{...}", wantErr: `"" is not a Go identifier`},
+		{name: "a duplicate wildcard", definition: "GET /{id}/{id}", wantErr: `path parameter name "id" is used more than once`},
+		{name: "a reserved name", definition: "GET /{form}", wantErr: "path parameter name form conflicts with a reserved identifier"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			var got []string
+			for _, segment := range defs[0].Segments {
+				got = append(got, describeSegment(segment))
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func describeSegment(segment muxt.Segment) string {
+	switch {
+	case segment.IsLiteral():
+		return "literal " + segment.Value()
+	case segment.IsRemainder():
+		return "remainder " + segment.Value()
+	case segment.IsWildcard():
+		return "wildcard " + segment.Value()
+	default:
+		return "unknown " + segment.Value()
+	}
+}
+
+func TestPathParameterLookup(t *testing.T) {
+	ts := template.Must(template.New("").Parse(`{{define "GET /files/{id}/{path...} M(id, path)"}}{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+	require.NoError(t, err)
+	def := defs[0]
+
+	for _, name := range []string{"id", "path"} {
+		segment, ok := def.PathParameter(name)
+		require.True(t, ok, "PathParameter(%q)", name)
+		require.Equal(t, name, segment.Value())
+		require.True(t, def.ArgumentIsPathParameter(name), "ArgumentIsPathParameter(%q)", name)
+		require.False(t, def.ArgumentIsLastEventID(name), "ArgumentIsLastEventID(%q)", name)
+	}
+	_, ok := def.PathParameter("files")
+	require.False(t, ok, "a literal segment is not a path parameter")
+	require.False(t, def.ArgumentIsPathParameter("files"))
+	require.True(t, def.ArgumentIsLastEventID(muxt.TemplateNameScopeIdentifierLastEventID))
 }

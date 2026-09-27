@@ -467,9 +467,9 @@ func (def Definition) HasPathEndWildcard() bool {
 }
 
 // ArgumentIsLastEventID reports whether name binds to the Last-Event-ID
-// request header rather than to a path parameter of the same name.
+// request header. The name is reserved, so no path parameter can shadow it.
 func (def Definition) ArgumentIsLastEventID(name string) bool {
-	return name == TemplateNameScopeIdentifierLastEventID && !def.ArgumentIsPathParameter(name)
+	return name == TemplateNameScopeIdentifierLastEventID
 }
 
 // ArgumentIsPathParameter reports whether name is a wildcard segment of the
