@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/source"
 )
 
 type templateGroups struct {
@@ -15,32 +14,24 @@ type templateGroups struct {
 	all    []muxt.Definition
 }
 
-func groupTemplates(config RoutesFileConfiguration, variables []source.Variable) (templateGroups, error) {
+func groupTemplates(config RoutesFileConfiguration, defs []muxt.Definition) (templateGroups, error) {
 	result := templateGroups{
 		byFile: make(map[string][]muxt.Definition),
+		all:    defs,
 	}
-	for _, tv := range variables {
-		defs, err := muxt.Definitions(tv)
-		if err != nil {
-			return result, err
-		}
-
-		if !config.OutputDatastar {
-			for _, d := range defs {
-				if d.UsesSignals() {
-					return result, fmt.Errorf("the signals argument in %q requires --output-datastar; it is shorthand for unmarshalJSON(body)", d.Name())
-				}
-				if name, ok := d.SignalsCallback(); ok {
-					return result, fmt.Errorf("the %s callback in %q requires --output-datastar; it marshals its argument as a datastar-patch-signals event", name, d.Name())
-				}
+	if !config.OutputDatastar {
+		for _, d := range defs {
+			if d.UsesSignals() {
+				return result, fmt.Errorf("the signals argument in %q requires --output-datastar; it is shorthand for unmarshalJSON(body)", d.Name())
+			}
+			if name, ok := d.SignalsCallback(); ok {
+				return result, fmt.Errorf("the %s callback in %q requires --output-datastar; it marshals its argument as a datastar-patch-signals event", name, d.Name())
 			}
 		}
-
-		for _, d := range defs {
-			key := d.SourceFile()
-			result.byFile[key] = append(result.byFile[key], d)
-		}
-		result.all = append(result.all, defs...)
+	}
+	for _, d := range defs {
+		key := d.SourceFile()
+		result.byFile[key] = append(result.byFile[key], d)
 	}
 
 	if err := muxt.CheckForDuplicatePatterns(result.all); err != nil {

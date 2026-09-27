@@ -27,15 +27,16 @@ func (T) Article(id int, title string) (string, error) { return "", nil }
 func (T) Title(id int) string { return "" }
 `, "T", `{{define "GET /article/{id} Article(id, Title(id))"}}{{end}}`)
 
-	groups, err := groupTemplates(config, pkg.Variables)
+	defs, err := muxt.Resolve(pkg, receiver, fake.NewChecker().Fake())
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups, err := groupTemplates(config, defs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	file := newFile(pkg)
 	def := groups.all[0]
-	if err := muxt.ResolveCall(&def, pkg, receiver, fake.NewChecker().Fake()); err != nil {
-		t.Fatal(err)
-	}
 
 	var handlers []string
 	for range 2 {
@@ -66,7 +67,11 @@ type T struct{}
 func (T) Stream(string) {}
 `, "T", `{{define "GET /x sse(Stream(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`)
 
-	_, err := TemplateRoutesFiles(".", config, pkg, receiver, fake.NewChecker().Fake(), log.New(io.Discard, "", 0))
+	defs, err := muxt.Resolve(pkg, receiver, fake.NewChecker().Fake())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = TemplateRoutesFiles(".", config, pkg, defs, log.New(io.Discard, "", 0))
 	if err == nil || !strings.Contains(err.Error(), "failed to determine type for fooMessage") {
 		t.Errorf("got error %v, want it to say it failed to determine type for fooMessage", err)
 	}
