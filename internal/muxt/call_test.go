@@ -335,6 +335,12 @@ func TestArgument(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, muxt.StatusCodeSourceNone, defs[0].ResultStatusCode())
 		}},
+		{Name: "nested call second result must be error or bool", Receiver: serverType, Template: `{{define "GET / Any(TwoResultsSecondNotErrorOrBool())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.ErrorContains(t, err, "the second result of TwoResultsSecondNotErrorOrBool() (int, float64) must be an error or a bool, got float64")
+		}},
+		{Name: "execute method must not return a value in place of error", Receiver: serverType, Template: `{{define "GET / ExecuteReturnsInt(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.ErrorContains(t, err, "method ExecuteReturnsInt(func() error) int receiving the execute callback must return only error")
+		}},
 		{Name: "nested call with data and ok results", Receiver: serverType, Template: `{{define "GET / Any(StringOK())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
 			require.Equal(t, muxt.ResultShapeDataOK, defs[0].Arguments[0].ResultShape())

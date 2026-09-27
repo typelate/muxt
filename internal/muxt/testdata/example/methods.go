@@ -40,6 +40,7 @@ func (srv *Server) TwoResultsSecondNotErrorOrBool() (int, float64) { return 0, 0
 func (srv *Server) StringOK() (string, bool)                       { return "", false }
 func (srv *Server) StringError() (string, error)                   { return "", nil }
 func (srv *Server) ExecuteReturnsValue(func() error) (int, error)  { return 0, nil }
+func (srv *Server) ExecuteReturnsInt(func() error) int             { return 0 }
 func (srv *Server) SSEReturnsValue(func(string) error) int         { return 0 }
 func (srv *Server) SSEEvents(func(string) error)                   {}
 
