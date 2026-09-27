@@ -169,7 +169,7 @@ func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIde
 
 func writeHeadersAndStatusCode(file *File, handlerFunc *ast.FuncLit, def muxt.Definition, resultType types.Type, statusCodeIdent string, bufIdent string, resultDataIdent string) (*ast.FuncLit, error) {
 	if !def.HasResponseWriterArg() {
-		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, resultType, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
+		handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, def.DefaultStatusCode(), statusCodeIdent, bufIdent, resultDataIdent, func() ast.Expr {
 			return &ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)}
 		})...)
 	} else {

@@ -657,7 +657,7 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 
 	callExecuteTemplate(file, config, def, handlerFunc, bufIdent, templateDataVarIdent)
 
-	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, types.NewStruct(nil, nil), def.DefaultStatusCode(), statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
+	handlerFunc.Body.List = append(handlerFunc.Body.List, writeStatusAndHeaders(file, def, def.DefaultStatusCode(), statusCodeIdent, bufIdent, templateDataVarIdent, func() ast.Expr {
 		panic("when no receiver method is called, then the result variable should not be needed")
 	})...)
 	return handlerFunc
@@ -1497,16 +1497,15 @@ func singleAssignment(assignTok token.Token, result ast.Expr) func(exp ast.Expr)
 	}
 }
 
-var statusCoder = statusCoderInterface()
-
-func writeStatusAndHeaders(file *File, def muxt.Definition, resultType types.Type, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
+func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode int, statusCode, bufIdent, resultDataIdent string, resultVar func() ast.Expr) []ast.Stmt {
 	statusCodePriorityList := []ast.Expr{
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
 	}
-	if types.Implements(resultType, statusCoder) {
+	switch def.ResultStatusCode() {
+	case muxt.StatusCodeSourceMethod:
 		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}})
-	} else if obj, _, _ := types.LookupFieldOrMethod(resultType, true, file.OutputPackage().Types, "StatusCode"); obj != nil {
+	case muxt.StatusCodeSourceField:
 		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
 	}
 	var list []ast.Stmt
@@ -1625,16 +1624,6 @@ func logDebugStatement(file *File, message, pattern string) *ast.ExprStmt {
 			Args: args,
 		},
 	}
-}
-
-func statusCoderInterface() *types.Interface {
-	sig := types.NewSignatureType(nil, nil, nil,
-		types.NewTuple(),
-		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])),
-		false)
-
-	method := types.NewFunc(token.NoPos, nil, "StatusCode", sig)
-	return types.NewInterfaceType([]*types.Func{method}, nil).Complete()
 }
 
 func assignTemplateDataErrStatusCode(file *File, rdIdent string, code int) *ast.AssignStmt {

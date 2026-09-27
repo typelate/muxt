@@ -164,8 +164,57 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 		return def.finishNameError(errAtNode(def.fun, err), def.handlerSpan())
 	}
 	def.resultShape = shape
-	return def.finishNameError(resolveCallbackShapes(def), def.handlerSpan())
+	if err := resolveCallbackShapes(def); err != nil {
+		return def.finishNameError(err, def.handlerSpan())
+	}
+	def.resultStatusCode = statusCodeSource(def.resultDataType(), pkg.Types)
+	return nil
 }
+
+// StatusCodeSource is where a route's result offers a status code: a
+// StatusCode() int method, a StatusCode field, or nowhere.
+type StatusCodeSource int
+
+const (
+	StatusCodeSourceNone StatusCodeSource = iota
+	StatusCodeSourceMethod
+	StatusCodeSourceField
+)
+
+// resultDataType is the type the template data's Result field has: the
+// execute callback's parameter when the call takes one, otherwise the
+// call's first result.
+func (def *Definition) resultDataType() types.Type {
+	if i, ok := def.ExecuteArgumentIndex(); ok {
+		return def.Arguments[i].callbackResult
+	}
+	switch def.resultShape {
+	case ResultShapeData, ResultShapeDataError, ResultShapeDataOK:
+		return def.sig.Results().At(0).Type()
+	}
+	return nil
+}
+
+func statusCodeSource(tp types.Type, pkg *types.Package) StatusCodeSource {
+	if tp == nil {
+		return StatusCodeSourceNone
+	}
+	if types.Implements(tp, statusCoder) {
+		return StatusCodeSourceMethod
+	}
+	if obj, _, _ := types.LookupFieldOrMethod(tp, true, pkg, "StatusCode"); obj != nil {
+		return StatusCodeSourceField
+	}
+	return StatusCodeSourceNone
+}
+
+var statusCoder = types.NewInterfaceType([]*types.Func{
+	types.NewFunc(token.NoPos, nil, "StatusCode", types.NewSignatureType(nil, nil, nil,
+		types.NewTuple(),
+		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])),
+		false,
+	)),
+}, nil).Complete()
 
 // recordPathValueTypes records the type each path parameter parses into.
 //

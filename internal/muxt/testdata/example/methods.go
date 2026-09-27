@@ -98,3 +98,13 @@ func (srv *Server) AnyFunction(func(any) error) any                      { retur
 func (srv *Server) StringFunction(func(string) error) any                { return nil }
 func (srv *Server) IntFunction(func(int) error) any                      { return nil }
 func (srv *Server) Functions(func(string) error, func(string) error) any { return nil }
+
+type Coded struct{ code int }
+
+func (c Coded) StatusCode() int { return c.code }
+
+type WithField struct{ StatusCode int }
+
+func (srv *Server) Coded() Coded                          { return Coded{} }
+func (srv *Server) WithField() WithField                  { return WithField{} }
+func (srv *Server) ExecuteCoded(func(Coded) error) error { return nil }
