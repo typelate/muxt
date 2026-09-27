@@ -168,8 +168,12 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	if err != nil {
 		return fail(err)
 	}
+	defs, err := muxt.Resolve(pkg, receiver, load.StandardLibrary(pl))
+	if err != nil {
+		return fail(err)
+	}
 	var logs strings.Builder
-	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, receiver, load.StandardLibrary(pl), log.New(&logs, "", 0))
+	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, defs, log.New(&logs, "", 0))
 	for _, file := range generated {
 		got[relative(file.Path)] = file.Content
 		for _, name := range unusedImports(t, file.Content) {

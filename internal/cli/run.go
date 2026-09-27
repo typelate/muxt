@@ -16,6 +16,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 // This file holds what each command does with its configuration: load the
@@ -122,7 +123,12 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		printMultiLineError(cmd, err)
 		return err
 	}
-	files, err := generate.TemplateRoutesFiles(wd, config, pkg, receiver, load.StandardLibrary(pl), log.New(stdout, "", 0))
+	defs, err := muxt.Resolve(pkg, receiver, load.StandardLibrary(pl))
+	if err != nil {
+		printMultiLineError(cmd, err)
+		return err
+	}
+	files, err := generate.TemplateRoutesFiles(wd, config, pkg, defs, log.New(stdout, "", 0))
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
