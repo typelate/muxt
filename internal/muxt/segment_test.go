@@ -154,7 +154,7 @@ func TestPathValueTypes(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			segment, ok := def.PathParameter(tt.param)
+			segment, ok := segmentByName(def.Segments, tt.param)
 			require.True(t, ok, "path parameter %q not found", tt.param)
 			got := pathParameterType(segment)
 			require.Equal(t, tt.want, got, "wrong path parameter type")
@@ -225,12 +225,12 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
 				t.Fatal(err)
 			}
-			segment, ok := defs[0].PathParameter(tt.param)
+			segment, ok := segmentByName(defs[0].Segments, tt.param)
 			if !ok {
 				t.Fatalf("path parameter %q not found", tt.param)
 			}
 			if got := pathParameterTextMarshaler(segment); got != tt.want {
-				t.Errorf("PathParameter(%q) marshals as text = %t, want %t", tt.param, got, tt.want)
+				t.Errorf("path parameter %q marshals as text = %t, want %t", tt.param, got, tt.want)
 			}
 			if got := defs[0].Arguments[0].TextMarshaler(); got != tt.want {
 				t.Errorf("Arguments[0].TextMarshaler() = %t, want %t", got, tt.want)
@@ -257,12 +257,12 @@ func TestSegmentArgument(t *testing.T) {
 	require.True(t, ok, "the first segment is the literal %q", literal.Value())
 	require.Nil(t, literal.Argument(), "a literal segment has no argument")
 
-	idSegment, ok := def.PathParameter("id")
+	idSegment, ok := segmentByName(def.Segments, "id")
 	require.True(t, ok)
 	require.NotNil(t, idSegment.Argument(), "id is passed to Int and should be linked")
 	require.Equal(t, &def.Arguments[0], idSegment.Argument(), "the linked argument is the resolved call argument")
 
-	unusedSegment, ok := def.PathParameter("unused")
+	unusedSegment, ok := segmentByName(def.Segments, "unused")
 	require.True(t, ok)
 	require.Nil(t, unusedSegment.Argument(), "unused is not passed to the call")
 }
@@ -359,6 +359,8 @@ func describeSegment(segment muxt.Segment) string {
 	}
 }
 
+// TestPathParameterLookup states that a wildcard segment is found among
+// Segments by its Value, and a literal segment is not a path parameter.
 func TestPathParameterLookup(t *testing.T) {
 	ts := template.Must(template.New("").Parse(`{{define "GET /files/{id}/{path...} M(id, path)"}}{{end}}`))
 	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
@@ -366,14 +368,22 @@ func TestPathParameterLookup(t *testing.T) {
 	def := defs[0]
 
 	for _, name := range []string{"id", "path"} {
-		segment, ok := def.PathParameter(name)
-		require.True(t, ok, "PathParameter(%q)", name)
+		segment, ok := segmentByName(def.Segments, name)
+		require.True(t, ok, "segment %q", name)
 		require.Equal(t, name, segment.Value())
-		require.True(t, def.ArgumentIsPathParameter(name), "ArgumentIsPathParameter(%q)", name)
-		require.False(t, def.ArgumentIsLastEventID(name), "ArgumentIsLastEventID(%q)", name)
+		require.Nil(t, segment.Argument(), "def has no resolved call")
 	}
-	_, ok := def.PathParameter("files")
+	_, ok := segmentByName(def.Segments, "files")
 	require.False(t, ok, "a literal segment is not a path parameter")
-	require.False(t, def.ArgumentIsPathParameter("files"))
-	require.True(t, def.ArgumentIsLastEventID(muxt.TemplateNameScopeIdentifierLastEventID))
+}
+
+// segmentByName finds the wildcard segment named name among segments, the
+// way muxt's own unexported pathParameter does.
+func segmentByName(segments []muxt.Segment, name string) (muxt.Segment, bool) {
+	for _, segment := range segments {
+		if segment.IsWildcard() && segment.Value() == name {
+			return segment, true
+		}
+	}
+	return muxt.Segment{}, false
 }
