@@ -36,6 +36,8 @@ func (T) Echo(string) string            { return "" }
 func (T) Inner(int) int                 { return 0 }
 func (T) Pair(int, int) any             { return nil }
 func (T) AnyString(any, string) any     { return nil }
+func (T) Sum(int, int) any              { return nil }
+func (T) Double(int) int                { return 0 }
 `
 
 // TestPathValueTypes states which type a path parameter parses into: the
@@ -263,6 +265,29 @@ func TestSegmentArgument(t *testing.T) {
 	unusedSegment, ok := def.PathParameter("unused")
 	require.True(t, ok)
 	require.Nil(t, unusedSegment.Argument(), "unused is not passed to the call")
+}
+
+// TestArgumentDeclares states that of a repeated path value's agreeing
+// occurrences, only the first depth first -- inside a nested call before the
+// outer call's own argument -- declares the generator's local; later
+// occurrences reuse it.
+func TestArgumentDeclares(t *testing.T) {
+	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
+	checker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
+
+	ts := template.Must(template.New("").Parse(`{{define "GET /{id} Sum(Double(id), id)"}}{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+	require.NoError(t, err)
+	require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
+	def := defs[0]
+
+	require.Equal(t, muxt.ArgumentTypeCall, def.Arguments[0].Type, "Sum's first argument is the nested Double(id) call")
+	nestedID := def.Arguments[0].Arguments()[0]
+	require.True(t, nestedID.Declares(), "the nested occurrence of id, reached first depth first, declares the local")
+
+	outerID := def.Arguments[1]
+	require.False(t, outerID.Declares(), "the outer occurrence of id reuses the local the nested call declared")
 }
 
 // TestSegments states how a pattern's path splits into segments and which

@@ -50,6 +50,11 @@ type Argument struct {
 	method    UnmarshalMethod
 
 	textMarshaler bool
+
+	// declares reports whether this is the first occurrence of a request
+	// value the generator declares a local for; a later occurrence reuses
+	// that local instead of declaring its own.
+	declares bool
 }
 
 // ScopeType returns the type a request value argument binds to before any
@@ -70,6 +75,10 @@ func (a Argument) UnmarshalMethod() UnmarshalMethod { return a.method }
 // argument's parameter type implements encoding.TextMarshaler, so a route
 // path formats it back with MarshalText.
 func (a Argument) TextMarshaler() bool { return a.textMarshaler }
+
+// Declares reports whether this is the first occurrence of a request value
+// the generator declares a local for; a later occurrence reuses it.
+func (a Argument) Declares() bool { return a.declares }
 
 // Signature returns the resolved signature of a nested call argument
 // (Type == ArgumentTypeCall), or nil for a leaf argument.
@@ -234,15 +243,16 @@ var statusCoder = types.NewInterfaceType([]*types.Func{
 	)),
 }, nil).Complete()
 
-// linkArguments walks def's arguments depth first, in argument order, and
-// for each wildcard's first occurrence links its segment to the argument.
-// It also rejects a repeated path value, lastEventID, form or multipart
-// argument whose occurrences disagree: the generator declares one local for
-// each of these request values, at the first occurrence, and every later
-// occurrence reuses it. A Direct occurrence needs the raw request value;
-// any other occurrence needs its parameter type. Two Direct occurrences
-// always agree; two non-Direct occurrences agree when their parameter types
-// are identical; anything else would reuse a local of the wrong type. An
+// linkArguments walks def's arguments depth first, in argument order. For
+// a path value, lastEventID, form, multipart, ctx or body argument, the
+// first occurrence of its identifier declares the generator's local for it
+// (Declares) and, for a path value, links the wildcard segment to it; every
+// later occurrence reuses that local. It also rejects a repeated path
+// value, lastEventID, form or multipart argument whose occurrences
+// disagree: a Direct occurrence needs the raw request value, any other
+// occurrence needs its parameter type; two Direct occurrences always agree,
+// two non-Direct occurrences agree when their parameter types are
+// identical, and anything else would reuse a local of the wrong type. An
 // sse-prefixed name is a render callback wherever it appears, never a path
 // value.
 func linkArguments(def *Definition, qual types.Qualifier) error {
@@ -257,10 +267,12 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 			if err := linkArgumentsSeen(def, qual, arg.args, seen); err != nil {
 				return err
 			}
-		case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm:
+		case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm,
+			ArgumentTypeRequestContext, ArgumentTypeRequestBody:
 			first, ok := seen[arg.Identifier]
 			if !ok {
 				seen[arg.Identifier] = arg
+				arg.declares = true
 				if arg.Type == ArgumentTypeRequestPathValue && !IsSSEArgument(arg.Identifier) {
 					for i := range def.Segments {
 						segment := &def.Segments[i]

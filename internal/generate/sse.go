@@ -82,7 +82,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := def.CallExpression()
-	body, err := appendParseArgumentStatements(body, def, file, def.Arguments, nil, "", config, call, validationFailureBlock, parseErrBlock)
+	body, err := appendParseArgumentStatements(body, def, file, def.Arguments, "", config, call, validationFailureBlock, parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
