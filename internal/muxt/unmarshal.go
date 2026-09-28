@@ -132,6 +132,7 @@ func bindParsedArgument(a *Argument, checker Checker, qual types.Qualifier) erro
 	case UnmarshalUnsupported, UnmarshalFloat32, UnmarshalFloat64:
 		return unsupportedTypeError(a.paramType, qual, supportedUnmarshalTypes)
 	default:
+		a.textMarshaler = checker.TextMarshaler(a.paramType)
 		return nil
 	}
 }

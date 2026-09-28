@@ -230,6 +230,9 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			if got := segment.TextMarshaler(); got != tt.want {
 				t.Errorf("PathParameter(%q).TextMarshaler() = %t, want %t", tt.param, got, tt.want)
 			}
+			if got := defs[0].Arguments[0].TextMarshaler(); got != tt.want {
+				t.Errorf("Arguments[0].TextMarshaler() = %t, want %t", got, tt.want)
+			}
 		})
 	}
 }
