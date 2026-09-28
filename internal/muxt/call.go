@@ -252,9 +252,7 @@ var statusCoder = types.NewInterfaceType([]*types.Func{
 // disagree: a Direct occurrence needs the raw request value, any other
 // occurrence needs its parameter type; two Direct occurrences always agree,
 // two non-Direct occurrences agree when their parameter types are
-// identical, and anything else would reuse a local of the wrong type. An
-// sse-prefixed name is a render callback wherever it appears, never a path
-// value.
+// identical, and anything else would reuse a local of the wrong type.
 func linkArguments(def *Definition, qual types.Qualifier) error {
 	return linkArgumentsSeen(def, qual, def.Arguments, make(map[string]*Argument))
 }
@@ -273,7 +271,7 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 			if !ok {
 				seen[arg.Identifier] = arg
 				arg.declares = true
-				if arg.Type == ArgumentTypeRequestPathValue && !IsSSEArgument(arg.Identifier) {
+				if arg.Type == ArgumentTypeRequestPathValue {
 					for i := range def.Segments {
 						segment := &def.Segments[i]
 						if segment.IsWildcard() && segment.value == arg.Identifier {

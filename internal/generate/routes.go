@@ -744,7 +744,7 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	if parseErrBlock == nil {
 		// Normal handlers accumulate scalar-parse failures into the template
 		// data (and respond with the recorded error status). SSE handlers pass
@@ -775,7 +775,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				call.Args[i] = ast.NewIdent(bodyValueIdent)
 				continue
 			}
-			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, nestedArg.Arguments(), rdIdent, config, arg, validationFailureBlock, parseErrBlock)
+			parseArgStatements, err := appendParseArgumentStatements(statements, file, nestedArg.Arguments(), rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -803,67 +803,61 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 
 			statements = append(parseArgStatements, nestedCall.DefineStmts()...)
 		case *ast.Ident:
-			if arg.Name == muxt.TemplateNameScopeIdentifierExecute || muxt.IsSSEArgument(arg.Name) || def.IsSignalsCallback(arg.Name) {
+			argument := args[i]
+			if argument.Type == muxt.ArgumentTypeExecute || argument.Type == muxt.ArgumentTypeSignalsCallback {
 				// Render and signals callbacks are validated and wired into the
 				// call in the sse handler assembly. They are not parsed from
 				// the request.
 				continue
 			}
 			name := arg.Name
-			argument := args[i]
-			src := requestArgumentSource(def, name)
 			ident := name
-			if def.ArgumentIsPathParameter(name) {
+			if argument.Type == muxt.ArgumentTypeRequestPathValue {
 				ident = pathParamIdent(name)
 				call.Args[i] = ast.NewIdent(ident)
 			}
 			if argument.Direct() {
 				if argument.Declares() {
-					switch name {
-					case muxt.TemplateNameScopeIdentifierForm:
+					switch argument.Type {
+					case muxt.ArgumentTypeRequestForm:
 						declareFormVar, err := formVariableAssignment(file, arg, argument.ParamType())
 						if err != nil {
 							return nil, err
 						}
 						statements = append(statements, callParseForm(file), declareFormVar)
-					case muxt.TemplateNameScopeIdentifierMultipart:
+					case muxt.ArgumentTypeRequestMultipartForm:
 						declareMultipartVar, err := multipartVariableAssignment(file, arg, argument.ParamType())
 						if err != nil {
 							return nil, err
 						}
 						statements = append(statements, callParseMultipartForm(file, config, parseErrBlock()), declareMultipartVar)
-					case muxt.TemplateNameScopeIdentifierContext:
+					case muxt.ArgumentTypeRequestContext:
 						statements = append(statements, contextAssignment(muxt.TemplateNameScopeIdentifierContext))
-					case muxt.TemplateNameScopeIdentifierRequestBody:
-						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(ident))(src))
-					default:
-						if def.ArgumentIsPathParameter(name) || name == muxt.TemplateNameScopeIdentifierLastEventID {
-							statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(ident))(src))
+					case muxt.ArgumentTypeRequestBody, muxt.ArgumentTypeRequestPathValue, muxt.ArgumentTypeLastEventID:
+						src, err := requestArgumentSource(argument)
+						if err != nil {
+							return nil, err
 						}
+						statements = append(statements, singleAssignment(token.DEFINE, ast.NewIdent(ident))(src))
 					}
 				}
 				continue
 			}
-			switch {
-			case def.ArgumentIsPathParameter(name):
+			switch argument.Type {
+			case muxt.ArgumentTypeRequestPathValue, muxt.ArgumentTypeLastEventID:
 				if !argument.Declares() {
 					continue
+				}
+				src, err := requestArgumentSource(argument)
+				if err != nil {
+					return nil, err
 				}
 				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
-			case name == muxt.TemplateNameScopeIdentifierLastEventID:
-				if !argument.Declares() {
-					continue
-				}
-				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
-				if err != nil {
-					return nil, err
-				}
-				statements = append(statements, s...)
-			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
+			case muxt.ArgumentTypeRequestForm:
 				if !argument.Declares() {
 					continue
 				}
@@ -872,7 +866,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 					return nil, err
 				}
 				statements = s
-			case arg.Name == muxt.TemplateNameScopeIdentifierMultipart:
+			case muxt.ArgumentTypeRequestMultipartForm:
 				if !argument.Declares() {
 					continue
 				}
@@ -1337,32 +1331,35 @@ func decodeJSONBodyStatements(file *File, valueIdent string, paramType source.Ty
 // client's "Last-Event-ID" as well.
 const lastEventIDHeader = "Last-Event-Id"
 
-// requestArgumentSource returns the expression a scalar argument is parsed from.
-// body is request.Body. lastEventID reads request.Header.Get("Last-Event-Id")
-// unless it is also a path wildcard, in which case the path value wins
-// (request.PathValue(name)).
-func requestArgumentSource(def muxt.Definition, name string) ast.Expr {
-	if name == muxt.TemplateNameScopeIdentifierRequestBody {
+// requestArgumentSource returns the expression a scalar argument is parsed
+// from: request.Body for body, request.Header.Get("Last-Event-Id") for
+// lastEventID, request.PathValue(argument.Identifier) for a path value, and
+// an error for any other argument type.
+func requestArgumentSource(argument muxt.Argument) (ast.Expr, error) {
+	switch argument.Type {
+	case muxt.ArgumentTypeRequestBody:
 		return &ast.SelectorExpr{
 			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
 			Sel: ast.NewIdent("Body"),
-		}
-	}
-	if def.ArgumentIsLastEventID(name) {
+		}, nil
+	case muxt.ArgumentTypeLastEventID:
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Header")},
 				Sel: ast.NewIdent("Get"),
 			},
 			Args: []ast.Expr{astgen.String(lastEventIDHeader)},
-		}
-	}
-	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-			Sel: ast.NewIdent(requestPathValue),
-		},
-		Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name)}},
+		}, nil
+	case muxt.ArgumentTypeRequestPathValue:
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
+				Sel: ast.NewIdent(requestPathValue),
+			},
+			Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(argument.Identifier)}},
+		}, nil
+	default:
+		return nil, fmt.Errorf("no request source for argument %s", argument.Identifier)
 	}
 }
 

@@ -118,10 +118,10 @@ func TestPathValueTypes(t *testing.T) {
 			want:       "string",
 		},
 		{
-			name:       "an sse-prefixed name is a callback, not a value",
+			name:       "an sse-prefixed name that is a path parameter is still a path value",
 			definition: "GET /{sseID} Int(sseID)",
 			param:      "sseID",
-			want:       "string",
+			want:       "int",
 		},
 		{
 			name:       "a remainder wildcard parses like any parameter",
