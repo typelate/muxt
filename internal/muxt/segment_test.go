@@ -1,6 +1,7 @@
 package muxt_test
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 	"html/template"
@@ -386,4 +387,33 @@ func segmentByName(segments []muxt.Segment, name string) (muxt.Segment, bool) {
 		}
 	}
 	return muxt.Segment{}, false
+}
+
+// TestRepeatedArgumentMarksEveryUse states that the error for a repeated
+// argument whose uses disagree marks each place the call passes it.
+func TestRepeatedArgumentMarksEveryUse(t *testing.T) {
+	for _, tt := range []struct {
+		definition string
+		offset     int
+		also       [][2]int
+	}{
+		{definition: "GET /{id} StringInt(id, id)", offset: 20, also: [][2]int{{24, 26}}},
+		{definition: "GET /{id} Wrap(Echo(id), id)", offset: 20, also: [][2]int{{25, 27}}},
+	} {
+		t.Run(tt.definition, func(t *testing.T) {
+			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
+			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+			require.NoError(t, err)
+
+			err = muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, fake.NewChecker().Fake())
+
+			nameErr, ok := errors.AsType[*muxt.NameError](err)
+			require.True(t, ok, "ResolveCall(%q) = %v, want a *NameError", tt.definition, err)
+			require.Equal(t, tt.offset, nameErr.Offset)
+			require.Equal(t, 2, nameErr.Length)
+			require.Equal(t, tt.also, nameErr.Also)
+		})
+	}
 }

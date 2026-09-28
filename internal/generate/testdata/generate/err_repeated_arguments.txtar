@@ -34,6 +34,7 @@ Command line: muxt generate --use-receiver-type=T
 -- index.gohtml --
 {{define "GET /{id} StringInt(id, id)"}}{{end}}
 {{define "POST /form TwoForms(form, form)"}}{{end}}
+{{define "GET /wrap/{id} Wrap(Echo(id), id)"}}{{end}}
 -- server.go --
 package server
 
@@ -45,13 +46,20 @@ type In struct{ Name string }
 
 func (T) StringInt(string, int) any { return nil }
 func (T) TwoForms(url.Values, In) any { return nil }
+func (T) Wrap(any, int) any { return nil }
+func (T) Echo(string) string { return "" }
 -- want/error.txt --
   POST /form TwoForms(form, form)
-                      ^^^^
+                      ^^^^  ^^^^
 index.gohtml:2:31: form is passed more than once with different types: url.Values and In
 server.go:10:10: TwoForms is defined here
 
+  GET /wrap/{id} Wrap(Echo(id), id)
+                           ^^   ^^
+index.gohtml:3:36: id is passed more than once with different types: string and int
+server.go:11:10: Wrap is defined here
+
   GET /{id} StringInt(id, id)
-                      ^^
+                      ^^  ^^
 index.gohtml:1:31: id is passed more than once with different types: string and int
 server.go:9:10: StringInt is defined here

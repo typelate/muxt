@@ -39,6 +39,10 @@ type NameError struct {
 	Offset int
 	Length int
 
+	// Also lists further [start, end) byte ranges of Name marked along
+	// with the failing segment, such as other uses of the same argument.
+	Also [][2]int
+
 	// Related lists source positions that give the error context, such
 	// as where the handler method is defined. Each entry is a complete
 	// "file:line:col: note" line.
@@ -60,17 +64,29 @@ func (e *NameError) Error() string {
 	}
 }
 
-// MultiLineError renders the template name with a marker under the
-// failing segment, then the short form, then the related locations.
-// Offset and Length are byte ranges; the marker is measured in runes
-// so it lines up under multi-byte characters.
+// MultiLineError renders the template name with markers under the
+// failing segment and any Also ranges, then the short form, then the
+// related locations. Offsets are byte ranges; markers are measured in
+// runes so they line up under multi-byte characters.
 func (e *NameError) MultiLineError() string {
-	offset := min(max(e.Offset, 0), len(e.Name))
-	end := min(offset+max(e.Length, 1), len(e.Name))
-	pad := utf8.RuneCountInString(e.Name[:offset])
-	width := max(utf8.RuneCountInString(e.Name[offset:end]), 1)
+	clamp := func(i int) int { return min(max(i, 0), len(e.Name)) }
+	marker := []rune(strings.Repeat(" ", utf8.RuneCountInString(e.Name)+1))
+	mark := func(start, end, minWidth int) {
+		pad := utf8.RuneCountInString(e.Name[:start])
+		width := max(utf8.RuneCountInString(e.Name[start:end]), minWidth)
+		for i := pad; i < pad+width; i++ {
+			marker[i] = '^'
+		}
+	}
+	offset := clamp(e.Offset)
+	mark(offset, min(offset+max(e.Length, 1), len(e.Name)), 1)
+	for _, span := range e.Also {
+		if start, end := clamp(span[0]), clamp(span[1]); start < end {
+			mark(start, end, 0)
+		}
+	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "  %s\n  %s%s\n", e.Name, strings.Repeat(" ", pad), strings.Repeat("^", width))
+	fmt.Fprintf(&sb, "  %s\n  %s\n", e.Name, strings.TrimRight(string(marker), " "))
 	sb.WriteString(e.Error())
 	for _, related := range e.Related {
 		sb.WriteString("\n")
@@ -120,6 +136,7 @@ func (def *Definition) spanErrorf(span [2]int, format string, args ...any) error
 // expression until finishNameError can translate it into a name offset.
 type positionedError struct {
 	pos, end token.Pos
+	also     []ast.Node
 	err      error
 }
 
@@ -143,25 +160,33 @@ func errAtNode(node ast.Node, err error) error {
 	return &positionedError{pos: node.Pos(), end: node.End(), err: err}
 }
 
-// findIdent returns the identifier named name among the call's
+// findIdent returns the first identifier named name among the call's
 // arguments, searching nested calls, or nil.
 func findIdent(call *ast.CallExpr, name string) ast.Node {
+	if nodes := findIdents(call, name); len(nodes) > 0 {
+		return nodes[0]
+	}
+	return nil
+}
+
+// findIdents returns every identifier named name among the call's
+// arguments, depth first, searching nested calls.
+func findIdents(call *ast.CallExpr, name string) []ast.Node {
 	if call == nil {
 		return nil
 	}
+	var nodes []ast.Node
 	for _, a := range call.Args {
 		switch arg := a.(type) {
 		case *ast.Ident:
 			if arg.Name == name {
-				return arg
+				nodes = append(nodes, arg)
 			}
 		case *ast.CallExpr:
-			if node := findIdent(arg, name); node != nil {
-				return node
-			}
+			nodes = append(nodes, findIdents(arg, name)...)
 		}
 	}
-	return nil
+	return nodes
 }
 
 // argErrorf reports an error about the call argument named name,
@@ -172,6 +197,16 @@ func (def *Definition) argErrorf(name, format string, args ...any) error {
 		return errAt(node, format, args...)
 	}
 	return fmt.Errorf(format, args...)
+}
+
+// argUsesErrorf reports an error about the call argument named name,
+// marking every place the call passes it.
+func (def *Definition) argUsesErrorf(name, format string, args ...any) error {
+	nodes := findIdents(def.call, name)
+	if len(nodes) == 0 {
+		return fmt.Errorf(format, args...)
+	}
+	return &positionedError{pos: nodes[0].Pos(), end: nodes[0].End(), also: nodes[1:], err: fmt.Errorf(format, args...)}
 }
 
 // pathParamErrorf reports an error about the occurrence-th path
@@ -202,6 +237,13 @@ func (def *Definition) handlerSpan() [2]int {
 	return [2]int{def.handlerOffset, def.handlerOffset + len(def.handler)}
 }
 
+// handlerNodeSpan translates a position range in the parsed handler
+// expression into a [start, end) byte range of the template name.
+func (def *Definition) handlerNodeSpan(pos, end token.Pos) [2]int {
+	start := def.handlerOffset + def.fileSet.Position(pos).Column - 1
+	return [2]int{start, start + def.fileSet.Position(end).Column - def.fileSet.Position(pos).Column}
+}
+
 // finishNameError gives err the definition's location: a positioned
 // handler-expression error is translated to its offset within the name,
 // any other error spans the segment given by fallback, and the
@@ -213,9 +255,11 @@ func (def *Definition) finishNameError(err error, fallback [2]int) error {
 	ne, ok := err.(*NameError)
 	if !ok {
 		if pe, isPositioned := err.(*positionedError); isPositioned && def.fileSet != nil {
-			start := def.handlerOffset + def.fileSet.Position(pe.pos).Column - 1
-			length := def.fileSet.Position(pe.end).Column - def.fileSet.Position(pe.pos).Column
-			ne = &NameError{Name: def.name, Offset: start, Length: length, err: pe.err}
+			span := def.handlerNodeSpan(pe.pos, pe.end)
+			ne = &NameError{Name: def.name, Offset: span[0], Length: span[1] - span[0], err: pe.err}
+			for _, node := range pe.also {
+				ne.Also = append(ne.Also, def.handlerNodeSpan(node.Pos(), node.End()))
+			}
 		} else {
 			ne = &NameError{Name: def.name, err: err}
 			if fallback[0] >= 0 {
