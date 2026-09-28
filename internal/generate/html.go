@@ -128,7 +128,7 @@ func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Defin
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := def.CallExpression()
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, def, file, def.Arguments, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, file, def.Arguments, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock

@@ -35,6 +35,7 @@ Command line: muxt generate --use-receiver-type=T
 -- index.gohtml --
 {{define "POST /form Forms(form, form)"}}{{.Result}}{{end}}
 {{define "GET /nested/{id} Sum(Double(id), id)"}}{{.Result}}{{end}}
+{{define "GET /stream/{sseID} Int(sseID)"}}{{.Result}}{{end}}
 -- server.go --
 package server
 
@@ -45,6 +46,7 @@ type T struct{}
 func (T) Forms(In, In) any { return nil }
 func (T) Double(int) int   { return 0 }
 func (T) Sum(int, int) any { return nil }
+func (T) Int(int) int      { return 0 }
 -- want/template_routes.go --
 package server
 
@@ -64,6 +66,7 @@ type RoutesReceiver interface {
 	Forms(In, In) any
 	Double(int) int
 	Sum(int, int) any
+	Int(int) int
 }
 
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
@@ -120,6 +123,38 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.okay = true
 		}
 		if err := templates.ExecuteTemplate(buf, "GET /nested/{id} Sum(Double(id), id)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /stream/{sseID}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, int]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		sseIDParsed, err := strconv.Atoi(request.PathValue("sseID"))
+		if err != nil {
+			td.errList = append(td.errList, err)
+			td.errStatusCode = http.StatusBadRequest
+		}
+		sseIDPathParam := sseIDParsed
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Int(sseIDPathParam)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /stream/{sseID} Int(sseID)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
@@ -229,4 +264,8 @@ func (routePaths TemplateRoutePaths) Forms() string {
 
 func (routePaths TemplateRoutePaths) Sum(idPathParam int) string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))
+}
+
+func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))
 }
