@@ -26,7 +26,7 @@ The simplest web-app architecture is a single binary with an HTTP server. The Go
 go install github.com/typelate/muxt@latest
 ```
 
-Or as a project tool: `go get -tool github.com/typelate/muxt`. Pre-built binaries are also attached to each [release](https://github.com/typelate/muxt/releases).
+Or as a project tool: `go get -tool github.com/typelate/muxt`.
 
 muxt loads Go packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
 
