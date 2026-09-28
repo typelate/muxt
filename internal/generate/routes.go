@@ -1492,9 +1492,9 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
 	}
 	switch def.ResultStatusCode() {
-	case muxt.StatusCodeSourceMethod:
+	case muxt.ResultStatusCodeMethod:
 		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}})
-	case muxt.StatusCodeSourceField:
+	case muxt.ResultStatusCodeField:
 		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
 	}
 	var list []ast.Stmt
