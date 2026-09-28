@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/ettle/strcase v0.2.0
-	github.com/maxbrunsfeld/counterfeiter/v6 v6.12.2
+	github.com/maxbrunsfeld/counterfeiter/v6 v6.14.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
