@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -121,7 +122,8 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		name := segment.Value()
 		ident := pathParamIdent(name)
 		wildcard := segment.IsRemainder()
-		pathValueType := segment.Type()
+		arg := segment.Argument()
+		pathValueType := pathSegmentHelperType(arg)
 		tpNode, err := file.TypeExpr(pathValueType)
 		if err != nil {
 			return nil, false, false, err
@@ -140,7 +142,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		summer.Write([]byte(def.Name()))
 		pathHash := hex.EncodeToString(summer.Sum(nil))
 
-		if segment.TextMarshaler() {
+		if arg != nil && !arg.Direct() && arg.TextMarshaler() {
 			hasErrorResult = true
 			if len(method.Type.Results.List) == 1 {
 				method.Type.Results.List = append(method.Type.Results.List, &ast.Field{
@@ -260,6 +262,17 @@ func indexRoutePath(file *File, config RoutesFileConfiguration, method *ast.Func
 // code references: an import, another local, or a captured variable.
 func pathParamIdent(name string) string {
 	return name + "PathParam"
+}
+
+// pathSegmentHelperType is the type a wildcard segment's parameter takes in
+// the generated route path method: string when the call does not link an
+// argument to the segment or that argument is Direct (its parameter takes
+// the raw request value as it is), otherwise the argument's parameter type.
+func pathSegmentHelperType(arg *muxt.Argument) source.Type {
+	if arg == nil || arg.Direct() {
+		return source.NewType(types.Universe.Lookup("string").Type())
+	}
+	return arg.ParamType()
 }
 
 // escapedPathSegment wraps value in a call to the generated escapePathSegment

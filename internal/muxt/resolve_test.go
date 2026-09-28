@@ -41,7 +41,7 @@ func (T) Form(In) any        { return nil }
 			require.False(t, def.Signature().IsZero(), "%s is resolved", def.Name())
 			segment, ok := def.PathParameter("id")
 			require.True(t, ok)
-			require.Equal(t, "int", segment.Type().Format(unqualified))
+			require.Equal(t, "int", pathParameterType(segment))
 		}
 	})
 
