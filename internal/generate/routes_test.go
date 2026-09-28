@@ -27,7 +27,7 @@ func (T) Article(id int, title string) (string, error) { return "", nil }
 func (T) Title(id int) string { return "" }
 `, "T", `{{define "GET /article/{id} Article(id, Title(id))"}}{{end}}`)
 
-	defs, err := muxt.Resolve(pkg, receiver, fake.NewChecker().Fake())
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ type T struct{}
 func (T) Stream(string) {}
 `, "T", `{{define "GET /x sse(Stream(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`)
 
-	defs, err := muxt.Resolve(pkg, receiver, fake.NewChecker().Fake())
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
 	if err != nil {
 		t.Fatal(err)
 	}
