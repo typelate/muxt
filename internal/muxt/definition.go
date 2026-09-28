@@ -460,9 +460,9 @@ func (def Definition) IsMethod() bool                     { return def.isMethod 
 func (def Definition) ResultShape() ResultShape           { return def.resultShape }
 func (def Definition) ResultStatusCode() ResultStatusCode { return def.resultStatusCode }
 
-// ResultDataType is the type of the template data's Result field.
-func (def Definition) ResultDataType() source.Type { return source.NewType(def.resultDataType()) }
-func (def Definition) UsesSignals() bool           { return def.usesSignals }
+// ResultType is the type of the template data's Result field.
+func (def Definition) ResultType() source.Type { return source.NewType(def.resultType()) }
+func (def Definition) UsesSignals() bool       { return def.usesSignals }
 
 func (def Definition) IsIndex() bool {
 	p := def.Path()

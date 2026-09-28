@@ -26,7 +26,7 @@ func newHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt
 
 func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, execIdx int, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
-	resultType := def.ResultDataType()
+	resultType := def.ResultType()
 	execHasArg := def.Arguments[execIdx].CallbackHasArg()
 
 	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
@@ -78,7 +78,7 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
-	resultType := def.ResultDataType()
+	resultType := def.ResultType()
 	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
 		return lit, err

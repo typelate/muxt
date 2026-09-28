@@ -176,7 +176,7 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	if err := resolveCallbackShapes(def); err != nil {
 		return def.finishNameError(err, def.handlerSpan())
 	}
-	def.resultStatusCode = statusCodeSource(def.resultDataType(), pkg.Types)
+	def.resultStatusCode = statusCodeSource(def.resultType(), pkg.Types)
 	return nil
 }
 
@@ -190,10 +190,10 @@ const (
 	ResultStatusCodeField
 )
 
-// resultDataType is the type the template data's Result field has: the
+// resultType is the type the template data's Result field has: the
 // execute callback's parameter when the call takes one, otherwise the
 // call's first result.
-func (def *Definition) resultDataType() types.Type {
+func (def *Definition) resultType() types.Type {
 	if i, ok := def.ExecuteArgumentIndex(); ok {
 		return def.Arguments[i].callbackResult
 	}
