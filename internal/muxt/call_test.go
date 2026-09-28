@@ -317,23 +317,23 @@ func TestArgument(t *testing.T) {
 		}},
 		{Name: "result with a StatusCode method", Receiver: serverType, Template: `{{define "GET / Coded()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
-			require.Equal(t, muxt.StatusCodeSourceMethod, defs[0].ResultStatusCode())
+			require.Equal(t, muxt.ResultStatusCodeMethod, defs[0].ResultStatusCode())
 		}},
 		{Name: "result with a StatusCode field", Receiver: serverType, Template: `{{define "GET / WithField()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
-			require.Equal(t, muxt.StatusCodeSourceField, defs[0].ResultStatusCode())
+			require.Equal(t, muxt.ResultStatusCodeField, defs[0].ResultStatusCode())
 		}},
 		{Name: "result without a StatusCode", Receiver: serverType, Template: `{{define "GET / StringError()"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
-			require.Equal(t, muxt.StatusCodeSourceNone, defs[0].ResultStatusCode())
+			require.Equal(t, muxt.ResultStatusCodeNone, defs[0].ResultStatusCode())
 		}},
 		{Name: "execute callback data with a StatusCode method", Receiver: serverType, Template: `{{define "GET / ExecuteCoded(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
-			require.Equal(t, muxt.StatusCodeSourceMethod, defs[0].ResultStatusCode())
+			require.Equal(t, muxt.ResultStatusCodeMethod, defs[0].ResultStatusCode())
 		}},
 		{Name: "execute callback without data", Receiver: serverType, Template: `{{define "GET / ExecuteNoArg(execute)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)
-			require.Equal(t, muxt.StatusCodeSourceNone, defs[0].ResultStatusCode())
+			require.Equal(t, muxt.ResultStatusCodeNone, defs[0].ResultStatusCode())
 		}},
 		{Name: "nested call second result must be error or bool", Receiver: serverType, Template: `{{define "GET / Any(TwoResultsSecondNotErrorOrBool())"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "the second result of TwoResultsSecondNotErrorOrBool() (int, float64) must be an error or a bool, got float64")

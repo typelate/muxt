@@ -180,14 +180,14 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	return nil
 }
 
-// StatusCodeSource is where a route's result offers a status code: a
+// ResultStatusCode is where a route's result offers a status code: a
 // StatusCode() int method, a StatusCode field, or nowhere.
-type StatusCodeSource int
+type ResultStatusCode int
 
 const (
-	StatusCodeSourceNone StatusCodeSource = iota
-	StatusCodeSourceMethod
-	StatusCodeSourceField
+	ResultStatusCodeNone ResultStatusCode = iota
+	ResultStatusCodeMethod
+	ResultStatusCodeField
 )
 
 // resultDataType is the type the template data's Result field has: the
@@ -204,17 +204,17 @@ func (def *Definition) resultDataType() types.Type {
 	return nil
 }
 
-func statusCodeSource(tp types.Type, pkg *types.Package) StatusCodeSource {
+func statusCodeSource(tp types.Type, pkg *types.Package) ResultStatusCode {
 	if tp == nil {
-		return StatusCodeSourceNone
+		return ResultStatusCodeNone
 	}
 	if types.Implements(tp, statusCoder) {
-		return StatusCodeSourceMethod
+		return ResultStatusCodeMethod
 	}
 	if obj, _, _ := types.LookupFieldOrMethod(tp, true, pkg, "StatusCode"); obj != nil {
-		return StatusCodeSourceField
+		return ResultStatusCodeField
 	}
-	return StatusCodeSourceNone
+	return ResultStatusCodeNone
 }
 
 var statusCoder = types.NewInterfaceType([]*types.Func{
