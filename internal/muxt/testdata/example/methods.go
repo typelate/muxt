@@ -31,6 +31,11 @@ type In struct{ Name string }
 
 func (srv *Server) FormStruct(In) any { return nil }
 
+// TwoForms takes form both raw and bound to a struct, for the repeated
+// argument conflict rule: two different bindings of the same request value
+// disagree even though they are otherwise valid on their own.
+func (srv *Server) TwoForms(Values, In) any { return nil }
+
 func (srv *Server) NoParams() error { return nil }
 
 func (srv *Server) FieldList(ctx Context, postID, commentID string) any { return nil }

@@ -165,6 +165,9 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
+	if err := checkRepeatedArguments(def, typeQualifier(receiver.Obj().Pkg()), args); err != nil {
+		return def.finishNameError(err, def.handlerSpan())
+	}
 	recordPathValueTypes(def, checker, args, make(map[string]bool))
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
@@ -224,6 +227,44 @@ var statusCoder = types.NewInterfaceType([]*types.Func{
 		false,
 	)),
 }, nil).Complete()
+
+// checkRepeatedArguments rejects a repeated path value, lastEventID, form or
+// multipart argument whose occurrences disagree: the generator declares one
+// local for each of these request values, at the first occurrence depth
+// first, in argument order, and every later occurrence reuses it. A Direct
+// occurrence needs the raw request value; any other occurrence needs its
+// parameter type. Two Direct occurrences always agree; two non-Direct
+// occurrences agree when their parameter types are identical; anything else
+// would reuse a local of the wrong type, so it is rejected here instead.
+func checkRepeatedArguments(def *Definition, qual types.Qualifier, args []Argument) error {
+	return checkRepeatedArgumentsSeen(def, qual, args, make(map[string]Argument))
+}
+
+func checkRepeatedArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]Argument) error {
+	for _, arg := range args {
+		switch arg.Type {
+		case ArgumentTypeCall:
+			if err := checkRepeatedArgumentsSeen(def, qual, arg.args, seen); err != nil {
+				return err
+			}
+		case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm:
+			first, ok := seen[arg.Identifier]
+			if !ok {
+				seen[arg.Identifier] = arg
+				continue
+			}
+			if first.direct && arg.direct {
+				continue
+			}
+			if !first.direct && !arg.direct && types.Identical(first.paramType, arg.paramType) {
+				continue
+			}
+			return def.argErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
+				arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual))
+		}
+	}
+	return nil
+}
 
 // recordPathValueTypes records the type each path parameter parses into.
 //
