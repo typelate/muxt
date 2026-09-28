@@ -48,6 +48,11 @@ type Argument struct {
 	scopeType types.Type
 	direct    bool
 	method    UnmarshalMethod
+
+	// textMarshaler reports whether a parsed path value or lastEventID
+	// argument's parameter type implements encoding.TextMarshaler, so a
+	// route path formats it back with MarshalText.
+	textMarshaler bool
 }
 
 // ScopeType returns the type a request value argument binds to before any
@@ -63,6 +68,11 @@ func (a Argument) Direct() bool { return a.direct }
 // UnmarshalMethod returns how a path value or lastEventID argument that is
 // not Direct parses from its string form.
 func (a Argument) UnmarshalMethod() UnmarshalMethod { return a.method }
+
+// TextMarshaler reports whether a parsed path value or lastEventID
+// argument's parameter type implements encoding.TextMarshaler, so a route
+// path formats it back with MarshalText.
+func (a Argument) TextMarshaler() bool { return a.textMarshaler }
 
 // Signature returns the resolved signature of a nested call argument
 // (Type == ArgumentTypeCall), or nil for a leaf argument.
