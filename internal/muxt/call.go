@@ -276,7 +276,7 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 			if types.Identical(first.paramType, arg.paramType) {
 				continue
 			}
-			return def.argErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
+			return def.argUsesErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
 				arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual))
 		}
 	}

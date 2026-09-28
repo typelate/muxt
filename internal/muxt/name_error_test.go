@@ -64,6 +64,21 @@ func TestNameErrorMultiLineErrorClamps(t *testing.T) {
 			ExpectedMarker: "       ^^^^^^^",
 		},
 		{
+			Name:           "every span is marked on one line",
+			Err:            NameError{Name: "GET /{id} F(id, id)", Offset: 12, Length: 2, Also: [][2]int{{16, 18}}, err: errors.New("boom")},
+			ExpectedMarker: "            ^^  ^^",
+		},
+		{
+			Name:           "a span before the primary one is marked too",
+			Err:            NameError{Name: "GET /{id} F(id, id)", Offset: 16, Length: 2, Also: [][2]int{{12, 14}}, err: errors.New("boom")},
+			ExpectedMarker: "            ^^  ^^",
+		},
+		{
+			Name:           "extra spans are clamped to the name",
+			Err:            NameError{Name: "GET /", Offset: 0, Length: 1, Also: [][2]int{{3, 99}, {-4, -1}}, err: errors.New("boom")},
+			ExpectedMarker: "^  ^^",
+		},
+		{
 			Name:           "related locations follow the short form",
 			Err:            NameError{Name: "GET /", Offset: 0, Length: 3, err: errors.New("boom"), Related: []string{"main.go:4:5: F is defined here"}},
 			ExpectedMarker: "^^^",
@@ -77,6 +92,38 @@ func TestNameErrorMultiLineErrorClamps(t *testing.T) {
 			assert.Equal(t, expected, tt.Err.MultiLineError())
 		})
 	}
+}
+
+func TestFindIdents(t *testing.T) {
+	for _, tt := range []struct {
+		expr      string
+		name      string
+		wantPos   []token.Pos
+		wantFirst token.Pos
+	}{
+		{expr: `F(a, G(a), b)`, name: "a", wantPos: []token.Pos{3, 8}, wantFirst: 3},
+		{expr: `F(G(a), a)`, name: "a", wantPos: []token.Pos{5, 9}, wantFirst: 5},
+		{expr: `F(b)`, name: "a"},
+		{expr: `F()`, name: "a"},
+	} {
+		t.Run(tt.expr, func(t *testing.T) {
+			call := mustParseCall(t, tt.expr)
+			var got []token.Pos
+			for _, node := range findIdents(call, tt.name) {
+				got = append(got, node.Pos())
+			}
+			assert.Equal(t, tt.wantPos, got, "findIdents(%q, %q)", tt.expr, tt.name)
+
+			first := findIdent(call, tt.name)
+			if tt.wantFirst == token.NoPos {
+				assert.Nil(t, first, "findIdent(%q, %q)", tt.expr, tt.name)
+				return
+			}
+			require.NotNil(t, first, "findIdent(%q, %q)", tt.expr, tt.name)
+			assert.Equal(t, tt.wantFirst, first.Pos(), "findIdent(%q, %q)", tt.expr, tt.name)
+		})
+	}
+	assert.Nil(t, findIdents(nil, "a"), "findIdents(nil, a)")
 }
 
 func TestErrorList(t *testing.T) {
