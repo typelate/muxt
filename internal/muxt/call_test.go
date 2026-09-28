@@ -477,6 +477,9 @@ func TestArgument(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, defs[0].Arguments[0].FormFields())
 		}},
+		{Name: "form passed once raw and once as a struct conflicts", Receiver: serverType, Template: `{{define "GET / TwoForms(form, form)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.ErrorContains(t, err, "form is passed more than once")
+		}},
 
 		// Direct is what generation reads to decide whether to pass a
 		// request value to its parameter as it is, or to parse or bind it

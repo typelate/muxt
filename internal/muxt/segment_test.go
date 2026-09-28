@@ -35,6 +35,7 @@ func (T) Wrap(any, int) any             { return nil }
 func (T) Echo(string) string            { return "" }
 func (T) Inner(int) int                 { return 0 }
 func (T) Pair(int, int) any             { return nil }
+func (T) AnyString(any, string) any     { return nil }
 `
 
 // TestPathValueTypes states which type a path parameter parses into: the
@@ -46,6 +47,7 @@ func TestPathValueTypes(t *testing.T) {
 		definition string
 		param      string
 		want       string
+		wantErr    string
 	}{
 		{
 			name:       "parsed into an int parameter",
@@ -75,23 +77,29 @@ func TestPathValueTypes(t *testing.T) {
 			name:       "the first occurrence decides when it parses",
 			definition: "GET /{id} IntString(id, id)",
 			param:      "id",
-			want:       "int",
+			wantErr:    "id is passed more than once",
 		},
 		{
 			name:       "the first occurrence decides when it does not",
 			definition: "GET /{id} StringInt(id, id)",
 			param:      "id",
-			want:       "string",
+			wantErr:    "id is passed more than once",
 		},
 		{
 			name:       "a nested call is walked where it is passed",
 			definition: "GET /{id} Outer(Inner(id), id)",
 			param:      "id",
-			want:       "int",
+			wantErr:    "id is passed more than once",
 		},
 		{
 			name:       "a nested call that takes a string decides before a later int",
 			definition: "GET /{id} Wrap(Echo(id), id)",
+			param:      "id",
+			wantErr:    "id is passed more than once",
+		},
+		{
+			name:       "two direct occurrences of the same path value agree",
+			definition: "GET /{id} AnyString(id, id)",
 			param:      "id",
 			want:       "string",
 		},
@@ -135,7 +143,12 @@ func TestPathValueTypes(t *testing.T) {
 			srcPkg := source.Package{Fset: fake.FileSet, Types: pkg}
 			fakeChecker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
 
-			if err := muxt.ResolveCall(def, srcPkg, receiver, fakeChecker); err != nil {
+			err = muxt.ResolveCall(def, srcPkg, receiver, fakeChecker)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
 
