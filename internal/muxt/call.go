@@ -49,9 +49,6 @@ type Argument struct {
 	direct    bool
 	method    UnmarshalMethod
 
-	// textMarshaler reports whether a parsed path value or lastEventID
-	// argument's parameter type implements encoding.TextMarshaler, so a
-	// route path formats it back with MarshalText.
 	textMarshaler bool
 }
 
@@ -175,10 +172,9 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	def.sig = sig
 	def.isMethod = isMethod
 	def.Arguments = args
-	if err := checkRepeatedArguments(def, typeQualifier(receiver.Obj().Pkg()), args); err != nil {
+	if err := linkArguments(def, typeQualifier(receiver.Obj().Pkg())); err != nil {
 		return def.finishNameError(err, def.handlerSpan())
 	}
-	linkArguments(def)
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		// Result-shape errors are about the method contract, so the
@@ -238,29 +234,41 @@ var statusCoder = types.NewInterfaceType([]*types.Func{
 	)),
 }, nil).Complete()
 
-// checkRepeatedArguments rejects a repeated path value, lastEventID, form or
-// multipart argument whose occurrences disagree: the generator declares one
-// local for each of these request values, at the first occurrence depth
-// first, in argument order, and every later occurrence reuses it. A Direct
-// occurrence needs the raw request value; any other occurrence needs its
-// parameter type. Two Direct occurrences always agree; two non-Direct
-// occurrences agree when their parameter types are identical; anything else
-// would reuse a local of the wrong type, so it is rejected here instead.
-func checkRepeatedArguments(def *Definition, qual types.Qualifier, args []Argument) error {
-	return checkRepeatedArgumentsSeen(def, qual, args, make(map[string]Argument))
+// linkArguments walks def's arguments depth first, in argument order, and
+// for each wildcard's first occurrence links its segment to the argument.
+// It also rejects a repeated path value, lastEventID, form or multipart
+// argument whose occurrences disagree: the generator declares one local for
+// each of these request values, at the first occurrence, and every later
+// occurrence reuses it. A Direct occurrence needs the raw request value;
+// any other occurrence needs its parameter type. Two Direct occurrences
+// always agree; two non-Direct occurrences agree when their parameter types
+// are identical; anything else would reuse a local of the wrong type. An
+// sse-prefixed name is a render callback wherever it appears, never a path
+// value.
+func linkArguments(def *Definition, qual types.Qualifier) error {
+	return linkArgumentsSeen(def, qual, def.Arguments, make(map[string]*Argument))
 }
 
-func checkRepeatedArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]Argument) error {
-	for _, arg := range args {
+func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]*Argument) error {
+	for i := range args {
+		arg := &args[i]
 		switch arg.Type {
 		case ArgumentTypeCall:
-			if err := checkRepeatedArgumentsSeen(def, qual, arg.args, seen); err != nil {
+			if err := linkArgumentsSeen(def, qual, arg.args, seen); err != nil {
 				return err
 			}
 		case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm:
 			first, ok := seen[arg.Identifier]
 			if !ok {
 				seen[arg.Identifier] = arg
+				if arg.Type == ArgumentTypeRequestPathValue && !IsSSEArgument(arg.Identifier) {
+					for i := range def.Segments {
+						segment := &def.Segments[i]
+						if segment.IsWildcard() && segment.value == arg.Identifier {
+							segment.argument = arg
+						}
+					}
+				}
 				continue
 			}
 			if first.direct && arg.direct {
@@ -274,38 +282,6 @@ func checkRepeatedArgumentsSeen(def *Definition, qual types.Qualifier, args []Ar
 		}
 	}
 	return nil
-}
-
-// linkArguments links each wildcard segment to the argument that first
-// supplies its value -- depth first, in argument order, the same walk the
-// generator repeats to decide which occurrence of a request value it
-// declares a local for. Later occurrences of the same identifier are
-// skipped; checkRepeatedArguments already guaranteed they need the same
-// value. An sse-prefixed name is a render callback wherever it appears,
-// never a path value.
-func linkArguments(def *Definition) {
-	linkArgumentsSeen(def, def.Arguments, make(map[string]bool))
-}
-
-func linkArgumentsSeen(def *Definition, args []Argument, seen map[string]bool) {
-	for i := range args {
-		arg := &args[i]
-		switch arg.Type {
-		case ArgumentTypeCall:
-			linkArgumentsSeen(def, arg.args, seen)
-		case ArgumentTypeRequestPathValue:
-			if seen[arg.Identifier] || IsSSEArgument(arg.Identifier) {
-				continue
-			}
-			seen[arg.Identifier] = true
-			for i := range def.Segments {
-				segment := &def.Segments[i]
-				if segment.IsWildcard() && segment.value == arg.Identifier {
-					segment.argument = arg
-				}
-			}
-		}
-	}
 }
 
 // resolveCallbackShapes validates each render-callback argument against the

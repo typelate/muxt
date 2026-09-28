@@ -28,10 +28,9 @@ type Segment struct {
 	kind  SegmentKind
 	value string
 
-	// argument is the first occurrence, depth first in argument order, of
-	// this wildcard's identifier in the call's arguments. It is nil for a
-	// literal segment, a wildcard the call does not pass, or a route with
-	// no call.
+	// argument is the first occurrence of this wildcard's identifier in the
+	// call's arguments, or nil for a literal segment, an unpassed wildcard,
+	// or a route with no call.
 	argument *Argument
 }
 
@@ -115,7 +114,6 @@ func (s Segment) IsWildcard() bool {
 // value is the rest of the path.
 func (s Segment) IsRemainder() bool { return s.kind == SegmentKindWildcardRemainder }
 
-// Argument returns the resolved argument that first supplies this wildcard
-// segment's value, or nil when the call does not pass it (or there is no
-// call).
+// Argument returns the argument that first supplies this wildcard segment's
+// value, or nil when the call does not pass it.
 func (s Segment) Argument() *Argument { return s.argument }
