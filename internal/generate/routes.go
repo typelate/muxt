@@ -744,7 +744,7 @@ func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
 	}
 }
 
-func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, args []muxt.Argument, parsed map[string]struct{}, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	if parseErrBlock == nil {
 		// Normal handlers accumulate scalar-parse failures into the template
 		// data (and respond with the recorded error status). SSE handlers pass
@@ -757,9 +757,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 	}
 	if len(args) != len(call.Args) {
 		return nil, fmt.Errorf("call %s was not resolved", fun.Name)
-	}
-	if parsed == nil {
-		parsed = make(map[string]struct{})
 	}
 	resultCount := 0
 	for i, a := range call.Args {
@@ -778,7 +775,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				call.Args[i] = ast.NewIdent(bodyValueIdent)
 				continue
 			}
-			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, nestedArg.Arguments(), parsed, rdIdent, config, arg, validationFailureBlock, parseErrBlock)
+			parseArgStatements, err := appendParseArgumentStatements(statements, def, file, nestedArg.Arguments(), rdIdent, config, arg, validationFailureBlock, parseErrBlock)
 			if err != nil {
 				return nil, err
 			}
@@ -821,8 +818,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				call.Args[i] = ast.NewIdent(ident)
 			}
 			if argument.Direct() {
-				if _, ok := parsed[name]; !ok {
-					parsed[name] = struct{}{}
+				if argument.Declares() {
 					switch name {
 					case muxt.TemplateNameScopeIdentifierForm:
 						declareFormVar, err := formVariableAssignment(file, arg, argument.ParamType())
@@ -848,31 +844,38 @@ func appendParseArgumentStatements(statements []ast.Stmt, def muxt.Definition, f
 				}
 				continue
 			}
-			if _, ok := parsed[name]; ok {
-				continue
-			}
 			switch {
 			case def.ArgumentIsPathParameter(name):
-				parsed[name] = struct{}{}
+				if !argument.Declares() {
+					continue
+				}
 				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
 			case name == muxt.TemplateNameScopeIdentifierLastEventID:
-				parsed[name] = struct{}{}
+				if !argument.Declares() {
+					continue
+				}
 				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
 				if err != nil {
 					return nil, err
 				}
 				statements = append(statements, s...)
 			case arg.Name == muxt.TemplateNameScopeIdentifierForm:
+				if !argument.Declares() {
+					continue
+				}
 				s, err := appendParseFormToStructStatements(statements, file, arg, argument, validationFailureBlock, parseErrBlock)
 				if err != nil {
 					return nil, err
 				}
 				statements = s
 			case arg.Name == muxt.TemplateNameScopeIdentifierMultipart:
+				if !argument.Declares() {
+					continue
+				}
 				s, err := appendParseMultipartFormToStructStatements(statements, file, arg, argument, validationFailureBlock, parseErrBlock, config)
 				if err != nil {
 					return nil, err
