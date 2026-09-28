@@ -168,7 +168,7 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	if err != nil {
 		return fail(err)
 	}
-	defs, err := muxt.Resolve(pkg, receiver, load.StandardLibrary(pl))
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
 	if err != nil {
 		return fail(err)
 	}

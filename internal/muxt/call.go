@@ -991,10 +991,10 @@ func patternScope() []string {
 	}
 }
 
-// Resolve parses the route definitions of every templates variable in pkg
+// ResolveDefinitions parses the route definitions of every templates variable in pkg
 // and resolves each call against receiver, or against an empty struct named
 // Receiver when there is none, so handler methods are inferred.
-func Resolve(pkg source.Package, receiver *types.Named, checker Checker) ([]Definition, error) {
+func ResolveDefinitions(pkg source.Package, receiver *types.Named, checker Checker) ([]Definition, error) {
 	if receiver == nil {
 		receiver = asteval.NamedEmptyStruct("Receiver", pkg.Types)
 	}

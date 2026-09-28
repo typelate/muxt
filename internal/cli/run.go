@@ -123,7 +123,7 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		printMultiLineError(cmd, err)
 		return err
 	}
-	defs, err := muxt.Resolve(pkg, receiver, load.StandardLibrary(pl))
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
