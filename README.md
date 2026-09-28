@@ -16,7 +16,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 
 `muxt generate` reads the name and writes an `http.Handler` that calls your method.
 
-`muxt check` type-checks a template against the data it receives. It checks each `ExecuteTemplate` call on the templates variable whose template name is a literal string and whose data has a statically known type. Generated handlers meet both conditions. Rename a field and the template that still uses it fails the static check.
+`muxt check` type-checks a template against the data it receives. It checks each `ExecuteTemplate` call on the templates variable whose template name is a literal string and whose data has a statically known type. Generated handlers meet both conditions. Rename a field and the template that still uses it fails a static `muxt check`.
 
 The simplest web-app architecture is a single binary with an HTTP server. The Go standard library has all the runtime you need for the HTTP endpoints and hypermedia generation. When you need more complicated front-end interaction, reach for fixi, htmx, and Datastar. What it lacks is statically type-checked coupling between your Go code and HTML templates.
 
