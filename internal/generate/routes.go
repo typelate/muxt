@@ -184,7 +184,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
-	logResolution(topLevelTemplateRoutes, config, logger)
+	logResolutionNotes(topLevelTemplateRoutes, config, logger)
 	if err := collectReceiverMethods(topLevelTemplateRoutes, file, receiverInterface); err != nil {
 		return nil, err
 	}
@@ -274,8 +274,8 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 // signatures — one line per method and the explanation once after the
 // list; the default mode synthesizes every method by design, so it
 // stays quiet.
-// logResolution reports what resolution found for defs.
-func logResolution(defs []muxt.Definition, config RoutesFileConfiguration, logger *log.Logger) {
+// logResolutionNotes reports what resolution found for defs.
+func logResolutionNotes(defs []muxt.Definition, config RoutesFileConfiguration, logger *log.Logger) {
 	if logger == nil {
 		return
 	}
@@ -523,7 +523,7 @@ func generatePerFileRouteFunction(
 	}
 
 	// Generate handlers for each template
-	logResolution(defs, config, logger)
+	logResolutionNotes(defs, config, logger)
 	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
 		return nil, err
 	}
