@@ -50,11 +50,7 @@ type Argument struct {
 	method    UnmarshalMethod
 
 	textMarshaler bool
-
-	// declares reports whether this is the first occurrence of a request
-	// value the generator declares a local for; a later occurrence reuses
-	// that local instead of declaring its own.
-	declares bool
+	declares      bool
 }
 
 // ScopeType returns the type a request value argument binds to before any
@@ -243,16 +239,10 @@ var statusCoder = types.NewInterfaceType([]*types.Func{
 	)),
 }, nil).Complete()
 
-// linkArguments walks def's arguments depth first, in argument order. For
-// a path value, lastEventID, form, multipart, ctx or body argument, the
-// first occurrence of its identifier declares the generator's local for it
-// (Declares) and, for a path value, links the wildcard segment to it; every
-// later occurrence reuses that local. It also rejects a repeated path
-// value, lastEventID, form or multipart argument whose occurrences
-// disagree: a Direct occurrence needs the raw request value, any other
-// occurrence needs its parameter type; two Direct occurrences always agree,
-// two non-Direct occurrences agree when their parameter types are
-// identical, and anything else would reuse a local of the wrong type.
+// linkArguments marks the first occurrence, depth first, of each request
+// value as the one that declares its local, links each wildcard segment to
+// its first occurrence, and rejects a repeat that needs a different value
+// than the first.
 func linkArguments(def *Definition, qual types.Qualifier) error {
 	return linkArgumentsSeen(def, qual, def.Arguments, make(map[string]*Argument))
 }
@@ -272,10 +262,9 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 				seen[arg.Identifier] = arg
 				arg.declares = true
 				if arg.Type == ArgumentTypeRequestPathValue {
-					for i := range def.Segments {
-						segment := &def.Segments[i]
-						if segment.IsWildcard() && segment.value == arg.Identifier {
-							segment.argument = arg
+					for j := range def.Segments {
+						if def.Segments[j].IsWildcard() && def.Segments[j].value == arg.Identifier {
+							def.Segments[j].argument = arg
 						}
 					}
 				}
