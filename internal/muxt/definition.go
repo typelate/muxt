@@ -474,24 +474,6 @@ func (def Definition) HasPathEndWildcard() bool {
 	return strings.HasSuffix(def.Path(), "{$}")
 }
 
-// ArgumentIsLastEventID reports whether name binds to the Last-Event-ID
-// request header. The name is reserved, so no path parameter can shadow it.
-func (def Definition) ArgumentIsLastEventID(name string) bool {
-	return name == TemplateNameScopeIdentifierLastEventID
-}
-
-// ArgumentIsPathParameter reports whether name is a wildcard segment of the
-// path.
-func (def Definition) ArgumentIsPathParameter(name string) bool {
-	_, ok := pathParameter(def.Segments, name)
-	return ok
-}
-
-// PathParameter returns the wildcard segment that names the path parameter.
-func (def Definition) PathParameter(name string) (Segment, bool) {
-	return pathParameter(def.Segments, name)
-}
-
 // SignalsCallback returns the first Signals-suffixed callback argument name,
 // if the route has one.
 func (def Definition) SignalsCallback() (string, bool) {

@@ -636,7 +636,7 @@ func defaultScopeType(checker Checker, def *Definition, argumentIdentifier strin
 		tp, err := checker.ScopeType(argumentIdentifier)
 		return tp, err == nil
 	default:
-		if def.ArgumentIsPathParameter(argumentIdentifier) {
+		if _, ok := pathParameter(def.Segments, argumentIdentifier); ok {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
@@ -737,7 +737,7 @@ func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident,
 			return a, err
 		}
 	default:
-		if def.ArgumentIsPathParameter(arg.Name) {
+		if _, ok := pathParameter(def.Segments, arg.Name); ok {
 			a.Type = ArgumentTypeRequestPathValue
 			if err := bindParsedArgument(&a, checker, qual); err != nil {
 				return a, err
@@ -801,9 +801,10 @@ func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
 // callback argument on this route. A declared path parameter wins: a path
 // value that happens to end in Signals stays a path value.
 func (def *Definition) IsSignalsCallback(name string) bool {
+	_, isPathParameter := pathParameter(def.Segments, name)
 	return def.Representation == RepresentationSSE &&
 		IsSignalsCallbackArgument(name) &&
-		!def.ArgumentIsPathParameter(name)
+		!isPathParameter
 }
 
 // IsSignalsCallbackArgument reports whether name is a datastar patch-signals

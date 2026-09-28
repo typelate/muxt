@@ -39,7 +39,7 @@ func (T) Form(In) any        { return nil }
 		require.Equal(t, "fragments", defs[1].TemplatesVariable())
 		for _, def := range defs {
 			require.False(t, def.Signature().IsZero(), "%s is resolved", def.Name())
-			segment, ok := def.PathParameter("id")
+			segment, ok := segmentByName(def.Segments, "id")
 			require.True(t, ok)
 			require.Equal(t, "int", pathParameterType(segment))
 		}
