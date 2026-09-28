@@ -178,7 +178,7 @@ func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, che
 	if err := checkRepeatedArguments(def, typeQualifier(receiver.Obj().Pkg()), args); err != nil {
 		return def.finishNameError(err, def.handlerSpan())
 	}
-	recordPathValueTypes(def, checker, args, make(map[string]bool))
+	linkArguments(def)
 	shape, err := classifyResultShape(def, typeQualifier(receiver.Obj().Pkg()))
 	if err != nil {
 		// Result-shape errors are about the method contract, so the
@@ -276,32 +276,32 @@ func checkRepeatedArgumentsSeen(def *Definition, qual types.Qualifier, args []Ar
 	return nil
 }
 
-// recordPathValueTypes records the type each path parameter parses into.
-//
-// A parameter is parsed once per request, where the call first passes it
-// -- depth first, in argument order -- so that occurrence decides its
-// type: the parameter's type, unless a string is assignable to it, in
-// which case the value is passed along unparsed and stays a string.
-// Later occurrences reuse the first one's value. An sse-prefixed name is a
-// render callback wherever it appears, never a parsed value.
-func recordPathValueTypes(def *Definition, checker Checker, args []Argument, seen map[string]bool) {
-	for _, arg := range args {
+// linkArguments links each wildcard segment to the argument that first
+// supplies its value -- depth first, in argument order, the same walk the
+// generator repeats to decide which occurrence of a request value it
+// declares a local for. Later occurrences of the same identifier are
+// skipped; checkRepeatedArguments already guaranteed they need the same
+// value. An sse-prefixed name is a render callback wherever it appears,
+// never a path value.
+func linkArguments(def *Definition) {
+	linkArgumentsSeen(def, def.Arguments, make(map[string]bool))
+}
+
+func linkArgumentsSeen(def *Definition, args []Argument, seen map[string]bool) {
+	for i := range args {
+		arg := &args[i]
 		switch arg.Type {
 		case ArgumentTypeCall:
-			recordPathValueTypes(def, checker, arg.args, seen)
+			linkArgumentsSeen(def, arg.args, seen)
 		case ArgumentTypeRequestPathValue:
 			if seen[arg.Identifier] || IsSSEArgument(arg.Identifier) {
 				continue
 			}
 			seen[arg.Identifier] = true
-			if isStringAssignable(arg.paramType) {
-				continue
-			}
 			for i := range def.Segments {
 				segment := &def.Segments[i]
 				if segment.IsWildcard() && segment.value == arg.Identifier {
-					segment.tp = arg.paramType
-					segment.textMarshaler = checker.TextMarshaler(arg.paramType)
+					segment.argument = arg
 				}
 			}
 		}

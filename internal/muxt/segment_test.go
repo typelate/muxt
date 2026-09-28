@@ -154,7 +154,7 @@ func TestPathValueTypes(t *testing.T) {
 
 			segment, ok := def.PathParameter(tt.param)
 			require.True(t, ok, "path parameter %q not found", tt.param)
-			got := segment.Type().Format(func(name, _ string) string { return name })
+			got := pathParameterType(segment)
 			require.Equal(t, tt.want, got, "wrong path parameter type")
 		})
 	}
@@ -227,14 +227,42 @@ func TestPathValueTextMarshaler(t *testing.T) {
 			if !ok {
 				t.Fatalf("path parameter %q not found", tt.param)
 			}
-			if got := segment.TextMarshaler(); got != tt.want {
-				t.Errorf("PathParameter(%q).TextMarshaler() = %t, want %t", tt.param, got, tt.want)
+			if got := pathParameterTextMarshaler(segment); got != tt.want {
+				t.Errorf("PathParameter(%q) marshals as text = %t, want %t", tt.param, got, tt.want)
 			}
 			if got := defs[0].Arguments[0].TextMarshaler(); got != tt.want {
 				t.Errorf("Arguments[0].TextMarshaler() = %t, want %t", got, tt.want)
 			}
 		})
 	}
+}
+
+// TestSegmentArgument states which wildcard segments link to the resolved
+// argument that first supplies their value: nil for a literal segment or a
+// wildcard the call does not pass, the argument otherwise.
+func TestSegmentArgument(t *testing.T) {
+	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
+	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
+	checker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
+
+	ts := template.Must(template.New("").Parse(`{{define "GET /a/{id}/{unused} Int(id)"}}{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+	require.NoError(t, err)
+	require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
+	def := defs[0]
+
+	literal, ok := def.Segments[0], def.Segments[0].IsLiteral()
+	require.True(t, ok, "the first segment is the literal %q", literal.Value())
+	require.Nil(t, literal.Argument(), "a literal segment has no argument")
+
+	idSegment, ok := def.PathParameter("id")
+	require.True(t, ok)
+	require.NotNil(t, idSegment.Argument(), "id is passed to Int and should be linked")
+	require.Equal(t, &def.Arguments[0], idSegment.Argument(), "the linked argument is the resolved call argument")
+
+	unusedSegment, ok := def.PathParameter("unused")
+	require.True(t, ok)
+	require.Nil(t, unusedSegment.Argument(), "unused is not passed to the call")
 }
 
 // TestSegments states how a pattern's path splits into segments and which
@@ -273,6 +301,24 @@ func TestSegments(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// pathParameterType mirrors the route path generator's rule for a wildcard
+// segment's helper parameter type: string when the segment names no linked
+// argument or the argument is Direct, else the argument's parameter type.
+func pathParameterType(segment muxt.Segment) string {
+	arg := segment.Argument()
+	if arg == nil || arg.Direct() {
+		return "string"
+	}
+	return arg.ParamType().Format(func(name, _ string) string { return name })
+}
+
+// pathParameterTextMarshaler mirrors the route path generator's rule for
+// whether a wildcard segment's value formats back with MarshalText.
+func pathParameterTextMarshaler(segment muxt.Segment) bool {
+	arg := segment.Argument()
+	return arg != nil && !arg.Direct() && arg.TextMarshaler()
 }
 
 func describeSegment(segment muxt.Segment) string {

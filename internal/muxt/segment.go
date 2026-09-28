@@ -2,11 +2,8 @@ package muxt
 
 import (
 	"go/token"
-	"go/types"
 	"slices"
 	"strings"
-
-	"github.com/typelate/muxt/internal/source"
 )
 
 // SegmentKind classifies one "/"-separated part of a route pattern's path.
@@ -26,13 +23,16 @@ const (
 
 // Segment is one "/"-separated part of a route pattern's path, after any
 // trailing {$}. A wildcard segment names a path parameter; once ResolveCall
-// has run it also knows the type the parameter parses into.
+// has run it also links to the argument that first supplies its value.
 type Segment struct {
 	kind  SegmentKind
 	value string
 
-	tp            types.Type
-	textMarshaler bool
+	// argument is the first occurrence, depth first in argument order, of
+	// this wildcard's identifier in the call's arguments. It is nil for a
+	// literal segment, a wildcard the call does not pass, or a route with
+	// no call.
+	argument *Argument
 }
 
 // initializeSegments splits the path into segments and checks each wildcard
@@ -115,16 +115,7 @@ func (s Segment) IsWildcard() bool {
 // value is the rest of the path.
 func (s Segment) IsRemainder() bool { return s.kind == SegmentKindWildcardRemainder }
 
-// Type returns the type a wildcard segment's value parses into: the
-// parameter type where the call first passes it, or string when the value
-// is passed along as it arrived or is not passed to the call at all.
-func (s Segment) Type() source.Type {
-	if s.tp == nil {
-		return source.NewType(types.Universe.Lookup("string").Type())
-	}
-	return source.NewType(s.tp)
-}
-
-// TextMarshaler reports whether Type implements encoding.TextMarshaler, so
-// a route path formats the value with MarshalText.
-func (s Segment) TextMarshaler() bool { return s.textMarshaler }
+// Argument returns the resolved argument that first supplies this wildcard
+// segment's value, or nil when the call does not pass it (or there is no
+// call).
+func (s Segment) Argument() *Argument { return s.argument }
