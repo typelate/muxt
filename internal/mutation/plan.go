@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"text/template/parse"
 
+	"github.com/typelate/check"
+
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -335,20 +337,7 @@ func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
 // that every node position is an offset into text this package holds,
 // which is what a mutation is spliced into.
 func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocation, error) {
-	functions := lt.Functions
-	// The definitions are gathered before the collector is built: a
-	// source scans its actions as it is constructed, and it can only do
-	// that once the delimiters its file was written with are known,
-	// which is something the definitions say.
-	var defs []source.Definition
-	for _, t := range lt.Set.Templates() {
-		definition, ok := lt.Definitions[t.Name()]
-		if !ok {
-			continue
-		}
-		defs = append(defs, definition)
-	}
-
+	defs := definitionsOf(lt)
 	collector := newSourceCollector(workingDirectory, defs)
 	for _, definition := range defs {
 		if _, err := collector.add(definition); err != nil {
@@ -356,8 +345,35 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 		}
 	}
 
+	index, err := indexTrees(collector.sorted(), lt.Functions)
+	if err != nil {
+		return nil, err
+	}
+	if unreadable := verifyReadable(defs, index, workingDirectory); unreadable != nil {
+		return nil, unreadable
+	}
+	return index, nil
+}
+
+// definitionsOf lists the definitions of the templates in the set. They
+// are gathered before the collector is built: a source scans its actions
+// as it is constructed, and it can only do that once the delimiters its
+// file was written with are known, which is something the definitions say.
+func definitionsOf(lt *checked) []source.Definition {
+	var defs []source.Definition
+	for _, t := range lt.Set.Templates() {
+		if definition, ok := lt.Definitions[t.Name()]; ok {
+			defs = append(defs, definition)
+		}
+	}
+	return defs
+}
+
+// indexTrees parses each source and indexes the trees by template name.
+// A name that several sources hold keeps the first tree that is not empty.
+func indexTrees(sources []*templateSource, functions check.Functions) (map[string]treeLocation, error) {
 	index := make(map[string]treeLocation)
-	for _, src := range collector.sorted() {
+	for _, src := range sources {
 		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
@@ -372,31 +388,34 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 			index[name] = treeLocation{src: src, tree: tree}
 		}
 	}
+	return index, nil
+}
 
+// verifyReadable reports the first definition holding actions that the
+// index does not.
+//
+// The template set found actions there and the re-parse found none, so
+// the text was read with delimiters it was not written in. Left alone the
+// template contributes no mutants and the run reports a smaller job rather
+// than a problem. Absent from the index is the same failure as present and
+// empty: with the wrong delimiters the define clause is not recognised as
+// one, so no tree is produced under that name at all.
+func verifyReadable(defs []source.Definition, index map[string]treeLocation, workingDirectory string) *UnreadableTemplateError {
 	for _, definition := range defs {
 		if definition.Tree == nil || countActions(definition.Tree.Root) == 0 {
 			continue
 		}
 		location, indexed := index[definition.Name]
-		// Absent is the same failure as present and empty: read with the
-		// wrong delimiters, the define clause is not recognised as one,
-		// so no tree is produced under that name at all.
-		if !indexed || countActions(location.tree.Root) == 0 {
-			path := collector.relative(definition.Define.Position.Filename)
-			if indexed {
-				path = location.src.path
-			}
-			// The template set found actions here and this re-parse found
-			// none, so the text was read with delimiters it was not
-			// written in. Left alone the template contributes no mutants
-			// and the run reports a smaller job rather than a problem.
-			return nil, &UnreadableTemplateError{
-				Template: definition.Name,
-				Path:     path,
-			}
+		if indexed && countActions(location.tree.Root) > 0 {
+			continue
 		}
+		path := relativePath(workingDirectory, definition.Define.Position.Filename)
+		if indexed {
+			path = location.src.path
+		}
+		return &UnreadableTemplateError{Template: definition.Name, Path: path}
 	}
-	return index, nil
+	return nil
 }
 
 func hasRoot(tree *parse.Tree) bool { return tree != nil && tree.Root != nil }
