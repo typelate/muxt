@@ -1262,7 +1262,6 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, method *types.Signatur
 	}
 }
 
-
 var assertion AssertionFailureReporter
 
 type AssertionFailureReporter struct{}
