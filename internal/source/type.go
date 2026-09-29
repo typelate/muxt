@@ -20,6 +20,9 @@ func (t Type) Format(qualify func(pkgName, pkgPath string) string) string {
 	})
 }
 
+// StringType is the predeclared string type.
+func StringType() Type { return Type{tp: types.Typ[types.String]} }
+
 func (t Type) IsZero() bool { return t.tp == nil }
 
 func (t Type) Identical(u Type) bool { return types.Identical(t.tp, u.tp) }
