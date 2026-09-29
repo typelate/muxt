@@ -4,8 +4,9 @@ import (
 	"errors"
 	"os/exec"
 	"regexp"
-	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckGoTestArgs(t *testing.T) {
@@ -25,8 +26,10 @@ func TestCheckGoTestArgs(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := CheckGoTestArgs(tt.args)
-			if refused := err != nil; refused != tt.refused {
-				t.Errorf("CheckGoTestArgs(%q) = %v, want refused %t", tt.args, err, tt.refused)
+			if tt.refused {
+				assert.Error(t, err, "CheckGoTestArgs(%q)", tt.args)
+			} else {
+				assert.NoError(t, err, "CheckGoTestArgs(%q)", tt.args)
 			}
 		})
 	}
@@ -59,9 +62,7 @@ func TestGoTestArgsPutTheCallersFlagsAfterThePackages(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.test.args(tt.flags...); !slices.Equal(got, tt.want) {
-				t.Errorf("args(%q) = %q, want %q", tt.flags, got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.test.args(tt.flags...), "args(%q)", tt.flags)
 		})
 	}
 }
@@ -86,10 +87,11 @@ func TestConfigurationGoTest(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.config.goTest("/work")
-			if got.dir != tt.want.dir || !slices.Equal(got.packages, tt.want.packages) || got.match != tt.want.match ||
-				!slices.Equal(got.extra, tt.want.extra) || !slices.Equal(got.env, tt.want.env) {
-				t.Errorf("goTest(/work) = %+v, want %+v", got, tt.want)
-			}
+			assert.Equal(t, tt.want.dir, got.dir, "goTest(/work) dir")
+			assert.Equal(t, tt.want.packages, got.packages, "goTest(/work) packages")
+			assert.Same(t, tt.want.match, got.match, "goTest(/work) match")
+			assert.Equal(t, tt.want.extra, got.extra, "goTest(/work) extra")
+			assert.Equal(t, tt.want.env, got.env, "goTest(/work) env")
 		})
 	}
 }
@@ -110,8 +112,11 @@ func TestVerdictOf(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := verdictOf(tt.err)
-			if got != tt.want || (err != nil) != tt.wantHasErr || (tt.wantHasErr && !errors.Is(err, tt.wantErr)) {
-				t.Errorf("verdictOf(%v) = %q, %v, want %q, %v", tt.err, got, err, tt.want, tt.wantErr)
+			assert.Equal(t, tt.want, got, "verdictOf(%v) status", tt.err)
+			if tt.wantHasErr {
+				assert.ErrorIs(t, err, tt.wantErr, "verdictOf(%v) error", tt.err)
+			} else {
+				assert.NoError(t, err, "verdictOf(%v) error", tt.err)
 			}
 		})
 	}
@@ -136,9 +141,7 @@ func TestIsTestFailureOnlyCountsATestThatRan(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := exec.Command("sh", "-c", tt.script).Run()
-			if got := isTestFailure(err); got != tt.want {
-				t.Errorf("isTestFailure(%v) = %t, want %t", err, got, tt.want)
-			}
+			assert.Equal(t, tt.want, isTestFailure(err), "isTestFailure(%v)", err)
 		})
 	}
 }
