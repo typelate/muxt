@@ -166,107 +166,57 @@ func isRedirectMethod(methodName string) bool {
 	return false
 }
 
-// containsRedirectCall checks if a command node contains a call to a redirect method
+// containsRedirectCall reports whether a command names a redirect method in a
+// field or chain, wherever dot points. A parenthesised pipeline in a chain is
+// its own command to the walker, so it is not looked into here.
 func containsRedirectCall(cmd *parse.CommandNode) bool {
-	if cmd == nil || len(cmd.Args) == 0 {
+	if cmd == nil {
 		return false
 	}
-
-	for _, arg := range cmd.Args {
-		if field, ok := arg.(*parse.FieldNode); ok {
-			if len(field.Ident) > 0 && isRedirectMethod(field.Ident[len(field.Ident)-1]) {
-				return true
-			}
-			for _, ident := range field.Ident {
-				if isRedirectMethod(ident) {
-					return true
-				}
-			}
+	return slices.ContainsFunc(cmd.Args, func(arg parse.Node) bool {
+		switch a := arg.(type) {
+		case *parse.FieldNode:
+			return slices.ContainsFunc(a.Ident, isRedirectMethod)
+		case *parse.ChainNode:
+			return slices.ContainsFunc(a.Field, isRedirectMethod)
 		}
-		// Check for chain nodes like .field.Redirect or (.Redirect ...).Header
-		if chain, ok := arg.(*parse.ChainNode); ok {
-			for _, field := range chain.Field {
-				if isRedirectMethod(field) {
-					return true
-				}
-			}
-			if chainNode, ok := chain.Node.(*parse.PipeNode); ok {
-				for _, chainCmd := range chainNode.Cmds {
-					if containsRedirectCall(chainCmd) {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
+		return false
+	})
 }
 
+// callsMethodOnTemplateData reports whether a command may call a TemplateData
+// method that is not known to be safe: by naming one, or by handing a
+// function dot or a chain, which it might call methods on.
 func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return false
 	}
-	firstArg := cmd.Args[0]
-	if _, ok := firstArg.(*parse.IdentifierNode); ok {
-		if len(cmd.Args) > 1 {
-			// This is a function call with arguments
-			for i := 1; i < len(cmd.Args); i++ {
-				switch arg := cmd.Args[i].(type) {
-				case *parse.DotNode:
-					// Bare . is being passed - this is the full TemplateData
-					// Be conservative: function might call methods on it
-					return true
-				case *parse.FieldNode:
-					if !isAllSafeMethods(arg.Ident) {
-						return true
-					}
-				case *parse.ChainNode:
-					// A chain is being passed, be conservative
-					return true
-				}
-			}
-		}
+	if _, isFunctionCall := cmd.Args[0].(*parse.IdentifierNode); isFunctionCall && slices.ContainsFunc(cmd.Args[1:], isDotOrChain) {
+		return true
 	}
+	return slices.ContainsFunc(cmd.Args, hasUnsafeField)
+}
 
-	for _, arg := range cmd.Args {
-		if field, ok := arg.(*parse.FieldNode); ok {
-			if !isAllSafeMethods(field.Ident) {
-				return true
-			}
-		}
+func isDotOrChain(arg parse.Node) bool {
+	switch arg.(type) {
+	case *parse.DotNode, *parse.ChainNode:
+		return true
 	}
-
 	return false
 }
 
-// isAllSafeMethods checks if all identifiers in a field chain are safe methods
-func isAllSafeMethods(idents []string) bool {
-	if len(idents) == 0 {
-		return true
-	}
-	// First identifier must be a safe TemplateData method
-	if !isSafeTemplateDataMethod(idents[0]) {
-		return false
-	}
-	// If there are more identifiers, we're chaining off the result
-	// e.g. `.Request.Method` - this is safe if Request is safe
-	// (subsequent fields/methods are on the returned type, not TemplateData)
-	return true
+func hasUnsafeField(arg parse.Node) bool {
+	field, ok := arg.(*parse.FieldNode)
+	return ok && len(field.Ident) > 0 && !isSafeTemplateDataMethod(field.Ident[0])
 }
 
-// isSafeTemplateDataMethod returns true for TemplateData methods that definitely
-// don't set redirectURL (i.e., don't call Redirect internally)
+// isSafeTemplateDataMethod reports whether a TemplateData method definitely
+// does not set redirectURL. Fields after the first are on the returned value,
+// not on TemplateData, so only the first identifier of a chain matters.
 func isSafeTemplateDataMethod(methodName string) bool {
-	safeMethodsSet := map[string]bool{
-		"Path":        true, // returns TemplateRoutePaths
-		"Result":      true, // returns T (the result type)
-		"Request":     true, // returns *http.Request
-		"Receiver":    true, // returns R (the receiver type)
-		"Ok":          true, // returns bool
-		"Err":         true, // returns error
-		"MuxtVersion": true, // returns string
-		"StatusCode":  true, // sets statusCode field, returns *TemplateData but doesn't set redirectURL
-		"Header":      true, // sets response headers, returns *TemplateData but doesn't set redirectURL
+	switch methodName {
+	case "Path", "Result", "Request", "Receiver", "Ok", "Err", "MuxtVersion", "StatusCode", "Header":
+		return true
 	}
-	return safeMethodsSet[methodName]
+	return false
 }
