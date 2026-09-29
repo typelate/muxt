@@ -32,18 +32,9 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 	if def.handler == "" {
 		return nil
 	}
-	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
+	fun, call, err := parseHandlerCall(fileSet, def)
 	if err != nil {
-		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
-		return def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
-	}
-	call, ok := e.(*ast.CallExpr)
-	if !ok {
-		return errAt(e, "expected call expression, got: %s", astgen.Format(e))
-	}
-	fun, ok := call.Fun.(*ast.Ident)
-	if !ok {
-		return errAt(call.Fun, "expected function identifier, got: %s", astgen.Format(call.Fun))
+		return err
 	}
 	if representation, inner, innerFun, ok := peelRepresentationWrapper(fun, call); ok {
 		def.Representation = representation
@@ -55,23 +46,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 	}
 
 	def.usesSignals = rewriteSignalsArguments(call, segments)
-	if def.Representation == RepresentationSSE {
-		for _, a := range call.Args {
-			if ident, ok := a.(*ast.Ident); ok && def.isSignalsCallback(ident.Name) {
-				def.signalsCallback = ident.Name
-				break
-			}
-		}
-	}
-
-	scope := patternScope()
-	for _, segment := range segments {
-		if segment.IsWildcard() {
-			scope = append(scope, segment.value)
-		}
-	}
-	slices.Sort(scope)
-	if err := checkArguments(scope, call, def.Representation == RepresentationSSE); err != nil {
+	def.signalsCallback = firstSignalsCallback(def, call)
+	if err := checkArguments(argumentScope(segments), call, def.Representation == RepresentationSSE); err != nil {
 		return err
 	}
 	if n := countBodyConsumers(call); n > 1 {
@@ -81,18 +57,60 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 
 	def.fun = fun
 	def.call = call
-
 	def.hasResponseWriterArg = hasHTTPResponseWriterArgument(call)
+	return def.checkRepresentationResponseWriter(call)
+}
 
-	if (def.Representation == RepresentationSSE || def.Representation == RepresentationMarshalJSON) && def.hasResponseWriterArg {
-		node := findIdent(call, TemplateNameScopeIdentifierHTTPResponse)
-		if node == nil {
-			node = call
-		}
-		return errAt(node, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
+func parseHandlerCall(fileSet *token.FileSet, def *Definition) (*ast.Ident, *ast.CallExpr, error) {
+	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
+	if err != nil {
+		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
+		return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}
+	call, ok := e.(*ast.CallExpr)
+	if !ok {
+		return nil, nil, errAt(e, "expected call expression, got: %s", astgen.Format(e))
+	}
+	fun, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return nil, nil, errAt(call.Fun, "expected function identifier, got: %s", astgen.Format(call.Fun))
+	}
+	return fun, call, nil
+}
 
-	return nil
+// firstSignalsCallback names the first signals callback among call's
+// arguments, if the route has one.
+func firstSignalsCallback(def *Definition, call *ast.CallExpr) string {
+	for _, a := range call.Args {
+		if ident, ok := a.(*ast.Ident); ok && def.isSignalsCallback(ident.Name) {
+			return ident.Name
+		}
+	}
+	return ""
+}
+
+func argumentScope(segments []Segment) []string {
+	scope := patternScope()
+	for _, segment := range segments {
+		if segment.IsWildcard() {
+			scope = append(scope, segment.value)
+		}
+	}
+	slices.Sort(scope)
+	return scope
+}
+
+// checkRepresentationResponseWriter rejects the response argument on the
+// representations that write the response themselves.
+func (def *Definition) checkRepresentationResponseWriter(call *ast.CallExpr) error {
+	if def.Representation != RepresentationSSE && def.Representation != RepresentationMarshalJSON || !def.hasResponseWriterArg {
+		return nil
+	}
+	var node ast.Node = call
+	if ident := findIdent(call, TemplateNameScopeIdentifierHTTPResponse); ident != nil {
+		node = ident
+	}
+	return errAt(node, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 }
 
 // peelRepresentationWrapper peels a representation wrapper — sse(...) or
@@ -151,42 +169,53 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 // identifier is an error rather than generated code that does not compile.
 func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bool) error {
 	for i, a := range call.Args {
+		var err error
 		switch exp := a.(type) {
 		case *ast.Ident:
-			// sse-prefixed render callbacks and Message- or Signals-suffixed
-			// callbacks are only in scope on sse routes. A name already in
-			// scope — a path parameter, say — keeps its scope meaning even
-			// when it matches a callback naming convention.
-			_, inScope := slices.BinarySearch(identifiers, exp.Name)
-			sseScoped := sse && !inScope && (isSSEArgument(exp.Name) || isSSEMessageArgument(exp.Name) || isSignalsCallbackArgument(exp.Name))
-			if !inScope && !sseScoped {
-				if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
-					return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
-				}
-				return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
-			}
-			if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
-				return errAt(exp, "the %s callback must be a direct argument of the route's method call", exp.Name)
-			}
+			err = checkIdentifierArgument(identifiers, exp, sse, nested)
 		case *ast.CallExpr:
-			if isBodyUnmarshalCall(exp) {
-				if err := checkBodyWrapperArguments(exp.Fun.(*ast.Ident).Name, exp); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := checkCallArguments(identifiers, exp, sse, true); err != nil {
-				wrapped := fmt.Errorf("call %s argument error: %w", astgen.Format(call.Fun), err)
-				if pe, ok := errors.AsType[*positionedError](err); ok {
-					// Keep the inner argument's position on the wrapped
-					// message.
-					return &positionedError{pos: pe.pos, end: pe.end, err: wrapped}
-				}
-				return wrapped
-			}
+			err = checkNestedCallArgument(identifiers, call, exp, sse)
 		default:
-			return errAt(a, "expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
+			err = errAt(a, "expected only identifier or call expressions as arguments, argument at index %d is: %s", i, astgen.Format(a))
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func checkIdentifierArgument(identifiers []string, exp *ast.Ident, sse, nested bool) error {
+	// sse-prefixed render callbacks and Message- or Signals-suffixed
+	// callbacks are only in scope on sse routes. A name already in
+	// scope — a path parameter, say — keeps its scope meaning even
+	// when it matches a callback naming convention.
+	_, inScope := slices.BinarySearch(identifiers, exp.Name)
+	sseScoped := sse && !inScope && (isSSEArgument(exp.Name) || isSSEMessageArgument(exp.Name) || isSignalsCallbackArgument(exp.Name))
+	if !inScope && !sseScoped {
+		if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
+			return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
+		}
+		return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
+	}
+	if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
+		return errAt(exp, "the %s callback must be a direct argument of the route's method call", exp.Name)
+	}
+	return nil
+}
+
+func checkNestedCallArgument(identifiers []string, parent, call *ast.CallExpr, sse bool) error {
+	if isBodyUnmarshalCall(call) {
+		return checkBodyWrapperArguments(call.Fun.(*ast.Ident).Name, call)
+	}
+	err := checkCallArguments(identifiers, call, sse, true)
+	if err == nil {
+		return nil
+	}
+	wrapped := fmt.Errorf("call %s argument error: %w", astgen.Format(parent.Fun), err)
+	if pe, ok := errors.AsType[*positionedError](err); ok {
+		// Keep the inner argument's position on the wrapped message.
+		return &positionedError{pos: pe.pos, end: pe.end, err: wrapped}
+	}
+	return wrapped
 }
