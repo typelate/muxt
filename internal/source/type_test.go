@@ -14,6 +14,14 @@ func named(pkg *types.Package, name string, underlying types.Type) types.Type {
 	return types.NewNamed(types.NewTypeName(token.NoPos, pkg, name, nil), underlying, nil)
 }
 
+func TestStringType(t *testing.T) {
+	got := source.StringType()
+	require.False(t, got.IsZero(), "StringType().IsZero()")
+	require.True(t, got.IsString(), "StringType().IsString()")
+	require.True(t, got.Identical(source.NewType(types.Typ[types.String])), "StringType() is identical to string")
+	require.Equal(t, "string", got.Format(func(name, path string) string { return name }), "StringType().Format")
+}
+
 func TestTypeFormat(t *testing.T) {
 	out := types.NewPackage("example.com/server", "server")
 	model := types.NewPackage("example.com/lib/model", "model")

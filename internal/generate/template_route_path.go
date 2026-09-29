@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"go/types"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -270,7 +269,7 @@ func pathParamIdent(name string) string {
 // the raw request value as it is), otherwise the argument's parameter type.
 func pathSegmentHelperType(arg *muxt.Argument) source.Type {
 	if arg == nil || arg.Direct() {
-		return source.NewType(types.Universe.Lookup("string").Type())
+		return source.StringType()
 	}
 	return arg.ParamType()
 }
