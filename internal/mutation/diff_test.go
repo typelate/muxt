@@ -128,6 +128,28 @@ func TestExtractRefusesALinkOutOfTheTree(t *testing.T) {
 	}
 }
 
+func TestCheckSymlink(t *testing.T) {
+	for _, tt := range []struct {
+		name, entry, target string
+		wantErr             bool
+	}{
+		{name: "sibling", entry: "web/link", target: "page.gohtml"},
+		{name: "up within the tree", entry: "web/deep/link", target: "../page.gohtml"},
+		{name: "up to the root", entry: "web/link", target: "../page.gohtml"},
+		{name: "past the root", entry: "web/link", target: "../../escape", wantErr: true},
+		{name: "past the root from the top", entry: "link", target: "../escape", wantErr: true},
+		{name: "absolute", entry: "web/link", target: "/etc/hosts", wantErr: true},
+		{name: "absolute in the tree's own name", entry: "web/link", target: "/web/page.gohtml", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkSymlink(tt.entry, tt.target)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("checkSymlink(%q, %q) = %v, want error %t", tt.entry, tt.target, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestWriteArchivedReportsAReadError states that a file the archive stops
 // short of is an error, not a file cut short: a template read from a
 // truncated copy would be compared as though it had changed.
