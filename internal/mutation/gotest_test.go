@@ -1,7 +1,10 @@
 package mutation
 
 import (
+	"errors"
 	"os/exec"
+	"regexp"
+	"slices"
 	"testing"
 )
 
@@ -24,6 +27,91 @@ func TestCheckGoTestArgs(t *testing.T) {
 			err := CheckGoTestArgs(tt.args)
 			if refused := err != nil; refused != tt.refused {
 				t.Errorf("CheckGoTestArgs(%q) = %v, want refused %t", tt.args, err, tt.refused)
+			}
+		})
+	}
+}
+
+// TestGoTestArgsPutTheCallersFlagsAfterThePackages states the order go
+// test needs: a flag it does not know ends the package list.
+func TestGoTestArgsPutTheCallersFlagsAfterThePackages(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		test  goTest
+		flags []string
+		want  []string
+	}{
+		{
+			name: "nothing else",
+			test: goTest{packages: []string{"./..."}},
+			want: []string{"test", "-count=1", "./..."},
+		},
+		{
+			name:  "everything",
+			test:  goTest{packages: []string{"./a", "./b"}, match: regexp.MustCompile("TestPage"), extra: []string{"-update", "-v"}},
+			flags: []string{"-overlay=o.json"},
+			want:  []string{"test", "-count=1", "-overlay=o.json", "-run=TestPage", "./a", "./b", "-update", "-v"},
+		},
+		{
+			name: "user flags only",
+			test: goTest{packages: []string{"./..."}, extra: []string{"-update"}},
+			want: []string{"test", "-count=1", "./...", "-update"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.test.args(tt.flags...); !slices.Equal(got, tt.want) {
+				t.Errorf("args(%q) = %q, want %q", tt.flags, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfigurationGoTest(t *testing.T) {
+	match := regexp.MustCompile("TestPage")
+	for _, tt := range []struct {
+		name   string
+		config Configuration
+		want   goTest
+	}{
+		{
+			name:   "packages default to everything",
+			config: Configuration{},
+			want:   goTest{dir: "/work", packages: []string{"./..."}},
+		},
+		{
+			name:   "configured fields carry over",
+			config: Configuration{Packages: []string{"./web"}, Run: match, GoTestArgs: []string{"-v"}, env: []string{"A=b"}},
+			want:   goTest{dir: "/work", packages: []string{"./web"}, match: match, extra: []string{"-v"}, env: []string{"A=b"}},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.goTest("/work")
+			if got.dir != tt.want.dir || !slices.Equal(got.packages, tt.want.packages) || got.match != tt.want.match ||
+				!slices.Equal(got.extra, tt.want.extra) || !slices.Equal(got.env, tt.want.env) {
+				t.Errorf("goTest(/work) = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestVerdictOf states how a go test result reads as a verdict.
+func TestVerdictOf(t *testing.T) {
+	cannotRun := errors.New("go: no such tool")
+	for _, tt := range []struct {
+		name       string
+		err        error
+		want       Status
+		wantErr    error
+		wantHasErr bool
+	}{
+		{name: "tests passed", err: nil, want: StatusMissed},
+		{name: "tests failed", err: exitStatusOne(t), want: StatusKilled},
+		{name: "go test could not run", err: cannotRun, wantErr: cannotRun, wantHasErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := verdictOf(tt.err)
+			if got != tt.want || (err != nil) != tt.wantHasErr || (tt.wantHasErr && !errors.Is(err, tt.wantErr)) {
+				t.Errorf("verdictOf(%v) = %q, %v, want %q, %v", tt.err, got, err, tt.want, tt.wantErr)
 			}
 		})
 	}

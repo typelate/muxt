@@ -149,9 +149,9 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 }
 
 // neverRun is a suite that fails the test if anything runs it.
-func neverRun(t *testing.T) (func([]string) (string, error), func(string) (Status, error)) {
+func neverRun(t *testing.T) (func(...string) (string, error), func(string) (Status, error)) {
 	t.Helper()
-	return func([]string) (string, error) {
+	return func(...string) (string, error) {
 			t.Error("the suite ran")
 			return "", nil
 		}, func(string) (Status, error) {
@@ -189,7 +189,7 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	_, verdict := neverRun(t)
 	failed := exitStatusOne(t)
 
-	_, err := runPlan(p, Configuration{}, nil, func([]string) (string, error) {
+	_, err := runPlan(p, Configuration{}, nil, func(...string) (string, error) {
 		return "--- FAIL: TestIndex (0.00s)\n", failed
 	}, verdict)
 
@@ -211,7 +211,7 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 	_, verdict := neverRun(t)
 	cannotRun := errors.New("go: no such tool")
 
-	_, err := runPlan(p, Configuration{}, nil, func([]string) (string, error) {
+	_, err := runPlan(p, Configuration{}, nil, func(...string) (string, error) {
 		return "", cannotRun
 	}, verdict)
 
@@ -231,7 +231,7 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true, false, true})
 
 	var status strings.Builder
-	got, err := runPlan(p, Configuration{Verbose: true}, &status, func([]string) (string, error) {
+	got, err := runPlan(p, Configuration{Verbose: true}, &status, func(...string) (string, error) {
 		return "", nil
 	}, func(overlay string) (Status, error) {
 		if strings.Contains(readMutated(t, overlay), "K") {
