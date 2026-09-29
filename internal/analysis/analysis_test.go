@@ -65,6 +65,18 @@ func TestNewReferences(t *testing.T) {
 	})
 }
 
+func TestNewNamedReferencesOrdersKindsAtOnePosition(t *testing.T) {
+	pos := token.Position{Filename: "a.gohtml", Offset: 4}
+	parse := TemplateReference{Name: "x", Kind: ParseTemplateNode, Position: pos, data: types.Typ[types.Int]}
+	execute := TemplateReference{Name: "x", Kind: ExecuteTemplateNode, Position: pos, data: types.Typ[types.Int]}
+	for _, in := range [][]TemplateReference{{parse, execute}, {execute, parse}} {
+		got := NewNamedReferences("example.com/p", "x", in).References
+		if len(got) != 2 || got[0].Kind != ExecuteTemplateNode || got[1].Kind != ParseTemplateNode {
+			t.Errorf("NewNamedReferences(%v) kinds = %v, want execute_template then template", in, got)
+		}
+	}
+}
+
 func TestNewNamedReferences(t *testing.T) {
 	pos := token.Position{Filename: "a.gohtml", Offset: 4}
 	tp := types.Typ[types.Int]

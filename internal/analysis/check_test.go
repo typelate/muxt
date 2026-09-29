@@ -212,6 +212,47 @@ func TestCollectTemplateReferencesFollowsEveryBranch(t *testing.T) {
 	}
 }
 
+// declaredTemplates has a template the set knows by name but that was never
+// parsed, so it has no tree, and one that is referenced but not defined.
+func declaredTemplates(t *testing.T) *template.Template {
+	t.Helper()
+	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
+	ts.New("declared")
+	if ts.Lookup("declared") == nil || ts.Lookup("declared").Tree != nil {
+		t.Fatal("the premise of this test is wrong: declared should exist without a tree")
+	}
+	return ts
+}
+
+func TestTemplatesWithoutATreeAreSkipped(t *testing.T) {
+	ts := declaredTemplates(t)
+
+	t.Run("collectTemplateReferences", func(t *testing.T) {
+		seen := make(map[string]bool)
+		collectTemplateReferences(ts, ts.Lookup("GET / Home()").Tree.Root, seen)
+		if !seen["declared"] || !seen["undefined"] {
+			t.Errorf("collectTemplateReferences reached %v, want declared and undefined", seen)
+		}
+	})
+	t.Run("partitionUnusedTemplates", func(t *testing.T) {
+		routes, partials := partitionUnusedTemplates(ts, []string{"GET / Home()"})
+		if len(routes) != 1 || len(partials) != 0 {
+			t.Errorf("partitionUnusedTemplates() = %q, %q, want the route only", routes, partials)
+		}
+	})
+	t.Run("findUnusedTemplates", func(t *testing.T) {
+		got := findUnusedTemplates(ts, executed())
+		if !slices.Equal(got, []string{"GET / Home()"}) {
+			t.Errorf("findUnusedTemplates() = %q, want only the route", got)
+		}
+	})
+	t.Run("executeTemplateTree", func(t *testing.T) {
+		// A nil global is never touched when there is no tree to walk.
+		executeTemplateTree(nil, ts, "declared", nil)
+		executeTemplateTree(nil, ts, "undefined", nil)
+	})
+}
+
 func TestReportDefinitionErrorsIsSilentWithoutErrors(t *testing.T) {
 	var logs strings.Builder
 	if err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)}); err != nil || logs.Len() != 0 {
