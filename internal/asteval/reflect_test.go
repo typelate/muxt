@@ -4,8 +4,9 @@ import (
 	"go/token"
 	"go/types"
 	"strconv"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckParses(t *testing.T) {
@@ -52,12 +53,11 @@ func TestCheckParses(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := CheckParses(tt.val, tt.tp)
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Errorf("CheckParses(%q, %s) = %v, want no error", tt.val, tt.tp, err)
-			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
-				t.Errorf("CheckParses(%q, %s) = %v, want error containing %q", tt.val, tt.tp, err, tt.wantErr)
+			if tt.wantErr == "" {
+				assert.NoError(t, err, "CheckParses(%q, %s)", tt.val, tt.tp)
+				return
 			}
+			assert.ErrorContains(t, err, tt.wantErr, "CheckParses(%q, %s)", tt.val, tt.tp)
 		})
 	}
 }
