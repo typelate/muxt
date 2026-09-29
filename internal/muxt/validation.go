@@ -73,14 +73,14 @@ func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]In
 	}, typeAttr) {
 		if input.HasAttribute("min") {
 			val := input.GetAttribute("min")
-			if _, err := asteval.ParseWithType(val, tp); err != nil {
+			if err := asteval.CheckParses(val, tp); err != nil {
 				return nil, err
 			}
 			result = append(result, MinValidation{Name: name, Min: val})
 		}
 		if input.HasAttribute("max") {
 			val := input.GetAttribute("max")
-			if _, err := asteval.ParseWithType(val, tp); err != nil {
+			if err := asteval.CheckParses(val, tp); err != nil {
 				return nil, err
 			}
 			result = append(result, MaxValidation{Name: name, Max: val})

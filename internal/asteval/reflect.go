@@ -3,75 +3,39 @@ package asteval
 import (
 	"fmt"
 	"go/types"
-	"reflect"
 	"strconv"
 )
 
-const IntBitLength = 32 << (^uint(0) >> 63)
+type integerKind struct {
+	bitSize int
+	signed  bool
+}
 
-func ParseWithType(val string, tp types.Type) (reflect.Value, error) {
-	switch tp.Underlying().String() {
-	case reflect.Int.String():
-		n, err := strconv.ParseInt(val, 10, IntBitLength)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(n), nil
-	case reflect.Int8.String():
-		n, err := strconv.ParseInt(val, 10, 8)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(int8(n)), nil
-	case reflect.Int16.String():
-		n, err := strconv.ParseInt(val, 10, 16)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(int16(n)), nil
-	case reflect.Int32.String():
-		n, err := strconv.ParseInt(val, 10, 32)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(int32(n)), nil
-	case reflect.Int64.String():
-		n, err := strconv.ParseInt(val, 10, 64)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(n), nil
-	case reflect.Uint.String():
-		n, err := strconv.ParseUint(val, 10, IntBitLength)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(uint(n)), nil
-	case reflect.Uint8.String():
-		n, err := strconv.ParseUint(val, 10, 8)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(uint8(n)), nil
-	case reflect.Uint16.String():
-		n, err := strconv.ParseUint(val, 10, 16)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(uint16(n)), nil
-	case reflect.Uint32.String():
-		n, err := strconv.ParseUint(val, 10, 32)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(uint32(n)), nil
-	case reflect.Uint64.String():
-		n, err := strconv.ParseUint(val, 10, 64)
-		if err != nil {
-			return reflect.Value{}, err
-		}
-		return reflect.ValueOf(n), nil
-	default:
-		return reflect.Value{}, fmt.Errorf("type %s unknown", tp.String())
+var integerKinds = map[string]integerKind{
+	"int":    {bitSize: strconv.IntSize, signed: true},
+	"int8":   {bitSize: 8, signed: true},
+	"int16":  {bitSize: 16, signed: true},
+	"int32":  {bitSize: 32, signed: true},
+	"int64":  {bitSize: 64, signed: true},
+	"uint":   {bitSize: strconv.IntSize},
+	"uint8":  {bitSize: 8},
+	"uint16": {bitSize: 16},
+	"uint32": {bitSize: 32},
+	"uint64": {bitSize: 64},
+}
+
+// CheckParses reports whether val, in base 10, fits the integer type that
+// tp's underlying type is. Any other type is an error.
+func CheckParses(val string, tp types.Type) error {
+	kind, ok := integerKinds[tp.Underlying().String()]
+	if !ok {
+		return fmt.Errorf("type %s unknown", tp.String())
 	}
+	var err error
+	if kind.signed {
+		_, err = strconv.ParseInt(val, 10, kind.bitSize)
+	} else {
+		_, err = strconv.ParseUint(val, 10, kind.bitSize)
+	}
+	return err
 }
