@@ -135,9 +135,6 @@ func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Temp
 	if ts, ok := lt.HTML(); ok {
 		return lt, ts, nil
 	}
-	// Muxt introspects template names and trees; it never executes the
-	// user's variable, so a text/template set works through an
-	// html/template value carrying the same trees.
 	textTemplates, ok := lt.Text()
 	if !ok {
 		return nil, nil, fmt.Errorf("variable %s is not a template", templatesVariable)
