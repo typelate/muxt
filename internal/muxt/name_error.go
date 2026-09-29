@@ -81,9 +81,8 @@ func (e *NameError) MultiLineError() string {
 	offset := clamp(e.Offset)
 	mark(offset, min(offset+max(e.Length, 1), len(e.Name)), 1)
 	for _, span := range e.Also {
-		if start, end := clamp(span[0]), clamp(span[1]); start < end {
-			mark(start, end, 0)
-		}
+		start := clamp(span[0])
+		mark(start, max(start, clamp(span[1])), 0)
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "  %s\n  %s\n", e.Name, strings.TrimRight(string(marker), " "))
@@ -104,7 +103,7 @@ type nameSpans struct {
 func newNameSpans(idx []int) nameSpans {
 	span := func(group string) [2]int {
 		i := 2 * templateNameMux.SubexpIndex(group)
-		if i < 0 || i+1 >= len(idx) {
+		if i+1 >= len(idx) {
 			return [2]int{-1, -1}
 		}
 		return [2]int{idx[i], idx[i+1]}

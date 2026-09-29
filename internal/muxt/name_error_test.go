@@ -158,3 +158,137 @@ func TestErrorList(t *testing.T) {
 		require.Same(t, first, nameErr)
 	})
 }
+
+func TestNameErrorMultiLineErrorIgnoresAnInvertedSpan(t *testing.T) {
+	err := NameError{Name: "GET /", Offset: 0, Length: 1, Also: [][2]int{{4, 2}, {3, 3}}, err: errors.New("boom")}
+	assert.Equal(t, "  GET /\n  ^\nboom", err.MultiLineError())
+}
+
+func TestNameErrorErrorPrefix(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  NameError
+		want string
+	}{
+		{name: "position", err: NameError{Position: token.Position{Filename: "a.gohtml", Line: 2, Column: 3}, SourceFile: "b.gohtml", err: errors.New("boom")}, want: "a.gohtml:2:3: boom"},
+		{name: "source file", err: NameError{SourceFile: "b.gohtml", err: errors.New("boom")}, want: "b.gohtml: boom"},
+		{name: "neither", err: NameError{err: errors.New("boom")}, want: "boom"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Error())
+		})
+	}
+}
+
+func TestNewNameSpans(t *testing.T) {
+	t.Run("a match spans its groups", func(t *testing.T) {
+		const name = "GET /a F()"
+		spans := newNameSpans(templateNameMux.FindStringSubmatchIndex(name))
+		assert.Equal(t, [2]int{0, 3}, spans.method)
+		assert.Equal(t, [2]int{4, 6}, spans.path)
+		assert.Equal(t, [2]int{-1, -1}, spans.status)
+	})
+	t.Run("no match spans nothing", func(t *testing.T) {
+		assert.Equal(t, nameSpans{[2]int{-1, -1}, [2]int{-1, -1}, [2]int{-1, -1}, [2]int{-1, -1}, [2]int{-1, -1}}, newNameSpans(nil))
+	})
+	t.Run("a group cut off by a short index spans nothing", func(t *testing.T) {
+		// The index has the group's start but not its end.
+		short := make([]int, 2*templateNameMux.SubexpIndex("METHOD")+1)
+		assert.Equal(t, [2]int{-1, -1}, newNameSpans(short).method)
+	})
+}
+
+func TestDefinitionSpanErrorf(t *testing.T) {
+	def := &Definition{name: "GET /a F()"}
+	for _, tt := range []struct {
+		name       string
+		span       [2]int
+		wantOffset int
+		wantLength int
+	}{
+		{name: "matched segment", span: [2]int{4, 6}, wantOffset: 4, wantLength: 2},
+		{name: "segment at the start", span: [2]int{0, 3}, wantOffset: 0, wantLength: 3},
+		{name: "unmatched segment marks the whole name", span: [2]int{-1, -1}, wantOffset: 0, wantLength: len("GET /a F()")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nameErr, ok := def.spanErrorf(tt.span, "boom").(*NameError)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantOffset, nameErr.Offset)
+			assert.Equal(t, tt.wantLength, nameErr.Length)
+		})
+	}
+}
+
+func TestDefinitionPathParamErrorf(t *testing.T) {
+	// The path "/{a}/{b}/{a}/{a}" starts at byte 4 of the name.
+	def := &Definition{name: "GET /{a}/{b}/{a}/{a}", path: "/{a}/{b}/{a}/{a}", spans: nameSpans{path: [2]int{4, 20}}}
+	for _, tt := range []struct {
+		name       string
+		param      string
+		occurrence int
+		wantOffset int
+		wantLength int
+	}{
+		{name: "first occurrence", param: "a", occurrence: 0, wantOffset: 6, wantLength: 1},
+		{name: "second occurrence", param: "a", occurrence: 1, wantOffset: 14, wantLength: 1},
+		{name: "third occurrence", param: "a", occurrence: 2, wantOffset: 18, wantLength: 1},
+		{name: "other parameter", param: "b", occurrence: 0, wantOffset: 10, wantLength: 1},
+		{name: "no such occurrence marks the path", param: "a", occurrence: 3, wantOffset: 4, wantLength: 16},
+		{name: "no such parameter marks the path", param: "c", occurrence: 0, wantOffset: 4, wantLength: 16},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nameErr, ok := def.pathParamErrorf(tt.param, tt.occurrence, "boom").(*NameError)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantOffset, nameErr.Offset, "offset")
+			assert.Equal(t, tt.wantLength, nameErr.Length, "length")
+		})
+	}
+}
+
+func TestDefinitionHandlerSpan(t *testing.T) {
+	t.Run("the handler expression", func(t *testing.T) {
+		def := &Definition{handler: "Save()", handlerOffset: 10, spans: nameSpans{call: [2]int{9, 20}}}
+		assert.Equal(t, [2]int{10, 16}, def.handlerSpan())
+	})
+	t.Run("the call segment without a handler", func(t *testing.T) {
+		def := &Definition{spans: nameSpans{call: [2]int{9, 20}}}
+		assert.Equal(t, [2]int{9, 20}, def.handlerSpan())
+	})
+}
+
+func TestDefinitionFinishNameErrorFallback(t *testing.T) {
+	def := &Definition{name: "GET /a Save()"}
+	for _, tt := range []struct {
+		name       string
+		fallback   [2]int
+		wantOffset int
+		wantLength int
+	}{
+		{name: "a segment", fallback: [2]int{4, 6}, wantOffset: 4, wantLength: 2},
+		{name: "a segment at the start", fallback: [2]int{0, 3}, wantOffset: 0, wantLength: 3},
+		{name: "no segment marks the whole name", fallback: [2]int{-1, -1}, wantOffset: 0, wantLength: len("GET /a Save()")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nameErr, ok := def.finishNameError(errors.New("boom"), tt.fallback).(*NameError)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantOffset, nameErr.Offset, "offset")
+			assert.Equal(t, tt.wantLength, nameErr.Length, "length")
+		})
+	}
+}
+
+func TestErrorListForms(t *testing.T) {
+	list := ErrorList{errors.New("a"), errors.New("b"), errors.New("c")}
+	assert.Equal(t, "a (and 2 more errors)", list.Error())
+	assert.Equal(t, "a\n\nb\n\nc", list.MultiLineError())
+	assert.Equal(t, "a", ErrorList{errors.New("a")}.MultiLineError())
+}
+
+func TestDefinitionPathParamErrorfAdjacentNames(t *testing.T) {
+	def := &Definition{name: "{a{a}", path: "{a{a}", spans: nameSpans{path: [2]int{0, 5}}}
+	for occurrence, want := range []int{1, 3} {
+		nameErr, ok := def.pathParamErrorf("a", occurrence, "boom").(*NameError)
+		require.True(t, ok)
+		assert.Equal(t, want, nameErr.Offset, "offset of occurrence %d", occurrence)
+	}
+}
