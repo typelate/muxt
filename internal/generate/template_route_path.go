@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"strconv"
+	"strings"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -35,225 +35,188 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
-	needsSegmentEscaper, needsSegmentsEscaper := false, false
+	var used escaperUse
 	for _, t := range defs {
-		decl, usesEscaper, usesSegmentsEscaper, err := routePathFunc(imports, config, &t)
+		decl, escapers, err := routePathFunc(imports, config, &t)
 		if err != nil {
 			return nil, err
 		}
-		// escapePathSegments calls escapePathSegment, so needing the former
-		// implies emitting both.
-		needsSegmentEscaper = needsSegmentEscaper || usesEscaper || usesSegmentsEscaper
-		needsSegmentsEscaper = needsSegmentsEscaper || usesSegmentsEscaper
+		used.segment = used.segment || escapers.segment
+		used.segments = used.segments || escapers.segments
 		decls = append(decls, decl)
 	}
-	if needsSegmentEscaper {
+	// escapePathSegments calls escapePathSegment, so needing the former
+	// implies emitting both.
+	if used.segment || used.segments {
 		decls = append(decls, escapePathSegmentMethod(imports, config))
 	}
-	if needsSegmentsEscaper {
+	if used.segments {
 		decls = append(decls, escapePathSegmentsMethod(imports, config))
 	}
 	return decls, nil
 }
 
-func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (_ *ast.FuncDecl, usesEscaper, usesSegmentsEscaper bool, _ error) {
-	const methodReceiverName = routePathsReceiverName
-	ident, err := def.ExportedPathIdentifier()
-	if err != nil {
-		return nil, false, false, err
+// escaperUse records which generated escaper methods a route path method calls.
+type escaperUse struct{ segment, segments bool }
+
+func routePathsMethod(config RoutesFileConfiguration, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Name: ast.NewIdent(name),
+		Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(config.TemplateRoutePathsTypeName), routePathsReceiverName)}},
+		Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: fieldList(results)},
+		Body: &ast.BlockStmt{List: body},
 	}
-
-	method := &ast.FuncDecl{
-		Name: ast.NewIdent(ident),
-		Recv: &ast.FieldList{
-			List: []*ast.Field{
-				{Names: []*ast.Ident{ast.NewIdent(methodReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
-			},
-		},
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: nil},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: nil,
-		},
-	}
-
-	if def.IsIndex() {
-		return indexRoutePath(file, config, method, methodReceiverName, usesEscaper, usesSegmentsEscaper)
-	}
-
-	var (
-		fields []*ast.Field
-		last   source.Type
-	)
-
-	hasErrorResult := false
-	segmentExpressions := []ast.Expr{
-		astgen.Call(file, "cmp", "cmp", "Or",
-			&ast.SelectorExpr{
-				X:   ast.NewIdent(methodReceiverName),
-				Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
-			},
-			astgen.String("/"),
-		),
-	}
-	for i, segment := range def.Segments {
-		// si numbers the segment as the path splits on "/", with the empty
-		// segment before the leading "/" at 0.
-		si := i + 1
-		if segment.IsLiteral() {
-			if len(segmentExpressions) > 0 {
-				prev := segmentExpressions[len(segmentExpressions)-1]
-				if prevBasic, ok := prev.(*ast.BasicLit); ok {
-					prevVal, _ := strconv.Unquote(prevBasic.Value)
-					prevBasic.Value = strconv.Quote(prevVal + "/" + segment.Value())
-					continue
-				}
-			}
-			segmentExpressions = append(segmentExpressions, &ast.BasicLit{
-				Kind:  token.STRING,
-				Value: strconv.Quote(segment.Value()),
-			})
-			continue
-		}
-
-		name := segment.Value()
-		ident := pathParamIdent(name)
-		wildcard := segment.IsRemainder()
-		arg := segment.Argument()
-		pathValueType := pathSegmentHelperType(arg)
-		tpNode, err := file.TypeExpr(pathValueType)
-		if err != nil {
-			return nil, false, false, err
-		}
-		if len(fields) > 0 && last.Identical(pathValueType) {
-			fields[len(fields)-1].Names = append(fields[len(fields)-1].Names, ast.NewIdent(ident))
-		} else {
-			fields = append(fields, &ast.Field{
-				Names: []*ast.Ident{ast.NewIdent(ident)},
-				Type:  tpNode,
-			})
-			last = pathValueType
-		}
-
-		summer := sha1.New()
-		summer.Write([]byte(def.Name()))
-		pathHash := hex.EncodeToString(summer.Sum(nil))
-
-		if arg != nil && !arg.Direct() && arg.TextMarshaler() {
-			hasErrorResult = true
-			if len(method.Type.Results.List) == 1 {
-				method.Type.Results.List = append(method.Type.Results.List, &ast.Field{
-					Type: ast.NewIdent("error"),
-				})
-			}
-			segmentIdent := fmt.Sprintf("segment%d_%s", si, pathHash[:8])
-			method.Body.List = append(method.Body.List, &ast.AssignStmt{
-				Rhs: []ast.Expr{&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent(ident),
-						Sel: ast.NewIdent("MarshalText"),
-					},
-				}},
-				Tok: token.DEFINE,
-				Lhs: []ast.Expr{
-					ast.NewIdent(segmentIdent),
-					ast.NewIdent("err"),
-				},
-			}, &ast.IfStmt{
-				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-				Body: &ast.BlockStmt{
-					List: []ast.Stmt{
-						&ast.ReturnStmt{
-							Results: []ast.Expr{
-								&ast.BasicLit{Kind: token.STRING, Value: `""`},
-								astgen.Call(file, "fmt", "fmt", "Errorf",
-									astgen.String(fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", name, si, def.Path())),
-									ast.NewIdent("err"),
-								),
-							},
-						},
-					},
-				},
-			})
-			var marshaled ast.Expr = &ast.CallExpr{
-				Fun:  ast.NewIdent("string"),
-				Args: []ast.Expr{ast.NewIdent(segmentIdent)},
-			}
-			if wildcard {
-				usesSegmentsEscaper = true
-				marshaled = escapedPathSegments(marshaled)
-			} else {
-				usesEscaper = true
-				marshaled = escapedPathSegment(marshaled)
-			}
-			segmentExpressions = append(segmentExpressions, marshaled)
-			continue
-		}
-
-		exp, err := astgen.ConvertToString(file, ast.NewIdent(ident), pathValueType)
-		if err != nil {
-			return nil, false, false, fmt.Errorf("failed to encode variable %s: %v", ident, err)
-		}
-		if pathValueType.IsString() {
-			if wildcard {
-				usesSegmentsEscaper = true
-				exp = escapedPathSegments(exp)
-			} else {
-				usesEscaper = true
-				exp = escapedPathSegment(exp)
-			}
-		}
-		segmentExpressions = append(segmentExpressions, exp)
-	}
-
-	returnStmt := ast.Expr(&ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(file.Import("path", "path")),
-			Sel: ast.NewIdent("Join"),
-		},
-		Args: segmentExpressions,
-	})
-	if def.HasPathEndWildcard() {
-		returnStmt = &ast.BinaryExpr{
-			X:  returnStmt,
-			Op: token.ADD,
-			Y: &ast.BasicLit{
-				Kind:  token.STRING,
-				Value: strconv.Quote("/"),
-			},
-		}
-	}
-
-	if hasErrorResult {
-		method.Body.List = append(method.Body.List, &ast.ReturnStmt{Results: []ast.Expr{returnStmt, astgen.Nil()}})
-	} else {
-		method.Body.List = append(method.Body.List, &ast.ReturnStmt{Results: []ast.Expr{returnStmt}})
-	}
-
-	method.Type.Params.List = fields
-
-	return method, usesEscaper, usesSegmentsEscaper, nil
 }
 
-func indexRoutePath(file *File, config RoutesFileConfiguration, method *ast.FuncDecl, methodReceiverName string, usesEscaper bool, usesSegmentsEscaper bool) (*ast.FuncDecl, bool, bool, error) {
-	if config.PathPrefix {
-		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-			astgen.Call(file, "path", "path", "Join",
-				astgen.Call(file, "cmp", "cmp", "Or",
-					&ast.SelectorExpr{
-						X:   ast.NewIdent(methodReceiverName),
-						Sel: ast.NewIdent(pathPrefixPathsStructFieldName),
-					},
-					astgen.String("/"),
-				),
-			),
-		}}}
-	} else {
-		method.Body.List = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("/")}}}
+func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definition) (*ast.FuncDecl, escaperUse, error) {
+	ident, err := def.ExportedPathIdentifier()
+	if err != nil {
+		return nil, escaperUse{}, err
 	}
-	return method, usesEscaper, usesSegmentsEscaper, nil
+	if def.IsIndex() {
+		body := []ast.Stmt{returnExprs(astgen.String("/"))}
+		if config.PathPrefix {
+			body = []ast.Stmt{returnExprs(astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file)))}
+		}
+		return routePathsMethod(config, ident, nil, results(ast.NewIdent("string")), body...), escaperUse{}, nil
+	}
+
+	b := &routePathBuilder{file: file, def: def, segments: []ast.Expr{pathPrefixOrRoot(file)}}
+	for i, segment := range def.Segments {
+		// The segment number counts as the path splits on "/", with the empty
+		// segment before the leading "/" at 0.
+		if err := b.addSegment(i+1, segment); err != nil {
+			return nil, escaperUse{}, err
+		}
+	}
+	b.flushLiteral()
+
+	var joined ast.Expr = astgen.Call(file, "path", "path", "Join", b.segments...)
+	if def.HasPathEndWildcard() {
+		joined = &ast.BinaryExpr{X: joined, Op: token.ADD, Y: astgen.String("/")}
+	}
+	returned, resultTypes := []ast.Expr{joined}, []ast.Expr{ast.NewIdent("string")}
+	if b.returnsError {
+		returned = append(returned, astgen.Nil())
+		resultTypes = append(resultTypes, ast.NewIdent("error"))
+	}
+	body := append(b.statements, returnExprs(returned...))
+	return routePathsMethod(config, ident, b.fields, results(resultTypes...), body...), b.escapers, nil
+}
+
+// pathPrefixOrRoot is cmp.Or(routePaths.pathsPrefix, "/").
+func pathPrefixOrRoot(file *File) ast.Expr {
+	return astgen.Call(file, "cmp", "cmp", "Or", selector(routePathsReceiverName, pathPrefixPathsStructFieldName), astgen.String("/"))
+}
+
+// routePathBuilder accumulates the parameters, statements and path segments of
+// one route path method.
+type routePathBuilder struct {
+	file *File
+	def  *muxt.Definition
+
+	fields     []*ast.Field
+	lastType   source.Type
+	statements []ast.Stmt
+	segments   []ast.Expr
+	// literals are consecutive literal segments not yet joined into one
+	// string in segments.
+	literals []string
+
+	returnsError bool
+	escapers     escaperUse
+}
+
+func (b *routePathBuilder) addSegment(number int, segment muxt.Segment) error {
+	if segment.IsLiteral() {
+		b.literals = append(b.literals, segment.Value())
+		return nil
+	}
+	b.flushLiteral()
+
+	ident := pathParamIdent(segment.Value())
+	arg := segment.Argument()
+	valueType := pathSegmentHelperType(arg)
+	if err := b.declareParameter(ident, valueType); err != nil {
+		return err
+	}
+	if arg != nil && !arg.Direct() && arg.TextMarshaler() {
+		b.addMarshaledSegment(number, segment, ident)
+		return nil
+	}
+	return b.addFormattedSegment(segment, ident, valueType)
+}
+
+func (b *routePathBuilder) flushLiteral() {
+	if len(b.literals) == 0 {
+		return
+	}
+	b.segments = append(b.segments, astgen.String(strings.Join(b.literals, "/")))
+	b.literals = nil
+}
+
+// declareParameter adds ident to the method's parameters, sharing the previous
+// field when it has the same type.
+func (b *routePathBuilder) declareParameter(ident string, valueType source.Type) error {
+	typeExpr, err := b.file.TypeExpr(valueType)
+	if err != nil {
+		return err
+	}
+	if len(b.fields) > 0 && b.lastType.Identical(valueType) {
+		last := b.fields[len(b.fields)-1]
+		last.Names = append(last.Names, ast.NewIdent(ident))
+		return nil
+	}
+	b.fields = append(b.fields, param(typeExpr, ident))
+	b.lastType = valueType
+	return nil
+}
+
+// addMarshaledSegment marshals the parameter with MarshalText, which is why
+// the method then returns an error.
+func (b *routePathBuilder) addMarshaledSegment(number int, segment muxt.Segment, ident string) {
+	b.returnsError = true
+	hash := sha1.Sum([]byte(b.def.Name()))
+	segmentIdent := fmt.Sprintf("segment%d_%s", number, hex.EncodeToString(hash[:])[:8])
+	message := fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", segment.Value(), number, b.def.Path())
+	b.statements = append(b.statements,
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(segmentIdent), ast.NewIdent(errIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{Fun: selector(ident, "MarshalText")}},
+		},
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(
+				astgen.String(""),
+				astgen.Call(b.file, "fmt", "fmt", "Errorf", astgen.String(message), ast.NewIdent(errIdent)),
+			)}},
+		},
+	)
+	b.segments = append(b.segments, b.escaped(astgen.ConvertIdent("string", ast.NewIdent(segmentIdent)), segment))
+}
+
+func (b *routePathBuilder) addFormattedSegment(segment muxt.Segment, ident string, valueType source.Type) error {
+	exp, err := astgen.ConvertToString(b.file, ast.NewIdent(ident), valueType)
+	if err != nil {
+		return fmt.Errorf("failed to encode variable %s: %v", ident, err)
+	}
+	if valueType.IsString() {
+		exp = b.escaped(exp, segment)
+	}
+	b.segments = append(b.segments, exp)
+	return nil
+}
+
+// escaped wraps value in the escaper for segment, and records that the
+// generated file needs it.
+func (b *routePathBuilder) escaped(value ast.Expr, segment muxt.Segment) ast.Expr {
+	if segment.IsRemainder() {
+		b.escapers.segments = true
+		return escapedPathSegments(value)
+	}
+	b.escapers.segment = true
+	return escapedPathSegment(value)
 }
 
 // pathParamIdent names the generated local for a path parameter. The suffix
@@ -277,26 +240,14 @@ func pathSegmentHelperType(arg *muxt.Argument) source.Type {
 // escapedPathSegment wraps value in a call to the generated escapePathSegment
 // method; the caller must arrange for escapePathSegmentMethod to be emitted.
 func escapedPathSegment(value ast.Expr) ast.Expr {
-	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(routePathsReceiverName),
-			Sel: ast.NewIdent(escapePathSegmentFuncName),
-		},
-		Args: []ast.Expr{value},
-	}
+	return &ast.CallExpr{Fun: selector(routePathsReceiverName, escapePathSegmentFuncName), Args: []ast.Expr{value}}
 }
 
 // escapedPathSegments wraps a trailing-wildcard value in a call to the
 // generated escapePathSegments method; the caller must arrange for both
 // escaper methods to be emitted.
 func escapedPathSegments(value ast.Expr) ast.Expr {
-	return &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X:   ast.NewIdent(routePathsReceiverName),
-			Sel: ast.NewIdent(escapePathSegmentsFuncName),
-		},
-		Args: []ast.Expr{value},
-	}
+	return &ast.CallExpr{Fun: selector(routePathsReceiverName, escapePathSegmentsFuncName), Args: []ast.Expr{value}}
 }
 
 // escapePathSegmentsMethod emits:
@@ -318,45 +269,27 @@ func escapePathSegmentsMethod(file *File, config RoutesFileConfiguration) *ast.F
 		indexIdent    = "i"
 		segmentIdent  = "segment"
 	)
-	return &ast.FuncDecl{
-		Name: ast.NewIdent(escapePathSegmentsFuncName),
-		Recv: &ast.FieldList{
-			List: []*ast.Field{
-				{Names: []*ast.Ident{ast.NewIdent(routePathsReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
-			},
+	return routePathsMethod(config, escapePathSegmentsFuncName,
+		[]*ast.Field{param(ast.NewIdent("string"), valueIdent)},
+		results(ast.NewIdent("string")),
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(segmentsIdent)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{astgen.Call(file, "strings", "strings", "Split", ast.NewIdent(valueIdent), astgen.String("/"))},
 		},
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(valueIdent)}, Type: ast.NewIdent("string")}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
+		&ast.RangeStmt{
+			Key:   ast.NewIdent(indexIdent),
+			Value: ast.NewIdent(segmentIdent),
+			Tok:   token.DEFINE,
+			X:     ast.NewIdent(segmentsIdent),
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.IndexExpr{X: ast.NewIdent(segmentsIdent), Index: ast.NewIdent(indexIdent)}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{escapedPathSegment(ast.NewIdent(segmentIdent))},
+			}}},
 		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent(segmentsIdent)},
-					Tok: token.DEFINE,
-					Rhs: []ast.Expr{astgen.Call(file, "strings", "strings", "Split", ast.NewIdent(valueIdent), astgen.String("/"))},
-				},
-				&ast.RangeStmt{
-					Key:   ast.NewIdent(indexIdent),
-					Value: ast.NewIdent(segmentIdent),
-					Tok:   token.DEFINE,
-					X:     ast.NewIdent(segmentsIdent),
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.AssignStmt{
-								Lhs: []ast.Expr{&ast.IndexExpr{X: ast.NewIdent(segmentsIdent), Index: ast.NewIdent(indexIdent)}},
-								Tok: token.ASSIGN,
-								Rhs: []ast.Expr{escapedPathSegment(ast.NewIdent(segmentIdent))},
-							},
-						},
-					},
-				},
-				&ast.ReturnStmt{Results: []ast.Expr{
-					astgen.Call(file, "strings", "strings", "Join", ast.NewIdent(segmentsIdent), astgen.String("/")),
-				}},
-			},
-		},
-	}
+		returnExprs(astgen.Call(file, "strings", "strings", "Join", ast.NewIdent(segmentsIdent), astgen.String("/"))),
+	)
 }
 
 // escapePathSegmentMethod emits:
@@ -377,38 +310,19 @@ func escapePathSegmentsMethod(file *File, config RoutesFileConfiguration) *ast.F
 // http.ServeMux matches the escaped path and PathValue decodes them back.
 func escapePathSegmentMethod(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
 	const valueIdent = "value"
-	caseReturn := func(match, encoded string) *ast.CaseClause {
+	caseReturn := func(match, encoded string) ast.Stmt {
 		return &ast.CaseClause{
 			List: []ast.Expr{astgen.String(match)},
-			Body: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String(encoded)}}},
+			Body: []ast.Stmt{returnExprs(astgen.String(encoded))},
 		}
 	}
-	return &ast.FuncDecl{
-		Name: ast.NewIdent(escapePathSegmentFuncName),
-		Recv: &ast.FieldList{
-			List: []*ast.Field{
-				{Names: []*ast.Ident{ast.NewIdent(routePathsReceiverName)}, Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
-			},
+	return routePathsMethod(config, escapePathSegmentFuncName,
+		[]*ast.Field{param(ast.NewIdent("string"), valueIdent)},
+		results(ast.NewIdent("string")),
+		&ast.SwitchStmt{
+			Tag:  ast.NewIdent(valueIdent),
+			Body: &ast.BlockStmt{List: []ast.Stmt{caseReturn(".", "%2E"), caseReturn("..", "%2E%2E")}},
 		},
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(valueIdent)}, Type: ast.NewIdent("string")}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.SwitchStmt{
-					Tag: ast.NewIdent(valueIdent),
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							caseReturn(".", "%2E"),
-							caseReturn("..", "%2E%2E"),
-						},
-					},
-				},
-				&ast.ReturnStmt{Results: []ast.Expr{
-					astgen.Call(file, "url", "net/url", "PathEscape", ast.NewIdent(valueIdent)),
-				}},
-			},
-		},
-	}
+		returnExprs(astgen.Call(file, "url", "net/url", "PathEscape", ast.NewIdent(valueIdent))),
+	)
 }
