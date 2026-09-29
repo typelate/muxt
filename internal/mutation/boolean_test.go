@@ -77,6 +77,54 @@ func TestSimplifyReducesConditions(t *testing.T) {
 			canonical:  "and(.A,.B,.C)",
 			conditions: []string{".A", ".B", ".C"},
 		},
+		{
+			name:       "flattening a nested or",
+			pipeline:   `or .A (or .B .C)`,
+			canonical:  "or(.A,.B,.C)",
+			conditions: []string{".A", ".B", ".C"},
+		},
+		{
+			name:       "a nested duplicate is dropped once flattened",
+			pipeline:   `and (and .A .B) .A`,
+			canonical:  "and(.A,.B)",
+			conditions: []string{".A", ".B"},
+		},
+		{
+			name:       "not of true",
+			pipeline:   `not true`,
+			canonical:  "false",
+			conditions: nil,
+		},
+		{
+			name:       "not of false",
+			pipeline:   `not false`,
+			canonical:  "true",
+			conditions: nil,
+		},
+		{
+			name:       "a single negation stays",
+			pipeline:   `and (not .A) .B`,
+			canonical:  "and(.B,not(.A))",
+			conditions: []string{".A", ".B"},
+		},
+		{
+			name:       "a false is the identity of or",
+			pipeline:   `or .A false`,
+			canonical:  ".A",
+			conditions: []string{".A"},
+		},
+		{
+			name:       "only constants leave the identity",
+			pipeline:   `and true true`,
+			canonical:  "true",
+			conditions: nil,
+		},
+		{
+			name:       "absorption in an or drops the wider term",
+			pipeline:   `or .A (and .A .B)`,
+			canonical:  ".A",
+			conditions: []string{".A"},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			text := `{{if ` + tt.pipeline + `}}x{{end}}`
@@ -116,6 +164,12 @@ func TestDecisionRefusesWhatItCannotModel(t *testing.T) {
 		`eq .A .B`,
 		`and (eq .A 1) .B`,
 		`.A | not`,
+		`not .A .B`,
+		`not`,
+		`and`,
+		`or`,
+		`.A .B`,
+		`and .A (eq .B 1)`,
 	} {
 		t.Run(pipeline, func(t *testing.T) {
 			text := `{{if ` + pipeline + `}}x{{end}}`
@@ -129,4 +183,136 @@ func TestDecisionRefusesWhatItCannotModel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLogicalKind(t *testing.T) {
+	for _, tt := range []struct {
+		function string
+		kind     boolKind
+		ok       bool
+	}{
+		{function: "and", kind: boolAnd, ok: true},
+		{function: "or", kind: boolOr, ok: true},
+		{function: "not", kind: boolNot, ok: true},
+		{function: "eq", ok: false},
+		{function: "", ok: false},
+	} {
+		t.Run(tt.function, func(t *testing.T) {
+			kind, ok := logicalKind(tt.function)
+			if ok != tt.ok || (ok && kind != tt.kind) {
+				t.Errorf("logicalKind(%q) = %v, %t, want %v, %t", tt.function, kind, ok, tt.kind, tt.ok)
+			}
+		})
+	}
+}
+
+func TestDecisionCallArity(t *testing.T) {
+	one := []parse.Node{&parse.BoolNode{True: true}}
+	two := []parse.Node{&parse.BoolNode{True: true}, &parse.BoolNode{}}
+	for _, tt := range []struct {
+		name string
+		kind boolKind
+		args []parse.Node
+		ok   bool
+	}{
+		{name: "not takes one", kind: boolNot, args: one, ok: true},
+		{name: "not refuses two", kind: boolNot, args: two, ok: false},
+		{name: "not refuses none", kind: boolNot, args: nil, ok: false},
+		{name: "and takes one", kind: boolAnd, args: one, ok: true},
+		{name: "and takes two", kind: boolAnd, args: two, ok: true},
+		{name: "and refuses none", kind: boolAnd, args: nil, ok: false},
+		{name: "or refuses none", kind: boolOr, args: nil, ok: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			node, ok := decisionCall(tt.kind, "", tt.args)
+			if ok != tt.ok {
+				t.Fatalf("decisionCall(%v, %d args) ok = %t, want %t", tt.kind, len(tt.args), ok, tt.ok)
+			}
+			if ok && len(node.kids) != len(tt.args) {
+				t.Errorf("decisionCall(%v, %d args) has %d operands", tt.kind, len(tt.args), len(node.kids))
+			}
+		})
+	}
+}
+
+func TestSimplifyHelpers(t *testing.T) {
+	a := &boolNode{kind: boolCond, text: ".A"}
+	b := &boolNode{kind: boolCond, text: ".B"}
+	not := func(n *boolNode) *boolNode { return &boolNode{kind: boolNot, kids: []*boolNode{n}} }
+	junction := func(kind boolKind, kids ...*boolNode) *boolNode { return &boolNode{kind: kind, kids: kids} }
+	canonicals := func(kids []*boolNode) string {
+		parts := make([]string, 0, len(kids))
+		for _, kid := range kids {
+			parts = append(parts, kid.canonical())
+		}
+		return strings.Join(parts, " ")
+	}
+
+	t.Run("negate", func(t *testing.T) {
+		for _, tt := range []struct {
+			name string
+			kid  *boolNode
+			want string
+		}{
+			{name: "true", kid: constant(true), want: "false"},
+			{name: "false", kid: constant(false), want: "true"},
+			{name: "double", kid: not(a), want: ".A"},
+			{name: "condition", kid: a, want: "not(.A)"},
+		} {
+			if got := negate(tt.kid).canonical(); got != tt.want {
+				t.Errorf("negate(%s) = %q, want %q", tt.name, got, tt.want)
+			}
+		}
+	})
+
+	t.Run("flatten", func(t *testing.T) {
+		got := canonicals(flatten(boolAnd, []*boolNode{a, junction(boolAnd, b, a), junction(boolOr, a, b), not(not(b))}))
+		if want := ".A .B .A or(.A,.B) .B"; got != want {
+			t.Errorf("flatten(and, ...) = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("foldConstants", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			kids        []*boolNode
+			zero        bool
+			want        string
+			wantDecided bool
+		}{
+			{name: "and drops true", kids: []*boolNode{a, constant(true), b}, zero: false, want: ".A .B"},
+			{name: "and decided by false", kids: []*boolNode{a, constant(false)}, zero: false, wantDecided: true},
+			{name: "or drops false", kids: []*boolNode{constant(false), a}, zero: true, want: ".A"},
+			{name: "or decided by true", kids: []*boolNode{a, constant(true)}, zero: true, wantDecided: true},
+		} {
+			kept, decided := foldConstants(tt.kids, tt.zero)
+			if decided != tt.wantDecided || (!decided && canonicals(kept) != tt.want) {
+				t.Errorf("foldConstants(%s) = %q, %t, want %q, %t", tt.name, canonicals(kept), decided, tt.want, tt.wantDecided)
+			}
+		}
+	})
+
+	t.Run("distinct", func(t *testing.T) {
+		got := canonicals(distinct([]*boolNode{a, b, a, junction(boolAnd, b, a), junction(boolAnd, a, b)}))
+		if want := ".A .B and(.A,.B)"; got != want {
+			t.Errorf("distinct = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("hasComplement", func(t *testing.T) {
+		for _, tt := range []struct {
+			name string
+			kids []*boolNode
+			want bool
+		}{
+			{name: "none", kids: []*boolNode{a, b}, want: false},
+			{name: "not first", kids: []*boolNode{not(a), a}, want: true},
+			{name: "not last", kids: []*boolNode{a, b, not(a)}, want: true},
+			{name: "different negation", kids: []*boolNode{a, not(b)}, want: false},
+		} {
+			if got := hasComplement(tt.kids); got != tt.want {
+				t.Errorf("hasComplement(%s) = %t, want %t", tt.name, got, tt.want)
+			}
+		}
+	})
 }
