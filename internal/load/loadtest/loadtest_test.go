@@ -5,6 +5,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/load/loadtest"
 )
@@ -35,30 +38,28 @@ func Render(w io.Writer, name string) error {
 	})
 
 	pkg, err := load.Package(dir, pl, []string{"templates", "inline"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pkg.Types.Path() != "example.com/server" {
-		t.Errorf("package %s, want example.com/server", pkg.Types.Path())
-	}
-	sets := pkg.Variables
+	require.NoError(t, err)
+	assert.Equal(t, "example.com/server", pkg.Types.Path(), "package path")
+	require.Len(t, pkg.Variables, 2)
+	templates, inline := pkg.Variables[0], pkg.Variables[1]
 
-	if sets[0].Set.Lookup("page") == nil {
-		t.Error("templates does not hold the page ParseFS read")
-	}
-	definition, ok := sets[0].Definitions["page"]
-	if !ok || definition.Define.Filename != filepath.Join(dir, "page.gohtml") {
-		t.Errorf("page defined at %+v, want in page.gohtml", definition.Define)
-	}
-	if got := len(sets[0].Calls); got != 1 {
-		t.Errorf("%d ExecuteTemplate calls, want the one Render makes", got)
-	}
-	var names []string
-	for _, tmpl := range sets[1].Set.Templates() {
-		names = append(names, tmpl.Name())
-	}
-	slices.Sort(names)
-	if !slices.Equal(names, []string{"inline", "note"}) {
-		t.Errorf("inline holds %q, want inline and note", names)
-	}
+	t.Run("ParseFS reads the embedded page", func(t *testing.T) {
+		assert.NotNil(t, templates.Set.Lookup("page"), "templates does not hold the page ParseFS read")
+		definition, ok := templates.Definitions["page"]
+		assert.True(t, ok, "page has a definition")
+		assert.Equal(t, filepath.Join(dir, "page.gohtml"), definition.Define.Filename, "page defined at %+v, want in page.gohtml", definition.Define)
+	})
+
+	t.Run("the one ExecuteTemplate call Render makes", func(t *testing.T) {
+		assert.Len(t, templates.Calls, 1)
+	})
+
+	t.Run("an inline template with custom delimiters", func(t *testing.T) {
+		var names []string
+		for _, tmpl := range inline.Set.Templates() {
+			names = append(names, tmpl.Name())
+		}
+		slices.Sort(names)
+		assert.Equal(t, []string{"inline", "note"}, names, "inline holds inline and note")
+	})
 }
