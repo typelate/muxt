@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/asteval"
 )
 
@@ -46,12 +48,8 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, content := range files {
 		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	}
 }
 
@@ -165,9 +163,8 @@ func (r *repo) git(args ...string) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.dir
 	cmd.Env = r.env
-	if out, err := cmd.CombinedOutput(); err != nil {
-		r.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
+	out, err := cmd.CombinedOutput()
+	require.NoError(r.t, err, "git %s\n%s", strings.Join(args, " "), out)
 }
 
 func (r *repo) write(files map[string]string) {
@@ -191,9 +188,8 @@ func exitStatusOne(t *testing.T) error {
 	}
 	err := exec.Command("false").Run()
 	exitErr, ok := errors.AsType[*exec.ExitError](err)
-	if !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("false = %v, want exit status 1", err)
-	}
+	require.True(t, ok, "false = %v, want exit status 1", err)
+	require.Equal(t, 1, exitErr.ExitCode(), "false = %v", err)
 	return err
 }
 
@@ -205,13 +201,9 @@ func exitStatusOne(t *testing.T) error {
 func scopeOf(t *testing.T, name, text string, dot types.Type) scope {
 	t.Helper()
 	trees, err := asteval.ParseTrees(name, text, "", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tree, ok := trees[name]
-	if !ok {
-		t.Fatalf("the text does not hold %q", name)
-	}
+	require.True(t, ok, "the text does not hold %q", name)
 	file := name + ".gohtml"
 	return scope{
 		template:     name,
@@ -245,9 +237,8 @@ func reportText(t *testing.T, p *plan) string {
 	report := p.report()
 	report.DryRun, report.Verbose = true, true
 	var out strings.Builder
-	if _, err := report.WriteTo(&out); err != nil {
-		t.Fatal(err)
-	}
+	_, err := report.WriteTo(&out)
+	require.NoError(t, err)
 	return out.String()
 }
 
@@ -289,13 +280,9 @@ func dataType(t *testing.T, src, name string) types.Type {
 	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "data.go", "package data\n"+src, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	pkg, err := new(types.Config).Check("example.com/data", fset, []*ast.File{file}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return pkg.Scope().Lookup(name).Type()
 }
 

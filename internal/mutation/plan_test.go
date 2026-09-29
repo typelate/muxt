@@ -6,10 +6,13 @@ import (
 	"go/types"
 	"path/filepath"
 	"regexp"
-	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/source"
@@ -90,9 +93,7 @@ func TestSelectorSkipsWhatARevisionAlreadyHeld(t *testing.T) {
 			if tt.wantMutated {
 				wantMutate = []string{tt.scope.template}
 			}
-			if got := names(chosen.mutate); !slices.Equal(got, wantMutate) {
-				t.Errorf("mutate %q, want %q", got, wantMutate)
-			}
+			assert.Equal(t, wantMutate, names(chosen.mutate), "mutate")
 
 			var wantUnchanged []string
 			if tt.wantUnchanged != "" {
@@ -102,9 +103,7 @@ func TestSelectorSkipsWhatARevisionAlreadyHeld(t *testing.T) {
 			for _, u := range chosen.unchanged {
 				got = append(got, u.Template+" "+u.DataType)
 			}
-			if !slices.Equal(got, wantUnchanged) {
-				t.Errorf("unchanged %q, want %q", got, wantUnchanged)
-			}
+			assert.Equal(t, wantUnchanged, got, "unchanged")
 		})
 	}
 }
@@ -117,13 +116,10 @@ func TestSelectorMutatesATemplateOnceAcrossAWholeRun(t *testing.T) {
 	page := scopeOf(t, "page", `<b>{{.}}</b>`, str)
 	sel := newSelector(nil)
 
-	if got := names(sel.choose([]scope{page}, nil).mutate); !slices.Equal(got, []string{"page"}) {
-		t.Fatalf("the first traversal chose %q, want the page", got)
-	}
+	require.Equal(t, []string{"page"}, names(sel.choose([]scope{page}, nil).mutate), "the first traversal chose the page")
 	second := sel.choose([]scope{page}, nil)
-	if len(second.mutate) != 0 || len(second.unchanged) != 0 {
-		t.Errorf("the second traversal chose %v and left %v, want neither", names(second.mutate), second.unchanged)
-	}
+	assert.Empty(t, second.mutate, "the second traversal chose nothing")
+	assert.Empty(t, second.unchanged, "the second traversal left nothing")
 }
 
 // TestSelectorHonoursTheTemplatePattern states that --template-pattern
@@ -138,12 +134,8 @@ func TestSelectorHonoursTheTemplatePattern(t *testing.T) {
 		scopeOf(t, "page", `<b>{{.}}</b>`, str),
 		scopeOf(t, "footer", `<p>{{.}}</p>`, str),
 	}, nil)
-	if got := names(chosen.mutate); !slices.Equal(got, []string{"page"}) {
-		t.Errorf("mutate %q, want only the page", got)
-	}
-	if len(chosen.unchanged) != 0 {
-		t.Errorf("unchanged %v, want none: the pattern is not a comparison", chosen.unchanged)
-	}
+	assert.Equal(t, []string{"page"}, names(chosen.mutate), "mutate only the page")
+	assert.Empty(t, chosen.unchanged, "the pattern is not a comparison")
 }
 
 // TestSelectorReportsTrims states what a trim says and when it is worth
@@ -158,21 +150,15 @@ func TestSelectorReportsTrims(t *testing.T) {
 			trimOf("row", str, "page.go", "page.go"),
 			trimOf("row", str, "page.go", "page.go"),
 		})
-		if len(chosen.trimmed) != 1 {
-			t.Fatalf("trimmed %v, want one", chosen.trimmed)
-		}
+		require.Len(t, chosen.trimmed, 1)
 		want := TrimmedTemplate{CallSite: "page.go:1:1", Template: "row", DataType: "string", FirstSeenAt: "page.go:1:1"}
-		if chosen.trimmed[0] != want {
-			t.Errorf("trimmed %+v, want %+v", chosen.trimmed[0], want)
-		}
+		assert.Equal(t, want, chosen.trimmed[0])
 	})
 
 	t.Run("a repeat of a template left alone is not reported", func(t *testing.T) {
 		before := scopesOf([]scope{page})
 		chosen := newSelector(before).choose([]scope{page}, []trim{trimOf("page", str, "page.go", "page.go")})
-		if len(chosen.trimmed) != 0 {
-			t.Errorf("trimmed %v, want none: the page was mutated nowhere", chosen.trimmed)
-		}
+		assert.Empty(t, chosen.trimmed, "the page was mutated nowhere")
 	})
 }
 
@@ -182,9 +168,8 @@ func TestSelectorReportsTrims(t *testing.T) {
 func TestPlanReportCounts(t *testing.T) {
 	p := &plan{mutants: make([]Mutant, 5), runnableN: 3, overBudget: 2}
 	report := p.report()
-	if report.Total != 7 || report.Skipped != 4 {
-		t.Errorf("total %d, skipped %d, want 7 and 4", report.Total, report.Skipped)
-	}
+	assert.Equal(t, 7, report.Total, "total")
+	assert.Equal(t, 4, report.Skipped, "skipped")
 }
 
 func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
@@ -219,12 +204,8 @@ func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
 				src.rootName = "page"
 			}
 			index, err := indexTrees(tt.sources, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := index["page"].src.path; got != tt.want {
-				t.Errorf("indexTrees(...)[page] comes from %q, want %q", got, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, index["page"].src.path, "indexTrees(...)[page] source")
 		})
 	}
 }
@@ -232,17 +213,14 @@ func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
 func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
 	src := newFileSource("bad.gohtml", "bad.gohtml", "{{if}}", "", "")
 	_, err := indexTrees([]*templateSource{src}, nil)
-	if err == nil || !strings.HasPrefix(err.Error(), "bad.gohtml: ") {
-		t.Errorf("indexTrees(bad source) error = %v, want one naming bad.gohtml", err)
-	}
+	require.Error(t, err, "indexTrees(bad source)")
+	assert.True(t, strings.HasPrefix(err.Error(), "bad.gohtml: "), "indexTrees(bad source) error = %v, want one naming bad.gohtml", err)
 }
 
 func TestVerifyReadable(t *testing.T) {
 	treeOf := func(text string) *parse.Tree {
 		trees, err := asteval.ParseTrees("page", text, "", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return trees["page"]
 	}
 	definition := func(name, text string) source.Definition {
@@ -308,12 +286,13 @@ func TestVerifyReadable(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := verifyReadable(tt.defs, tt.index, filepath.Join("/work", "app"))
-			if (got != nil) != tt.want {
-				t.Fatalf("verifyReadable(...) = %v, want error %t", got, tt.want)
+			if !tt.want {
+				require.Nil(t, got, "verifyReadable(...)")
+				return
 			}
-			if got != nil && (got.Path != tt.wantPath || got.Template != tt.wantAbout) {
-				t.Errorf("verifyReadable(...) = template %q at %q, want %q at %q", got.Template, got.Path, tt.wantAbout, tt.wantPath)
-			}
+			require.NotNil(t, got, "verifyReadable(...)")
+			assert.Equal(t, tt.wantPath, got.Path, "verifyReadable(...) path")
+			assert.Equal(t, tt.wantAbout, got.Template, "verifyReadable(...) template")
 		})
 	}
 }
@@ -344,14 +323,14 @@ func TestPlanValidate(t *testing.T) {
 			err := tt.plan.validate([]string{"templates"})
 			noCalls, isNoCalls := errors.AsType[*NoCallSitesError](err)
 			noMutations, isNoMutations := errors.AsType[*NoMutationsError](err)
-			if isNoCalls != tt.wantNoCalls || isNoMutations != tt.wantNoMutant || (err != nil) != (tt.wantNoCalls || tt.wantNoMutant) {
-				t.Fatalf("validate() = %v, want no call sites %t, no mutations %t", err, tt.wantNoCalls, tt.wantNoMutant)
+			require.Equal(t, tt.wantNoCalls, isNoCalls, "validate() = %v: no call sites", err)
+			require.Equal(t, tt.wantNoMutant, isNoMutations, "validate() = %v: no mutations", err)
+			require.Equal(t, tt.wantNoCalls || tt.wantNoMutant, err != nil, "validate() = %v: any error", err)
+			if isNoCalls {
+				assert.Equal(t, []string{"templates"}, noCalls.Variables, "validate() variables")
 			}
-			if isNoCalls && !slices.Equal(noCalls.Variables, []string{"templates"}) {
-				t.Errorf("validate() names variables %v, want [templates]", noCalls.Variables)
-			}
-			if isNoMutations && noMutations.Templates != tt.plan.templates {
-				t.Errorf("validate() counts %d templates, want %d", noMutations.Templates, tt.plan.templates)
+			if isNoMutations {
+				assert.Equal(t, tt.plan.templates, noMutations.Templates, "validate() templates")
 			}
 		})
 	}
@@ -364,9 +343,9 @@ func TestConfigurationMaxCases(t *testing.T) {
 		{configured: 1, want: 1},
 		{configured: 20, want: 20},
 	} {
-		if got := (Configuration{MaxCases: tt.configured}).maxCases(); got != tt.want {
-			t.Errorf("Configuration{MaxCases: %d}.maxCases() = %d, want %d", tt.configured, got, tt.want)
-		}
+		t.Run(strconv.Itoa(tt.configured), func(t *testing.T) {
+			assert.Equal(t, tt.want, (Configuration{MaxCases: tt.configured}).maxCases(), "Configuration{MaxCases: %d}.maxCases()", tt.configured)
+		})
 	}
 }
 
@@ -382,9 +361,7 @@ func TestTemplateFilter(t *testing.T) {
 		{name: "other name", pattern: regexp.MustCompile(`^page$`), in: "footer", want: false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := templateFilter(tt.pattern)(tt.in); got != tt.want {
-				t.Errorf("templateFilter(%v)(%q) = %t, want %t", tt.pattern, tt.in, got, tt.want)
-			}
+			assert.Equal(t, tt.want, templateFilter(tt.pattern)(tt.in), "templateFilter(%v)(%q)", tt.pattern, tt.in)
 		})
 	}
 }
@@ -400,9 +377,7 @@ func TestHasRoot(t *testing.T) {
 		{name: "tree with root", tree: &parse.Tree{Root: &parse.ListNode{}}, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := hasRoot(tt.tree); got != tt.want {
-				t.Errorf("hasRoot(%s) = %t, want %t", tt.name, got, tt.want)
-			}
+			assert.Equal(t, tt.want, hasRoot(tt.tree), "hasRoot(%s)", tt.name)
 		})
 	}
 }
@@ -417,9 +392,7 @@ func TestRelativePath(t *testing.T) {
 		{name: "no relative path", dir: "relative", file: filepath.Join(dir, "a.gohtml"), want: filepath.Join(dir, "a.gohtml")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := relativePath(tt.dir, tt.file); got != tt.want {
-				t.Errorf("relativePath(%q, %q) = %q, want %q", tt.dir, tt.file, got, tt.want)
-			}
+			assert.Equal(t, tt.want, relativePath(tt.dir, tt.file), "relativePath(%q, %q)", tt.dir, tt.file)
 		})
 	}
 }

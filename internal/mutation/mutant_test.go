@@ -1,9 +1,13 @@
 package mutation
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -24,9 +28,7 @@ func TestValueStart(t *testing.T) {
 	} {
 		t.Run(tt.text, func(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			nodes := trees["t"].Root.Nodes
 			var pipe *parse.PipeNode
 			switch node := nodes[len(nodes)-1].(type) {
@@ -39,13 +41,9 @@ func TestValueStart(t *testing.T) {
 			}
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, "", "")
 			_, r, ok := regionAt(src.regions, int(pipe.Position()))
-			if !ok {
-				t.Fatalf("no region holds the pipeline at %d", pipe.Position())
-			}
+			require.True(t, ok, "no region holds the pipeline at %d", pipe.Position())
 			start := valueStart(pipe)
-			if got := tt.text[start:r.innerEnd]; got != tt.want {
-				t.Errorf("value = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.text[start:r.innerEnd], "value")
 		})
 	}
 }
@@ -58,9 +56,7 @@ func TestMutantsAreReportedWhereTheFileHoldsThem(t *testing.T) {
 	const goFile = "package p\n\nvar t = `x\n  {{.A}}`\n"
 	start, end := strings.Index(goFile, "`"), strings.LastIndex(goFile, "`")+1
 	literal, err := newLiteralSource("p.go", "p.go", "t", goFile, "", "", start, end)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, tt := range []struct {
 		name         string
 		src          *templateSource
@@ -73,9 +69,9 @@ func TestMutantsAreReportedWhereTheFileHoldsThem(t *testing.T) {
 			e := &enumerator{src: tt.src, template: "t"}
 			r := tt.src.regions[0]
 			e.appendEdits(r, OperatorActionEmpty, []edit{{start: r.start, end: r.end}}, "")
-			if m := e.mutants[0]; m.Line != tt.line || m.Column != tt.column {
-				t.Errorf("mutant at %d:%d, want %d:%d", m.Line, m.Column, tt.line, tt.column)
-			}
+			m := e.mutants[0]
+			assert.Equal(t, tt.line, m.Line, "mutant line")
+			assert.Equal(t, tt.column, m.Column, "mutant column")
 		})
 	}
 }
@@ -93,9 +89,11 @@ func TestLineIndex(t *testing.T) {
 		{offset: 7, line: 4, column: 1},
 		{offset: 8, line: 4, column: 2},
 	} {
-		if line, column := lines.at(tt.offset); line != tt.line || column != tt.column {
-			t.Errorf("at(%d) = %d:%d, want %d:%d", tt.offset, line, column, tt.line, tt.column)
-		}
+		t.Run(strconv.Itoa(tt.offset), func(t *testing.T) {
+			line, column := lines.at(tt.offset)
+			assert.Equal(t, tt.line, line, "at(%d) line", tt.offset)
+			assert.Equal(t, tt.column, column, "at(%d) column", tt.offset)
+		})
 	}
 }
 
@@ -136,13 +134,8 @@ func TestConstructDropKeepsTheElseBranch(t *testing.T) {
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, tt.left, tt.right)
 			e := &enumerator{src: src, template: "t"}
 			e.addConstructDrop(action{region: src.regions[0], index: 0}, OperatorWithEmpty)
-			out := e.mutants
-			if len(out) != 1 {
-				t.Fatalf("mutants = %d, want 1", len(out))
-			}
-			if got := src.mutatedText(out[0].edits); got != tt.want {
-				t.Errorf("dropping the with leaves %q, want %q", got, tt.want)
-			}
+			require.Len(t, e.mutants, 1)
+			assert.Equal(t, tt.want, src.mutatedText(e.mutants[0].edits), "text left by dropping the with")
 		})
 	}
 }
