@@ -1,0 +1,173 @@
+package generate
+
+import (
+	"go/types"
+	"html/template"
+	"testing"
+
+	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/fake"
+	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
+)
+
+const routePathTestSource = `package server
+
+type T struct{}
+
+type ID int
+
+func (ID) MarshalText() ([]byte, error) { return nil, nil }
+
+func (T) ByID(id ID) string { return "" }
+
+func (T) ByNumber(n int) string { return "" }
+
+func (T) ByName(name string) string { return "" }
+
+func (T) ByPair(a, b string) string { return "" }
+
+func (T) ByBool(ok bool) string { return "" }
+
+func (T) ByTwoIDs(a, b ID) string { return "" }
+
+func (T) ByRest(rest string) string { return "" }
+`
+
+func TestRoutePathFunc(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		pattern    string
+		pathPrefix bool
+		want       string
+		escapers   escaperUse
+	}{
+		{
+			name: "index", pattern: "GET /{$}",
+			want: `func (routePaths TemplateRoutePaths) ReadExact() string {
+	return "/"
+}`,
+		},
+		{
+			name: "index with prefix", pattern: "GET /{$}", pathPrefix: true,
+			want: `func (routePaths TemplateRoutePaths) ReadExact() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"))
+}`,
+		},
+		{
+			name: "literals fold into one segment", pattern: "GET /a/b/c",
+			want: `func (routePaths TemplateRoutePaths) ReadABC() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "a/b/c")
+}`,
+		},
+		{
+			name: "int", pattern: "GET /n/{n} ByNumber(n)",
+			want: `func (routePaths TemplateRoutePaths) ByNumber(nPathParam int) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "n", strconv.Itoa(nPathParam))
+}`,
+		},
+		{
+			name: "bool", pattern: "GET /b/{ok} ByBool(ok)",
+			want: `func (routePaths TemplateRoutePaths) ByBool(okPathParam bool) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "b", strconv.FormatBool(bool(okPathParam)))
+}`,
+		},
+		{
+			name: "string is escaped", pattern: "GET /s/{name} ByName(name)",
+			want: `func (routePaths TemplateRoutePaths) ByName(namePathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "s", routePaths.escapePathSegment(namePathParam))
+}`,
+			escapers: escaperUse{segment: true},
+		},
+		{
+			name: "same typed parameters share a field", pattern: "GET /p/{a}/{b} ByPair(a, b)",
+			want: `func (routePaths TemplateRoutePaths) ByPair(aPathParam, bPathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "p", routePaths.escapePathSegment(aPathParam), routePaths.escapePathSegment(bPathParam))
+}`,
+			escapers: escaperUse{segment: true},
+		},
+		{
+			name: "unlinked segment is a string", pattern: "GET /u/{name}",
+			want: `func (routePaths TemplateRoutePaths) ReadUByName(namePathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "u", routePaths.escapePathSegment(namePathParam))
+}`,
+			escapers: escaperUse{segment: true},
+		},
+		{
+			name: "text marshaler returns an error", pattern: "GET /m/{id} ByID(id)",
+			want: `func (routePaths TemplateRoutePaths) ByID(idPathParam ID) (string, error) {
+	segment2_4d0556ab, err := idPathParam.MarshalText()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal path value {id} (segment 2) in /m/{id}: %w", err)
+	}
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "m", routePaths.escapePathSegment(string(segment2_4d0556ab))), nil
+}`,
+			escapers: escaperUse{segment: true},
+		},
+		{
+			name: "two text marshalers", pattern: "GET /mm/{a}/{b} ByTwoIDs(a, b)",
+			want: `func (routePaths TemplateRoutePaths) ByTwoIDs(aPathParam, bPathParam ID) (string, error) {
+	segment2_b8dad819, err := aPathParam.MarshalText()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal path value {a} (segment 2) in /mm/{a}/{b}: %w", err)
+	}
+	segment3_b8dad819, err := bPathParam.MarshalText()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal path value {b} (segment 3) in /mm/{a}/{b}: %w", err)
+	}
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "mm", routePaths.escapePathSegment(string(segment2_b8dad819)), routePaths.escapePathSegment(string(segment3_b8dad819))), nil
+}`,
+			escapers: escaperUse{segment: true},
+		},
+		{
+			name: "remainder wildcard", pattern: "GET /r/{rest...} ByRest(rest)",
+			want: `func (routePaths TemplateRoutePaths) ByRest(restPathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "r", routePaths.escapePathSegments(restPathParam))
+}`,
+			escapers: escaperUse{segments: true},
+		},
+		{
+			name: "path end wildcard", pattern: "GET /w/{$}",
+			want: `func (routePaths TemplateRoutePaths) ReadWExact() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "w") + "/"
+}`,
+		},
+		{
+			name: "path end wildcard after a parameter", pattern: "GET /w/{name}/{$} ByName(name)",
+			want: `func (routePaths TemplateRoutePaths) ByName(namePathParam string) string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "w", routePaths.escapePathSegment(namePathParam)) + "/"
+}`,
+			escapers: escaperUse{segment: true},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": routePathTestSource})
+			src := source.Package{
+				Fset:  fake.FileSet,
+				Types: pkg,
+				Variables: []source.Variable{{
+					Name: "templates",
+					Set:  template.Must(template.New("templates").Parse(`{{define "` + tt.pattern + `"}}{{end}}`)),
+				}},
+			}
+			id := fake.Lookup(t, pkg, "ID")
+			checker := fake.StandInChecker(t, pkg).ParsesFromText(id).FormatsAsText(id).Fake()
+			defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), checker)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config := testConfig()
+			config.PathPrefix = tt.pathPrefix
+			decl, escapers, err := routePathFunc(newFile(src), config, &defs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := astgen.Format(decl); got != tt.want {
+				t.Errorf("routePathFunc(%q) =\n%s\nwant\n%s", tt.pattern, got, tt.want)
+			}
+			if escapers != tt.escapers {
+				t.Errorf("routePathFunc(%q) escapers = %+v, want %+v", tt.pattern, escapers, tt.escapers)
+			}
+		})
+	}
+}
