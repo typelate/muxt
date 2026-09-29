@@ -152,6 +152,20 @@ func TestWriteGeneratedFilesRollsBack(t *testing.T) {
 	}
 }
 
+func TestWriteGeneratedFilesReportsRollbackFailure(t *testing.T) {
+	dir := t.TempDir()
+	twice := filepath.Join(dir, "a.go")
+	files := []generate.GeneratedFile{
+		{Path: twice},
+		{Path: twice},
+		{Path: filepath.Join(dir, "missing", "b.go")},
+	}
+	_, err := writeGeneratedFiles(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{})
+	if err == nil || !strings.Contains(err.Error(), "b.go") || !strings.Contains(err.Error(), "a.go") {
+		t.Fatalf("writeGeneratedFiles() error = %v, want both the failed write and the failed removal", err)
+	}
+}
+
 func TestRemoveOrphans(t *testing.T) {
 	dir := t.TempDir()
 	kept := writeTestFile(t, dir, "kept.go", "")
