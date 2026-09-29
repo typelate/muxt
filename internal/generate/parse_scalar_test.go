@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
@@ -198,15 +201,11 @@ out = tmp`,
 				tmp: "tmp", str: ast.NewIdent("str"), typ: tt.typ(t), method: tt.method,
 				validations: tt.validations, assign: assign, errBlock: errBlock(),
 			}.statements(file)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			got := strings.TrimSpace(astgen.Format(&ast.BlockStmt{List: stmts}))
 			got = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(got, "{"), "}"))
 			got = strings.ReplaceAll(got, "\n\t", "\n")
-			if got != tt.want {
-				t.Errorf("scalarParse(%s).statements =\n%s\nwant\n%s", tt.name, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "scalarParse(%s).statements", tt.name)
 		})
 	}
 
@@ -215,8 +214,6 @@ out = tmp`,
 			tmp: "tmp", str: ast.NewIdent("str"), typ: basic(types.Complex128), method: muxt.UnmarshalUnsupported,
 			assign: assign, errBlock: errBlock(),
 		}.statements(scalarTestFile(t))
-		if err == nil || !strings.Contains(err.Error(), "unsupported type: complex128") {
-			t.Errorf("error = %v, want unsupported type: complex128", err)
-		}
+		assert.ErrorContains(t, err, "unsupported type: complex128")
 	})
 }
