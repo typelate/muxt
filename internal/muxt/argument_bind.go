@@ -34,25 +34,32 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 				seen[arg.Identifier] = arg
 				arg.declares = true
 				if arg.Type == ArgumentTypeRequestPathValue {
-					for j := range def.Segments {
-						if def.Segments[j].IsWildcard() && def.Segments[j].value == arg.Identifier {
-							def.Segments[j].argument = arg
-						}
-					}
+					linkWildcardSegments(def, arg)
 				}
 				continue
 			}
-			if first.direct && arg.direct {
-				continue
+			if err := checkRepeatedArgument(def, qual, first, arg); err != nil {
+				return err
 			}
-			if types.Identical(first.paramType, arg.paramType) {
-				continue
-			}
-			return def.argUsesErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
-				arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual))
 		}
 	}
 	return nil
+}
+
+func linkWildcardSegments(def *Definition, arg *Argument) {
+	for j := range def.Segments {
+		if def.Segments[j].IsWildcard() && def.Segments[j].value == arg.Identifier {
+			def.Segments[j].argument = arg
+		}
+	}
+}
+
+func checkRepeatedArgument(def *Definition, qual types.Qualifier, first, arg *Argument) error {
+	if first.direct && arg.direct || types.Identical(first.paramType, arg.paramType) {
+		return nil
+	}
+	return def.argUsesErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
+		arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual))
 }
 
 // defaultScopeType returns the type an argument identifier binds to: a
