@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/fake"
@@ -151,9 +152,7 @@ func TestPathValueTypes(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			segment, ok := segmentByName(def.Segments, tt.param)
 			require.True(t, ok, "path parameter %q not found", tt.param)
@@ -184,18 +183,12 @@ func TestPathValueParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
 			argument := defs[0].Arguments[0]
-			if got := argument.Direct(); got != tt.wantDirect {
-				t.Errorf("Direct() = %t, want %t", got, tt.wantDirect)
-			}
-			if got := argument.UnmarshalMethod(); !tt.wantDirect && got != tt.wantMethod {
-				t.Errorf("UnmarshalMethod() = %v, want %v", got, tt.wantMethod)
+			assert.Equal(t, tt.wantDirect, argument.Direct(), "Direct()")
+			if !tt.wantDirect {
+				assert.Equal(t, tt.wantMethod, argument.UnmarshalMethod(), "UnmarshalMethod()")
 			}
 		})
 	}
@@ -220,22 +213,12 @@ func TestPathValueTextMarshaler(t *testing.T) {
 		t.Run(tt.template, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
 			segment, ok := segmentByName(defs[0].Segments, tt.param)
-			if !ok {
-				t.Fatalf("path parameter %q not found", tt.param)
-			}
-			if got := pathParameterTextMarshaler(segment); got != tt.want {
-				t.Errorf("path parameter %q marshals as text = %t, want %t", tt.param, got, tt.want)
-			}
-			if got := defs[0].Arguments[0].TextMarshaler(); got != tt.want {
-				t.Errorf("Arguments[0].TextMarshaler() = %t, want %t", got, tt.want)
-			}
+			require.True(t, ok, "path parameter %q not found", tt.param)
+			assert.Equal(t, tt.want, pathParameterTextMarshaler(segment), "path parameter %q marshals as text", tt.param)
+			assert.Equal(t, tt.want, defs[0].Arguments[0].TextMarshaler(), "Arguments[0].TextMarshaler()")
 		})
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/typelate/dom"
 	"github.com/typelate/dom/spec"
 	"golang.org/x/net/html"
@@ -21,13 +23,9 @@ func inputElement(t *testing.T, markup string) spec.Element {
 		DataAtom: atom.Body,
 		Data:     atom.Body.String(),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	element := dom.NewDocumentFragment(nodes).QuerySelector("[name=field]")
-	if element == nil {
-		t.Fatalf("%q has no element named field", markup)
-	}
+	require.NotNil(t, element, "%q has no element named field", markup)
 	return element
 }
 
@@ -77,17 +75,11 @@ func TestParseInputValidations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := muxt.ParseInputValidations("field", inputElement(t, tt.markup), tt.tp)
 			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("ParseInputValidations(%s) error = %v, want it to contain %q", tt.markup, err, tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr, "ParseInputValidations(%s)", tt.markup)
 				return
 			}
-			if err != nil {
-				t.Fatalf("ParseInputValidations(%s) error = %v", tt.markup, err)
-			}
-			if described := describeValidations(got); strings.Join(described, "; ") != strings.Join(tt.want, "; ") {
-				t.Errorf("ParseInputValidations(%s) = %q, want %q", tt.markup, described, tt.want)
-			}
+			require.NoError(t, err, "ParseInputValidations(%s)", tt.markup)
+			assert.Equal(t, tt.want, describeValidations(got), "ParseInputValidations(%s)", tt.markup)
 		})
 	}
 }

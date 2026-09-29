@@ -6,28 +6,36 @@ import (
 	"go/token"
 	"go/types"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func checkSource(t *testing.T, src string) *types.Package {
 	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "p.go", src, parser.SkipObjectResolution)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	pkg, err := new(types.Config).Check("example.com/p", fset, []*ast.File{file}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return pkg
+}
+
+// assertErrorMessage asserts err is nil when wantErr is empty and carries
+// exactly the message wantErr otherwise.
+func assertErrorMessage(t *testing.T, wantErr string, err error, msgAndArgs ...any) {
+	t.Helper()
+	if wantErr == "" {
+		assert.NoError(t, err, msgAndArgs...)
+		return
+	}
+	assert.EqualError(t, err, wantErr, msgAndArgs...)
 }
 
 func funcSignature(t *testing.T, pkg *types.Package, name string) *types.Signature {
 	t.Helper()
 	obj := pkg.Scope().Lookup(name)
-	if obj == nil {
-		t.Fatalf("package declares no %s", name)
-	}
+	require.NotNil(t, obj, "package declares no %s", name)
 	return obj.Type().(*types.Signature)
 }
 
@@ -99,15 +107,8 @@ func TestClassifyResultShape(t *testing.T) {
 				Arguments:      tt.arguments,
 			}
 			got, err := classifyResultShape(def, typeQualifier(pkg))
-			if got != tt.want {
-				t.Errorf("classifyResultShape(%s) = %v, want %v", tt.fn, got, tt.want)
-			}
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Errorf("classifyResultShape(%s) error = %v, want none", tt.fn, err)
-			case tt.wantErr != "" && (err == nil || err.Error() != tt.wantErr):
-				t.Errorf("classifyResultShape(%s) error = %v, want %q", tt.fn, err, tt.wantErr)
-			}
+			assert.Equal(t, tt.want, got, "classifyResultShape(%s)", tt.fn)
+			assertErrorMessage(t, tt.wantErr, err, "classifyResultShape(%s)", tt.fn)
 		})
 	}
 }
@@ -128,15 +129,8 @@ func TestClassifyNestedCallResultShape(t *testing.T) {
 	} {
 		t.Run(tt.fn, func(t *testing.T) {
 			got, err := classifyNestedCallResultShape(tt.fn, funcSignature(t, pkg, tt.fn), typeQualifier(pkg))
-			if got != tt.want {
-				t.Errorf("classifyNestedCallResultShape(%s) = %v, want %v", tt.fn, got, tt.want)
-			}
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Errorf("classifyNestedCallResultShape(%s) error = %v, want none", tt.fn, err)
-			case tt.wantErr != "" && (err == nil || err.Error() != tt.wantErr):
-				t.Errorf("classifyNestedCallResultShape(%s) error = %v, want %q", tt.fn, err, tt.wantErr)
-			}
+			assert.Equal(t, tt.want, got, "classifyNestedCallResultShape(%s)", tt.fn)
+			assertErrorMessage(t, tt.wantErr, err, "classifyNestedCallResultShape(%s)", tt.fn)
 		})
 	}
 }

@@ -3,6 +3,8 @@ package muxt
 import (
 	"go/types"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type textUnmarshalerChecker struct {
@@ -70,9 +72,7 @@ var (
 		{name: "pointer", tp: lookup("Pointer"), want: UnmarshalUnsupported},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := unmarshalMethodFor(checker, tt.tp); got != tt.want {
-				t.Errorf("unmarshalMethodFor(%s) = %d, want %d", tt.tp, got, tt.want)
-			}
+			assert.Equal(t, tt.want, unmarshalMethodFor(checker, tt.tp), "unmarshalMethodFor(%s)", tt.tp)
 		})
 	}
 }
