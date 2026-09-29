@@ -261,14 +261,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	return generatedFiles, nil
 }
 
-// hydrateGroup resolves each definition's call, collecting every
-// resolution error so one run reports them all. When noteSynthesized is
-// set (a --use-receiver-type run with a non-nil logger), methods the
-// named receiver does not define are announced with their inferred
-// signatures — one line per method and the explanation once after the
-// list; the default mode synthesizes every method by design, so it
-// stays quiet.
-// logResolutionNotes reports what resolution found for defs.
+// logResolutionNotes reports what resolution found for defs. With a
+// --use-receiver-type run, methods the named receiver does not define are
+// announced with their inferred signatures, one line per method and the
+// explanation once after the list; the default mode synthesizes every method
+// by design, so it stays quiet.
 func logResolutionNotes(defs []muxt.Definition, config RoutesFileConfiguration, logger *log.Logger) {
 	if logger == nil {
 		return
@@ -743,7 +740,6 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 	for i, a := range call.Args {
 		switch arg := a.(type) {
 		default:
-			// TODO: add error case
 		case *ast.CallExpr:
 			nestedArg := args[i]
 			if nestedArg.Type == muxt.ArgumentTypeRequestBodyJSON {
