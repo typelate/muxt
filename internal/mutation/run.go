@@ -139,8 +139,6 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
 func runPlan(p *plan, config Configuration, status io.Writer, baseline func(extra []string) (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
-	// Per mutant lines are noise unless asked for; the preamble is not,
-	// because it is what tells someone whether to wait or walk away.
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
