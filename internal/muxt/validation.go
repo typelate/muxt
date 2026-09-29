@@ -66,62 +66,101 @@ func ParseInputValidations(name string, input spec.Element, tp types.Type) ([]In
 	if tag := strings.ToLower(input.TagName()); tag != atom.Input.String() {
 		return nil, fmt.Errorf("expected element to have tag <input> got <%s>", tag)
 	}
+	inputType := cmp.Or(input.GetAttribute("type"), "text")
 	var result []InputValidation
-	typeAttr := cmp.Or(input.GetAttribute("type"), "text")
-	if slices.Contains([]string{
-		"date", "month", "week", "time", "datetime-local", "number", "range",
-	}, typeAttr) {
-		if input.HasAttribute("min") {
-			val := input.GetAttribute("min")
-			if err := asteval.CheckParses(val, tp); err != nil {
-				return nil, err
-			}
-			result = append(result, MinValidation{Name: name, Min: val})
-		}
-		if input.HasAttribute("max") {
-			val := input.GetAttribute("max")
-			if err := asteval.CheckParses(val, tp); err != nil {
-				return nil, err
-			}
-			result = append(result, MaxValidation{Name: name, Max: val})
-		}
-	}
-	if slices.Contains([]string{
-		"text", "search", "url", "tel", "email", "password",
-	}, typeAttr) && input.HasAttribute("pattern") {
-		val := input.GetAttribute("pattern")
-		exp, err := regexp.Compile(val)
+	if slices.Contains(boundedInputTypes, inputType) {
+		bounds, err := parseBoundValidations(name, input, tp)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, PatternValidation{Name: name, Pattern: exp})
+		result = append(result, bounds...)
 	}
-	var minL MinLengthValidation
-	if val := input.GetAttribute("minlength"); val != "" {
-		n, err := strconv.Atoi(val)
+	if slices.Contains(patternInputTypes, inputType) {
+		patterns, err := parsePatternValidations(name, input)
 		if err != nil {
-			return nil, fmt.Errorf("minlength must be an integer: %w", err)
+			return nil, err
 		}
-		if n < 0 {
-			return nil, fmt.Errorf("minlength must not be negative")
-		}
-		minL = MinLengthValidation{Name: name, MinLength: n}
-		result = append(result, minL)
+		result = append(result, patterns...)
 	}
-	if val := input.GetAttribute("maxlength"); val != "" {
-		maxLength, err := strconv.Atoi(val)
-		if err != nil {
-			return nil, fmt.Errorf("maxlength must be an integer: %w", err)
+	lengths, err := parseLengthValidations(name, input)
+	if err != nil {
+		return nil, err
+	}
+	return append(result, lengths...), nil
+}
+
+// boundedInputTypes are the input types the min and max attributes apply to;
+// patternInputTypes are the ones the pattern attribute applies to.
+var (
+	boundedInputTypes = []string{"date", "month", "week", "time", "datetime-local", "number", "range"}
+	patternInputTypes = []string{"text", "search", "url", "tel", "email", "password"}
+)
+
+func parseBoundValidations(name string, input spec.Element, tp types.Type) ([]InputValidation, error) {
+	var result []InputValidation
+	if input.HasAttribute("min") {
+		val := input.GetAttribute("min")
+		if err := asteval.CheckParses(val, tp); err != nil {
+			return nil, err
 		}
-		if maxLength < 0 {
-			return nil, fmt.Errorf("maxlength must not be negative")
+		result = append(result, MinValidation{Name: name, Min: val})
+	}
+	if input.HasAttribute("max") {
+		val := input.GetAttribute("max")
+		if err := asteval.CheckParses(val, tp); err != nil {
+			return nil, err
 		}
-		if minL.MinLength != 0 {
-			if minL.MinLength > maxLength {
-				return nil, fmt.Errorf("maxlength (%d) must be greater than or equal to minlength (%d)", maxLength, minL.MinLength)
-			}
+		result = append(result, MaxValidation{Name: name, Max: val})
+	}
+	return result, nil
+}
+
+func parsePatternValidations(name string, input spec.Element) ([]InputValidation, error) {
+	if !input.HasAttribute("pattern") {
+		return nil, nil
+	}
+	pattern, err := regexp.Compile(input.GetAttribute("pattern"))
+	if err != nil {
+		return nil, err
+	}
+	return []InputValidation{PatternValidation{Name: name, Pattern: pattern}}, nil
+}
+
+func parseLengthValidations(name string, input spec.Element) ([]InputValidation, error) {
+	var result []InputValidation
+	minLength, hasMin, err := lengthAttribute(input, "minlength")
+	if err != nil {
+		return nil, err
+	}
+	if hasMin {
+		result = append(result, MinLengthValidation{Name: name, MinLength: minLength})
+	}
+	maxLength, hasMax, err := lengthAttribute(input, "maxlength")
+	if err != nil {
+		return nil, err
+	}
+	if hasMax {
+		if hasMin && minLength > maxLength {
+			return nil, fmt.Errorf("maxlength (%d) must be greater than or equal to minlength (%d)", maxLength, minLength)
 		}
 		result = append(result, MaxLengthValidation{Name: name, MaxLength: maxLength})
 	}
 	return result, nil
+}
+
+// lengthAttribute reads a non-negative integer attribute; an empty or absent
+// one is not present.
+func lengthAttribute(input spec.Element, attribute string) (int, bool, error) {
+	val := input.GetAttribute(attribute)
+	if val == "" {
+		return 0, false, nil
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, false, fmt.Errorf("%s must be an integer: %w", attribute, err)
+	}
+	if n < 0 {
+		return 0, false, fmt.Errorf("%s must not be negative", attribute)
+	}
+	return n, true, nil
 }
