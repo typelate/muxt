@@ -87,7 +87,6 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 		return nil, err
 	}
 
-	// Walk the module tree looking for generated files
 	type dirEntry struct {
 		dir         string
 		args        []string
@@ -167,7 +166,6 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 			continue
 		}
 
-		// Apply defaults for empty fields
 		routesFunction := config.RoutesFunction
 		if routesFunction == "" {
 			routesFunction = generate.DefaultRoutesFunctionName
@@ -181,7 +179,6 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 			templateRoutePathsType = generate.DefaultTemplateRoutePathsTypeName
 		}
 
-		// Compute package import path from module path + relative dir
 		relDir, err := filepath.Rel(mod.Dir, entry.dir)
 		if err != nil {
 			return nil, err
@@ -191,10 +188,8 @@ func NewModule(workingDirectory string, addFlags func(*pflag.FlagSet, *generate.
 			pkgPath = mod.Path + "/" + filepath.ToSlash(relDir)
 		}
 
-		// Build commands
 		commands := buildCommands(entry.dir, entry.command)
 
-		// Scan for external assets
 		assets, err := findExternalAssets(entry.dir)
 		if err != nil {
 			return nil, err

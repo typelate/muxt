@@ -51,7 +51,6 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg source.Package) (*T
 
 func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) (*TemplateCalls, error) {
 	global, ts := newGlobal(pkg, lt), lt.Set
-	// Track what each template uses (calls via {{template}})
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
@@ -63,7 +62,6 @@ func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt sou
 		})
 	}
 
-	// Analyze all templates
 	for _, c := range lt.Calls {
 		t := ts.Lookup(c.Template)
 		if t != nil && t.Tree != nil {
