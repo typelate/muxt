@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"go/token"
+	"regexp"
 	"slices"
 	"strconv"
 	"text/template/parse"
@@ -175,11 +176,6 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 // is what the templates read like at the --diff revision, nil when there
 // is none, and diffError why that revision could not be read.
 func planFrom(config Configuration, in input, before revision, diffError string) (*plan, error) {
-	include := func(string) bool { return true }
-	if config.TemplatePattern != nil {
-		include = config.TemplatePattern.MatchString
-	}
-
 	p := &plan{
 		seed:      config.Seed,
 		draw:      newValues(config.Seed),
@@ -194,7 +190,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		before:    before,
 		seen:      make(map[string]struct{}),
 		unchanged: make(map[string]struct{}),
-		include:   include,
+		include:   templateFilter(config.TemplatePattern),
 		wd:        in.dir,
 	}
 
@@ -214,17 +210,31 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		p.trimmed = append(p.trimmed, chosen.trimmed...)
 	}
 
-	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {
-		return nil, &NoCallSitesError{Variables: config.TemplatesVariables}
-	}
-	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {
-		// Templates were reached and held nothing to mutate. A template
-		// that is entirely static is possible, but a whole run of them
-		// means the actions were not read, and reporting that as a pass
-		// would say the tests catch everything.
-		return nil, &NoMutationsError{Templates: p.templates}
+	if err := p.validate(config.TemplatesVariables); err != nil {
+		return nil, err
 	}
 	return p, nil
+}
+
+// templateFilter admits every template name when pattern is nil.
+func templateFilter(pattern *regexp.Regexp) func(string) bool {
+	if pattern == nil {
+		return func(string) bool { return true }
+	}
+	return pattern.MatchString
+}
+
+func (p *plan) validate(variables []string) error {
+	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {
+		return &NoCallSitesError{Variables: variables}
+	}
+	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {
+		// A template that is entirely static is possible, but a whole run
+		// of them means the actions were not read, and reporting that as
+		// a pass would say the tests catch everything.
+		return &NoMutationsError{Templates: p.templates}
+	}
+	return nil
 }
 
 // add enumerates one template's mutants and files them under the call

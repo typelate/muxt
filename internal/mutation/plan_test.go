@@ -1,9 +1,11 @@
 package mutation
 
 import (
+	"errors"
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -311,6 +313,64 @@ func TestVerifyReadable(t *testing.T) {
 			}
 			if got != nil && (got.Path != tt.wantPath || got.Template != tt.wantAbout) {
 				t.Errorf("verifyReadable(...) = template %q at %q, want %q at %q", got.Template, got.Path, tt.wantAbout, tt.wantPath)
+			}
+		})
+	}
+}
+
+func TestPlanValidate(t *testing.T) {
+	var (
+		group     = []Group{{}}
+		mutants   = make([]Mutant, 1)
+		unchanged = []UnchangedTemplate{{}}
+		trimmed   = []TrimmedTemplate{{}}
+	)
+	for _, tt := range []struct {
+		name         string
+		plan         plan
+		wantNoCalls  bool
+		wantNoMutant bool
+	}{
+		{name: "empty plan reached no call site", plan: plan{}, wantNoCalls: true},
+		{name: "templates counted without a group still reached no call site", plan: plan{templates: 1}, wantNoCalls: true},
+		{name: "reached templates without mutants", plan: plan{groups: group, templates: 2}, wantNoMutant: true},
+		{name: "mutants", plan: plan{groups: group, templates: 1, mutants: mutants}},
+		{name: "only over budget actions", plan: plan{groups: group, templates: 1, overBudget: 1}},
+		{name: "only unchanged templates", plan: plan{unchanged: unchanged}},
+		{name: "only trimmed templates", plan: plan{trimmed: trimmed}},
+		{name: "no templates counted", plan: plan{groups: group}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.plan.validate([]string{"templates"})
+			noCalls, isNoCalls := errors.AsType[*NoCallSitesError](err)
+			noMutations, isNoMutations := errors.AsType[*NoMutationsError](err)
+			if isNoCalls != tt.wantNoCalls || isNoMutations != tt.wantNoMutant || (err != nil) != (tt.wantNoCalls || tt.wantNoMutant) {
+				t.Fatalf("validate() = %v, want no call sites %t, no mutations %t", err, tt.wantNoCalls, tt.wantNoMutant)
+			}
+			if isNoCalls && !slices.Equal(noCalls.Variables, []string{"templates"}) {
+				t.Errorf("validate() names variables %v, want [templates]", noCalls.Variables)
+			}
+			if isNoMutations && noMutations.Templates != tt.plan.templates {
+				t.Errorf("validate() counts %d templates, want %d", noMutations.Templates, tt.plan.templates)
+			}
+		})
+	}
+}
+
+func TestTemplateFilter(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		pattern *regexp.Regexp
+		in      string
+		want    bool
+	}{
+		{name: "no pattern admits everything", pattern: nil, in: "anything", want: true},
+		{name: "matching name", pattern: regexp.MustCompile(`^page$`), in: "page", want: true},
+		{name: "other name", pattern: regexp.MustCompile(`^page$`), in: "footer", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := templateFilter(tt.pattern)(tt.in); got != tt.want {
+				t.Errorf("templateFilter(%v)(%q) = %t, want %t", tt.pattern, tt.in, got, tt.want)
 			}
 		})
 	}
