@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/types"
 	"html/template"
-	"strings"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
@@ -69,22 +68,9 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 	if !ok {
 		return nil, false, nil, errAt(call.Fun, "expected a function identifier, got: %s", astgen.Format(call.Fun))
 	}
-	isMethod := true
-	object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
-	if object == nil {
-		if m, ok := packageScopeFunc(pkg.Types, fun); ok {
-			object = m
-			isMethod = false
-		} else {
-			ms, err := synthesizeCallSignature(def, call, pkg, receiver, checker)
-			if err != nil {
-				return nil, false, nil, err
-			}
-			fn := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, ms)
-			receiver.AddMethod(fn)
-			object = fn
-			def.synthesizedMethods = append(def.synthesizedMethods, fun.Name+strings.TrimPrefix(types.TypeString(ms, typeQualifier(receiver.Obj().Pkg())), "func"))
-		}
+	object, isMethod, err := lookupCallee(def, call, fun, pkg, receiver, checker)
+	if err != nil {
+		return nil, false, nil, err
 	}
 	if call == def.call {
 		if note := definedHere(pkg, object); note != "" {
@@ -92,84 +78,112 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 		}
 	}
 	sig := object.Type().(*types.Signature)
-	args := make([]Argument, 0, len(call.Args))
 	qual := typeQualifier(receiver.Obj().Pkg())
-
-	if paramCount := sig.Params().Len(); len(call.Args) != sig.Params().Len() {
-		// An execute callback that cannot map to a func parameter gets its
-		// contract error rather than the generic argument count mismatch.
-		for i, a := range call.Args {
-			id, ok := a.(*ast.Ident)
-			if !ok || id.Name != TemplateNameScopeIdentifierExecute {
-				continue
-			}
-			if i >= paramCount {
-				return nil, false, nil, errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
-			}
-			if _, ok := sig.Params().At(i).Type().Underlying().(*types.Signature); !ok {
-				return nil, false, nil, errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
-			}
-		}
-		sigStr := fun.Name + strings.TrimPrefix(types.TypeString(sig, qual), "func")
-		return nil, false, nil, fmt.Errorf("handler func %s expects %d arguments but call %s has %d", sigStr, paramCount, astgen.Format(call), len(call.Args))
+	if len(call.Args) != sig.Params().Len() {
+		return nil, false, nil, argumentCountError(call, fun, sig, qual)
 	}
+	args, err := hydrateArguments(def, call, sig, pkg, receiver, checker)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	return sig, isMethod, args, nil
+}
 
+// lookupCallee finds what fun names: a receiver method, else a package-scope
+// function, else a method synthesized from the call's arguments.
+func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg source.Package, receiver *types.Named, checker Checker) (types.Object, bool, error) {
+	if object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name); object != nil {
+		return object, true, nil
+	}
+	if function, ok := packageScopeFunc(pkg.Types, fun); ok {
+		return function, false, nil
+	}
+	sig, err := synthesizeCallSignature(def, call, pkg, receiver, checker)
+	if err != nil {
+		return nil, false, err
+	}
+	method := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, sig)
+	receiver.AddMethod(method)
+	def.synthesizedMethods = append(def.synthesizedMethods, signatureString(fun.Name, sig, typeQualifier(receiver.Obj().Pkg())))
+	return method, true, nil
+}
+
+// argumentCountError reports a call whose arguments do not match sig's
+// parameters. An execute callback that cannot map to a func parameter gets its
+// contract error rather than the generic argument count mismatch.
+func argumentCountError(call *ast.CallExpr, fun *ast.Ident, sig *types.Signature, qual types.Qualifier) error {
 	for i, a := range call.Args {
-		var paramType types.Type
-		if i < sig.Params().Len() {
-			paramType = sig.Params().At(i).Type()
+		id, ok := a.(*ast.Ident)
+		if !ok || id.Name != TemplateNameScopeIdentifierExecute {
+			continue
 		}
+		if i >= sig.Params().Len() {
+			return errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
+		}
+		if _, ok := sig.Params().At(i).Type().Underlying().(*types.Signature); !ok {
+			return errAt(id, "execute argument for %s must be a func(...) error", fun.Name)
+		}
+	}
+	return fmt.Errorf("handler func %s expects %d arguments but call %s has %d", signatureString(fun.Name, sig, qual), sig.Params().Len(), astgen.Format(call), len(call.Args))
+}
+
+// hydrateArguments maps each argument of call, which has as many arguments as
+// sig has parameters, to the parameter it binds to.
+func hydrateArguments(def *Definition, call *ast.CallExpr, sig *types.Signature, pkg source.Package, receiver *types.Named, checker Checker) ([]Argument, error) {
+	qual := typeQualifier(receiver.Obj().Pkg())
+	args := make([]Argument, 0, len(call.Args))
+	for i, a := range call.Args {
+		paramType := sig.Params().At(i).Type()
 		switch argument := a.(type) {
 		case *ast.Ident:
-			if paramType == nil && !isSSEArgument(argument.Name) {
-				args = append(args, Argument{Identifier: argument.Name})
-				continue
-			}
 			arg, err := newArgumentFromIdentifier(def, checker, argument, paramType, qual)
 			if err != nil {
-				return nil, false, nil, errAtNode(argument, err)
+				return nil, errAtNode(argument, err)
 			}
 			args = append(args, arg)
 		case *ast.CallExpr:
-			var name string
-			if fun, ok := argument.Fun.(*ast.Ident); ok {
-				name = fun.Name
-			}
-			if paramType == nil {
-				args = append(args, Argument{Identifier: name})
-				continue
-			}
-			if name == callWrapperUnmarshalJSON {
-				// The decode target is the method parameter's type; any type
-				// encoding/json can unmarshal into is permitted, so there is
-				// no assignability constraint to check here.
-				args = append(args, Argument{
-					Identifier: TemplateNameScopeIdentifierRequestBody,
-					Type:       ArgumentTypeRequestBodyJSON,
-					paramType:  paramType,
-				})
-				continue
-			}
-			nestedSig, nestedIsMethod, nestedArgs, err := resolveCall(def, argument, pkg, receiver, checker)
+			arg, err := hydrateCallArgument(def, argument, paramType, pkg, receiver, checker)
 			if err != nil {
-				return nil, false, nil, err
+				return nil, err
 			}
-			nestedShape, err := classifyNestedCallResultShape(name, nestedSig, qual)
-			if err != nil {
-				return nil, false, nil, errAtNode(argument.Fun, err)
-			}
-			args = append(args, Argument{
-				Identifier:  name,
-				Type:        ArgumentTypeCall,
-				paramType:   paramType,
-				sig:         nestedSig,
-				isMethod:    nestedIsMethod,
-				args:        nestedArgs,
-				resultShape: nestedShape,
-			})
+			args = append(args, arg)
 		}
 	}
-	return sig, isMethod, args, nil
+	return args, nil
+}
+
+func hydrateCallArgument(def *Definition, call *ast.CallExpr, paramType types.Type, pkg source.Package, receiver *types.Named, checker Checker) (Argument, error) {
+	var name string
+	if fun, ok := call.Fun.(*ast.Ident); ok {
+		name = fun.Name
+	}
+	if name == callWrapperUnmarshalJSON {
+		// The decode target is the method parameter's type; any type
+		// encoding/json can unmarshal into is permitted, so there is
+		// no assignability constraint to check here.
+		return Argument{
+			Identifier: TemplateNameScopeIdentifierRequestBody,
+			Type:       ArgumentTypeRequestBodyJSON,
+			paramType:  paramType,
+		}, nil
+	}
+	sig, isMethod, args, err := resolveCall(def, call, pkg, receiver, checker)
+	if err != nil {
+		return Argument{}, err
+	}
+	shape, err := classifyNestedCallResultShape(name, sig, typeQualifier(receiver.Obj().Pkg()))
+	if err != nil {
+		return Argument{}, errAtNode(call.Fun, err)
+	}
+	return Argument{
+		Identifier:  name,
+		Type:        ArgumentTypeCall,
+		paramType:   paramType,
+		sig:         sig,
+		isMethod:    isMethod,
+		args:        args,
+		resultShape: shape,
+	}, nil
 }
 
 // synthesizeCallSignature builds a signature for a call whose method is not yet
