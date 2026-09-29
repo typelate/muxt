@@ -87,75 +87,33 @@ This command is intended for exploratory use only.`,
 			if len(args) == 0 {
 				args = []string{*workingDirectory}
 			}
-
-			outDir := outputDir
-			if outDir == "" {
-				outDir = filepath.Join(*workingDirectory, "cmd", "explore-goland")
-			}
-			if !filepath.IsAbs(outDir) {
-				outDir = filepath.Join(*workingDirectory, outDir)
-			}
-
-			relOutDir, err := filepath.Rel(mod.ModuleDir, outDir)
+			outDir := absoluteDir(*workingDirectory, cmp.Or(outputDir, filepath.Join("cmd", "explore-goland")))
+			importPath, err := fakeImportPath(mod, outDir)
 			if err != nil {
-				return fmt.Errorf("computing fake import path: %w", err)
+				return err
 			}
-			fakeImportPath := mod.ModulePath + "/" + filepath.ToSlash(relOutDir) + "/internal/fake"
+			relOut, err := filepath.Rel(*workingDirectory, outDir)
+			if err != nil {
+				relOut = outDir
+			}
 
 			for _, arg := range args {
-				dir := arg
-				if !filepath.IsAbs(dir) {
-					dir = filepath.Join(*workingDirectory, dir)
+				pkg, err := packageInDirectory(mod, absoluteDir(*workingDirectory, arg))
+				if err != nil {
+					return err
 				}
-
-				var pkg *analysis.PackageInfo
-				for i := range mod.Packages {
-					if mod.Packages[i].Dir == dir {
-						pkg = &mod.Packages[i]
-						break
-					}
-				}
-				if pkg == nil {
-					return fmt.Errorf("no muxt-generated package found at %s", dir)
-				}
-
 				_, pl, err := load.Packages(pkg.Dir)
 				if err != nil {
 					return err
 				}
-
-				config := fakeserver.Config{
-					PackagePath:       pkg.Path,
-					PackageDir:        pkg.Dir,
-					RoutesFunction:    pkg.Config.RoutesFunction,
-					ReceiverInterface: pkg.Config.ReceiverInterface,
-					Logger:            pkg.Config.Logger,
-					PathPrefix:        pkg.Config.PathPrefix,
-					Middleware:        pkg.Config.Middleware,
-					FakeImportPath:    fakeImportPath,
-				}
-
-				files, err := fakeserver.Generate(config, pl)
+				files, err := fakeserver.Generate(newFakeServerConfig(pkg, importPath), pl)
 				if err != nil {
 					return err
 				}
-
-				fakeDir := filepath.Join(outDir, "internal", "fake")
-				if err := os.MkdirAll(fakeDir, 0o755); err != nil {
+				if err := writeFakeServer(outDir, files); err != nil {
 					return err
 				}
-				if err := os.WriteFile(filepath.Join(outDir, "main.go"), files.Main, 0o644); err != nil {
-					return err
-				}
-				if err := os.WriteFile(filepath.Join(fakeDir, "receiver.go"), files.Fake, 0o644); err != nil {
-					return err
-				}
-
-				relOut, err := filepath.Rel(*workingDirectory, outDir)
-				if err != nil {
-					relOut = outDir
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Run: go run ./%s\n", relOut)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run: go run ./%s\n", relOut)
 			}
 			return nil
 		},
@@ -164,4 +122,52 @@ This command is intended for exploratory use only.`,
 	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "output directory (default: ./cmd/explore-goland)")
 
 	return cmd
+}
+
+func absoluteDir(wd, dir string) string {
+	if filepath.IsAbs(dir) {
+		return dir
+	}
+	return filepath.Join(wd, dir)
+}
+
+func fakeImportPath(mod *analysis.Module, outDir string) (string, error) {
+	rel, err := filepath.Rel(mod.ModuleDir, outDir)
+	if err != nil {
+		return "", fmt.Errorf("computing fake import path: %w", err)
+	}
+	return mod.ModulePath + "/" + filepath.ToSlash(rel) + "/internal/fake", nil
+}
+
+func packageInDirectory(mod *analysis.Module, dir string) (analysis.PackageInfo, error) {
+	for _, pkg := range mod.Packages {
+		if pkg.Dir == dir {
+			return pkg, nil
+		}
+	}
+	return analysis.PackageInfo{}, fmt.Errorf("no muxt-generated package found at %s", dir)
+}
+
+func newFakeServerConfig(pkg analysis.PackageInfo, fakeImportPath string) fakeserver.Config {
+	return fakeserver.Config{
+		PackagePath:       pkg.Path,
+		PackageDir:        pkg.Dir,
+		RoutesFunction:    pkg.Config.RoutesFunction,
+		ReceiverInterface: pkg.Config.ReceiverInterface,
+		Logger:            pkg.Config.Logger,
+		PathPrefix:        pkg.Config.PathPrefix,
+		Middleware:        pkg.Config.Middleware,
+		FakeImportPath:    fakeImportPath,
+	}
+}
+
+func writeFakeServer(outDir string, files *fakeserver.Files) error {
+	fakeDir := filepath.Join(outDir, "internal", "fake")
+	if err := os.MkdirAll(fakeDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "main.go"), files.Main, 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(fakeDir, "receiver.go"), files.Fake, 0o644)
 }
