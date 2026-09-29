@@ -400,8 +400,6 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 	}
 }
 
-// HTMX Response Header Helpers
-
 func htmxHeaderSetterMethod(templateDataTypeIdent, methodName, headerName, paramName string) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Recv: templateDataMethodReceiver(templateDataTypeIdent),
@@ -455,8 +453,6 @@ func htmxRefreshMethod(templateDataTypeIdent string) *ast.FuncDecl {
 		},
 	}
 }
-
-// HTMX Request Header Helpers
 
 func htmxRequestHeaderStringMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
 	return &ast.FuncDecl{
@@ -569,7 +565,6 @@ func templateDataStringMethod(templateDataTypeIdent string) *ast.FuncDecl {
 
 func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl {
 	return []*ast.FuncDecl{
-		// Response header setters
 		htmxHeaderSetterMethod(templateDataTypeIdent, "HXLocation", "HX-Location", "link"),
 		htmxHeaderSetterMethod(templateDataTypeIdent, "HXPushURL", "HX-Push-Url", "link"),
 		htmxHeaderSetterMethod(templateDataTypeIdent, "HXRedirect", "HX-Redirect", "link"),
@@ -582,7 +577,6 @@ func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl
 		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSettle", "HX-Trigger-After-Settle", "eventName"),
 		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSwap", "HX-Trigger-After-Swap", "eventName"),
 
-		// Request header getters
 		htmxRequestHeaderBoolNonEmptyMethod(templateDataTypeIdent, "HXBoosted", "HX-Boosted"),
 		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXCurrentURL", "HX-Current-Url"),
 		htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, "HXHistoryRestoreRequest", "HX-History-Restore-Request"),

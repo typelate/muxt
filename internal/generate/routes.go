@@ -119,7 +119,6 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		templateSourceFiles = slices.Sorted(maps.Keys(groups.byFile))
 	)
 
-	// Build main routes function
 	routesFunc := &ast.FuncDecl{
 		Name: ast.NewIdent(config.RoutesFunction),
 		Type: &ast.FuncType{
@@ -226,16 +225,12 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	importDecl := &ast.GenDecl{Tok: token.IMPORT}
 	decls := []ast.Decl{
 		importDecl,
-
-		// type
 		&ast.GenDecl{
 			Tok: token.TYPE,
 			Specs: []ast.Spec{
 				&ast.TypeSpec{Name: ast.NewIdent(config.ReceiverInterface), Type: receiverInterface},
 			},
 		},
-
-		// func routes
 		routesFunc,
 	}
 	decls = append(decls, templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
@@ -261,7 +256,6 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		return nil, err
 	}
 
-	// Append main file to generated files
 	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content, Routes: len(topLevelTemplateRoutes)})
 
 	return generatedFiles, nil
@@ -388,7 +382,6 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		if config.Logger {
 			callArgs = append(callArgs, ast.NewIdent("logger"))
 		}
-		// Always pass pathsPrefix to per-file functions
 		callArgs = append(callArgs, ast.NewIdent(pathPrefixPathsStructFieldName))
 		if config.Middleware {
 			callArgs = append(callArgs, ast.NewIdent(middlewareParamName))
@@ -484,7 +477,6 @@ func generatePerFileRouteFunction(
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
 
-	// Create the function declaration
 	routesFunc := &ast.FuncDecl{
 		Name: ast.NewIdent(funcName),
 		Type: &ast.FuncType{
@@ -505,7 +497,6 @@ func generatePerFileRouteFunction(
 		})
 	}
 
-	// Per-file functions always accept pathsPrefix parameter
 	routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
 		Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
 	})
@@ -517,12 +508,10 @@ func generatePerFileRouteFunction(
 		})
 	}
 
-	// Declare the buffer pool shared by this file's handlers.
 	if len(defs) > 0 {
 		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
 	}
 
-	// Generate handlers for each template
 	logResolutionNotes(defs, config, logger)
 	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
 		return nil, err
@@ -550,7 +539,6 @@ func generatePerFileRouteFunction(
 }
 
 // generatePerFileAST creates a complete AST file for templates from a specific source file.
-// Returns an *ast.File ready to be formatted and written.
 func generatePerFileAST(
 	sourceFile string,
 	defs []muxt.Definition,
@@ -562,12 +550,10 @@ func generatePerFileAST(
 	if sourceFile == "" {
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
-	// Create a scoped receiver interface for this file's templates
 	scopedReceiverInterface := &ast.InterfaceType{
 		Methods: new(ast.FieldList),
 	}
 
-	// Generate the route function
 	routesFunc, err := generatePerFileRouteFunction(
 		sourceFile,
 		defs,
@@ -582,23 +568,19 @@ func generatePerFileAST(
 		return nil, err
 	}
 
-	// Get import specs
 	is := file.ImportSpecs()
 	importSpecs := make([]ast.Spec, 0, len(is))
 	for _, s := range is {
 		importSpecs = append(importSpecs, s)
 	}
 
-	// Build the output file
 	outputFile := &ast.File{
 		Name: ast.NewIdent(config.PackageName),
 		Decls: []ast.Decl{
-			// imports
 			&ast.GenDecl{
 				Tok:   token.IMPORT,
 				Specs: importSpecs,
 			},
-			// receiver interface for this file
 			&ast.GenDecl{
 				Tok: token.TYPE,
 				Specs: []ast.Spec{
@@ -608,7 +590,6 @@ func generatePerFileAST(
 					},
 				},
 			},
-			// routes function
 			routesFunc,
 		},
 	}
@@ -1531,7 +1512,6 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 		Rhs: []ast.Expr{astgen.CmpOr(file, statusCodePriorityList...)},
 	})
 
-	// Only add redirect block if the template can call Redirect
 	if def.MayRedirect() {
 		list = append(list, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
