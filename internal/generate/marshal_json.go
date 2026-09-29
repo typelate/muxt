@@ -20,7 +20,7 @@ import (
 // output is sent as the usual text/html fallback.
 func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent, receiverInterfaceName, bufIdent, statusCodeIdent string) (*ast.FuncLit, error) {
 	if slices.ContainsFunc(def.Arguments, func(arg muxt.Argument) bool {
-		return arg.Type == muxt.ArgumentTypeExecute && arg.Identifier == muxt.TemplateNameScopeIdentifierExecute
+		return arg.Type == muxt.ArgumentTypeExecute
 	}) {
 		return nil, fmt.Errorf("marshalJSON does not support the execute callback")
 	}
