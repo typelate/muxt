@@ -36,7 +36,6 @@ type Files struct {
 //
 // The fake implementation interface is unstable and should not be relied upon.
 func Generate(config Config, pl []*packages.Package) (*Files, error) {
-	// Find the target package and validate it's not main.
 	var targetPkg *packages.Package
 	for _, pkg := range pl {
 		if pkg.PkgPath == config.PackagePath {
