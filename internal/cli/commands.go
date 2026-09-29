@@ -95,7 +95,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 
 	addUseTemplatesVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.TemplatesVariables, &deprecatedTemplatesVar)
 	addUseReceiverTypeVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverType)
-	adUseReceiverTypePackageVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverPackage)
+	addUseReceiverTypePackageVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverPackage)
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
 	rootCmd.Flags().String("format", "text", "output format (text or json)")
 

@@ -53,10 +53,8 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 }
 
 func validateGenerateConfiguration(config generate.RoutesFileConfiguration) error {
-	for _, tv := range config.TemplatesVariables {
-		if tv != "" && !token.IsIdentifier(tv) {
-			return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
-		}
+	if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
+		return err
 	}
 	for _, id := range []struct{ flag, value string }{
 		{outputRoutesFunc, config.RoutesFunction},

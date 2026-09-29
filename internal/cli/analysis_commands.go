@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"go/token"
 	"regexp"
 
 	"github.com/spf13/cobra"
@@ -25,10 +23,8 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			for _, tv := range config.TemplatesVariables {
-				if tv != "" && !token.IsIdentifier(tv) {
-					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
-				}
+			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
+				return err
 			}
 			cmd.SilenceUsage = true
 			return run(cmd, *workingDirectory, config)
@@ -40,6 +36,18 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 	addDeprecatedReceiverType(cmd.Flags(), &rt)
 
 	return cmd
+}
+
+func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
+	var compiled []*regexp.Regexp
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		compiled = append(compiled, re)
+	}
+	return compiled, nil
 }
 
 func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error) *cobra.Command {
@@ -58,14 +66,11 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 				return err
 			}
 			cmd.SilenceUsage = true
-			for _, pattern := range patterns {
-				pat, err := regexp.Compile(pattern)
-				if err != nil {
-					return err
-				}
-				config.FilterTemplates = append(config.FilterTemplates, pat)
+			filters, err := compilePatterns(patterns)
+			if err != nil {
+				return err
 			}
-
+			config.FilterTemplates = filters
 			return run(cmd, *wd, config)
 		},
 	}
@@ -93,14 +98,11 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 				return err
 			}
 			cmd.SilenceUsage = true
-			for _, pattern := range patterns {
-				pat, err := regexp.Compile(pattern)
-				if err != nil {
-					return err
-				}
-				config.FilterTemplates = append(config.FilterTemplates, pat)
+			filters, err := compilePatterns(patterns)
+			if err != nil {
+				return err
 			}
-
+			config.FilterTemplates = filters
 			return run(cmd, *wd, config)
 		},
 	}
