@@ -135,7 +135,12 @@ func pipelineType(dot types.Type, pipe *parse.PipeNode, functions check.Function
 		return nil, false
 	}
 
-	switch arg := command.Args[0].(type) {
+	return operandType(dot, command.Args[0])
+}
+
+// operandType resolves a lone operand read off dot.
+func operandType(dot types.Type, operand parse.Node) (types.Type, bool) {
+	switch arg := operand.(type) {
 	case *parse.DotNode:
 		return dot, true
 	case *parse.FieldNode:
