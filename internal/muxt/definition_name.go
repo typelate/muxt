@@ -196,12 +196,10 @@ func (e *MethodNameCollisionError) MultiLineError() string {
 
 // FileNameToPrivateIdentifier converts a template source filename to a private (unexported) Go identifier prefix.
 // For example: "index.gohtml" -> "index", "user-profile.gohtml" -> "userProfile"
-// Returns empty string for empty filenames.
 func FileNameToPrivateIdentifier(filename string) string {
 	if filename == "" {
 		return ""
 	}
-	// Strip the extension
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))
 	if base == "" {
 		return ""
