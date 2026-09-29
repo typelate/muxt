@@ -14,7 +14,7 @@ import (
 // ResolveCall resolves def's call against the receiver type and the package's
 // functions, asking checker what it needs to know about the standard library.
 func ResolveCall(def *Definition, pkg source.Package, receiver *types.Named, checker Checker) error {
-	if def.call == nil || def.fun == nil {
+	if def.call == nil {
 		return nil
 	}
 	sig, isMethod, args, err := resolveCall(def, def.call, pkg, receiver, checker)

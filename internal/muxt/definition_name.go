@@ -81,13 +81,6 @@ func wildcardName(segment string) (string, bool) {
 	return segment, false
 }
 
-func (def Definition) exportedFunctionName() string {
-	if def.fun == nil || def.fun.Name == "" {
-		return ""
-	}
-	return strcase.ToGoPascal(def.fun.Name)
-}
-
 func calculateIdentifiers(in []Definition) {
 	var (
 		sb    strings.Builder
@@ -99,7 +92,7 @@ func calculateIdentifiers(in []Definition) {
 			continue
 		}
 		ident := t.fun.Name
-		exported := t.exportedFunctionName()
+		exported := strcase.ToGoPascal(ident)
 		if slices.Contains(dupes, ident) {
 			route := t.generateEndpointPatternIdentifier(&sb)
 			in[i].identifier = route + "Calling" + exported
