@@ -1,13 +1,14 @@
 package mutation
 
 import (
-	"fmt"
 	"go/types"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -43,9 +44,7 @@ func enumerate(t *testing.T, body string, dot types.Type, maxCases int) ([]Mutan
 	t.Helper()
 	text := `{{define "t"}}` + body + `{{end}}`
 	trees, err := asteval.ParseTrees("t.gohtml", text, "", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	src := newFileSource("t.gohtml", "t.gohtml", text, "", "")
 	sc := scope{template: "t", dataType: dot, treeLocation: treeLocation{src: src, tree: trees["t"]}}
 	return mutantsInScope(sc, nil, newValues(1), maxCases)
@@ -111,12 +110,8 @@ func TestMutantsInScope(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			mutants, notes := enumerate(t, tt.body, page, DefaultMaxCases)
-			if got := variants(mutants); !slices.Equal(got, tt.want) {
-				t.Errorf("mutants:\n got %q\nwant %q", got, tt.want)
-			}
-			if len(notes) != 0 {
-				t.Errorf("notes = %v, want none", notes)
-			}
+			assert.Equal(t, tt.want, variants(mutants), "mutants")
+			assert.Empty(t, notes, "notes")
 		})
 	}
 }
@@ -126,51 +121,39 @@ func TestMutantsInScope(t *testing.T) {
 // says so where the action is.
 func TestMutantsInScopeHoldsBackAnActionOverBudget(t *testing.T) {
 	mutants, notes := enumerate(t, `{{printf "%s %d" .Name .Count}}`, dataType(t, pageSource, "Page"), 2)
-	if got, want := variants(mutants), []variant{{OperatorActionZero, `""`}}; !slices.Equal(got, want) {
-		t.Errorf("mutants %q, want %q", got, want)
-	}
-	if len(notes) != 1 {
-		t.Fatalf("notes = %v, want one", notes)
-	}
+	assert.Equal(t, []variant{{OperatorActionZero, `""`}}, variants(mutants), "mutants")
+	require.Len(t, notes, 1)
 	note := notes[0]
-	if note.line != 1 || note.column != 15 || note.template != "t" {
-		t.Errorf("note at %s %d:%d, want t 1:15", note.template, note.line, note.column)
-	}
-	if got, want := note.reason(), "2 operands need 3 cases, over --max-cases=2"; got != want {
-		t.Errorf("reason = %q, want %q", got, want)
-	}
+	assert.Equal(t, "t", note.template, "note template")
+	assert.Equal(t, 1, note.line, "note line")
+	assert.Equal(t, 15, note.column, "note column")
+	assert.Equal(t, "2 operands need 3 cases, over --max-cases=2", note.reason(), "reason")
 }
 
 // TestValuesDraw states what a substituted value looks like: a literal of
 // the operand's own type where there is one, and a quoted word otherwise.
 func TestValuesDraw(t *testing.T) {
 	word := regexp.MustCompile(`^"[a-z]{4}"$`)
-	isWord := func(s string) error {
-		if !word.MatchString(s) {
-			return fmt.Errorf("not a quoted four letter word")
-		}
-		return nil
-	}
+	isWord := func(s string) bool { return word.MatchString(s) }
 	for _, tt := range []struct {
 		name  string
 		typ   types.Type
-		valid func(string) error
+		valid func(string) bool
 	}{
 		{name: "a string", typ: types.Typ[types.String], valid: isWord},
 		{name: "a safe string", typ: safeHTML(), valid: isWord},
 		{name: "no type", typ: nil, valid: isWord},
 		{name: "a struct", typ: types.NewStruct(nil, nil), valid: isWord},
 		{name: "a complex number", typ: types.Typ[types.Complex128], valid: isWord},
-		{name: "a bool", typ: types.Typ[types.Bool], valid: func(s string) error { _, err := strconv.ParseBool(s); return err }},
-		{name: "an int", typ: types.Typ[types.Int], valid: func(s string) error { _, err := strconv.Atoi(s); return err }},
-		{name: "a float", typ: types.Typ[types.Float64], valid: func(s string) error { _, err := strconv.ParseFloat(s, 64); return err }},
+		{name: "a bool", typ: types.Typ[types.Bool], valid: func(s string) bool { _, err := strconv.ParseBool(s); return err == nil }},
+		{name: "an int", typ: types.Typ[types.Int], valid: func(s string) bool { _, err := strconv.Atoi(s); return err == nil }},
+		{name: "a float", typ: types.Typ[types.Float64], valid: func(s string) bool { _, err := strconv.ParseFloat(s, 64); return err == nil }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValues(1)
 			for range 20 {
-				if drawn := v.draw(tt.typ); tt.valid(drawn) != nil {
-					t.Fatalf("draw = %q, which is not a literal of %v", drawn, tt.typ)
-				}
+				drawn := v.draw(tt.typ)
+				require.True(t, tt.valid(drawn), "draw = %q, which is not a literal of %v", drawn, tt.typ)
 			}
 		})
 	}
@@ -187,10 +170,6 @@ func TestValuesAreSeeded(t *testing.T) {
 		}
 		return out
 	}
-	if !slices.Equal(draws(7), draws(7)) {
-		t.Error("the same seed drew different values")
-	}
-	if slices.Equal(draws(7), draws(8)) {
-		t.Error("different seeds drew the same values")
-	}
+	assert.Equal(t, draws(7), draws(7), "the same seed draws the same values")
+	assert.NotEqual(t, draws(7), draws(8), "different seeds draw different values")
 }
