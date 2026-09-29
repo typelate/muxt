@@ -194,41 +194,52 @@ func formStructBindings(def *Definition, checker Checker, st *types.Struct, argN
 	}
 	bindings := make([]FieldBinding, 0, st.NumFields())
 	for i := 0; i < st.NumFields(); i++ {
-		field, tags := st.Field(i), reflect.StructTag(st.Tag(i))
-		fb := FieldBinding{
-			Name:      field.Name(),
-			InputName: field.Name(),
-		}
-		if name, found := tags.Lookup(InputAttributeNameStructTag); found {
-			fb.InputName = name
-		}
-		ft := field.Type()
-		if fileHeaderPtr != nil && (types.Identical(ft, fileHeaderPtr) || types.Identical(ft, types.NewSlice(fileHeaderPtr))) {
-			fb.FileHeader = true
-			fb.Slice = types.Identical(ft, types.NewSlice(fileHeaderPtr))
-			bindings = append(bindings, fb)
-			continue
-		}
-		if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
-			fb.Template = def.template.Lookup(name)
-		}
-		fb.elem = ft
-		if slice, ok := ft.(*types.Slice); ok {
-			fb.Slice = true
-			fb.elem = slice.Elem()
-		}
-		validations, err := fieldTemplateValidations(fb)
+		fb, err := formFieldBinding(def, checker, st, i, argName, qual, fileHeaderPtr)
 		if err != nil {
 			return nil, err
 		}
-		fb.Validations = validations
-		if err := checkUnmarshalable(checker, fb.elem, qual); err != nil {
-			return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
-		}
-		fb.Method = unmarshalMethodFor(checker, fb.elem)
 		bindings = append(bindings, fb)
 	}
 	return bindings, nil
+}
+
+// formFieldBinding binds field i of st. A nil fileHeaderPtr means file
+// fields are not allowed.
+func formFieldBinding(def *Definition, checker Checker, st *types.Struct, i int, argName string, qual types.Qualifier, fileHeaderPtr types.Type) (FieldBinding, error) {
+	field, tags := st.Field(i), reflect.StructTag(st.Tag(i))
+	fb := FieldBinding{
+		Name:      field.Name(),
+		InputName: field.Name(),
+	}
+	if name, found := tags.Lookup(InputAttributeNameStructTag); found {
+		fb.InputName = name
+	}
+	ft := field.Type()
+	if fileHeaderPtr != nil {
+		if isSlice := types.Identical(ft, types.NewSlice(fileHeaderPtr)); isSlice || types.Identical(ft, fileHeaderPtr) {
+			fb.FileHeader = true
+			fb.Slice = isSlice
+			return fb, nil
+		}
+	}
+	if name, found := tags.Lookup(InputAttributeTemplateStructTag); found {
+		fb.Template = def.template.Lookup(name)
+	}
+	fb.elem = ft
+	if slice, ok := ft.(*types.Slice); ok {
+		fb.Slice = true
+		fb.elem = slice.Elem()
+	}
+	validations, err := fieldTemplateValidations(fb)
+	if err != nil {
+		return FieldBinding{}, err
+	}
+	fb.Validations = validations
+	if err := checkUnmarshalable(checker, fb.elem, qual); err != nil {
+		return FieldBinding{}, fmt.Errorf("failed to generate parse statements for %s field %s: %w", argName, field.Name(), err)
+	}
+	fb.Method = unmarshalMethodFor(checker, fb.elem)
+	return fb, nil
 }
 
 // fieldTemplateValidations parses the constraint attributes of the <input>
