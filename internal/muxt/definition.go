@@ -257,7 +257,7 @@ func (def Definition) SynthesizedMethods() []string { return def.synthesizedMeth
 
 func (def Definition) String() string { return def.name }
 
-func (def Definition) Call() string {
+func (def Definition) functionName() string {
 	if def.fun == nil {
 		return ""
 	}
