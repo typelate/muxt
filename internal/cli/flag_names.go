@@ -25,11 +25,9 @@ const (
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 	outputMuxtVersion                   = "output-muxt-version"
 
-	// Deprecated feature flag names
 	deprecatedPathPrefix = "path-prefix"
 	deprecatedLogger     = "logger"
 
-	// Deprecated flag names (for backward compatibility)
 	deprecatedTemplatesVariable       = "templates-variable"
 	deprecatedReceiverType            = "receiver-type"
 	deprecatedReceiverTypePackage     = "receiver-type-package"

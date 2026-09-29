@@ -45,7 +45,7 @@ func NewTemplateCalls(config TemplateCallsConfiguration, pkg source.Package) (*T
 
 func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) []NamedReferences {
 	global := newGlobal(pkg, lt)
-	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
+	refs := make(map[string][]TemplateReference)
 
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
 		refs[tree.Name] = append(refs[tree.Name], TemplateReference{

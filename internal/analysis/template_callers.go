@@ -45,7 +45,7 @@ func NewTemplateCallers(config TemplateCallersConfiguration, pkg source.Package)
 
 func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt source.Variable) []NamedReferences {
 	global := newGlobal(pkg, lt)
-	refs := make(map[string][]TemplateReference) // template name -> list of references
+	refs := make(map[string][]TemplateReference)
 
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
 		pos := check.ParseNodePosition(tree, node)

@@ -25,7 +25,6 @@ var templates = template.Must(template.New("output").Funcs(template.FuncMap{
 	"formatImports": func(im *astgen.TypeFormatter) string { return strings.TrimSpace(astgen.Format(im.GenDecl())) },
 }).ParseFS(outputTemplates, "*"))
 
-// matchesAny returns true if value contains any of the filter patterns (case-insensitive substring match)
 func matchesAny(value string, filters []*regexp.Regexp) bool {
 	for _, filter := range filters {
 		if filter.MatchString(value) {

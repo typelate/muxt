@@ -205,7 +205,7 @@ func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]T
 		usedTemplates[name] = true
 	}
 
-	// Find unused templates (skip templates that are empty after define blocks are stripped)
+	// A file template holding only define blocks is empty once they are stripped.
 	var unused []string
 	for name := range allNames {
 		if !usedTemplates[name] {
@@ -246,7 +246,6 @@ func isEmptyTemplate(node parse.Node) bool {
 		return true
 
 	default:
-		// Any other node type (actions, if, range, etc.) is non-empty
 		return false
 	}
 }
