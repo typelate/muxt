@@ -7,6 +7,9 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -72,26 +75,14 @@ func TestResolveCall(t *testing.T) {
 			def := &Definition{call: call, fun: ast.NewIdent("x")}
 			sig, isMethod, args, err := resolveCall(def, call, source.Package{Types: pkg}, receiver, checker)
 			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Fatalf("resolveCall(%s) error = %v, want %q", tt.call, err, tt.wantErr)
-				}
+				require.EqualError(t, err, tt.wantErr, "resolveCall(%s)", tt.call)
 				return
 			}
-			if err != nil {
-				t.Fatalf("resolveCall(%s) error = %v", tt.call, err)
-			}
-			if got := types.TypeString(sig, typeQualifier(pkg)); got != tt.wantSig {
-				t.Errorf("resolveCall(%s) signature = %s, want %s", tt.call, got, tt.wantSig)
-			}
-			if isMethod != tt.wantIsMethod {
-				t.Errorf("resolveCall(%s) isMethod = %t, want %t", tt.call, isMethod, tt.wantIsMethod)
-			}
-			if len(args) != tt.wantArgs {
-				t.Errorf("resolveCall(%s) returned %d arguments, want %d", tt.call, len(args), tt.wantArgs)
-			}
-			if fmt.Sprint(def.synthesizedMethods) != fmt.Sprint(tt.wantSynth) {
-				t.Errorf("resolveCall(%s) synthesized %v, want %v", tt.call, def.synthesizedMethods, tt.wantSynth)
-			}
+			require.NoError(t, err, "resolveCall(%s)", tt.call)
+			assert.Equal(t, tt.wantSig, types.TypeString(sig, typeQualifier(pkg)), "resolveCall(%s) signature", tt.call)
+			assert.Equal(t, tt.wantIsMethod, isMethod, "resolveCall(%s) isMethod", tt.call)
+			assert.Len(t, args, tt.wantArgs, "resolveCall(%s) arguments", tt.call)
+			assert.Equal(t, fmt.Sprint(tt.wantSynth), fmt.Sprint(def.synthesizedMethods), "resolveCall(%s) synthesized methods", tt.call)
 		})
 	}
 }

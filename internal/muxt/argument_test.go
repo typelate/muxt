@@ -3,8 +3,10 @@ package muxt_test
 import (
 	"go/types"
 	"html/template"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
@@ -37,22 +39,13 @@ func TestReservedArgumentBinding(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			defs := resolveTemplate(t, pkg, receiver, checker, tt.template)
-			if len(defs) == 0 || len(defs[0].Arguments) == 0 {
-				t.Fatalf("%s resolved no arguments", tt.name)
-			}
+			require.NotEmpty(t, defs, "%s resolved no definitions", tt.name)
+			require.NotEmpty(t, defs[0].Arguments, "%s resolved no arguments", tt.name)
 			arg := defs[0].Arguments[0]
-			if arg.Type != tt.wantType {
-				t.Errorf("%s Type = %v, want %v", tt.name, arg.Type, tt.wantType)
-			}
-			if arg.Direct() != tt.wantDirect {
-				t.Errorf("%s Direct() = %t, want %t", tt.name, arg.Direct(), tt.wantDirect)
-			}
-			if arg.Declares() != tt.wantDeclares {
-				t.Errorf("%s Declares() = %t, want %t", tt.name, arg.Declares(), tt.wantDeclares)
-			}
-			if got := formatType(arg.ScopeType()); got != tt.wantScope {
-				t.Errorf("%s ScopeType() = %q, want %q", tt.name, got, tt.wantScope)
-			}
+			assert.Equal(t, tt.wantType, arg.Type, "%s Type", tt.name)
+			assert.Equal(t, tt.wantDirect, arg.Direct(), "%s Direct()", tt.name)
+			assert.Equal(t, tt.wantDeclares, arg.Declares(), "%s Declares()", tt.name)
+			assert.Equal(t, tt.wantScope, formatType(arg.ScopeType()), "%s ScopeType()", tt.name)
 		})
 	}
 }
@@ -73,13 +66,9 @@ func TestReservedArgumentBindingErrors(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("templates").Parse(tt.template))})
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			err = muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, unbound)
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("ResolveCall(%s) error = %v, want it to contain %q", tt.name, err, tt.wantErr)
-			}
+			assert.ErrorContains(t, err, tt.wantErr, "ResolveCall(%s)", tt.name)
 		})
 	}
 }
@@ -87,13 +76,9 @@ func TestReservedArgumentBindingErrors(t *testing.T) {
 func resolveTemplate(t *testing.T, pkg *types.Package, receiver *types.Named, checker muxt.Checker, text string) []muxt.Definition {
 	t.Helper()
 	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("templates").Parse(text))})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for i := range defs {
-		if err := muxt.ResolveCall(&defs[i], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, muxt.ResolveCall(&defs[i], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
 	}
 	return defs
 }

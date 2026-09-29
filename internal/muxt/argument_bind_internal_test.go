@@ -3,6 +3,8 @@ package muxt
 import (
 	"go/types"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckRepeatedArgument(t *testing.T) {
@@ -37,12 +39,11 @@ func TestCheckRepeatedArgument(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.first.Identifier, tt.second.Identifier = "id", "id"
 			err := checkRepeatedArgument(&Definition{}, nil, &tt.first, &tt.second)
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Errorf("checkRepeatedArgument() = %v, want nil", err)
-			case tt.wantErr != "" && (err == nil || err.Error() != tt.wantErr):
-				t.Errorf("checkRepeatedArgument() = %v, want %q", err, tt.wantErr)
+			if tt.wantErr == "" {
+				assert.NoError(t, err, "checkRepeatedArgument()")
+				return
 			}
+			assert.EqualError(t, err, tt.wantErr, "checkRepeatedArgument()")
 		})
 	}
 }
