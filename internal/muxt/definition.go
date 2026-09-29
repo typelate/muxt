@@ -296,25 +296,31 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	if def.handler != "" && def.spans.call[0] >= 0 {
 		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)
 	}
-	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
+	err := def.parseParts(matches[templateNameMux.SubexpIndex("HTTP_STATUS")])
+	return def, err, true
+}
+
+// parseParts checks the parts of the name in order and reports the first
+// that is malformed.
+func (def *Definition) parseParts(httpStatusCode string) error {
 	if httpStatusCode != "" {
 		if err := def.parseStatusCode(httpStatusCode); err != nil {
-			return def, err, true
+			return err
 		}
 	}
 	if err := def.checkPathAndMethod(); err != nil {
-		return def, err, true
+		return err
 	}
 	if err := def.initializeSegments(); err != nil {
-		return def, err, true
+		return err
 	}
-	if err := parseHandler(def.fileSet, &def, def.Segments); err != nil {
-		return def, err, true
+	if err := parseHandler(def.fileSet, def, def.Segments); err != nil {
+		return err
 	}
 	if httpStatusCode != "" && !def.callWriteHeader() {
-		return def, def.statusCodeConflictError(), true
+		return def.statusCodeConflictError()
 	}
-	return def, nil, true
+	return nil
 }
 
 func (def *Definition) parseStatusCode(text string) error {
