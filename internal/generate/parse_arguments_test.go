@@ -2,6 +2,7 @@ package generate
 
 import (
 	"go/ast"
+	"go/token"
 	"testing"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -33,6 +34,14 @@ func TestAppendParseArgumentStatementsRejectsUnresolvedCalls(t *testing.T) {
 				t.Errorf("appendParseArgumentStatements error = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestAppendParseArgumentStatementsRejectsUnexpectedArgumentExpressions(t *testing.T) {
+	call := &ast.CallExpr{Fun: ast.NewIdent("F"), Args: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "1"}}}
+	_, err := appendParseArgumentStatements(nil, scalarTestFile(t), []muxt.Argument{{}}, "", testConfig(), call, nil, nil)
+	if want := "unsupported argument 1 in call to F"; err == nil || err.Error() != want {
+		t.Errorf("appendParseArgumentStatements error = %v, want %q", err, want)
 	}
 }
 
