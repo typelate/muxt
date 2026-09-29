@@ -24,7 +24,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 	const parsedVariableName = "value"
 	statements = append(statements, parseCall)
 
-	declareVar, err := formVariableDeclaration(file, arg, argument.ParamType())
+	declareVar, err := typedVar(file, arg.Name, argument.ParamType(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,10 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 					Rhs: []ast.Expr{astgen.CallBuiltinAppend(&ast.SelectorExpr{X: ast.NewIdent(arg.Name), Sel: ast.NewIdent(fb.Name)}, expr)},
 				}
 			}
-			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, ast.NewIdent("val"), fb.Elem(), fb.Method, validations, parseResult, parseErrBlock())
+			parseStatements, err := scalarParse{
+				tmp: parsedVariableName, str: ast.NewIdent("val"), typ: fb.Elem(), method: fb.Method,
+				validations: validations, assign: parseResult, errBlock: parseErrBlock(),
+			}.statements(file)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Name, err)
 			}
@@ -57,7 +60,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 				Key:   ast.NewIdent("_"),
 				Value: ast.NewIdent("val"),
 				Tok:   token.DEFINE,
-				X:     &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("Form")}, Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}},
+				X:     &ast.IndexExpr{X: requestField("Form"), Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}},
 				Body:  &ast.BlockStmt{List: parseStatements},
 			})
 		} else {
@@ -68,8 +71,11 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 					Rhs: []ast.Expr{expr},
 				}
 			}
-			str := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent("FormValue")}, Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}}}
-			parseStatements, err := generateParseValueFromStringStatements(file, parsedVariableName, str, fb.Elem(), fb.Method, validations, parseResult, parseErrBlock())
+			str := &ast.CallExpr{Fun: requestField("FormValue"), Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}}}
+			parseStatements, err := scalarParse{
+				tmp: parsedVariableName, str: str, typ: fb.Elem(), method: fb.Method,
+				validations: validations, assign: parseResult, errBlock: parseErrBlock(),
+			}.statements(file)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate parse statements for %s field %s: %w", arg.Name, fb.Name, err)
 			}
@@ -166,46 +172,25 @@ func wrapInMultipartFormNotNil(stmt ast.Stmt) ast.Stmt {
 	}
 }
 
-func formVariableDeclaration(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeExpr(tp)
+// typedVar emits `var name T` or, with a value, `var name T = value`.
+func typedVar(file *File, name string, tp source.Type, value ast.Expr) (*ast.DeclStmt, error) {
+	typeExpr, err := file.TypeExpr(tp)
 	if err != nil {
 		return nil, err
 	}
-	return &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names: []*ast.Ident{ast.NewIdent(arg.Name)},
-					Type:  typeExp,
-				},
-			},
-		},
-	}, nil
+	return varDecl(name, typeExpr, value), nil
 }
 
-func formVariableAssignment(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeExpr(tp)
-	if err != nil {
-		return nil, err
+func varDecl(name string, typeExpr, value ast.Expr) *ast.DeclStmt {
+	spec := &ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(name)}, Type: typeExpr}
+	if value != nil {
+		spec.Values = []ast.Expr{value}
 	}
-	return &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names: []*ast.Ident{ast.NewIdent(arg.Name)},
-					Type:  typeExp,
-					Values: []ast.Expr{
-						&ast.SelectorExpr{
-							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-							Sel: ast.NewIdent("Form"),
-						},
-					},
-				},
-			},
-		},
-	}, nil
+	return &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{spec}}}
+}
+
+func requestField(name string) *ast.SelectorExpr {
+	return &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest), Sel: ast.NewIdent(name)}
 }
 
 // callParseForm emits:
@@ -280,30 +265,4 @@ func callParseMultipartForm(file *File, config RoutesFileConfiguration, errBlock
 		Cond: &ast.BinaryExpr{X: notNil, Op: token.LAND, Y: notErrNotMultipart},
 		Body: errBlock,
 	}
-}
-
-// multipartVariableAssignment emits `var <arg> <Type> = request.MultipartForm`
-// for raw-mode multipart binding.
-func multipartVariableAssignment(file *File, arg *ast.Ident, tp source.Type) (*ast.DeclStmt, error) {
-	typeExp, err := file.TypeExpr(tp)
-	if err != nil {
-		return nil, err
-	}
-	return &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names: []*ast.Ident{ast.NewIdent(arg.Name)},
-					Type:  typeExp,
-					Values: []ast.Expr{
-						&ast.SelectorExpr{
-							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest),
-							Sel: ast.NewIdent("MultipartForm"),
-						},
-					},
-				},
-			},
-		},
-	}, nil
 }
