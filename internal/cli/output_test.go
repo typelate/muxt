@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -48,9 +50,7 @@ func TestWarnPartialAST(t *testing.T) {
 				logger = nil
 			}
 			warnPartialAST(logger, tt.pl)
-			if buf.String() != tt.want {
-				t.Errorf("warnPartialAST() wrote %q, want %q", buf.String(), tt.want)
-			}
+			assert.Equal(t, tt.want, buf.String(), "warnPartialAST() wrote")
 		})
 	}
 }
@@ -60,26 +60,17 @@ func TestPrintMultiLineError(t *testing.T) {
 		var stderr bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetErr(&stderr)
-		if !printMultiLineError(cmd, fmt.Errorf("wrapped: %w", multiLineError{})) {
-			t.Fatal("printMultiLineError() = false, want true")
-		}
-		if want := "Error:\nline one\nline two\n"; stderr.String() != want {
-			t.Errorf("stderr = %q, want %q", stderr.String(), want)
-		}
-		if !cmd.SilenceErrors {
-			t.Error("SilenceErrors = false, want cobra's inline error silenced")
-		}
+		require.True(t, printMultiLineError(cmd, fmt.Errorf("wrapped: %w", multiLineError{})), "printMultiLineError()")
+		assert.Equal(t, "Error:\nline one\nline two\n", stderr.String(), "stderr")
+		assert.True(t, cmd.SilenceErrors, "SilenceErrors, want cobra's inline error silenced")
 	})
 	t.Run("any other error", func(t *testing.T) {
 		var stderr bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetErr(&stderr)
-		if printMultiLineError(cmd, errors.New("plain")) {
-			t.Fatal("printMultiLineError() = true, want false")
-		}
-		if stderr.Len() != 0 || cmd.SilenceErrors {
-			t.Errorf("stderr = %q, SilenceErrors = %v, want untouched", stderr.String(), cmd.SilenceErrors)
-		}
+		require.False(t, printMultiLineError(cmd, errors.New("plain")), "printMultiLineError()")
+		assert.Empty(t, stderr.String(), "stderr, want untouched")
+		assert.False(t, cmd.SilenceErrors, "SilenceErrors, want untouched")
 	})
 }
 
@@ -89,24 +80,16 @@ func TestCheckFailure(t *testing.T) {
 		cmd := &cobra.Command{}
 		cmd.SetErr(&stderr)
 		in := multiLineError{}
-		if got := checkFailure(cmd, in); got != error(in) {
-			t.Errorf("checkFailure() = %v, want the error it was given", got)
-		}
-		if want := "Error:\nline one\nline two\n"; stderr.String() != want {
-			t.Errorf("stderr = %q, want %q", stderr.String(), want)
-		}
+		assert.Equal(t, error(in), checkFailure(cmd, in), "checkFailure() want the error it was given")
+		assert.Equal(t, "Error:\nline one\nline two\n", stderr.String(), "stderr")
 	})
 	t.Run("any other error is a fail line", func(t *testing.T) {
 		var stderr bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetErr(&stderr)
 		got := checkFailure(cmd, errors.New("no such variable"))
-		if want := "fail: no such variable"; got == nil || got.Error() != want {
-			t.Errorf("checkFailure() = %v, want %q", got, want)
-		}
-		if stderr.Len() != 0 {
-			t.Errorf("stderr = %q, want nothing", stderr.String())
-		}
+		assert.EqualError(t, got, "fail: no such variable", "checkFailure()")
+		assert.Empty(t, stderr.String(), "stderr, want nothing")
 	})
 }
 
@@ -133,56 +116,54 @@ func TestWriteResultFormats(t *testing.T) {
 			var buf bytes.Buffer
 			err := writeResult(newCmd(tt.format), &buf, textResult("hello"))
 			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Fatalf("writeResult() error = %v, want %q", err, tt.wantErr)
-				}
+				require.EqualError(t, err, tt.wantErr, "writeResult()")
 				return
 			}
-			if err != nil || buf.String() != tt.want {
-				t.Fatalf("writeResult() = %q, %v, want %q", buf.String(), err, tt.want)
-			}
+			require.NoError(t, err, "writeResult()")
+			require.Equal(t, tt.want, buf.String(), "writeResult()")
 		})
 	}
 }
 
 func TestVersionCommand(t *testing.T) {
 	for _, args := range [][]string{{"version"}, {"v"}, {"version", "--verbose"}} {
-		var stdout bytes.Buffer
-		err := Commands(t.TempDir(), args, func(string) string { return "" }, &stdout, io.Discard)
-		v, ok := cliVersion()
-		switch {
-		case !ok && (err == nil || err.Error() != "missing CLI version"):
-			t.Errorf("muxt %v = %v, want the missing CLI version error", args, err)
-		case ok && !strings.HasPrefix(stdout.String(), v+"\n"):
-			t.Errorf("muxt %v printed %q, want it to start with %q", args, stdout.String(), v+"\n")
-		}
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			err := Commands(t.TempDir(), args, func(string) string { return "" }, &stdout, io.Discard)
+			v, ok := cliVersion()
+			if !ok {
+				assert.EqualError(t, err, "missing CLI version", "muxt %v, want the missing CLI version error", args)
+				return
+			}
+			assert.True(t, strings.HasPrefix(stdout.String(), v+"\n"), "muxt %v printed %q, want it to start with %q", args, stdout.String(), v+"\n")
+		})
 	}
 }
 
 func TestCommandsAreWired(t *testing.T) {
+	help := func(t *testing.T, arg string) string {
+		t.Helper()
+		var stdout bytes.Buffer
+		err := Commands(t.TempDir(), []string{arg, "--help"}, func(string) string { return "" }, &stdout, io.Discard)
+		assert.NoError(t, err, "muxt %s --help", arg)
+		return stdout.String()
+	}
+
 	for _, name := range []string{
 		generateCommandName, versionCommandName, checkCommandName,
 		listTemplateCallersCommandName, listTemplateCallsCommandName,
 		exploreModuleCommandName, generateFakeServerCommandName, testTemplateMutationsName,
 	} {
-		var stdout bytes.Buffer
-		if err := Commands(t.TempDir(), []string{name, "--help"}, func(string) string { return "" }, &stdout, io.Discard); err != nil {
-			t.Errorf("muxt %s --help error = %v", name, err)
-		}
-		if !strings.Contains(stdout.String(), "muxt "+name) {
-			t.Errorf("muxt %s --help = %q, want its usage", name, stdout.String())
-		}
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, help(t, name), "muxt "+name, "muxt %s --help want its usage", name)
+		})
 	}
 	for alias, name := range map[string]string{
 		"g": generateCommandName, "gen": generateCommandName, "v": versionCommandName, "c": checkCommandName,
 		"callers": listTemplateCallersCommandName, "calls": listTemplateCallsCommandName, "explore": exploreModuleCommandName,
 	} {
-		var stdout bytes.Buffer
-		if err := Commands(t.TempDir(), []string{alias, "--help"}, func(string) string { return "" }, &stdout, io.Discard); err != nil {
-			t.Errorf("muxt %s --help error = %v", alias, err)
-		}
-		if !strings.Contains(stdout.String(), "muxt "+name) {
-			t.Errorf("muxt %s --help = %q, want the usage of %s", alias, stdout.String(), name)
-		}
+		t.Run("alias "+alias, func(t *testing.T) {
+			assert.Contains(t, help(t, alias), "muxt "+name, "muxt %s --help want the usage of %s", alias, name)
+		})
 	}
 }

@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/header"
 )
 
@@ -50,69 +53,49 @@ func execute(t *testing.T, wd string, args ...string) (stdout, stderr string, er
 	return out.String(), errOut.String(), err
 }
 
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
+// TestRunGenerate runs generate twice in one module: the second run sees
+// the files the first wrote, and removes the ones a renamed template left
+// behind.
 func TestRunGenerate(t *testing.T) {
 	wd := newModule(t)
 
-	stdout, _, err := execute(t, wd, "generate", "--output-multiple-files")
-	if err != nil {
-		t.Fatalf("generate error = %v", err)
-	}
-	for _, want := range []string{"wrote old_template_routes_gen.go: 1 route\n", "wrote template_routes.go: 0 routes\n"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("generate output = %q, want containing %q", stdout, want)
+	t.Run("the first run writes a file per template file", func(t *testing.T) {
+		stdout, _, err := execute(t, wd, "generate", "--output-multiple-files")
+		require.NoError(t, err, "generate")
+		for _, want := range []string{"wrote old_template_routes_gen.go: 1 route\n", "wrote template_routes.go: 0 routes\n"} {
+			assert.Contains(t, stdout, want, "generate output")
 		}
-	}
-	generated, err := header.Scan(wd)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h, ok := generated[filepath.Join(wd, "template_routes.go")]; !ok || h.Args()[0] != "--output-multiple-files" {
-		t.Errorf("template_routes.go header = %+v (found %v), want it to record --output-multiple-files", h, ok)
-	}
+		generated, err := header.Scan(wd)
+		require.NoError(t, err)
+		h, ok := generated[filepath.Join(wd, "template_routes.go")]
+		if assert.True(t, ok, "template_routes.go has a header") {
+			assert.Equal(t, "--output-multiple-files", h.Args()[0], "template_routes.go header = %+v, want it to record --output-multiple-files", h)
+		}
+	})
 
 	unreadable := writeTestFile(t, wd, "unreadable.go", header.Format([]string{"--no-such-flag"}, "")+"package main\n")
 	otherRoutes := writeTestFile(t, wd, "other.go", header.Format([]string{"--output-routes-func=AdminRoutes"}, "")+"package main\n")
 
-	if err := os.Rename(filepath.Join(wd, "old.gohtml"), filepath.Join(wd, "new.gohtml")); err != nil {
-		t.Fatal(err)
-	}
-	_, stderr, err := execute(t, wd, "generate", "--output-multiple-files")
-	if err != nil {
-		t.Fatalf("second generate error = %v", err)
-	}
-	if exists(filepath.Join(wd, "old_template_routes_gen.go")) {
-		t.Error("old_template_routes_gen.go survived the template rename")
-	}
-	if !exists(filepath.Join(wd, "new_template_routes_gen.go")) {
-		t.Error("new_template_routes_gen.go was not written")
-	}
-	for _, kept := range []string{unreadable, otherRoutes} {
-		if !exists(kept) {
-			t.Errorf("%s was deleted, want it left alone", kept)
+	t.Run("the second run after a template rename", func(t *testing.T) {
+		require.NoError(t, os.Rename(filepath.Join(wd, "old.gohtml"), filepath.Join(wd, "new.gohtml")))
+		_, stderr, err := execute(t, wd, "generate", "--output-multiple-files")
+		require.NoError(t, err, "second generate")
+		assert.NoFileExists(t, filepath.Join(wd, "old_template_routes_gen.go"), "old_template_routes_gen.go survived the template rename")
+		assert.FileExists(t, filepath.Join(wd, "new_template_routes_gen.go"), "new_template_routes_gen.go was not written")
+		for _, kept := range []string{unreadable, otherRoutes} {
+			assert.FileExists(t, kept, "%s was deleted, want it left alone", kept)
 		}
-	}
-	if want := "WARNING: ignored generated file " + unreadable; !strings.Contains(stderr, want) {
-		t.Errorf("stderr = %q, want containing %q", stderr, want)
-	}
+		assert.Contains(t, stderr, "WARNING: ignored generated file "+unreadable, "stderr")
+	})
 }
 
 func TestRunCheck(t *testing.T) {
 	wd := newModule(t)
-	if _, _, err := execute(t, wd, "generate"); err != nil {
-		t.Fatalf("generate error = %v", err)
-	}
+	_, _, err := execute(t, wd, "generate")
+	require.NoError(t, err, "generate")
 	stdout, _, err := execute(t, wd, "check")
-	if err != nil {
-		t.Fatalf("check error = %v", err)
-	}
-	if want := "ok: 2 templates\n"; stdout != want {
-		t.Errorf("check output = %q, want %q", stdout, want)
-	}
+	require.NoError(t, err, "check")
+	assert.Equal(t, "ok: 2 templates\n", stdout, "check output")
 }
 
 func TestRunListings(t *testing.T) {
@@ -128,12 +111,8 @@ func TestRunListings(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, _, err := execute(t, wd, tt.args...)
-			if err != nil {
-				t.Fatalf("muxt %v error = %v", tt.args, err)
-			}
-			if !strings.Contains(stdout, tt.want) {
-				t.Errorf("muxt %v output = %q, want containing %q", tt.args, stdout, tt.want)
-			}
+			require.NoError(t, err, "muxt %v", tt.args)
+			assert.Contains(t, stdout, tt.want, "muxt %v output", tt.args)
 		})
 	}
 }
@@ -141,16 +120,18 @@ func TestRunListings(t *testing.T) {
 func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
 	wd := newModule(t)
 	for _, args := range [][]string{{"--format=yaml"}, {"list-template-callers", "--format=yaml"}, {"list-template-calls", "--format=yaml"}} {
-		if _, _, err := execute(t, wd, args...); err == nil || err.Error() != "unknown format: yaml" {
-			t.Errorf("muxt %v error = %v, want unknown format: yaml", args, err)
-		}
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			_, _, err := execute(t, wd, args...)
+			assert.EqualError(t, err, "unknown format: yaml", "muxt %v", args)
+		})
 	}
 }
 
 func TestRunFailsOutsideAModule(t *testing.T) {
 	for _, args := range [][]string{{"check"}, {"generate"}, {"list-template-callers"}, {testTemplateMutationsName}} {
-		if _, _, err := execute(t, t.TempDir(), args...); err == nil {
-			t.Errorf("muxt %v outside a module = nil error, want one", args)
-		}
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			_, _, err := execute(t, t.TempDir(), args...)
+			assert.Error(t, err, "muxt %v outside a module", args)
+		})
 	}
 }
