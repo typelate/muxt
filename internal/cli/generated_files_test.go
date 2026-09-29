@@ -6,10 +6,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/header"
@@ -18,9 +20,7 @@ import (
 func writeTestFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	return path
 }
 
@@ -34,9 +34,7 @@ func TestPlural(t *testing.T) {
 		{2, "2 routes"},
 		{12, "12 routes"},
 	} {
-		if got := plural(tt.n, "route"); got != tt.want {
-			t.Errorf("plural(%d, %q) = %q, want %q", tt.n, "route", got, tt.want)
-		}
+		assert.Equal(t, tt.want, plural(tt.n, "route"), "plural(%d, %q)", tt.n, "route")
 	}
 }
 
@@ -52,22 +50,18 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 	writeTestFile(t, dir, "handwritten.go", "package main\n")
 	writeTestFile(t, dir, "notes.txt", header.Format(nil, ""))
 
-	got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(io.Discard, "", 0))
-	if err != nil {
-		t.Fatalf("ownedGeneratedFiles() error = %v", err)
-	}
-	want := map[string]bool{current: true, explicitDefault: true, deprecatedFlag: true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ownedGeneratedFiles(%q) = %v, want %v (not %s)", "TemplateRoutes", got, want, other)
-	}
+	t.Run("the default routes function", func(t *testing.T) {
+		got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(io.Discard, "", 0))
+		require.NoError(t, err, "ownedGeneratedFiles()")
+		want := map[string]bool{current: true, explicitDefault: true, deprecatedFlag: true}
+		assert.Equal(t, want, got, "ownedGeneratedFiles(%q) (not %s)", "TemplateRoutes", other)
+	})
 
-	got, err = ownedGeneratedFiles(dir, "AdminRoutes", log.New(io.Discard, "", 0))
-	if err != nil {
-		t.Fatalf("ownedGeneratedFiles() error = %v", err)
-	}
-	if want := (map[string]bool{other: true}); !reflect.DeepEqual(got, want) {
-		t.Errorf("ownedGeneratedFiles(%q) = %v, want %v", "AdminRoutes", got, want)
-	}
+	t.Run("another routes function", func(t *testing.T) {
+		got, err := ownedGeneratedFiles(dir, "AdminRoutes", log.New(io.Discard, "", 0))
+		require.NoError(t, err, "ownedGeneratedFiles()")
+		assert.Equal(t, map[string]bool{other: true}, got, "ownedGeneratedFiles(%q)", "AdminRoutes")
+	})
 }
 
 // A header this version cannot read is not shown to belong to the current
@@ -78,22 +72,15 @@ func TestOwnedGeneratedFilesIgnoresUnreadableHeaders(t *testing.T) {
 
 	var stderr bytes.Buffer
 	got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(&stderr, "", 0))
-	if err != nil {
-		t.Fatalf("ownedGeneratedFiles() error = %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("ownedGeneratedFiles() = %v, want the unreadable file ignored", got)
-	}
+	require.NoError(t, err, "ownedGeneratedFiles()")
+	assert.Empty(t, got, "ownedGeneratedFiles() want the unreadable file ignored")
 	want := "WARNING: ignored generated file " + unreadable + " because arguments failed to parse: unknown flag: --no-such-flag\n"
-	if stderr.String() != want {
-		t.Errorf("log = %q, want %q", stderr.String(), want)
-	}
+	assert.Equal(t, want, stderr.String(), "log")
 }
 
 func TestOwnedGeneratedFilesMissingDirectory(t *testing.T) {
-	if _, err := ownedGeneratedFiles(filepath.Join(t.TempDir(), "missing"), "TemplateRoutes", log.New(io.Discard, "", 0)); err == nil {
-		t.Fatal("ownedGeneratedFiles(missing directory) = nil error, want one")
-	}
+	_, err := ownedGeneratedFiles(filepath.Join(t.TempDir(), "missing"), "TemplateRoutes", log.New(io.Discard, "", 0))
+	require.Error(t, err, "ownedGeneratedFiles(missing directory)")
 }
 
 func TestWriteGeneratedFiles(t *testing.T) {
@@ -116,22 +103,13 @@ func TestWriteGeneratedFiles(t *testing.T) {
 	}
 	var stdout bytes.Buffer
 	written, err := writeGeneratedFiles(&stdout, files, config)
-	if err != nil {
-		t.Fatalf("writeGeneratedFiles() error = %v", err)
-	}
-	if want := "wrote a.go: 1 route\nwrote b.go: 3 routes\n"; stdout.String() != want {
-		t.Errorf("stdout = %q, want %q", stdout.String(), want)
-	}
-	if want := (map[string]bool{files[0].Path: true, files[1].Path: true}); !reflect.DeepEqual(written, want) {
-		t.Errorf("written = %v, want %v", written, want)
-	}
+	require.NoError(t, err, "writeGeneratedFiles()")
+
+	assert.Equal(t, "wrote a.go: 1 route\nwrote b.go: 3 routes\n", stdout.String(), "stdout")
+	assert.Equal(t, map[string]bool{files[0].Path: true, files[1].Path: true}, written, "written")
 	content, err := os.ReadFile(files[0].Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := header.Format(nil, "v9") + "package a\n"; string(content) != want {
-		t.Errorf("a.go = %q, want %q", content, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, header.Format(nil, "v9")+"package a\n", string(content), "a.go")
 }
 
 func TestWriteGeneratedFilesRollsBack(t *testing.T) {
@@ -141,15 +119,10 @@ func TestWriteGeneratedFilesRollsBack(t *testing.T) {
 		{Path: filepath.Join(dir, "missing", "b.go"), Content: "package b\n"},
 	}
 	written, err := writeGeneratedFiles(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{})
-	if err == nil {
-		t.Fatal("writeGeneratedFiles() = nil error, want the failed write")
-	}
-	if written != nil {
-		t.Errorf("written = %v, want nil after a failure", written)
-	}
-	if _, statErr := os.Stat(files[0].Path); !os.IsNotExist(statErr) {
-		t.Errorf("a.go still exists after rollback: %v", statErr)
-	}
+	require.Error(t, err, "writeGeneratedFiles() want the failed write")
+	assert.Nil(t, written, "written after a failure")
+	_, statErr := os.Stat(files[0].Path)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "a.go still exists after rollback")
 }
 
 func TestWriteGeneratedFilesReportsRollbackFailure(t *testing.T) {
@@ -161,9 +134,9 @@ func TestWriteGeneratedFilesReportsRollbackFailure(t *testing.T) {
 		{Path: filepath.Join(dir, "missing", "b.go")},
 	}
 	_, err := writeGeneratedFiles(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{})
-	if err == nil || !strings.Contains(err.Error(), "b.go") || !strings.Contains(err.Error(), "a.go") {
-		t.Fatalf("writeGeneratedFiles() error = %v, want both the failed write and the failed removal", err)
-	}
+	require.Error(t, err, "writeGeneratedFiles() want both the failed write and the failed removal")
+	require.ErrorContains(t, err, "b.go", "the failed write")
+	require.ErrorContains(t, err, "a.go", "the failed removal")
 }
 
 func TestRemoveOrphans(t *testing.T) {
@@ -174,32 +147,23 @@ func TestRemoveOrphans(t *testing.T) {
 	gone := filepath.Join(dir, "gone.go")
 
 	owned := map[string]bool{kept: true, orphan: true, gone: true}
-	if err := removeOrphans(owned, map[string]bool{kept: true}); err != nil {
-		t.Fatalf("removeOrphans() error = %v", err)
-	}
+	require.NoError(t, removeOrphans(owned, map[string]bool{kept: true}), "removeOrphans()")
 	var left []string
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, e := range entries {
 		left = append(left, e.Name())
 	}
 	slices.Sort(left)
-	if want := []string{"kept.go", "unowned.go"}; !slices.Equal(left, want) {
-		t.Errorf("files left = %v, want %v", left, want)
-	}
+	assert.Equal(t, []string{"kept.go", "unowned.go"}, left, "files left")
 }
 
 func TestRemoveOrphansReportsFailure(t *testing.T) {
 	dir := t.TempDir()
 	stuck := filepath.Join(dir, "stuck")
-	if err := os.Mkdir(stuck, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Mkdir(stuck, 0o755))
 	writeTestFile(t, stuck, "child", "")
 	err := removeOrphans(map[string]bool{stuck: true}, nil)
-	if err == nil || !strings.HasPrefix(err.Error(), "failed to remove orphaned file "+stuck+": ") {
-		t.Fatalf("removeOrphans() = %v, want a failed to remove orphaned file error", err)
-	}
+	require.Error(t, err, "removeOrphans() want a failed to remove orphaned file error")
+	require.True(t, strings.HasPrefix(err.Error(), "failed to remove orphaned file "+stuck+": "), "removeOrphans() = %v, want a failed to remove orphaned file error", err)
 }

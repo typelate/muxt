@@ -3,9 +3,11 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/fakeserver"
@@ -17,9 +19,7 @@ func TestAbsoluteDir(t *testing.T) {
 		{"/work", "/other", "/other"},
 		{"/work", "./a/../b", "/work/b"},
 	} {
-		if got := absoluteDir(tt.wd, tt.dir); got != tt.want {
-			t.Errorf("absoluteDir(%q, %q) = %q, want %q", tt.wd, tt.dir, got, tt.want)
-		}
+		assert.Equal(t, tt.want, absoluteDir(tt.wd, tt.dir), "absoluteDir(%q, %q)", tt.wd, tt.dir)
 	}
 }
 
@@ -30,9 +30,8 @@ func TestFakeImportPath(t *testing.T) {
 		{"/work/x", "example.com/app/x/internal/fake"},
 	} {
 		got, err := fakeImportPath(mod, tt.outDir)
-		if err != nil || got != tt.want {
-			t.Errorf("fakeImportPath(%q) = %q, %v, want %q", tt.outDir, got, err, tt.want)
-		}
+		assert.NoError(t, err, "fakeImportPath(%q)", tt.outDir)
+		assert.Equal(t, tt.want, got, "fakeImportPath(%q)", tt.outDir)
 	}
 }
 
@@ -41,14 +40,17 @@ func TestPackageInDirectory(t *testing.T) {
 		{Path: "example.com/a", Dir: "/work/a"},
 		{Path: "example.com/b", Dir: "/work/b"},
 	}}
-	got, err := packageInDirectory(mod, "/work/b")
-	if err != nil || got.Path != "example.com/b" {
-		t.Fatalf("packageInDirectory(/work/b) = %+v, %v, want example.com/b", got, err)
-	}
-	_, err = packageInDirectory(mod, "/work/c")
-	if want := "no muxt-generated package found at /work/c"; err == nil || err.Error() != want {
-		t.Fatalf("packageInDirectory(/work/c) error = %v, want %q", err, want)
-	}
+
+	t.Run("a generated package", func(t *testing.T) {
+		got, err := packageInDirectory(mod, "/work/b")
+		require.NoError(t, err, "packageInDirectory(/work/b)")
+		assert.Equal(t, "example.com/b", got.Path, "packageInDirectory(/work/b)")
+	})
+
+	t.Run("no generated package", func(t *testing.T) {
+		_, err := packageInDirectory(mod, "/work/c")
+		require.EqualError(t, err, "no muxt-generated package found at /work/c", "packageInDirectory(/work/c)")
+	})
 }
 
 func TestNewFakeServerConfig(t *testing.T) {
@@ -73,33 +75,27 @@ func TestNewFakeServerConfig(t *testing.T) {
 		Middleware:        true,
 		FakeImportPath:    "example.com/app/out/internal/fake",
 	}
-	if got := newFakeServerConfig(pkg, "example.com/app/out/internal/fake"); !reflect.DeepEqual(got, want) {
-		t.Errorf("newFakeServerConfig() = %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, newFakeServerConfig(pkg, "example.com/app/out/internal/fake"), "newFakeServerConfig()")
 }
 
 func TestWriteFakeServer(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "explore")
 	files := &fakeserver.Files{Main: []byte("package main\n"), Fake: []byte("package fake\n")}
-	if err := writeFakeServer(out, files); err != nil {
-		t.Fatalf("writeFakeServer() error = %v", err)
-	}
+	require.NoError(t, writeFakeServer(out, files), "writeFakeServer()")
 	for path, want := range map[string]string{
 		filepath.Join(out, "main.go"):                         "package main\n",
 		filepath.Join(out, "internal", "fake", "receiver.go"): "package fake\n",
 	} {
 		got, err := os.ReadFile(path)
-		if err != nil || string(got) != want {
-			t.Errorf("%s = %q, %v, want %q", path, got, err, want)
-		}
+		assert.NoError(t, err, path)
+		assert.Equal(t, want, string(got), path)
 	}
 }
 
 func TestWriteFakeServerFailsUnderAFile(t *testing.T) {
 	blocker := writeTestFile(t, t.TempDir(), "file", "")
-	if err := writeFakeServer(filepath.Join(blocker, "out"), &fakeserver.Files{}); err == nil {
-		t.Fatal("writeFakeServer() under a regular file = nil error, want one")
-	}
+	err := writeFakeServer(filepath.Join(blocker, "out"), &fakeserver.Files{})
+	require.Error(t, err, "writeFakeServer() under a regular file")
 }
 
 func newTwoPackageModule(t *testing.T) string {
@@ -107,9 +103,7 @@ func newTwoPackageModule(t *testing.T) string {
 	dir := t.TempDir()
 	writeTestFile(t, dir, "go.mod", "module example.com\n\ngo 1.24\n")
 	for _, name := range []string{"a", "b"} {
-		if err := os.Mkdir(filepath.Join(dir, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.Mkdir(filepath.Join(dir, name), 0o755))
 		writeTestFile(t, filepath.Join(dir, name), "template.go", `package `+name+`
 
 import (
@@ -137,45 +131,33 @@ func (s *Server) Home() any { return nil }
 func TestGenerateFakeServerWithSeveralPackagesKeepsTheLast(t *testing.T) {
 	wd := newTwoPackageModule(t)
 	for _, name := range []string{"a", "b"} {
-		if _, _, err := execute(t, wd, "-C", name, "generate", "--receiver-type=Server"); err != nil {
-			t.Fatalf("generate in %s error = %v", name, err)
-		}
+		_, _, err := execute(t, wd, "-C", name, "generate", "--receiver-type=Server")
+		require.NoError(t, err, "generate in %s", name)
 	}
 
 	stdout, _, err := execute(t, wd, "generate-fake-server", "a", "b", "-o", "out")
-	if err != nil {
-		t.Fatalf("generate-fake-server error = %v", err)
-	}
-	if want := "Run: go run ./out\nRun: go run ./out\n"; stdout != want {
-		t.Errorf("stdout = %q, want %q", stdout, want)
-	}
+	require.NoError(t, err, "generate-fake-server")
+	assert.Equal(t, "Run: go run ./out\nRun: go run ./out\n", stdout, "stdout")
 	main, err := os.ReadFile(filepath.Join(wd, "out", "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(main), `b "example.com/b"`) || strings.Contains(string(main), `"example.com/a"`) {
-		t.Errorf("main.go = %s\nwant only package b, the last argument", main)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, string(main), `b "example.com/b"`, "main.go want package b, the last argument")
+	assert.NotContains(t, string(main), `"example.com/a"`, "main.go want only package b, the last argument")
 }
 
 func TestExploreModuleListsGeneratedPackages(t *testing.T) {
 	wd := newTwoPackageModule(t)
-	if _, _, err := execute(t, wd, "-C", "a", "generate"); err != nil {
-		t.Fatalf("generate error = %v", err)
-	}
+	_, _, err := execute(t, wd, "-C", "a", "generate")
+	require.NoError(t, err, "generate")
 	stdout, _, err := execute(t, wd, "explore-module", "--format=json")
-	if err != nil {
-		t.Fatalf("explore-module error = %v", err)
-	}
-	if !strings.Contains(stdout, `"path": "example.com/a"`) || strings.Contains(stdout, `"path": "example.com/b"`) {
-		t.Errorf("explore-module output = %s\nwant only package a", stdout)
-	}
+	require.NoError(t, err, "explore-module")
+	assert.Contains(t, stdout, `"path": "example.com/a"`, "explore-module output want package a")
+	assert.NotContains(t, stdout, `"path": "example.com/b"`, "explore-module output want only package a")
 }
 
 func TestGenerateFakeServerRejectsADirectoryWithoutRoutes(t *testing.T) {
 	wd := newTwoPackageModule(t)
 	_, _, err := execute(t, wd, "generate-fake-server", "a")
-	if want := "no muxt-generated package found at " + filepath.Join(wd, "a"); err == nil || !strings.HasSuffix(err.Error(), want) {
-		t.Fatalf("generate-fake-server error = %v, want ending %q", err, want)
-	}
+	require.Error(t, err, "generate-fake-server")
+	want := "no muxt-generated package found at " + filepath.Join(wd, "a")
+	require.True(t, strings.HasSuffix(err.Error(), want), "generate-fake-server error = %v, want ending %q", err, want)
 }
