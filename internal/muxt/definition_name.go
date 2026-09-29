@@ -144,7 +144,7 @@ func CheckPathMethodCollisions(defs []Definition) error {
 	handlerName := func(def Definition) string {
 		// Report the original handler names (e.g. "list" and "List"), not the
 		// exported identifier they collide on, so the difference is visible.
-		if handler := def.Call(); handler != "" {
+		if handler := def.functionName(); handler != "" {
 			return handler
 		}
 		return def.Identifier()
