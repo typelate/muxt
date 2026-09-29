@@ -2,10 +2,13 @@ package analysis
 
 import (
 	"html/template"
+	"log"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // parseTemplates parses text as one template set named "set". Text outside
@@ -139,6 +142,66 @@ func TestPartitionUnusedTemplates(t *testing.T) {
 				t.Errorf("partials = %q, want %q", partials, tt.wantPartials)
 			}
 		})
+	}
+}
+
+func TestReportUnusedTemplates(t *testing.T) {
+	const templates = `{{define "GET / Home()"}}<p>hi</p>{{end}}{{define "footer"}}<p>bye</p>{{end}}`
+	for _, tt := range []struct {
+		name         string
+		executed     map[string][]TemplateExecution
+		wantErrors   []string
+		wantLogParts []string
+		wantSilent   bool
+	}{
+		{name: "everything executed", executed: executed("GET / Home()", "footer"), wantSilent: true},
+		{
+			name:     "an unwired route and an unused partial",
+			executed: executed(),
+			wantErrors: []string{
+				"1 route templates are not wired to generated handlers",
+				"unused templates 1",
+			},
+			wantLogParts: []string{
+				"Route templates with no generated handler; run muxt generate to wire them up:\n",
+				`: "GET / Home()"`,
+				"Unused templates:\n",
+				`: "footer"`,
+			},
+		},
+		{
+			name:         "only a partial unused",
+			executed:     executed("GET / Home()"),
+			wantErrors:   []string{"unused templates 1"},
+			wantLogParts: []string{"Unused templates:\n", `: "footer"`},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var logs strings.Builder
+			errs := reportUnusedTemplates(log.New(&logs, "", 0), parseTemplates(t, templates), tt.executed)
+			var got []string
+			for _, err := range errs {
+				got = append(got, err.Error())
+			}
+			if !slices.Equal(got, tt.wantErrors) {
+				t.Errorf("errors = %q, want %q", got, tt.wantErrors)
+			}
+			if tt.wantSilent && logs.Len() != 0 {
+				t.Errorf("log = %q, want nothing", logs.String())
+			}
+			for _, part := range tt.wantLogParts {
+				if !strings.Contains(logs.String(), part) {
+					t.Errorf("log = %q, want containing %q", logs.String(), part)
+				}
+			}
+		})
+	}
+}
+
+func TestReportDefinitionErrorsIsSilentWithoutErrors(t *testing.T) {
+	var logs strings.Builder
+	if err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)}); err != nil || logs.Len() != 0 {
+		t.Errorf("reportDefinitionErrors() = %v with log %q, want neither", err, logs.String())
 	}
 }
 

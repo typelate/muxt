@@ -31,76 +31,32 @@ type CheckConfiguration struct {
 // Check validates the package's templates and returns how many
 // ExecuteTemplate call sites it checked, so the caller can report the
 // count on success.
-func Check(config CheckConfiguration, log *log.Logger, pkg source.Package) (int, error) {
+func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (int, error) {
 	var errs []error
 	totalChecked := 0
+	qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
 
 	for _, lt := range pkg.Variables {
-		global, ts := newGlobal(pkg, lt), lt.Set
+		global := newGlobal(pkg, lt)
 
-		// Route template names are validated here so a malformed name
-		// surfaces with its position instead of leaving the template to
-		// be reported as merely unused below.
-		if _, err := muxt.Definitions(lt); err != nil {
-			if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
-				log.Println(multiLine.MultiLineError())
-				log.Println()
-			} else {
-				log.Println(err)
-			}
+		if err := reportDefinitionErrors(logger, lt); err != nil {
 			errs = append(errs, err)
 		}
 
 		executedTemplates := make(map[string][]TemplateExecution)
-		checkedTemplates := 0
-
 		for _, c := range lt.Calls {
-			checkedTemplates++
-			templateName, dataType := c.Template, c.Data
+			totalChecked++
 			if config.Verbose {
-				log.Println("checking endpoint", templateName)
+				logger.Println("checking endpoint", c.Template)
 			}
-			qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
-			if err := findTemplateExecution(executedTemplates, global, qualifier, ts, c.Position, templateName, dataType); err != nil {
-				log.Println(c.Position, executeTemplateFunc, strconv.Quote(templateName), types.TypeString(dataType, qualifier))
-				if checkErr, ok := errors.AsType[*check.Error](err); ok {
-					var sb strings.Builder
-					if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
-						// The detail rendering failed; the compact error
-						// must still reach the user.
-						log.Println(" - ", err)
-					}
-					log.Println(sb.String())
-				} else {
-					log.Println(" - ", err)
-				}
-				log.Println()
+			err := findTemplateExecution(executedTemplates, global, qualifier, lt.Set, c.Position, c.Template, c.Data)
+			if err != nil {
+				reportExecutionError(logger, qualifier, c, err)
 				errs = append(errs, err)
 			}
 		}
 
-		unusedTemplates := findUnusedTemplates(ts, executedTemplates)
-		unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, unusedTemplates)
-		if len(unusedRoutes) > 0 {
-			// Route templates with no ExecuteTemplate caller usually mean
-			// the generated routes file is missing or stale, not that the
-			// template should be deleted.
-			log.Println("Route templates with no generated handler; run muxt generate to wire them up:")
-			for _, name := range unusedRoutes {
-				t := ts.Lookup(name)
-				log.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
-			}
-			errs = append(errs, fmt.Errorf("%d route templates are not wired to generated handlers", len(unusedRoutes)))
-		}
-		if len(unusedPartials) > 0 {
-			log.Println("Unused templates:")
-			for _, name := range unusedPartials {
-				t := ts.Lookup(name)
-				log.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
-			}
-			errs = append(errs, fmt.Errorf("unused templates %d", len(unusedPartials)))
-		}
-		totalChecked += checkedTemplates
+		errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates)...)
 	}
 
 	switch len(errs) {
@@ -110,6 +66,66 @@ func Check(config CheckConfiguration, log *log.Logger, pkg source.Package) (int,
 		return totalChecked, fmt.Errorf("1 error")
 	default:
 		return totalChecked, fmt.Errorf("%d errors", len(errs))
+	}
+}
+
+// reportDefinitionErrors validates route template names so a malformed name
+// surfaces with its position instead of leaving the template to be reported
+// as merely unused.
+func reportDefinitionErrors(logger *log.Logger, variable source.Variable) error {
+	_, err := muxt.Definitions(variable)
+	if err == nil {
+		return nil
+	}
+	if multiLine, ok := errors.AsType[muxt.MultiLineError](err); ok {
+		logger.Println(multiLine.MultiLineError())
+		logger.Println()
+	} else {
+		logger.Println(err)
+	}
+	return err
+}
+
+func reportExecutionError(logger *log.Logger, qualifier types.Qualifier, call source.Call, err error) {
+	logger.Println(call.Position, executeTemplateFunc, strconv.Quote(call.Template), types.TypeString(call.Data, qualifier))
+	if checkErr, ok := errors.AsType[*check.Error](err); ok {
+		var sb strings.Builder
+		if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
+			// The compact error must still reach the user.
+			logger.Println(" - ", err)
+		}
+		logger.Println(sb.String())
+	} else {
+		logger.Println(" - ", err)
+	}
+	logger.Println()
+}
+
+// reportUnusedTemplates logs the templates no ExecuteTemplate call reaches
+// and returns one error per kind.
+func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTemplates map[string][]TemplateExecution) []error {
+	var errs []error
+	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates))
+	if len(unusedRoutes) > 0 {
+		// Route templates with no ExecuteTemplate caller usually mean
+		// the generated routes file is missing or stale, not that the
+		// template should be deleted.
+		logger.Println("Route templates with no generated handler; run muxt generate to wire them up:")
+		logTemplatePositions(logger, ts, unusedRoutes)
+		errs = append(errs, fmt.Errorf("%d route templates are not wired to generated handlers", len(unusedRoutes)))
+	}
+	if len(unusedPartials) > 0 {
+		logger.Println("Unused templates:")
+		logTemplatePositions(logger, ts, unusedPartials)
+		errs = append(errs, fmt.Errorf("unused templates %d", len(unusedPartials)))
+	}
+	return errs
+}
+
+func logTemplatePositions(logger *log.Logger, ts *template.Template, names []string) {
+	for _, name := range names {
+		t := ts.Lookup(name)
+		logger.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
 	}
 }
 
