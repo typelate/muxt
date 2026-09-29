@@ -3,9 +3,11 @@ package analysis
 import (
 	"html/template"
 	"log"
-	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/source"
@@ -17,9 +19,7 @@ import (
 func parseTemplates(t *testing.T, text string) *template.Template {
 	t.Helper()
 	ts, err := template.New("set").Parse(text)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return ts
 }
 
@@ -73,9 +73,7 @@ func TestFindUnusedTemplates(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := findUnusedTemplates(parseTemplates(t, tt.templates), tt.executed)
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("findUnusedTemplates = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "findUnusedTemplates")
 		})
 	}
 }
@@ -86,9 +84,7 @@ func TestFindUnusedTemplates(t *testing.T) {
 // template already renders is waiting on that route rather than unused.
 func TestPartitionUnusedTemplates(t *testing.T) {
 	const route = "GET / Home()"
-	if !muxt.IsRouteDefinitionName(route) {
-		t.Fatalf("the premise of this test is wrong: %q does not name a route", route)
-	}
+	require.True(t, muxt.IsRouteDefinitionName(route), "the premise of this test is wrong: %q does not name a route", route)
 
 	for _, tt := range []struct {
 		name         string
@@ -135,12 +131,8 @@ func TestPartitionUnusedTemplates(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			routes, partials := partitionUnusedTemplates(parseTemplates(t, tt.templates), tt.unused)
-			if !slices.Equal(routes, tt.wantRoutes) {
-				t.Errorf("routes = %q, want %q", routes, tt.wantRoutes)
-			}
-			if !slices.Equal(partials, tt.wantPartials) {
-				t.Errorf("partials = %q, want %q", partials, tt.wantPartials)
-			}
+			assert.Equal(t, tt.wantRoutes, routes, "routes")
+			assert.Equal(t, tt.wantPartials, partials, "partials")
 		})
 	}
 }
@@ -183,16 +175,12 @@ func TestReportUnusedTemplates(t *testing.T) {
 			for _, err := range errs {
 				got = append(got, err.Error())
 			}
-			if !slices.Equal(got, tt.wantErrors) {
-				t.Errorf("errors = %q, want %q", got, tt.wantErrors)
-			}
-			if tt.wantSilent && logs.Len() != 0 {
-				t.Errorf("log = %q, want nothing", logs.String())
+			assert.Equal(t, tt.wantErrors, got, "errors")
+			if tt.wantSilent {
+				assert.Empty(t, logs.String(), "log, want nothing")
 			}
 			for _, part := range tt.wantLogParts {
-				if !strings.Contains(logs.String(), part) {
-					t.Errorf("log = %q, want containing %q", logs.String(), part)
-				}
+				assert.Contains(t, logs.String(), part, "log, want containing %q", part)
 			}
 		})
 	}
@@ -203,13 +191,9 @@ func TestCollectTemplateReferencesFollowsEveryBranch(t *testing.T) {
 	seen := make(map[string]bool)
 	collectTemplateReferences(ts, ts.Lookup("root").Tree.Root, seen)
 	for _, name := range []string{"in-range", "in-range-else", "in-with", "in-with-else", "loop", "leaf"} {
-		if !seen[name] {
-			t.Errorf("collectTemplateReferences did not reach %q; reached %v", name, seen)
-		}
+		assert.True(t, seen[name], "collectTemplateReferences did not reach %q; reached %v", name, seen)
 	}
-	if seen["root"] {
-		t.Errorf("collectTemplateReferences reached the root template itself")
-	}
+	assert.False(t, seen["root"], "collectTemplateReferences reached the root template itself")
 }
 
 // declaredTemplates has a template the set knows by name but that was never
@@ -219,9 +203,9 @@ func declaredTemplates(t *testing.T) *template.Template {
 	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
 	ts.New("declared")
 	ts.New("GET /bare Bare()")
-	if ts.Lookup("declared") == nil || ts.Lookup("declared").Tree != nil {
-		t.Fatal("the premise of this test is wrong: declared should exist without a tree")
-	}
+	declared := ts.Lookup("declared")
+	require.NotNil(t, declared, "the premise of this test is wrong: declared should exist without a tree")
+	require.Nil(t, declared.Tree, "the premise of this test is wrong: declared should exist without a tree")
 	return ts
 }
 
@@ -231,21 +215,17 @@ func TestTemplatesWithoutATreeAreSkipped(t *testing.T) {
 	t.Run("collectTemplateReferences", func(t *testing.T) {
 		seen := make(map[string]bool)
 		collectTemplateReferences(ts, ts.Lookup("GET / Home()").Tree.Root, seen)
-		if !seen["declared"] || !seen["undefined"] {
-			t.Errorf("collectTemplateReferences reached %v, want declared and undefined", seen)
-		}
+		assert.True(t, seen["declared"], "collectTemplateReferences reached %v, want declared", seen)
+		assert.True(t, seen["undefined"], "collectTemplateReferences reached %v, want undefined", seen)
 	})
 	t.Run("partitionUnusedTemplates", func(t *testing.T) {
 		routes, partials := partitionUnusedTemplates(ts, []string{"GET / Home()"})
-		if len(routes) != 1 || len(partials) != 0 {
-			t.Errorf("partitionUnusedTemplates() = %q, %q, want the route only", routes, partials)
-		}
+		assert.Len(t, routes, 1, "partitionUnusedTemplates() routes, want the route only")
+		assert.Empty(t, partials, "partitionUnusedTemplates() partials, want the route only")
 	})
 	t.Run("findUnusedTemplates", func(t *testing.T) {
 		got := findUnusedTemplates(ts, executed())
-		if !slices.Equal(got, []string{"GET / Home()"}) {
-			t.Errorf("findUnusedTemplates() = %q, want only the route", got)
-		}
+		assert.Equal(t, []string{"GET / Home()"}, got, "findUnusedTemplates() want only the route")
 	})
 	t.Run("executeTemplateTree", func(t *testing.T) {
 		// A nil global is never touched when there is no tree to walk.
@@ -256,9 +236,9 @@ func TestTemplatesWithoutATreeAreSkipped(t *testing.T) {
 
 func TestReportDefinitionErrorsIsSilentWithoutErrors(t *testing.T) {
 	var logs strings.Builder
-	if err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)}); err != nil || logs.Len() != 0 {
-		t.Errorf("reportDefinitionErrors() = %v with log %q, want neither", err, logs.String())
-	}
+	err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)})
+	assert.NoError(t, err, "reportDefinitionErrors()")
+	assert.Empty(t, logs.String(), "reportDefinitionErrors() log")
 }
 
 // TestIsEmptyTemplate states what counts as a template with nothing to
@@ -278,9 +258,7 @@ func TestIsEmptyTemplate(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := parseTemplates(t, `{{define "t"}}`+tt.template+`{{end}}`)
-			if got := isEmptyTemplate(ts.Lookup("t").Tree.Root); got != tt.want {
-				t.Errorf("isEmptyTemplate(%q) = %t, want %t", tt.template, got, tt.want)
-			}
+			assert.Equal(t, tt.want, isEmptyTemplate(ts.Lookup("t").Tree.Root), "isEmptyTemplate(%q)", tt.template)
 		})
 	}
 }

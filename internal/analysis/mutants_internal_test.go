@@ -20,9 +20,7 @@ func TestIndent(t *testing.T) {
 		{in: "a\nb", want: "> a\n> b"},
 		{in: "a\n", want: "> a\n> "},
 	} {
-		if got := indent("> ", tt.in); got != tt.want {
-			t.Errorf("indent(%q) = %q, want %q", tt.in, got, tt.want)
-		}
+		assert.Equal(t, tt.want, indent("> ", tt.in), "indent(%q)", tt.in)
 	}
 }
 
