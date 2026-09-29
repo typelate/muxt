@@ -56,6 +56,10 @@ func TestResolveCall(t *testing.T) {
 		{name: "nested call", call: `Method(Function(ctx))`, wantSig: "func(Context) any", wantIsMethod: true, wantArgs: 1},
 		{name: "argument count mismatch", call: `Two(ctx)`, wantErr: "handler func Two(Context, Context) any expects 2 arguments but call Two(ctx) has 1"},
 		{name: "unbound identifier", call: `Method(request)`, wantErr: "no type bound to request"},
+		{name: "synthesized method with a repeated argument", call: `Missing(ctx, ctx)`, wantErr: "cannot infer a signature for Missing: the ctx argument is passed more than once; define the method on the receiver to use repeated arguments"},
+		{name: "synthesized method with the execute callback", call: `Missing(execute)`, wantErr: "method Missing using the execute callback must be defined on the receiver type"},
+		{name: "synthesized method with an unknown identifier", call: `Missing(other)`, wantErr: "could not determine a type for other"},
+		{name: "synthesized method with an unmarshalJSON body and no raw json type", call: `Missing(unmarshalJSON(body))`, wantErr: "no raw json"},
 		{name: "not an identifier", call: `a.B(ctx)`, wantErr: "expected a function identifier, got: a.B"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
