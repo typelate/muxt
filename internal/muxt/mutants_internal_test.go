@@ -10,6 +10,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -33,12 +36,8 @@ func TestDefinitionRepresentationPredicates(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			def := Definition{Representation: tt.representation, Segments: tt.segments}
-			if got := def.isSignalsCallback(tt.argument); got != tt.signals {
-				t.Errorf("isSignalsCallback(%q) = %t, want %t", tt.argument, got, tt.signals)
-			}
-			if got := def.isSendMessage(tt.argument); got != tt.message {
-				t.Errorf("isSendMessage(%q) = %t, want %t", tt.argument, got, tt.message)
-			}
+			assert.Equal(t, tt.signals, def.isSignalsCallback(tt.argument), "isSignalsCallback(%q)", tt.argument)
+			assert.Equal(t, tt.message, def.isSendMessage(tt.argument), "isSendMessage(%q)", tt.argument)
 		})
 	}
 }
@@ -72,12 +71,13 @@ func (Server) NotFunction(int) {}
 			param := method.Type().(*types.Signature).Params().At(0).Type()
 			arg := &Argument{Identifier: "countsSignals", Type: ArgumentTypeSignalsCallback, paramType: param}
 			err := resolveSignalsCallback(&Definition{}, arg)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("resolveSignalsCallback(%s) error = %v, want error %t", tt.method, err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err, "resolveSignalsCallback(%s)", tt.method)
+				return
 			}
-			if !tt.wantErr && (!arg.callbackHasArg || types.TypeString(arg.callbackResult, nil) != "int") {
-				t.Errorf("resolveSignalsCallback(%s) recorded %v, %t, want int, true", tt.method, arg.callbackResult, arg.callbackHasArg)
-			}
+			require.NoError(t, err, "resolveSignalsCallback(%s)", tt.method)
+			assert.True(t, arg.callbackHasArg, "resolveSignalsCallback(%s) callbackHasArg", tt.method)
+			assert.Equal(t, "int", types.TypeString(arg.callbackResult, nil), "resolveSignalsCallback(%s) callbackResult", tt.method)
 		})
 	}
 }
@@ -85,9 +85,7 @@ func (Server) NotFunction(int) {}
 func TestDefinedHere(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "server.go", "package p\n\nfunc Handler() {}\n", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	decl := file.Decls[0].(*ast.FuncDecl)
 	located := types.NewFunc(decl.Name.Pos(), nil, "Handler", nil)
 	unlocated := types.NewFunc(token.NoPos, nil, "Handler", nil)
@@ -104,9 +102,7 @@ func TestDefinedHere(t *testing.T) {
 		{name: "position outside the file set", fset: token.NewFileSet(), object: located},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := definedHere(source.Package{Fset: tt.fset}, tt.object); got != tt.want {
-				t.Errorf("definedHere() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, definedHere(source.Package{Fset: tt.fset}, tt.object), "definedHere()")
 		})
 	}
 }
@@ -129,18 +125,14 @@ func TestCheckPathAndMethod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.def.checkPathAndMethod()
 			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("checkPathAndMethod() = %v, want nil", err)
-				}
+				require.NoError(t, err, "checkPathAndMethod()")
 				return
 			}
 			nameError, ok := errors.AsType[*NameError](err)
-			if !ok {
-				t.Fatalf("checkPathAndMethod() = %v, want a *NameError", err)
-			}
-			if nameError.Unwrap().Error() != tt.wantErr || nameError.Offset != tt.wantOffset || nameError.Length != tt.wantLength {
-				t.Errorf("checkPathAndMethod() = %q at %d+%d, want %q at %d+%d", nameError.Unwrap(), nameError.Offset, nameError.Length, tt.wantErr, tt.wantOffset, tt.wantLength)
-			}
+			require.True(t, ok, "checkPathAndMethod() = %v, want a *NameError", err)
+			assert.EqualError(t, nameError.Unwrap(), tt.wantErr, "checkPathAndMethod() message")
+			assert.Equal(t, tt.wantOffset, nameError.Offset, "checkPathAndMethod() offset")
+			assert.Equal(t, tt.wantLength, nameError.Length, "checkPathAndMethod() length")
 		})
 	}
 }
@@ -161,15 +153,13 @@ func TestNewDefinitionStatusCodeAndResponse(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			def, err, matched := newDefinition(template.Must(template.New(tt.route).Parse(``)))
-			if !matched {
-				t.Fatalf("newDefinition(%q) did not match", tt.route)
+			require.True(t, matched, "newDefinition(%q) did not match", tt.route)
+			if tt.wantErr {
+				require.Error(t, err, "newDefinition(%q)", tt.route)
+				return
 			}
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("newDefinition(%q) error = %v, want error %t", tt.route, err, tt.wantErr)
-			}
-			if !tt.wantErr && def.defaultStatusCode != tt.want {
-				t.Errorf("newDefinition(%q) status = %d, want %d", tt.route, def.defaultStatusCode, tt.want)
-			}
+			require.NoError(t, err, "newDefinition(%q)", tt.route)
+			assert.Equal(t, tt.want, def.defaultStatusCode, "newDefinition(%q) status", tt.route)
 		})
 	}
 }
@@ -190,10 +180,11 @@ func TestWildcardName(t *testing.T) {
 		{segment: "users", wantName: "users"},
 		{segment: "", wantName: ""},
 	} {
-		name, isWildcard := wildcardName(tt.segment)
-		if name != tt.wantName || isWildcard != tt.wantWildcard {
-			t.Errorf("wildcardName(%q) = (%q, %t), want (%q, %t)", tt.segment, name, isWildcard, tt.wantName, tt.wantWildcard)
-		}
+		t.Run(tt.segment, func(t *testing.T) {
+			name, isWildcard := wildcardName(tt.segment)
+			assert.Equal(t, tt.wantName, name, "wildcardName(%q) name", tt.segment)
+			assert.Equal(t, tt.wantWildcard, isWildcard, "wildcardName(%q) isWildcard", tt.segment)
+		})
 	}
 }
 
@@ -211,23 +202,22 @@ func TestExecuteArgumentIndex(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			index, ok := Definition{Arguments: tt.arguments}.ExecuteArgumentIndex()
-			if index != tt.wantIndex || ok != tt.wantOK {
-				t.Errorf("ExecuteArgumentIndex() = (%d, %t), want (%d, %t)", index, ok, tt.wantIndex, tt.wantOK)
-			}
+			assert.Equal(t, tt.wantIndex, index, "ExecuteArgumentIndex() index")
+			assert.Equal(t, tt.wantOK, ok, "ExecuteArgumentIndex() ok")
 		})
 	}
 }
 
 func TestTemplateNames(t *testing.T) {
-	if got := templateNames(nil); got != nil {
-		t.Errorf("templateNames(nil) = %v, want nil", got)
-	}
-	ts := template.Must(template.New("root").Parse(`{{define "a"}}{{end}}{{define "b"}}{{end}}`))
-	got := templateNames(ts)
-	slices.Sort(got)
-	if want := []string{"a", "b", "root"}; !slices.Equal(got, want) {
-		t.Errorf("templateNames() = %v, want %v", got, want)
-	}
+	t.Run("no set", func(t *testing.T) {
+		assert.Nil(t, templateNames(nil), "templateNames(nil)")
+	})
+	t.Run("every template in the set", func(t *testing.T) {
+		ts := template.Must(template.New("root").Parse(`{{define "a"}}{{end}}{{define "b"}}{{end}}`))
+		got := templateNames(ts)
+		slices.Sort(got)
+		assert.Equal(t, []string{"a", "b", "root"}, got, "templateNames()")
+	})
 }
 
 func TestResolveCallNotesOnlyTheRouteCall(t *testing.T) {
@@ -242,13 +232,9 @@ func Function(Context) any { return nil }
 `
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "p.go", src, parser.SkipObjectResolution)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	pkg, err := new(types.Config).Check("example.com/p", fset, []*ast.File{file}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	checker := scopeChecker{TemplateNameScopeIdentifierContext: pkg.Scope().Lookup("Context").Type()}
 	server := pkg.Scope().Lookup("Server").Type().(*types.Named)
 	for _, tt := range []struct {
@@ -264,12 +250,9 @@ func Function(Context) any { return nil }
 		t.Run(tt.name, func(t *testing.T) {
 			call := mustParseCall(t, tt.call)
 			def := &Definition{call: call}
-			if _, _, _, err := resolveCall(def, call, source.Package{Types: pkg, Fset: fset}, server, checker); err != nil {
-				t.Fatalf("resolveCall(%s) error = %v", tt.call, err)
-			}
-			if !slices.Equal(def.related, tt.want) {
-				t.Errorf("resolveCall(%s) related = %q, want %q", tt.call, def.related, tt.want)
-			}
+			_, _, _, err := resolveCall(def, call, source.Package{Types: pkg, Fset: fset}, server, checker)
+			require.NoError(t, err, "resolveCall(%s)", tt.call)
+			assert.Equal(t, tt.want, def.related, "resolveCall(%s) related", tt.call)
 		})
 	}
 }

@@ -1,9 +1,11 @@
 package muxt
 
 import (
-	"slices"
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWalkTemplateCommands(t *testing.T) {
@@ -28,17 +30,14 @@ func TestWalkTemplateCommands(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, page := pageIn(t, tt.template)
-			if _, err := ts.Parse(`{{define "inner"}}{{.Inner}}{{end}}`); err != nil {
-				t.Fatal(err)
-			}
+			_, err := ts.Parse(`{{define "inner"}}{{.Inner}}{{end}}`)
+			require.NoError(t, err)
 			var got []string
 			walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *parse.CommandNode, dot bool) bool {
 				got = append(got, cmd.String()+" "+boolWord(dot))
 				return false
 			})
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("walkTemplateCommands(%s) visited %q, want %q", tt.template, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "walkTemplateCommands(%s) visited", tt.template)
 		})
 	}
 }
@@ -50,12 +49,8 @@ func TestWalkTemplateCommandsStopsAtTheFirstAccepted(t *testing.T) {
 		visited = append(visited, cmd.String())
 		return cmd.String() == ".C"
 	})
-	if !found {
-		t.Error("walkTemplateCommands did not report the accepted command")
-	}
-	if want := []string{".A", ".B", ".C"}; !slices.Equal(visited, want) {
-		t.Errorf("walkTemplateCommands visited %q, want %q", visited, want)
-	}
+	assert.True(t, found, "walkTemplateCommands reported the accepted command")
+	assert.Equal(t, []string{".A", ".B", ".C"}, visited, "walkTemplateCommands visited")
 }
 
 func boolWord(b bool) string {
