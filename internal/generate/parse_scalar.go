@@ -32,6 +32,18 @@ type strconvParser struct {
 	convert bool
 }
 
+func parseInt(size int) func(astgen.ImportManager, ast.Expr) *ast.CallExpr {
+	return func(im astgen.ImportManager, str ast.Expr) *ast.CallExpr {
+		return astgen.StrconvParseIntCall(im, str, 10, size)
+	}
+}
+
+func parseUint(size int) func(astgen.ImportManager, ast.Expr) *ast.CallExpr {
+	return func(im astgen.ImportManager, str ast.Expr) *ast.CallExpr {
+		return astgen.StrconvParseUintCall(im, str, 10, size)
+	}
+}
+
 func parseFloat(size int) func(astgen.ImportManager, ast.Expr) *ast.CallExpr {
 	return func(im astgen.ImportManager, str ast.Expr) *ast.CallExpr {
 		return astgen.StrconvParseFloatCall(im, str, size)
@@ -41,15 +53,15 @@ func parseFloat(size int) func(astgen.ImportManager, ast.Expr) *ast.CallExpr {
 var strconvParsers = map[muxt.UnmarshalMethod]strconvParser{
 	muxt.UnmarshalBool:    {call: astgen.StrconvParseBoolCall},
 	muxt.UnmarshalInt:     {call: astgen.StrconvAtoiCall},
-	muxt.UnmarshalInt8:    {call: astgen.StrconvParseInt8Call, convert: true},
-	muxt.UnmarshalInt16:   {call: astgen.StrconvParseInt16Call, convert: true},
-	muxt.UnmarshalInt32:   {call: astgen.StrconvParseInt32Call, convert: true},
-	muxt.UnmarshalInt64:   {call: astgen.StrconvParseInt64Call},
-	muxt.UnmarshalUint:    {call: astgen.StrconvParseUint0Call, convert: true},
-	muxt.UnmarshalUint8:   {call: astgen.StrconvParseUint8Call, convert: true},
-	muxt.UnmarshalUint16:  {call: astgen.StrconvParseUint16Call, convert: true},
-	muxt.UnmarshalUint32:  {call: astgen.StrconvParseUint32Call, convert: true},
-	muxt.UnmarshalUint64:  {call: astgen.StrconvParseUint64Call},
+	muxt.UnmarshalInt8:    {call: parseInt(8), convert: true},
+	muxt.UnmarshalInt16:   {call: parseInt(16), convert: true},
+	muxt.UnmarshalInt32:   {call: parseInt(32), convert: true},
+	muxt.UnmarshalInt64:   {call: parseInt(64)},
+	muxt.UnmarshalUint:    {call: parseUint(0), convert: true},
+	muxt.UnmarshalUint8:   {call: parseUint(8), convert: true},
+	muxt.UnmarshalUint16:  {call: parseUint(16), convert: true},
+	muxt.UnmarshalUint32:  {call: parseUint(32), convert: true},
+	muxt.UnmarshalUint64:  {call: parseUint(64)},
 	muxt.UnmarshalFloat32: {call: parseFloat(32), convert: true},
 	muxt.UnmarshalFloat64: {call: parseFloat(64)},
 }

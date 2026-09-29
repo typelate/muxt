@@ -16,27 +16,15 @@ func ConvertToString(im ImportManager, variable ast.Expr, tp source.Type) (ast.E
 	}
 	switch kind {
 	case types.Bool, types.UntypedBool:
-		return FormatBool(im, variable), nil
+		return Call(im, "", "strconv", "FormatBool", ConvertIdent("bool", variable)), nil
 	case types.Int, types.UntypedInt:
-		return FormatInt(im, variable), nil
-	case types.Int8:
-		return FormatInt8(im, variable), nil
-	case types.Int16:
-		return FormatInt16(im, variable), nil
-	case types.Int32:
-		return FormatInt32(im, variable), nil
-	case types.Int64:
-		return FormatInt64(im, variable), nil
-	case types.Uint:
-		return FormatUint(im, variable), nil
-	case types.Uint8:
-		return FormatUint8(im, variable), nil
-	case types.Uint16:
-		return FormatUint16(im, variable), nil
-	case types.Uint32:
-		return FormatUint32(im, variable), nil
+		return StrconvItoaCall(im, variable), nil
+	case types.Int8, types.Int16, types.Int32, types.Int64:
+		return formatInteger(im, "FormatInt", "int64", variable), nil
+	case types.Uint, types.Uint8, types.Uint16, types.Uint32:
+		return formatInteger(im, "FormatUint", "uint64", variable), nil
 	case types.Uint64:
-		return FormatUint64(im, variable), nil
+		return Call(im, "", "strconv", "FormatUint", variable, Int(10)), nil
 	case types.String:
 		return variable, nil
 	default:
@@ -44,132 +32,32 @@ func ConvertToString(im ImportManager, variable ast.Expr, tp source.Type) (ast.E
 	}
 }
 
-// StrconvAtoiCall creates a strconv.Atoi call expression
+// formatInteger calls the strconv function format on variable converted to
+// the widest type it takes.
+func formatInteger(im ImportManager, format, widest string, variable ast.Expr) *ast.CallExpr {
+	return Call(im, "", "strconv", format, ConvertIdent(widest, variable), Int(10))
+}
+
 func StrconvAtoiCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
 	return Call(im, "", "strconv", "Atoi", expr)
 }
 
-// StrconvItoaCall creates a strconv.Itoa call expression
 func StrconvItoaCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
 	return Call(im, "", "strconv", "Itoa", expr)
 }
 
-// StrconvParseIntCall creates a strconv.ParseInt call expression
 func StrconvParseIntCall(im ImportManager, expr ast.Expr, base, size int) *ast.CallExpr {
 	return Call(im, "", "strconv", "ParseInt", expr, Int(base), Int(size))
 }
 
-// StrconvParseUintCall creates a strconv.ParseUint call expression
 func StrconvParseUintCall(im ImportManager, expr ast.Expr, base, size int) *ast.CallExpr {
 	return Call(im, "", "strconv", "ParseUint", expr, Int(base), Int(size))
 }
 
-// StrconvParseFloatCall creates a strconv.ParseFloat call expression
 func StrconvParseFloatCall(im ImportManager, expr ast.Expr, size int) *ast.CallExpr {
 	return Call(im, "", "strconv", "ParseFloat", expr, Int(size))
 }
 
-// StrconvParseBoolCall creates a strconv.ParseBool call expression
 func StrconvParseBoolCall(im ImportManager, expr ast.Expr) *ast.CallExpr {
 	return Call(im, "", "strconv", "ParseBool", expr)
-}
-
-// StrconvParseInt8Call creates a strconv.ParseInt call for int8
-func StrconvParseInt8Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseIntCall(im, in, 10, 8)
-}
-
-// StrconvParseInt16Call creates a strconv.ParseInt call for int16
-func StrconvParseInt16Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseIntCall(im, in, 10, 16)
-}
-
-// StrconvParseInt32Call creates a strconv.ParseInt call for int32
-func StrconvParseInt32Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseIntCall(im, in, 10, 32)
-}
-
-// StrconvParseInt64Call creates a strconv.ParseInt call for int64
-func StrconvParseInt64Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseIntCall(im, in, 10, 64)
-}
-
-// StrconvParseUint0Call creates a strconv.ParseUint call for uint
-func StrconvParseUint0Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseUintCall(im, in, 10, 0)
-}
-
-// StrconvParseUint8Call creates a strconv.ParseUint call for uint8
-func StrconvParseUint8Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseUintCall(im, in, 10, 8)
-}
-
-// StrconvParseUint16Call creates a strconv.ParseUint call for uint16
-func StrconvParseUint16Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseUintCall(im, in, 10, 16)
-}
-
-// StrconvParseUint32Call creates a strconv.ParseUint call for uint32
-func StrconvParseUint32Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseUintCall(im, in, 10, 32)
-}
-
-// StrconvParseUint64Call creates a strconv.ParseUint call for uint64
-func StrconvParseUint64Call(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return StrconvParseUintCall(im, in, 10, 64)
-}
-
-// FormatInt creates a strconv.Itoa call expression
-func FormatInt(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "Itoa", in)
-}
-
-// FormatInt8 creates a strconv.FormatInt call for int8
-func FormatInt8(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
-}
-
-// FormatInt16 creates a strconv.FormatInt call for int16
-func FormatInt16(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
-}
-
-// FormatInt32 creates a strconv.FormatInt call for int32
-func FormatInt32(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
-}
-
-// FormatInt64 creates a strconv.FormatInt call for int64
-func FormatInt64(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatInt", ConvertIdent("int64", in), Int(10))
-}
-
-// FormatUint creates a strconv.FormatUint call for uint
-func FormatUint(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
-}
-
-// FormatUint8 creates a strconv.FormatUint call for uint8
-func FormatUint8(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
-}
-
-// FormatUint16 creates a strconv.FormatUint call for uint16
-func FormatUint16(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
-}
-
-// FormatUint32 creates a strconv.FormatUint call for uint32
-func FormatUint32(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatUint", ConvertIdent("uint64", in), Int(10))
-}
-
-// FormatUint64 creates a strconv.FormatUint call for uint64
-func FormatUint64(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatUint", in, Int(10))
-}
-
-// FormatBool creates a strconv.FormatBool call expression
-func FormatBool(im ImportManager, in ast.Expr) *ast.CallExpr {
-	return Call(im, "", "strconv", "FormatBool", ConvertIdent("bool", in))
 }
