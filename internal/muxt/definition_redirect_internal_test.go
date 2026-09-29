@@ -3,6 +3,9 @@ package muxt
 import (
 	"html/template"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // pageIn parses text as a set holding "page", plus whatever else the text
@@ -10,13 +13,10 @@ import (
 func pageIn(t *testing.T, text string) (*template.Template, *template.Template) {
 	t.Helper()
 	ts, err := template.New("set").Parse(`{{define "page"}}` + text + `{{end}}`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	page := ts.Lookup("page")
-	if page == nil || page.Tree == nil {
-		t.Fatalf("the set does not hold a parsed page: %q", text)
-	}
+	require.NotNil(t, page, "the set does not hold a page: %q", text)
+	require.NotNil(t, page.Tree, "the set does not hold a parsed page: %q", text)
 	return ts, page
 }
 
@@ -39,9 +39,9 @@ func TestWritesResponseState(t *testing.T) {
 		{method: "Header"},
 		{method: "Name"},
 	} {
-		if got := writesResponseState(tt.method); got != tt.want {
-			t.Errorf("writesResponseState(%q) = %t, want %t", tt.method, got, tt.want)
-		}
+		t.Run(tt.method, func(t *testing.T) {
+			assert.Equal(t, tt.want, writesResponseState(tt.method), "writesResponseState(%q)", tt.method)
+		})
 	}
 }
 
@@ -83,9 +83,8 @@ func TestFindResponseStateCall(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, page := pageIn(t, tt.template)
 			got, ok := findResponseStateCall(page.Tree.Root, ts)
-			if got != tt.want || ok != (tt.want != "") {
-				t.Errorf("findResponseStateCall(%s) = %q, %t, want %q, %t", tt.template, got, ok, tt.want, tt.want != "")
-			}
+			assert.Equal(t, tt.want, got, "findResponseStateCall(%s) method", tt.template)
+			assert.Equal(t, tt.want != "", ok, "findResponseStateCall(%s) found", tt.template)
 		})
 	}
 }
@@ -107,14 +106,11 @@ func TestFindResponseStateCallThroughTemplateCalls(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, err := template.New("set").Parse(
 				`{{define "page"}}` + tt.call + `{{end}}{{define "part"}}{{.StatusCode 201}}{{end}}`)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			page := ts.Lookup("page")
 			got, ok := findResponseStateCall(page.Tree.Root, ts)
-			if got != tt.want || ok != (tt.want != "") {
-				t.Errorf("findResponseStateCall(%s) = %q, %t, want %q, %t", tt.call, got, ok, tt.want, tt.want != "")
-			}
+			assert.Equal(t, tt.want, got, "findResponseStateCall(%s) method", tt.call)
+			assert.Equal(t, tt.want != "", ok, "findResponseStateCall(%s) found", tt.call)
 		})
 	}
 }
@@ -140,9 +136,7 @@ func TestCanTemplateRedirect(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, page := pageIn(t, tt.template)
-			if got := canTemplateRedirect(page.Tree.Root, ts, make(map[string]bool)); got != tt.want {
-				t.Errorf("canTemplateRedirect(%s) = %t, want %t", tt.template, got, tt.want)
-			}
+			assert.Equal(t, tt.want, canTemplateRedirect(page.Tree.Root, ts, make(map[string]bool)), "canTemplateRedirect(%s)", tt.template)
 		})
 	}
 }
@@ -172,13 +166,9 @@ func TestCanTemplateRedirectFollowsTemplateCalls(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, err := template.New("set").Parse(tt.set)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			page := ts.Lookup("page")
-			if got := canTemplateRedirect(page.Tree.Root, ts, make(map[string]bool)); got != tt.want {
-				t.Errorf("canTemplateRedirect = %t, want %t", got, tt.want)
-			}
+			assert.Equal(t, tt.want, canTemplateRedirect(page.Tree.Root, ts, make(map[string]bool)), "canTemplateRedirect(%s)", tt.set)
 		})
 	}
 }
@@ -194,8 +184,6 @@ func TestAnalyzeRedirectCalls(t *testing.T) {
 	}
 	analyzeRedirectCalls(ts, defs)
 	for i, want := range []bool{true, false, false, false} {
-		if defs[i].canRedirect != want {
-			t.Errorf("analyzeRedirectCalls() set canRedirect of %q to %t, want %t", defs[i].name, defs[i].canRedirect, want)
-		}
+		assert.Equal(t, want, defs[i].canRedirect, "analyzeRedirectCalls() canRedirect of %q", defs[i].name)
 	}
 }

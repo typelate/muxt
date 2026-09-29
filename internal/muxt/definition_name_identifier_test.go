@@ -3,6 +3,8 @@ package muxt
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateEndpointPatternIdentifierParts(t *testing.T) {
@@ -23,9 +25,7 @@ func TestGenerateEndpointPatternIdentifierParts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var sb strings.Builder
 			sb.WriteString("stale")
-			if got := tt.def.generateEndpointPatternIdentifier(&sb); got != tt.want {
-				t.Errorf("generateEndpointPatternIdentifier(%q %q %q) = %q, want %q", tt.def.method, tt.def.host, tt.def.path, got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.def.generateEndpointPatternIdentifier(&sb), "generateEndpointPatternIdentifier(%q %q %q)", tt.def.method, tt.def.host, tt.def.path)
 		})
 	}
 }
