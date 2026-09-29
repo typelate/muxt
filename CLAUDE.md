@@ -20,7 +20,7 @@
 
 ```
 go list (golang.org/x/tools/go/packages)      ./internal/load
-    ↓  load.Package, load.GenerateSource, load.RoutesSource
+    ↓  load.Package, load.PackageWithReceiver
 source.Package: types + templates variables    ./internal/source
     ↓  muxt.Definitions, muxt.ResolveCall
 Resolved routes (muxt.Definition)              ./internal/muxt

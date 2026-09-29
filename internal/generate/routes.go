@@ -91,6 +91,12 @@ type RoutesFileConfiguration struct {
 	SilenceHTTPResponseWarning bool
 }
 
+// OutputDirectory is the directory of the output file, written relative to
+// wd. The routes file belongs to the package in that directory.
+func (c RoutesFileConfiguration) OutputDirectory(wd string) string {
+	return filepath.Dir(filepath.Join(wd, c.OutputFileName))
+}
+
 // DefaultMultipartMaxMemory is the default maxMemory value passed to
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
