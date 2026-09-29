@@ -64,8 +64,10 @@ func TestHeaderArgs(t *testing.T) {
 		{command: "", want: []string{}},
 		{command: "--a=b  --c", want: []string{"--a=b", "--c"}},
 	} {
-		got := header.Header{Command: tt.command}.Args()
-		assert.Equal(t, tt.want, got, "Header{Command: %q}.Args()", tt.command)
+		t.Run(tt.command, func(t *testing.T) {
+			got := header.Header{Command: tt.command}.Args()
+			assert.Equal(t, tt.want, got, "Header{Command: %q}.Args()", tt.command)
+		})
 	}
 }
 
@@ -86,7 +88,7 @@ func TestRoundTrip(t *testing.T) {
 			lines := splitLines(text)
 			got, ok := header.Parse(lines[0], lines[1])
 			require.True(t, ok, "Parse of Format(%q, %q) = %q", tt.args, tt.version, text)
-			assert.Equal(t, tt.version, got.Version)
+			assert.Equal(t, tt.version, got.Version, "version of Format(%q, %q)", tt.args, tt.version)
 			want := tt.args
 			if want == nil {
 				want = []string{}
