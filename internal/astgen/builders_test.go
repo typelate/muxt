@@ -195,45 +195,86 @@ func TestFormatReportsUnparsableNodes(t *testing.T) {
 	assert.True(t, strings.HasPrefix(got, "formatting error:"), "Format(bad literal) = %q, want it to report a formatting error", got)
 }
 
+func newPackage(path, name string) *types.Package {
+	return types.NewPackage(path, name)
+}
+
+// TestTypeFormatter states how a generated file names the packages its types
+// come from. Qualifier remembers the name it gave each import path, so the
+// subtests that depend on that build their own formatter and say so.
 func TestTypeFormatter(t *testing.T) {
-	server := types.NewPackage("example.com/server", "server")
-	other := types.NewPackage("example.com/other", "other")
-	colliding := types.NewPackage("example.com/x/other", "other")
+	const outputPath = "example.com/server"
 
-	tf := astgen.NewTypeFormatter(server.Path())
-	tf.Idents = []string{"other"}
-
-	if got := tf.Qualifier(nil); got != "" {
-		t.Errorf("Qualifier(nil) = %q, want empty", got)
+	// newFormatter writes for the output package with the identifiers the
+	// file already declares.
+	newFormatter := func(idents ...string) *astgen.TypeFormatter {
+		tf := astgen.NewTypeFormatter(outputPath)
+		tf.Idents = idents
+		return tf
 	}
-	if got := tf.Qualifier(server); got != "" {
-		t.Errorf("Qualifier(output package) = %q, want empty", got)
-	}
-	if got := tf.Qualifier(other); got != "other1" {
-		t.Errorf("Qualifier(other) = %q, want other1 because the file declares other", got)
-	}
-	if got := tf.Qualifier(other); got != "other1" {
-		t.Errorf("Qualifier(other) again = %q, want the name it was given", got)
-	}
-	tf.Idents = []string{"third", "third1", "third2"}
-	if got := tf.Qualifier(types.NewPackage("example.com/third", "third")); got != "third3" {
-		t.Errorf("Qualifier(third) = %q, want third3, the first name the file does not declare", got)
-	}
-	tf.Idents = nil
-	if got := tf.Qualifier(colliding); got != "other" {
-		t.Errorf("Qualifier(colliding) = %q, want other", got)
+	// collectedFormatter has already been asked about three import paths,
+	// two of which share the name other.
+	collectedFormatter := func() *astgen.TypeFormatter {
+		tf := newFormatter()
+		tf.Imports = map[string]string{
+			"example.com/x/other": "other",
+			"example.com/third":   "third3",
+			"example.com/other":   "other1",
+		}
+		return tf
 	}
 
-	want := "import (\n\tother1 \"example.com/other\"\n\tthird3 \"example.com/third\"\n\t\"example.com/x/other\"\n)"
-	if got := astgen.Format(tf.GenDecl()); got != want {
-		t.Errorf("GenDecl = %q, want %q", got, want)
-	}
+	t.Run("a nil package is qualified by the empty string", func(t *testing.T) {
+		tf := newFormatter("server")
+		assert.Empty(t, tf.Qualifier(nil), "Qualifier(nil)")
+	})
 
-	encoded, err := json.Marshal(tf, json.Deterministic(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := `{"example.com/other":"other1","example.com/third":"third3","example.com/x/other":"other"}`; string(encoded) != want {
-		t.Errorf("json.Marshal(TypeFormatter) = %s, want %s", encoded, want)
-	}
+	t.Run("the output package is qualified by the empty string", func(t *testing.T) {
+		tf := newFormatter("server")
+		assert.Empty(t, tf.Qualifier(newPackage(outputPath, "server")), "Qualifier(output package)")
+	})
+
+	t.Run("a name the file declares gets the next free numeric suffix", func(t *testing.T) {
+		tf := newFormatter("other")
+		assert.Equal(t, "other1", tf.Qualifier(newPackage("example.com/other", "other")), "Qualifier(other) because the file declares other")
+	})
+
+	t.Run("a package keeps the name it was given", func(t *testing.T) {
+		other := newPackage("example.com/other", "other")
+		tf := newFormatter("other")
+		require.Equal(t, "other1", tf.Qualifier(other), "Qualifier(other)")
+		assert.Equal(t, "other1", tf.Qualifier(other), "Qualifier(other) again with the same declared names")
+
+		tf.Idents = nil
+		assert.Equal(t, "other1", tf.Qualifier(other), "Qualifier(other) after the file stops declaring other")
+	})
+
+	t.Run("the suffix skips every declared name", func(t *testing.T) {
+		tf := newFormatter("third", "third1", "third2")
+		assert.Equal(t, "third3", tf.Qualifier(newPackage("example.com/third", "third")), "Qualifier(third), the first name the file does not declare")
+	})
+
+	t.Run("two packages with one name are told apart by import path", func(t *testing.T) {
+		tf := newFormatter("other")
+		require.Equal(t, "other1", tf.Qualifier(newPackage("example.com/other", "other")), "Qualifier(example.com/other)")
+
+		tf.Idents = nil
+		assert.Equal(t, "other", tf.Qualifier(newPackage("example.com/x/other", "other")), "Qualifier(example.com/x/other)")
+		assert.Equal(t, map[string]string{
+			"example.com/other":   "other1",
+			"example.com/x/other": "other",
+		}, tf.Imports, "each import path keeps its own name")
+	})
+
+	t.Run("GenDecl lists imports sorted by path and omits an alias equal to the last path element", func(t *testing.T) {
+		want := "import (\n\tother1 \"example.com/other\"\n\tthird3 \"example.com/third\"\n\t\"example.com/x/other\"\n)"
+		assert.Equal(t, want, astgen.Format(collectedFormatter().GenDecl()), "GenDecl")
+	})
+
+	t.Run("JSON marshals the path to name map with deterministic key order", func(t *testing.T) {
+		encoded, err := json.Marshal(collectedFormatter(), json.Deterministic(true))
+		require.NoError(t, err)
+		want := `{"example.com/other":"other1","example.com/third":"third3","example.com/x/other":"other"}`
+		assert.Equal(t, want, string(encoded), "json.Marshal(TypeFormatter)")
+	})
 }
