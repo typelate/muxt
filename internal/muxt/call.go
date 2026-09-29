@@ -100,9 +100,9 @@ func (a Argument) ResultShape() ResultShape { return a.resultShape }
 // template for an sse-prefixed callback (nil if that template does not exist).
 func (a Argument) Template() *template.Template { return a.template }
 
-// CallbackSignature returns a render-callback argument's function signature
+// callbackSignature returns a render-callback argument's function signature
 // (from its parameter type), or nil if the parameter type is not a function.
-func (a Argument) CallbackSignature() *types.Signature {
+func (a Argument) callbackSignature() *types.Signature {
 	if a.paramType == nil {
 		return nil
 	}
@@ -293,7 +293,7 @@ func resolveCallbackShapes(def *Definition) error {
 			// The generated closure has type func(T) error, so the result must
 			// be exactly error — an error implementation would not compile at
 			// the receiver call.
-			callback := a.CallbackSignature()
+			callback := a.callbackSignature()
 			if callback == nil || callback.Params().Len() != 1 || callback.Results().Len() != 1 || !types.Identical(callback.Results().At(0).Type(), types.Universe.Lookup("error").Type()) {
 				return def.argErrorf(a.Identifier, "the %s signals callback must be a func(T) error; T is marshaled as the patch-signals payload", a.Identifier)
 			}
@@ -307,7 +307,7 @@ func resolveCallbackShapes(def *Definition) error {
 		if def.Representation != RepresentationSSE && a.Identifier != TemplateNameScopeIdentifierExecute {
 			continue
 		}
-		callback := a.CallbackSignature()
+		callback := a.callbackSignature()
 		if callback == nil || callback.Results().Len() != 1 || !types.Implements(callback.Results().At(0).Type(), errIface) {
 			if def.Representation == RepresentationSSE {
 				return def.argErrorf(a.Identifier, "execute parameter for %s must be a function", def.fun.Name)
@@ -490,7 +490,7 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 		}
 		switch argument := a.(type) {
 		case *ast.Ident:
-			if paramType == nil && !IsSSEArgument(argument.Name) {
+			if paramType == nil && !isSSEArgument(argument.Name) {
 				args = append(args, Argument{Identifier: argument.Name})
 				continue
 			}
@@ -565,7 +565,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 			if arg.Name == TemplateNameScopeIdentifierExecute {
 				return nil, errAt(arg, "method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
 			}
-			if IsSSEArgument(arg.Name) {
+			if isSSEArgument(arg.Name) {
 				hasSSE = true
 				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
 					return nil, err
@@ -730,7 +730,7 @@ func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident,
 			}
 			return a, nil
 		}
-		if IsSSEArgument(arg.Name) {
+		if isSSEArgument(arg.Name) {
 			// An sse-prefixed render callback (sseClock, sseMetrics, ...) renders
 			// the same-named template. Template existence is validated in
 			// resolveCallbackShapes once all arguments are hydrated.
@@ -789,26 +789,26 @@ func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
 func (def *Definition) IsSignalsCallback(name string) bool {
 	_, isPathParameter := pathParameter(def.Segments, name)
 	return def.Representation == RepresentationSSE &&
-		IsSignalsCallbackArgument(name) &&
+		isSignalsCallbackArgument(name) &&
 		!isPathParameter
 }
 
-// IsSignalsCallbackArgument reports whether name is a datastar patch-signals
+// isSignalsCallbackArgument reports whether name is a datastar patch-signals
 // callback argument: a Signals-suffixed identifier (countsSignals) whose
 // func(T) error argument is marshaled as the event payload. Only valid on sse
 // routes in --output-datastar packages.
-func IsSignalsCallbackArgument(name string) bool {
+func isSignalsCallbackArgument(name string) bool {
 	return strings.HasSuffix(name, "Signals") && token.IsIdentifier(name)
 }
 
 func isSendMessage(def *Definition, arg *ast.Ident) bool {
-	return def.Representation == RepresentationSSE && IsSSEMessageArgument(arg.Name)
+	return def.Representation == RepresentationSSE && isSSEMessageArgument(arg.Name)
 }
 
-// IsSSEMessageArgument reports whether name is an sse send-message template
+// isSSEMessageArgument reports whether name is an sse send-message template
 // argument: a Message-suffixed identifier (fooMessage) naming the template the
 // message renders with. Only valid on sse routes.
-func IsSSEMessageArgument(name string) bool {
+func isSSEMessageArgument(name string) bool {
 	return strings.HasSuffix(name, "Message") && token.IsIdentifier(name)
 }
 
