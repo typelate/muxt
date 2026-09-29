@@ -64,7 +64,7 @@ func (def *Definition) checkPathParameterName(segment Segment, before []Segment)
 	if !token.IsIdentifier(n) {
 		return def.pathParamErrorf(n, 0, "path parameter name not permitted: %q is not a Go identifier", n)
 	}
-	if _, dup := pathParameter(before, n); dup {
+	if hasPathParameter(before, n) {
 		return def.pathParamErrorf(n, 1, "path parameter name %q is used more than once; parameter names must be unique within a path", n)
 	}
 	if slices.Contains(patternScope(), n) {
@@ -88,13 +88,10 @@ func newSegment(in string) Segment {
 }
 
 // pathParameter returns the wildcard segment that names the path parameter.
-func pathParameter(segments []Segment, name string) (Segment, bool) {
-	for _, segment := range segments {
-		if segment.IsWildcard() && segment.value == name {
-			return segment, true
-		}
-	}
-	return Segment{}, false
+func hasPathParameter(segments []Segment, name string) bool {
+	return slices.ContainsFunc(segments, func(segment Segment) bool {
+		return segment.IsWildcard() && segment.value == name
+	})
 }
 
 // Value is the text of a literal segment or the parameter name of a

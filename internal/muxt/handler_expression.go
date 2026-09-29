@@ -57,7 +57,7 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 	def.usesSignals = rewriteSignalsArguments(call, segments)
 	if def.Representation == RepresentationSSE {
 		for _, a := range call.Args {
-			if ident, ok := a.(*ast.Ident); ok && def.IsSignalsCallback(ident.Name) {
+			if ident, ok := a.(*ast.Ident); ok && def.isSignalsCallback(ident.Name) {
 				def.signalsCallback = ident.Name
 				break
 			}

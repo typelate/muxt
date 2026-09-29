@@ -62,7 +62,7 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 // path wildcard named signals keeps its path-value meaning. It reports
 // whether anything was rewritten.
 func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
-	if _, ok := pathParameter(segments, TemplateNameScopeIdentifierSignals); ok {
+	if hasPathParameter(segments, TemplateNameScopeIdentifierSignals) {
 		return false
 	}
 	rewritten := false
