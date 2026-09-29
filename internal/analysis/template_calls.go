@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"go/types"
 	"io"
-	"maps"
 	"regexp"
-	"slices"
 	"text/template/parse"
 
 	"github.com/typelate/check"
@@ -40,17 +38,13 @@ func (result *TemplateCalls) WriteTo(w io.Writer) (int64, error) {
 func NewTemplateCalls(config TemplateCallsConfiguration, pkg source.Package) (*TemplateCalls, error) {
 	combined := &TemplateCalls{}
 	for _, lt := range pkg.Variables {
-		result, err := templateCalls(config, pkg, lt)
-		if err != nil {
-			return nil, err
-		}
-		combined.Templates = append(combined.Templates, result.Templates...)
+		combined.Templates = append(combined.Templates, templateCalls(config, pkg, lt)...)
 	}
 	return combined, nil
 }
 
-func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) (*TemplateCalls, error) {
-	global, ts := newGlobal(pkg, lt), lt.Set
+func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt source.Variable) []NamedReferences {
+	global := newGlobal(pkg, lt)
 	refs := make(map[string][]TemplateReference) // template -> set of templates it calls
 
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
@@ -63,20 +57,8 @@ func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt sou
 	}
 
 	for _, c := range lt.Calls {
-		t := ts.Lookup(c.Template)
-		if t != nil && t.Tree != nil {
-			_ = check.Execute(global, t.Tree, c.Data)
-		}
+		executeTemplateTree(global, lt.Set, c.Template, c.Data)
 	}
 
-	var result TemplateCalls
-	names := slices.Sorted(maps.Keys(refs))
-	for _, name := range names {
-		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
-			continue
-		}
-		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
-	}
-
-	return &result, nil
+	return newReferences(pkg.Types.Path(), refs, config.FilterTemplates)
 }
