@@ -45,9 +45,7 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 			failures = append(failures, nameFailure{def: mt, err: mt.finishNameError(err, mt.handlerSpan())})
 			continue
 		}
-		// Extract source file from ParseName if available
 		if t.Tree != nil && t.Tree.ParseName != "" {
-			// ParseName contains the filename used when parsing
 			mt.sourceFile = t.Tree.ParseName
 		}
 		// else sourceFile remains empty string for Parse() defined templates
@@ -77,7 +75,6 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 	slices.SortFunc(defs, Definition.byPathThenMethod)
 	calculateIdentifiers(defs)
 
-	// Analyze templates to determine which ones can call Redirect
 	analyzeRedirectCalls(ts, defs)
 
 	if err := checkResponseWriterConflicts(ts, defs); err != nil {
@@ -969,11 +966,9 @@ func containsRedirectCall(cmd *parse.CommandNode) bool {
 
 	for _, arg := range cmd.Args {
 		if field, ok := arg.(*parse.FieldNode); ok {
-			// Check if this is a redirect method call
 			if len(field.Ident) > 0 && isRedirectMethod(field.Ident[len(field.Ident)-1]) {
 				return true
 			}
-			// Also check if any part of the chain is a redirect method
 			for _, ident := range field.Ident {
 				if isRedirectMethod(ident) {
 					return true
@@ -982,13 +977,11 @@ func containsRedirectCall(cmd *parse.CommandNode) bool {
 		}
 		// Check for chain nodes like .field.Redirect or (.Redirect ...).Header
 		if chain, ok := arg.(*parse.ChainNode); ok {
-			// Check if any field in the chain is a redirect method
 			for _, field := range chain.Field {
 				if isRedirectMethod(field) {
 					return true
 				}
 			}
-			// Also recursively check the Node that the chain starts from
 			if chainNode, ok := chain.Node.(*parse.PipeNode); ok {
 				for _, chainCmd := range chainNode.Cmds {
 					if containsRedirectCall(chainCmd) {
@@ -1009,7 +1002,6 @@ func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
 	if _, ok := firstArg.(*parse.IdentifierNode); ok {
 		if len(cmd.Args) > 1 {
 			// This is a function call with arguments
-			// Check if any argument is bare TemplateData (.) or calls unsafe methods
 			for i := 1; i < len(cmd.Args); i++ {
 				switch arg := cmd.Args[i].(type) {
 				case *parse.DotNode:
@@ -1017,7 +1009,6 @@ func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
 					// Be conservative: function might call methods on it
 					return true
 				case *parse.FieldNode:
-					// Check if it's a safe method call
 					if !isAllSafeMethods(arg.Ident) {
 						return true
 					}
@@ -1029,10 +1020,8 @@ func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
 		}
 	}
 
-	// Check for direct method calls on TemplateData (not passed to a function)
 	for _, arg := range cmd.Args {
 		if field, ok := arg.(*parse.FieldNode); ok {
-			// Check if all methods in the chain are safe
 			if !isAllSafeMethods(field.Ident) {
 				return true
 			}

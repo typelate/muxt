@@ -89,13 +89,10 @@ func (a Argument) Signature() source.Type {
 // (as opposed to a package-scope function).
 func (a Argument) IsMethod() bool { return a.isMethod }
 
-// Arguments returns the hydrated arguments of a nested call argument.
 func (a Argument) Arguments() []Argument { return a.args }
 
-// ParamType is the type of the parameter the argument is passed to.
 func (a Argument) ParamType() source.Type { return source.NewType(a.paramType) }
 
-// ResultShape classifies a nested call argument's results.
 func (a Argument) ResultShape() ResultShape { return a.resultShape }
 
 // Template returns the template a render-callback argument (ArgumentTypeExecute)
