@@ -60,6 +60,8 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 			resultCount++
 		case *ast.Ident:
 			statements, err = p.appendIdentifier(statements, call, i, args[i], arg)
+		default:
+			err = fmt.Errorf("unsupported argument %s in call to %s", astgen.Format(a), fun.Name)
 		}
 		if err != nil {
 			return nil, err
