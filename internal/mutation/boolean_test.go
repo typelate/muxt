@@ -185,6 +185,17 @@ func TestDecisionRefusesWhatItCannotModel(t *testing.T) {
 	}
 }
 
+func TestDecisionCommandRefusesACommandWithoutArguments(t *testing.T) {
+	for name, command := range map[string]*parse.CommandNode{
+		"nil":   nil,
+		"empty": {},
+	} {
+		if node, ok := decisionCommand("", command); ok {
+			t.Errorf("decisionCommand(%s command) = %v, want it declined", name, node)
+		}
+	}
+}
+
 func TestLogicalKind(t *testing.T) {
 	for _, tt := range []struct {
 		function string
