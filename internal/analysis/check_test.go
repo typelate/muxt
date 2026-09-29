@@ -198,6 +198,20 @@ func TestReportUnusedTemplates(t *testing.T) {
 	}
 }
 
+func TestCollectTemplateReferencesFollowsEveryBranch(t *testing.T) {
+	ts := parseTemplates(t, `{{define "root"}}{{range .}}{{template "in-range" .}}{{else}}{{template "in-range-else" .}}{{end}}{{with .}}{{template "in-with" .}}{{else}}{{template "in-with-else" .}}{{end}}{{template "loop"}}{{end}}{{define "loop"}}{{template "loop"}}{{template "leaf"}}{{end}}{{define "leaf"}}x{{end}}{{define "in-range"}}x{{end}}{{define "in-range-else"}}x{{end}}{{define "in-with"}}x{{end}}{{define "in-with-else"}}x{{end}}`)
+	seen := make(map[string]bool)
+	collectTemplateReferences(ts, ts.Lookup("root").Tree.Root, seen)
+	for _, name := range []string{"in-range", "in-range-else", "in-with", "in-with-else", "loop", "leaf"} {
+		if !seen[name] {
+			t.Errorf("collectTemplateReferences did not reach %q; reached %v", name, seen)
+		}
+	}
+	if seen["root"] {
+		t.Errorf("collectTemplateReferences reached the root template itself")
+	}
+}
+
 func TestReportDefinitionErrorsIsSilentWithoutErrors(t *testing.T) {
 	var logs strings.Builder
 	if err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)}); err != nil || logs.Len() != 0 {
