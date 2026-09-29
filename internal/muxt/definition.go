@@ -294,92 +294,78 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 	}
 	httpStatusCode := matches[templateNameMux.SubexpIndex("HTTP_STATUS")]
 	if httpStatusCode != "" {
-		if strings.HasPrefix(httpStatusCode, "http.Status") {
-			code, err := astgen.HTTPStatusName(httpStatusCode)
-			if err != nil {
-				return def, def.spanErrorf(def.spans.status, "invalid status code %s: %v", httpStatusCode, err), true
-			}
-			def.defaultStatusCode = code
-		} else {
-			code, err := strconv.Atoi(strings.TrimSpace(httpStatusCode))
-			if err != nil {
-				return def, def.spanErrorf(def.spans.status, "invalid status code %q: expected an integer like 201 or a constant name like http.StatusCreated", strings.TrimSpace(httpStatusCode)), true
-			}
-			def.defaultStatusCode = code
+		if err := def.parseStatusCode(httpStatusCode); err != nil {
+			return def, err, true
 		}
 	}
-
-	if len(def.path) > 1 {
-		if idx := strings.Index(def.path, "//"); idx >= 0 {
-			return def, def.nameErrorf(def.spans.path[0]+idx+1, 1, "path has an empty segment"), true
-		}
-		if strings.HasSuffix(def.path, "/") {
-			return def, def.nameErrorf(def.spans.path[0]+len(def.path)-1, 1, "path has an empty segment"), true
-		}
+	if err := def.checkPathAndMethod(); err != nil {
+		return def, err, true
 	}
-
-	switch def.method {
-	default:
-		return def, def.spanErrorf(def.spans.method, "%s method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE", def.method), true
-	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-	}
-
 	if err := def.initializeSegments(); err != nil {
 		return def, err, true
 	}
-
-	err := parseHandler(def.fileSet, &def, def.Segments)
-	if err != nil {
+	if err := parseHandler(def.fileSet, &def, def.Segments); err != nil {
 		return def, err, true
 	}
-
-	if httpStatusCode != "" && !def.callWriteHeader(nil) {
-		if node := findIdent(def.call, TemplateNameScopeIdentifierHTTPResponse); node != nil {
-			return def, errAt(node, "cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s", TemplateNameScopeIdentifierHTTPResponse), true
-		}
-		return def, fmt.Errorf("cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s", TemplateNameScopeIdentifierHTTPResponse), true
+	if httpStatusCode != "" && !def.callWriteHeader() {
+		return def, def.statusCodeConflictError(), true
 	}
-
 	return def, nil, true
+}
+
+func (def *Definition) parseStatusCode(text string) error {
+	if strings.HasPrefix(text, "http.Status") {
+		code, err := astgen.HTTPStatusName(text)
+		if err != nil {
+			return def.spanErrorf(def.spans.status, "invalid status code %s: %v", text, err)
+		}
+		def.defaultStatusCode = code
+		return nil
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(text))
+	if err != nil {
+		return def.spanErrorf(def.spans.status, "invalid status code %q: expected an integer like 201 or a constant name like http.StatusCreated", strings.TrimSpace(text))
+	}
+	def.defaultStatusCode = code
+	return nil
+}
+
+func (def Definition) checkPathAndMethod() error {
+	if len(def.path) > 1 {
+		if idx := strings.Index(def.path, "//"); idx >= 0 {
+			return def.nameErrorf(def.spans.path[0]+idx+1, 1, "path has an empty segment")
+		}
+		if strings.HasSuffix(def.path, "/") {
+			return def.nameErrorf(def.spans.path[0]+len(def.path)-1, 1, "path has an empty segment")
+		}
+	}
+	switch def.method {
+	case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return nil
+	}
+	return def.spanErrorf(def.spans.method, "%s method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE", def.method)
+}
+
+func (def Definition) statusCodeConflictError() error {
+	const message = "cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s"
+	if node := findIdent(def.call, TemplateNameScopeIdentifierHTTPResponse); node != nil {
+		return errAt(node, message, TemplateNameScopeIdentifierHTTPResponse)
+	}
+	return fmt.Errorf(message, TemplateNameScopeIdentifierHTTPResponse)
 }
 
 var templateNameMux = regexp.MustCompile(`^(?P<pattern>((?P<METHOD>[A-Z]+)\s+)?(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)
 
-func (def Definition) callWriteHeader(receiverInterfaceType *ast.InterfaceType) bool {
+// callWriteHeader reports whether muxt writes the status code: it does not when
+// the handler takes the response as a direct argument.
+func (def Definition) callWriteHeader() bool {
 	if def.call == nil {
 		return true
 	}
-	return !hasIdentArgument(def.call.Args, TemplateNameScopeIdentifierHTTPResponse, receiverInterfaceType, 1, 1)
-}
-
-func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.InterfaceType, depth, maxDepth int) bool {
-	if depth > maxDepth {
-		return false
-	}
-	for _, arg := range args {
-		switch exp := arg.(type) {
-		case *ast.Ident:
-			if exp.Name == ident {
-				return true
-			}
-		case *ast.CallExpr:
-			methodIdent, ok := exp.Fun.(*ast.Ident)
-			if ok && receiverInterfaceType != nil {
-				field, ok := astgen.FindFieldWithName(receiverInterfaceType.Methods, methodIdent.Name)
-				if ok {
-					funcType, ok := field.Type.(*ast.FuncType)
-					if ok {
-						if funcType.Results.NumFields() == 1 {
-							if hasIdentArgument(exp.Args, ident, receiverInterfaceType, depth+1, maxDepth+1) {
-								return true
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
+	return !slices.ContainsFunc(def.call.Args, func(arg ast.Expr) bool {
+		ident, ok := arg.(*ast.Ident)
+		return ok && ident.Name == TemplateNameScopeIdentifierHTTPResponse
+	})
 }
 
 func (def Definition) ExecuteArgumentIndex() (int, bool) {
