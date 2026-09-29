@@ -22,12 +22,10 @@ import (
 // definition, errors about its name carry a file position.
 func Definitions(variable source.Variable) ([]Definition, error) {
 	ts, templatesVariable := variable.Set, variable.Name
-	var defs []Definition
-	type nameFailure struct {
-		def Definition
-		err error
-	}
-	var failures []nameFailure
+	var (
+		defs     []Definition
+		failures []nameFailure
+	)
 	for _, t := range ts.Templates() {
 		mt, err, ok := newDefinition(t)
 		if !ok {
@@ -50,22 +48,7 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 		defs = append(defs, mt)
 	}
 	if len(failures) > 0 {
-		// The template set iterates in map order; sort so the report is
-		// stable across runs.
-		slices.SortFunc(failures, func(a, b nameFailure) int {
-			if n := cmp.Compare(a.def.sourceFile, b.def.sourceFile); n != 0 {
-				return n
-			}
-			if n := cmp.Compare(a.def.namePosition.Offset, b.def.namePosition.Offset); n != 0 {
-				return n
-			}
-			return cmp.Compare(a.def.name, b.def.name)
-		})
-		errs := make([]error, 0, len(failures))
-		for _, failure := range failures {
-			errs = append(errs, failure.err)
-		}
-		return defs, CombineErrors(errs)
+		return defs, combineNameFailures(failures)
 	}
 	slices.SortFunc(defs, Definition.byPathThenMethod)
 	calculateIdentifiers(defs)
@@ -77,6 +60,30 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 	}
 
 	return defs, nil
+}
+
+type nameFailure struct {
+	def Definition
+	err error
+}
+
+// combineNameFailures joins the errors in one order. The template set
+// iterates in map order; sorting keeps the report stable across runs.
+func combineNameFailures(failures []nameFailure) error {
+	slices.SortFunc(failures, func(a, b nameFailure) int {
+		if n := cmp.Compare(a.def.sourceFile, b.def.sourceFile); n != 0 {
+			return n
+		}
+		if n := cmp.Compare(a.def.namePosition.Offset, b.def.namePosition.Offset); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.def.name, b.def.name)
+	})
+	errs := make([]error, 0, len(failures))
+	for _, failure := range failures {
+		errs = append(errs, failure.err)
+	}
+	return CombineErrors(errs)
 }
 
 // templateSourceFile returns the file t was parsed from, or "". ParseFS and
