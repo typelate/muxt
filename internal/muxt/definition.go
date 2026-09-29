@@ -45,8 +45,6 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 		if t.Tree != nil && t.Tree.ParseName != "" {
 			mt.sourceFile = t.Tree.ParseName
 		}
-		// else sourceFile remains empty string for Parse() defined templates
-
 		mt.templatesVariable = templatesVariable
 
 		defs = append(defs, mt)
@@ -136,8 +134,7 @@ type Definition struct {
 	// Empty string means the template was defined via Parse() calls rather than from a file.
 	sourceFile string
 
-	// canRedirect indicates whether this template (or any template it calls) can call the Redirect method.
-	// This is determined by static analysis of the template's action nodes.
+	// canRedirect is whether this template, or one it calls, may call a redirect method.
 	canRedirect bool
 
 	// templatesVariable is the name of the package-level *template.Template

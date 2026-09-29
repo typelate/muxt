@@ -6,9 +6,7 @@ import (
 	"text/template/parse"
 )
 
-// analyzeRedirectCalls performs static analysis on all templates to determine
-// which ones can call the Redirect method. It updates the canRedirect field
-// on each Definition in the templates slice.
+// analyzeRedirectCalls sets canRedirect on each definition.
 func analyzeRedirectCalls(ts *template.Template, defs []Definition) {
 	for i := range defs {
 		t := ts.Lookup(defs[i].name)
