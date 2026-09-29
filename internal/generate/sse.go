@@ -42,7 +42,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		Body: &ast.BlockStmt{},
 	}
 	body := []ast.Stmt{
-		// defer func() { _ = request.Body.Close() }()
 		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.FuncLit{
 			Type: &ast.FuncType{Params: &ast.FieldList{}},
 			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
@@ -54,13 +53,11 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 				}}},
 			}}},
 		}}},
-		// flusher, ok := response.(http.Flusher)
 		&ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(flusherIdent), ast.NewIdent(okIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(response), Type: astgen.ExportedIdentifier(file, "", "net/http", "Flusher")}},
 		},
-		// if !ok { http.Error(response, "streaming unsupported", 500); return }
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent(okIdent)},
 			Body: &ast.BlockStmt{List: []ast.Stmt{
@@ -87,7 +84,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		return nil, err
 	}
 
-	// h := response.Header(); set the SSE headers; WriteHeader(200); flush.
 	headerSet := func(key, value string) ast.Stmt {
 		return &ast.ExprStmt{X: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(headerIdent), Sel: ast.NewIdent("Set")},
@@ -108,7 +104,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			Args: []ast.Expr{astgen.HTTPStatusCode(file, http.StatusOK)},
 		}},
 		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
-		// var mut sync.Mutex
 		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 			Names: []*ast.Ident{ast.NewIdent(mutexIdent)},
 			Type:  astgen.ExportedIdentifier(file, "", "sync", "Mutex"),
@@ -283,9 +278,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 	body := []ast.Stmt{
 		requestContextCancelledCheck(request),
 	}
-	// buf := bytesBufferPool.Get().(*bytes.Buffer); buf.Reset(); defer bytesBufferPool.Put(buf)
 	body = append(body, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
-	// td := SSETemplateData[Recv, T]{...}
 	body = append(body, &ast.AssignStmt{
 		Lhs: []ast.Expr{ast.NewIdent(tdIdent)},
 		Tok: token.DEFINE,
@@ -294,7 +287,6 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 			Elts: tdElts,
 		}},
 	})
-	// if err := templates.ExecuteTemplate(buf, name, &td); err != nil { slog...; return err }
 	body = append(body, &ast.IfStmt{
 		Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(def.TemplatesVariable()), Sel: ast.NewIdent("ExecuteTemplate")},
@@ -307,13 +299,9 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		}},
 	})
 	body = append(body,
-		// td.data = buf
 		&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent(sseTemplateDataFieldData)}}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(bufIdent)}},
-		// mut.Lock()
 		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Lock")}}},
-		// defer mut.Unlock()
 		&ast.DeferStmt{Call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(mutexIdent), Sel: ast.NewIdent("Unlock")}}},
-		// if _, err := td.WriteTo(response); err != nil { return err }
 		&ast.IfStmt{
 			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_"), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.CallExpr{
 				Fun:  &ast.SelectorExpr{X: ast.NewIdent(tdIdent), Sel: ast.NewIdent("WriteTo")},
@@ -322,9 +310,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}}}},
 		},
-		// flusher.Flush()
 		&ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(flusherIdent), Sel: ast.NewIdent("Flush")}}},
-		// return nil
 		&ast.ReturnStmt{Results: []ast.Expr{astgen.Nil()}},
 	)
 

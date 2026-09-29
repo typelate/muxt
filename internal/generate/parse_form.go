@@ -92,11 +92,6 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 	return statements, nil
 }
 
-// appendParseMultipartFormToStructStatements is a thin wrapper over
-// appendStructFieldParseStatements that emits a ParseMultipartForm call.
-// FileHeader field bindings (from request.MultipartForm.File) are resolved by
-// muxt.ResolveCall; all other field-binding behavior is shared with the form
-// codepath.
 func appendParseMultipartFormToStructStatements(statements []ast.Stmt, file *File, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt, config RoutesFileConfiguration) ([]ast.Stmt, error) {
 	return appendStructFieldParseStatements(statements, file, arg, argument, validationBlock, parseErrBlock, callParseMultipartForm(file, config, parseErrBlock()))
 }

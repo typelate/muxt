@@ -198,7 +198,6 @@ func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 		returnExprs(templatePathsLiteral(sseTemplateDataReceiverName, config.TemplateRoutePathsTypeName)))
 }
 
-// Idents used inside the generated WriteTo method bodies.
 const (
 	sseWriterIdent   = "w"
 	sseCountIdent    = "bytesWritten"
