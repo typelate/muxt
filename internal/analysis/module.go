@@ -140,8 +140,7 @@ func scanGeneratedHeaders(moduleDir string) (map[string]headerEntry, error) {
 			return err
 		}
 		if d.IsDir() {
-			base := d.Name()
-			if base == ".git" || base == "vendor" || base == "node_modules" || base == "testdata" {
+			if isSkippedDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -150,40 +149,47 @@ func scanGeneratedHeaders(moduleDir string) (map[string]headerEntry, error) {
 			return nil
 		}
 
-		f, err := os.Open(path)
-		if err != nil {
+		parsed, ok, err := readGeneratedHeader(path)
+		if err != nil || !ok {
 			return err
 		}
-		defer func() { _ = f.Close() }()
-		scanner := bufio.NewScanner(f)
-		var (
-			lines     [2]string
-			lineCount int
-		)
-		for lineCount < len(lines) && scanner.Scan() {
-			lines[lineCount] = scanner.Text()
-			lineCount++
-		}
-		if lineCount == 0 {
-			return nil
-		}
-
-		parsed, ok := header.Parse(lines[0], lines[1])
-		if !ok {
-			return nil
-		}
-
 		dir := filepath.Dir(path)
-		if _, ok := entries[dir]; !ok {
+		if _, seen := entries[dir]; !seen {
 			entries[dir] = headerEntry{dir: dir, args: parsed.Args(), command: parsed.Command, muxtVersion: parsed.Version}
 		}
-
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return entries, nil
+}
+
+func isSkippedDir(name string) bool {
+	return name == ".git" || name == "vendor" || name == "node_modules" || name == "testdata"
+}
+
+// readGeneratedHeader parses the first two lines of the Go file at path.
+func readGeneratedHeader(path string) (header.Header, bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return header.Header{}, false, err
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	var (
+		lines     [2]string
+		lineCount int
+	)
+	for lineCount < len(lines) && scanner.Scan() {
+		lines[lineCount] = scanner.Text()
+		lineCount++
+	}
+	if lineCount == 0 {
+		return header.Header{}, false, nil
+	}
+	parsed, ok := header.Parse(lines[0], lines[1])
+	return parsed, ok, nil
 }
 
 // newPackageInfo describes the package in entry's directory.

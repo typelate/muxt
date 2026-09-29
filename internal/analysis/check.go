@@ -166,13 +166,7 @@ func collectTemplateReferences(ts *template.Template, node parse.Node, seen map[
 			collectTemplateReferences(ts, child, seen)
 		}
 	case *parse.TemplateNode:
-		if seen[n.Name] {
-			return
-		}
-		seen[n.Name] = true
-		if t := ts.Lookup(n.Name); t != nil && t.Tree != nil {
-			collectTemplateReferences(ts, t.Tree.Root, seen)
-		}
+		followTemplate(ts, n.Name, seen)
 	case *parse.IfNode:
 		collectTemplateReferences(ts, n.List, seen)
 		collectTemplateReferences(ts, n.ElseList, seen)
@@ -182,6 +176,16 @@ func collectTemplateReferences(ts *template.Template, node parse.Node, seen map[
 	case *parse.WithNode:
 		collectTemplateReferences(ts, n.List, seen)
 		collectTemplateReferences(ts, n.ElseList, seen)
+	}
+}
+
+func followTemplate(ts *template.Template, name string, seen map[string]bool) {
+	if seen[name] {
+		return
+	}
+	seen[name] = true
+	if t := ts.Lookup(name); t != nil && t.Tree != nil {
+		collectTemplateReferences(ts, t.Tree.Root, seen)
 	}
 }
 
