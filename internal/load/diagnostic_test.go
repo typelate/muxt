@@ -47,6 +47,45 @@ func TestNoPackageError(t *testing.T) {
 		assert.Equal(t, 3, strings.Count(multiLine(t, err), "boom"))
 		assert.Contains(t, multiLine(t, err), "more load errors omitted")
 	})
+	t.Run("exactly three load errors across packages are all shown", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		pl := []*packages.Package{
+			{PkgPath: "example.com/a", Errors: []packages.Error{{Msg: "first"}, {Msg: "second"}}},
+			{PkgPath: "example.com/b", Errors: []packages.Error{{Msg: "third"}}},
+		}
+		msg := multiLine(t, load.NoPackageError(t.TempDir(), pl))
+		for _, want := range []string{"first", "second", "third"} {
+			assert.Contains(t, msg, want)
+		}
+		assert.NotContains(t, msg, "more load errors omitted")
+	})
+	t.Run("a fourth load error in a later package is omitted", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		pl := []*packages.Package{
+			{PkgPath: "example.com/a", Errors: []packages.Error{{Msg: "first"}, {Msg: "second"}}},
+			{PkgPath: "example.com/b", Errors: []packages.Error{{Msg: "third"}, {Msg: "fourth-error"}}},
+		}
+		msg := multiLine(t, load.NoPackageError(t.TempDir(), pl))
+		assert.NotContains(t, msg, "fourth-error")
+		assert.Equal(t, 1, strings.Count(msg, "more load errors omitted"))
+	})
+	t.Run("packages without a path are counted but not listed", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		pl := []*packages.Package{{PkgPath: "example.com/a"}, {}}
+		assert.Contains(t, multiLine(t, load.NoPackageError(t.TempDir(), pl)), "loaded 2 packages: example.com/a\n")
+	})
+	t.Run("a package elsewhere with errors does not mean the directory loaded", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		dir := t.TempDir()
+		pl := []*packages.Package{{PkgPath: "example.com/a", Errors: []packages.Error{{Msg: "boom"}}}}
+		assert.Equal(t, "no Go package found at "+dir, load.NoPackageError(dir, pl).Error())
+	})
+	t.Run("the directory package without errors is not called broken", func(t *testing.T) {
+		t.Setenv("GOWORK", "off")
+		dir := t.TempDir()
+		pl := []*packages.Package{{PkgPath: dir}}
+		assert.Equal(t, "no Go package found at "+dir, load.NoPackageError(dir, pl).Error())
+	})
 	t.Run("a discovered parent go.work is named", func(t *testing.T) {
 		t.Setenv("GOWORK", "")
 		parent := t.TempDir()
