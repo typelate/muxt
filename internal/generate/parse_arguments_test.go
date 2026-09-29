@@ -1,11 +1,47 @@
 package generate
 
 import (
+	"go/ast"
 	"testing"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
 )
+
+func TestAppendParseArgumentStatementsRejectsUnresolvedCalls(t *testing.T) {
+	file := scalarTestFile(t)
+	for _, tt := range []struct {
+		name string
+		call *ast.CallExpr
+		args []muxt.Argument
+		want string
+	}{
+		{
+			name: "function is not an identifier",
+			call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("a"), Sel: ast.NewIdent("B")}},
+			want: "expected function to be identifier",
+		},
+		{
+			name: "arguments were not resolved",
+			call: &ast.CallExpr{Fun: ast.NewIdent("F"), Args: []ast.Expr{ast.NewIdent("x")}},
+			want: "call F was not resolved",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := appendParseArgumentStatements(nil, file, tt.args, "", testConfig(), tt.call, nil, nil)
+			if err == nil || err.Error() != tt.want {
+				t.Errorf("appendParseArgumentStatements error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMismatchedArgumentError(t *testing.T) {
+	err := mismatchedArgumentError(scalarTestFile(t), muxt.Argument{Identifier: "fooMessage"})
+	if err == nil || err.Error() != "failed to determine type for fooMessage" {
+		t.Errorf("mismatchedArgumentError = %v, want failed to determine type for fooMessage", err)
+	}
+}
 
 func TestRequestArgumentSource(t *testing.T) {
 	for _, tt := range []struct {
