@@ -4,6 +4,9 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/asteval"
 )
 
@@ -24,13 +27,11 @@ func TestComplexity(t *testing.T) {
 		{text: `{{if .A}}{{else if .B}}{{end}}`, want: 3},
 		{text: `{{if .A}}{{else}}{{with .B}}{{end}}{{end}}`, want: 3},
 	} {
-		trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := complexity(trees["t"].Root); got != tt.want {
-			t.Errorf("complexity(%s) = %d, want %d", tt.text, got, tt.want)
-		}
+		t.Run(tt.text, func(t *testing.T) {
+			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, complexity(trees["t"].Root), "complexity(%s)", tt.text)
+		})
 	}
 }
 
@@ -48,11 +49,9 @@ func TestTypeNames(t *testing.T) {
 		{typ: page, key: "example.com/data.Page", display: "data.Page"},
 		{typ: types.NewPointer(page), key: "*example.com/data.Page", display: "*data.Page"},
 	} {
-		if got := typeKey(tt.typ); got != tt.key {
-			t.Errorf("typeKey(%v) = %q, want %q", tt.typ, got, tt.key)
-		}
-		if got := typeDisplay(tt.typ); got != tt.display {
-			t.Errorf("typeDisplay(%v) = %q, want %q", tt.typ, got, tt.display)
-		}
+		t.Run(tt.key, func(t *testing.T) {
+			assert.Equal(t, tt.key, typeKey(tt.typ), "typeKey(%v)", tt.typ)
+			assert.Equal(t, tt.display, typeDisplay(tt.typ), "typeDisplay(%v)", tt.typ)
+		})
 	}
 }

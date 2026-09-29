@@ -2,9 +2,11 @@ package mutation
 
 import (
 	"go/types"
-	"strings"
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestWalkActionsOrder states the order actions are reported in, which is
@@ -20,9 +22,7 @@ func TestWalkActionsOrder(t *testing.T) {
 		`{{end}}`
 
 	trees, err := parse.Parse("t", text+`{{define "p"}}x{{end}}`, "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var got []string
 	walkActions(text, regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
@@ -35,9 +35,7 @@ func TestWalkActionsOrder(t *testing.T) {
 		"{{with .G}}", "{{.H}}", "{{.I}}",
 		`{{template "p" .J}}`,
 	}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("walk order:\n got %v\nwant %v", got, want)
-	}
+	assert.Equal(t, want, got, "walk order")
 }
 
 // TestWalkActionsNarrowsDot states that a body is walked with the dot its
@@ -54,9 +52,7 @@ func TestWalkActionsNarrowsDot(t *testing.T) {
 		`{{with .Owner}}{{.}}{{else}}{{.}}{{end}}` +
 		`{{end}}`
 	trees, err := parse.Parse("t", text, "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var got []string
 	walkActions(text, regions(text, "", ""), dataType(t, pageSource, "Page"), nil, trees["t"].Root, func(a action) {
@@ -71,7 +67,5 @@ func TestWalkActionsNarrowsDot(t *testing.T) {
 		"*example.com/data.User",
 		"example.com/data.Page",
 	}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("body dots:\n got %v\nwant %v", got, want)
-	}
+	assert.Equal(t, want, got, "body dots")
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"text/template/parse"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/typelate/check"
 
 	"github.com/typelate/muxt/internal/asteval"
@@ -16,9 +18,7 @@ import (
 func TestRangeDot(t *testing.T) {
 	item := dataType(t, pageSource, "Item")
 	trees, err := asteval.ParseTrees("t", `{{range .}}{{end}}`, "", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	pipe := trees["t"].Root.Nodes[0].(*parse.RangeNode).Pipe
 	for _, tt := range []struct {
 		name       string
@@ -34,10 +34,10 @@ func TestRangeDot(t *testing.T) {
 		{name: "a struct", over: item},
 		{name: "nothing known", over: nil},
 	} {
-		got := rangeDot(tt.over, pipe, nil)
-		if types.TypeString(got, nil) != types.TypeString(tt.want, nil) {
-			t.Errorf("%s: rangeDot = %v, want %v", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := rangeDot(tt.over, pipe, nil)
+			assert.Equal(t, types.TypeString(tt.want, nil), types.TypeString(got, nil), "rangeDot over %s", tt.name)
+		})
 	}
 }
 
@@ -84,13 +84,11 @@ func TestZeroLiteral(t *testing.T) {
 				dot = page
 			}
 			trees, err := asteval.ParseTrees("t", tt.action, "", "", functions)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			pipe := trees["t"].Root.Nodes[0].(*parse.ActionNode).Pipe
-			if got, typed := zeroLiteral(dot, pipe, functions); got != tt.want || typed != tt.typed {
-				t.Errorf("zeroLiteral(%s) = %q, %t, want %q, %t", tt.action, got, typed, tt.want, tt.typed)
-			}
+			got, typed := zeroLiteral(dot, pipe, functions)
+			assert.Equal(t, tt.want, got, "zeroLiteral(%s) literal", tt.action)
+			assert.Equal(t, tt.typed, typed, "zeroLiteral(%s) typed", tt.action)
 		})
 	}
 }

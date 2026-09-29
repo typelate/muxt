@@ -1,6 +1,12 @@
 package mutation
 
-import "testing"
+import (
+	"strconv"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 // TestRegionsBoundTheActionsContent states where an action's content
 // begins and ends, which is what a pipeline substitution is spliced over.
@@ -62,23 +68,16 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			found := regions(tt.text, "", "")
-			if len(found) != 1 {
-				t.Fatalf("regions = %d, want 1", len(found))
-			}
+			require.Len(t, found, 1, "regions")
 			r := found[0]
-			if r.start != 0 || r.end != len(tt.text) {
-				t.Errorf("region spans [%d,%d), want [0,%d)", r.start, r.end, len(tt.text))
-			}
+			assert.Equal(t, 0, r.start, "region start")
+			assert.Equal(t, len(tt.text), r.end, "region end")
 
 			// The content runs from after the delimiter and any leading
 			// marker, which trimLeft finds, to innerEnd.
 			from := trimLeft(tt.text, r.start+2, r.innerEnd)
-			if got := tt.text[from:r.innerEnd]; got != tt.content {
-				t.Errorf("content = %q, want %q", got, tt.content)
-			}
-			if r.keyword != tt.keyword {
-				t.Errorf("keyword = %q, want %q", r.keyword, tt.keyword)
-			}
+			assert.Equal(t, tt.content, tt.text[from:r.innerEnd], "content")
+			assert.Equal(t, tt.keyword, r.keyword, "keyword")
 		})
 	}
 }
@@ -88,9 +87,9 @@ func TestRegionsBoundTheActionsContent(t *testing.T) {
 // withDefault, and text/template lexes those as one identifier.
 func TestLeadingWordReadsTheWholeIdentifier(t *testing.T) {
 	for _, text := range []string{`{{endX}}`, `{{end2}}`, `{{end_x}}`, `{{withDefault .A "x"}}`, `{{ifEmpty .A}}`, `{{rangeOf .A}}`} {
-		if got := regions(text, "", "")[0].keyword; got != "" {
-			t.Errorf("regions(%q) keyword = %q, want none", text, got)
-		}
+		t.Run(text, func(t *testing.T) {
+			assert.Empty(t, regions(text, "", "")[0].keyword, "regions(%q) keyword", text)
+		})
 	}
 }
 
@@ -98,18 +97,20 @@ func TestLeadingWordReadsTheWholeIdentifier(t *testing.T) {
 // does not open a block, so the end is matched at the right depth.
 func TestMatchEndSkipsAFunctionNamedLikeAKeyword(t *testing.T) {
 	const text = `{{range .Items}}{{withDefault . "x"}}{{end}}`
-	if end, _, ok := matchEnd(regions(text, "", ""), 0); !ok || end != 2 {
-		t.Errorf("matchEnd = %d, %t, want 2, true", end, ok)
-	}
+	end, _, ok := matchEnd(regions(text, "", ""), 0)
+	assert.True(t, ok, "matchEnd ok")
+	assert.Equal(t, 2, end, "matchEnd end")
 }
 
 // TestRegionsIgnoresAnUnfinishedTail states that an action cut off by the
 // end of the text is not reported, and costs the actions before it nothing.
 func TestRegionsIgnoresAnUnfinishedTail(t *testing.T) {
 	for _, text := range []string{`{{.A}}{{`, `{{.A}}{{-`, `{{.A}}{{.B`, `{{.A}}{{/* x`, `{{.A}}{{/* x */`} {
-		if found := regions(text, "", ""); len(found) != 1 || text[found[0].start:found[0].end] != "{{.A}}" {
-			t.Errorf("regions(%q) = %v, want only {{.A}}", text, found)
-		}
+		t.Run(text, func(t *testing.T) {
+			found := regions(text, "", "")
+			require.Len(t, found, 1, "regions(%q)", text)
+			assert.Equal(t, "{{.A}}", text[found[0].start:found[0].end], "regions(%q) only", text)
+		})
 	}
 }
 
@@ -119,9 +120,8 @@ func TestRegionsIgnoresAnUnfinishedTail(t *testing.T) {
 func TestRegionsEndAStringAtALineEnd(t *testing.T) {
 	const text = "{{printf \"a\nb\"}}{{.B}}"
 	found := regions(text, "", "")
-	if len(found) != 1 || text[found[0].start:found[0].end] != "{{.B}}" {
-		t.Errorf("regions(%q) = %v, want only {{.B}}", text, found)
-	}
+	require.Len(t, found, 1, "regions(%q)", text)
+	assert.Equal(t, "{{.B}}", text[found[0].start:found[0].end], "regions(%q) only", text)
 }
 
 // TestRegionAt states that a position belongs to the action whose
@@ -141,9 +141,11 @@ func TestRegionAt(t *testing.T) {
 		{pos: 12, index: 1, ok: true},
 		{pos: 13},
 	} {
-		if index, _, ok := regionAt(found, tt.pos); index != tt.index || ok != tt.ok {
-			t.Errorf("regionAt(%d) = %d, %t, want %d, %t", tt.pos, index, ok, tt.index, tt.ok)
-		}
+		t.Run(strconv.Itoa(tt.pos), func(t *testing.T) {
+			index, _, ok := regionAt(found, tt.pos)
+			assert.Equal(t, tt.index, index, "regionAt(%d) index", tt.pos)
+			assert.Equal(t, tt.ok, ok, "regionAt(%d) ok", tt.pos)
+		})
 	}
 }
 
@@ -165,9 +167,9 @@ func TestMatchEnd(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			end, elseIndex, ok := matchEnd(regions(tt.text, "", ""), 0)
-			if end != tt.wantEnd || elseIndex != tt.wantElse || ok != tt.ok {
-				t.Errorf("matchEnd = %d, %d, %t, want %d, %d, %t", end, elseIndex, ok, tt.wantEnd, tt.wantElse, tt.ok)
-			}
+			assert.Equal(t, tt.wantEnd, end, "matchEnd end")
+			assert.Equal(t, tt.wantElse, elseIndex, "matchEnd else")
+			assert.Equal(t, tt.ok, ok, "matchEnd ok")
 		})
 	}
 }
@@ -185,11 +187,7 @@ func TestRegionsKeepsScanningPastSomethingItCannotRead(t *testing.T) {
 	for _, r := range found {
 		starts = append(starts, r.start)
 	}
-	if len(found) < 2 {
-		t.Fatalf("regions = %v, want the actions on both sides of the unreadable one", starts)
-	}
+	require.GreaterOrEqual(t, len(found), 2, "regions starting at %v: want the actions on both sides of the unreadable one", starts)
 	last := found[len(found)-1]
-	if got := text[last.start:last.end]; got != `{{.B}}` {
-		t.Errorf("last region = %q, want %q", got, `{{.B}}`)
-	}
+	assert.Equal(t, `{{.B}}`, text[last.start:last.end], "last region")
 }

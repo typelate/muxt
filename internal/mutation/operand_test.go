@@ -1,9 +1,11 @@
 package mutation
 
 import (
-	"slices"
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
 )
@@ -29,9 +31,7 @@ func TestOperandsAreFoundWhereTheyAreWritten(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			var got []string
 			for _, node := range trees["t"].Root.Nodes {
 				a, ok := node.(*parse.ActionNode)
@@ -39,15 +39,11 @@ func TestOperandsAreFoundWhereTheyAreWritten(t *testing.T) {
 					continue
 				}
 				for _, op := range operands(tt.text, nil, a.Pipe) {
-					if written := tt.text[op.start:op.end]; written != op.text {
-						t.Errorf("operand %q spans %q", op.text, written)
-					}
+					assert.Equal(t, op.text, tt.text[op.start:op.end], "operand %q span", op.text)
 					got = append(got, op.text)
 				}
 			}
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("operands = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "operands")
 		})
 	}
 }
@@ -61,16 +57,11 @@ func TestCombinations(t *testing.T) {
 	}
 	editSets, details := combinations(ops, []string{`"x"`, `1`})
 
-	wantDetails := []string{`.A="x"`, `.B=1`, `.A="x" .B=1`}
-	if !slices.Equal(details, wantDetails) {
-		t.Errorf("details = %q, want %q", details, wantDetails)
-	}
+	assert.Equal(t, []string{`.A="x"`, `.B=1`, `.A="x" .B=1`}, details, "details")
 	wantEdits := [][]edit{
 		{{start: 2, end: 4, text: `"x"`}},
 		{{start: 5, end: 7, text: `1`}},
 		{{start: 2, end: 4, text: `"x"`}, {start: 5, end: 7, text: `1`}},
 	}
-	if !slices.EqualFunc(editSets, wantEdits, slices.Equal) {
-		t.Errorf("edits = %v, want %v", editSets, wantEdits)
-	}
+	assert.Equal(t, wantEdits, editSets, "edits")
 }
