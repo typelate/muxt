@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"go/token"
 	"path/filepath"
@@ -33,34 +34,8 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 				return err
 			}
 			config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
-			for _, tv := range config.TemplatesVariables {
-				if tv != "" && !token.IsIdentifier(tv) {
-					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
-				}
-			}
-			if config.RoutesFunction != "" && !token.IsIdentifier(config.RoutesFunction) {
-				return fmt.Errorf(outputRoutesFunc + errIdentSuffix)
-			}
-			if config.ReceiverType != "" && !token.IsIdentifier(config.ReceiverType) {
-				return fmt.Errorf(useReceiverType + errIdentSuffix)
-			}
-			if config.ReceiverInterface != "" && !token.IsIdentifier(config.ReceiverInterface) {
-				return fmt.Errorf(outputReceiverInterface + errIdentSuffix)
-			}
-			if config.TemplateDataType != "" && !token.IsIdentifier(config.TemplateDataType) {
-				return fmt.Errorf(outputTemplateDataType + errIdentSuffix)
-			}
-			if config.SSETemplateDataType != "" && !token.IsIdentifier(config.SSETemplateDataType) {
-				return fmt.Errorf(outputSSETemplateDataType + errIdentSuffix)
-			}
-			if config.TemplateRoutePathsTypeName != "" && !token.IsIdentifier(config.TemplateRoutePathsTypeName) {
-				return fmt.Errorf(outputTemplateRoutePathsType + errIdentSuffix)
-			}
-			if config.OutputHTMX && config.OutputDatastar {
-				return fmt.Errorf("--%s and --%s are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)", outputHTMX, outputDatastar)
-			}
-			if config.OutputFileName != "" && filepath.Ext(config.OutputFileName) != ".go" {
-				return fmt.Errorf("output filename must use .go extension")
+			if err := validateGenerateConfiguration(config); err != nil {
+				return err
 			}
 
 			if v, ok := version(); ok && config.OutputMuxtVersion {
@@ -75,6 +50,33 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 	addGenerateFlags(cmd.Flags(), &config, &deprecatedTemplatesVar)
 
 	return cmd
+}
+
+func validateGenerateConfiguration(config generate.RoutesFileConfiguration) error {
+	for _, tv := range config.TemplatesVariables {
+		if tv != "" && !token.IsIdentifier(tv) {
+			return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
+		}
+	}
+	for _, id := range []struct{ flag, value string }{
+		{outputRoutesFunc, config.RoutesFunction},
+		{useReceiverType, config.ReceiverType},
+		{outputReceiverInterface, config.ReceiverInterface},
+		{outputTemplateDataType, config.TemplateDataType},
+		{outputSSETemplateDataType, config.SSETemplateDataType},
+		{outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName},
+	} {
+		if id.value != "" && !token.IsIdentifier(id.value) {
+			return errors.New(id.flag + errIdentSuffix)
+		}
+	}
+	if config.OutputHTMX && config.OutputDatastar {
+		return fmt.Errorf("--%s and --%s are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)", outputHTMX, outputDatastar)
+	}
+	if config.OutputFileName != "" && filepath.Ext(config.OutputFileName) != ".go" {
+		return errors.New("output filename must use .go extension")
+	}
+	return nil
 }
 
 func configToArgs(config generate.RoutesFileConfiguration) []string {
