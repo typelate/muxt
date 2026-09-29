@@ -179,13 +179,11 @@ func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]T
 		return nil
 	}
 
-	// Collect all template names
 	allNames := make(map[string]bool)
 	for _, t := range allTemplates {
 		allNames[t.Name()] = true
 	}
 
-	// Build a set of used templates starting from executed templates
 	usedTemplates := make(map[string]bool)
 	for name := range executedTemplates {
 		usedTemplates[name] = true
