@@ -268,12 +268,32 @@ func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfigu
 	addDeprecatedOutputFlagsToFlagSet(flagSet, config)
 }
 
-// addGenerateFlagsForModule adapts addGenerateFlags to the
-// analysis.NewModule signature, which only needs the structured config and
-// discards the deprecated --templates-variable flag.
-func addGenerateFlagsForModule(flagSet *pflag.FlagSet, config *generate.RoutesFileConfiguration) {
-	var deprecatedTemplatesVar string
-	addGenerateFlags(flagSet, config, &deprecatedTemplatesVar)
+// parseModuleHeader reads the arguments recorded in a generated file's
+// header into what analysis.NewModule reports about the package. It reports
+// false when they do not parse.
+func parseModuleHeader(args []string) (analysis.PackageConfig, bool) {
+	var (
+		config                 generate.RoutesFileConfiguration
+		deprecatedTemplatesVar string
+	)
+	set := pflag.NewFlagSet("parse-header", pflag.ContinueOnError)
+	set.SetOutput(io.Discard)
+	addGenerateFlags(set, &config, &deprecatedTemplatesVar)
+	if err := set.Parse(args); err != nil {
+		return analysis.PackageConfig{}, false
+	}
+	return analysis.PackageConfig{
+		RoutesFunction:         cmp.Or(config.RoutesFunction, generate.DefaultRoutesFunctionName),
+		ReceiverInterface:      cmp.Or(config.ReceiverInterface, generate.DefaultReceiverInterfaceName),
+		ReceiverType:           config.ReceiverType,
+		ReceiverPackage:        config.ReceiverPackage,
+		TemplateRoutePathsType: cmp.Or(config.TemplateRoutePathsTypeName, generate.DefaultTemplateRoutePathsTypeName),
+		OutputHTMX:             config.OutputHTMX,
+		OutputDatastar:         config.OutputDatastar,
+		Logger:                 config.Logger,
+		PathPrefix:             config.PathPrefix,
+		Middleware:             config.Middleware,
+	}, true
 }
 
 // envSilenceHTTPResponseWarning silences the per-route warning about
@@ -785,7 +805,7 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 		Short:   "Explore all muxt packages in the module",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			result, err := analysis.NewModule(*workingDirectory, addGenerateFlagsForModule)
+			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
 			if err != nil {
 				return err
 			}
@@ -813,7 +833,7 @@ This command is intended for exploratory use only.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			mod, err := analysis.NewModule(*workingDirectory, addGenerateFlagsForModule)
+			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
 			if err != nil {
 				return err
 			}
