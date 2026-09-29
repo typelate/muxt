@@ -11,122 +11,111 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
-// generateParseValueFromStringStatements emits the statements that parse str
-// into valueType and pass the result to assignment. On a parse failure it runs
-// errBlock, which callers supply so the failure can be handled differently per
-// context (normal handlers accumulate into the template data; SSE handlers
+// scalarParse describes parsing str into a value of typ. On a parse failure it
+// runs errBlock, which callers supply so the failure can be handled differently
+// per context (normal handlers accumulate into the template data; SSE handlers
 // respond 400 before establishing the stream).
-func generateParseValueFromStringStatements(file *File, tmp string, str ast.Expr, valueType source.Type, method muxt.UnmarshalMethod, validations []ast.Stmt, assignment func(ast.Expr) ast.Stmt, errBlock *ast.BlockStmt) ([]ast.Stmt, error) {
-	typeExpr, err := file.TypeExpr(valueType)
+type scalarParse struct {
+	tmp         string
+	str         ast.Expr
+	typ         source.Type
+	method      muxt.UnmarshalMethod
+	validations []ast.Stmt
+	assign      func(ast.Expr) ast.Stmt
+	errBlock    *ast.BlockStmt
+}
+
+// strconvParser calls the strconv function for a method. convert is set when
+// that function returns a wider type than the target.
+type strconvParser struct {
+	call    func(astgen.ImportManager, ast.Expr) *ast.CallExpr
+	convert bool
+}
+
+func parseFloat(size int) func(astgen.ImportManager, ast.Expr) *ast.CallExpr {
+	return func(im astgen.ImportManager, str ast.Expr) *ast.CallExpr {
+		return astgen.StrconvParseFloatCall(im, str, size)
+	}
+}
+
+var strconvParsers = map[muxt.UnmarshalMethod]strconvParser{
+	muxt.UnmarshalBool:    {call: astgen.StrconvParseBoolCall},
+	muxt.UnmarshalInt:     {call: astgen.StrconvAtoiCall},
+	muxt.UnmarshalInt8:    {call: astgen.StrconvParseInt8Call, convert: true},
+	muxt.UnmarshalInt16:   {call: astgen.StrconvParseInt16Call, convert: true},
+	muxt.UnmarshalInt32:   {call: astgen.StrconvParseInt32Call, convert: true},
+	muxt.UnmarshalInt64:   {call: astgen.StrconvParseInt64Call},
+	muxt.UnmarshalUint:    {call: astgen.StrconvParseUint0Call, convert: true},
+	muxt.UnmarshalUint8:   {call: astgen.StrconvParseUint8Call, convert: true},
+	muxt.UnmarshalUint16:  {call: astgen.StrconvParseUint16Call, convert: true},
+	muxt.UnmarshalUint32:  {call: astgen.StrconvParseUint32Call, convert: true},
+	muxt.UnmarshalUint64:  {call: astgen.StrconvParseUint64Call},
+	muxt.UnmarshalFloat32: {call: parseFloat(32), convert: true},
+	muxt.UnmarshalFloat64: {call: parseFloat(64)},
+}
+
+func (p scalarParse) statements(file *File) ([]ast.Stmt, error) {
+	typeExpr, err := file.TypeExpr(p.typ)
 	if err != nil {
 		return nil, err
 	}
-	// convert wraps the parsed value in a conversion to the target basic type
-	// for the strconv functions that return a wider type (ParseInt/ParseUint).
-	convert := func(exp ast.Expr) ast.Stmt {
-		return assignment(&ast.CallExpr{
-			Fun:  typeExpr,
-			Args: []ast.Expr{exp},
-		})
-	}
-	switch method {
-	case muxt.UnmarshalBool:
-		return parseBlock(tmp, astgen.StrconvParseBoolCall(file, str), validations, errBlock, assignment), nil
-	case muxt.UnmarshalInt:
-		return parseBlock(tmp, astgen.StrconvAtoiCall(file, str), validations, errBlock, assignment), nil
-	case muxt.UnmarshalInt8:
-		return parseBlock(tmp, astgen.StrconvParseInt8Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalInt16:
-		return parseBlock(tmp, astgen.StrconvParseInt16Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalInt32:
-		return parseBlock(tmp, astgen.StrconvParseInt32Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalInt64:
-		return parseBlock(tmp, astgen.StrconvParseInt64Call(file, str), validations, errBlock, assignment), nil
-	case muxt.UnmarshalUint:
-		return parseBlock(tmp, astgen.StrconvParseUint0Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalUint8:
-		return parseBlock(tmp, astgen.StrconvParseUint8Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalUint16:
-		return parseBlock(tmp, astgen.StrconvParseUint16Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalUint32:
-		return parseBlock(tmp, astgen.StrconvParseUint32Call(file, str), validations, errBlock, convert), nil
-	case muxt.UnmarshalUint64:
-		return parseBlock(tmp, astgen.StrconvParseUint64Call(file, str), validations, errBlock, assignment), nil
-	case muxt.UnmarshalFloat32:
-		return parseBlock(tmp, astgen.StrconvParseFloatCall(file, str, 32), validations, errBlock, convert), nil
-	case muxt.UnmarshalFloat64:
-		return parseBlock(tmp, astgen.StrconvParseFloatCall(file, str, 64), validations, errBlock, assignment), nil
+	switch p.method {
 	case muxt.UnmarshalString:
-		if len(validations) == 0 {
-			assign := assignment(str)
-			statements := slices.Concat(validations, []ast.Stmt{assign})
-			return statements, nil
-		}
-		statements := slices.Concat([]ast.Stmt{&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent(tmp)},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{str},
-		}}, validations, []ast.Stmt{assignment(ast.NewIdent(tmp))})
-		return statements, nil
+		return p.stringStatements(), nil
 	case muxt.UnmarshalTextUnmarshaler:
-		return []ast.Stmt{
-			&ast.DeclStmt{
-				Decl: &ast.GenDecl{
-					Tok: token.VAR,
-					Specs: []ast.Spec{
-						&ast.ValueSpec{
-							Names: []*ast.Ident{ast.NewIdent(tmp)},
-							Type:  typeExpr,
-						},
-					},
-				},
-			},
-			&ast.IfStmt{
-				Init: &ast.AssignStmt{
-					Lhs: []ast.Expr{ast.NewIdent(errIdent)},
-					Tok: token.DEFINE,
-					Rhs: []ast.Expr{&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(tmp),
-							Sel: ast.NewIdent("UnmarshalText"),
-						},
-						Args: []ast.Expr{&ast.CallExpr{
-							Fun: &ast.ArrayType{
-								Elt: ast.NewIdent("byte"),
-							},
-							Args: []ast.Expr{str},
-						}},
-					}},
-				},
-				Cond: &ast.BinaryExpr{
-					X:  ast.NewIdent(errIdent),
-					Op: token.NEQ,
-					Y:  ast.NewIdent("nil"),
-				},
-				Body: errBlock,
-			},
-			assignment(ast.NewIdent(tmp)),
-		}, nil
-	default:
+		return p.textUnmarshalerStatements(typeExpr), nil
+	}
+	parser, ok := strconvParsers[p.method]
+	if !ok {
 		return nil, fmt.Errorf("unsupported type: %s", astgen.Format(typeExpr))
+	}
+	assign := p.assign
+	if parser.convert {
+		assign = func(exp ast.Expr) ast.Stmt { return p.assign(astgen.Convert(typeExpr, exp)) }
+	}
+	return parseBlock(p.tmp, parser.call(file, p.str), p.validations, p.errBlock, assign), nil
+}
+
+func (p scalarParse) stringStatements() []ast.Stmt {
+	if len(p.validations) == 0 {
+		return []ast.Stmt{p.assign(p.str)}
+	}
+	define := &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(p.tmp)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{p.str},
+	}
+	return slices.Concat([]ast.Stmt{define}, p.validations, []ast.Stmt{p.assign(ast.NewIdent(p.tmp))})
+}
+
+func (p scalarParse) textUnmarshalerStatements(typeExpr ast.Expr) []ast.Stmt {
+	unmarshal := &ast.CallExpr{
+		Fun:  &ast.SelectorExpr{X: ast.NewIdent(p.tmp), Sel: ast.NewIdent("UnmarshalText")},
+		Args: []ast.Expr{astgen.Convert(&ast.ArrayType{Elt: ast.NewIdent("byte")}, p.str)},
+	}
+	return []ast.Stmt{
+		varDecl(p.tmp, typeExpr, nil),
+		&ast.IfStmt{
+			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{unmarshal}},
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: p.errBlock,
+		},
+		p.assign(ast.NewIdent(p.tmp)),
 	}
 }
 
 func parseBlock(tmpIdent string, parseCall ast.Expr, validations []ast.Stmt, errBlock *ast.BlockStmt, handleResult func(out ast.Expr) ast.Stmt) []ast.Stmt {
-	const errIdent = "err"
 	callParse := &ast.AssignStmt{
 		Lhs: []ast.Expr{ast.NewIdent(tmpIdent), ast.NewIdent(errIdent)},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{parseCall},
 	}
-	errCheckStmt := &ast.IfStmt{
+	errCheck := &ast.IfStmt{
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: errBlock,
 	}
 	if len(validations) > 0 {
-		errCheckStmt.Else = &ast.BlockStmt{List: validations}
+		errCheck.Else = &ast.BlockStmt{List: validations}
 	}
-	block := &ast.BlockStmt{List: []ast.Stmt{callParse, errCheckStmt}}
-	block.List = append(block.List, handleResult(ast.NewIdent(tmpIdent)))
-	return block.List
+	return []ast.Stmt{callParse, errCheck, handleResult(ast.NewIdent(tmpIdent))}
 }

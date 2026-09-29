@@ -87,13 +87,13 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 				if argument.Declares() {
 					switch argument.Type {
 					case muxt.ArgumentTypeRequestForm:
-						declareFormVar, err := formVariableAssignment(file, arg, argument.ParamType())
+						declareFormVar, err := typedVar(file, arg.Name, argument.ParamType(), requestField("Form"))
 						if err != nil {
 							return nil, err
 						}
 						statements = append(statements, callParseForm(file), declareFormVar)
 					case muxt.ArgumentTypeRequestMultipartForm:
-						declareMultipartVar, err := multipartVariableAssignment(file, arg, argument.ParamType())
+						declareMultipartVar, err := typedVar(file, arg.Name, argument.ParamType(), requestField("MultipartForm"))
 						if err != nil {
 							return nil, err
 						}
@@ -119,7 +119,10 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 				if err != nil {
 					return nil, err
 				}
-				s, err := generateParseValueFromStringStatements(file, name+"Parsed", src, argument.ParamType(), argument.UnmarshalMethod(), nil, singleAssignment(token.DEFINE, ast.NewIdent(ident)), parseErrBlock())
+				s, err := scalarParse{
+					tmp: name + "Parsed", str: src, typ: argument.ParamType(), method: argument.UnmarshalMethod(),
+					assign: singleAssignment(token.DEFINE, ast.NewIdent(ident)), errBlock: parseErrBlock(),
+				}.statements(file)
 				if err != nil {
 					return nil, err
 				}
