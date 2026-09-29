@@ -26,7 +26,6 @@ func isDefaultTemplatesVariable(in *[]string) bool {
 	return in != nil && len(*in) == 1 && (*in)[0] == defaultTemplatesVariableName
 }
 
-// addUseTemplatesVarToFlagSet was split out because it is used for a few different commands
 func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *[]string, deprecated *string) {
 	flagSet.StringSliceVar(out, useTemplatesVariable, []string{defaultTemplatesVariableName}, useTemplatesVariableHelp)
 	flagSet.StringVar(deprecated, deprecatedTemplatesVariable, "", "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
