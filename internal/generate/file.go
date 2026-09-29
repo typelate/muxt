@@ -36,7 +36,6 @@ func newFile(pkg source.Package) *File {
 	}
 }
 
-// OutputPackage is the package the generated file is written into.
 func (file *File) OutputPackage() source.Package { return file.pkg }
 
 // TypeExpr spells t as the generated file refers to it, importing what it

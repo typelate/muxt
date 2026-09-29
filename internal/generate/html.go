@@ -29,9 +29,9 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 	resultType := def.ResultType()
 	execHasArg := def.Arguments[execIdx].CallbackHasArg()
 
-	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
+	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
-		return lit, err
+		return nil, err
 	}
 
 	const guardIdent = "executed"
@@ -39,9 +39,6 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 	if err != nil {
 		return nil, err
 	}
-	// The render callback may be invoked more than once (possibly from
-	// another goroutine); guard with an atomic.Bool so it renders at most
-	// once (see executeClosure).
 	handlerFunc.Body.List = append(handlerFunc.Body.List, &ast.DeclStmt{Decl: &ast.GenDecl{
 		Tok:   token.VAR,
 		Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(guardIdent)}, Type: astgen.ExportedIdentifier(file, "", "sync/atomic", "Bool")}},
@@ -79,9 +76,9 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
 	resultType := def.ResultType()
-	handlerFunc, call, lit, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
+	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
 	if err != nil {
-		return lit, err
+		return nil, err
 	}
 
 	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
@@ -117,10 +114,10 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 	return writeHeadersAndStatusCode(file, handlerFunc, def, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
-func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType source.Type) (*ast.FuncLit, *ast.CallExpr, *ast.FuncLit, error) {
+func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType source.Type) (*ast.FuncLit, *ast.CallExpr, error) {
 	typeExpr, err := file.TypeExpr(resultType)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	handlerFunc := newHandlerFuncLit(file, config, resultDataIdent, receiverInterfaceName, typeExpr)
@@ -133,11 +130,11 @@ func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Defin
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
 	}, nil); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	handlerFunc.Body.List = append(handlerFunc.Body.List, astgen.GetBufferFromPool(file, bufferPoolIdent, bufIdent)...)
-	return handlerFunc, call, nil, nil
+	return handlerFunc, call, nil
 }
 
 func newHandlerFuncLit(file *File, config RoutesFileConfiguration, resultDataIdent, receiverInterfaceName string, typeExpr ast.Expr) *ast.FuncLit {
