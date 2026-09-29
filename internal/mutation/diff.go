@@ -163,28 +163,45 @@ func extract(r io.Reader, dir string) error {
 		if !filepath.IsLocal(header.Name) {
 			return fmt.Errorf("archive entry %q is outside the tree", header.Name)
 		}
-		path := filepath.Join(dir, filepath.FromSlash(header.Name))
-		switch header.Typeflag {
-		case tar.TypeDir:
-			err = os.MkdirAll(path, 0o700)
-		case tar.TypeReg:
-			err = writeArchived(path, archive, header.FileInfo().Mode().Perm())
-		case tar.TypeSymlink:
-			// A link leaving the tree would read what the revision does
-			// not hold, and a relative one would resolve against the copy
-			// rather than the repository.
-			target := filepath.Join(filepath.Dir(header.Name), header.Linkname)
-			if strings.HasPrefix(header.Linkname, "/") || filepath.IsAbs(header.Linkname) || !filepath.IsLocal(target) {
-				return fmt.Errorf("archive entry %q links outside the tree, to %q", header.Name, header.Linkname)
-			}
-			if err = os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
-				err = os.Symlink(header.Linkname, path)
-			}
-		}
-		if err != nil {
+		if err := extractEntry(archive, dir, header); err != nil {
 			return err
 		}
 	}
+}
+
+func extractEntry(archive io.Reader, dir string, header *tar.Header) error {
+	path := filepath.Join(dir, filepath.FromSlash(header.Name))
+	switch header.Typeflag {
+	case tar.TypeDir:
+		return os.MkdirAll(path, 0o700)
+	case tar.TypeReg:
+		return writeArchived(path, archive, header.FileInfo().Mode().Perm())
+	case tar.TypeSymlink:
+		if err := checkSymlink(header.Name, header.Linkname); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return err
+		}
+		return os.Symlink(header.Linkname, path)
+	default:
+		return nil
+	}
+}
+
+// checkSymlink refuses a link leaving the tree, which would read what the
+// revision does not hold, and an absolute one, which would resolve against
+// the machine rather than the repository.
+//
+// A leading slash is refused by name because filepath.IsAbs does not take
+// it for absolute on Windows, and filepath.Join would fold it into the
+// link's directory.
+func checkSymlink(name, target string) error {
+	resolved := filepath.Join(filepath.Dir(name), target)
+	if strings.HasPrefix(target, "/") || filepath.IsAbs(target) || !filepath.IsLocal(resolved) {
+		return fmt.Errorf("archive entry %q links outside the tree, to %q", name, target)
+	}
+	return nil
 }
 
 func writeArchived(path string, r io.Reader, perm os.FileMode) error {
