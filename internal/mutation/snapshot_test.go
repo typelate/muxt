@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/configjson"
@@ -44,16 +46,11 @@ var update = flag.Bool("update", false, "rewrite the want/ files of the snapshot
 // run_test.go and the integration suite do.
 func TestSnapshots(t *testing.T) {
 	const command = "test-template-mutations"
-	if stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar")); len(stray) > 0 {
-		t.Fatalf("%s is not in a command's directory; the mutation run's archives are in testdata/%s", stray[0], command)
-	}
+	stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar"))
+	require.Empty(t, stray, "archives outside a command's directory; the mutation run's archives are in testdata/%s", command)
 	archives, err := filepath.Glob(filepath.Join("testdata", command, "*.txtar"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(archives) == 0 {
-		t.Fatalf("no archives in testdata/%s", command)
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, archives, "no archives in testdata/%s", command)
 	t.Run(command, func(t *testing.T) {
 		for _, archivePath := range archives {
 			runSnapshot(t, archivePath)
@@ -67,13 +64,9 @@ func runSnapshot(t *testing.T, archivePath string) {
 	t.Helper()
 	t.Run(strings.TrimSuffix(filepath.Base(archivePath), ".txtar"), func(t *testing.T) {
 		archive, err := txtar.ParseFile(archivePath)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		config := configuration(t, archive)
-		if !config.DryRun {
-			t.Fatal("a snapshot plans a dry run; config.json must set DryRun")
-		}
+		require.True(t, config.DryRun, "a snapshot plans a dry run; config.json must set DryRun")
 		got := dryRunSnapshot(t, config, archive)
 		if *update {
 			files := slices.DeleteFunc(slices.Clone(archive.Files), func(file txtar.File) bool {
@@ -85,9 +78,7 @@ func runSnapshot(t *testing.T, archivePath string) {
 				}
 			}
 			archive.Files = files
-			if err := os.WriteFile(archivePath, txtar.Format(archive), 0o644); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, os.WriteFile(archivePath, txtar.Format(archive), 0o644))
 			return
 		}
 		want := make(map[string]string)
@@ -97,9 +88,7 @@ func runSnapshot(t *testing.T, archivePath string) {
 			}
 		}
 		for _, name := range []string{"error.txt", "report.txt"} {
-			if got[name] != want[name] {
-				t.Errorf("want/%s differs (run go test -run TestSnapshots -update to rewrite):\n--- got\n%s\n--- want\n%s", name, got[name], want[name])
-			}
+			assert.Equal(t, want[name], got[name], "want/%s differs (run go test -run TestSnapshots -update to rewrite)", name)
 		}
 	})
 }
@@ -113,12 +102,10 @@ func configuration(t *testing.T, archive *txtar.Archive) Configuration {
 			continue
 		}
 		var config Configuration
-		if err := json.Unmarshal(file.Data, &config, configjson.Options()); err != nil {
-			t.Fatalf("config.json: %v", err)
-		}
+		require.NoError(t, json.Unmarshal(file.Data, &config, configjson.Options()), "config.json")
 		return config
 	}
-	t.Fatal("the archive has no config.json")
+	require.Fail(t, "the archive has no config.json")
 	return Configuration{}
 }
 
@@ -173,19 +160,18 @@ func dryRunSnapshot(t *testing.T, config Configuration, archive *txtar.Archive) 
 		return fail(err)
 	}
 	report, err := runPlan(p, config, nil, func(...string) (string, error) {
-		t.Fatal("a dry run ran the baseline")
+		require.Fail(t, "a dry run ran the baseline")
 		return "", nil
 	}, func(string) (Status, error) {
-		t.Fatal("a dry run ran a mutant")
+		require.Fail(t, "a dry run ran a mutant")
 		return "", nil
 	})
 	if err != nil {
 		return fail(err)
 	}
 	var out strings.Builder
-	if _, err := report.WriteTo(&out); err != nil {
-		t.Fatal(err)
-	}
+	_, err = report.WriteTo(&out)
+	require.NoError(t, err)
 	got["report.txt"] = out.String()
 	return got
 }
