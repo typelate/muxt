@@ -1,6 +1,7 @@
 package load
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -137,6 +138,54 @@ func TestParseErrors(t *testing.T) {
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("ParseErrors = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPackagesWithEnvLoadsExtraPatterns(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod": "module example.com/p\n\ngo 1.24\n",
+		"p.go":   "package p\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, pl, err := PackagesWithEnv(dir, nil, "", "os")
+	if err != nil {
+		t.Fatalf("PackagesWithEnv() error = %v", err)
+	}
+	var paths []string
+	for _, pkg := range pl {
+		paths = append(paths, pkg.PkgPath)
+	}
+	for _, want := range []string{"example.com/p", "fmt", "os"} {
+		if !slices.Contains(paths, want) {
+			t.Errorf("PackagesWithEnv() loaded %q, want it to include %q", paths, want)
+		}
+	}
+}
+
+func TestLoadFailedError(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	for _, tt := range []struct {
+		name string
+		msg  string
+		want string
+	}{
+		{name: "driver plumbing is stripped", msg: "err: exit status 1: stderr: go: boom\n", want: "go: boom"},
+		{name: "stderr at the start", msg: "stderr: go: boom", want: "go: boom"},
+		{name: "no plumbing", msg: "boom", want: "boom"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e, ok := loadFailedError(t.TempDir(), errors.New(tt.msg)).(*PackageLookupError)
+			if !ok {
+				t.Fatal("loadFailedError() is not a *PackageLookupError")
+			}
+			if len(e.Details) != 2 || e.Details[0] != tt.want {
+				t.Errorf("loadFailedError() details = %q, want the message %q then the environment note", e.Details, tt.want)
 			}
 		})
 	}
