@@ -118,6 +118,52 @@ func withDatastar(c generate.RoutesFileConfiguration) generate.RoutesFileConfigu
 	return c
 }
 
+// TestConfigToArgsOrder pins the order of the recorded flags: generated files
+// are committed, so a reordering rewrites every header.
+func TestConfigToArgsOrder(t *testing.T) {
+	config := generate.RoutesFileConfiguration{
+		TemplatesVariables:         []string{"a", "b"},
+		ReceiverType:               "Server",
+		ReceiverPackage:            "example.com/server",
+		OutputFileName:             "routes_gen.go",
+		ReceiverInterface:          "I",
+		RoutesFunction:             "R",
+		TemplateDataType:           "D",
+		SSETemplateDataType:        "S",
+		TemplateRoutePathsTypeName: "P",
+		Logger:                     true,
+		PathPrefix:                 true,
+		Middleware:                 true,
+		OutputMultipleFiles:        true,
+		OutputHTMX:                 true,
+		OutputDatastar:             true,
+		MultipartMaxMemory:         1024,
+	}
+	want := []string{
+		"--use-templates-variable=a", "--use-templates-variable=b",
+		"--use-receiver-type=Server",
+		"--use-receiver-type-package=example.com/server",
+		"--output-file=routes_gen.go",
+		"--output-receiver-interface=I",
+		"--output-routes-func=R",
+		"--output-template-data-type=D",
+		"--output-sse-template-data-type=S",
+		"--output-template-route-paths-type=P",
+		"--output-routes-func-with-logger-param",
+		"--output-routes-func-with-path-prefix-param",
+		"--output-routes-func-with-middleware-param",
+		"--output-multiple-files",
+		"--output-htmx",
+		"--output-datastar",
+		"--output-exported-default-identifiers=false",
+		"--output-muxt-version=false",
+		"--output-multipart-max-memory=1024",
+	}
+	if got := configToArgs(config); !reflect.DeepEqual(got, want) {
+		t.Errorf("configToArgs = %q, want %q", got, want)
+	}
+}
+
 // TestConfigToArgsRecordsWhatDiffersFromTheDefaults states that the header
 // stays as short as the run was ordinary: a flag left at its default is
 // not written into it, and one that was passed is.

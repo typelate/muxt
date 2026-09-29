@@ -81,69 +81,45 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 
 func configToArgs(config generate.RoutesFileConfiguration) []string {
 	var args []string
-
 	if !isDefaultTemplatesVariable(&config.TemplatesVariables) {
 		for _, tv := range config.TemplatesVariables {
 			args = append(args, "--"+useTemplatesVariable+"="+tv)
 		}
 	}
-	if config.ReceiverType != "" {
-		args = append(args, "--"+useReceiverType+"="+config.ReceiverType)
-	}
-	if config.ReceiverPackage != "" {
-		args = append(args, "--"+useReceiverTypePackage+"="+config.ReceiverPackage)
-	}
-	if config.OutputFileName != defaultOutputFileName {
-		args = append(args, "--"+outputFile+"="+config.OutputFileName)
-	}
-	if config.ReceiverInterface != defaultReceiverInterfaceName {
-		args = append(args, "--"+outputReceiverInterface+"="+config.ReceiverInterface)
-	}
-	if config.RoutesFunction != defaultRoutesFunctionName {
-		args = append(args, "--"+outputRoutesFunc+"="+config.RoutesFunction)
-	}
-	if config.TemplateDataType != defaultTemplateDataTypeName {
-		args = append(args, "--"+outputTemplateDataType+"="+config.TemplateDataType)
-	}
-	if config.SSETemplateDataType != defaultSSETemplateDataTypeName {
-		args = append(args, "--"+outputSSETemplateDataType+"="+config.SSETemplateDataType)
-	}
-	if config.TemplateRoutePathsTypeName != defaultTemplateRoutePathsTypeName {
-		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
-	}
-
-	if config.Logger {
-		args = append(args, "--"+outputRoutesFuncWithLoggerParam)
-	}
-	if config.PathPrefix {
-		args = append(args, "--"+outputRoutesFuncWithPathPrefix)
-	}
-	if config.Middleware {
-		args = append(args, "--"+outputRoutesFuncWithMiddlewareParam)
-	}
-	if config.OutputMultipleFiles {
-		args = append(args, "--"+outputMultipleFiles)
-	}
-	if config.OutputHTMX {
-		args = append(args, "--"+outputHTMX)
-	}
-	if config.OutputDatastar {
-		args = append(args, "--"+outputDatastar)
-	}
-
-	if !config.OutputExportedDefaultIdentifiers {
-		args = append(args, "--"+outputExportedDefaultIdentifiers+"=false")
-	}
-
-	if !config.OutputMuxtVersion {
-		args = append(args, "--"+outputMuxtVersion+"=false")
-	}
-
+	args = appendValueArg(args, useReceiverType, config.ReceiverType, "")
+	args = appendValueArg(args, useReceiverTypePackage, config.ReceiverPackage, "")
+	args = appendValueArg(args, outputFile, config.OutputFileName, defaultOutputFileName)
+	args = appendValueArg(args, outputReceiverInterface, config.ReceiverInterface, defaultReceiverInterfaceName)
+	args = appendValueArg(args, outputRoutesFunc, config.RoutesFunction, defaultRoutesFunctionName)
+	args = appendValueArg(args, outputTemplateDataType, config.TemplateDataType, defaultTemplateDataTypeName)
+	args = appendValueArg(args, outputSSETemplateDataType, config.SSETemplateDataType, defaultSSETemplateDataTypeName)
+	args = appendValueArg(args, outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+	args = appendSwitchArg(args, outputRoutesFuncWithLoggerParam, config.Logger)
+	args = appendSwitchArg(args, outputRoutesFuncWithPathPrefix, config.PathPrefix)
+	args = appendSwitchArg(args, outputRoutesFuncWithMiddlewareParam, config.Middleware)
+	args = appendSwitchArg(args, outputMultipleFiles, config.OutputMultipleFiles)
+	args = appendSwitchArg(args, outputHTMX, config.OutputHTMX)
+	args = appendSwitchArg(args, outputDatastar, config.OutputDatastar)
+	args = appendValueArg(args, outputExportedDefaultIdentifiers, strconv.FormatBool(config.OutputExportedDefaultIdentifiers), "true")
+	args = appendValueArg(args, outputMuxtVersion, strconv.FormatBool(config.OutputMuxtVersion), "true")
 	if config.MultipartMaxMemory > 0 {
 		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
 	}
-
 	return args
+}
+
+func appendValueArg(args []string, name, value, defaultValue string) []string {
+	if value == defaultValue {
+		return args
+	}
+	return append(args, "--"+name+"="+value)
+}
+
+func appendSwitchArg(args []string, name string, on bool) []string {
+	if !on {
+		return args
+	}
+	return append(args, "--"+name)
 }
 
 func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
