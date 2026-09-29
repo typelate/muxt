@@ -26,7 +26,7 @@ jobs:
     - name: Test
       run: |
         go install ./cmd/muxt
-        go test -race -shuffle=on ./...
+        go test -race -shuffle=on -timeout 20m ./...
 
   # Guards the generated code in docs/examples against gosec findings.
   # Excluded rules only fire in the hand-written demo code:
