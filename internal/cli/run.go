@@ -107,7 +107,8 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 	if err != nil {
 		return err
 	}
-	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
+	stderr := log.New(cmd.ErrOrStderr(), "", 0)
+	warnPartialAST(stderr, pl)
 	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(wd), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		printMultiLineError(cmd, err)
@@ -123,7 +124,7 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		printMultiLineError(cmd, err)
 		return err
 	}
-	owned, err := ownedGeneratedFiles(wd, config.RoutesFunction)
+	owned, err := ownedGeneratedFiles(wd, config.RoutesFunction, stderr)
 	if err != nil {
 		return err
 	}
