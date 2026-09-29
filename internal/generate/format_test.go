@@ -5,6 +5,9 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 )
 
@@ -62,12 +65,8 @@ func TestFormatFileImports(t *testing.T) {
 				f.Decls = []ast.Decl{decl}
 			}
 			got, err := formatFile("routes.go", f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got != tt.want {
-				t.Errorf("formatFile =\n%s\nwant\n%s", got, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got, "formatFile")
 		})
 	}
 }
