@@ -33,7 +33,6 @@ func FileArguments(workingDirectory, routesFunction string) (map[string][]string
 			return nil, fmt.Errorf("failed to read %s: %w", filePath, err)
 		}
 
-		// Check if file has muxt generation comment
 		lines := strings.Split(string(content), "\n")
 		if len(lines) == 0 {
 			continue
