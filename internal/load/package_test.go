@@ -1,11 +1,75 @@
 package load
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
 )
+
+func TestTestVariantsFirst(t *testing.T) {
+	ids := func(pl []*packages.Package) []string {
+		var got []string
+		for _, pkg := range pl {
+			got = append(got, pkg.ID)
+		}
+		return got
+	}
+	in := []*packages.Package{
+		{ID: "example.com/a"},
+		{ID: "example.com/b [example.com/b.test]"},
+		{ID: "example.com/c"},
+		{ID: "example.com/a [example.com/a.test]"},
+		{ID: "example.com/b.test"},
+	}
+	want := []string{
+		"example.com/b [example.com/b.test]",
+		"example.com/a [example.com/a.test]",
+		"example.com/a",
+		"example.com/c",
+		"example.com/b.test",
+	}
+	if got := ids(testVariantsFirst(in)); !slices.Equal(got, want) {
+		t.Errorf("testVariantsFirst() = %q, want %q", got, want)
+	}
+	if got := ids(in); got[0] != "example.com/a" {
+		t.Errorf("testVariantsFirst reordered its argument: %q", got)
+	}
+}
+
+func TestPackagesWithTests(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":    "module example.com/p\n\ngo 1.24\n",
+		"p.go":      "package p\n\nfunc F() int { return 1 }\n",
+		"p_test.go": "package p\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { _ = F() }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pl, err := PackagesWithTests(dir, nil)
+	if err != nil {
+		t.Fatalf("PackagesWithTests() error = %v", err)
+	}
+	if len(pl) == 0 || !strings.HasSuffix(pl[0].ID, ".test]") {
+		t.Fatalf("PackagesWithTests()[0] = %v, want the package compiled with its tests first", pl)
+	}
+	var files []string
+	for _, f := range pl[0].GoFiles {
+		files = append(files, filepath.Base(f))
+	}
+	if !slices.Contains(files, "p_test.go") {
+		t.Errorf("first package files = %q, want p_test.go among them", files)
+	}
+	if got, ok := PackageInDirectory(pl, dir); !ok || got != pl[0] {
+		t.Errorf("PackageInDirectory() = %v, %v, want the test variant", got, ok)
+	}
+}
 
 func loadError(kind packages.ErrorKind, pos, msg string) packages.Error {
 	return packages.Error{Pos: pos, Msg: msg, Kind: kind}
