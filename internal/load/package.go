@@ -1,11 +1,13 @@
 package load
 
 import (
+	"cmp"
 	"fmt"
 	"go/token"
 	"go/types"
 	"html/template"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/typelate/check"
@@ -65,18 +67,22 @@ func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
 	if err != nil {
 		return nil, err
 	}
-	ordered := make([]*packages.Package, 0, len(pl))
-	for _, pkg := range pl {
-		if strings.HasSuffix(pkg.ID, ".test]") {
-			ordered = append(ordered, pkg)
-		}
+	return testVariantsFirst(pl), nil
+}
+
+func testVariantsFirst(pl []*packages.Package) []*packages.Package {
+	ordered := slices.Clone(pl)
+	slices.SortStableFunc(ordered, func(a, b *packages.Package) int {
+		return cmp.Compare(variantRank(a), variantRank(b))
+	})
+	return ordered
+}
+
+func variantRank(pkg *packages.Package) int {
+	if strings.HasSuffix(pkg.ID, ".test]") {
+		return 0
 	}
-	for _, pkg := range pl {
-		if !strings.HasSuffix(pkg.ID, ".test]") {
-			ordered = append(ordered, pkg)
-		}
-	}
-	return ordered, nil
+	return 1
 }
 
 // ParseErrors returns the syntax errors the loader recovered from.
