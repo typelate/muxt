@@ -37,6 +37,23 @@ const (
 	UnmarshalTextUnmarshaler
 )
 
+var basicUnmarshalMethods = map[string]UnmarshalMethod{
+	"string":  UnmarshalString,
+	"bool":    UnmarshalBool,
+	"int":     UnmarshalInt,
+	"int8":    UnmarshalInt8,
+	"int16":   UnmarshalInt16,
+	"int32":   UnmarshalInt32,
+	"int64":   UnmarshalInt64,
+	"uint":    UnmarshalUint,
+	"uint8":   UnmarshalUint8,
+	"uint16":  UnmarshalUint16,
+	"uint32":  UnmarshalUint32,
+	"uint64":  UnmarshalUint64,
+	"float32": UnmarshalFloat32,
+	"float64": UnmarshalFloat64,
+}
+
 // unmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
@@ -44,36 +61,7 @@ const (
 func unmarshalMethodFor(checker Checker, tp types.Type) UnmarshalMethod {
 	switch t := tp.(type) {
 	case *types.Basic:
-		switch t.Name() {
-		case "string":
-			return UnmarshalString
-		case "bool":
-			return UnmarshalBool
-		case "int":
-			return UnmarshalInt
-		case "int8":
-			return UnmarshalInt8
-		case "int16":
-			return UnmarshalInt16
-		case "int32":
-			return UnmarshalInt32
-		case "int64":
-			return UnmarshalInt64
-		case "uint":
-			return UnmarshalUint
-		case "uint8":
-			return UnmarshalUint8
-		case "uint16":
-			return UnmarshalUint16
-		case "uint32":
-			return UnmarshalUint32
-		case "uint64":
-			return UnmarshalUint64
-		case "float32":
-			return UnmarshalFloat32
-		case "float64":
-			return UnmarshalFloat64
-		}
+		return basicUnmarshalMethods[t.Name()]
 	case *types.Named:
 		if checker.TextUnmarshaler(t) {
 			return UnmarshalTextUnmarshaler
