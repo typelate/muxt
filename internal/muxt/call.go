@@ -191,68 +191,83 @@ func hydrateCallArgument(def *Definition, call *ast.CallExpr, paramType types.Ty
 // scope. Nested calls are resolved (so their own methods are synthesized too)
 // but do not contribute a parameter, mirroring the pre-hydration generator.
 func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Package, receiver *types.Named, checker Checker) (*types.Signature, error) {
-	var params []*types.Var
-	hasSSE := false
-	// Each argument becomes a parameter named after it, so a repeated
-	// argument would synthesize a method whose parameter names collide.
-	seen := make(map[string]bool)
-	addParam := func(node ast.Node, name string, tp types.Type) error {
-		if seen[name] {
-			return errAt(node, "cannot infer a signature for %s: the %s argument is passed more than once; define the method on the receiver to use repeated arguments", call.Fun.(*ast.Ident).Name, name)
-		}
-		seen[name] = true
-		params = append(params, types.NewVar(0, receiver.Obj().Pkg(), name, tp))
-		return nil
+	params := synthesizedParameters{
+		callName: call.Fun.(*ast.Ident).Name,
+		pkg:      receiver.Obj().Pkg(),
+		seen:     make(map[string]bool),
 	}
 	for _, a := range call.Args {
+		var err error
 		switch arg := a.(type) {
 		case *ast.Ident:
-			if arg.Name == TemplateNameScopeIdentifierExecute {
-				return nil, errAt(arg, "method %s using the execute callback must be defined on the receiver type", call.Fun.(*ast.Ident).Name)
-			}
-			if isSSEArgument(arg.Name) {
-				hasSSE = true
-				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			if def.isSignalsCallback(arg.Name) {
-				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			tp, ok := defaultScopeType(checker, def, arg.Name)
-			if !ok {
-				return nil, errAt(arg, "could not determine a type for %s", arg.Name)
-			}
-			if err := addParam(arg, arg.Name, tp); err != nil {
-				return nil, err
-			}
+			err = params.addIdentifier(def, checker, arg)
 		case *ast.CallExpr:
-			if isCallTo(arg, callWrapperUnmarshalJSON) {
-				// Template-first iteration: without a defined method the decode
-				// target is unknown, so pass the raw payload through.
-				tp, err := checker.RawJSON()
-				if err != nil {
-					return nil, err
-				}
-				if err := addParam(arg, TemplateNameScopeIdentifierRequestBody, tp); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			if _, _, _, err := resolveCall(def, arg, pkg, receiver, checker); err != nil {
-				return nil, err
-			}
+			err = params.addCall(def, arg, pkg, receiver, checker)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
+	return params.signature(receiver), nil
+}
+
+// synthesizedParameters collects the parameters of a synthesized method.
+// Each argument becomes a parameter named after it, so a repeated argument
+// would synthesize a method whose parameter names collide.
+type synthesizedParameters struct {
+	callName string
+	pkg      *types.Package
+	seen     map[string]bool
+	vars     []*types.Var
+	hasSSE   bool
+}
+
+func (p *synthesizedParameters) add(node ast.Node, name string, tp types.Type) error {
+	if p.seen[name] {
+		return errAt(node, "cannot infer a signature for %s: the %s argument is passed more than once; define the method on the receiver to use repeated arguments", p.callName, name)
+	}
+	p.seen[name] = true
+	p.vars = append(p.vars, types.NewVar(0, p.pkg, name, tp))
+	return nil
+}
+
+func (p *synthesizedParameters) addIdentifier(def *Definition, checker Checker, arg *ast.Ident) error {
+	switch {
+	case arg.Name == TemplateNameScopeIdentifierExecute:
+		return errAt(arg, "method %s using the execute callback must be defined on the receiver type", p.callName)
+	case isSSEArgument(arg.Name):
+		p.hasSSE = true
+		return p.add(arg, arg.Name, sseCallbackSignature())
+	case def.isSignalsCallback(arg.Name):
+		return p.add(arg, arg.Name, sseCallbackSignature())
+	}
+	tp, ok := defaultScopeType(checker, def, arg.Name)
+	if !ok {
+		return errAt(arg, "could not determine a type for %s", arg.Name)
+	}
+	return p.add(arg, arg.Name, tp)
+}
+
+func (p *synthesizedParameters) addCall(def *Definition, arg *ast.CallExpr, pkg source.Package, receiver *types.Named, checker Checker) error {
+	if !isCallTo(arg, callWrapperUnmarshalJSON) {
+		_, _, _, err := resolveCall(def, arg, pkg, receiver, checker)
+		return err
+	}
+	// Template-first iteration: without a defined method the decode
+	// target is unknown, so pass the raw payload through.
+	tp, err := checker.RawJSON()
+	if err != nil {
+		return err
+	}
+	return p.add(arg, TemplateNameScopeIdentifierRequestBody, tp)
+}
+
+func (p *synthesizedParameters) signature(receiver *types.Named) *types.Signature {
 	results := types.NewTuple(types.NewVar(0, nil, "", types.Universe.Lookup("any").Type()))
-	if hasSSE {
+	if p.hasSSE {
 		results = types.NewTuple()
 	}
-	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(params...), results, false), nil
+	return types.NewSignatureType(types.NewVar(0, nil, "", receiver.Obj().Type()), nil, nil, types.NewTuple(p.vars...), results, false)
 }
 
 // sseCallbackSignature is the func(any) error type synthesized for an sse
