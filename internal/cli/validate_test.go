@@ -3,6 +3,8 @@ package cli
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -33,14 +35,11 @@ func TestValidateGenerateConfiguration(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateGenerateConfiguration(tt.config)
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Fatalf("validateGenerateConfiguration() = %v, want no error", err)
-			case tt.wantErr != "" && err == nil:
-				t.Fatalf("validateGenerateConfiguration() = nil, want %q", tt.wantErr)
-			case tt.wantErr != "" && err.Error() != tt.wantErr:
-				t.Fatalf("validateGenerateConfiguration() = %q, want %q", err, tt.wantErr)
+			if tt.wantErr == "" {
+				require.NoError(t, err, "validateGenerateConfiguration()")
+				return
 			}
+			require.EqualError(t, err, tt.wantErr, "validateGenerateConfiguration()")
 		})
 	}
 }

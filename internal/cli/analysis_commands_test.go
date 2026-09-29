@@ -1,29 +1,28 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestCompilePatterns(t *testing.T) {
 	t.Run("none stays nil", func(t *testing.T) {
 		got, err := compilePatterns(nil)
-		if err != nil || got != nil {
-			t.Fatalf("compilePatterns(nil) = %v, %v, want nil, nil", got, err)
-		}
+		require.NoError(t, err, "compilePatterns(nil)")
+		require.Nil(t, got, "compilePatterns(nil)")
 	})
 	t.Run("in order", func(t *testing.T) {
 		got, err := compilePatterns([]string{`^GET `, `Home$`})
-		if err != nil {
-			t.Fatalf("compilePatterns() error = %v", err)
-		}
-		if len(got) != 2 || got[0].String() != `^GET ` || got[1].String() != `Home$` {
-			t.Fatalf("compilePatterns() = %v, want both patterns in order", got)
-		}
+		require.NoError(t, err, "compilePatterns()")
+		require.Len(t, got, 2, "compilePatterns() want both patterns in order")
+		assert.Equal(t, `^GET `, got[0].String())
+		assert.Equal(t, `Home$`, got[1].String())
 	})
 	t.Run("invalid", func(t *testing.T) {
 		_, err := compilePatterns([]string{`ok`, `(`})
-		want := "error parsing regexp: missing closing ): `(`"
-		if err == nil || err.Error() != want {
-			t.Fatalf("compilePatterns() error = %v, want %q", err, want)
-		}
+		require.EqualError(t, err, "error parsing regexp: missing closing ): `(`", "compilePatterns()")
 	})
 }
 
@@ -41,12 +40,11 @@ func TestCheckTemplatesVariables(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := checkTemplatesVariables(tt.in)
-			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Fatalf("checkTemplatesVariables(%q) = %v, want no error", tt.in, err)
-			case tt.wantErr != "" && (err == nil || err.Error() != tt.wantErr):
-				t.Fatalf("checkTemplatesVariables(%q) = %v, want %q", tt.in, err, tt.wantErr)
+			if tt.wantErr == "" {
+				require.NoError(t, err, "checkTemplatesVariables(%q)", tt.in)
+				return
 			}
+			require.EqualError(t, err, tt.wantErr, "checkTemplatesVariables(%q)", tt.in)
 		})
 	}
 }
