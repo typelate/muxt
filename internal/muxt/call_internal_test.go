@@ -196,8 +196,8 @@ func TestIsSignalsCallbackArgument(t *testing.T) {
 		"signalsCounts":     false,
 		"boardStateSignals": true,
 	} {
-		if got := IsSignalsCallbackArgument(name); got != want {
-			t.Errorf("IsSignalsCallbackArgument(%q) = %t, want %t", name, got, want)
+		if got := isSignalsCallbackArgument(name); got != want {
+			t.Errorf("isSignalsCallbackArgument(%q) = %t, want %t", name, got, want)
 		}
 	}
 }

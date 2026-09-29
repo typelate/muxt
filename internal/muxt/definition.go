@@ -726,11 +726,11 @@ func hasIdentArgument(args []ast.Expr, ident string, receiverInterfaceType *ast.
 	return false
 }
 
-// IsSSEArgument reports whether name is an SSE render-callback argument: the
+// isSSEArgument reports whether name is an SSE render-callback argument: the
 // reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
 // sseMetrics, ...). Prefixed callbacks render a same-named template; they are
 // only valid on a route that also has the base "sse" argument.
-func IsSSEArgument(name string) bool {
+func isSSEArgument(name string) bool {
 	if name == TemplateNameScopeIdentifierExecute {
 		return true
 	}
@@ -766,7 +766,7 @@ func checkCallArguments(identifiers []string, call *ast.CallExpr, sse, nested bo
 			// scope — a path parameter, say — keeps its scope meaning even
 			// when it matches a callback naming convention.
 			_, inScope := slices.BinarySearch(identifiers, exp.Name)
-			sseScoped := sse && !inScope && (IsSSEArgument(exp.Name) || IsSSEMessageArgument(exp.Name) || IsSignalsCallbackArgument(exp.Name))
+			sseScoped := sse && !inScope && (isSSEArgument(exp.Name) || isSSEMessageArgument(exp.Name) || isSignalsCallbackArgument(exp.Name))
 			if !inScope && !sseScoped {
 				if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
 					return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
