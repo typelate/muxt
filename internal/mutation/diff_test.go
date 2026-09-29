@@ -3,17 +3,18 @@ package mutation
 import (
 	"archive/tar"
 	"bytes"
-	"errors"
 	"fmt"
 	"go/types"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRevisionChanged states which scopes a --diff run mutates: one whose
@@ -35,9 +36,7 @@ func TestRevisionChanged(t *testing.T) {
 		{name: "a type of dot not reached with before", text: `<b>{{.}}</b>`, dot: types.Typ[types.Int], want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := before.changed(scopeOf(t, "t", tt.text, tt.dot)); got != tt.want {
-				t.Errorf("changed = %t, want %t", got, tt.want)
-			}
+			assert.Equal(t, tt.want, before.changed(scopeOf(t, "t", tt.text, tt.dot)), "changed")
 		})
 	}
 }
@@ -49,16 +48,11 @@ func tarOf(t *testing.T, entries ...tarEntry) *bytes.Buffer {
 	w := tar.NewWriter(&buf)
 	for _, e := range entries {
 		e.header.Size = int64(len(e.body))
-		if err := w.WriteHeader(&e.header); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := w.Write([]byte(e.body)); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, w.WriteHeader(&e.header))
+		_, err := w.Write([]byte(e.body))
+		require.NoError(t, err)
 	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Close())
 	return &buf
 }
 
@@ -77,16 +71,10 @@ func TestExtractWritesTheTree(t *testing.T) {
 		tarEntry{header: tar.Header{Typeflag: tar.TypeReg, Name: "sub/page.gohtml", Mode: 0o644}, body: `{{.}}`},
 	)
 	dir := t.TempDir()
-	if err := extract(archive, dir); err != nil {
-		t.Fatalf("extract = %v", err)
-	}
+	require.NoError(t, extract(archive, dir))
 	got, err := os.ReadFile(filepath.Join(dir, "sub", "page.gohtml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != `{{.}}` {
-		t.Errorf("sub/page.gohtml = %q, want %q", got, `{{.}}`)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, `{{.}}`, string(got), "sub/page.gohtml")
 }
 
 // TestExtractWritesASymlink states that a symlink in the tree is made as
@@ -100,16 +88,16 @@ func TestExtractWritesASymlink(t *testing.T) {
 		tarEntry{header: tar.Header{Typeflag: tar.TypeSymlink, Name: "link/page.gohtml", Linkname: "../sub/page.gohtml"}},
 	)
 	dir := t.TempDir()
-	if err := extract(archive, dir); err != nil {
-		t.Fatalf("extract = %v", err)
-	}
+	require.NoError(t, extract(archive, dir))
 	link := filepath.Join(dir, "link", "page.gohtml")
-	if target, err := os.Readlink(link); err != nil || target != "../sub/page.gohtml" {
-		t.Errorf("Readlink = %q, %v, want %q", target, err, "../sub/page.gohtml")
-	}
-	if got, err := os.ReadFile(link); err != nil || string(got) != `{{.}}` {
-		t.Errorf("reading through the link = %q, %v, want %q", got, err, `{{.}}`)
-	}
+
+	target, err := os.Readlink(link)
+	assert.NoError(t, err, "Readlink")
+	assert.Equal(t, "../sub/page.gohtml", target, "Readlink")
+
+	got, err := os.ReadFile(link)
+	assert.NoError(t, err, "reading through the link")
+	assert.Equal(t, `{{.}}`, string(got), "reading through the link")
 }
 
 // TestExtractRefusesALinkOutOfTheTree states that a symlink pointing
@@ -117,14 +105,12 @@ func TestExtractWritesASymlink(t *testing.T) {
 // hold.
 func TestExtractRefusesALinkOutOfTheTree(t *testing.T) {
 	for _, target := range []string{"../../escape", "/etc/hosts"} {
-		archive := tarOf(t, tarEntry{header: tar.Header{Typeflag: tar.TypeSymlink, Name: "link/escape", Linkname: target}})
-		dir := t.TempDir()
-		if err := extract(archive, dir); err == nil {
-			t.Errorf("extract of a link to %q = nil, want an error", target)
-		}
-		if _, err := os.Lstat(filepath.Join(dir, "link", "escape")); err == nil {
-			t.Errorf("extract made the link to %q", target)
-		}
+		t.Run(target, func(t *testing.T) {
+			archive := tarOf(t, tarEntry{header: tar.Header{Typeflag: tar.TypeSymlink, Name: "link/escape", Linkname: target}})
+			dir := t.TempDir()
+			assert.Error(t, extract(archive, dir), "extract of a link to %q", target)
+			assert.NoFileExists(t, filepath.Join(dir, "link", "escape"), "extract made the link to %q", target)
+		})
 	}
 }
 
@@ -143,8 +129,10 @@ func TestCheckSymlink(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := checkSymlink(tt.entry, tt.target)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("checkSymlink(%q, %q) = %v, want error %t", tt.entry, tt.target, err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err, "checkSymlink(%q, %q)", tt.entry, tt.target)
+			} else {
+				assert.NoError(t, err, "checkSymlink(%q, %q)", tt.entry, tt.target)
 			}
 		})
 	}
@@ -155,23 +143,20 @@ func TestCheckSymlink(t *testing.T) {
 // truncated copy would be compared as though it had changed.
 func TestWriteArchivedReportsAReadError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "page.gohtml")
-	if err := writeArchived(path, iotest.ErrReader(io.ErrUnexpectedEOF), 0o644); !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Errorf("writeArchived = %v, want %v", err, io.ErrUnexpectedEOF)
-	}
+	err := writeArchived(path, iotest.ErrReader(io.ErrUnexpectedEOF), 0o644)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "writeArchived")
 }
 
 // TestExtractRefusesAnEntryOutsideTheTree states that an entry naming a
 // path outside the directory is refused rather than written.
 func TestExtractRefusesAnEntryOutsideTheTree(t *testing.T) {
 	for _, name := range []string{"../escape.txt", "/escape.txt"} {
-		dir := t.TempDir()
-		archive := tarOf(t, tarEntry{header: tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: 0o644}, body: "x"})
-		if err := extract(archive, filepath.Join(dir, "tree")); err == nil {
-			t.Errorf("extract(%q) = nil, want an error", name)
-		}
-		if _, err := os.Stat(filepath.Join(dir, "escape.txt")); err == nil {
-			t.Errorf("extract(%q) wrote outside the tree", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive := tarOf(t, tarEntry{header: tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: 0o644}, body: "x"})
+			assert.Error(t, extract(archive, filepath.Join(dir, "tree")), "extract(%q)", name)
+			assert.NoFileExists(t, filepath.Join(dir, "escape.txt"), "extract(%q) wrote outside the tree", name)
+		})
 	}
 }
 
@@ -276,26 +261,14 @@ func TestNewPlanWithDiff(t *testing.T) {
 			}
 
 			p, err := newPlan(config, web)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if p.diffError != "" {
-				t.Fatalf("the templates at HEAD could not be read: %s", p.diffError)
-			}
-			if got := mutatedTemplates(p); !slices.Equal(got, tt.mutated) {
-				t.Errorf("mutated %q, want %q", got, tt.mutated)
-			}
-			if got := unchangedTemplates(p); !slices.Equal(got, tt.unchanged) {
-				t.Errorf("unchanged %q, want %q", got, tt.unchanged)
-			}
-			if len(p.trimmed) != tt.trimmed {
-				t.Errorf("trimmed %v, want %d", p.trimmed, tt.trimmed)
-			}
+			require.NoError(t, err)
+			require.Empty(t, p.diffError, "the templates at HEAD could not be read")
+			assert.Equal(t, tt.mutated, mutatedTemplates(p), "mutated")
+			assert.Equal(t, tt.unchanged, unchangedTemplates(p), "unchanged")
+			assert.Len(t, p.trimmed, tt.trimmed, "trimmed")
 			text := reportText(t, p)
 			for _, want := range tt.reportSays {
-				if !strings.Contains(text, want) {
-					t.Errorf("report does not say %q:\n%s", want, text)
-				}
+				assert.Contains(t, text, want, "report")
 			}
 		})
 	}
@@ -313,18 +286,10 @@ func TestNewPlanWithDiffAtARevisionItCannotRead(t *testing.T) {
 	config.Diff = "empty"
 
 	p, err := newPlan(config, web)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.diffError == "" {
-		t.Error("diffError is empty, want why the templates could not be read")
-	}
-	if got, want := mutatedTemplates(p), []string{"page server.Summary", "name string", "count float64"}; !slices.Equal(got, want) {
-		t.Errorf("mutated %q, want every template", got)
-	}
-	if text := reportText(t, p); !strings.Contains(text, "every template counts as changed: the templates at empty could not be read (") {
-		t.Errorf("report does not say why everything was mutated:\n%s", text)
-	}
+	require.NoError(t, err)
+	assert.NotEmpty(t, p.diffError, "diffError says why the templates could not be read")
+	assert.Equal(t, []string{"page server.Summary", "name string", "count float64"}, mutatedTemplates(p), "mutated: every template")
+	assert.Contains(t, reportText(t, p), "every template counts as changed: the templates at empty could not be read (", "report says why everything was mutated")
 }
 
 // TestNewPlanWithDiffAtARevisionGitDoesNotKnow states that an unknown
@@ -338,10 +303,7 @@ func TestNewPlanWithDiffAtARevisionGitDoesNotKnow(t *testing.T) {
 	config.Diff = "no-such-revision"
 
 	_, err := newPlan(config, web)
-	if err == nil || !strings.Contains(err.Error(), "no-such-revision") {
-		t.Fatalf("newPlan = %v, want an error naming the revision", err)
-	}
-	if !strings.Contains(err.Error(), "fatal:") {
-		t.Errorf("newPlan = %v, want what git said", err)
-	}
+	require.Error(t, err, "newPlan")
+	require.ErrorContains(t, err, "no-such-revision", "newPlan names the revision")
+	assert.ErrorContains(t, err, "fatal:", "newPlan says what git said")
 }
