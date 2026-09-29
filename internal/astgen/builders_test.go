@@ -231,12 +231,16 @@ func TestTypeFormatter(t *testing.T) {
 	if got := tf.Qualifier(other); got != "other1" {
 		t.Errorf("Qualifier(other) again = %q, want the name it was given", got)
 	}
+	tf.Idents = []string{"third", "third1", "third2"}
+	if got := tf.Qualifier(types.NewPackage("example.com/third", "third")); got != "third3" {
+		t.Errorf("Qualifier(third) = %q, want third3, the first name the file does not declare", got)
+	}
 	tf.Idents = nil
 	if got := tf.Qualifier(colliding); got != "other" {
 		t.Errorf("Qualifier(colliding) = %q, want other", got)
 	}
 
-	want := "import (\n\tother1 \"example.com/other\"\n\t\"example.com/x/other\"\n)"
+	want := "import (\n\tother1 \"example.com/other\"\n\tthird3 \"example.com/third\"\n\t\"example.com/x/other\"\n)"
 	if got := astgen.Format(tf.GenDecl()); got != want {
 		t.Errorf("GenDecl = %q, want %q", got, want)
 	}
@@ -245,7 +249,7 @@ func TestTypeFormatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := `{"example.com/other":"other1","example.com/x/other":"other"}`; string(encoded) != want {
+	if want := `{"example.com/other":"other1","example.com/third":"third3","example.com/x/other":"other"}`; string(encoded) != want {
 		t.Errorf("json.Marshal(TypeFormatter) = %s, want %s", encoded, want)
 	}
 }
