@@ -60,9 +60,7 @@ func TestNearestString(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			suggestion, found := astgen.NearestString(tt.Target, tt.Candidates)
 			assert.Equal(t, tt.Found, found, "NearestString(%q, %v)", tt.Target, tt.Candidates)
-			if tt.Found {
-				assert.Equal(t, tt.Suggestion, suggestion)
-			}
+			assert.Equal(t, tt.Suggestion, suggestion, "NearestString(%q, %v) suggestion", tt.Target, tt.Candidates)
 		})
 	}
 }

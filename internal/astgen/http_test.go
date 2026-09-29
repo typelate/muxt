@@ -1,6 +1,11 @@
 package astgen
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 // TestHTTPStatusName states which names resolve to a status code. A
 // template name may write the constant with or without its package
@@ -21,12 +26,8 @@ func TestHTTPStatusName(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HTTPStatusName(tt.name)
-			if err != nil {
-				t.Fatalf("HTTPStatusName(%q) = %v", tt.name, err)
-			}
-			if got != tt.want {
-				t.Errorf("HTTPStatusName(%q) = %d, want %d", tt.name, got, tt.want)
-			}
+			require.NoError(t, err, "HTTPStatusName(%q)", tt.name)
+			assert.Equal(t, tt.want, got, "HTTPStatusName(%q)", tt.name)
 		})
 	}
 }
@@ -46,15 +47,9 @@ func TestHTTPStatusNameRejectsWhatIsNotAConstant(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, err := HTTPStatusName(tt.name)
-			if err == nil {
-				t.Fatalf("HTTPStatusName(%q) = %d, want an error", tt.name, code)
-			}
-			if err.Error() != tt.want {
-				t.Errorf("HTTPStatusName(%q) = %q, want %q", tt.name, err, tt.want)
-			}
-			if code != 0 {
-				t.Errorf("HTTPStatusName(%q) = %d, want no code beside the error", tt.name, code)
-			}
+			require.Error(t, err, "HTTPStatusName(%q) = %d, want an error", tt.name, code)
+			assert.Equal(t, tt.want, err.Error(), "HTTPStatusName(%q) error", tt.name)
+			assert.Zero(t, code, "HTTPStatusName(%q) code beside the error", tt.name)
 		})
 	}
 }

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -56,12 +59,8 @@ func TestConvertToString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			im := imports{}
 			got, err := astgen.ConvertToString(im, ast.NewIdent("v"), source.NewType(types.Typ[tt.kind]))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if s := astgen.Format(got); s != tt.want {
-				t.Errorf("ConvertToString(%s) = %q, want %q", tt.name, s, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, astgen.Format(got), "ConvertToString(%s)", tt.name)
 		})
 	}
 
@@ -75,9 +74,7 @@ func TestConvertToString(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := astgen.ConvertToString(imports{}, ast.NewIdent("v"), source.NewType(tt.tp))
-			if err == nil || err.Error() != tt.want {
-				t.Errorf("ConvertToString(%s) error = %v, want %q", tt.name, err, tt.want)
-			}
+			assert.EqualError(t, err, tt.want, "ConvertToString(%s) error", tt.name)
 		})
 	}
 }
@@ -98,12 +95,8 @@ func TestStrconvCalls(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			im := imports{}
-			if got := astgen.Format(tt.call(im)); got != tt.want {
-				t.Errorf("%s call = %q, want %q", tt.name, got, tt.want)
-			}
-			if im["strconv"] != "strconv" {
-				t.Errorf("%s did not register the strconv import: %v", tt.name, im)
-			}
+			assert.Equal(t, tt.want, astgen.Format(tt.call(im)), "%s call", tt.name)
+			assert.Equal(t, "strconv", im["strconv"], "%s should register the strconv import: %v", tt.name, im)
 		})
 	}
 }
@@ -155,17 +148,11 @@ func TestBuilders(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			im := imports{}
-			if got := astgen.Format(tt.node(im)); got != tt.want {
-				t.Errorf("%s = %q, want %q", tt.name, got, tt.want)
-			}
+			assert.Equal(t, tt.want, astgen.Format(tt.node(im)), tt.name)
 			for _, pkg := range tt.imports {
-				if _, ok := im[pkg]; !ok {
-					t.Errorf("%s did not register the %s import: %v", tt.name, pkg, im)
-				}
+				assert.Contains(t, im, pkg, "%s should register the %s import", tt.name, pkg)
 			}
-			if len(im) != len(tt.imports) {
-				t.Errorf("%s registered imports %v, want %v", tt.name, im, tt.imports)
-			}
+			assert.Len(t, im, len(tt.imports), "%s registered imports %v, want %v", tt.name, im, tt.imports)
 		})
 	}
 }
@@ -173,9 +160,7 @@ func TestBuilders(t *testing.T) {
 func TestGetBufferFromPool(t *testing.T) {
 	stmts := astgen.GetBufferFromPool(imports{}, "pool", "buf")
 	want := "{\n\tbuf := pool.Get().(*bytes.Buffer)\n\tbuf.Reset()\n\tdefer pool.Put(buf)\n}"
-	if got := astgen.Format(&ast.BlockStmt{List: stmts}); got != want {
-		t.Errorf("GetBufferFromPool = %q, want %q", got, want)
-	}
+	assert.Equal(t, want, astgen.Format(&ast.BlockStmt{List: stmts}), "GetBufferFromPool")
 }
 
 func TestFindFieldWithName(t *testing.T) {
@@ -193,22 +178,21 @@ func TestFindFieldWithName(t *testing.T) {
 		{name: "c", wantType: "string", wantOK: true},
 		{name: "d"},
 	} {
-		field, ok := astgen.FindFieldWithName(list, tt.name)
-		if ok != tt.wantOK {
-			t.Errorf("FindFieldWithName(%q) found = %v, want %v", tt.name, ok, tt.wantOK)
-			continue
-		}
-		if ok && astgen.Format(field.Type) != tt.wantType {
-			t.Errorf("FindFieldWithName(%q).Type = %s, want %s", tt.name, astgen.Format(field.Type), tt.wantType)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			field, ok := astgen.FindFieldWithName(list, tt.name)
+			if !assert.Equal(t, tt.wantOK, ok, "FindFieldWithName(%q) found", tt.name) {
+				return
+			}
+			if ok {
+				assert.Equal(t, tt.wantType, astgen.Format(field.Type), "FindFieldWithName(%q).Type", tt.name)
+			}
+		})
 	}
 }
 
 func TestFormatReportsUnparsableNodes(t *testing.T) {
 	got := astgen.Format(&ast.BasicLit{Kind: token.INT, Value: "not a number"})
-	if !strings.HasPrefix(got, "formatting error:") {
-		t.Errorf("Format(bad literal) = %q, want it to report a formatting error", got)
-	}
+	assert.True(t, strings.HasPrefix(got, "formatting error:"), "Format(bad literal) = %q, want it to report a formatting error", got)
 }
 
 func TestTypeFormatter(t *testing.T) {
