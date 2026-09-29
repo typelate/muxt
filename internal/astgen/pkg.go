@@ -46,12 +46,8 @@ func (tf *TypeFormatter) Qualifier(pkg *types.Package) string {
 		return name
 	}
 	name = pkg.Name()
-	for i := 1; i < 100; i++ {
-		if slices.Contains(tf.Idents, name) {
-			name = pkg.Name() + strconv.Itoa(i)
-			continue
-		}
-		break
+	for i := 1; slices.Contains(tf.Idents, name); i++ {
+		name = pkg.Name() + strconv.Itoa(i)
 	}
 	tf.Imports[pth] = name
 	return name
