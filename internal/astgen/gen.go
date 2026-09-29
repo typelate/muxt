@@ -17,8 +17,6 @@ type ImportManager interface {
 	ImportSpecs() []*ast.ImportSpec
 }
 
-// ExportedIdentifier creates a selector expression for an exported identifier
-// from a package (e.g., http.ResponseWriter)
 func ExportedIdentifier(im ImportManager, pkgName, pkgPath, ident string) *ast.SelectorExpr {
 	return &ast.SelectorExpr{
 		X:   ast.NewIdent(im.Import(pkgName, pkgPath)),

@@ -5,7 +5,6 @@ import (
 	"go/token"
 )
 
-// BytesNewBuffer creates a bytes.NewBuffer call expression
 func BytesNewBuffer(im ImportManager, expr ast.Expr) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun: &ast.SelectorExpr{

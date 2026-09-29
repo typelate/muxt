@@ -106,24 +106,20 @@ func HTTPStatusCode(im ImportManager, n int) ast.Expr {
 	return ExportedIdentifier(im, "", "net/http", ident)
 }
 
-// HTTPErrorCall creates an http.Error call expression
 func HTTPErrorCall(im ImportManager, response, message ast.Expr, code int) *ast.CallExpr {
 	return Call(im, "", "net/http", "Error", response, message, HTTPStatusCode(im, code))
 }
 
-// HTTPRequestPtr creates a *http.Request type expression
 func HTTPRequestPtr(im ImportManager) *ast.StarExpr {
 	return &ast.StarExpr{
 		X: ExportedIdentifier(im, "http", "net/http", "Request"),
 	}
 }
 
-// HTTPResponseWriter creates an http.ResponseWriter type expression
 func HTTPResponseWriter(im ImportManager) *ast.SelectorExpr {
 	return ExportedIdentifier(im, "http", "net/http", "ResponseWriter")
 }
 
-// AddNetHTTP registers the net/http import and returns its identifier
 func AddNetHTTP(im ImportManager) string {
 	return im.Import("", "net/http")
 }
@@ -140,12 +136,10 @@ func HTTPHandlerFuncType(file ImportManager, res, req string) *ast.FuncType {
 	return &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{HTTPResponseField(file, res), HTTPRequestField(file, req)}}}
 }
 
-// HTTPHandler creates an http.Handler type expression
 func HTTPHandler(im ImportManager) *ast.SelectorExpr {
 	return ExportedIdentifier(im, "http", "net/http", "Handler")
 }
 
-// HTTPMiddlewareFuncType creates the type expression func(next http.Handler) http.Handler
 func HTTPMiddlewareFuncType(im ImportManager) *ast.FuncType {
 	return &ast.FuncType{
 		Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("next")}, Type: HTTPHandler(im)}}},
