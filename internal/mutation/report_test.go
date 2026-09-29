@@ -3,6 +3,9 @@ package mutation
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // sampleReport is a finished run over two call sites. "page" holds a mutant
@@ -53,12 +56,8 @@ func writeReport(t *testing.T, report *Report) string {
 	t.Helper()
 	var out strings.Builder
 	n, err := report.WriteTo(&out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != int64(out.Len()) {
-		t.Errorf("WriteTo = %d, but wrote %d bytes", n, out.Len())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, int64(out.Len()), n, "WriteTo count of bytes written")
 	return out.String()
 }
 
@@ -77,9 +76,7 @@ page.go:9:9 ExecuteTemplate "page" (dot: server.Page)
 
 7 mutants, 3 killed, 3 missed, 1 skipped
 `
-	if got := writeReport(t, sampleReport()); got != want {
-		t.Errorf("report:\n%s\nwant:\n%s", got, want)
-	}
+	assert.Equal(t, want, writeReport(t, sampleReport()), "report")
 }
 
 // TestVerboseReportListsEverything states that a verbose report lists every
@@ -109,9 +106,7 @@ trimmed 1 subtree already mutated with the same dot:
 
 7 mutants, 3 killed, 3 missed, 1 skipped
 `
-	if got := writeReport(t, report); got != want {
-		t.Errorf("report:\n%s\nwant:\n%s", got, want)
-	}
+	assert.Equal(t, want, writeReport(t, report), "report")
 }
 
 // TestDryRunReportListsWhatWouldRun states that a dry run has no verdicts to
@@ -125,9 +120,7 @@ func TestDryRunReportListsWhatWouldRun(t *testing.T) {
 		"    KILL 3:5 template-drop\n",
 		"\n7 mutants, 6 runnable, 1 skipped\n",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("report does not say %q:\n%s", want, got)
-		}
+		assert.Contains(t, got, want, "report")
 	}
 }
 
@@ -136,7 +129,5 @@ func TestDryRunReportListsWhatWouldRun(t *testing.T) {
 func TestReportSaysTheBaselineFailed(t *testing.T) {
 	report := sampleReport()
 	report.Baseline = BaselineResult{}
-	if got := writeReport(t, report); !strings.Contains(got, "(complexity 4, seed 1)\nbaseline failed\n") {
-		t.Errorf("report does not say the baseline failed:\n%s", got)
-	}
+	assert.Contains(t, writeReport(t, report), "(complexity 4, seed 1)\nbaseline failed\n", "report says the baseline failed")
 }
