@@ -24,23 +24,11 @@ func renderValidations(im astgen.ImportManager, variable ast.Expr, validations [
 func renderValidation(im astgen.ImportManager, variable ast.Expr, validation muxt.InputValidation, handleError ValidationErrorBlock) ast.Stmt {
 	switch val := validation.(type) {
 	case muxt.MinValidation:
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  variable,
-				Op: token.LSS, // value < 13
-				Y:  &ast.BasicLit{Value: val.Min, Kind: token.INT},
-			},
-			Body: handleError(fmt.Sprintf("%s must not be less than %s", val.Name, val.Min)),
-		}
+		bound := &ast.BasicLit{Value: val.Min, Kind: token.INT}
+		return guard(variable, token.LSS, bound, handleError(fmt.Sprintf("%s must not be less than %s", val.Name, val.Min)))
 	case muxt.MaxValidation:
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  variable,
-				Op: token.GTR, // value > 13
-				Y:  &ast.BasicLit{Value: val.Max, Kind: token.INT},
-			},
-			Body: handleError(fmt.Sprintf("%s must not be more than %s", val.Name, val.Max)),
-		}
+		bound := &ast.BasicLit{Value: val.Max, Kind: token.INT}
+		return guard(variable, token.GTR, bound, handleError(fmt.Sprintf("%s must not be more than %s", val.Name, val.Max)))
 	case muxt.PatternValidation:
 		return &ast.IfStmt{
 			Cond: &ast.UnaryExpr{
@@ -56,24 +44,15 @@ func renderValidation(im astgen.ImportManager, variable ast.Expr, validation mux
 			Body: handleError(fmt.Sprintf("%s must match %q", val.Name, val.Pattern.String())),
 		}
 	case muxt.MinLengthValidation:
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{variable}},
-				Op: token.LSS,
-				Y:  astgen.Int(val.MinLength),
-			},
-			Body: handleError(fmt.Sprintf("%s is too short (the min length is %d)", val.Name, val.MinLength)),
-		}
+		return guard(astgen.CallBuiltinLen(variable), token.LSS, astgen.Int(val.MinLength), handleError(fmt.Sprintf("%s is too short (the min length is %d)", val.Name, val.MinLength)))
 	case muxt.MaxLengthValidation:
-		return &ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{variable}},
-				Op: token.GTR,
-				Y:  astgen.Int(val.MaxLength),
-			},
-			Body: handleError(fmt.Sprintf("%s is too long (the max length is %d)", val.Name, val.MaxLength)),
-		}
+		return guard(astgen.CallBuiltinLen(variable), token.GTR, astgen.Int(val.MaxLength), handleError(fmt.Sprintf("%s is too long (the max length is %d)", val.Name, val.MaxLength)))
 	default:
 		panic(fmt.Sprintf("unknown input validation type %T", validation))
 	}
+}
+
+// guard emits `if x op y { body }`.
+func guard(x ast.Expr, op token.Token, y ast.Expr, body *ast.BlockStmt) *ast.IfStmt {
+	return &ast.IfStmt{Cond: &ast.BinaryExpr{X: x, Op: op, Y: y}, Body: body}
 }
