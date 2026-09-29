@@ -196,7 +196,13 @@ func (c *sourceCollector) read(file string) (string, error) {
 }
 
 func (c *sourceCollector) relative(file string) string {
-	path, err := filepath.Rel(c.workingDirectory, file)
+	return relativePath(c.workingDirectory, file)
+}
+
+// relativePath is file as slash separated path from dir, or file as given
+// when there is no such path.
+func relativePath(dir, file string) string {
+	path, err := filepath.Rel(dir, file)
 	if err != nil {
 		return file
 	}
