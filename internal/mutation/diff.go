@@ -181,8 +181,6 @@ func extract(r io.Reader, dir string) error {
 				err = os.Symlink(header.Linkname, path)
 			}
 		}
-		// Anything else, such as the global header git writes to name the
-		// commit, holds no file.
 		if err != nil {
 			return err
 		}

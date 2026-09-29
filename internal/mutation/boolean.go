@@ -148,7 +148,6 @@ func (n *boolNode) simplify() *boolNode {
 			return &boolNode{kind: boolConst, value: !kid.value}
 		}
 		if kid.kind == boolNot {
-			// Double negation.
 			return kid.kids[0]
 		}
 		return &boolNode{kind: boolNot, kids: []*boolNode{kid}}
@@ -177,19 +176,16 @@ func (n *boolNode) simplify() *boolNode {
 			if kid.value == zero {
 				return &boolNode{kind: boolConst, value: zero}
 			}
-			// The identity element contributes nothing.
 			continue
 		}
 		key := kid.canonical()
 		if _, done := seen[key]; done {
-			// Idempotence: X and X is X.
 			continue
 		}
 		seen[key] = struct{}{}
 		kept = append(kept, kid)
 	}
 
-	// Complement: X and not X is false; X or not X is true.
 	for _, kid := range kept {
 		if kid.kind != boolNot {
 			continue

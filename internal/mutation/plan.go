@@ -144,7 +144,6 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-// newPlan loads the project, then plans from it.
 func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
