@@ -36,18 +36,9 @@ type Files struct {
 //
 // The fake implementation interface is unstable and should not be relied upon.
 func Generate(config Config, pl []*packages.Package) (*Files, error) {
-	var targetPkg *packages.Package
-	for _, pkg := range pl {
-		if pkg.PkgPath == config.PackagePath {
-			targetPkg = pkg
-			break
-		}
-	}
-	if targetPkg == nil {
-		return nil, fmt.Errorf("package %q not found in loaded packages", config.PackagePath)
-	}
-	if targetPkg.Name == "main" {
-		return nil, fmt.Errorf("cannot generate fake server for package %q: package is main (the target package must be a library)", config.PackagePath)
+	targetPkg, err := libraryPackage(pl, config.PackagePath)
+	if err != nil {
+		return nil, err
 	}
 
 	cache := &preloadedCache{
@@ -74,32 +65,47 @@ func Generate(config Config, pl []*packages.Package) (*Files, error) {
 		return nil, fmt.Errorf("counterfeiter generate: %w", err)
 	}
 
-	// Generate main.go from template.
-	pkgAlias := targetPkg.Name
-	if mainTemplateReservedNames[pkgAlias] {
-		pkgAlias += "pkg"
-	}
-
-	type mainTemplateData struct {
-		Config
-		PackageName string
-	}
-	var mainBuf bytes.Buffer
-	if err := mainFuncTemplate.Execute(&mainBuf, mainTemplateData{
-		Config:      config,
-		PackageName: pkgAlias,
-	}); err != nil {
-		return nil, fmt.Errorf("executing main template: %w", err)
-	}
-	mainBytes, err := format.Source(mainBuf.Bytes())
+	mainSource, err := renderMain(config, targetPkg.Name)
 	if err != nil {
-		return nil, fmt.Errorf("formatting main.go: %w", err)
+		return nil, err
 	}
 
 	return &Files{
-		Main: mainBytes,
+		Main: mainSource,
 		Fake: fakeSource,
 	}, nil
+}
+
+func libraryPackage(pl []*packages.Package, path string) (*packages.Package, error) {
+	for _, pkg := range pl {
+		if pkg.PkgPath != path {
+			continue
+		}
+		if pkg.Name == "main" {
+			return nil, fmt.Errorf("cannot generate fake server for package %q: package is main (the target package must be a library)", path)
+		}
+		return pkg, nil
+	}
+	return nil, fmt.Errorf("package %q not found in loaded packages", path)
+}
+
+func renderMain(config Config, packageName string) ([]byte, error) {
+	if mainTemplateReservedNames[packageName] {
+		packageName += "pkg"
+	}
+	var buf bytes.Buffer
+	err := mainFuncTemplate.Execute(&buf, struct {
+		Config
+		PackageName string
+	}{Config: config, PackageName: packageName})
+	if err != nil {
+		return nil, fmt.Errorf("executing main template: %w", err)
+	}
+	source, err := format.Source(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("formatting main.go: %w", err)
+	}
+	return source, nil
 }
 
 // mainTemplateReservedNames are identifiers used in mainFuncTemplate that would
