@@ -2,6 +2,7 @@ package muxt
 
 import (
 	"html/template"
+	"slices"
 	"text/template/parse"
 )
 
@@ -35,83 +36,92 @@ func analyzeRedirectCalls(ts *template.Template, defs []Definition) {
 //
 // visited stops a template that reaches itself.
 func walkTemplateCommands(node parse.Node, ts *template.Template, visited map[string]bool, dotIsTemplateData bool, visit func(*parse.CommandNode, bool) bool) bool {
-	if node == nil {
-		return false
-	}
+	w := commandWalker{ts: ts, visited: visited, visit: visit}
+	return w.node(node, dotIsTemplateData)
+}
 
+type commandWalker struct {
+	ts      *template.Template
+	visited map[string]bool
+	visit   func(*parse.CommandNode, bool) bool
+}
+
+func (w *commandWalker) node(node parse.Node, dot bool) bool {
 	switch n := node.(type) {
 	case *parse.ListNode:
-		if n == nil {
-			return false
-		}
-		for _, child := range n.Nodes {
-			if walkTemplateCommands(child, ts, visited, dotIsTemplateData, visit) {
-				return true
-			}
-		}
-
+		return n != nil && slices.ContainsFunc(n.Nodes, func(child parse.Node) bool { return w.node(child, dot) })
 	case *parse.ActionNode:
-		return walkTemplateCommands(n.Pipe, ts, visited, dotIsTemplateData, visit)
-
+		return w.pipe(n.Pipe, dot)
 	case *parse.PipeNode:
-		if n == nil {
-			return false
-		}
-		for _, cmd := range n.Cmds {
-			if visit(cmd, dotIsTemplateData) {
-				return true
-			}
-			// A parenthesised pipeline is an argument, not a command of
-			// this pipeline, so it needs the walk of its own. Chaining a
-			// field onto one -- (.Redirect "/x").Header -- leaves the
-			// pipeline inside the chain, where it still has to be walked.
-			for _, arg := range cmd.Args {
-				pipe, ok := arg.(*parse.PipeNode)
-				if chain, isChain := arg.(*parse.ChainNode); isChain {
-					pipe, ok = chain.Node.(*parse.PipeNode)
-				}
-				if ok {
-					if walkTemplateCommands(pipe, ts, visited, dotIsTemplateData, visit) {
-						return true
-					}
-				}
-			}
-		}
-
+		return w.pipe(n, dot)
 	case *parse.IfNode:
 		// An if does not rebind dot, in either branch.
-		return walkBranchCommands(&n.BranchNode, ts, visited, dotIsTemplateData, dotIsTemplateData, visit)
-
+		return w.branch(&n.BranchNode, dot, dot)
 	case *parse.WithNode:
 		// Inside the body dot is whatever the with selected; the else
 		// branch runs with the dot the with was written under.
-		return walkBranchCommands(&n.BranchNode, ts, visited, false, dotIsTemplateData, visit)
-
+		return w.branch(&n.BranchNode, false, dot)
 	case *parse.RangeNode:
 		// Inside the body dot is one element of what was ranged over.
-		return walkBranchCommands(&n.BranchNode, ts, visited, false, dotIsTemplateData, visit)
-
+		return w.branch(&n.BranchNode, false, dot)
 	case *parse.TemplateNode:
-		if n.Pipe != nil {
-			// The argument is evaluated where the invocation is written.
-			if walkTemplateCommands(n.Pipe, ts, visited, dotIsTemplateData, visit) {
-				return true
-			}
-		}
-		if visited[n.Name] {
-			return false
-		}
-		visited[n.Name] = true
-		defer delete(visited, n.Name)
-
-		called := ts.Lookup(n.Name)
-		if called == nil || called.Tree == nil {
-			return false
-		}
-		return walkTemplateCommands(called.Tree.Root, ts, visited, passesDotAlong(n, dotIsTemplateData), visit)
+		return w.template(n, dot)
 	}
-
 	return false
+}
+
+func (w *commandWalker) pipe(pipe *parse.PipeNode, dot bool) bool {
+	if pipe == nil {
+		return false
+	}
+	for _, cmd := range pipe.Cmds {
+		if w.visit(cmd, dot) || w.arguments(cmd, dot) {
+			return true
+		}
+	}
+	return false
+}
+
+// arguments walks the parenthesised pipelines among cmd's arguments: an
+// argument is not a command of the pipeline it is written in. Chaining a field
+// onto one -- (.Redirect "/x").Header -- leaves the pipeline inside the
+// chain, where it still has to be walked.
+func (w *commandWalker) arguments(cmd *parse.CommandNode, dot bool) bool {
+	for _, arg := range cmd.Args {
+		if chain, ok := arg.(*parse.ChainNode); ok {
+			arg = chain.Node
+		}
+		if pipe, ok := arg.(*parse.PipeNode); ok && w.pipe(pipe, dot) {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *commandWalker) branch(branch *parse.BranchNode, bodyDot, elseDot bool) bool {
+	// The pipeline itself is evaluated with the dot in force outside the
+	// branch, which is the one the else branch runs under too.
+	return w.pipe(branch.Pipe, elseDot) ||
+		w.node(branch.List, bodyDot) ||
+		w.node(branch.ElseList, elseDot)
+}
+
+func (w *commandWalker) template(n *parse.TemplateNode, dot bool) bool {
+	// The argument is evaluated where the invocation is written.
+	if w.pipe(n.Pipe, dot) {
+		return true
+	}
+	if w.visited[n.Name] {
+		return false
+	}
+	w.visited[n.Name] = true
+	defer delete(w.visited, n.Name)
+
+	called := w.ts.Lookup(n.Name)
+	if called == nil || called.Tree == nil {
+		return false
+	}
+	return w.node(called.Tree.Root, passesDotAlong(n, dot))
 }
 
 // passesDotAlong reports whether the template a {{template}} node invokes
@@ -130,14 +140,6 @@ func passesDotAlong(n *parse.TemplateNode, dotIsTemplateData bool) bool {
 	}
 	_, isDot := cmd.Args[0].(*parse.DotNode)
 	return isDot
-}
-
-func walkBranchCommands(branch *parse.BranchNode, ts *template.Template, visited map[string]bool, bodyDot, elseDot bool, visit func(*parse.CommandNode, bool) bool) bool {
-	// The pipeline itself is evaluated with the dot in force outside the
-	// branch, which is the one the else branch runs under too.
-	return walkTemplateCommands(branch.Pipe, ts, visited, elseDot, visit) ||
-		walkTemplateCommands(branch.List, ts, visited, bodyDot, visit) ||
-		walkTemplateCommands(branch.ElseList, ts, visited, elseDot, visit)
 }
 
 // canTemplateRedirect reports whether a template, or one it calls, can reach
