@@ -3,8 +3,10 @@ package generate
 import (
 	"io"
 	"log"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/fake"
@@ -28,30 +30,20 @@ func (T) Title(id int) string { return "" }
 `, "T", `{{define "GET /article/{id} Article(id, Title(id))"}}{{end}}`)
 
 	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	groups, err := groupTemplates(config, defs)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	file := newFile(pkg)
 	def := groups.all[0]
 
 	var handlers []string
 	for range 2 {
 		handler, err := callHandlerFunc(file, config, def, config.ReceiverInterface)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		handlers = append(handlers, astgen.Format(handler))
 	}
-	if handlers[0] != handlers[1] {
-		t.Errorf("the second handler differs from the first:\n%s\nsecond:\n%s", handlers[0], handlers[1])
-	}
-	if got := astgen.Format(def.CallExpression()); got != "Article(id, Title(id))" {
-		t.Errorf("the route's call is %s after generation, want it as written", got)
-	}
+	assert.Equal(t, handlers[0], handlers[1], "the second handler differs from the first")
+	assert.Equal(t, "Article(id, Title(id))", astgen.Format(def.CallExpression()), "the route's call after generation, want it as written")
 }
 
 // TestHandlerGenerationRejectsAnArgumentWithNoRequestValue generates an sse
@@ -68,11 +60,7 @@ func (T) Stream(string) {}
 `, "T", `{{define "GET /x sse(Stream(fooMessage))"}}{{end}}{{define "fooMessage"}}{{end}}`)
 
 	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = TemplateRoutesFiles(".", config, pkg, defs, log.New(io.Discard, "", 0))
-	if err == nil || !strings.Contains(err.Error(), "failed to determine type for fooMessage") {
-		t.Errorf("got error %v, want it to say it failed to determine type for fooMessage", err)
-	}
+	assert.ErrorContains(t, err, "failed to determine type for fooMessage")
 }

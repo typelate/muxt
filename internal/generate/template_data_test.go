@@ -5,6 +5,8 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/typelate/muxt/internal/astgen"
 )
 
@@ -86,9 +88,7 @@ func TestTemplateDataMethods(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := astgen.Format(tt.decl); got != tt.want {
-				t.Errorf("%s =\n%s\nwant\n%s", tt.name, got, tt.want)
-			}
+			assert.Equal(t, tt.want, astgen.Format(tt.decl), tt.name)
 		})
 	}
 }
@@ -96,7 +96,5 @@ func TestTemplateDataMethods(t *testing.T) {
 func TestHTMXRequestHeaderBoolMethod(t *testing.T) {
 	decl := htmxRequestHeaderBoolMethod("TemplateData", "Flag", "X-Flag", token.NEQ, "yes")
 	want := "func (data *TemplateData[R, T]) Flag() bool {\n\treturn data.Request().Header.Get(\"X-Flag\") != \"yes\"\n}"
-	if got := astgen.Format(decl); got != want {
-		t.Errorf("htmxRequestHeaderBoolMethod = %s, want %s", got, want)
-	}
+	assert.Equal(t, want, astgen.Format(decl), "htmxRequestHeaderBoolMethod")
 }
