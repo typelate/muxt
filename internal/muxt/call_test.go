@@ -505,9 +505,7 @@ func TestArgument(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tc.Template))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			for i := range defs {
 				err = muxt.ResolveCall(&defs[i], pkg, tc.Receiver, checker)

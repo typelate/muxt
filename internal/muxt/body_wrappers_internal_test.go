@@ -1,6 +1,10 @@
 package muxt
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestScanBodyBindings(t *testing.T) {
 	for _, tt := range []struct {
@@ -21,9 +25,7 @@ func TestScanBodyBindings(t *testing.T) {
 		{name: "nested and direct", call: `F(form, G(multipart, body))`, want: bodyBindings{reads: 1, hasForm: true, hasMultipart: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := scanBodyBindings(mustParseCall(t, tt.call)); got != tt.want {
-				t.Errorf("scanBodyBindings(%s) = %+v, want %+v", tt.call, got, tt.want)
-			}
+			assert.Equal(t, tt.want, scanBodyBindings(mustParseCall(t, tt.call)), "scanBodyBindings(%s)", tt.call)
 		})
 	}
 }

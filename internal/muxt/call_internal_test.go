@@ -8,6 +8,9 @@ import (
 	"html/template"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -15,13 +18,9 @@ import (
 func mustParseCall(t *testing.T, src string) *ast.CallExpr {
 	t.Helper()
 	e, err := parser.ParseExpr(src)
-	if err != nil {
-		t.Fatalf("ParseExpr(%q) = %v", src, err)
-	}
+	require.NoError(t, err, "ParseExpr(%q)", src)
 	call, ok := e.(*ast.CallExpr)
-	if !ok {
-		t.Fatalf("ParseExpr(%q) is %T, want *ast.CallExpr", src, e)
-	}
+	require.True(t, ok, "ParseExpr(%q) is %T, want *ast.CallExpr", src, e)
 	return call
 }
 
@@ -46,37 +45,37 @@ func TestCountBodyConsumers(t *testing.T) {
 		{expr: `Outer(Inner(form), body)`, want: 2},
 	} {
 		t.Run(tt.expr, func(t *testing.T) {
-			if got := countBodyConsumers(mustParseCall(t, tt.expr)); got != tt.want {
-				t.Errorf("countBodyConsumers(%q) = %d, want %d", tt.expr, got, tt.want)
-			}
+			assert.Equal(t, tt.want, countBodyConsumers(mustParseCall(t, tt.expr)), "countBodyConsumers(%q)", tt.expr)
 		})
 	}
 }
 
 func TestDefinitionsBodyArgumentErrors(t *testing.T) {
+	const (
+		unmarshalJSONShape = "the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)"
+		unmarshalFormShape = "the unmarshalForm wrapper requires exactly one argument, the reserved body identifier: unmarshalForm(body)"
+		consumedTwice      = "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"
+		nestedExecute      = "call Outer argument error: the execute callback must be a direct argument of the route's method call"
+	)
 	for _, tt := range []struct {
 		name, template, wantErr string
 	}{
-		{name: "unmarshalJSON requires the body identifier", template: `{{define "POST / Save(unmarshalJSON(form))"}}{{end}}`, wantErr: "the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)"},
-		{name: "unmarshalJSON requires exactly one argument", template: `{{define "POST / Save(unmarshalJSON(body, ctx))"}}{{end}}`, wantErr: "the unmarshalJSON wrapper requires exactly one argument, the reserved body identifier: unmarshalJSON(body)"},
-		{name: "request body may be consumed at most once", template: `{{define "POST / Save(ctx, body, unmarshalJSON(body))"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
-		{name: "unmarshalForm requires the body identifier", template: `{{define "POST / Save(unmarshalForm(form))"}}{{end}}`, wantErr: "the unmarshalForm wrapper requires exactly one argument, the reserved body identifier: unmarshalForm(body)"},
-		{name: "form parses the request body", template: `{{define "POST / Save(ctx, form, body)"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
-		{name: "multipart parses the request body", template: `{{define "POST / Save(ctx, multipart, unmarshalJSON(body))"}}{{end}}`, wantErr: "call Save reads the request body 2 times; the request body is a single-use stream and may be consumed at most once"},
-		{name: "execute nested in a call argument", template: `{{define "GET / Outer(Inner(execute))"}}{{end}}`, wantErr: "call Outer argument error: the execute callback must be a direct argument of the route's method call"},
-		{name: "execute nested inside a representation wrapper call argument", template: `{{define "GET / marshalJSON(Outer(Inner(execute)))"}}{{end}}`, wantErr: "call Outer argument error: the execute callback must be a direct argument of the route's method call"},
+		{name: "unmarshalJSON requires the body identifier", template: `{{define "POST / Save(unmarshalJSON(form))"}}{{end}}`, wantErr: unmarshalJSONShape},
+		{name: "unmarshalJSON requires exactly one argument", template: `{{define "POST / Save(unmarshalJSON(body, ctx))"}}{{end}}`, wantErr: unmarshalJSONShape},
+		{name: "request body may be consumed at most once", template: `{{define "POST / Save(ctx, body, unmarshalJSON(body))"}}{{end}}`, wantErr: consumedTwice},
+		{name: "unmarshalForm requires the body identifier", template: `{{define "POST / Save(unmarshalForm(form))"}}{{end}}`, wantErr: unmarshalFormShape},
+		{name: "form parses the request body", template: `{{define "POST / Save(ctx, form, body)"}}{{end}}`, wantErr: consumedTwice},
+		{name: "multipart parses the request body", template: `{{define "POST / Save(ctx, multipart, unmarshalJSON(body))"}}{{end}}`, wantErr: consumedTwice},
+		{name: "execute nested in a call argument", template: `{{define "GET / Outer(Inner(execute))"}}{{end}}`, wantErr: nestedExecute},
+		{name: "execute nested inside a representation wrapper call argument", template: `{{define "GET / marshalJSON(Outer(Inner(execute)))"}}{{end}}`, wantErr: nestedExecute},
 		{name: "sse callback nested in a call argument", template: `{{define "GET / sse(Outer(Inner(sseClock)))"}}{{end}}`, wantErr: "call Outer argument error: the sseClock callback must be a direct argument of the route's method call"},
 		{name: "unmarshalForm conflicts with multipart like form does", template: `{{define "POST / Save(unmarshalForm(body), multipart)"}}{{end}}`, wantErr: `call Save has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(tt.template))
 			_, err := Definitions(source.Variable{Name: "templates", Set: ts})
-			if err == nil {
-				t.Fatalf("Definitions(%q) = nil error, want %q", tt.template, tt.wantErr)
-			}
-			if err.Error() != tt.wantErr {
-				t.Errorf("Definitions(%q) error = %q, want %q", tt.template, err.Error(), tt.wantErr)
-			}
+			require.Error(t, err, "Definitions(%q)", tt.template)
+			assert.Equal(t, tt.wantErr, err.Error(), "Definitions(%q) error", tt.template)
 		})
 	}
 }
@@ -92,9 +91,7 @@ func TestRewriteBodyFormWrappers(t *testing.T) {
 		t.Run(tt.expr, func(t *testing.T) {
 			call := mustParseCall(t, tt.expr)
 			rewriteBodyFormWrappers(call)
-			if got := astgen.Format(call); got != tt.want {
-				t.Errorf("rewriteBodyFormWrappers(%q) = %q, want %q", tt.expr, got, tt.want)
-			}
+			assert.Equal(t, tt.want, astgen.Format(call), "rewriteBodyFormWrappers(%q)", tt.expr)
 		})
 	}
 }
@@ -117,21 +114,13 @@ func TestPeelRepresentationWrapper(t *testing.T) {
 		t.Run(tt.expr, func(t *testing.T) {
 			call := mustParseCall(t, tt.expr)
 			representation, inner, innerFun, ok := peelRepresentationWrapper(call.Fun.(*ast.Ident), call)
-			if ok != tt.peeled {
-				t.Fatalf("peelRepresentationWrapper(%q) ok = %t, want %t", tt.expr, ok, tt.peeled)
-			}
+			require.Equal(t, tt.peeled, ok, "peelRepresentationWrapper(%q) ok", tt.expr)
 			if !tt.peeled {
 				return
 			}
-			if representation != tt.representation {
-				t.Errorf("peelRepresentationWrapper(%q) representation = %q, want %q", tt.expr, representation, tt.representation)
-			}
-			if innerFun.Name != tt.fun {
-				t.Errorf("peelRepresentationWrapper(%q) fun = %q, want %q", tt.expr, innerFun.Name, tt.fun)
-			}
-			if inner == nil {
-				t.Errorf("peelRepresentationWrapper(%q) inner call is nil", tt.expr)
-			}
+			assert.Equal(t, tt.representation, representation, "peelRepresentationWrapper(%q) representation", tt.expr)
+			assert.Equal(t, tt.fun, innerFun.Name, "peelRepresentationWrapper(%q) fun", tt.expr)
+			assert.NotNil(t, inner, "peelRepresentationWrapper(%q) inner call", tt.expr)
 		})
 	}
 }
@@ -151,12 +140,8 @@ func TestRewriteSignalsArguments(t *testing.T) {
 		t.Run(tt.expr, func(t *testing.T) {
 			call := mustParseCall(t, tt.expr)
 			rewritten := rewriteSignalsArguments(call, tt.segments)
-			if rewritten != tt.rewritten {
-				t.Errorf("rewriteSignalsArguments(%q) = %t, want %t", tt.expr, rewritten, tt.rewritten)
-			}
-			if got := astgen.Format(call); got != tt.want {
-				t.Errorf("rewriteSignalsArguments(%q) rewrote to %q, want %q", tt.expr, got, tt.want)
-			}
+			assert.Equal(t, tt.rewritten, rewritten, "rewriteSignalsArguments(%q)", tt.expr)
+			assert.Equal(t, tt.want, astgen.Format(call), "rewriteSignalsArguments(%q) rewrote to", tt.expr)
 		})
 	}
 }
@@ -165,53 +150,43 @@ func TestDefinitionsSignals(t *testing.T) {
 	t.Run("signals marks the definition", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
 		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !defs[0].UsesSignals() {
-			t.Error("UsesSignals() = false, want true")
-		}
-		if got, want := astgen.Format(defs[0].CallExpression()), "Save(ctx, unmarshalJSON(body))"; got != want {
-			t.Errorf("call = %q, want %q", got, want)
-		}
+		require.NoError(t, err)
+		assert.True(t, defs[0].UsesSignals(), "UsesSignals()")
+		assert.Equal(t, "Save(ctx, unmarshalJSON(body))", astgen.Format(defs[0].CallExpression()), "call")
 	})
 	t.Run("a signals path wildcard keeps its path-value meaning", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
 		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if defs[0].UsesSignals() {
-			t.Error("UsesSignals() = true, want false")
-		}
+		require.NoError(t, err)
+		assert.False(t, defs[0].UsesSignals(), "UsesSignals()")
 	})
 }
 
 func TestIsSignalsCallbackArgument(t *testing.T) {
-	for name, want := range map[string]bool{
-		"countsSignals":     true,
-		"Signals":           true,
-		"signals":           false,
-		"countsSignal":      false,
-		"signalsCounts":     false,
-		"boardStateSignals": true,
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{name: "countsSignals", want: true},
+		{name: "Signals", want: true},
+		{name: "signals", want: false},
+		{name: "countsSignal", want: false},
+		{name: "signalsCounts", want: false},
+		{name: "boardStateSignals", want: true},
 	} {
-		if got := isSignalsCallbackArgument(name); got != want {
-			t.Errorf("isSignalsCallbackArgument(%q) = %t, want %t", name, got, want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isSignalsCallbackArgument(tt.name), "isSignalsCallbackArgument(%q)", tt.name)
+		})
 	}
 }
 
 func TestDefinitionsSignalsCallback(t *testing.T) {
 	ts := template.Must(template.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	name, ok := defs[0].SignalsCallback()
-	if !ok || name != "countsSignals" {
-		t.Errorf("SignalsCallback() = %q, %t; want %q, true", name, ok, "countsSignals")
-	}
+	assert.True(t, ok, "SignalsCallback() ok")
+	assert.Equal(t, "countsSignals", name, "SignalsCallback() name")
 }
 
 // TestTypeQualifier states how a type is named in a message about a route:
@@ -226,10 +201,6 @@ func TestTypeQualifier(t *testing.T) {
 		obj := types.NewTypeName(token.NoPos, pkg, name, nil)
 		return types.NewNamed(obj, types.NewStruct(nil, nil), nil)
 	}
-	if got := types.TypeString(named(receiverPkg, "Page"), qual); got != "Page" {
-		t.Errorf("a receiver package type is %q, want %q", got, "Page")
-	}
-	if got := types.TypeString(named(otherPkg, "Page"), qual); got != "models.Page" {
-		t.Errorf("another package's type is %q, want %q", got, "models.Page")
-	}
+	assert.Equal(t, "Page", types.TypeString(named(receiverPkg, "Page"), qual), "a receiver package type")
+	assert.Equal(t, "models.Page", types.TypeString(named(otherPkg, "Page"), qual), "another package's type")
 }

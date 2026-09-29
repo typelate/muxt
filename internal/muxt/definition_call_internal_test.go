@@ -1,6 +1,10 @@
 package muxt
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestCallWriteHeader(t *testing.T) {
 	for _, tt := range []struct {
@@ -17,12 +21,11 @@ func TestCallWriteHeader(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			def := Definition{call: mustParseCall(t, tt.call)}
-			if got := def.callWriteHeader(); got != tt.want {
-				t.Errorf("callWriteHeader(%s) = %t, want %t", tt.call, got, tt.want)
-			}
+			assert.Equal(t, tt.want, def.callWriteHeader(), "callWriteHeader(%s)", tt.call)
 		})
 	}
-	if !(Definition{}).callWriteHeader() {
-		t.Error("callWriteHeader() of a definition without a call = false, want true")
-	}
+
+	t.Run("a definition without a call", func(t *testing.T) {
+		assert.True(t, (Definition{}).callWriteHeader(), "callWriteHeader() of a definition without a call")
+	})
 }
