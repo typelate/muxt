@@ -3,6 +3,7 @@ package muxt
 import (
 	"fmt"
 	"html/template"
+	"slices"
 	"strings"
 	"text/template/parse"
 )
@@ -92,43 +93,38 @@ func responseStateCallInCommand(cmd *parse.CommandNode, dotIsTemplateData bool) 
 		return "", false
 	}
 	for _, arg := range cmd.Args {
-		switch a := arg.(type) {
-		case *parse.FieldNode:
-			// .StatusCode is only TemplateData's when dot still is.
-			// Inside a with or a range it names a field of whatever was
-			// selected, and reporting that would reject a working route.
-			if !dotIsTemplateData {
-				continue
-			}
-			for _, ident := range a.Ident {
-				if writesResponseState(ident) {
-					return ident, true
-				}
-			}
-		case *parse.VariableNode:
-			// $ is the dot the template started with, whatever the
-			// current one is, so $.StatusCode is TemplateData's wherever
-			// it is written.
-			if len(a.Ident) == 0 || a.Ident[0] != "$" {
-				continue
-			}
-			for _, ident := range a.Ident[1:] {
-				if writesResponseState(ident) {
-					return ident, true
-				}
-			}
-		case *parse.ChainNode:
-			if !chainStartsAtTemplateData(a, dotIsTemplateData) {
-				continue
-			}
-			for _, field := range a.Field {
-				if writesResponseState(field) {
-					return field, true
-				}
-			}
+		names := templateDataNames(arg, dotIsTemplateData)
+		if i := slices.IndexFunc(names, writesResponseState); i >= 0 {
+			return names[i], true
 		}
 	}
 	return "", false
+}
+
+// templateDataNames lists the names an argument selects from TemplateData, and
+// none when it does not start there.
+func templateDataNames(arg parse.Node, dotIsTemplateData bool) []string {
+	switch a := arg.(type) {
+	case *parse.FieldNode:
+		// .StatusCode is only TemplateData's when dot still is.
+		// Inside a with or a range it names a field of whatever was
+		// selected, and reporting that would reject a working route.
+		if dotIsTemplateData {
+			return a.Ident
+		}
+	case *parse.VariableNode:
+		// $ is the dot the template started with, whatever the
+		// current one is, so $.StatusCode is TemplateData's wherever
+		// it is written.
+		if len(a.Ident) > 0 && a.Ident[0] == "$" {
+			return a.Ident[1:]
+		}
+	case *parse.ChainNode:
+		if chainStartsAtTemplateData(a, dotIsTemplateData) {
+			return a.Field
+		}
+	}
+	return nil
 }
 
 // chainStartsAtTemplateData reports whether a chained expression is rooted
