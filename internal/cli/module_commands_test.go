@@ -158,6 +158,20 @@ func TestGenerateFakeServerWithSeveralPackagesKeepsTheLast(t *testing.T) {
 	}
 }
 
+func TestExploreModuleListsGeneratedPackages(t *testing.T) {
+	wd := newTwoPackageModule(t)
+	if _, _, err := execute(t, wd, "-C", "a", "generate"); err != nil {
+		t.Fatalf("generate error = %v", err)
+	}
+	stdout, _, err := execute(t, wd, "explore-module", "--format=json")
+	if err != nil {
+		t.Fatalf("explore-module error = %v", err)
+	}
+	if !strings.Contains(stdout, `"path": "example.com/a"`) || strings.Contains(stdout, `"path": "example.com/b"`) {
+		t.Errorf("explore-module output = %s\nwant only package a", stdout)
+	}
+}
+
 func TestGenerateFakeServerRejectsADirectoryWithoutRoutes(t *testing.T) {
 	wd := newTwoPackageModule(t)
 	_, _, err := execute(t, wd, "generate-fake-server", "a")
