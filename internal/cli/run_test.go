@@ -148,7 +148,7 @@ func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
 }
 
 func TestRunFailsOutsideAModule(t *testing.T) {
-	for _, args := range [][]string{{"check"}, {"generate"}, {"list-template-callers"}} {
+	for _, args := range [][]string{{"check"}, {"generate"}, {"list-template-callers"}, {testTemplateMutationsName}} {
 		if _, _, err := execute(t, t.TempDir(), args...); err == nil {
 			t.Errorf("muxt %v outside a module = nil error, want one", args)
 		}

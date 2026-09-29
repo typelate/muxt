@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -86,6 +87,8 @@ func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 		{name: "garbage", input: "not-a-size", wantErr: "invalid byte size"},
 		{name: "negative", input: "-1MB", wantErr: "invalid byte size"},
 		{name: "overflow int64", input: "10EB", wantErr: "exceeds int64 maximum"},
+		{name: "largest int64", input: "9223372036854775807", want: math.MaxInt64},
+		{name: "one past int64", input: "9223372036854775808", wantErr: "exceeds int64 maximum"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &generate.RoutesFileConfiguration{}
@@ -116,6 +119,14 @@ func TestMultipartMaxMemoryFlag_String(t *testing.T) {
 		got := f.String()
 		if !strings.Contains(got, "MiB") && !strings.Contains(got, "MB") {
 			t.Fatalf("String() = %q, want a human-readable size", got)
+		}
+	})
+	t.Run("a nil flag or configuration shows default", func(t *testing.T) {
+		want := (&multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}).String()
+		for name, f := range map[string]*multipartMaxMemoryFlag{"nil flag": nil, "nil configuration": {}} {
+			if got := f.String(); got != want {
+				t.Errorf("String() of a %s = %q, want %q", name, got, want)
+			}
 		}
 	})
 	t.Run("override shows override", func(t *testing.T) {
