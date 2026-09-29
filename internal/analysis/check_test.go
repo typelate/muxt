@@ -218,6 +218,7 @@ func declaredTemplates(t *testing.T) *template.Template {
 	t.Helper()
 	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
 	ts.New("declared")
+	ts.New("GET /bare Bare()")
 	if ts.Lookup("declared") == nil || ts.Lookup("declared").Tree != nil {
 		t.Fatal("the premise of this test is wrong: declared should exist without a tree")
 	}
