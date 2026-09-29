@@ -162,7 +162,7 @@ func (b *routePathBuilder) declareParameter(ident string, valueType source.Type)
 	if err != nil {
 		return err
 	}
-	if len(b.fields) > 0 && b.lastType.Identical(valueType) {
+	if !b.lastType.IsZero() && b.lastType.Identical(valueType) {
 		last := b.fields[len(b.fields)-1]
 		last.Names = append(last.Names, ast.NewIdent(ident))
 		return nil

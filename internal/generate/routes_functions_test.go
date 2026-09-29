@@ -27,6 +27,8 @@ func (T) B() string { return "" }
 
 func (T) Nested(string) string { return "" }
 
+func (T) Two(a, b string) string { return "" }
+
 type ResponseWriter interface{ Write([]byte) (int, error) }
 
 func (T) Raw(ResponseWriter) string { return "" }

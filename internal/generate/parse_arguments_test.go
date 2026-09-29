@@ -3,6 +3,7 @@ package generate
 import (
 	"go/ast"
 	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -42,6 +43,22 @@ func TestAppendParseArgumentStatementsRejectsUnexpectedArgumentExpressions(t *te
 	_, err := appendParseArgumentStatements(nil, scalarTestFile(t), []muxt.Argument{{}}, "", testConfig(), call, nil, nil)
 	if want := "unsupported argument 1 in call to F"; err == nil || err.Error() != want {
 		t.Errorf("appendParseArgumentStatements error = %v, want %q", err, want)
+	}
+}
+
+func TestAppendParseArgumentStatementsNumbersNestedCallResults(t *testing.T) {
+	pkg, defs := routesTestDefinitions(t, map[string]string{
+		"a.gohtml": `{{define "GET /two Two(B(), B())"}}{{end}}`,
+	})
+	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := astgen.Format(handler.Body)
+	for _, want := range []string{"result0 := receiver.B()", "result1 := receiver.B()", "receiver.Two(result0, result1)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("handler does not contain %q:\n%s", want, got)
+		}
 	}
 }
 
