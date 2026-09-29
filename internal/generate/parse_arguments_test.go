@@ -3,8 +3,10 @@ package generate
 import (
 	"go/ast"
 	"go/token"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -31,9 +33,7 @@ func TestAppendParseArgumentStatementsRejectsUnresolvedCalls(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := appendParseArgumentStatements(nil, file, tt.args, "", testConfig(), tt.call, nil, nil)
-			if err == nil || err.Error() != tt.want {
-				t.Errorf("appendParseArgumentStatements error = %v, want %q", err, tt.want)
-			}
+			assert.EqualError(t, err, tt.want, "appendParseArgumentStatements error")
 		})
 	}
 }
@@ -41,9 +41,7 @@ func TestAppendParseArgumentStatementsRejectsUnresolvedCalls(t *testing.T) {
 func TestAppendParseArgumentStatementsRejectsUnexpectedArgumentExpressions(t *testing.T) {
 	call := &ast.CallExpr{Fun: ast.NewIdent("F"), Args: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "1"}}}
 	_, err := appendParseArgumentStatements(nil, scalarTestFile(t), []muxt.Argument{{}}, "", testConfig(), call, nil, nil)
-	if want := "unsupported argument 1 in call to F"; err == nil || err.Error() != want {
-		t.Errorf("appendParseArgumentStatements error = %v, want %q", err, want)
-	}
+	assert.EqualError(t, err, "unsupported argument 1 in call to F", "appendParseArgumentStatements error")
 }
 
 func TestAppendParseArgumentStatementsNumbersNestedCallResults(t *testing.T) {
@@ -51,22 +49,16 @@ func TestAppendParseArgumentStatementsNumbersNestedCallResults(t *testing.T) {
 		"a.gohtml": `{{define "GET /two Two(B(), B())"}}{{end}}`,
 	})
 	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := astgen.Format(handler.Body)
 	for _, want := range []string{"result0 := receiver.B()", "result1 := receiver.B()", "receiver.Two(result0, result1)"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("handler does not contain %q:\n%s", want, got)
-		}
+		assert.Contains(t, got, want, "handler body")
 	}
 }
 
 func TestMismatchedArgumentError(t *testing.T) {
 	err := mismatchedArgumentError(scalarTestFile(t), muxt.Argument{Identifier: "fooMessage"})
-	if err == nil || err.Error() != "failed to determine type for fooMessage" {
-		t.Errorf("mismatchedArgumentError = %v, want failed to determine type for fooMessage", err)
-	}
+	assert.EqualError(t, err, "failed to determine type for fooMessage", "mismatchedArgumentError")
 }
 
 func TestRequestArgumentSource(t *testing.T) {
@@ -84,17 +76,11 @@ func TestRequestArgumentSource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := requestArgumentSource(tt.argument)
 			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Errorf("requestArgumentSource(%s) error = %v, want %q", tt.name, err, tt.wantErr)
-				}
+				assert.EqualError(t, err, tt.wantErr, "requestArgumentSource(%s) error", tt.name)
 				return
 			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if s := astgen.Format(got); s != tt.want {
-				t.Errorf("requestArgumentSource(%s) = %q, want %q", tt.name, s, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, astgen.Format(got), "requestArgumentSource(%s)", tt.name)
 		})
 	}
 }

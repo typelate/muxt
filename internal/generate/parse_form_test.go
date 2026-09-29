@@ -3,8 +3,10 @@ package generate
 import (
 	"go/ast"
 	"go/types"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
@@ -25,9 +27,7 @@ func TestCallParseMultipartFormMaxMemory(t *testing.T) {
 			config := testConfig()
 			config.MultipartMaxMemory = tt.maxMemory
 			got := astgen.Format(callParseMultipartForm(scalarTestFile(t), config, &ast.BlockStmt{}))
-			if !strings.Contains(got, tt.want) {
-				t.Errorf("callParseMultipartForm(%d) = %s, want it to call %s", tt.maxMemory, got, tt.want)
-			}
+			assert.Contains(t, got, tt.want, "callParseMultipartForm(%d)", tt.maxMemory)
 		})
 	}
 }
@@ -45,12 +45,8 @@ func TestTypedVar(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			decl, err := typedVar(scalarTestFile(t), "form", tp, tt.value)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := astgen.Format(decl); got != tt.want {
-				t.Errorf("typedVar(form, %s) = %q, want %q", tt.name, got, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, astgen.Format(decl), "typedVar(form, %s)", tt.name)
 		})
 	}
 }
