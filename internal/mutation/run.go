@@ -127,7 +127,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 	if err != nil {
 		return nil, err
 	}
-	tester := goTest{dir: workingDirectory, packages: testedPackages(config), match: config.Run, extra: config.GoTestArgs, env: config.env}
+	tester := config.goTest(workingDirectory)
 	return runPlan(p, config, status, tester.run, tester.verdict)
 }
 
@@ -138,7 +138,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 // built here, because it is the slow part of a run and everything this
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
-func runPlan(p *plan, config Configuration, status io.Writer, baseline func(extra []string) (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
+func runPlan(p *plan, config Configuration, status io.Writer, baseline func(flags ...string) (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -152,7 +152,7 @@ func runPlan(p *plan, config Configuration, status io.Writer, baseline func(extr
 	}
 
 	started := time.Now()
-	if out, err := baseline(nil); err != nil {
+	if out, err := baseline(); err != nil {
 		if !isTestFailure(err) {
 			return nil, err
 		}

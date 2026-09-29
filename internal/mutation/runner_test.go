@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -68,6 +69,47 @@ func readMutated(t *testing.T, overlay string) string {
 	}
 	t.Fatal("overlay replaces nothing")
 	return ""
+}
+
+// TestWriteMutantMapsTheFileToItsMutatedCopy states that the overlay
+// replaces the mutant's file with a copy holding the mutation, and that no
+// two mutants share a directory.
+func TestWriteMutantMapsTheFileToItsMutatedCopy(t *testing.T) {
+	_, p := runnerFixture(t, []bool{true, false})
+	scratch := t.TempDir()
+
+	var dirs []string
+	for i, mutant := range p.mutants {
+		overlay, err := writeMutant(scratch, mutant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got struct{ Replace map[string]string }
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
+		mutated, ok := got.Replace[mutant.File]
+		if !ok || len(got.Replace) != 1 {
+			t.Fatalf("mutant %d overlay = %v, want only %s replaced", i, got.Replace, mutant.File)
+		}
+		if want := mutant.Apply(); readMutated(t, overlay) != want {
+			t.Errorf("mutant %d copy = %q, want %q", i, readMutated(t, overlay), want)
+		}
+		if filepath.Base(mutated) != filepath.Base(mutant.File) {
+			t.Errorf("mutant %d copy is named %q, want %q", i, filepath.Base(mutated), filepath.Base(mutant.File))
+		}
+		if filepath.Dir(mutated) != filepath.Dir(overlay) || filepath.Dir(filepath.Dir(overlay)) != scratch {
+			t.Errorf("mutant %d wrote %s and %s, want both in a directory of its own under %s", i, mutated, overlay, scratch)
+		}
+		dirs = append(dirs, filepath.Dir(overlay))
+	}
+	if dirs[0] == dirs[1] {
+		t.Errorf("mutants share the directory %s", dirs[0])
+	}
 }
 
 // TestRunAllWritesVerdictsInPlanOrder states that however many mutants run

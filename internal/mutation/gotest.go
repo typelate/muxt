@@ -21,20 +21,30 @@ type goTest struct {
 	env []string
 }
 
-func (t goTest) run(extra []string) (string, error) {
-	// go test reads [flags] [packages] [flags and test binary flags]. A
-	// flag it does not know -- a test binary's own, such as -update --
-	// ends the package list, so the caller's flags go after the packages,
-	// where they cannot cut it short.
+func (c Configuration) goTest(dir string) goTest {
+	packages := c.Packages
+	if len(packages) == 0 {
+		packages = []string{"./..."}
+	}
+	return goTest{dir: dir, packages: packages, match: c.Run, extra: c.GoTestArgs, env: c.env}
+}
+
+// args is the go test command line. go test reads [flags] [packages]
+// [flags and test binary flags]. A flag it does not know -- a test
+// binary's own, such as -update -- ends the package list, so the caller's
+// flags go after the packages, where they cannot cut it short.
+func (t goTest) args(flags ...string) []string {
 	args := []string{"test", "-count=1"}
-	args = append(args, extra...)
+	args = append(args, flags...)
 	if t.match != nil {
 		args = append(args, "-run="+t.match.String())
 	}
 	args = append(args, t.packages...)
-	args = append(args, t.extra...)
+	return append(args, t.extra...)
+}
 
-	cmd := exec.Command("go", args...)
+func (t goTest) run(flags ...string) (string, error) {
+	cmd := exec.Command("go", t.args(flags...)...)
 	cmd.Dir = t.dir
 	if t.env != nil {
 		// os/exec points PWD at Dir only when it supplies the environment
@@ -51,7 +61,11 @@ func (t goTest) run(extra []string) (string, error) {
 // verdict runs the tests against one mutant's overlay and reports whether
 // they caught it. An error means go test could not run at all.
 func (t goTest) verdict(overlay string) (Status, error) {
-	_, err := t.run([]string{"-overlay=" + overlay})
+	_, err := t.run("-overlay=" + overlay)
+	return verdictOf(err)
+}
+
+func verdictOf(err error) (Status, error) {
 	switch {
 	case err == nil:
 		return StatusMissed, nil
@@ -60,15 +74,6 @@ func (t goTest) verdict(overlay string) (Status, error) {
 	default:
 		return "", err
 	}
-}
-
-// testedPackages is the package patterns a run tests, with the default
-// applied.
-func testedPackages(config Configuration) []string {
-	if len(config.Packages) == 0 {
-		return []string{"./..."}
-	}
-	return config.Packages
 }
 
 // isTestFailure reports whether go test exited the way it does when a
