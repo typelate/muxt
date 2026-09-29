@@ -5,8 +5,23 @@ import (
 	"testing"
 	"text/template/parse"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/asteval"
 )
+
+// ifPipe parses `{{if pipeline}}x{{end}}` and returns the template text and
+// the if's pipeline.
+func ifPipe(t *testing.T, pipeline string) (string, *parse.PipeNode) {
+	t.Helper()
+	text := `{{if ` + pipeline + `}}x{{end}}`
+	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	require.NoError(t, err)
+	node, ok := trees["t"].Root.Nodes[0].(*parse.IfNode)
+	require.Truef(t, ok, "first node is %T, want an if", trees["t"].Root.Nodes[0])
+	return text, node.Pipe
+}
 
 // TestSimplifyReducesConditions states the laws the decision simplifier
 // applies.
@@ -127,28 +142,13 @@ func TestSimplifyReducesConditions(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			text := `{{if ` + tt.pipeline + `}}x{{end}}`
-			trees, err := asteval.ParseTrees("t", text, "", "", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			node, ok := trees["t"].Root.Nodes[0].(*parse.IfNode)
-			if !ok {
-				t.Fatalf("first node is %T, want an if", trees["t"].Root.Nodes[0])
-			}
-			built, ok := decision(text, node.Pipe)
-			if !ok {
-				t.Fatalf("decision(%q) could not be modelled", tt.pipeline)
-			}
+			text, pipe := ifPipe(t, tt.pipeline)
+			built, ok := decision(text, pipe)
+			require.Truef(t, ok, "decision(%q) could not be modelled", tt.pipeline)
 
 			simplified := built.simplify()
-			if got := simplified.canonical(); got != tt.canonical {
-				t.Errorf("simplify(%q).canonical() = %q, want %q", tt.pipeline, got, tt.canonical)
-			}
-			got := simplified.conditions()
-			if strings.Join(got, ",") != strings.Join(tt.conditions, ",") {
-				t.Errorf("simplify(%q).conditions() = %v, want %v", tt.pipeline, got, tt.conditions)
-			}
+			assert.Equal(t, tt.canonical, simplified.canonical(), "simplify(%q).canonical()", tt.pipeline)
+			assert.Equal(t, strings.Join(tt.conditions, ","), strings.Join(simplified.conditions(), ","), "simplify(%q).conditions()", tt.pipeline)
 		})
 	}
 }
@@ -172,15 +172,9 @@ func TestDecisionRefusesWhatItCannotModel(t *testing.T) {
 		`and .A (eq .B 1)`,
 	} {
 		t.Run(pipeline, func(t *testing.T) {
-			text := `{{if ` + pipeline + `}}x{{end}}`
-			trees, err := asteval.ParseTrees("t", text, "", "", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			node := trees["t"].Root.Nodes[0].(*parse.IfNode)
-			if _, ok := decision(text, node.Pipe); ok {
-				t.Errorf("decision(%q) was modelled, want it declined so the general operand combinations apply instead", pipeline)
-			}
+			text, pipe := ifPipe(t, pipeline)
+			_, ok := decision(text, pipe)
+			assert.False(t, ok, "decision(%q) was modelled, want it declined so the general operand combinations apply instead", pipeline)
 		})
 	}
 }
@@ -190,9 +184,10 @@ func TestDecisionCommandRefusesACommandWithoutArguments(t *testing.T) {
 		"nil":   nil,
 		"empty": {},
 	} {
-		if node, ok := decisionCommand("", command); ok {
-			t.Errorf("decisionCommand(%s command) = %v, want it declined", name, node)
-		}
+		t.Run(name, func(t *testing.T) {
+			node, ok := decisionCommand("", command)
+			assert.False(t, ok, "decisionCommand(%s command) = %v, want it declined", name, node)
+		})
 	}
 }
 
@@ -210,8 +205,9 @@ func TestLogicalKind(t *testing.T) {
 	} {
 		t.Run(tt.function, func(t *testing.T) {
 			kind, ok := logicalKind(tt.function)
-			if ok != tt.ok || (ok && kind != tt.kind) {
-				t.Errorf("logicalKind(%q) = %v, %t, want %v, %t", tt.function, kind, ok, tt.kind, tt.ok)
+			assert.Equal(t, tt.ok, ok, "logicalKind(%q) ok", tt.function)
+			if ok {
+				assert.Equal(t, tt.kind, kind, "logicalKind(%q)", tt.function)
 			}
 		})
 	}
@@ -236,11 +232,9 @@ func TestDecisionCallArity(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			node, ok := decisionCall(tt.kind, "", tt.args)
-			if ok != tt.ok {
-				t.Fatalf("decisionCall(%v, %d args) ok = %t, want %t", tt.kind, len(tt.args), ok, tt.ok)
-			}
-			if ok && len(node.kids) != len(tt.args) {
-				t.Errorf("decisionCall(%v, %d args) has %d operands", tt.kind, len(tt.args), len(node.kids))
+			require.Equal(t, tt.ok, ok, "decisionCall(%v, %d args) ok", tt.kind, len(tt.args))
+			if ok {
+				assert.Len(t, node.kids, len(tt.args), "decisionCall(%v, %d args) operands", tt.kind, len(tt.args))
 			}
 		})
 	}
@@ -270,17 +264,15 @@ func TestSimplifyHelpers(t *testing.T) {
 			{name: "double", kid: not(a), want: ".A"},
 			{name: "condition", kid: a, want: "not(.A)"},
 		} {
-			if got := negate(tt.kid).canonical(); got != tt.want {
-				t.Errorf("negate(%s) = %q, want %q", tt.name, got, tt.want)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Equal(t, tt.want, negate(tt.kid).canonical(), "negate(%s)", tt.name)
+			})
 		}
 	})
 
 	t.Run("flatten", func(t *testing.T) {
 		got := canonicals(flatten(boolAnd, []*boolNode{a, junction(boolAnd, b, a), junction(boolOr, a, b), not(not(b))}))
-		if want := ".A .B .A or(.A,.B) .B"; got != want {
-			t.Errorf("flatten(and, ...) = %q, want %q", got, want)
-		}
+		assert.Equal(t, ".A .B .A or(.A,.B) .B", got, "flatten(and, ...)")
 	})
 
 	t.Run("foldConstants", func(t *testing.T) {
@@ -296,18 +288,19 @@ func TestSimplifyHelpers(t *testing.T) {
 			{name: "or drops false", kids: []*boolNode{constant(false), a}, zero: true, want: ".A"},
 			{name: "or decided by true", kids: []*boolNode{a, constant(true)}, zero: true, wantDecided: true},
 		} {
-			kept, decided := foldConstants(tt.kids, tt.zero)
-			if decided != tt.wantDecided || (!decided && canonicals(kept) != tt.want) {
-				t.Errorf("foldConstants(%s) = %q, %t, want %q, %t", tt.name, canonicals(kept), decided, tt.want, tt.wantDecided)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				kept, decided := foldConstants(tt.kids, tt.zero)
+				assert.Equal(t, tt.wantDecided, decided, "foldConstants(%s) decided", tt.name)
+				if !decided {
+					assert.Equal(t, tt.want, canonicals(kept), "foldConstants(%s) kept", tt.name)
+				}
+			})
 		}
 	})
 
 	t.Run("distinct", func(t *testing.T) {
 		got := canonicals(distinct([]*boolNode{a, b, a, junction(boolAnd, b, a), junction(boolAnd, a, b)}))
-		if want := ".A .B and(.A,.B)"; got != want {
-			t.Errorf("distinct = %q, want %q", got, want)
-		}
+		assert.Equal(t, ".A .B and(.A,.B)", got, "distinct")
 	})
 
 	t.Run("hasComplement", func(t *testing.T) {
@@ -321,9 +314,9 @@ func TestSimplifyHelpers(t *testing.T) {
 			{name: "not last", kids: []*boolNode{a, b, not(a)}, want: true},
 			{name: "different negation", kids: []*boolNode{a, not(b)}, want: false},
 		} {
-			if got := hasComplement(tt.kids); got != tt.want {
-				t.Errorf("hasComplement(%s) = %t, want %t", tt.name, got, tt.want)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Equal(t, tt.want, hasComplement(tt.kids), "hasComplement(%s)", tt.name)
+			})
 		}
 	})
 }

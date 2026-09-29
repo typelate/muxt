@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -62,12 +65,9 @@ func TestDelimitersReadsThemOffTheEndClause(t *testing.T) {
 			}
 
 			left, right, ok := delimiters(text, definition)
-			if ok != tt.ok {
-				t.Fatalf("delimiters(%q) ok = %t, want %t", tt.end, ok, tt.ok)
-			}
-			if left != tt.left || right != tt.right {
-				t.Errorf("delimiters(%q) = %q, %q, want %q, %q", tt.end, left, right, tt.left, tt.right)
-			}
+			require.Equal(t, tt.ok, ok, "delimiters(%q) ok", tt.end)
+			assert.Equal(t, tt.left, left, "delimiters(%q) left", tt.end)
+			assert.Equal(t, tt.right, right, "delimiters(%q) right", tt.end)
 		})
 	}
 }
@@ -86,9 +86,8 @@ func TestDelimitersDeclinesWhatItCannotRead(t *testing.T) {
 			Name: "t.gohtml",
 			End:  source.Span{Position: token.Position{Filename: "t.gohtml", Offset: len(text)}},
 		}
-		if _, _, ok := delimiters(text, definition); ok {
-			t.Error("delimiters accepted a definition with no end clause to read")
-		}
+		_, _, ok := delimiters(text, definition)
+		assert.False(t, ok, "delimiters accepted a definition with no end clause to read")
 	})
 
 	t.Run("a span outside the text", func(t *testing.T) {
@@ -100,9 +99,8 @@ func TestDelimitersDeclinesWhatItCannotRead(t *testing.T) {
 				Length:   99,
 			},
 		}
-		if _, _, ok := delimiters(text, definition); ok {
-			t.Error("delimiters read past the end of the text")
-		}
+		_, _, ok := delimiters(text, definition)
+		assert.False(t, ok, "delimiters read past the end of the text")
 	})
 }
 
@@ -124,21 +122,13 @@ func TestDelimitersAgreeWithTheScanner(t *testing.T) {
 	}
 
 	left, right, ok := delimiters(text, definition)
-	if !ok {
-		t.Fatal("delimiters could not read the pair off the end clause")
-	}
+	require.True(t, ok, "delimiters could not read the pair off the end clause")
 
 	found := regions(text, left, right)
-	if len(found) != 3 {
-		t.Fatalf("regions = %d, want the define, the action and the end", len(found))
-	}
-	if got := text[found[1].start:found[1].end]; got != "[[.Name]]" {
-		t.Errorf("second region = %q, want %q", got, "[[.Name]]")
-	}
+	require.Len(t, found, 3, "regions: the define, the action and the end")
+	assert.Equal(t, "[[.Name]]", text[found[1].start:found[1].end], "second region")
 
 	// The defaults find nothing here, which is the failure this whole
 	// derivation exists to avoid.
-	if none := regions(text, "", ""); len(none) != 0 {
-		t.Errorf("scanning with the default delimiters found %d regions, want none", len(none))
-	}
+	assert.Empty(t, regions(text, "", ""), "scanning with the default delimiters")
 }

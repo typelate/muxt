@@ -3,6 +3,8 @@ package mutation
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEstimateTotal(t *testing.T) {
@@ -21,9 +23,7 @@ func TestEstimateTotal(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			e := estimate{perMutant: time.Second, remaining: tt.remaining, workers: tt.workers}
-			if got := e.total(); got != tt.want {
-				t.Errorf("total() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, e.total(), "total()")
 		})
 	}
 }
@@ -32,10 +32,6 @@ func TestEstimateObserve(t *testing.T) {
 	e := estimate{perMutant: 10 * time.Second, remaining: 1, workers: 1}
 	e.observe(2 * time.Second)
 	e.observe(4 * time.Second)
-	if e.perMutant != 3*time.Second {
-		t.Errorf("perMutant = %v, want the average of what was observed, 3s", e.perMutant)
-	}
-	if e.remaining != 0 {
-		t.Errorf("remaining = %d, want it to stop at 0", e.remaining)
-	}
+	assert.Equal(t, 3*time.Second, e.perMutant, "perMutant is the average of what was observed")
+	assert.Equal(t, 0, e.remaining, "remaining stops at 0")
 }
