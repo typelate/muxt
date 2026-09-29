@@ -93,42 +93,56 @@ func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
 // however many times they appear they count as one read. The request body is
 // a single-use stream, so more than one read is a generation error.
 func countBodyConsumers(call *ast.CallExpr) int {
-	reads, hasForm, hasMultipart := scanBodyBindings(call)
-	if hasForm || hasMultipart {
-		reads++
+	b := scanBodyBindings(call)
+	if b.hasForm || b.hasMultipart {
+		b.reads++
 	}
-	return reads
+	return b.reads
+}
+
+type bodyBindings struct {
+	reads                 int
+	hasForm, hasMultipart bool
 }
 
 // scanBodyBindings walks call's argument tree, counting direct request-body
 // reads (the body identifier and the unmarshalJSON(body) wrapper) and noting
 // the form and multipart bindings (the form and multipart identifiers, and
 // unmarshalForm(body), which is the form binding).
-func scanBodyBindings(call *ast.CallExpr) (reads int, hasForm, hasMultipart bool) {
+func scanBodyBindings(call *ast.CallExpr) bodyBindings {
+	var b bodyBindings
 	for _, a := range call.Args {
 		switch exp := a.(type) {
 		case *ast.Ident:
-			switch exp.Name {
-			case TemplateNameScopeIdentifierRequestBody:
-				reads++
-			case TemplateNameScopeIdentifierForm:
-				hasForm = true
-			case TemplateNameScopeIdentifierMultipart:
-				hasMultipart = true
-			}
+			b.addIdent(exp.Name)
 		case *ast.CallExpr:
-			switch {
-			case isCallTo(exp, callWrapperUnmarshalJSON):
-				reads++
-			case isCallTo(exp, callWrapperUnmarshalForm):
-				hasForm = true
-			default:
-				nestedReads, nestedForm, nestedMultipart := scanBodyBindings(exp)
-				reads += nestedReads
-				hasForm = hasForm || nestedForm
-				hasMultipart = hasMultipart || nestedMultipart
-			}
+			b.addCall(exp)
 		}
 	}
-	return reads, hasForm, hasMultipart
+	return b
+}
+
+func (b *bodyBindings) addIdent(name string) {
+	switch name {
+	case TemplateNameScopeIdentifierRequestBody:
+		b.reads++
+	case TemplateNameScopeIdentifierForm:
+		b.hasForm = true
+	case TemplateNameScopeIdentifierMultipart:
+		b.hasMultipart = true
+	}
+}
+
+func (b *bodyBindings) addCall(exp *ast.CallExpr) {
+	switch {
+	case isCallTo(exp, callWrapperUnmarshalJSON):
+		b.reads++
+	case isCallTo(exp, callWrapperUnmarshalForm):
+		b.hasForm = true
+	default:
+		nested := scanBodyBindings(exp)
+		b.reads += nested.reads
+		b.hasForm = b.hasForm || nested.hasForm
+		b.hasMultipart = b.hasMultipart || nested.hasMultipart
+	}
 }

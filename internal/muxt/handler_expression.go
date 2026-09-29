@@ -152,7 +152,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 	if err := checkCallArguments(identifiers, call, sse, false); err != nil {
 		return err
 	}
-	if _, hasForm, hasMultipart := scanBodyBindings(call); hasForm && hasMultipart {
+	if b := scanBodyBindings(call); b.hasForm && b.hasMultipart {
 		node := findIdent(call, TemplateNameScopeIdentifierMultipart)
 		if node == nil {
 			node = call
@@ -191,17 +191,25 @@ func checkIdentifierArgument(identifiers []string, exp *ast.Ident, sse, nested b
 	// scope — a path parameter, say — keeps its scope meaning even
 	// when it matches a callback naming convention.
 	_, inScope := slices.BinarySearch(identifiers, exp.Name)
-	sseScoped := sse && !inScope && (isSSEArgument(exp.Name) || isSSEMessageArgument(exp.Name) || isSignalsCallbackArgument(exp.Name))
+	sseScoped := sse && !inScope && isSSECallbackName(exp.Name)
 	if !inScope && !sseScoped {
-		if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
-			return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
-		}
-		return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
+		return unknownArgumentError(exp, identifiers)
 	}
 	if nested && (exp.Name == TemplateNameScopeIdentifierExecute || sseScoped) {
 		return errAt(exp, "the %s callback must be a direct argument of the route's method call", exp.Name)
 	}
 	return nil
+}
+
+func isSSECallbackName(name string) bool {
+	return isSSEArgument(name) || isSSEMessageArgument(name) || isSignalsCallbackArgument(name)
+}
+
+func unknownArgumentError(exp *ast.Ident, identifiers []string) error {
+	if suggestion, ok := astgen.NearestString(exp.Name, identifiers); ok {
+		return errAt(exp, "unknown argument %s; did you mean %s?", exp.Name, suggestion)
+	}
+	return errAt(exp, "unknown argument %s; expected one of: %s", exp.Name, strings.Join(identifiers, ", "))
 }
 
 func checkNestedCallArgument(identifiers []string, parent, call *ast.CallExpr, sse bool) error {
