@@ -3,8 +3,10 @@ package mutation
 import (
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"slices"
 	"testing"
+	"text/template/parse"
 )
 
 // newSelector is a selector with nothing to compare with and no template
@@ -176,5 +178,40 @@ func TestPlanReportCounts(t *testing.T) {
 	report := p.report()
 	if report.Total != 7 || report.Skipped != 4 {
 		t.Errorf("total %d, skipped %d, want 7 and 4", report.Total, report.Skipped)
+	}
+}
+
+func TestHasRoot(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		tree *parse.Tree
+		want bool
+	}{
+		{name: "nil tree", tree: nil, want: false},
+		{name: "tree without root", tree: &parse.Tree{}, want: false},
+		{name: "tree with root", tree: &parse.Tree{Root: &parse.ListNode{}}, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasRoot(tt.tree); got != tt.want {
+				t.Errorf("hasRoot(%s) = %t, want %t", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRelativePath(t *testing.T) {
+	dir := filepath.Join(string(filepath.Separator), "work", "app")
+	for _, tt := range []struct {
+		name, dir, file, want string
+	}{
+		{name: "inside", dir: dir, file: filepath.Join(dir, "web", "page.gohtml"), want: "web/page.gohtml"},
+		{name: "outside", dir: dir, file: filepath.Join(dir, "..", "other", "a.gohtml"), want: "../other/a.gohtml"},
+		{name: "no relative path", dir: "relative", file: filepath.Join(dir, "a.gohtml"), want: filepath.Join(dir, "a.gohtml")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := relativePath(tt.dir, tt.file); got != tt.want {
+				t.Errorf("relativePath(%q, %q) = %q, want %q", tt.dir, tt.file, got, tt.want)
+			}
+		})
 	}
 }

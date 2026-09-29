@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"go/token"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"text/template/parse"
@@ -320,7 +319,7 @@ func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
 		return "does not parse", true
 	}
 	tree, ok := trees[sc.template]
-	if !ok || tree == nil || tree.Root == nil {
+	if !ok || !hasRoot(tree) {
 		return "template not found after mutation", true
 	}
 	if !checks(lt, tree, sc.dataType) {
@@ -364,7 +363,7 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}
 		for name, tree := range trees {
-			if tree == nil || tree.Root == nil {
+			if !hasRoot(tree) {
 				continue
 			}
 			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
@@ -400,6 +399,8 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 	return index, nil
 }
 
+func hasRoot(tree *parse.Tree) bool { return tree != nil && tree.Root != nil }
+
 // countActions reports how many dynamic or control flow actions a tree
 // holds, which is what a template has to offer a mutation.
 func countActions(node parse.Node) int {
@@ -430,9 +431,6 @@ func relativePosition(workingDirectory string, position token.Position) string {
 	if !position.IsValid() {
 		return "?"
 	}
-	path := position.Filename
-	if rel, err := filepath.Rel(workingDirectory, path); err == nil {
-		path = filepath.ToSlash(rel)
-	}
+	path := relativePath(workingDirectory, position.Filename)
 	return path + ":" + strconv.Itoa(position.Line) + ":" + strconv.Itoa(position.Column)
 }
