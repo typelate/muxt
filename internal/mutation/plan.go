@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"text/template/parse"
 
-	"github.com/typelate/check"
-
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -209,7 +207,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 
 		chosen := sel.choose(traverse(lt, index))
 		for _, sc := range chosen.mutate {
-			p.add(lt, sc, lt.Functions, in.dir)
+			p.add(lt, sc, in.dir)
 		}
 		p.unchanged = append(p.unchanged, chosen.unchanged...)
 		p.trimmed = append(p.trimmed, chosen.trimmed...)
@@ -230,8 +228,8 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 
 // add enumerates one template's mutants and files them under the call
 // that reaches it.
-func (p *plan) add(lt *checked, sc scope, functions check.Functions, workingDirectory string) {
-	found, notes := mutantsInScope(sc, functions, p.draw, p.maxCases)
+func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
+	found, notes := mutantsInScope(sc, lt.Functions, p.draw, p.maxCases)
 
 	report := TemplateReport{
 		Template:   sc.template,
@@ -252,7 +250,7 @@ func (p *plan) add(lt *checked, sc scope, functions check.Functions, workingDire
 			Mutated:  mutant.Replacement(),
 			Status:   StatusPending,
 		}
-		switch reason, broken := invalid(lt, sc, mutant, functions); {
+		switch reason, broken := invalid(lt, sc, mutant); {
 		case mutant.Operator == OperatorConditionDead:
 			// Simplification already proved this condition cannot change
 			// the decision, so no test could be coupled to it and there
@@ -315,9 +313,9 @@ func (p *plan) add(lt *checked, sc scope, functions check.Functions, workingDire
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *checked, sc scope, mutant Mutant, functions check.Functions) (string, bool) {
+func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
 	mutated := sc.src.mutatedText(mutant.edits)
-	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, functions)
+	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, lt.Functions)
 	if err != nil {
 		return "does not parse", true
 	}
