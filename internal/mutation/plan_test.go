@@ -5,8 +5,12 @@ import (
 	"go/types"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // newSelector is a selector with nothing to compare with and no template
@@ -178,6 +182,137 @@ func TestPlanReportCounts(t *testing.T) {
 	report := p.report()
 	if report.Total != 7 || report.Skipped != 4 {
 		t.Errorf("total %d, skipped %d, want 7 and 4", report.Total, report.Skipped)
+	}
+}
+
+func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
+	sourceOf := func(name, text string) *templateSource {
+		return newFileSource(name, name, text, "", "")
+	}
+	for _, tt := range []struct {
+		name    string
+		sources []*templateSource
+		want    string
+	}{
+		{
+			name:    "a later tree does not replace a non-empty one",
+			sources: []*templateSource{sourceOf("a.gohtml", "{{.A}}"), sourceOf("b.gohtml", "{{.B}}")},
+			want:    "a.gohtml",
+		},
+		{
+			name:    "a non-empty tree replaces an empty one",
+			sources: []*templateSource{sourceOf("a.gohtml", ""), sourceOf("b.gohtml", "{{.B}}")},
+			want:    "b.gohtml",
+		},
+		{
+			name:    "an empty tree replaces an empty one",
+			sources: []*templateSource{sourceOf("a.gohtml", ""), sourceOf("b.gohtml", " ")},
+			want:    "b.gohtml",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each file names the template it holds after its base name, so
+			// a shared define is what makes two sources compete for one name.
+			for _, src := range tt.sources {
+				src.rootName = "page"
+			}
+			index, err := indexTrees(tt.sources, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := index["page"].src.path; got != tt.want {
+				t.Errorf("indexTrees(...)[page] comes from %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
+	src := newFileSource("bad.gohtml", "bad.gohtml", "{{if}}", "", "")
+	_, err := indexTrees([]*templateSource{src}, nil)
+	if err == nil || !strings.HasPrefix(err.Error(), "bad.gohtml: ") {
+		t.Errorf("indexTrees(bad source) error = %v, want one naming bad.gohtml", err)
+	}
+}
+
+func TestVerifyReadable(t *testing.T) {
+	treeOf := func(text string) *parse.Tree {
+		trees, err := asteval.ParseTrees("page", text, "", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return trees["page"]
+	}
+	definition := func(name, text string) source.Definition {
+		return source.Definition{
+			Name:   name,
+			Tree:   treeOf(text),
+			Define: source.Span{Position: token.Position{Filename: filepath.Join("/work", name+".gohtml")}},
+		}
+	}
+	located := func(path, text string) treeLocation {
+		return treeLocation{src: &templateSource{path: path}, tree: treeOf(text)}
+	}
+
+	for _, tt := range []struct {
+		name      string
+		defs      []source.Definition
+		index     map[string]treeLocation
+		want      bool
+		wantPath  string
+		wantAbout string
+	}{
+		{
+			name:  "read with actions",
+			defs:  []source.Definition{definition("page", "{{.A}}")},
+			index: map[string]treeLocation{"page": located("page.gohtml", "{{.A}}")},
+		},
+		{
+			name:  "a static definition needs nothing",
+			defs:  []source.Definition{definition("page", "text")},
+			index: map[string]treeLocation{},
+		},
+		{
+			name:  "a definition without a tree needs nothing",
+			defs:  []source.Definition{{Name: "page"}},
+			index: map[string]treeLocation{},
+		},
+		{
+			name:      "indexed without actions is reported at its source",
+			defs:      []source.Definition{definition("page", "{{.A}}")},
+			index:     map[string]treeLocation{"page": located("web/page.gohtml", "text")},
+			want:      true,
+			wantPath:  "web/page.gohtml",
+			wantAbout: "page",
+		},
+		{
+			name:      "absent is reported at its define clause",
+			defs:      []source.Definition{definition("page", "{{.A}}")},
+			index:     map[string]treeLocation{},
+			want:      true,
+			wantPath:  "../page.gohtml",
+			wantAbout: "page",
+		},
+		{
+			name: "the first unreadable definition is reported",
+			defs: []source.Definition{definition("ok", "{{.A}}"), definition("one", "{{.A}}"), definition("two", "{{.A}}")},
+			index: map[string]treeLocation{
+				"ok": located("ok.gohtml", "{{.A}}"),
+			},
+			want:      true,
+			wantPath:  "../one.gohtml",
+			wantAbout: "one",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := verifyReadable(tt.defs, tt.index, filepath.Join("/work", "app"))
+			if (got != nil) != tt.want {
+				t.Fatalf("verifyReadable(...) = %v, want error %t", got, tt.want)
+			}
+			if got != nil && (got.Path != tt.wantPath || got.Template != tt.wantAbout) {
+				t.Errorf("verifyReadable(...) = template %q at %q, want %q at %q", got.Template, got.Path, tt.wantAbout, tt.wantPath)
+			}
+		})
 	}
 }
 
