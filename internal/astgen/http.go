@@ -98,7 +98,6 @@ func HTTPStatusName(name string) (int, error) {
 }
 
 // HTTPStatusCode creates an AST expression for an HTTP status code.
-// Returns http.StatusXXX constant if available, otherwise a literal int.
 func HTTPStatusCode(im ImportManager, n int) ast.Expr {
 	ident, ok := httpCodes[n]
 	if !ok {
