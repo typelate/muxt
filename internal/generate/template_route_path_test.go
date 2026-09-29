@@ -5,6 +5,9 @@ import (
 	"html/template"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
@@ -153,21 +156,13 @@ func TestRoutePathFunc(t *testing.T) {
 			id := fake.Lookup(t, pkg, "ID")
 			checker := fake.StandInChecker(t, pkg).ParsesFromText(id).FormatsAsText(id).Fake()
 			defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), checker)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			config := testConfig()
 			config.PathPrefix = tt.pathPrefix
 			decl, escapers, err := routePathFunc(newFile(src), config, &defs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := astgen.Format(decl); got != tt.want {
-				t.Errorf("routePathFunc(%q) =\n%s\nwant\n%s", tt.pattern, got, tt.want)
-			}
-			if escapers != tt.escapers {
-				t.Errorf("routePathFunc(%q) escapers = %+v, want %+v", tt.pattern, escapers, tt.escapers)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, astgen.Format(decl), "routePathFunc(%q)", tt.pattern)
+			assert.Equal(t, tt.escapers, escapers, "routePathFunc(%q) escapers", tt.pattern)
 		})
 	}
 }
