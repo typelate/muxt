@@ -3,8 +3,10 @@ package muxt
 import (
 	"go/ast"
 	"html/template"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/source"
 )
@@ -27,18 +29,13 @@ func TestCheckResponseWriterConflicts(t *testing.T) {
 			def := Definition{name: "GET /a A(response)", handler: "A(response)", hasResponseWriterArg: true}
 			err := checkResponseWriterConflicts(ts, []Definition{def})
 			if tt.want == "" {
-				if err != nil {
-					t.Fatalf("checkResponseWriterConflicts() = %v, want nil", err)
-				}
+				require.NoError(t, err, "checkResponseWriterConflicts()")
 				return
 			}
 			conflict, ok := err.(*ResponseWriterTemplateStateError)
-			if !ok {
-				t.Fatalf("checkResponseWriterConflicts() = %v, want a *ResponseWriterTemplateStateError", err)
-			}
-			if conflict.Method != tt.want || conflict.Template != def.name {
-				t.Errorf("checkResponseWriterConflicts() = %+v, want method %s of template %s", conflict, tt.want, def.name)
-			}
+			require.True(t, ok, "checkResponseWriterConflicts() = %v, want a *ResponseWriterTemplateStateError", err)
+			assert.Equal(t, tt.want, conflict.Method, "conflict method")
+			assert.Equal(t, def.name, conflict.Template, "conflict template")
 		})
 	}
 }
@@ -56,9 +53,7 @@ func TestCheckResponseWriterConflictsSkips(t *testing.T) {
 		{name: "no tree", def: Definition{name: "GET /b B(response)", hasResponseWriterArg: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := checkResponseWriterConflicts(ts, []Definition{tt.def}); err != nil {
-				t.Errorf("checkResponseWriterConflicts() = %v, want nil", err)
-			}
+			assert.NoError(t, checkResponseWriterConflicts(ts, []Definition{tt.def}), "checkResponseWriterConflicts()")
 		})
 	}
 }
@@ -76,39 +71,35 @@ func TestCheckResponseWriterConflictsNamesTheFunction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			def := Definition{name: "GET /a save(response)", handler: "save(response)", fun: tt.fun, hasResponseWriterArg: true}
 			conflict, ok := checkResponseWriterConflicts(ts, []Definition{def}).(*ResponseWriterTemplateStateError)
-			if !ok {
-				t.Fatal("checkResponseWriterConflicts() is not a *ResponseWriterTemplateStateError")
-			}
-			if conflict.Function != tt.want {
-				t.Errorf("Function = %q, want %q", conflict.Function, tt.want)
-			}
+			require.True(t, ok, "checkResponseWriterConflicts() is not a *ResponseWriterTemplateStateError")
+			assert.Equal(t, tt.want, conflict.Function, "Function")
 		})
 	}
 }
 
 func TestResponseWriterTemplateStateErrorMessage(t *testing.T) {
-	e := &ResponseWriterTemplateStateError{Template: "GET /a A(response)", Method: "StatusCode", Function: "A"}
 	const want = `template "GET /a A(response)" calls StatusCode but A takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method`
-	if got := e.Error(); got != want {
-		t.Errorf("Error() = %q, want %q", got, want)
-	}
-	e.Location = "a.gohtml:1:2"
-	if got := e.Error(); got != "a.gohtml:1:2: "+want {
-		t.Errorf("Error() with a location = %q, want it prefixed with the location", got)
-	}
-	e.Method = "Redirect"
-	if got := e.Error(); !strings.Contains(got, "or call http.Redirect in the method") {
-		t.Errorf("Error() for a redirect = %q, want the http.Redirect remedy", got)
-	}
+	e := &ResponseWriterTemplateStateError{Template: "GET /a A(response)", Method: "StatusCode", Function: "A"}
+
+	t.Run("without a location", func(t *testing.T) {
+		assert.Equal(t, want, e.Error(), "Error()")
+	})
+	t.Run("with a location", func(t *testing.T) {
+		located := *e
+		located.Location = "a.gohtml:1:2"
+		assert.Equal(t, "a.gohtml:1:2: "+want, located.Error(), "Error() with a location")
+	})
+	t.Run("for a redirect", func(t *testing.T) {
+		redirect := *e
+		redirect.Method = "Redirect"
+		assert.Contains(t, redirect.Error(), "or call http.Redirect in the method", "Error() for a redirect")
+	})
 }
 
 func TestDefinitionsReportsResponseWriterConflicts(t *testing.T) {
 	ts := template.Must(template.New("root").Parse(`{{define "GET /a A(response)"}}{{.StatusCode}}{{end}}`))
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
-	if _, ok := err.(*ResponseWriterTemplateStateError); !ok {
-		t.Fatalf("Definitions() error = %v, want a *ResponseWriterTemplateStateError", err)
-	}
-	if len(defs) != 1 {
-		t.Errorf("Definitions() returned %d definitions with the error, want 1", len(defs))
-	}
+	_, ok := err.(*ResponseWriterTemplateStateError)
+	require.True(t, ok, "Definitions() error = %v, want a *ResponseWriterTemplateStateError", err)
+	assert.Len(t, defs, 1, "Definitions() definitions returned with the error")
 }

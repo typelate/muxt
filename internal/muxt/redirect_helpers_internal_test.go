@@ -3,15 +3,16 @@ package muxt
 import (
 	"testing"
 	"text/template/parse"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func firstCommand(t *testing.T, text string) *parse.CommandNode {
 	t.Helper()
 	_, page := pageIn(t, text)
 	action, ok := page.Tree.Root.Nodes[0].(*parse.ActionNode)
-	if !ok {
-		t.Fatalf("%q does not start with an action", text)
-	}
+	require.True(t, ok, "%q does not start with an action", text)
 	return action.Pipe.Cmds[0]
 }
 
@@ -29,14 +30,13 @@ func TestContainsRedirectCall(t *testing.T) {
 		{template: `{{"literal"}}`},
 	} {
 		t.Run(tt.template, func(t *testing.T) {
-			if got := containsRedirectCall(firstCommand(t, tt.template)); got != tt.want {
-				t.Errorf("containsRedirectCall(%s) = %t, want %t", tt.template, got, tt.want)
-			}
+			assert.Equal(t, tt.want, containsRedirectCall(firstCommand(t, tt.template)), "containsRedirectCall(%s)", tt.template)
 		})
 	}
-	if containsRedirectCall(nil) {
-		t.Error("containsRedirectCall(nil) = true, want false")
-	}
+
+	t.Run("no command", func(t *testing.T) {
+		assert.False(t, containsRedirectCall(nil), "containsRedirectCall(nil)")
+	})
 }
 
 func TestCallsMethodOnTemplateData(t *testing.T) {
@@ -57,14 +57,13 @@ func TestCallsMethodOnTemplateData(t *testing.T) {
 		{name: "literal", template: `{{"x"}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := callsMethodOnTemplateData(firstCommand(t, tt.template)); got != tt.want {
-				t.Errorf("callsMethodOnTemplateData(%s) = %t, want %t", tt.template, got, tt.want)
-			}
+			assert.Equal(t, tt.want, callsMethodOnTemplateData(firstCommand(t, tt.template)), "callsMethodOnTemplateData(%s)", tt.template)
 		})
 	}
-	if callsMethodOnTemplateData(nil) {
-		t.Error("callsMethodOnTemplateData(nil) = true, want false")
-	}
+
+	t.Run("no command", func(t *testing.T) {
+		assert.False(t, callsMethodOnTemplateData(nil), "callsMethodOnTemplateData(nil)")
+	})
 }
 
 func TestChainStartsAtTemplateData(t *testing.T) {
@@ -85,9 +84,7 @@ func TestChainStartsAtTemplateData(t *testing.T) {
 		{name: "literal", node: &parse.StringNode{}, dot: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := chainStartsAtTemplateData(&parse.ChainNode{Node: tt.node}, tt.dot); got != tt.want {
-				t.Errorf("chainStartsAtTemplateData(%s, dot=%t) = %t, want %t", tt.name, tt.dot, got, tt.want)
-			}
+			assert.Equal(t, tt.want, chainStartsAtTemplateData(&parse.ChainNode{Node: tt.node}, tt.dot), "chainStartsAtTemplateData(%s, dot=%t)", tt.name, tt.dot)
 		})
 	}
 }
