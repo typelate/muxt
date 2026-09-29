@@ -36,7 +36,7 @@ import (
 // routes function name will NOT be deleted (to allow multiple route sets to coexist).
 // To clean up after changing routes function name, manually delete old files or
 // temporarily use the old --output-routes-func value with current templates.
-func ownedGeneratedFiles(dir, routesFunction string) (map[string]bool, error) {
+func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[string]bool, error) {
 	generated, err := header.Scan(dir)
 	if err != nil {
 		return nil, err
@@ -51,8 +51,7 @@ func ownedGeneratedFiles(dir, routesFunction string) (map[string]bool, error) {
 		addGenerateFlags(set, &config, &deprecated)
 		set.SetOutput(io.Discard)
 		if err := set.Parse(h.Args()); err != nil {
-			log.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", path, err)
-			owned[path] = true
+			logger.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", path, err)
 			continue
 		}
 		if config.RoutesFunction == routesFunction {

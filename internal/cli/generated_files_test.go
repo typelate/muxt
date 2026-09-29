@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -50,7 +52,7 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 	writeTestFile(t, dir, "handwritten.go", "package main\n")
 	writeTestFile(t, dir, "notes.txt", header.Format(nil, ""))
 
-	got, err := ownedGeneratedFiles(dir, "TemplateRoutes")
+	got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(io.Discard, "", 0))
 	if err != nil {
 		t.Fatalf("ownedGeneratedFiles() error = %v", err)
 	}
@@ -59,7 +61,7 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 		t.Errorf("ownedGeneratedFiles(%q) = %v, want %v (not %s)", "TemplateRoutes", got, want, other)
 	}
 
-	got, err = ownedGeneratedFiles(dir, "AdminRoutes")
+	got, err = ownedGeneratedFiles(dir, "AdminRoutes", log.New(io.Discard, "", 0))
 	if err != nil {
 		t.Fatalf("ownedGeneratedFiles() error = %v", err)
 	}
@@ -68,8 +70,28 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 	}
 }
 
+// A header this version cannot read is not shown to belong to the current
+// routes function, so the file is left alone, as the warning says.
+func TestOwnedGeneratedFilesIgnoresUnreadableHeaders(t *testing.T) {
+	dir := t.TempDir()
+	unreadable := writeTestFile(t, dir, "unreadable.go", header.Format([]string{"--no-such-flag"}, "")+"package main\n")
+
+	var stderr bytes.Buffer
+	got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(&stderr, "", 0))
+	if err != nil {
+		t.Fatalf("ownedGeneratedFiles() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("ownedGeneratedFiles() = %v, want the unreadable file ignored", got)
+	}
+	want := "WARNING: ignored generated file " + unreadable + " because arguments failed to parse: unknown flag: --no-such-flag\n"
+	if stderr.String() != want {
+		t.Errorf("log = %q, want %q", stderr.String(), want)
+	}
+}
+
 func TestOwnedGeneratedFilesMissingDirectory(t *testing.T) {
-	if _, err := ownedGeneratedFiles(filepath.Join(t.TempDir(), "missing"), "TemplateRoutes"); err == nil {
+	if _, err := ownedGeneratedFiles(filepath.Join(t.TempDir(), "missing"), "TemplateRoutes", log.New(io.Discard, "", 0)); err == nil {
 		t.Fatal("ownedGeneratedFiles(missing directory) = nil error, want one")
 	}
 }
