@@ -67,7 +67,7 @@ func defaultScopeType(checker Checker, def *Definition, argumentIdentifier strin
 		tp, err := checker.ScopeType(argumentIdentifier)
 		return tp, err == nil
 	default:
-		if _, ok := pathParameter(def.Segments, argumentIdentifier); ok {
+		if hasPathParameter(def.Segments, argumentIdentifier) {
 			return types.Universe.Lookup("string").Type(), true
 		}
 		return nil, false
@@ -79,85 +79,73 @@ func newArgumentFromIdentifier(def *Definition, checker Checker, arg *ast.Ident,
 		Identifier: arg.Name,
 		paramType:  param,
 	}
+	var err error
 	switch arg.Name {
 	case TemplateNameScopeIdentifierContext:
 		a.Type = ArgumentTypeRequestContext
-		if err := bindScopeValue(&a, checker, qual); err != nil {
-			return a, err
-		}
+		err = bindScopeValue(&a, checker, qual)
 	case TemplateNameScopeIdentifierForm:
 		a.Type = ArgumentTypeRequestForm
-		if err := bindFormArgument(&a, def, checker, qual, false); err != nil {
-			return a, err
-		}
+		err = bindFormArgument(&a, def, checker, qual, false)
 	case TemplateNameScopeIdentifierMultipart:
 		a.Type = ArgumentTypeRequestMultipartForm
-		if err := bindFormArgument(&a, def, checker, qual, true); err != nil {
-			return a, err
-		}
+		err = bindFormArgument(&a, def, checker, qual, true)
 	case TemplateNameScopeIdentifierHTTPRequest:
 		a.Type = ArgumentTypeRequest
-		if err := bindScopeValue(&a, checker, qual); err != nil {
-			return a, err
-		}
+		err = bindScopeValue(&a, checker, qual)
 	case TemplateNameScopeIdentifierHTTPResponse:
 		a.Type = ArgumentTypeResponse
-		if err := bindScopeValue(&a, checker, qual); err != nil {
-			return a, err
-		}
+		err = bindScopeValue(&a, checker, qual)
 	case TemplateNameScopeIdentifierLastEventID:
 		a.Type = ArgumentTypeLastEventID
-		if err := bindParsedArgument(&a, checker, qual); err != nil {
-			return a, err
-		}
+		err = bindParsedArgument(&a, checker, qual)
 	case TemplateNameScopeIdentifierExecute:
 		a.Type = ArgumentTypeExecute
 		a.template = def.template
 	case TemplateNameScopeIdentifierRequestBody:
 		a.Type = ArgumentTypeRequestBody
-		if err := checkRequestBodyParameter(&a, checker, qual); err != nil {
-			return a, err
-		}
+		err = checkRequestBodyParameter(&a, checker, qual)
 	default:
-		if _, ok := pathParameter(def.Segments, arg.Name); ok {
-			a.Type = ArgumentTypeRequestPathValue
-			if err := bindParsedArgument(&a, checker, qual); err != nil {
-				return a, err
-			}
-			return a, nil
-		}
-		if isSSEArgument(arg.Name) {
-			// An sse-prefixed render callback (sseClock, sseMetrics, ...) renders
-			// the same-named template. Template existence is validated in
-			// resolveCallbackShapes once all arguments are hydrated.
-			a.Type = ArgumentTypeExecute
-			a.template = def.template.Lookup(arg.Name)
-			return a, nil
-		}
-		if isSignalsCallback(def, arg) {
-			// The callback contract is validated in resolveCallbackShapes; the
-			// remainder before the Signals suffix is only a label, so muxt
-			// never derives an identifier from it.
-			a.Type = ArgumentTypeSignalsCallback
-			return a, nil
-		}
-		if isSendMessage(def, arg) {
-			a.Type = ArgumentTypeSendMessage
-
-			t := def.template.Lookup(arg.Name)
-			if t == nil {
-				if suggestion, ok := astgen.NearestString(arg.Name, templateNames(def.template)); ok {
-					return Argument{}, fmt.Errorf("no template %q for sse message argument %s; did you mean %q?", arg.Name, arg.Name, suggestion)
-				}
-				return Argument{}, fmt.Errorf("no template %q for sse message argument %s", arg.Name, arg.Name)
-			}
-			a.template = t
-
-			return a, nil
-		}
-		return Argument{}, errors.New("unknown argument type")
+		err = bindNamedArgument(&a, def, checker, qual)
 	}
-	return a, nil
+	return a, err
+}
+
+// bindNamedArgument binds an identifier that is not reserved: a path value or
+// one of the sse callbacks and messages, which exist only on sse routes.
+func bindNamedArgument(a *Argument, def *Definition, checker Checker, qual types.Qualifier) error {
+	name := a.Identifier
+	switch {
+	case hasPathParameter(def.Segments, name):
+		a.Type = ArgumentTypeRequestPathValue
+		return bindParsedArgument(a, checker, qual)
+	case isSSEArgument(name):
+		// Template existence is validated in resolveCallbackShapes once all
+		// arguments are hydrated.
+		a.Type = ArgumentTypeExecute
+		a.template = def.template.Lookup(name)
+		return nil
+	case def.isSignalsCallback(name):
+		// The remainder before the Signals suffix is only a label, so muxt
+		// never derives an identifier from it.
+		a.Type = ArgumentTypeSignalsCallback
+		return nil
+	case def.isSendMessage(name):
+		a.Type = ArgumentTypeSendMessage
+		a.template = def.template.Lookup(name)
+		if a.template == nil {
+			return def.missingSSEMessageTemplateError(name)
+		}
+		return nil
+	}
+	return errors.New("unknown argument type")
+}
+
+func (def *Definition) missingSSEMessageTemplateError(name string) error {
+	if suggestion, ok := astgen.NearestString(name, templateNames(def.template)); ok {
+		return fmt.Errorf("no template %q for sse message argument %s; did you mean %q?", name, name, suggestion)
+	}
+	return fmt.Errorf("no template %q for sse message argument %s", name, name)
 }
 
 // bindScopeValue requires a request value -- ctx, request or response -- to
@@ -175,18 +163,13 @@ func bindScopeValue(a *Argument, checker Checker, qual types.Qualifier) error {
 	return nil
 }
 
-func isSignalsCallback(def *Definition, arg *ast.Ident) bool {
-	return def.IsSignalsCallback(arg.Name)
-}
-
-// IsSignalsCallback reports whether name is a Signals-suffixed patch-signals
+// isSignalsCallback reports whether name is a Signals-suffixed patch-signals
 // callback argument on this route. A declared path parameter wins: a path
 // value that happens to end in Signals stays a path value.
-func (def *Definition) IsSignalsCallback(name string) bool {
-	_, isPathParameter := pathParameter(def.Segments, name)
+func (def *Definition) isSignalsCallback(name string) bool {
 	return def.Representation == RepresentationSSE &&
 		isSignalsCallbackArgument(name) &&
-		!isPathParameter
+		!hasPathParameter(def.Segments, name)
 }
 
 // isSignalsCallbackArgument reports whether name is a datastar patch-signals
@@ -197,8 +180,8 @@ func isSignalsCallbackArgument(name string) bool {
 	return strings.HasSuffix(name, "Signals") && token.IsIdentifier(name)
 }
 
-func isSendMessage(def *Definition, arg *ast.Ident) bool {
-	return def.Representation == RepresentationSSE && isSSEMessageArgument(arg.Name)
+func (def *Definition) isSendMessage(name string) bool {
+	return def.Representation == RepresentationSSE && isSSEMessageArgument(name)
 }
 
 // isSSEMessageArgument reports whether name is an sse send-message template

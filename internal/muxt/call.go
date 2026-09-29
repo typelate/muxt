@@ -203,7 +203,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 				}
 				continue
 			}
-			if def.IsSignalsCallback(arg.Name) {
+			if def.isSignalsCallback(arg.Name) {
 				if err := addParam(arg, arg.Name, sseCallbackSignature()); err != nil {
 					return nil, err
 				}
