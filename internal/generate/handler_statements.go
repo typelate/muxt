@@ -307,7 +307,7 @@ func loggerErrorCall(file *File, message, pattern, errIdent string) *ast.CallExp
 		astgen.SlogString(file, "error", astgen.CallError(errIdent)),
 	}
 	return &ast.CallExpr{
-		Fun:  &ast.SelectorExpr{X: ast.NewIdent("logger"), Sel: ast.NewIdent("ErrorContext")},
+		Fun:  selector(loggerIdent, "ErrorContext"),
 		Args: args,
 	}
 }
@@ -325,7 +325,7 @@ func logDebugStatement(file *File, message, pattern string) *ast.ExprStmt {
 	}
 	return &ast.ExprStmt{
 		X: &ast.CallExpr{
-			Fun:  &ast.SelectorExpr{X: ast.NewIdent("logger"), Sel: ast.NewIdent("DebugContext")},
+			Fun:  selector(loggerIdent, "DebugContext"),
 			Args: args,
 		},
 	}
