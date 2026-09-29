@@ -20,41 +20,50 @@ func NoPackageError(dir string, pl []*packages.Package) error {
 	if len(pl) == 0 {
 		e.Details = append(e.Details, "go/packages loaded no packages")
 	} else {
-		paths := make([]string, 0, len(pl))
-		for _, p := range pl {
-			if p.PkgPath != "" {
-				paths = append(paths, p.PkgPath)
-			}
-			// A package loaded by directory pattern keeps the directory as
-			// its path when module resolution fails. Saying "no Go package
-			// found" above a list containing that very directory reads
-			// self-contradictory, so report the truth: it loaded, broken.
-			if p.PkgPath == dir && len(p.Errors) > 0 {
-				e.LoadedWithErrors = true
-			}
-		}
-		e.Details = append(e.Details, fmt.Sprintf("loaded %d packages: %s", len(pl), strings.Join(paths, ", ")))
+		var listing string
+		listing, e.LoadedWithErrors = describeLoaded(dir, pl)
+		e.Details = append(e.Details, listing)
 	}
-	const maxLoadErrors = 3
-	shown := 0
-	for _, p := range pl {
-		for _, loadErr := range p.Errors {
-			if shown == maxLoadErrors {
-				e.Details = append(e.Details, "(more load errors omitted)")
-				break
-			}
-			e.Details = append(e.Details, loadErr.Error())
-			shown++
-		}
-		if shown == maxLoadErrors {
-			break
-		}
-	}
+	e.Details = append(e.Details, loadErrorDetails(pl)...)
 	if note := workspaceNote(dir); note != "" {
 		e.Details = append(e.Details, note)
 	}
 	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
 	return e
+}
+
+// describeLoaded lists the loaded package paths. It also reports whether the
+// package at dir loaded with errors: a package loaded by directory pattern
+// keeps the directory as its path when module resolution fails, and saying
+// "no Go package found" above a list containing that very directory reads
+// self-contradictory.
+func describeLoaded(dir string, pl []*packages.Package) (string, bool) {
+	paths := make([]string, 0, len(pl))
+	loadedWithErrors := false
+	for _, p := range pl {
+		if p.PkgPath != "" {
+			paths = append(paths, p.PkgPath)
+		}
+		if p.PkgPath == dir && len(p.Errors) > 0 {
+			loadedWithErrors = true
+		}
+	}
+	return fmt.Sprintf("loaded %d packages: %s", len(pl), strings.Join(paths, ", ")), loadedWithErrors
+}
+
+// loadErrorDetails forwards the loader's own errors, up to a limit.
+func loadErrorDetails(pl []*packages.Package) []string {
+	const maxLoadErrors = 3
+	var details []string
+	for _, p := range pl {
+		for _, loadErr := range p.Errors {
+			if len(details) == maxLoadErrors {
+				return append(details, "(more load errors omitted)")
+			}
+			details = append(details, loadErr.Error())
+		}
+	}
+	return details
 }
 
 // PackageLookupError reports that no loaded package matched a
