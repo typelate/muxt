@@ -138,6 +138,15 @@ func TestRunListings(t *testing.T) {
 	}
 }
 
+func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
+	wd := newModule(t)
+	for _, args := range [][]string{{"--format=yaml"}, {"list-template-callers", "--format=yaml"}, {"list-template-calls", "--format=yaml"}} {
+		if _, _, err := execute(t, wd, args...); err == nil || err.Error() != "unknown format: yaml" {
+			t.Errorf("muxt %v error = %v, want unknown format: yaml", args, err)
+		}
+	}
+}
+
 func TestRunFailsOutsideAModule(t *testing.T) {
 	for _, args := range [][]string{{"check"}, {"generate"}, {"list-template-callers"}} {
 		if _, _, err := execute(t, t.TempDir(), args...); err == nil {

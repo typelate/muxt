@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"go/token"
 	"regexp"
 
 	"github.com/spf13/cobra"
@@ -41,10 +40,8 @@ working tree is never written to.`,
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			for _, tv := range config.TemplatesVariables {
-				if tv != "" && !token.IsIdentifier(tv) {
-					return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
-				}
+			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
+				return err
 			}
 			cmd.SilenceUsage = true
 
