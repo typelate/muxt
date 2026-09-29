@@ -1,9 +1,11 @@
 package mutation
 
 import (
-	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestLiteralOffsetsMapsEveryByteBack states where each byte of a
@@ -79,23 +81,13 @@ func TestLiteralOffsetsMapsEveryByteBack(t *testing.T) {
 			// The pair has to be a real one, or the table is asserting
 			// against arithmetic nobody will ever run.
 			decoded, err := strconv.Unquote(tt.literal)
-			if err != nil {
-				t.Fatalf("Unquote(%s) = %v", tt.literal, err)
-			}
-			if decoded != tt.value {
-				t.Fatalf("%s decodes to %q, but the table says %q", tt.literal, decoded, tt.value)
-			}
+			require.NoError(t, err, "Unquote(%s)", tt.literal)
+			require.Equal(t, tt.value, decoded, "%s decodes to a value other than the table's", tt.literal)
 
 			got, err := literalOffsets(tt.literal, tt.value)
-			if err != nil {
-				t.Fatalf("literalOffsets(%s) = %v", tt.literal, err)
-			}
-			if !slices.Equal(got, tt.want) {
-				t.Fatalf("literalOffsets(%s) = %v, want %v", tt.literal, got, tt.want)
-			}
-			if len(got) != len(tt.value)+1 {
-				t.Errorf("offsets = %d, want one per byte of the value plus an end", len(got))
-			}
+			require.NoError(t, err, "literalOffsets(%s)", tt.literal)
+			require.Equal(t, tt.want, got, "literalOffsets(%s)", tt.literal)
+			assert.Len(t, got, len(tt.value)+1, "offsets: one per byte of the value plus an end")
 		})
 	}
 }
@@ -117,9 +109,8 @@ func TestLiteralOffsetsRefusesAValueItCannotAccountFor(t *testing.T) {
 		{name: "an escape that is not one", literal: `"\q"`, value: "q"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, err := literalOffsets(tt.literal, tt.value); err == nil {
-				t.Errorf("literalOffsets(%s, %q) = %v, want an error", tt.literal, tt.value, got)
-			}
+			got, err := literalOffsets(tt.literal, tt.value)
+			assert.Error(t, err, "literalOffsets(%s, %q) = %v", tt.literal, tt.value, got)
 		})
 	}
 }
@@ -136,8 +127,8 @@ func TestLiteralEncoder(t *testing.T) {
 		{name: "raw cannot hold a carriage return", literal: "`{{.A}}`", mutated: "a\rb", want: `"a\rb"`},
 		{name: "interpreted is quoted", literal: `"{{.A}}\n"`, mutated: "{{0}}\n", want: `"{{0}}\n"`},
 	} {
-		if got := literalEncoder(tt.literal)(tt.mutated); got != tt.want {
-			t.Errorf("%s: encoded %q, want %q", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, literalEncoder(tt.literal)(tt.mutated), "literalEncoder(%s)(%q)", tt.literal, tt.mutated)
+		})
 	}
 }
