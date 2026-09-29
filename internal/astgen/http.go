@@ -124,11 +124,6 @@ func HTTPResponseWriter(im ImportManager) *ast.SelectorExpr {
 	return ExportedIdentifier(im, "http", "net/http", "ResponseWriter")
 }
 
-// HTTPHeader creates an http.Header type expression
-func HTTPHeader(im ImportManager) *ast.SelectorExpr {
-	return ExportedIdentifier(im, "http", "net/http", "Header")
-}
-
 // AddNetHTTP registers the net/http import and returns its identifier
 func AddNetHTTP(im ImportManager) string {
 	return im.Import("", "net/http")
