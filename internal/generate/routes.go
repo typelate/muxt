@@ -237,7 +237,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		},
 		routesFunc,
 	}
-	decls = append(decls, templateDataDecls(file, config, ast.NewIdent(config.ReceiverInterface))...)
+	decls = append(decls, templateDataDecls(file, config)...)
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
