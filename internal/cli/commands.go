@@ -377,7 +377,6 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 		args = append(args, "--"+outputTemplateRoutePathsType+"="+config.TemplateRoutePathsTypeName)
 	}
 
-	// Add boolean flags if true
 	if config.Logger {
 		args = append(args, "--"+outputRoutesFuncWithLoggerParam)
 	}
@@ -397,17 +396,14 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 		args = append(args, "--"+outputDatastar)
 	}
 
-	// Add output-exported-default-identifiers flag if false (true is the default)
 	if !config.OutputExportedDefaultIdentifiers {
 		args = append(args, "--"+outputExportedDefaultIdentifiers+"=false")
 	}
 
-	// Add output-muxt-version flag if false (true is the default)
 	if !config.OutputMuxtVersion {
 		args = append(args, "--"+outputMuxtVersion+"=false")
 	}
 
-	// Add output-multipart-max-memory if explicitly set
 	if config.MultipartMaxMemory > 0 {
 		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
 	}
@@ -557,7 +553,6 @@ func cliVersion() (string, bool) {
 }
 
 const (
-	// New flag names with clear prefixes
 	useTemplatesVariable                = "use-templates-variable"
 	useReceiverType                     = "use-receiver-type"
 	useReceiverTypePackage              = "use-receiver-type-package"
@@ -594,7 +589,6 @@ const (
 	deprecatedFindReceiverType        = "find-receiver-type"
 	deprecatedFindReceiverTypePackage = "find-receiver-type-package"
 
-	// Help text
 	useTemplatesVariableHelp   = `the name of the global variable with type *"html/template".Template in the working directory package.`
 	useReceiverTypeHelp        = `The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file.`
 	useReceiverTypePackageHelp = `The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.`
@@ -638,7 +632,6 @@ func isDefaultTemplatesVariable(in *[]string) bool {
 func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 
-	// Apply defaults and convert to private if --output-exported-default-identifiers=false
 	if !config.OutputExportedDefaultIdentifiers {
 		if !flagSet.Changed(outputRoutesFunc) {
 			config.RoutesFunction = strcase.ToGoCamel(defaultRoutesFunctionName)
@@ -656,7 +649,6 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
 	} else {
-		// Normal defaults when exported identifiers are enabled
 		config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
 		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
@@ -668,7 +660,6 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 // addUseTemplatesVarToFlagSet was split out because it is used for a few different commands
 func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *[]string, deprecated *string) {
 	flagSet.StringSliceVar(out, useTemplatesVariable, []string{defaultTemplatesVariableName}, useTemplatesVariableHelp)
-	// For backward compatibility, also handle the deprecated flag as a single string
 	flagSet.StringVar(deprecated, deprecatedTemplatesVariable, "", "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
 	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
 }

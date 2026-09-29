@@ -153,7 +153,6 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 	// To clean up after changing routes function name, manually delete old files or
 	// temporarily use the old --output-routes-func value with current templates.
 
-	// Find existing generated files for cleanup
 	oldGeneratedFiles, err := generate.FileArguments(wd, config.RoutesFunction)
 	if err != nil {
 		return err
@@ -179,7 +178,6 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		}
 	}
 
-	// Write new files
 	newGeneratedFiles := make(map[string]bool)
 	for i, file := range files {
 		var sb bytes.Buffer
@@ -193,7 +191,6 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 			}
 			return err
 		}
-		// Always include the count — a uniform line parses reliably.
 		if file.Routes == 1 {
 			_, _ = fmt.Fprintf(stdout, "wrote %s: 1 route\n", filepath.Base(file.Path))
 		} else {
@@ -202,7 +199,6 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		newGeneratedFiles[file.Path] = true
 	}
 
-	// Clean up orphaned files
 	// Only deletes files that match the current routes function name but weren't regenerated
 	for oldFile := range oldGeneratedFiles {
 		if !newGeneratedFiles[oldFile] {
