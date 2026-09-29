@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"go/token"
 	"math"
 
 	"github.com/dustin/go-humanize"
@@ -13,7 +14,7 @@ import (
 func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfiguration, deprecatedTemplatesVar *string) {
 	addUseTemplatesVarToFlagSet(flagSet, &config.TemplatesVariables, deprecatedTemplatesVar)
 	addUseReceiverTypeVarToFlagSet(flagSet, &config.ReceiverType)
-	adUseReceiverTypePackageVarToFlagSet(flagSet, &config.ReceiverPackage)
+	addUseReceiverTypePackageVarToFlagSet(flagSet, &config.ReceiverPackage)
 	addVerboseFlagToFlagSet(flagSet, &config.Verbose)
 
 	addOutputFlagsToFlagSet(flagSet, config)
@@ -36,7 +37,7 @@ func addUseReceiverTypeVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
 	flagSet.StringVar(out, useReceiverType, "", useReceiverTypeHelp)
 }
 
-func adUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
+func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
 	flagSet.StringVar(out, useReceiverTypePackage, "", useReceiverTypePackageHelp)
 }
 
@@ -156,6 +157,15 @@ func fixTemplateVariables(templateVariables *[]string, deprecatedTemplatesVar st
 		}
 	}
 	return findDuplicateVariables(*templateVariables)
+}
+
+func checkTemplatesVariables(templateVariables []string) error {
+	for _, tv := range templateVariables {
+		if tv != "" && !token.IsIdentifier(tv) {
+			return fmt.Errorf("variable %s%s", tv, errIdentSuffix)
+		}
+	}
+	return nil
 }
 
 func findDuplicateVariables(in []string) error {
