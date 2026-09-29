@@ -18,50 +18,13 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 		sb = new(strings.Builder)
 	}
 	sb.Reset()
-	switch def.method {
-	case http.MethodPost:
-		sb.WriteString("Create")
-	case http.MethodGet:
-		sb.WriteString("Read")
-	case http.MethodPut:
-		sb.WriteString("Replace")
-	case http.MethodPatch:
-		sb.WriteString("Update")
-	case http.MethodDelete:
-		sb.WriteString("Delete")
-	default:
-		sb.WriteString(strcase.ToGoPascal(def.method))
-	}
+	sb.WriteString(methodVerb(def.method))
 	var pathParams []string
 	if def.path == "/" {
-		if def.host != "" {
-			sb.WriteString(strcase.ToGoPascal(def.host))
-		}
+		sb.WriteString(strcase.ToGoPascal(def.host))
 		sb.WriteString("Index")
 	} else {
-		pathSegments := []string{def.host}
-		pathSegments = append(pathSegments, strings.Split(def.path, "/")...)
-		for _, pathSegment := range pathSegments {
-			isPathParam := false
-			if len(pathSegment) > 2 && pathSegment[0] == '{' && pathSegment[len(pathSegment)-1] == '}' {
-				pathSegment = pathSegment[1 : len(pathSegment)-1]
-				isPathParam = true
-			}
-			if len(pathSegment) == 0 {
-				continue
-			}
-			if isPathParam && pathSegment == "$" {
-				sb.WriteString("Exact")
-				continue
-			}
-			pathSegment = strings.TrimRight(pathSegment, ".")
-			pathSegment = strcase.ToGoPascal(pathSegment)
-			if isPathParam {
-				pathParams = append(pathParams, pathSegment)
-				continue
-			}
-			sb.WriteString(pathSegment)
-		}
+		pathParams = writePathSegments(sb, append([]string{def.host}, strings.Split(def.path, "/")...))
 	}
 	if len(pathParams) > 0 {
 		sb.WriteString("By")
@@ -73,6 +36,49 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 		sb.WriteString(pathParam)
 	}
 	return sb.String()
+}
+
+func methodVerb(method string) string {
+	switch method {
+	case http.MethodPost:
+		return "Create"
+	case http.MethodGet:
+		return "Read"
+	case http.MethodPut:
+		return "Replace"
+	case http.MethodPatch:
+		return "Update"
+	case http.MethodDelete:
+		return "Delete"
+	}
+	return strcase.ToGoPascal(method)
+}
+
+// writePathSegments writes the literal segments to sb and returns the names of
+// the wildcard segments, which are written after them.
+func writePathSegments(sb *strings.Builder, segments []string) []string {
+	var pathParams []string
+	for _, segment := range segments {
+		name, isPathParam := wildcardName(segment)
+		switch {
+		case name == "":
+			continue
+		case isPathParam && name == "$":
+			sb.WriteString("Exact")
+		case isPathParam:
+			pathParams = append(pathParams, strcase.ToGoPascal(strings.TrimRight(name, ".")))
+		default:
+			sb.WriteString(strcase.ToGoPascal(strings.TrimRight(name, ".")))
+		}
+	}
+	return pathParams
+}
+
+func wildcardName(segment string) (string, bool) {
+	if len(segment) > 2 && segment[0] == '{' && segment[len(segment)-1] == '}' {
+		return segment[1 : len(segment)-1], true
+	}
+	return segment, false
 }
 
 func (def Definition) exportedFunctionName() string {
