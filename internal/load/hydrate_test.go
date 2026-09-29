@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/load/loadtest"
@@ -43,7 +42,7 @@ func TestHydration(t *testing.T) {
 	})
 
 	t.Run("the package, its receiver, and each variable", func(t *testing.T) {
-		pkg, receiver, err := load.RoutesSource(dir, pl, analysis.DefinitionsConfiguration{ReceiverType: "Server", TemplatesVariables: []string{"templates"}})
+		pkg, receiver, err := load.PackageWithReceiver(dir, pl, "", "Server", []string{"templates"})
 		require.NoError(t, err)
 		assert.Equal(t, "Server", receiver.Obj().Name())
 		require.Len(t, pkg.Variables, 1)
@@ -57,13 +56,13 @@ func TestHydration(t *testing.T) {
 	})
 
 	t.Run("no receiver named is none looked up", func(t *testing.T) {
-		_, receiver, err := load.RoutesSource(dir, pl, analysis.DefinitionsConfiguration{TemplatesVariables: []string{"templates"}})
+		_, receiver, err := load.PackageWithReceiver(dir, pl, "", "", []string{"templates"})
 		require.NoError(t, err)
 		assert.Nil(t, receiver)
 	})
 
 	t.Run("a missing receiver is reported before a missing variable", func(t *testing.T) {
-		_, _, err := load.RoutesSource(dir, pl, analysis.DefinitionsConfiguration{ReceiverType: "Srever", TemplatesVariables: []string{"nope"}})
+		_, _, err := load.PackageWithReceiver(dir, pl, "", "Srever", []string{"nope"})
 		require.EqualError(t, err, "could not find receiver type Srever in example.com/server; did you mean Server?")
 	})
 
@@ -73,7 +72,8 @@ func TestHydration(t *testing.T) {
 	})
 
 	t.Run("the routes file belongs to the package in its own directory", func(t *testing.T) {
-		_, _, err := load.GenerateSource(dir, pl, generate.RoutesFileConfiguration{OutputFileName: filepath.Join("sub", "routes.go"), ReceiverType: "Srever"})
+		config := generate.RoutesFileConfiguration{OutputFileName: filepath.Join("sub", "routes.go"), ReceiverType: "Srever"}
+		_, _, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 		require.Error(t, err)
 		assert.Equal(t, "no Go package found at "+filepath.Join(dir, "sub"), err.Error(), "a missing package is reported before a missing receiver")
 	})

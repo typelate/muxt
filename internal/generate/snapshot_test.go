@@ -59,7 +59,7 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 //   - Go files and .gohtml files are loaded as example.com/server by
 //     internal/load/loadtest -- type checked against the official standard
 //     library, without loading the package graph -- and hydrated by
-//     load.GenerateSource, as muxt generate does. An archive with no
+//     load.PackageWithReceiver, as muxt generate does. An archive with no
 //     templates.go gets one declaring the templates variable over every
 //     .gohtml file.
 //   - want/ files are the expected output: one per generated file, named
@@ -164,7 +164,7 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	}
 
 	pl := loadtest.Package(t, dir, "example.com/server", files)
-	pkg, receiver, err := load.GenerateSource(dir, pl, config)
+	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		return fail(err)
 	}

@@ -29,7 +29,7 @@ func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfigu
 	if err != nil {
 		return err
 	}
-	pkg, receiver, err := load.RoutesSource(wd, pl, config)
+	pkg, receiver, err := load.PackageWithReceiver(wd, pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
@@ -118,7 +118,7 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		return err
 	}
 	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-	pkg, receiver, err := load.GenerateSource(wd, pl, config)
+	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(wd), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
