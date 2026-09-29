@@ -30,6 +30,7 @@ const (
 
 	muxParamName        = "mux"
 	middlewareParamName = "middleware"
+	loggerIdent         = "logger"
 
 	errIdent                    = "err"
 	templateDataFieldStatusCode = "statusCode"
@@ -118,125 +119,36 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		return nil, err
 	}
 
-	var (
-		receiverInterface   = &ast.InterfaceType{Methods: new(ast.FieldList)}
-		templateSourceFiles = slices.Sorted(maps.Keys(groups.byFile))
-	)
+	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
+	routesFunc := routesFuncDecl(file, config, config.RoutesFunction, config.ReceiverInterface, config.PathPrefix)
+	routesFunc.Type.Results = fieldList(results(ast.NewIdent(config.TemplateRoutePathsTypeName)))
+	routesFunc.Body.List = routesFuncPrelude(file, config)
 
-	routesFunc := &ast.FuncDecl{
-		Name: ast.NewIdent(config.RoutesFunction),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{
-				List: []*ast.Field{
-					httpServeMuxField(file),
-					{
-						Names: []*ast.Ident{ast.NewIdent(receiverIdent)},
-						Type:  ast.NewIdent(config.ReceiverInterface),
-					},
-				},
-			},
-			Results: &ast.FieldList{
-				List: []*ast.Field{
-					{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)},
-				},
-			},
-		},
-		Body: &ast.BlockStmt{List: []ast.Stmt{}},
-	}
-	if config.Logger {
-		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent("logger")},
-			Type:  astgen.SlogLoggerPtr(file),
-		})
-	}
-	if config.PathPrefix {
-		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
-		})
-	} else {
-		routesFunc.Body.List = append(routesFunc.Body.List, &ast.AssignStmt{
-			Tok: token.DEFINE,
-			Lhs: []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName)},
-			Rhs: []ast.Expr{astgen.String("")},
-		})
-	}
-	if config.Middleware {
-		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(middlewareParamName)},
-			Type:  astgen.HTTPMiddlewareFuncType(file),
-		})
-		routesFunc.Body.List = append(routesFunc.Body.List, middlewareNilGuard(file))
-	}
-
-	var (
-		topLevelTemplateRoutes []muxt.Definition
-		generatedFiles         []GeneratedFile
-	)
+	var generatedFiles []GeneratedFile
+	topLevelRoutes := groups.all
 	if config.OutputMultipleFiles {
+		templateSourceFiles := slices.Sorted(maps.Keys(groups.byFile))
 		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiverInterface, routesFunc)
 		if err != nil {
 			return files, err
 		}
-		generatedFiles = append(generatedFiles, files...)
-		topLevelTemplateRoutes = groups.noFile
-	} else {
-		topLevelTemplateRoutes = groups.all
+		generatedFiles = files
+		topLevelRoutes = groups.noFile
 	}
 
-	if len(topLevelTemplateRoutes) > 0 {
-		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
-	}
-
-	logResolutionNotes(topLevelTemplateRoutes, config, logger)
-	if err := collectReceiverMethods(topLevelTemplateRoutes, file, receiverInterface); err != nil {
+	handlers, err := routeStatements(file, config, topLevelRoutes, receiverInterface, config.ReceiverInterface, logger, "")
+	if err != nil {
 		return nil, err
 	}
-	for _, def := range topLevelTemplateRoutes {
-		if config.Verbose {
-			logger.Printf("generating handler for pattern %s", def.RawPattern())
-		}
-		if def.FunctionIdentifier() == nil {
-			handlerFunc := noReceiverMethodCall(file, def, config, config.ReceiverInterface)
-			call := callHandleFunc(file, def, handlerFunc, config)
-			routesFunc.Body.List = append(routesFunc.Body.List, call)
-			continue
-		}
-		handlerFunc, err := callHandlerFunc(file, config, def, config.ReceiverInterface)
-		if err != nil {
-			return nil, err
-		}
-		call := callHandleFunc(file, def, handlerFunc, config)
-		routesFunc.Body.List = append(routesFunc.Body.List, call)
-	}
+	routesFunc.Body.List = append(routesFunc.Body.List, handlers...)
 
 	routePathDecls, err := routePathTypeAndMethods(file, config, groups.all)
 	if err != nil {
 		return nil, err
 	}
-	routesFunc.Body.List = append(routesFunc.Body.List, &ast.ReturnStmt{
-		Results: []ast.Expr{
-			&ast.CompositeLit{
-				Type: ast.NewIdent(config.TemplateRoutePathsTypeName),
-				Elts: []ast.Expr{
-					&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
-				},
-			},
-		},
-	})
+	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(config))
 
-	// The import declaration is filled in last: building the other
-	// declarations is what registers the imports they use.
-	importDecl := &ast.GenDecl{Tok: token.IMPORT}
-	decls := []ast.Decl{
-		importDecl,
-		&ast.GenDecl{
-			Tok: token.TYPE,
-			Specs: []ast.Spec{
-				&ast.TypeSpec{Name: ast.NewIdent(config.ReceiverInterface), Type: receiverInterface},
-			},
-		},
-		routesFunc,
-	}
+	decls := []ast.Decl{receiverInterfaceDecl(config.ReceiverInterface, receiverInterface), routesFunc}
 	decls = append(decls, templateDataDecls(file, config)...)
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
@@ -246,12 +158,12 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		decls = append(decls, sseTemplateDataDecls(file, config)...)
 	}
 	decls = append(decls, routePathDecls...)
-	for _, spec := range file.ImportSpecs() {
-		importDecl.Specs = append(importDecl.Specs, spec)
-	}
+
+	// The import declaration is built last: building the other
+	// declarations is what registers the imports they use.
 	outputFile := &ast.File{
 		Name:  ast.NewIdent(config.PackageName),
-		Decls: decls,
+		Decls: append([]ast.Decl{importDecl(file)}, decls...),
 	}
 
 	filePath := filepath.Join(wd, config.OutputFileName)
@@ -260,9 +172,104 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		return nil, err
 	}
 
-	generatedFiles = append(generatedFiles, GeneratedFile{Path: filePath, Content: content, Routes: len(topLevelTemplateRoutes)})
+	return append(generatedFiles, GeneratedFile{Path: filePath, Content: content, Routes: len(topLevelRoutes)}), nil
+}
 
-	return generatedFiles, nil
+// routesFuncDecl declares func name(mux, receiver[, logger][, pathsPrefix][, middleware]).
+func routesFuncDecl(file *File, config RoutesFileConfiguration, name, receiverInterfaceName string, prefixParam bool) *ast.FuncDecl {
+	params := []*ast.Field{
+		httpServeMuxField(file),
+		param(ast.NewIdent(receiverInterfaceName), receiverIdent),
+	}
+	if config.Logger {
+		params = append(params, param(astgen.SlogLoggerPtr(file), loggerIdent))
+	}
+	if prefixParam {
+		params = append(params, param(ast.NewIdent("string"), pathPrefixPathsStructFieldName))
+	}
+	if config.Middleware {
+		params = append(params, param(astgen.HTTPMiddlewareFuncType(file), middlewareParamName))
+	}
+	return &ast.FuncDecl{
+		Name: ast.NewIdent(name),
+		Type: &ast.FuncType{Params: &ast.FieldList{List: params}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{}},
+	}
+}
+
+func routesFuncPrelude(file *File, config RoutesFileConfiguration) []ast.Stmt {
+	stmts := []ast.Stmt{}
+	if !config.PathPrefix {
+		stmts = append(stmts, &ast.AssignStmt{
+			Tok: token.DEFINE,
+			Lhs: []ast.Expr{ast.NewIdent(pathPrefixPathsStructFieldName)},
+			Rhs: []ast.Expr{astgen.String("")},
+		})
+	}
+	if config.Middleware {
+		stmts = append(stmts, middlewareNilGuard(file))
+	}
+	return stmts
+}
+
+// routeStatements declares the buffer pool and registers a handler for each of
+// defs, adding the receiver methods they call to receiverInterface. where is
+// appended to the verbose log line naming each pattern.
+func routeStatements(file *File, config RoutesFileConfiguration, defs []muxt.Definition, receiverInterface *ast.InterfaceType, receiverInterfaceName string, logger *log.Logger, where string) ([]ast.Stmt, error) {
+	var stmts []ast.Stmt
+	if len(defs) > 0 {
+		stmts = append(stmts, bytesBufferPoolDeclaration(file))
+	}
+	logResolutionNotes(defs, config, logger)
+	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
+		return nil, err
+	}
+	for _, def := range defs {
+		if config.Verbose {
+			logger.Printf("generating handler for pattern %s%s", def.RawPattern(), where)
+		}
+		call, err := handleFuncStatement(file, config, def, receiverInterfaceName)
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, call)
+	}
+	return stmts, nil
+}
+
+func handleFuncStatement(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.ExprStmt, error) {
+	if def.FunctionIdentifier() == nil {
+		return callHandleFunc(file, def, noReceiverMethodCall(file, def, config, receiverInterfaceName), config), nil
+	}
+	handlerFunc, err := callHandlerFunc(file, config, def, receiverInterfaceName)
+	if err != nil {
+		return nil, err
+	}
+	return callHandleFunc(file, def, handlerFunc, config), nil
+}
+
+func returnRoutePaths(config RoutesFileConfiguration) *ast.ReturnStmt {
+	return returnExprs(&ast.CompositeLit{
+		Type: ast.NewIdent(config.TemplateRoutePathsTypeName),
+		Elts: []ast.Expr{
+			&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+		},
+	})
+}
+
+func receiverInterfaceDecl(name string, receiverInterface *ast.InterfaceType) *ast.GenDecl {
+	return &ast.GenDecl{
+		Tok:   token.TYPE,
+		Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Type: receiverInterface}},
+	}
+}
+
+func importDecl(file *File) *ast.GenDecl {
+	decl := &ast.GenDecl{Tok: token.IMPORT}
+	for _, spec := range file.ImportSpecs() {
+		decl.Specs = append(decl.Specs, spec)
+	}
+	return decl
 }
 
 // logResolutionNotes reports what resolution found for defs. With a
@@ -358,8 +365,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
 
-		// Generate filename: strip .gohtml extension, add _template_routes_gen.go
-		// sourceFile may be an absolute path, so extract just the base filename
+		// sourceFile may be an absolute path, so only its base name is used.
 		baseFileName := strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile))
 		outputFileName := baseFileName + "_template_routes_gen.go"
 		outputFilePath := filepath.Join(wd, outputFileName)
@@ -378,24 +384,23 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterface.Methods.List = append(receiverInterface.Methods.List, &ast.Field{
 			Type: ast.NewIdent(receiverInterfaceName),
 		})
-
-		callArgs := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
-		if config.Logger {
-			callArgs = append(callArgs, ast.NewIdent("logger"))
-		}
-		callArgs = append(callArgs, ast.NewIdent(pathPrefixPathsStructFieldName))
-		if config.Middleware {
-			callArgs = append(callArgs, ast.NewIdent(middlewareParamName))
-		}
-
-		routesFunc.Body.List = append(routesFunc.Body.List, &ast.ExprStmt{
-			X: &ast.CallExpr{
-				Fun:  ast.NewIdent(routesFuncName),
-				Args: callArgs,
-			},
-		})
+		routesFunc.Body.List = append(routesFunc.Body.List, perFileRoutesCall(config, routesFuncName))
 	}
 	return generatedFiles, nil
+}
+
+// perFileRoutesCall calls a per-file routes function with the arguments the
+// top-level routes function received.
+func perFileRoutesCall(config RoutesFileConfiguration, routesFuncName string) *ast.ExprStmt {
+	args := []ast.Expr{ast.NewIdent(muxParamName), ast.NewIdent(receiverIdent)}
+	if config.Logger {
+		args = append(args, ast.NewIdent(loggerIdent))
+	}
+	args = append(args, ast.NewIdent(pathPrefixPathsStructFieldName))
+	if config.Middleware {
+		args = append(args, ast.NewIdent(middlewareParamName))
+	}
+	return &ast.ExprStmt{X: &ast.CallExpr{Fun: ast.NewIdent(routesFuncName), Args: args}}
 }
 
 // generatePerFileRouteFunction creates a route registration function for templates from a specific source file.
@@ -413,69 +418,15 @@ func generatePerFileRouteFunction(
 	if sourceFile == "" {
 		return nil, fmt.Errorf("sourceFile cannot be empty")
 	}
-
-	routesFunc := &ast.FuncDecl{
-		Name: ast.NewIdent(funcName),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{
-				List: []*ast.Field{
-					httpServeMuxField(file),
-					{Names: []*ast.Ident{ast.NewIdent(receiverIdent)}, Type: ast.NewIdent(receiverInterfaceName)},
-				},
-			},
-		},
-		Body: &ast.BlockStmt{List: []ast.Stmt{}},
-	}
-
-	if config.Logger {
-		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent("logger")},
-			Type:  astgen.SlogLoggerPtr(file),
-		})
-	}
-
-	routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-		Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string"),
-	})
-
-	if config.Middleware {
-		routesFunc.Type.Params.List = append(routesFunc.Type.Params.List, &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(middlewareParamName)},
-			Type:  astgen.HTTPMiddlewareFuncType(file),
-		})
-	}
-
-	if len(defs) > 0 {
-		routesFunc.Body.List = append(routesFunc.Body.List, bytesBufferPoolDeclaration(file))
-	}
-
-	logResolutionNotes(defs, config, logger)
-	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
+	routesFunc := routesFuncDecl(file, config, funcName, receiverInterfaceName, true)
+	handlers, err := routeStatements(file, config, defs, receiverInterface, receiverInterfaceName, logger, " in "+sourceFile)
+	if err != nil {
 		return nil, err
 	}
-	for i := range defs {
-		t := defs[i]
-		if config.Verbose {
-			logger.Printf("generating handler for pattern %s in %s", t.RawPattern(), sourceFile)
-		}
-		if t.FunctionIdentifier() == nil {
-			handlerFunc := noReceiverMethodCall(file, t, config, receiverInterfaceName)
-			call := callHandleFunc(file, t, handlerFunc, config)
-			routesFunc.Body.List = append(routesFunc.Body.List, call)
-			continue
-		}
-		handlerFunc, err := callHandlerFunc(file, config, t, receiverInterfaceName)
-		if err != nil {
-			return nil, err
-		}
-		call := callHandleFunc(file, t, handlerFunc, config)
-		routesFunc.Body.List = append(routesFunc.Body.List, call)
-	}
-
+	routesFunc.Body.List = handlers
 	return routesFunc, nil
 }
 
-// generatePerFileAST creates a complete AST file for templates from a specific source file.
 func generatePerFileAST(
 	sourceFile string,
 	defs []muxt.Definition,
@@ -484,59 +435,21 @@ func generatePerFileAST(
 	logger *log.Logger,
 	config RoutesFileConfiguration,
 ) (*ast.File, error) {
-	if sourceFile == "" {
-		return nil, fmt.Errorf("sourceFile cannot be empty")
-	}
-	scopedReceiverInterface := &ast.InterfaceType{
-		Methods: new(ast.FieldList),
-	}
-
-	routesFunc, err := generatePerFileRouteFunction(
-		sourceFile,
-		defs,
-		file,
-		funcName,
-		receiverInterfaceName,
-		logger,
-		config,
-		scopedReceiverInterface,
-	)
+	scopedReceiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
+	routesFunc, err := generatePerFileRouteFunction(sourceFile, defs, file, funcName, receiverInterfaceName, logger, config, scopedReceiverInterface)
 	if err != nil {
 		return nil, err
 	}
-
-	is := file.ImportSpecs()
-	importSpecs := make([]ast.Spec, 0, len(is))
-	for _, s := range is {
-		importSpecs = append(importSpecs, s)
-	}
-
-	outputFile := &ast.File{
+	return &ast.File{
 		Name: ast.NewIdent(config.PackageName),
 		Decls: []ast.Decl{
-			&ast.GenDecl{
-				Tok:   token.IMPORT,
-				Specs: importSpecs,
-			},
-			&ast.GenDecl{
-				Tok: token.TYPE,
-				Specs: []ast.Spec{
-					&ast.TypeSpec{
-						Name: ast.NewIdent(receiverInterfaceName),
-						Type: scopedReceiverInterface,
-					},
-				},
-			},
+			importDecl(file),
+			receiverInterfaceDecl(receiverInterfaceName, scopedReceiverInterface),
 			routesFunc,
 		},
-	}
-
-	return outputFile, nil
+	}, nil
 }
 
 func httpServeMuxField(file *File) *ast.Field {
-	return &ast.Field{
-		Names: []*ast.Ident{ast.NewIdent(muxParamName)},
-		Type:  &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent(astgen.AddNetHTTP(file)), Sel: ast.NewIdent("ServeMux")}},
-	}
+	return param(&ast.StarExpr{X: astgen.ExportedIdentifier(file, "", "net/http", "ServeMux")}, muxParamName)
 }
