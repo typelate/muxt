@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/load"
@@ -30,14 +32,11 @@ func TestLibraryPackage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := libraryPackage(pl, tt.path)
 			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Fatalf("libraryPackage(%q) error = %v, want %q", tt.path, err, tt.wantErr)
-				}
+				require.EqualError(t, err, tt.wantErr, "libraryPackage(%q)", tt.path)
 				return
 			}
-			if err != nil || got != tt.want {
-				t.Fatalf("libraryPackage(%q) = %v, %v, want %v", tt.path, got, err, tt.want)
-			}
+			require.NoError(t, err, "libraryPackage(%q)", tt.path)
+			require.Same(t, tt.want, got, "libraryPackage(%q)", tt.path)
 		})
 	}
 }
@@ -108,18 +107,12 @@ func TestRenderMain(t *testing.T) {
 				tt.change(&c)
 			}
 			got, err := renderMain(c, tt.packageName)
-			if err != nil {
-				t.Fatalf("renderMain() error = %v", err)
-			}
+			require.NoError(t, err, "renderMain()")
 			for _, want := range tt.want {
-				if !strings.Contains(string(got), want) {
-					t.Errorf("renderMain() = %s\nwant containing %q", got, want)
-				}
+				assert.Contains(t, string(got), want, "renderMain() want containing %q", want)
 			}
 			for _, notWant := range tt.notWant {
-				if strings.Contains(string(got), notWant) {
-					t.Errorf("renderMain() = %s\nwant without %q", got, notWant)
-				}
+				assert.NotContains(t, string(got), notWant, "renderMain() want without %q", notWant)
 			}
 		})
 	}
@@ -127,25 +120,31 @@ func TestRenderMain(t *testing.T) {
 
 func TestRenderMainRejectsAnInvalidImportPath(t *testing.T) {
 	_, err := renderMain(Config{RoutesFunction: "Routes", ReceiverInterface: "Receiver", PackagePath: "not valid \n"}, "routes")
-	if err == nil || !strings.HasPrefix(err.Error(), "formatting main.go: ") {
-		t.Fatalf("renderMain() error = %v, want a formatting error", err)
-	}
+	require.Error(t, err, "renderMain()")
+	require.True(t, strings.HasPrefix(err.Error(), "formatting main.go: "), "renderMain() error = %v, want a formatting error", err)
 }
 
 func TestPreloadedCache(t *testing.T) {
 	pl := []*packages.Package{{PkgPath: "example.com/a"}}
 	cache := &preloadedCache{pkgPath: "example.com/a", packages: pl}
 
-	if got, ok := cache.Load("example.com/a"); !ok || len(got) != 1 {
-		t.Errorf("Load(its package) = %v, %v, want the loaded packages", got, ok)
-	}
-	if got, ok := cache.Load("example.com/b"); ok || got != nil {
-		t.Errorf("Load(another package) = %v, %v, want nothing", got, ok)
-	}
-	cache.Store("example.com/b", nil)
-	if _, ok := cache.Load("example.com/b"); ok {
-		t.Error("Store made another package loadable, want it ignored")
-	}
+	t.Run("its package", func(t *testing.T) {
+		got, ok := cache.Load("example.com/a")
+		assert.True(t, ok, "Load(its package) ok")
+		assert.Len(t, got, 1, "Load(its package) want the loaded packages")
+	})
+
+	t.Run("another package", func(t *testing.T) {
+		got, ok := cache.Load("example.com/b")
+		assert.False(t, ok, "Load(another package) ok")
+		assert.Nil(t, got, "Load(another package) want nothing")
+	})
+
+	t.Run("store is ignored", func(t *testing.T) {
+		cache.Store("example.com/b", nil)
+		_, ok := cache.Load("example.com/b")
+		assert.False(t, ok, "Store made another package loadable, want it ignored")
+	})
 }
 
 func TestGenerate(t *testing.T) {
@@ -163,40 +162,35 @@ type RoutesReceiver interface {
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) {}
 `,
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
 	}
 	_, pl, err := load.Packages(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	files, err := Generate(Config{
-		PackagePath:       "example.com/app",
-		PackageDir:        dir,
-		RoutesFunction:    "TemplateRoutes",
-		ReceiverInterface: "RoutesReceiver",
-		FakeImportPath:    "example.com/app/cmd/explore/internal/fake",
-	}, pl)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-	for _, want := range []string{`routes "example.com/app"`, "routes.TemplateRoutes(mux, receiver)"} {
-		if !strings.Contains(string(files.Main), want) {
-			t.Errorf("Main = %s\nwant containing %q", files.Main, want)
+	t.Run("a library with a receiver interface", func(t *testing.T) {
+		files, err := Generate(Config{
+			PackagePath:       "example.com/app",
+			PackageDir:        dir,
+			RoutesFunction:    "TemplateRoutes",
+			ReceiverInterface: "RoutesReceiver",
+			FakeImportPath:    "example.com/app/cmd/explore/internal/fake",
+		}, pl)
+		require.NoError(t, err, "Generate()")
+		for _, want := range []string{`routes "example.com/app"`, "routes.TemplateRoutes(mux, receiver)"} {
+			assert.Contains(t, string(files.Main), want, "Main want containing %q", want)
 		}
-	}
-	for _, want := range []string{"package fake", "type RoutesReceiver struct", "func (fake *RoutesReceiver) Home() any"} {
-		if !strings.Contains(string(files.Fake), want) {
-			t.Errorf("Fake = %s\nwant containing %q", files.Fake, want)
+		for _, want := range []string{"package fake", "type RoutesReceiver struct", "func (fake *RoutesReceiver) Home() any"} {
+			assert.Contains(t, string(files.Fake), want, "Fake want containing %q", want)
 		}
-	}
+	})
 
-	if _, err := Generate(Config{PackagePath: "example.com/missing"}, pl); err == nil {
-		t.Error("Generate(missing package) = nil error, want one")
-	}
-	if _, err := Generate(Config{PackagePath: "example.com/app", PackageDir: dir, ReceiverInterface: "Missing"}, pl); err == nil {
-		t.Error("Generate(missing interface) = nil error, want one")
-	}
+	t.Run("a missing package", func(t *testing.T) {
+		_, err := Generate(Config{PackagePath: "example.com/missing"}, pl)
+		assert.Error(t, err, "Generate(missing package)")
+	})
+
+	t.Run("a missing interface", func(t *testing.T) {
+		_, err := Generate(Config{PackagePath: "example.com/app", PackageDir: dir, ReceiverInterface: "Missing"}, pl)
+		assert.Error(t, err, "Generate(missing interface)")
+	})
 }
