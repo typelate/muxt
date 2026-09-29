@@ -20,7 +20,7 @@ const (
 	TemplateDataFieldIdentifierErrStatusCode = "errStatusCode"
 )
 
-func templateDataType(file *File, templateTypeIdent string, receiverType ast.Expr) *ast.GenDecl {
+func templateDataType(file *File, templateTypeIdent string) *ast.GenDecl {
 	return &ast.GenDecl{
 		Tok: token.TYPE,
 		Specs: []ast.Spec{
@@ -53,64 +53,79 @@ func templateDataType(file *File, templateTypeIdent string, receiverType ast.Exp
 	}
 }
 
-func templateDataMethodReceiver(templateDataTypeIdent string) *ast.FieldList {
-	return &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(templateDataReceiverName)}, Type: &ast.StarExpr{X: &ast.IndexListExpr{
-		X:       ast.NewIdent(templateDataTypeIdent),
+// genericMethod declares func (recv *typeIdent[R, T]) name(params) results {
+// body }. The template data types share the type parameters R and T.
+func genericMethod(recv, typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(recv)}, Type: genericPointer(typeIdent)}}},
+		Name: ast.NewIdent(name),
+		Type: &ast.FuncType{Params: fieldList(params), Results: fieldList(results)},
+		Body: &ast.BlockStmt{List: body},
+	}
+}
+
+func genericPointer(typeIdent string) ast.Expr {
+	return &ast.StarExpr{X: &ast.IndexListExpr{
+		X:       ast.NewIdent(typeIdent),
 		Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-	}}}}}
+	}}
 }
 
-func templateDataOkay(templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Ok"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("okay")}},
-				},
-			},
-		},
+func fieldList(fields []*ast.Field) *ast.FieldList {
+	if len(fields) == 0 {
+		return nil
 	}
+	return &ast.FieldList{List: fields}
 }
 
-func templateDataError(file *File, templateDataTypeIdent string) *ast.FuncDecl {
-	join := astgen.ErrorsJoin(file, &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)})
+func param(typ ast.Expr, names ...string) *ast.Field {
+	field := &ast.Field{Type: typ}
+	for _, name := range names {
+		field.Names = append(field.Names, ast.NewIdent(name))
+	}
+	return field
+}
+
+func results(types ...ast.Expr) []*ast.Field {
+	fields := make([]*ast.Field, 0, len(types))
+	for _, typ := range types {
+		fields = append(fields, param(typ))
+	}
+	return fields
+}
+
+func selector(x, sel string) *ast.SelectorExpr {
+	return &ast.SelectorExpr{X: ast.NewIdent(x), Sel: ast.NewIdent(sel)}
+}
+
+func returnExprs(exprs ...ast.Expr) *ast.ReturnStmt {
+	return &ast.ReturnStmt{Results: exprs}
+}
+
+func templatePathsLiteral(recv, pathsType string) *ast.CompositeLit {
+	return &ast.CompositeLit{Type: ast.NewIdent(pathsType), Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: selector(recv, pathPrefixPathsStructFieldName)},
+	}}
+}
+
+func dataMethod(typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
+	return genericMethod(templateDataReceiverName, typeIdent, name, params, results, body...)
+}
+
+func templateDataOkay(typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "Ok", nil, results(ast.NewIdent("bool")),
+		returnExprs(selector(templateDataReceiverName, "okay")))
+}
+
+func templateDataError(file *File, typeIdent string) *ast.FuncDecl {
+	join := astgen.ErrorsJoin(file, selector(templateDataReceiverName, TemplateDataFieldIdentifierError))
 	join.Ellipsis = 1
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Err"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{join},
-				},
-			},
-		},
-	}
+	return dataMethod(typeIdent, "Err", nil, results(ast.NewIdent("error")), returnExprs(join))
 }
 
-func templateDataReceiver(receiverType ast.Expr, templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Receiver"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("R")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("receiver")}},
-				},
-			},
-		},
-	}
+func templateDataReceiver(typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "Receiver", nil, results(ast.NewIdent("R")),
+		returnExprs(selector(templateDataReceiverName, "receiver")))
 }
 
 func templateRedirect(file *File, config RoutesFileConfiguration) *ast.FuncDecl {
@@ -118,86 +133,43 @@ func templateRedirect(file *File, config RoutesFileConfiguration) *ast.FuncDecl 
 		codeParamIdent = "code"
 		urlParamIdent  = "url"
 	)
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
-		Name: ast.NewIdent("Redirect"),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{List: []*ast.Field{
-				{Names: []*ast.Ident{ast.NewIdent(urlParamIdent)}, Type: ast.NewIdent("string")},
-				{Names: []*ast.Ident{ast.NewIdent(codeParamIdent)}, Type: ast.NewIdent("int")},
-			}},
-			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(config.TemplateDataType), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.IfStmt{
-					Cond: &ast.BinaryExpr{
-						X: &ast.BinaryExpr{
-							X:  ast.NewIdent(codeParamIdent),
-							Op: token.LSS,
-							Y:  astgen.Int(300),
-						},
-						Op: token.LOR,
-						Y: &ast.BinaryExpr{
-							X:  ast.NewIdent(codeParamIdent),
-							Op: token.GEQ,
-							Y:  astgen.Int(400),
-						},
-					},
-					Body: &ast.BlockStmt{
-						List: []ast.Stmt{
-							&ast.ReturnStmt{Results: []ast.Expr{
-								ast.NewIdent(templateDataReceiverName),
-								astgen.Call(file, "", "fmt", "Errorf", astgen.String("invalid status code %d for redirect"), ast.NewIdent("code")),
-							}},
-						},
-					},
-				},
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierRedirectURL)}},
-					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{ast.NewIdent("url")},
-				},
-				&ast.ReturnStmt{Results: []ast.Expr{
-					&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(templateDataReceiverName),
-							Sel: ast.NewIdent("StatusCode"),
-						},
-						Args: []ast.Expr{ast.NewIdent(codeParamIdent)},
-					},
-					astgen.Nil(),
-				}},
-			},
-		},
+	invalidCode := &ast.BinaryExpr{
+		X:  &ast.BinaryExpr{X: ast.NewIdent(codeParamIdent), Op: token.LSS, Y: astgen.Int(300)},
+		Op: token.LOR,
+		Y:  &ast.BinaryExpr{X: ast.NewIdent(codeParamIdent), Op: token.GEQ, Y: astgen.Int(400)},
 	}
+	return dataMethod(config.TemplateDataType, "Redirect",
+		[]*ast.Field{param(ast.NewIdent("string"), urlParamIdent), param(ast.NewIdent("int"), codeParamIdent)},
+		results(genericPointer(config.TemplateDataType), ast.NewIdent("error")),
+		&ast.IfStmt{
+			Cond: invalidCode,
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(
+				ast.NewIdent(templateDataReceiverName),
+				astgen.Call(file, "", "fmt", "Errorf", astgen.String("invalid status code %d for redirect"), ast.NewIdent("code")),
+			)}},
+		},
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{selector(templateDataReceiverName, TemplateDataFieldIdentifierRedirectURL)},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{ast.NewIdent("url")},
+		},
+		returnExprs(
+			&ast.CallExpr{Fun: selector(templateDataReceiverName, "StatusCode"), Args: []ast.Expr{ast.NewIdent(codeParamIdent)}},
+			astgen.Nil(),
+		),
+	)
 }
 
 func templateRedirectHelperMethod(file *File, config RoutesFileConfiguration, methodName string, statusCode int) *ast.FuncDecl {
 	const urlParamIdent = "url"
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{List: []*ast.Field{
-				{Names: []*ast.Ident{ast.NewIdent(urlParamIdent)}, Type: ast.NewIdent("string")},
-			}},
-			Results: astgen.ResultsWithErr(&ast.StarExpr{X: &ast.IndexListExpr{X: ast.NewIdent(config.TemplateDataType), Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")}}}),
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{Results: []ast.Expr{
-					&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(templateDataReceiverName),
-							Sel: ast.NewIdent("Redirect"),
-						},
-						Args: []ast.Expr{ast.NewIdent(urlParamIdent), astgen.HTTPStatusCode(file, statusCode)},
-					},
-				}},
-			},
-		},
-	}
+	return dataMethod(config.TemplateDataType, methodName,
+		[]*ast.Field{param(ast.NewIdent("string"), urlParamIdent)},
+		results(genericPointer(config.TemplateDataType), ast.NewIdent("error")),
+		returnExprs(&ast.CallExpr{
+			Fun:  selector(templateDataReceiverName, "Redirect"),
+			Args: []ast.Expr{ast.NewIdent(urlParamIdent), astgen.HTTPStatusCode(file, statusCode)},
+		}),
+	)
 }
 
 func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration) []*ast.FuncDecl {
@@ -211,161 +183,65 @@ func templateRedirectHelperMethods(file *File, config RoutesFileConfiguration) [
 
 func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	const versionIdent = "muxtVersion"
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
-		Name: ast.NewIdent("MuxtVersion"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("")}, Type: ast.NewIdent("string")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.DeclStmt{
-					Decl: &ast.GenDecl{
-						Tok: token.CONST,
-						Specs: []ast.Spec{
-							&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(versionIdent)}, Values: []ast.Expr{astgen.String(config.MuxtVersion)}},
-						},
-					},
-				},
-				&ast.ReturnStmt{
-					Results: []ast.Expr{ast.NewIdent(versionIdent)},
-				},
-			},
-		},
-	}
+	return dataMethod(config.TemplateDataType, "MuxtVersion", nil, results(ast.NewIdent("string")),
+		&ast.DeclStmt{Decl: &ast.GenDecl{
+			Tok:   token.CONST,
+			Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(versionIdent)}, Values: []ast.Expr{astgen.String(config.MuxtVersion)}}},
+		}},
+		returnExprs(ast.NewIdent(versionIdent)),
+	)
 }
 
 func templateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(config.TemplateDataType),
-		Name: ast.NewIdent("Path"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.CompositeLit{Type: ast.NewIdent(config.TemplateRoutePathsTypeName), Elts: []ast.Expr{
-						&ast.KeyValueExpr{
-							Key:   ast.NewIdent(pathPrefixPathsStructFieldName),
-							Value: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(pathPrefixPathsStructFieldName)},
-						},
-					}}},
-				},
-			},
-		},
-	}
+	return dataMethod(config.TemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
+		returnExprs(templatePathsLiteral(templateDataReceiverName, config.TemplateRoutePathsTypeName)))
 }
 
-func templateDataResultMethod(templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Result"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("T")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("result")}},
-				},
-			},
-		},
-	}
+func templateDataResultMethod(typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "Result", nil, results(ast.NewIdent("T")),
+		returnExprs(selector(templateDataReceiverName, "result")))
 }
 
-func templateDataRequestMethod(file *File, templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Request"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: astgen.HTTPRequestPtr(file)}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("request")}},
-				},
-			},
-		},
-	}
+func templateDataRequestMethod(file *File, typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "Request", nil, results(astgen.HTTPRequestPtr(file)),
+		returnExprs(selector(templateDataReceiverName, "request")))
 }
 
-func templateDataStatusCodeMethod(templateDataTypeIdent string) *ast.FuncDecl {
-	const (
-		scIdent = "statusCode"
+func templateDataStatusCodeMethod(typeIdent string) *ast.FuncDecl {
+	const scIdent = "statusCode"
+	return dataMethod(typeIdent, "StatusCode",
+		[]*ast.Field{param(ast.NewIdent("int"), scIdent)},
+		results(genericPointer(typeIdent)),
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{selector(templateDataReceiverName, scIdent)},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{ast.NewIdent(scIdent)},
+		},
+		returnExprs(ast.NewIdent(templateDataReceiverName)),
 	)
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("StatusCode"),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{List: []*ast.Field{{
-				Names: []*ast.Ident{ast.NewIdent(scIdent)},
-				Type:  ast.NewIdent("int"),
-			}}},
-			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexListExpr{
-					X:       ast.NewIdent(templateDataTypeIdent),
-					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-				}},
-			}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.AssignStmt{
-					Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent(scIdent)}},
-					Tok: token.ASSIGN,
-					Rhs: []ast.Expr{ast.NewIdent(scIdent)},
-				},
-				&ast.ReturnStmt{
-					Results: []ast.Expr{ast.NewIdent(templateDataReceiverName)},
-				},
-			},
-		},
-	}
 }
 
-func templateDataHeaderMethod(templateDataTypeIdent string) *ast.FuncDecl {
+func templateDataHeaderMethod(typeIdent string) *ast.FuncDecl {
 	const (
-		this       = "data"
 		keyIdent   = "key"
 		valueIdent = "value"
 	)
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("Header"),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{List: []*ast.Field{{
-				Names: []*ast.Ident{ast.NewIdent("key"), ast.NewIdent("value")},
-				Type:  ast.NewIdent("string"),
-			}}},
-			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexListExpr{
-					X:       ast.NewIdent(templateDataTypeIdent),
-					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-				}},
-			}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ExprStmt{X: &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X: &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   &ast.SelectorExpr{X: ast.NewIdent(this), Sel: ast.NewIdent("response")},
-								Sel: ast.NewIdent("Header"),
-							},
-						},
-						Sel: ast.NewIdent("Set"),
-					},
-					Args: []ast.Expr{ast.NewIdent(keyIdent), ast.NewIdent(valueIdent)},
-				}},
-				&ast.ReturnStmt{
-					Results: []ast.Expr{ast.NewIdent(this)},
-				},
+	return dataMethod(typeIdent, "Header",
+		[]*ast.Field{param(ast.NewIdent("string"), keyIdent, valueIdent)},
+		results(genericPointer(typeIdent)),
+		&ast.ExprStmt{X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: selector(templateDataReceiverName, "response"), Sel: ast.NewIdent("Header")}},
+				Sel: ast.NewIdent("Set"),
 			},
-		},
-	}
+			Args: []ast.Expr{ast.NewIdent(keyIdent), ast.NewIdent(valueIdent)},
+		}},
+		returnExprs(ast.NewIdent(templateDataReceiverName)),
+	)
+}
+
+func responseHeader() *ast.CallExpr {
+	return &ast.CallExpr{Fun: selector(muxt.TemplateNameScopeIdentifierHTTPResponse, "Header")}
 }
 
 func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
@@ -378,219 +254,94 @@ func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 			Lhs: []ast.Expr{ast.NewIdent(ctIdent)},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{&ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X: &ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X:   ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse),
-							Sel: ast.NewIdent("Header"),
-						},
-					},
-					Sel: ast.NewIdent("Get"),
-				},
+				Fun:  &ast.SelectorExpr{X: responseHeader(), Sel: ast.NewIdent("Get")},
 				Args: []ast.Expr{astgen.String(ctHeader)},
 			}},
 		},
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(ctIdent), Op: token.EQL, Y: astgen.String("")},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
-				Fun:  &ast.SelectorExpr{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), Sel: ast.NewIdent("Header")}, Args: []ast.Expr{}}, Sel: ast.NewIdent("Set")},
-				Args: []ast.Expr{astgen.String(ctHeader), astgen.String("text/html; charset=utf-8")},
-			}}},
-		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: responseHeader(), Sel: ast.NewIdent("Set")},
+			Args: []ast.Expr{astgen.String(ctHeader), astgen.String("text/html; charset=utf-8")},
+		}}}},
 	}
 }
 
-func htmxHeaderSetterMethod(templateDataTypeIdent, methodName, headerName, paramName string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Params: &ast.FieldList{List: []*ast.Field{{
-				Names: []*ast.Ident{ast.NewIdent(paramName)},
-				Type:  ast.NewIdent("string"),
-			}}},
-			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexListExpr{
-					X:       ast.NewIdent(templateDataTypeIdent),
-					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-				}},
-			}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.CallExpr{
-						Fun:  &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Header")},
-						Args: []ast.Expr{astgen.String(headerName), ast.NewIdent(paramName)},
-					}},
-				},
-			},
-		},
+func dataHeaderCall(name string, value ast.Expr) *ast.CallExpr {
+	return &ast.CallExpr{Fun: selector(templateDataReceiverName, "Header"), Args: []ast.Expr{astgen.String(name), value}}
+}
+
+func htmxHeaderSetterMethod(typeIdent, methodName, headerName, paramName string) *ast.FuncDecl {
+	return dataMethod(typeIdent, methodName,
+		[]*ast.Field{param(ast.NewIdent("string"), paramName)},
+		results(genericPointer(typeIdent)),
+		returnExprs(dataHeaderCall(headerName, ast.NewIdent(paramName))),
+	)
+}
+
+func htmxRefreshMethod(typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "HXRefresh", nil, results(genericPointer(typeIdent)),
+		returnExprs(dataHeaderCall("HX-Refresh", astgen.String("true"))))
+}
+
+// requestHeaderGet is data.Request().Header.Get(name).
+func requestHeaderGet(name string) *ast.CallExpr {
+	request := &ast.CallExpr{Fun: selector(templateDataReceiverName, "Request")}
+	return &ast.CallExpr{
+		Fun:  &ast.SelectorExpr{X: &ast.SelectorExpr{X: request, Sel: ast.NewIdent("Header")}, Sel: ast.NewIdent("Get")},
+		Args: []ast.Expr{astgen.String(name)},
 	}
 }
 
-func htmxRefreshMethod(templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("HXRefresh"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{
-				Type: &ast.StarExpr{X: &ast.IndexListExpr{
-					X:       ast.NewIdent(templateDataTypeIdent),
-					Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-				}},
-			}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.CallExpr{
-						Fun:  &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Header")},
-						Args: []ast.Expr{astgen.String("HX-Refresh"), astgen.String("true")},
-					}},
-				},
-			},
-		},
-	}
+func htmxRequestHeaderStringMethod(typeIdent, methodName, headerName string) *ast.FuncDecl {
+	return dataMethod(typeIdent, methodName, nil, results(ast.NewIdent("string")),
+		returnExprs(requestHeaderGet(headerName)))
 }
 
-func htmxRequestHeaderStringMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X: &ast.SelectorExpr{
-								X: &ast.CallExpr{
-									Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
-								},
-								Sel: ast.NewIdent("Header"),
-							},
-							Sel: ast.NewIdent("Get"),
-						},
-						Args: []ast.Expr{astgen.String(headerName)},
-					}},
-				},
-			},
-		},
-	}
+func htmxRequestHeaderBoolMethod(typeIdent, methodName, headerName string, op token.Token, value string) *ast.FuncDecl {
+	return dataMethod(typeIdent, methodName, nil, results(ast.NewIdent("bool")),
+		returnExprs(&ast.BinaryExpr{X: requestHeaderGet(headerName), Op: op, Y: astgen.String(value)}))
 }
 
-func htmxRequestHeaderBoolNonEmptyMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.BinaryExpr{
-						X: &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X: &ast.SelectorExpr{
-									X: &ast.CallExpr{
-										Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
-									},
-									Sel: ast.NewIdent("Header"),
-								},
-								Sel: ast.NewIdent("Get"),
-							},
-							Args: []ast.Expr{astgen.String(headerName)},
-						},
-						Op: token.NEQ,
-						Y:  astgen.String(""),
-					}},
-				},
-			},
-		},
-	}
+func htmxRequestHeaderBoolNonEmptyMethod(typeIdent, methodName, headerName string) *ast.FuncDecl {
+	return htmxRequestHeaderBoolMethod(typeIdent, methodName, headerName, token.NEQ, "")
 }
 
-func htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, methodName, headerName string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{&ast.BinaryExpr{
-						X: &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X: &ast.SelectorExpr{
-									X: &ast.CallExpr{
-										Fun: &ast.SelectorExpr{X: ast.NewIdent(templateDataReceiverName), Sel: ast.NewIdent("Request")},
-									},
-									Sel: ast.NewIdent("Header"),
-								},
-								Sel: ast.NewIdent("Get"),
-							},
-							Args: []ast.Expr{astgen.String(headerName)},
-						},
-						Op: token.EQL,
-						Y:  astgen.String("true"),
-					}},
-				},
-			},
-		},
-	}
+func htmxRequestHeaderBoolTrueMethod(typeIdent, methodName, headerName string) *ast.FuncDecl {
+	return htmxRequestHeaderBoolMethod(typeIdent, methodName, headerName, token.EQL, "true")
 }
 
-func templateDataStringMethod(templateDataTypeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: templateDataMethodReceiver(templateDataTypeIdent),
-		Name: ast.NewIdent("String"),
-		Type: &ast.FuncType{
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}},
-		},
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ReturnStmt{
-					Results: []ast.Expr{astgen.String("")},
-				},
-			},
-		},
-	}
+func templateDataStringMethod(typeIdent string) *ast.FuncDecl {
+	return dataMethod(typeIdent, "String", nil, results(ast.NewIdent("string")), returnExprs(astgen.String("")))
 }
 
-func templateDataHTMXHelperMethods(templateDataTypeIdent string) []*ast.FuncDecl {
+func templateDataHTMXHelperMethods(typeIdent string) []*ast.FuncDecl {
 	return []*ast.FuncDecl{
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXLocation", "HX-Location", "link"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXPushURL", "HX-Push-Url", "link"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXRedirect", "HX-Redirect", "link"),
-		htmxRefreshMethod(templateDataTypeIdent),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReplaceURL", "HX-Replace-Url", "link"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReswap", "HX-Reswap", "swap"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXRetarget", "HX-Retarget", "target"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXReselect", "HX-Reselect", "selector"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTrigger", "HX-Trigger", "eventName"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSettle", "HX-Trigger-After-Settle", "eventName"),
-		htmxHeaderSetterMethod(templateDataTypeIdent, "HXTriggerAfterSwap", "HX-Trigger-After-Swap", "eventName"),
+		htmxHeaderSetterMethod(typeIdent, "HXLocation", "HX-Location", "link"),
+		htmxHeaderSetterMethod(typeIdent, "HXPushURL", "HX-Push-Url", "link"),
+		htmxHeaderSetterMethod(typeIdent, "HXRedirect", "HX-Redirect", "link"),
+		htmxRefreshMethod(typeIdent),
+		htmxHeaderSetterMethod(typeIdent, "HXReplaceURL", "HX-Replace-Url", "link"),
+		htmxHeaderSetterMethod(typeIdent, "HXReswap", "HX-Reswap", "swap"),
+		htmxHeaderSetterMethod(typeIdent, "HXRetarget", "HX-Retarget", "target"),
+		htmxHeaderSetterMethod(typeIdent, "HXReselect", "HX-Reselect", "selector"),
+		htmxHeaderSetterMethod(typeIdent, "HXTrigger", "HX-Trigger", "eventName"),
+		htmxHeaderSetterMethod(typeIdent, "HXTriggerAfterSettle", "HX-Trigger-After-Settle", "eventName"),
+		htmxHeaderSetterMethod(typeIdent, "HXTriggerAfterSwap", "HX-Trigger-After-Swap", "eventName"),
 
-		htmxRequestHeaderBoolNonEmptyMethod(templateDataTypeIdent, "HXBoosted", "HX-Boosted"),
-		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXCurrentURL", "HX-Current-Url"),
-		htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, "HXHistoryRestoreRequest", "HX-History-Restore-Request"),
-		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXPrompt", "HX-Prompt"),
-		htmxRequestHeaderBoolTrueMethod(templateDataTypeIdent, "HXRequest", "HX-Request"),
-		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTargetElementID", "HX-Target"),
-		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTriggerName", "HX-Trigger-Name"),
-		htmxRequestHeaderStringMethod(templateDataTypeIdent, "HXTriggerElementID", "HX-Trigger"),
+		htmxRequestHeaderBoolNonEmptyMethod(typeIdent, "HXBoosted", "HX-Boosted"),
+		htmxRequestHeaderStringMethod(typeIdent, "HXCurrentURL", "HX-Current-Url"),
+		htmxRequestHeaderBoolTrueMethod(typeIdent, "HXHistoryRestoreRequest", "HX-History-Restore-Request"),
+		htmxRequestHeaderStringMethod(typeIdent, "HXPrompt", "HX-Prompt"),
+		htmxRequestHeaderBoolTrueMethod(typeIdent, "HXRequest", "HX-Request"),
+		htmxRequestHeaderStringMethod(typeIdent, "HXTargetElementID", "HX-Target"),
+		htmxRequestHeaderStringMethod(typeIdent, "HXTriggerName", "HX-Trigger-Name"),
+		htmxRequestHeaderStringMethod(typeIdent, "HXTriggerElementID", "HX-Trigger"),
 	}
 }
 
-func templateDataDecls(file *File, config RoutesFileConfiguration, receiverInterface ast.Expr) []ast.Decl {
+func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 	decls := []ast.Decl{
-		templateDataType(file, config.TemplateDataType, receiverInterface),
+		templateDataType(file, config.TemplateDataType),
 	}
 	if config.OutputMuxtVersion {
 		decls = append(decls, templateDataMuxtVersionMethod(config))
@@ -603,7 +354,7 @@ func templateDataDecls(file *File, config RoutesFileConfiguration, receiverInter
 		templateDataHeaderMethod(config.TemplateDataType),
 		templateDataOkay(config.TemplateDataType),
 		templateDataError(file, config.TemplateDataType),
-		templateDataReceiver(receiverInterface, config.TemplateDataType),
+		templateDataReceiver(config.TemplateDataType),
 		templateRedirect(file, config),
 	)
 	for _, method := range templateRedirectHelperMethods(file, config) {

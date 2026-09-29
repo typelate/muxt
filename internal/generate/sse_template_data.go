@@ -93,23 +93,8 @@ func sseTemplateDataTypeParams() *ast.FieldList {
 	}}
 }
 
-func sseTemplateDataMethodReceiver(typeIdent string) *ast.FieldList {
-	return &ast.FieldList{List: []*ast.Field{{
-		Names: []*ast.Ident{ast.NewIdent(sseTemplateDataReceiverName)},
-		Type: &ast.StarExpr{X: &ast.IndexListExpr{
-			X:       ast.NewIdent(typeIdent),
-			Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-		}},
-	}}}
-}
-
-// sseTemplateDataSelfType returns the *SSETemplateData[R, T] expression used as
-// the return type of the chainable setter methods.
-func sseTemplateDataSelfType(typeIdent string) ast.Expr {
-	return &ast.StarExpr{X: &ast.IndexListExpr{
-		X:       ast.NewIdent(typeIdent),
-		Indices: []ast.Expr{ast.NewIdent("R"), ast.NewIdent("T")},
-	}}
+func sseMethod(typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
+	return genericMethod(sseTemplateDataReceiverName, typeIdent, name, params, results, body...)
 }
 
 func sseTemplateDataType(file *File, typeIdent string) *ast.GenDecl {
@@ -138,56 +123,28 @@ func sseTemplateDataType(file *File, typeIdent string) *ast.GenDecl {
 }
 
 func sseTemplateDataStringMethod(typeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("String"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{astgen.String("")}}}},
-	}
+	return sseMethod(typeIdent, "String", nil, results(ast.NewIdent("string")), returnExprs(astgen.String("")))
 }
 
 func sseTemplateDataReceiverMethod(typeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("Receiver"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("R")}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-			&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierReceiver)},
-		}}}},
-	}
+	return sseMethod(typeIdent, "Receiver", nil, results(ast.NewIdent("R")),
+		returnExprs(selector(sseTemplateDataReceiverName, TemplateDataFieldIdentifierReceiver)))
 }
 
 func sseTemplateDataRequestMethod(file *File, typeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("Request"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: astgen.HTTPRequestPtr(file)}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-			&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPRequest)},
-		}}}},
-	}
+	return sseMethod(typeIdent, "Request", nil, results(astgen.HTTPRequestPtr(file)),
+		returnExprs(selector(sseTemplateDataReceiverName, muxt.TemplateNameScopeIdentifierHTTPRequest)))
 }
 
 func sseTemplateDataResultMethod(typeIdent string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("Result"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("T")}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-			&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierResult)},
-		}}}},
-	}
+	return sseMethod(typeIdent, "Result", nil, results(ast.NewIdent("T")),
+		returnExprs(selector(sseTemplateDataReceiverName, TemplateDataFieldIdentifierResult)))
 }
 
 func sseTemplateDataErrMethod(file *File, typeIdent string) *ast.FuncDecl {
-	join := astgen.ErrorsJoin(file, &ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)})
+	join := astgen.ErrorsJoin(file, selector(sseTemplateDataReceiverName, TemplateDataFieldIdentifierError))
 	join.Ellipsis = 1
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("Err"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{join}}}},
-	}
+	return sseMethod(typeIdent, "Err", nil, results(ast.NewIdent("error")), returnExprs(join))
 }
 
 // sseTemplateDataPointerSetterMethod builds a chainable setter of the form
@@ -197,22 +154,20 @@ func sseTemplateDataErrMethod(file *File, typeIdent string) *ast.FuncDecl {
 //		return m
 //	}
 func sseTemplateDataPointerSetterMethod(typeIdent, methodName, paramName, paramType, field string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(paramName)}, Type: ast.NewIdent(paramType)}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: sseTemplateDataSelfType(typeIdent)}}},
+	return sseSetterMethod(typeIdent, methodName, paramName, paramType, field, &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(paramName)})
+}
+
+func sseSetterMethod(typeIdent, methodName, paramName, paramType, field string, value ast.Expr) *ast.FuncDecl {
+	return sseMethod(typeIdent, methodName,
+		[]*ast.Field{param(ast.NewIdent(paramType), paramName)},
+		results(genericPointer(typeIdent)),
+		&ast.AssignStmt{
+			Lhs: []ast.Expr{selector(sseTemplateDataReceiverName, field)},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{value},
 		},
-		Body: &ast.BlockStmt{List: []ast.Stmt{
-			&ast.AssignStmt{
-				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}},
-				Tok: token.ASSIGN,
-				Rhs: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(paramName)}},
-			},
-			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(sseTemplateDataReceiverName)}},
-		}},
-	}
+		returnExprs(ast.NewIdent(sseTemplateDataReceiverName)),
+	)
 }
 
 // sseTemplateDataBoolSetterMethod builds a chainable setter of the form
@@ -222,22 +177,7 @@ func sseTemplateDataPointerSetterMethod(typeIdent, methodName, paramName, paramT
 //		return m
 //	}
 func sseTemplateDataBoolSetterMethod(typeIdent, methodName, field string) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent(methodName),
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("value")}, Type: ast.NewIdent("bool")}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: sseTemplateDataSelfType(typeIdent)}}},
-		},
-		Body: &ast.BlockStmt{List: []ast.Stmt{
-			&ast.AssignStmt{
-				Lhs: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(field)}},
-				Tok: token.ASSIGN,
-				Rhs: []ast.Expr{ast.NewIdent("value")},
-			},
-			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(sseTemplateDataReceiverName)}},
-		}},
-	}
+	return sseSetterMethod(typeIdent, methodName, "value", "bool", field, ast.NewIdent("value"))
 }
 
 func sseTemplateDataEventMethod(typeIdent string) *ast.FuncDecl {
@@ -254,19 +194,8 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 }
 
 func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(config.SSETemplateDataType),
-		Name: ast.NewIdent("Path"),
-		Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent(config.TemplateRoutePathsTypeName)}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{
-			&ast.CompositeLit{Type: ast.NewIdent(config.TemplateRoutePathsTypeName), Elts: []ast.Expr{
-				&ast.KeyValueExpr{
-					Key:   ast.NewIdent(pathPrefixPathsStructFieldName),
-					Value: &ast.SelectorExpr{X: ast.NewIdent(sseTemplateDataReceiverName), Sel: ast.NewIdent(pathPrefixPathsStructFieldName)},
-				},
-			}},
-		}}}},
-	}
+	return sseMethod(config.SSETemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
+		returnExprs(templatePathsLiteral(sseTemplateDataReceiverName, config.TemplateRoutePathsTypeName)))
 }
 
 // Idents used inside the generated WriteTo method bodies.
@@ -413,15 +342,10 @@ func sseDataLineLoop(file *File, rangeBody ...ast.Stmt) []ast.Stmt {
 }
 
 func sseWriteToFuncDecl(file *File, typeIdent string, body []ast.Stmt) *ast.FuncDecl {
-	return &ast.FuncDecl{
-		Recv: sseTemplateDataMethodReceiver(typeIdent),
-		Name: ast.NewIdent("WriteTo"),
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(sseWriterIdent)}, Type: astgen.ExportedIdentifier(file, "", "io", "Writer")}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("int64")}, {Type: ast.NewIdent("error")}}},
-		},
-		Body: &ast.BlockStmt{List: body},
-	}
+	return sseMethod(typeIdent, "WriteTo",
+		[]*ast.Field{param(astgen.ExportedIdentifier(file, "", "io", "Writer"), sseWriterIdent)},
+		results(ast.NewIdent("int64"), ast.NewIdent("error")),
+		body...)
 }
 
 // sseTemplateDataWriteToMethod builds the WriteTo method that serializes the
