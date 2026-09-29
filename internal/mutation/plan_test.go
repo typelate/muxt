@@ -357,6 +357,19 @@ func TestPlanValidate(t *testing.T) {
 	}
 }
 
+func TestConfigurationMaxCases(t *testing.T) {
+	for _, tt := range []struct{ configured, want int }{
+		{configured: -1, want: DefaultMaxCases},
+		{configured: 0, want: DefaultMaxCases},
+		{configured: 1, want: 1},
+		{configured: 20, want: 20},
+	} {
+		if got := (Configuration{MaxCases: tt.configured}).maxCases(); got != tt.want {
+			t.Errorf("Configuration{MaxCases: %d}.maxCases() = %d, want %d", tt.configured, got, tt.want)
+		}
+	}
+}
+
 func TestTemplateFilter(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

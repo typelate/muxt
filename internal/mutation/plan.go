@@ -179,12 +179,9 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 	p := &plan{
 		seed:      config.Seed,
 		draw:      newValues(config.Seed),
-		maxCases:  config.MaxCases,
+		maxCases:  config.maxCases(),
 		diff:      config.Diff,
 		diffError: diffError,
-	}
-	if p.maxCases <= 0 {
-		p.maxCases = DefaultMaxCases
 	}
 	sel := selector{
 		before:    before,
@@ -214,6 +211,13 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		return nil, err
 	}
 	return p, nil
+}
+
+func (c Configuration) maxCases() int {
+	if c.MaxCases <= 0 {
+		return DefaultMaxCases
+	}
+	return c.MaxCases
 }
 
 // templateFilter admits every template name when pattern is nil.
