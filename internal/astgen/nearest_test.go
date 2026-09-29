@@ -3,6 +3,8 @@ package astgen_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/typelate/muxt/internal/astgen"
 )
 
@@ -24,9 +26,8 @@ func TestNearestStringExactAndTiedMatches(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, found := astgen.NearestString(tt.target, tt.candidates)
-			if found != tt.found || got != tt.want {
-				t.Errorf("NearestString(%q, %q) = %q, %v; want %q, %v", tt.target, tt.candidates, got, found, tt.want, tt.found)
-			}
+			assert.Equal(t, tt.found, found, "NearestString(%q, %q) found", tt.target, tt.candidates)
+			assert.Equal(t, tt.want, got, "NearestString(%q, %q)", tt.target, tt.candidates)
 		})
 	}
 }
