@@ -270,6 +270,15 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 	return nil
 }
 
+// executeTemplateTree walks the template called name with data so that
+// global's InspectTemplateNode sees each {{template}} action. Type errors
+// are not reported: a listing shows what the walk reached.
+func executeTemplateTree(global *check.Global, ts *template.Template, name string, data types.Type) {
+	if t := ts.Lookup(name); t != nil && t.Tree != nil {
+		_ = check.Execute(global, t.Tree, data)
+	}
+}
+
 // newGlobal wires a check.Global for type checking a templates variable's
 // templates in pkg.
 //

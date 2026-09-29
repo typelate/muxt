@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"go/types"
 	"io"
-	"maps"
 	"regexp"
-	"slices"
 	"text/template/parse"
 
 	"github.com/typelate/check"
@@ -40,17 +38,13 @@ func (result *TemplateCallers) WriteTo(w io.Writer) (int64, error) {
 func NewTemplateCallers(config TemplateCallersConfiguration, pkg source.Package) (*TemplateCallers, error) {
 	combined := &TemplateCallers{}
 	for _, lt := range pkg.Variables {
-		result, err := templateCallers(config, pkg, lt)
-		if err != nil {
-			return nil, err
-		}
-		combined.Templates = append(combined.Templates, result.Templates...)
+		combined.Templates = append(combined.Templates, templateCallers(config, pkg, lt)...)
 	}
 	return combined, nil
 }
 
-func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt source.Variable) (*TemplateCallers, error) {
-	global, ts := newGlobal(pkg, lt), lt.Set
+func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt source.Variable) []NamedReferences {
+	global := newGlobal(pkg, lt)
 	refs := make(map[string][]TemplateReference) // template name -> list of references
 
 	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
@@ -63,32 +57,15 @@ func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt
 		})
 	}
 
-	{
-		for _, c := range lt.Calls {
-			templateName, dataType := c.Template, c.Data
-
-			refs[templateName] = append(refs[templateName], TemplateReference{
-				Position: c.Position,
-				Kind:     ExecuteTemplateNode,
-				Name:     templateName,
-				data:     dataType,
-			})
-
-			t := ts.Lookup(templateName)
-			if t != nil && t.Tree != nil {
-				_ = check.Execute(global, t.Tree, dataType)
-			}
-		}
+	for _, c := range lt.Calls {
+		refs[c.Template] = append(refs[c.Template], TemplateReference{
+			Position: c.Position,
+			Kind:     ExecuteTemplateNode,
+			Name:     c.Template,
+			data:     c.Data,
+		})
+		executeTemplateTree(global, lt.Set, c.Template, c.Data)
 	}
 
-	var result TemplateCallers
-	names := slices.Sorted(maps.Keys(refs))
-	for _, name := range names {
-		if len(config.FilterTemplates) > 0 && !matchesAny(name, config.FilterTemplates) {
-			continue
-		}
-		result.Templates = append(result.Templates, NewNamedReferences(pkg.Types.Path(), name, refs[name]))
-	}
-
-	return &result, nil
+	return newReferences(pkg.Types.Path(), refs, config.FilterTemplates)
 }

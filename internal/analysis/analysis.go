@@ -5,6 +5,7 @@ import (
 	"embed"
 	"go/token"
 	"go/types"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -76,6 +77,19 @@ type NamedReferences struct {
 	Name       string
 	Imports    *astgen.TypeFormatter `json:",omitempty"`
 	References []TemplateReference
+}
+
+// newReferences lists refs by name in order, keeping the names that match one
+// of filter, or all of them when filter is empty.
+func newReferences(pkgPath string, refs map[string][]TemplateReference, filter []*regexp.Regexp) []NamedReferences {
+	var named []NamedReferences
+	for _, name := range slices.Sorted(maps.Keys(refs)) {
+		if len(filter) > 0 && !matchesAny(name, filter) {
+			continue
+		}
+		named = append(named, NewNamedReferences(pkgPath, name, refs[name]))
+	}
+	return named
 }
 
 func NewNamedReferences(pkgPath, name string, refs []TemplateReference) NamedReferences {
