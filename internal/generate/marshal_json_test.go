@@ -1,22 +1,23 @@
 package generate
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestMarshalJSONHandlerFuncRejectsTheExecuteCallback(t *testing.T) {
 	pkg, defs := routesTestDefinitions(t, map[string]string{
 		"a.gohtml": `{{define "GET /e marshalJSON(Run(execute))"}}{{end}}{{define "GET /b marshalJSON(B())"}}{{end}}`,
 	})
 	for _, def := range defs {
-		_, err := marshalJSONHandlerFunc(newFile(pkg), testConfig(), def, "td", "RoutesReceiver", "buf", "statusCode")
-		switch def.RawPattern() {
-		case "GET /e":
-			if want := "marshalJSON does not support the execute callback"; err == nil || err.Error() != want {
-				t.Errorf("marshalJSONHandlerFunc(%s) error = %v, want %q", def.RawPattern(), err, want)
+		t.Run(def.RawPattern(), func(t *testing.T) {
+			_, err := marshalJSONHandlerFunc(newFile(pkg), testConfig(), def, "td", "RoutesReceiver", "buf", "statusCode")
+			if def.RawPattern() == "GET /e" {
+				assert.EqualError(t, err, "marshalJSON does not support the execute callback", "marshalJSONHandlerFunc(%s)", def.RawPattern())
+				return
 			}
-		default:
-			if err != nil {
-				t.Errorf("marshalJSONHandlerFunc(%s) = %v, want no error", def.RawPattern(), err)
-			}
-		}
+			assert.NoError(t, err, "marshalJSONHandlerFunc(%s)", def.RawPattern())
+		})
 	}
 }
