@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // runnerFixture builds a report of n runnable mutants of one template.
@@ -53,21 +55,15 @@ func runnerFixture(t *testing.T, kills []bool) (*Report, *plan) {
 func readMutated(t *testing.T, overlay string) string {
 	t.Helper()
 	b, err := os.ReadFile(overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var o struct{ Replace map[string]string }
-	if err := json.Unmarshal(b, &o); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, json.Unmarshal(b, &o))
 	for _, mutated := range o.Replace {
 		text, err := os.ReadFile(mutated)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return string(text)
 	}
-	t.Fatal("overlay replaces nothing")
+	require.Fail(t, "overlay replaces nothing")
 	return ""
 }
 
@@ -81,35 +77,22 @@ func TestWriteMutantMapsTheFileToItsMutatedCopy(t *testing.T) {
 	var dirs []string
 	for i, mutant := range p.mutants {
 		overlay, err := writeMutant(scratch, mutant)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		b, err := os.ReadFile(overlay)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		var got struct{ Replace map[string]string }
-		if err := json.Unmarshal(b, &got); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, json.Unmarshal(b, &got))
 		mutated, ok := got.Replace[mutant.File]
-		if !ok || len(got.Replace) != 1 {
-			t.Fatalf("mutant %d overlay = %v, want only %s replaced", i, got.Replace, mutant.File)
-		}
-		if want := mutant.Apply(); readMutated(t, overlay) != want {
-			t.Errorf("mutant %d copy = %q, want %q", i, readMutated(t, overlay), want)
-		}
-		if filepath.Base(mutated) != filepath.Base(mutant.File) {
-			t.Errorf("mutant %d copy is named %q, want %q", i, filepath.Base(mutated), filepath.Base(mutant.File))
-		}
-		if filepath.Dir(mutated) != filepath.Dir(overlay) || filepath.Dir(filepath.Dir(overlay)) != scratch {
-			t.Errorf("mutant %d wrote %s and %s, want both in a directory of its own under %s", i, mutated, overlay, scratch)
-		}
+		require.True(t, ok, "mutant %d overlay = %v, want %s replaced", i, got.Replace, mutant.File)
+		require.Len(t, got.Replace, 1, "mutant %d overlay replaces only %s", i, mutant.File)
+
+		assert.Equal(t, mutant.Apply(), readMutated(t, overlay), "mutant %d copy", i)
+		assert.Equal(t, filepath.Base(mutant.File), filepath.Base(mutated), "mutant %d copy name", i)
+		assert.Equal(t, filepath.Dir(overlay), filepath.Dir(mutated), "mutant %d copy and overlay share a directory", i)
+		assert.Equal(t, scratch, filepath.Dir(filepath.Dir(overlay)), "mutant %d directory is directly under the scratch directory", i)
 		dirs = append(dirs, filepath.Dir(overlay))
 	}
-	if dirs[0] == dirs[1] {
-		t.Errorf("mutants share the directory %s", dirs[0])
-	}
+	assert.NotEqual(t, dirs[0], dirs[1], "mutants share a directory")
 }
 
 // TestRunAllWritesVerdictsInPlanOrder states that however many mutants run
@@ -118,35 +101,32 @@ func TestWriteMutantMapsTheFileToItsMutatedCopy(t *testing.T) {
 func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 	kills := []bool{true, false, true, true, false, false, true, false}
 	for _, workers := range []int{1, 4} {
-		report, p := runnerFixture(t, kills)
-		r := &mutantRunner{
-			plan:    p,
-			scratch: t.TempDir(),
-			clock:   &estimate{remaining: len(kills), workers: workers},
-			test: func(overlay string) (Status, error) {
-				if strings.Contains(readMutated(t, overlay), "K") {
-					return StatusKilled, nil
-				}
-				return StatusMissed, nil
-			},
-		}
-		if err := r.runAll(report, workers); err != nil {
-			t.Fatalf("workers %d: runAll = %v", workers, err)
-		}
+		t.Run(fmt.Sprintf("workers %d", workers), func(t *testing.T) {
+			report, p := runnerFixture(t, kills)
+			r := &mutantRunner{
+				plan:    p,
+				scratch: t.TempDir(),
+				clock:   &estimate{remaining: len(kills), workers: workers},
+				test: func(overlay string) (Status, error) {
+					if strings.Contains(readMutated(t, overlay), "K") {
+						return StatusKilled, nil
+					}
+					return StatusMissed, nil
+				},
+			}
+			require.NoError(t, r.runAll(report, workers))
 
-		results := report.Groups[0].Templates[0].Results
-		for i, kill := range kills {
-			want := StatusMissed
-			if kill {
-				want = StatusKilled
+			results := report.Groups[0].Templates[0].Results
+			for i, kill := range kills {
+				want := StatusMissed
+				if kill {
+					want = StatusKilled
+				}
+				assert.Equal(t, want, results[i].Status, "result %d", i)
 			}
-			if results[i].Status != want {
-				t.Errorf("workers %d: result %d = %s, want %s", workers, i, results[i].Status, want)
-			}
-		}
-		if report.Killed != 4 || report.Missed != 4 {
-			t.Errorf("workers %d: killed %d, missed %d, want 4 and 4", workers, report.Killed, report.Missed)
-		}
+			assert.Equal(t, 4, report.Killed, "killed")
+			assert.Equal(t, 4, report.Missed, "missed")
+		})
 	}
 }
 
@@ -167,12 +147,8 @@ func TestRunAllStopsDispatchingAfterAnError(t *testing.T) {
 			return "", errors.New("go could not run")
 		},
 	}
-	if err := r.runAll(report, 1); err == nil {
-		t.Fatal("runAll = nil, want the error the go command gave")
-	}
-	if got := calls.Load(); got != 1 {
-		t.Errorf("mutants started = %d, want 1: nothing should start after the first error", got)
-	}
+	require.Error(t, r.runAll(report, 1), "runAll: the error the go command gave")
+	assert.Equal(t, int32(1), calls.Load(), "mutants started: nothing should start after the first error")
 }
 
 // TestRunAllReportsEachMutantAsItFinishes states the progress stream: a
@@ -199,18 +175,14 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 			return StatusMissed, nil
 		},
 	}
-	if err := r.runAll(report, 1); err != nil {
-		t.Fatalf("runAll = %v", err)
-	}
+	require.NoError(t, r.runAll(report, 1))
 
 	want := []string{
 		fmt.Sprintf(`[1/3] KILL page.gohtml:0:0 "page" %s (0s, ~0s left)`, OperatorActionEmpty),
 		fmt.Sprintf(`[2/3] SKIP page.gohtml:0:0 "page" %s (does not type check)`, OperatorActionEmpty),
 		fmt.Sprintf(`[3/3] MISS page.gohtml:0:0 "page" %s (0s, ~0s left)`, OperatorActionEmpty),
 	}
-	if got := strings.Split(strings.TrimSpace(progress.String()), "\n"); !slices.Equal(got, want) {
-		t.Errorf("progress:\n got %q\nwant %q", got, want)
-	}
+	assert.Equal(t, want, strings.Split(strings.TrimSpace(progress.String()), "\n"), "progress")
 }
 
 // TestReportTrims states the progress line for a trimmed subtree, which
@@ -220,10 +192,8 @@ func TestReportTrims(t *testing.T) {
 	trimmed := []TrimmedTemplate{{CallSite: "page.go:12:9", Template: "row", DataType: "server.Row", FirstSeenAt: "page.go:9:9"}}
 	var out strings.Builder
 	reportTrims(&out, trimmed)
-	if got, want := out.String(), "trimmed \"row\" at page.go:12:9: already mutated with server.Row from page.go:9:9\n"; got != want {
-		t.Errorf("reportTrims wrote %q, want %q", got, want)
-	}
-	reportTrims(nil, trimmed)
+	assert.Equal(t, "trimmed \"row\" at page.go:12:9: already mutated with server.Row from page.go:9:9\n", out.String(), "reportTrims")
+	assert.NotPanics(t, func() { reportTrims(nil, trimmed) }, "reportTrims without a writer")
 }
 
 // TestRoundDuration states how a duration is shown: to a tenth of a second
@@ -237,8 +207,8 @@ func TestRoundDuration(t *testing.T) {
 		{d: 1234 * time.Millisecond, want: "1.2s"},
 		{d: 90*time.Second + 600*time.Millisecond, want: "1m31s"},
 	} {
-		if got := roundDuration(tt.d); got != tt.want {
-			t.Errorf("roundDuration(%v) = %q, want %q", tt.d, got, tt.want)
-		}
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, roundDuration(tt.d), "roundDuration(%v)", tt.d)
+		})
 	}
 }
