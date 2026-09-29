@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/analysis"
@@ -68,27 +70,21 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 // written to. Run with -update to rewrite the want/ files, then read the
 // diff.
 func TestSnapshots(t *testing.T) {
-	if stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar")); len(stray) > 0 {
-		t.Fatalf("%s is not in a command's directory", stray[0])
-	}
+	stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar"))
+	require.Empty(t, stray, "a testdata archive is not in a command's directory")
 	directories, err := os.ReadDir("testdata")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, directory := range directories {
 		if !directory.IsDir() {
 			continue
 		}
 		command := directory.Name()
 		newConfiguration, ok := commands[command]
-		if !ok {
-			t.Errorf("testdata/%s names no command this package snapshots", command)
+		if !assert.True(t, ok, "testdata/%s names no command this package snapshots", command) {
 			continue
 		}
 		archives, err := filepath.Glob(filepath.Join("testdata", command, "*.txtar"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		t.Run(command, func(t *testing.T) {
 			for _, archivePath := range archives {
 				runSnapshot(t, archivePath, newConfiguration)
@@ -112,9 +108,7 @@ func runSnapshot(t *testing.T, archivePath string, newConfiguration func() any) 
 	t.Helper()
 	t.Run(strings.TrimSuffix(filepath.Base(archivePath), ".txtar"), func(t *testing.T) {
 		archive, err := txtar.ParseFile(archivePath)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		got := snapshot(t, configuration(t, archive, newConfiguration()), archive)
 		if *update {
 			files := slices.DeleteFunc(slices.Clone(archive.Files), func(file txtar.File) bool {
@@ -124,9 +118,7 @@ func runSnapshot(t *testing.T, archivePath string, newConfiguration func() any) 
 				files = append(files, txtar.File{Name: "want/" + name, Data: []byte(got[name])})
 			}
 			archive.Files = files
-			if err := os.WriteFile(archivePath, txtar.Format(archive), 0o644); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, os.WriteFile(archivePath, txtar.Format(archive), 0o644))
 			return
 		}
 		want := make(map[string]string)
@@ -136,9 +128,7 @@ func runSnapshot(t *testing.T, archivePath string, newConfiguration func() any) 
 			}
 		}
 		for _, name := range sortedKeys(got, want) {
-			if got[name] != want[name] {
-				t.Errorf("want/%s differs (run go test -run TestSnapshots -update to rewrite):\n--- got\n%s\n--- want\n%s", name, got[name], want[name])
-			}
+			assert.Equal(t, want[name], got[name], "want/%s differs (run go test -run TestSnapshots -update to rewrite)", name)
 		}
 	})
 }
@@ -152,12 +142,10 @@ func configuration(t *testing.T, archive *txtar.Archive, config any) any {
 		if file.Name != "config.json" {
 			continue
 		}
-		if err := json.Unmarshal(file.Data, config, configjson.Options()); err != nil {
-			t.Fatalf("config.json: %v", err)
-		}
+		require.NoError(t, json.Unmarshal(file.Data, config, configjson.Options()), "config.json")
 		return reflect.ValueOf(config).Elem().Interface()
 	}
-	t.Fatal("the archive has no config.json")
+	require.Fail(t, "the archive has no config.json")
 	return nil
 }
 
@@ -226,7 +214,7 @@ func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]strin
 			writeTo(t, &stdout, result)
 		}
 	default:
-		t.Fatalf("no analysis runs with a %T", config)
+		require.Failf(t, "unsupported configuration", "no analysis runs with a %T", config)
 	}
 	if stdout.Len() > 0 {
 		got["stdout.txt"] = relative(stdout.String())
@@ -243,9 +231,8 @@ func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]strin
 
 func writeTo(t *testing.T, w io.Writer, result io.WriterTo) {
 	t.Helper()
-	if _, err := result.WriteTo(w); err != nil {
-		t.Fatal(err)
-	}
+	_, err := result.WriteTo(w)
+	require.NoError(t, err)
 }
 
 func sortedKeys(maps ...map[string]string) []string {

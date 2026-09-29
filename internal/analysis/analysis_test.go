@@ -5,6 +5,9 @@ import (
 	"go/types"
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewReferences(t *testing.T) {
@@ -43,25 +46,16 @@ func TestNewReferences(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := names(newReferences("example.com/p", refs(), tt.filter))
-			if len(got) != len(tt.want) {
-				t.Fatalf("newReferences() names = %v, want %v", got, tt.want)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Fatalf("newReferences() names = %v, want %v", got, tt.want)
-				}
-			}
+			assert.Equal(t, tt.want, got, "newReferences() names")
 		})
 	}
 
 	t.Run("references are sorted by position and typed", func(t *testing.T) {
 		got := newReferences("example.com/p", refs(), nil)[1]
-		if len(got.References) != 2 || got.References[0].Position.Offset != 1 || got.References[1].Position.Offset != 9 {
-			t.Fatalf("references of b = %+v, want offsets 1 then 9", got.References)
-		}
-		if got.References[0].Data != "string" {
-			t.Errorf("Data = %q, want %q", got.References[0].Data, "string")
-		}
+		require.Len(t, got.References, 2, "references of b = %+v, want offsets 1 then 9", got.References)
+		assert.Equal(t, 1, got.References[0].Position.Offset, "references of b = %+v, want offsets 1 then 9", got.References)
+		assert.Equal(t, 9, got.References[1].Position.Offset, "references of b = %+v, want offsets 1 then 9", got.References)
+		assert.Equal(t, "string", got.References[0].Data, "Data")
 	})
 }
 
@@ -70,10 +64,11 @@ func TestNewNamedReferencesOrdersKindsAtOnePosition(t *testing.T) {
 	parse := TemplateReference{Name: "x", Kind: ParseTemplateNode, Position: pos, data: types.Typ[types.Int]}
 	execute := TemplateReference{Name: "x", Kind: ExecuteTemplateNode, Position: pos, data: types.Typ[types.Int]}
 	for _, in := range [][]TemplateReference{{parse, execute}, {execute, parse}} {
-		got := NewNamedReferences("example.com/p", "x", in).References
-		if len(got) != 2 || got[0].Kind != ExecuteTemplateNode || got[1].Kind != ParseTemplateNode {
-			t.Errorf("NewNamedReferences(%v) kinds = %v, want execute_template then template", in, got)
+		var kinds []TemplateReferenceKind
+		for _, ref := range NewNamedReferences("example.com/p", "x", in).References {
+			kinds = append(kinds, ref.Kind)
 		}
+		assert.Equal(t, []TemplateReferenceKind{ExecuteTemplateNode, ParseTemplateNode}, kinds, "NewNamedReferences(%v) kinds, want execute_template then template", in)
 	}
 }
 
@@ -100,9 +95,7 @@ func TestNewNamedReferences(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NewNamedReferences("example.com/p", "x", tt.refs)
-			if len(got.References) != tt.want {
-				t.Errorf("NewNamedReferences() has %d references, want %d: %+v", len(got.References), tt.want, got.References)
-			}
+			assert.Len(t, got.References, tt.want, "NewNamedReferences() references: %+v", got.References)
 		})
 	}
 }
