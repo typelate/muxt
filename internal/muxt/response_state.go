@@ -116,7 +116,7 @@ func templateDataNames(arg parse.Node, dotIsTemplateData bool) []string {
 		// $ is the dot the template started with, whatever the
 		// current one is, so $.StatusCode is TemplateData's wherever
 		// it is written.
-		if len(a.Ident) > 0 && a.Ident[0] == "$" {
+		if a.Ident[0] == "$" {
 			return a.Ident[1:]
 		}
 	case *parse.ChainNode:

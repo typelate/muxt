@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 	"html/template"
+	"slices"
 	"testing"
 
 	"github.com/typelate/muxt/internal/source"
@@ -168,6 +169,106 @@ func TestNewDefinitionStatusCodeAndResponse(t *testing.T) {
 			}
 			if !tt.wantErr && def.defaultStatusCode != tt.want {
 				t.Errorf("newDefinition(%q) status = %d, want %d", tt.route, def.defaultStatusCode, tt.want)
+			}
+		})
+	}
+}
+
+func TestWildcardName(t *testing.T) {
+	for _, tt := range []struct {
+		segment      string
+		wantName     string
+		wantWildcard bool
+	}{
+		{segment: "{id}", wantName: "id", wantWildcard: true},
+		{segment: "{id...}", wantName: "id...", wantWildcard: true},
+		{segment: "{$}", wantName: "$", wantWildcard: true},
+		{segment: "{x}", wantName: "x", wantWildcard: true},
+		{segment: "{}", wantName: "{}"},
+		{segment: "{id", wantName: "{id"},
+		{segment: "id}", wantName: "id}"},
+		{segment: "users", wantName: "users"},
+		{segment: "", wantName: ""},
+	} {
+		name, isWildcard := wildcardName(tt.segment)
+		if name != tt.wantName || isWildcard != tt.wantWildcard {
+			t.Errorf("wildcardName(%q) = (%q, %t), want (%q, %t)", tt.segment, name, isWildcard, tt.wantName, tt.wantWildcard)
+		}
+	}
+}
+
+func TestExecuteArgumentIndex(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		arguments []Argument
+		wantIndex int
+		wantOK    bool
+	}{
+		{name: "no arguments"},
+		{name: "the execute callback", arguments: []Argument{{Type: ArgumentTypeRequestContext, Identifier: "ctx"}, {Type: ArgumentTypeExecute, Identifier: TemplateNameScopeIdentifierExecute}}, wantIndex: 1, wantOK: true},
+		{name: "a render callback with another name", arguments: []Argument{{Type: ArgumentTypeExecute, Identifier: "sseClock"}}},
+		{name: "the name on another kind of argument", arguments: []Argument{{Type: ArgumentTypeRequestContext, Identifier: TemplateNameScopeIdentifierExecute}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			index, ok := Definition{Arguments: tt.arguments}.ExecuteArgumentIndex()
+			if index != tt.wantIndex || ok != tt.wantOK {
+				t.Errorf("ExecuteArgumentIndex() = (%d, %t), want (%d, %t)", index, ok, tt.wantIndex, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestTemplateNames(t *testing.T) {
+	if got := templateNames(nil); got != nil {
+		t.Errorf("templateNames(nil) = %v, want nil", got)
+	}
+	ts := template.Must(template.New("root").Parse(`{{define "a"}}{{end}}{{define "b"}}{{end}}`))
+	got := templateNames(ts)
+	slices.Sort(got)
+	if want := []string{"a", "b", "root"}; !slices.Equal(got, want) {
+		t.Errorf("templateNames() = %v, want %v", got, want)
+	}
+}
+
+func TestResolveCallNotesOnlyTheRouteCall(t *testing.T) {
+	const src = `package p
+
+type Context interface{ Done() }
+
+type Server struct{}
+
+func (Server) Method(Context) any { return nil }
+func Function(Context) any { return nil }
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := new(types.Config).Check("example.com/p", fset, []*ast.File{file}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checker := scopeChecker{TemplateNameScopeIdentifierContext: pkg.Scope().Lookup("Context").Type()}
+	server := pkg.Scope().Lookup("Server").Type().(*types.Named)
+	for _, tt := range []struct {
+		name string
+		call string
+		want []string
+	}{
+		{name: "a defined method", call: `Method(ctx)`, want: []string{"p.go:7:15: Method is defined here"}},
+		{name: "nested calls add no note", call: `Method(Function(ctx))`, want: []string{"p.go:7:15: Method is defined here"}},
+		{name: "a synthesized method has no position", call: `Missing(ctx)`},
+		{name: "a synthesized method around a defined one", call: `Missing(Function(ctx))`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			call := mustParseCall(t, tt.call)
+			def := &Definition{call: call}
+			if _, _, _, err := resolveCall(def, call, source.Package{Types: pkg, Fset: fset}, server, checker); err != nil {
+				t.Fatalf("resolveCall(%s) error = %v", tt.call, err)
+			}
+			if !slices.Equal(def.related, tt.want) {
+				t.Errorf("resolveCall(%s) related = %q, want %q", tt.call, def.related, tt.want)
 			}
 		})
 	}

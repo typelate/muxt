@@ -205,7 +205,7 @@ func isDotOrChain(arg parse.Node) bool {
 
 func hasUnsafeField(arg parse.Node) bool {
 	field, ok := arg.(*parse.FieldNode)
-	return ok && len(field.Ident) > 0 && !isSafeTemplateDataMethod(field.Ident[0])
+	return ok && !isSafeTemplateDataMethod(field.Ident[0])
 }
 
 // isSafeTemplateDataMethod reports whether a TemplateData method definitely

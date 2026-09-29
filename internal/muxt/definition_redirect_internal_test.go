@@ -182,3 +182,20 @@ func TestCanTemplateRedirectFollowsTemplateCalls(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeRedirectCalls(t *testing.T) {
+	ts := template.Must(template.New("set").Parse(`{{define "GET /a A()"}}{{.Redirect "/x" 302}}{{end}}{{define "GET /b B()"}}plain{{end}}`))
+	ts.New("GET /c C()") // declared, never parsed: no tree
+	defs := []Definition{
+		{name: "GET /a A()"},
+		{name: "GET /b B()"},
+		{name: "GET /c C()"},
+		{name: "GET /d D()"}, // not in the set
+	}
+	analyzeRedirectCalls(ts, defs)
+	for i, want := range []bool{true, false, false, false} {
+		if defs[i].canRedirect != want {
+			t.Errorf("analyzeRedirectCalls() set canRedirect of %q to %t, want %t", defs[i].name, defs[i].canRedirect, want)
+		}
+	}
+}

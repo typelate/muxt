@@ -29,15 +29,7 @@ func CheckForDuplicatePatterns(templates []Definition) error {
 		// Definitions with the same pattern tie in the byPathThenMethod
 		// ordering and the template set iterates in map order, so the
 		// group is sorted here to keep the report stable across runs.
-		slices.SortFunc(defs, func(a, b Definition) int {
-			if n := cmp.Compare(a.sourceFile, b.sourceFile); n != 0 {
-				return n
-			}
-			if n := cmp.Compare(a.namePosition.Offset, b.namePosition.Offset); n != 0 {
-				return n
-			}
-			return cmp.Compare(a.name, b.name)
-		})
+		slices.SortFunc(defs, Definition.bySourceThenName)
 		dup := &DuplicatePatternError{Pattern: pat}
 		for _, def := range defs {
 			dup.Locations = append(dup.Locations, def.definitionLocation())

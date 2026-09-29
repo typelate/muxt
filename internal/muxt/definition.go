@@ -2,7 +2,6 @@ package muxt
 
 import (
 	"cmp"
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -70,20 +69,23 @@ type nameFailure struct {
 // combineNameFailures joins the errors in one order. The template set
 // iterates in map order; sorting keeps the report stable across runs.
 func combineNameFailures(failures []nameFailure) error {
-	slices.SortFunc(failures, func(a, b nameFailure) int {
-		if n := cmp.Compare(a.def.sourceFile, b.def.sourceFile); n != 0 {
-			return n
-		}
-		if n := cmp.Compare(a.def.namePosition.Offset, b.def.namePosition.Offset); n != 0 {
-			return n
-		}
-		return cmp.Compare(a.def.name, b.def.name)
-	})
+	slices.SortFunc(failures, func(a, b nameFailure) int { return a.def.bySourceThenName(b.def) })
 	errs := make([]error, 0, len(failures))
 	for _, failure := range failures {
 		errs = append(errs, failure.err)
 	}
 	return CombineErrors(errs)
+}
+
+// bySourceThenName orders definitions by where their names were written.
+func (def Definition) bySourceThenName(other Definition) int {
+	if n := cmp.Compare(def.sourceFile, other.sourceFile); n != 0 {
+		return n
+	}
+	if n := cmp.Compare(def.namePosition.Offset, other.namePosition.Offset); n != 0 {
+		return n
+	}
+	return cmp.Compare(def.name, other.name)
 }
 
 // templateSourceFile returns the file t was parsed from, or "". ParseFS and
@@ -293,7 +295,7 @@ func newDefinition(t *template.Template) (Definition, error, bool) {
 		template:          t,
 		spans:             newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
 	}
-	if def.handler != "" && def.spans.call[0] >= 0 {
+	if def.handler != "" {
 		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)
 	}
 	err := def.parseParts(matches[templateNameMux.SubexpIndex("HTTP_STATUS")])
@@ -358,10 +360,7 @@ func (def Definition) checkPathAndMethod() error {
 
 func (def Definition) statusCodeConflictError() error {
 	const message = "cannot use %s as an argument and also set an HTTP status code in the template name; the handler writes the header through %[1]s"
-	if node := findIdent(def.call, TemplateNameScopeIdentifierHTTPResponse); node != nil {
-		return errAt(node, message, TemplateNameScopeIdentifierHTTPResponse)
-	}
-	return fmt.Errorf(message, TemplateNameScopeIdentifierHTTPResponse)
+	return errAt(findIdent(def.call, TemplateNameScopeIdentifierHTTPResponse), message, TemplateNameScopeIdentifierHTTPResponse)
 }
 
 var templateNameMux = regexp.MustCompile(`^(?P<pattern>((?P<METHOD>[A-Z]+)\s+)?(?P<HOST>([^/])*)(?P<PATH>(/(\S)*)))(\s+(?P<HTTP_STATUS>(\d|http\.Status)\S+))?(?P<CALL>.*)?$`)

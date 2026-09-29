@@ -106,11 +106,7 @@ func (def *Definition) checkRepresentationResponseWriter(call *ast.CallExpr) err
 	if def.Representation != RepresentationSSE && def.Representation != RepresentationMarshalJSON || !def.hasResponseWriterArg {
 		return nil
 	}
-	var node ast.Node = call
-	if ident := findIdent(call, TemplateNameScopeIdentifierHTTPResponse); ident != nil {
-		node = ident
-	}
-	return errAt(node, "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
+	return errAt(findIdent(call, TemplateNameScopeIdentifierHTTPResponse), "%s handler cannot use a %q argument", def.Representation, TemplateNameScopeIdentifierHTTPResponse)
 }
 
 // peelRepresentationWrapper peels a representation wrapper — sse(...) or
@@ -153,11 +149,7 @@ func checkArguments(identifiers []string, call *ast.CallExpr, sse bool) error {
 		return err
 	}
 	if b := scanBodyBindings(call); b.hasForm && b.hasMultipart {
-		node := findIdent(call, TemplateNameScopeIdentifierMultipart)
-		if node == nil {
-			node = call
-		}
-		return errAt(node, "call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
+		return errAt(findIdent(call, TemplateNameScopeIdentifierMultipart), "call %s has both %q and %q arguments; use only one (multipart parses url-encoded fields too)", astgen.Format(call.Fun), TemplateNameScopeIdentifierForm, TemplateNameScopeIdentifierMultipart)
 	}
 	return nil
 }
