@@ -3,9 +3,11 @@ package mutation
 import (
 	"errors"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func greetingConfig() Configuration {
@@ -26,27 +28,19 @@ func TestRun(t *testing.T) {
 
 	var status strings.Builder
 	report, err := Run(config, dir, &status)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Baseline.Passed {
-		t.Error("baseline did not pass")
-	}
+	require.NoError(t, err)
+	assert.True(t, report.Baseline.Passed, "baseline passed")
 	var got []string
 	for _, result := range report.Groups[0].Templates[0].Results {
 		got = append(got, string(result.Status)+" "+string(result.Operator))
 	}
-	if want := []string{"KILL action-zero", "MISS if-false", "KILL if-true"}; !slices.Equal(got, want) {
-		t.Errorf("results %q, want %q", got, want)
-	}
-	if report.Killed != 2 || report.Missed != 1 {
-		t.Errorf("killed %d, missed %d, want 2 and 1", report.Killed, report.Missed)
-	}
+	assert.Equal(t, []string{"KILL action-zero", "MISS if-false", "KILL if-true"}, got, "results")
+	assert.Equal(t, 2, report.Killed, "killed")
+	assert.Equal(t, 1, report.Missed, "missed")
 
 	lines := strings.Split(strings.TrimSpace(status.String()), "\n")
-	if len(lines) != 4 || !strings.HasPrefix(lines[0], "3 mutants across 1 template (complexity 2), baseline ") {
-		t.Errorf("status:\n%s\nwant the preamble and a line per mutant", status.String())
-	}
+	assert.Len(t, lines, 4, "status has the preamble and a line per mutant:\n%s", status.String())
+	assert.True(t, strings.HasPrefix(lines[0], "3 mutants across 1 template (complexity 2), baseline "), "status opens with the preamble:\n%s", status.String())
 }
 
 // TestRunDryRun states that a dry run enumerates and tests nothing: here a
@@ -62,15 +56,10 @@ func TestRunDryRun(t *testing.T) {
 	config.DryRun = true
 	var status strings.Builder
 	report, err := Run(config, dir, &status)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.DryRun || report.Total != 3 {
-		t.Errorf("dry run %t with %d mutants, want a dry run of 3", report.DryRun, report.Total)
-	}
-	if status.Len() != 0 {
-		t.Errorf("status = %q, want nothing: no baseline ran", status.String())
-	}
+	require.NoError(t, err)
+	assert.True(t, report.DryRun, "the report is a dry run")
+	assert.Equal(t, 3, report.Total, "mutants")
+	assert.Empty(t, status.String(), "status: no baseline ran")
 }
 
 // TestRunStopsWhenTheBaselineFails states that tests failing with nothing
@@ -84,12 +73,8 @@ func TestRunStopsWhenTheBaselineFails(t *testing.T) {
 	})
 	_, err := Run(greetingConfig(), dir, nil)
 	baseline, ok := errors.AsType[*BaselineFailedError](err)
-	if !ok {
-		t.Fatalf("Run = %v, want a failing baseline", err)
-	}
-	if !strings.Contains(baseline.Output, "broken before mutation") {
-		t.Errorf("baseline output does not hold the failure:\n%s", baseline.Output)
-	}
+	require.True(t, ok, "Run = %v, want a failing baseline", err)
+	assert.Contains(t, baseline.Output, "broken before mutation", "baseline output holds the failure")
 }
 
 // TestRunStopsWhenGoTestCannotRun states that go test refusing to run, here
@@ -101,12 +86,8 @@ func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
 	config := greetingConfig()
 	config.GoTestArgs = []string{"-count=many"}
 	_, err := Run(config, dir, nil)
-	if err == nil {
-		t.Fatal("Run = nil, want an error")
-	}
-	if _, ok := errors.AsType[*BaselineFailedError](err); ok {
-		t.Errorf("Run = %v, want an error other than a failing baseline", err)
-	}
+	require.Error(t, err, "Run")
+	assert.NotErrorAs(t, err, new(*BaselineFailedError), "Run: an error other than a failing baseline")
 }
 
 // TestNewPlanIncludesTestCallersWhenAsked states that a template rendered
@@ -124,38 +105,28 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 			"func TestGreeting(t *testing.T) {\n\tif err := templates.ExecuteTemplate(io.Discard, \"greeting\", Greeting{Name: \"World\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n",
 	})
 
-	if _, err := newPlan(greetingConfig(), dir); err == nil {
-		t.Fatal("newPlan = nil, want no call sites: the only one is in a test")
-	} else if _, ok := errors.AsType[*NoCallSitesError](err); !ok {
-		t.Fatalf("newPlan = %v, want no call sites", err)
-	}
+	_, err := newPlan(greetingConfig(), dir)
+	require.ErrorAs(t, err, new(*NoCallSitesError), "newPlan: the only call site is in a test")
 
 	config := greetingConfig()
 	config.IncludeTests = true
 	p, err := newPlan(config, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(p.mutants) != 1 {
-		t.Fatalf("mutants = %d, want the one action", len(p.mutants))
-	}
+	require.NoError(t, err)
+	require.Len(t, p.mutants, 1, "the one action")
 	m := p.mutants[0]
-	if m.Path != "template.go" || m.Line != 5 {
-		t.Errorf("mutant at %s:%d, want template.go:5", m.Path, m.Line)
-	}
-	if want := `Parse("Hello, {{\"\"}}!\n")`; !strings.Contains(m.Apply(), want) {
-		t.Errorf("mutated file does not hold %s:\n%s", want, m.Apply())
-	}
+	assert.Equal(t, "template.go", m.Path, "mutant path")
+	assert.Equal(t, 5, m.Line, "mutant line")
+	assert.Contains(t, m.Apply(), `Parse("Hello, {{\"\"}}!\n")`, "mutated file")
 }
 
 // neverRun is a suite that fails the test if anything runs it.
 func neverRun(t *testing.T) (func(...string) (string, error), func(string) (Status, error)) {
 	t.Helper()
 	return func(...string) (string, error) {
-			t.Error("the suite ran")
+			assert.Fail(t, "the suite ran")
 			return "", nil
 		}, func(string) (Status, error) {
-			t.Error("a mutant ran")
+			assert.Fail(t, "a mutant ran")
 			return StatusMissed, nil
 		}
 }
@@ -169,15 +140,9 @@ func TestRunPlanDryRun(t *testing.T) {
 
 	var status strings.Builder
 	report, err := runPlan(p, Configuration{DryRun: true}, &status, baseline, verdict)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.DryRun {
-		t.Error("the report does not say it was a dry run")
-	}
-	if status.Len() != 0 {
-		t.Errorf("status = %q, want nothing", status.String())
-	}
+	require.NoError(t, err)
+	assert.True(t, report.DryRun, "the report says it was a dry run")
+	assert.Empty(t, status.String(), "status")
 }
 
 // TestRunPlanStopsWhenTheBaselineFails states that tests failing with
@@ -194,12 +159,8 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	}, verdict)
 
 	baselineErr, ok := errors.AsType[*BaselineFailedError](err)
-	if !ok {
-		t.Fatalf("runPlan = %v, want a failing baseline", err)
-	}
-	if !strings.Contains(baselineErr.Output, "--- FAIL: TestIndex") {
-		t.Errorf("the error does not carry what failed: %q", baselineErr.Output)
-	}
+	require.True(t, ok, "runPlan = %v, want a failing baseline", err)
+	assert.Contains(t, baselineErr.Output, "--- FAIL: TestIndex", "the error carries what failed")
 }
 
 // TestRunPlanStopsWhenTheSuiteCannotRun states that go test failing to run
@@ -215,12 +176,8 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 		return "", cannotRun
 	}, verdict)
 
-	if !errors.Is(err, cannotRun) {
-		t.Fatalf("runPlan = %v, want the error go gave", err)
-	}
-	if _, ok := errors.AsType[*BaselineFailedError](err); ok {
-		t.Error("a command that could not run was reported as a failing baseline")
-	}
+	require.ErrorIs(t, err, cannotRun, "runPlan: the error go gave")
+	assert.NotErrorAs(t, err, new(*BaselineFailedError), "a command that could not run is not a failing baseline")
 }
 
 // TestRunPlanReportsWhatTheSuiteSaid states a whole run without a suite of
@@ -239,20 +196,11 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 		}
 		return StatusMissed, nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Killed != 2 || got.Missed != 1 {
-		t.Errorf("killed %d, missed %d, want 2 and 1", got.Killed, got.Missed)
-	}
-	if !got.Baseline.Passed {
-		t.Error("the report does not say the baseline passed")
-	}
-	if !strings.HasPrefix(status.String(), "3 mutants across 1 template (complexity 0), baseline ") {
-		t.Errorf("status does not open with the preamble:\n%s", status.String())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 2, got.Killed, "killed")
+	assert.Equal(t, 1, got.Missed, "missed")
+	assert.True(t, got.Baseline.Passed, "the report says the baseline passed")
+	assert.True(t, strings.HasPrefix(status.String(), "3 mutants across 1 template (complexity 0), baseline "), "status opens with the preamble:\n%s", status.String())
 	lines := strings.Count(strings.TrimSpace(status.String()), "\n") + 1
-	if lines != 4 {
-		t.Errorf("status has %d lines, want the preamble and one per mutant:\n%s", lines, status.String())
-	}
+	assert.Equal(t, 4, lines, "status has the preamble and one line per mutant:\n%s", status.String())
 }
