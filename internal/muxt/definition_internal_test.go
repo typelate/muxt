@@ -700,20 +700,18 @@ func TestNewTemplateName(t *testing.T) {
 }
 
 func TestDefinition_IsIndex(t *testing.T) {
-	t.Run("not index", func(t *testing.T) {
-		def := Definition{path: "/foo"}
-		require.False(t, def.IsIndex())
-	})
-	t.Run("slash", func(t *testing.T) {
-		def := Definition{path: "/"}
-		require.True(t, def.IsIndex())
-	})
-	t.Run("slash dollar", func(t *testing.T) {
-		def := Definition{path: "/{$}"}
-		require.True(t, def.IsIndex())
-	})
-	t.Run("malformed path", func(t *testing.T) {
-		def := Definition{path: " / "}
-		require.True(t, def.IsIndex())
-	})
+	for _, tt := range []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "not index", path: "/foo", want: false},
+		{name: "slash", path: "/", want: true},
+		{name: "slash dollar", path: "/{$}", want: true},
+		{name: "malformed path", path: " / ", want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, Definition{path: tt.path}.IsIndex(), "IsIndex() of %q", tt.path)
+		})
+	}
 }

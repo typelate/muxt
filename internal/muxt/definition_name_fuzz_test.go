@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // FuzzCalculateIdentifiers feeds synthetic Definition slices to
@@ -79,10 +81,9 @@ func FuzzCalculateIdentifiers(f *testing.F) {
 			if id == "" {
 				continue
 			}
-			if prev, ok := seen[id]; ok {
-				t.Fatalf("duplicate identifier %q at indexes %d and %d\ninput: %q\ndefs: %+v",
-					id, prev, i, encoded, defs)
-			}
+			prev, dup := seen[id]
+			require.False(t, dup, "duplicate identifier %q at indexes %d and %d\ninput: %q\ndefs: %+v",
+				id, prev, i, encoded, defs)
 			seen[id] = i
 		}
 	})

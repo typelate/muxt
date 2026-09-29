@@ -3,6 +3,8 @@ package muxt
 import (
 	"html/template"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func FuzzNewDefinition(f *testing.F) {
@@ -42,9 +44,7 @@ func FuzzNewDefinition(f *testing.F) {
 			return
 		}
 		// Invariants on a successfully parsed definition.
-		if def.Path() == "" {
-			t.Fatalf("parsed definition has empty path: %q", name)
-		}
+		require.NotEmpty(t, def.Path(), "parsed definition has empty path: %q", name)
 		// Note: status-code range is NOT validated by the parser today —
 		// "/ 00" yields 0 and "/ 700" yields 700. Worth a separate fix;
 		// intentionally not asserted here so the fuzzer keeps hunting
@@ -53,15 +53,12 @@ func FuzzNewDefinition(f *testing.F) {
 		// Wildcard segments must name unique path parameters.
 		seen := make(map[string]struct{})
 		for _, segment := range def.Segments {
-			if segment.Kind() == SegmentKindUnknown {
-				t.Fatalf("segment of unknown kind %q in %q", segment.Value(), name)
-			}
+			require.NotEqual(t, SegmentKindUnknown, segment.Kind(), "segment of unknown kind %q in %q", segment.Value(), name)
 			if !segment.IsWildcard() {
 				continue
 			}
-			if _, dup := seen[segment.Value()]; dup {
-				t.Fatalf("duplicate path value identifier %q in %q", segment.Value(), name)
-			}
+			_, dup := seen[segment.Value()]
+			require.False(t, dup, "duplicate path value identifier %q in %q", segment.Value(), name)
 			seen[segment.Value()] = struct{}{}
 		}
 	})

@@ -4,9 +4,10 @@ import (
 	"errors"
 	"go/token"
 	"html/template"
-	"maps"
-	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/source"
 )
@@ -29,9 +30,9 @@ func TestDefinitionBySourceThenName(t *testing.T) {
 		{name: "same", a: at("a.gohtml", 5, "a"), b: at("a.gohtml", 5, "a")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.a.bySourceThenName(tt.b); (got > 0) != (tt.wantSign > 0) || (got < 0) != (tt.wantSign < 0) {
-				t.Errorf("bySourceThenName() = %d, want sign %d", got, tt.wantSign)
-			}
+			got := tt.a.bySourceThenName(tt.b)
+			assert.Equal(t, tt.wantSign > 0, got > 0, "bySourceThenName() = %d, want sign %d", got, tt.wantSign)
+			assert.Equal(t, tt.wantSign < 0, got < 0, "bySourceThenName() = %d, want sign %d", got, tt.wantSign)
 		})
 	}
 }
@@ -42,16 +43,12 @@ func TestCombineNameFailuresIsSorted(t *testing.T) {
 		{def: Definition{sourceFile: "a.gohtml", name: "y"}, err: errors.New("first")},
 	}
 	list, ok := combineNameFailures(failures).(ErrorList)
-	if !ok {
-		t.Fatalf("combineNameFailures() is not an ErrorList")
-	}
+	require.True(t, ok, "combineNameFailures() is not an ErrorList")
 	var got []string
 	for _, err := range list {
 		got = append(got, err.Error())
 	}
-	if want := []string{"first", "second"}; !slices.Equal(got, want) {
-		t.Errorf("combineNameFailures() = %q, want %q", got, want)
-	}
+	assert.Equal(t, []string{"first", "second"}, got, "combineNameFailures()")
 }
 
 func TestCheckForDuplicatePatternsOrdersLocations(t *testing.T) {
@@ -73,12 +70,8 @@ func TestCheckForDuplicatePatternsOrdersLocations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := CheckForDuplicatePatterns(tt.defs)
 			dup, ok := err.(*DuplicatePatternError)
-			if !ok {
-				t.Fatalf("CheckForDuplicatePatterns() = %v, want a *DuplicatePatternError", err)
-			}
-			if !slices.Equal(dup.Locations, tt.want) {
-				t.Errorf("CheckForDuplicatePatterns() locations = %q, want %q", dup.Locations, tt.want)
-			}
+			require.True(t, ok, "CheckForDuplicatePatterns() = %v, want a *DuplicatePatternError", err)
+			assert.Equal(t, tt.want, dup.Locations, "CheckForDuplicatePatterns() locations")
 		})
 	}
 }
@@ -88,15 +81,11 @@ func TestDefinitionsSourceFile(t *testing.T) {
 	template.Must(ts.New("a.gohtml").Parse(`{{define "GET /a A()"}}x{{end}}`))
 	ts.New("GET /b B()") // declared, never parsed: no tree
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
-	if err != nil {
-		t.Fatalf("Definitions() error = %v", err)
-	}
+	require.NoError(t, err, "Definitions()")
 	got := make(map[string]string)
 	for _, def := range defs {
 		got[def.Name()] = def.SourceFile()
 	}
 	want := map[string]string{"GET /a A()": "a.gohtml", "GET /b B()": ""}
-	if !maps.Equal(got, want) {
-		t.Errorf("Definitions() source files = %v, want %v", got, want)
-	}
+	assert.Equal(t, want, got, "Definitions() source files")
 }

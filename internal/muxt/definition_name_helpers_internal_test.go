@@ -5,6 +5,9 @@ import (
 	"go/ast"
 	"go/types"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFileNameToPrivateIdentifier(t *testing.T) {
@@ -19,9 +22,9 @@ func TestFileNameToPrivateIdentifier(t *testing.T) {
 		{filename: "noextension", want: "noextension"},
 		{filename: ".gohtml", want: ""},
 	} {
-		if got := FileNameToPrivateIdentifier(tt.filename); got != tt.want {
-			t.Errorf("FileNameToPrivateIdentifier(%q) = %q, want %q", tt.filename, got, tt.want)
-		}
+		t.Run(tt.filename, func(t *testing.T) {
+			assert.Equal(t, tt.want, FileNameToPrivateIdentifier(tt.filename), "FileNameToPrivateIdentifier(%q)", tt.filename)
+		})
 	}
 }
 
@@ -37,9 +40,9 @@ func TestIsRouteDefinitionName(t *testing.T) {
 		{name: "page.gohtml"},
 		{name: ""},
 	} {
-		if got := IsRouteDefinitionName(tt.name); got != tt.want {
-			t.Errorf("IsRouteDefinitionName(%q) = %t, want %t", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsRouteDefinitionName(tt.name), "IsRouteDefinitionName(%q)", tt.name)
+		})
 	}
 }
 
@@ -55,10 +58,15 @@ func TestExportedPathIdentifier(t *testing.T) {
 		{identifier: "_private", wantErr: true},
 		{identifier: "9lives", wantErr: true},
 	} {
-		got, err := Definition{identifier: tt.identifier}.ExportedPathIdentifier()
-		if (err != nil) != tt.wantErr || got != tt.want {
-			t.Errorf("ExportedPathIdentifier(%q) = %q, %v, want %q, error %t", tt.identifier, got, err, tt.want, tt.wantErr)
-		}
+		t.Run(tt.identifier, func(t *testing.T) {
+			got, err := Definition{identifier: tt.identifier}.ExportedPathIdentifier()
+			if tt.wantErr {
+				assert.Error(t, err, "ExportedPathIdentifier(%q)", tt.identifier)
+			} else {
+				assert.NoError(t, err, "ExportedPathIdentifier(%q)", tt.identifier)
+			}
+			assert.Equal(t, tt.want, got, "ExportedPathIdentifier(%q)", tt.identifier)
+		})
 	}
 }
 
@@ -88,48 +96,51 @@ b.gohtml:3:4: "List" is defined here`,
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := &MethodNameCollisionError{Method: "List", Handlers: [2]string{"list", "List"}, Locations: tt.locations}
-			if got := err.MultiLineError(); got != tt.want {
-				t.Errorf("MultiLineError() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, err.MultiLineError(), "MultiLineError()")
 		})
 	}
 }
 
 func TestErrorUnwrap(t *testing.T) {
 	cause := errors.New("cause")
-	if !errors.Is(&NameError{err: cause}, cause) {
-		t.Error("errors.Is(NameError, cause) = false, want true")
-	}
-	if !errors.Is(&positionedError{err: cause}, cause) {
-		t.Error("errors.Is(positionedError, cause) = false, want true")
-	}
-	if !errors.Is(ErrorList{errors.New("other"), cause}, cause) {
-		t.Error("errors.Is(ErrorList, cause) = false, want true")
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "NameError", err: &NameError{err: cause}},
+		{name: "positionedError", err: &positionedError{err: cause}},
+		{name: "ErrorList", err: ErrorList{errors.New("other"), cause}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.ErrorIs(t, tt.err, cause)
+		})
 	}
 }
 
 func TestErrAtNode(t *testing.T) {
 	node := ast.NewIdent("x")
 	cause := errors.New("cause")
-	if got := errAtNode(node, nil); got != nil {
-		t.Errorf("errAtNode(node, nil) = %v, want nil", got)
-	}
-	positioned := errAt(ast.NewIdent("y"), "already")
-	if got := errAtNode(node, positioned); got != positioned {
-		t.Errorf("errAtNode(node, positioned) = %v, want the same error", got)
-	}
-	nameError := &NameError{err: cause}
-	if got := errAtNode(node, nameError); got != error(nameError) {
-		t.Errorf("errAtNode(node, nameError) = %v, want the same error", got)
-	}
-	wrapped := errAtNode(node, cause)
-	if pe, ok := wrapped.(*positionedError); !ok || pe.pos != node.Pos() || !errors.Is(pe, cause) {
-		t.Errorf("errAtNode(node, cause) = %#v, want a positioned error wrapping cause at the node", wrapped)
-	}
+
+	t.Run("no error stays nil", func(t *testing.T) {
+		assert.NoError(t, errAtNode(node, nil), "errAtNode(node, nil)")
+	})
+	t.Run("a positioned error is returned as it is", func(t *testing.T) {
+		positioned := errAt(ast.NewIdent("y"), "already")
+		assert.Same(t, positioned, errAtNode(node, positioned), "errAtNode(node, positioned)")
+	})
+	t.Run("a name error is returned as it is", func(t *testing.T) {
+		nameError := &NameError{err: cause}
+		assert.Same(t, nameError, errAtNode(node, nameError), "errAtNode(node, nameError)")
+	})
+	t.Run("any other error is positioned at the node", func(t *testing.T) {
+		wrapped := errAtNode(node, cause)
+		pe, ok := wrapped.(*positionedError)
+		require.True(t, ok, "errAtNode(node, cause) = %#v, want a *positionedError", wrapped)
+		assert.Equal(t, node.Pos(), pe.pos, "errAtNode(node, cause) position")
+		assert.ErrorIs(t, pe, cause, "errAtNode(node, cause)")
+	})
 }
 
 func TestSSECallbackSignature(t *testing.T) {
-	if got, want := types.TypeString(sseCallbackSignature(), nil), "func(any) error"; got != want {
-		t.Errorf("sseCallbackSignature() = %s, want %s", got, want)
-	}
+	assert.Equal(t, "func(any) error", types.TypeString(sseCallbackSignature(), nil), "sseCallbackSignature()")
 }
