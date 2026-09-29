@@ -11,6 +11,7 @@ import (
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
 )
 
 // This file holds what each command does with its configuration: load the
@@ -60,12 +61,16 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	return nil
 }
 
-func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {
+func loadTemplates(wd string, templatesVariables []string) (source.Package, error) {
 	_, pl, err := load.Packages(wd)
 	if err != nil {
-		return err
+		return source.Package{}, err
 	}
-	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
+	return load.Package(wd, pl, templatesVariables)
+}
+
+func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {
+	pkg, err := loadTemplates(wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
@@ -77,11 +82,7 @@ func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateC
 }
 
 func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error {
-	_, pl, err := load.Packages(wd)
-	if err != nil {
-		return err
-	}
-	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
+	pkg, err := loadTemplates(wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
