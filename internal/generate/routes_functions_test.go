@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/muxt"
@@ -53,9 +56,7 @@ func routesTestDefinitions(t *testing.T, files map[string]string) (source.Packag
 	}
 	receiver := fake.Lookup(t, pkg, "T").(*types.Named)
 	defs, err := muxt.ResolveDefinitions(src, receiver, fake.StandInChecker(t, pkg).Fake())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return src, defs
 }
 
@@ -66,21 +67,14 @@ func TestGroupTemplates(t *testing.T) {
 		"c d.gohtml": `{{define "GET /c B()"}}{{end}}`,
 	})
 	groups, err := groupTemplates(testConfig(), defs)
-	if err != nil {
-		t.Fatal(err)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a.gohtml", "b.gohtml"}, slices.Sorted(maps.Keys(groups.byFile)), "groups.byFile keys")
+	assert.Len(t, groups.byFile["b.gohtml"], 2, "groups.byFile[b.gohtml]")
+	if assert.Len(t, groups.noFile, 1, "groups.noFile, want the route of the file with a space in its name") {
+		assert.Equal(t, "GET /c", groups.noFile[0].RawPattern(), "groups.noFile[0]")
 	}
-	if got, want := slices.Sorted(maps.Keys(groups.byFile)), []string{"a.gohtml", "b.gohtml"}; !slices.Equal(got, want) {
-		t.Errorf("groups.byFile keys = %q, want %q", got, want)
-	}
-	if got := len(groups.byFile["b.gohtml"]); got != 2 {
-		t.Errorf("len(groups.byFile[b.gohtml]) = %d, want 2", got)
-	}
-	if len(groups.noFile) != 1 || groups.noFile[0].RawPattern() != "GET /c" {
-		t.Errorf("groups.noFile = %v, want the route of the file with a space in its name", groups.noFile)
-	}
-	if len(groups.all) != len(defs) || len(groups.all) != 4 {
-		t.Errorf("len(groups.all) = %d, want 4", len(groups.all))
-	}
+	assert.Len(t, groups.all, len(defs), "groups.all, want every definition")
+	assert.Len(t, groups.all, 4, "groups.all")
 }
 
 func TestLogResolutionNotes(t *testing.T) {
@@ -115,14 +109,10 @@ func TestLogResolutionNotes(t *testing.T) {
 			var buf bytes.Buffer
 			logResolutionNotes(defs, tt.config(testConfig()), log.New(&buf, "", 0))
 			for _, want := range tt.contains {
-				if !strings.Contains(buf.String(), want) {
-					t.Errorf("log = %q, want it to contain %q", buf.String(), want)
-				}
+				assert.Contains(t, buf.String(), want, "log")
 			}
 			for _, unwanted := range tt.excludes {
-				if strings.Contains(buf.String(), unwanted) {
-					t.Errorf("log = %q, want it not to contain %q", buf.String(), unwanted)
-				}
+				assert.NotContains(t, buf.String(), unwanted, "log")
 			}
 		})
 	}
@@ -139,20 +129,14 @@ func TestCollectReceiverMethods(t *testing.T) {
 		"a.gohtml": `{{define "GET /a/{id} A(id)"}}{{end}}{{define "GET /b B()"}}{{end}}{{define "GET /n Nested(B())"}}{{end}}{{define "GET /plain"}}{{end}}`,
 	})
 	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
-	if err := collectReceiverMethods(defs, newFile(pkg), receiverInterface); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, collectReceiverMethods(defs, newFile(pkg), receiverInterface))
 	var names []string
 	for _, field := range receiverInterface.Methods.List {
 		names = append(names, field.Names[0].Name)
 	}
 	slices.Sort(names)
-	if want := []string{"A", "B", "Nested"}; !slices.Equal(names, want) {
-		t.Errorf("collectReceiverMethods interface methods = %q, want %q (each method once, nested calls included)", names, want)
-	}
-	if got := astgen.Format(receiverInterface); !strings.Contains(got, "Nested(string) string") {
-		t.Errorf("receiver interface = %s, want it to declare Nested(string) string", got)
-	}
+	assert.Equal(t, []string{"A", "B", "Nested"}, names, "collectReceiverMethods interface methods, each method once, nested calls included")
+	assert.Contains(t, astgen.Format(receiverInterface), "Nested(string) string", "receiver interface")
 }
 
 func TestGeneratePerFileRouteFunction(t *testing.T) {
@@ -162,9 +146,7 @@ func TestGeneratePerFileRouteFunction(t *testing.T) {
 
 	t.Run("source file is required", func(t *testing.T) {
 		_, err := generatePerFileRouteFunction("", defs, newFile(pkg), "aRoutes", "aReceiver", log.New(&bytes.Buffer{}, "", 0), testConfig(), &ast.InterfaceType{Methods: new(ast.FieldList)})
-		if err == nil || err.Error() != "sourceFile cannot be empty" {
-			t.Errorf("error = %v, want sourceFile cannot be empty", err)
-		}
+		assert.EqualError(t, err, "sourceFile cannot be empty")
 	})
 
 	for _, tt := range []struct {
@@ -193,34 +175,23 @@ func TestGeneratePerFileRouteFunction(t *testing.T) {
 			var buf bytes.Buffer
 			iface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 			decl, err := generatePerFileRouteFunction("a.gohtml", defs, newFile(pkg), "aRoutes", "aReceiver", log.New(&buf, "", 0), config, iface)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			got := astgen.Format(decl)
-			if first, _, _ := strings.Cut(got, "\n"); first != tt.signature {
-				t.Errorf("signature = %q, want %q", first, tt.signature)
-			}
-			if !strings.Contains(got, "bytesBufferPool") {
-				t.Errorf("function has no buffer pool declaration:\n%s", got)
-			}
+			first, _, _ := strings.Cut(got, "\n")
+			assert.Equal(t, tt.signature, first, "signature")
+			assert.Contains(t, got, "bytesBufferPool", "function should declare a buffer pool")
 			for _, want := range []string{"generating handler for pattern GET /a/{id} in a.gohtml", "generating handler for pattern GET /plain in a.gohtml"} {
-				if !strings.Contains(buf.String(), want) {
-					t.Errorf("log = %q, want it to contain %q", buf.String(), want)
-				}
+				assert.Contains(t, buf.String(), want, "log")
 			}
-			if len(iface.Methods.List) != 1 || iface.Methods.List[0].Names[0].Name != "A" {
-				t.Errorf("receiver interface = %s, want it to declare A", astgen.Format(iface))
+			if assert.Len(t, iface.Methods.List, 1, "receiver interface = %s, want it to declare A", astgen.Format(iface)) {
+				assert.Equal(t, "A", iface.Methods.List[0].Names[0].Name, "receiver interface method")
 			}
 		})
 	}
 
 	t.Run("no routes has no buffer pool", func(t *testing.T) {
 		decl, err := generatePerFileRouteFunction("a.gohtml", nil, newFile(pkg), "aRoutes", "aReceiver", nil, testConfig(), &ast.InterfaceType{Methods: new(ast.FieldList)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := astgen.Format(decl); strings.Contains(got, "bytesBufferPool") {
-			t.Errorf("function with no routes declares a buffer pool:\n%s", got)
-		}
+		require.NoError(t, err)
+		assert.NotContains(t, astgen.Format(decl), "bytesBufferPool", "function with no routes should not declare a buffer pool")
 	})
 }

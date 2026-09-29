@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/configjson"
@@ -75,16 +76,11 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 // integration suite's job, under cmd/muxt/testdata.
 func TestSnapshots(t *testing.T) {
 	const command = "generate"
-	if stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar")); len(stray) > 0 {
-		t.Fatalf("%s is not in a command's directory; generate's archives are in testdata/%s", stray[0], command)
-	}
+	stray, _ := filepath.Glob(filepath.Join("testdata", "*.txtar"))
+	require.Empty(t, stray, "these are not in a command's directory; generate's archives are in testdata/%s", command)
 	archives, err := filepath.Glob(filepath.Join("testdata", command, "*.txtar"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(archives) == 0 {
-		t.Fatalf("no archives in testdata/%s", command)
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, archives, "no archives in testdata/%s", command)
 	t.Run(command, func(t *testing.T) {
 		for _, archivePath := range archives {
 			runSnapshot(t, archivePath)
@@ -98,9 +94,7 @@ func runSnapshot(t *testing.T, archivePath string) {
 	t.Helper()
 	t.Run(strings.TrimSuffix(filepath.Base(archivePath), ".txtar"), func(t *testing.T) {
 		archive, err := txtar.ParseFile(archivePath)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		got := snapshot(t, configuration(t, archive), archive)
 		if *update {
 			writeSnapshot(t, archivePath, archive, got)
@@ -113,7 +107,7 @@ func runSnapshot(t *testing.T, archivePath string) {
 			}
 		}
 		for _, name := range sortedKeys(got, want) {
-			assert.Equal(t, want[name], got[name], "want/%s differs (run go test -run TestSnapshots -update to rewrite)")
+			assert.Equal(t, want[name], got[name], "want/%s differs (run go test -run TestSnapshots -update to rewrite)", name)
 		}
 	})
 }
@@ -127,12 +121,10 @@ func configuration(t *testing.T, archive *txtar.Archive) generate.RoutesFileConf
 			continue
 		}
 		var config generate.RoutesFileConfiguration
-		if err := json.Unmarshal(file.Data, &config, configjson.Options()); err != nil {
-			t.Fatalf("config.json: %v", err)
-		}
+		require.NoError(t, json.Unmarshal(file.Data, &config, configjson.Options()), "config.json")
 		return config
 	}
-	t.Fatal("the archive has no config.json")
+	require.FailNow(t, "the archive has no config.json")
 	return generate.RoutesFileConfiguration{}
 }
 
@@ -176,9 +168,7 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, defs, log.New(&logs, "", 0))
 	for _, file := range generated {
 		got[relative(file.Path)] = file.Content
-		for _, name := range unusedImports(t, file.Content) {
-			t.Errorf("%s imports %s without using it", relative(file.Path), name)
-		}
+		assert.Empty(t, unusedImports(t, file.Content), "%s imports these without using them", relative(file.Path))
 	}
 	if logs.Len() > 0 {
 		got["log.txt"] = relative(logs.String())
@@ -198,9 +188,7 @@ func writeSnapshot(t *testing.T, archivePath string, archive *txtar.Archive, got
 		files = append(files, txtar.File{Name: "want/" + name, Data: []byte(got[name])})
 	}
 	archive.Files = files
-	if err := os.WriteFile(archivePath, txtar.Format(archive), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(archivePath, txtar.Format(archive), 0o644))
 }
 
 func sortedKeys(ms ...map[string]string) []string {
@@ -218,9 +206,7 @@ func sortedKeys(ms ...map[string]string) []string {
 func unusedImports(t *testing.T, content string) []string {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), "generated.go", content, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	referenced := make(map[string]bool)
 	ast.Inspect(file, func(node ast.Node) bool {
 		if sel, ok := node.(*ast.SelectorExpr); ok {
@@ -235,9 +221,7 @@ func unusedImports(t *testing.T, content string) []string {
 	var unused []string
 	for _, spec := range file.Imports {
 		importPath, err := strconv.Unquote(spec.Path.Value)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		name := path.Base(importPath)
 		if spec.Name != nil {
 			name = spec.Name.Name
