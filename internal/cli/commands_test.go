@@ -95,20 +95,11 @@ func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 			f := &multipartMaxMemoryFlag{cfg: cfg}
 			err := f.Set(tc.input)
 			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("Set(%q) = nil, want error containing %q", tc.input, tc.wantErr)
-				}
-				if !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("Set(%q) error = %q, want containing %q", tc.input, err.Error(), tc.wantErr)
-				}
+				require.ErrorContains(t, err, tc.wantErr, "Set(%q)", tc.input)
 				return
 			}
-			if err != nil {
-				t.Fatalf("Set(%q) = %v, want no error", tc.input, err)
-			}
-			if cfg.MultipartMaxMemory != tc.want {
-				t.Fatalf("Set(%q) stored %d, want %d", tc.input, cfg.MultipartMaxMemory, tc.want)
-			}
+			require.NoError(t, err, "Set(%q)", tc.input)
+			require.Equal(t, tc.want, cfg.MultipartMaxMemory, "Set(%q) stored", tc.input)
 		})
 	}
 }
@@ -117,23 +108,16 @@ func TestMultipartMaxMemoryFlag_String(t *testing.T) {
 	t.Run("zero shows default", func(t *testing.T) {
 		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}
 		got := f.String()
-		if !strings.Contains(got, "MiB") && !strings.Contains(got, "MB") {
-			t.Fatalf("String() = %q, want a human-readable size", got)
-		}
+		require.True(t, strings.Contains(got, "MiB") || strings.Contains(got, "MB"), "String() = %q, want a human-readable size", got)
 	})
 	t.Run("a nil flag or configuration shows default", func(t *testing.T) {
 		want := (&multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}).String()
 		for name, f := range map[string]*multipartMaxMemoryFlag{"nil flag": nil, "nil configuration": {}} {
-			if got := f.String(); got != want {
-				t.Errorf("String() of a %s = %q, want %q", name, got, want)
-			}
+			assert.Equal(t, want, f.String(), "String() of a %s", name)
 		}
 	})
 	t.Run("override shows override", func(t *testing.T) {
 		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{MultipartMaxMemory: 64 << 20}}
-		got := f.String()
-		if !strings.Contains(got, "64") {
-			t.Fatalf("String() = %q, want containing 64", got)
-		}
+		require.Contains(t, f.String(), "64", "String()")
 	})
 }

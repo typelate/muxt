@@ -2,10 +2,11 @@ package cli
 
 import (
 	"io"
-	"reflect"
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -27,9 +28,7 @@ func parseGeneratedHeader(t *testing.T, args []string) generate.RoutesFileConfig
 	set := pflag.NewFlagSet("header", pflag.ContinueOnError)
 	set.SetOutput(io.Discard)
 	addGenerateFlags(set, &config, &deprecated)
-	if err := set.Parse(args); err != nil {
-		t.Fatalf("parsing the header %q: %v", args, err)
-	}
+	require.NoError(t, set.Parse(args), "parsing the header %q", args)
 	return config
 }
 
@@ -106,9 +105,7 @@ func TestGeneratedHeaderRoundTrip(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseGeneratedHeader(t, configToArgs(tt.config))
-			if !reflect.DeepEqual(recorded(got), recorded(tt.want)) {
-				t.Errorf("the header read back as\n%+v\nwant\n%+v", recorded(got), recorded(tt.want))
-			}
+			assert.Equal(t, recorded(tt.want), recorded(got), "the header read back")
 		})
 	}
 }
@@ -159,18 +156,16 @@ func TestConfigToArgsOrder(t *testing.T) {
 		"--output-muxt-version=false",
 		"--output-multipart-max-memory=1024",
 	}
-	if got := configToArgs(config); !reflect.DeepEqual(got, want) {
-		t.Errorf("configToArgs = %q, want %q", got, want)
-	}
+	assert.Equal(t, want, configToArgs(config), "configToArgs")
 }
 
 // TestConfigToArgsRecordsWhatDiffersFromTheDefaults states that the header
 // stays as short as the run was ordinary: a flag left at its default is
 // not written into it, and one that was passed is.
 func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
-	if got := configToArgs(defaultsConfig()); len(got) != 0 {
-		t.Errorf("configToArgs(defaults) = %q, want nothing recorded", got)
-	}
+	t.Run("the defaults record nothing", func(t *testing.T) {
+		assert.Empty(t, configToArgs(defaultsConfig()), "configToArgs(defaults)")
+	})
 
 	for _, tt := range []struct {
 		name   string
@@ -206,9 +201,7 @@ func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := defaultsConfig()
 			tt.change(&config)
-			if got := configToArgs(config); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("configToArgs = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, configToArgs(config), "configToArgs")
 		})
 	}
 }
