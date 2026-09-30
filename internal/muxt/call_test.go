@@ -257,7 +257,9 @@ func TestArgument(t *testing.T) {
 			require.True(t, defs[0].Arguments[0].ParamType().Identical(source.NewType(contextContextType)))
 		}},
 		{Name: "synthesized method with a repeated argument", Receiver: emptyStruct, Template: `{{define "GET / RepeatedArg(request, request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
-			require.ErrorContains(t, err, "cannot infer a signature for RepeatedArg: the request argument is passed more than once; define the method on the receiver to use repeated arguments")
+			require.NoError(t, err)
+			require.Len(t, defs[0].Arguments, 2)
+			require.Equal(t, "request", defs[0].Arguments[1].Identifier)
 		}},
 		{Name: "error when argument is not assignable to parameter", Receiver: serverType, Template: `{{define "GET / Context(request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "method expects type Context but request is *Request")

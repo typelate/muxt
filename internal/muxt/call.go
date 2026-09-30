@@ -194,7 +194,7 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 	params := synthesizedParameters{
 		callName: call.Fun.(*ast.Ident).Name,
 		pkg:      receiver.Obj().Pkg(),
-		seen:     make(map[string]bool),
+		uses:     make(map[string]int),
 	}
 	for _, a := range call.Args {
 		var err error
@@ -212,23 +212,22 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 }
 
 // synthesizedParameters collects the parameters of a synthesized method.
-// Each argument becomes a parameter named after it, so a repeated argument
-// would synthesize a method whose parameter names collide.
+// Each use of an argument becomes a parameter of its default type, named after
+// the argument; later uses of a repeated argument are numbered (request2).
 type synthesizedParameters struct {
 	callName string
 	pkg      *types.Package
-	seen     map[string]bool
+	uses     map[string]int
 	vars     []*types.Var
 	hasSSE   bool
 }
 
-func (p *synthesizedParameters) add(node ast.Node, name string, tp types.Type) error {
-	if p.seen[name] {
-		return errAt(node, "cannot infer a signature for %s: the %s argument is passed more than once; define the method on the receiver to use repeated arguments", p.callName, name)
+func (p *synthesizedParameters) add(name string, tp types.Type) {
+	p.uses[name]++
+	if n := p.uses[name]; n > 1 {
+		name = fmt.Sprintf("%s%d", name, n)
 	}
-	p.seen[name] = true
 	p.vars = append(p.vars, types.NewVar(0, p.pkg, name, tp))
-	return nil
 }
 
 func (p *synthesizedParameters) addIdentifier(def *Definition, checker Checker, arg *ast.Ident) error {
@@ -237,15 +236,18 @@ func (p *synthesizedParameters) addIdentifier(def *Definition, checker Checker, 
 		return errAt(arg, "method %s using the execute callback must be defined on the receiver type", p.callName)
 	case isSSEArgument(arg.Name):
 		p.hasSSE = true
-		return p.add(arg, arg.Name, sseCallbackSignature())
+		p.add(arg.Name, sseCallbackSignature())
+		return nil
 	case def.isSignalsCallback(arg.Name):
-		return p.add(arg, arg.Name, sseCallbackSignature())
+		p.add(arg.Name, sseCallbackSignature())
+		return nil
 	}
 	tp, ok := defaultScopeType(checker, def, arg.Name)
 	if !ok {
 		return errAt(arg, "could not determine a type for %s", arg.Name)
 	}
-	return p.add(arg, arg.Name, tp)
+	p.add(arg.Name, tp)
+	return nil
 }
 
 func (p *synthesizedParameters) addCall(def *Definition, arg *ast.CallExpr, pkg source.Package, receiver *types.Named, checker Checker) error {
@@ -259,7 +261,8 @@ func (p *synthesizedParameters) addCall(def *Definition, arg *ast.CallExpr, pkg 
 	if err != nil {
 		return err
 	}
-	return p.add(arg, TemplateNameScopeIdentifierRequestBody, tp)
+	p.add(TemplateNameScopeIdentifierRequestBody, tp)
+	return nil
 }
 
 func (p *synthesizedParameters) signature(receiver *types.Named) *types.Signature {

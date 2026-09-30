@@ -1,0 +1,28 @@
+# A method that is not defined on the receiver gets its signature synthesized
+# from the call's arguments: each use becomes a parameter of the argument's
+# default type, and later uses of a repeated argument are numbered.
+
+muxt generate --use-receiver-type=T
+stdout 'note: T does not define F\(request \*http.Request, request2 \*http.Request, id string, id2 string\) any'
+grep 'F\(request \*http.Request, request2 \*http.Request, id string, id2 string\) any' template_routes.go
+
+-- template.gohtml --
+{{- define "GET /{id} F(request, request, id, id)" -}}ok{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
