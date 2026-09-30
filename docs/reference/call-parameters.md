@@ -36,6 +36,8 @@ Form fields are not arguments; bind them through `form` or `multipart`.
 
 Without `--use-receiver-type` ([cli.md](cli.md#flags)), muxt infers the signature: path values and `lastEventID` are `string`, `form` is `url.Values`, `multipart` is `*multipart.Form`, `body` is `io.Reader`, `unmarshalJSON(body)` is `json.RawMessage`, and the method returns `any`. With it, muxt parses each argument to the method's declared parameter type ([howto_arg_no_receiver.txt](../../cmd/muxt/testdata/howto_arg_no_receiver.txt) · [howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)).
 
+An argument may appear more than once in a call, including inside nested calls, when every use is passed to a parameter of an identical type, such as `Sum(id, id)` with two `int` parameters or `(request, request)` with two `*http.Request` parameters. The value is parsed once and reused. A later use whose parameter type differs from the first fails generation and names both types, so `AnyString(id, id)` with `(any, string)` is rejected. A method muxt infers cannot repeat an argument ([err_repeated_argument_on_undefined_method.txt](../../cmd/muxt/testdata/err_repeated_argument_on_undefined_method.txt)).
+
 ## Parseable Types
 
 | Parameter type | Parser |
