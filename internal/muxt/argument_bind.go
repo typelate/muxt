@@ -27,33 +27,36 @@ type argumentUses struct {
 func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]*argumentUses) error {
 	for i := range args {
 		arg := &args[i]
-		switch arg.Type {
-		case ArgumentTypeCall:
+		if arg.Type == ArgumentTypeCall {
 			if err := linkArgumentsSeen(def, qual, arg.args, seen); err != nil {
 				return err
 			}
-		case ArgumentTypeUnknown, ArgumentTypeRequestBodyJSON:
-		default:
-			uses, ok := seen[arg.Identifier]
-			if !ok {
-				seen[arg.Identifier] = &argumentUses{first: arg, count: 1}
-				arg.declares = declaresLocal(arg.Type)
-				if arg.Type == ArgumentTypeRequestPathValue {
-					linkWildcardSegments(def, arg)
-				}
-				continue
+			continue
+		}
+		if !declaresLocal(arg.Type) {
+			continue
+		}
+		uses, ok := seen[arg.Identifier]
+		if !ok {
+			seen[arg.Identifier] = &argumentUses{first: arg, count: 1}
+			arg.declares = true
+			if arg.Type == ArgumentTypeRequestPathValue {
+				linkWildcardSegments(def, arg)
 			}
-			uses.count++
-			if err := checkRepeatedArgument(def, qual, uses.first, arg, uses.count); err != nil {
-				return err
-			}
+			continue
+		}
+		uses.count++
+		if err := checkRepeatedArgument(def, qual, uses.first, arg, uses.count); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// declaresLocal reports whether the generated handler declares a local for
-// an argument of this kind, where its first use is.
+// declaresLocal reports whether the generated handler declares one local for
+// an argument of this kind, at its first use, that every later use shares.
+// Only those uses must be passed to parameters of an identical type; request,
+// response and the callbacks are handler parameters or per-use closures.
 func declaresLocal(t ArgumentType) bool {
 	switch t {
 	case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm,
