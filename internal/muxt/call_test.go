@@ -480,6 +480,19 @@ func TestArgument(t *testing.T) {
 		{Name: "form passed once raw and once as a struct conflicts", Receiver: serverType, Template: `{{define "GET / TwoForms(form, form)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.ErrorContains(t, err, "form is passed more than once")
 		}},
+		{Name: "request passed twice to parameters of one type", Receiver: serverType, Template: `{{define "GET / RequestTwice(request, request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+			require.Len(t, defs[0].Arguments, 2)
+		}},
+		{Name: "request passed to parameters of different types", Receiver: serverType, Template: `{{define "GET / RequestAndAny(request, request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.ErrorContains(t, err, "request is passed more than once with different types: *Request at the first use and any at use 2")
+		}},
+		{Name: "ctx passed twice to parameters of one type", Receiver: serverType, Template: `{{define "GET / ContextTwice(ctx, ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
+		}},
+		{Name: "ctx passed to parameters of different types", Receiver: serverType, Template: `{{define "GET / ContextAndAny(ctx, ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.ErrorContains(t, err, "ctx is passed more than once with different types: Context at the first use and any at use 2")
+		}},
 
 		// Direct is what generation reads to decide whether to pass a
 		// request value to its parameter as it is, or to parse or bind it

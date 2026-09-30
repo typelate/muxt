@@ -1,6 +1,6 @@
-A repeated argument -- a path value, lastEventID, form or multipart
-identifier the generator declares one local for -- must need the same value
-at every occurrence: the raw request value, or an identical parameter type.
+An argument used more than once in a call must be passed to parameters of an
+identical type, like a type parameter that every use must resolve to one type.
+The error names the first use's type and the use that differs.
 
 Command line: muxt generate --use-receiver-type=T
 -- config.json --
@@ -35,6 +35,7 @@ Command line: muxt generate --use-receiver-type=T
 {{define "GET /{id} StringInt(id, id)"}}{{end}}
 {{define "POST /form TwoForms(form, form)"}}{{end}}
 {{define "GET /wrap/{id} Wrap(Echo(id), id)"}}{{end}}
+{{define "GET /any/{id} AnyString(id, id)"}}{{end}}
 -- server.go --
 package server
 
@@ -48,18 +49,24 @@ func (T) StringInt(string, int) any { return nil }
 func (T) TwoForms(url.Values, In) any { return nil }
 func (T) Wrap(any, int) any { return nil }
 func (T) Echo(string) string { return "" }
+func (T) AnyString(any, string) any { return nil }
 -- want/error.txt --
+  GET /any/{id} AnyString(id, id)
+                          ^^  ^^
+index.gohtml:4:35: id is passed more than once with different types: any at the first use and string at use 2
+server.go:13:10: AnyString is defined here
+
   POST /form TwoForms(form, form)
                       ^^^^  ^^^^
-index.gohtml:2:31: form is passed more than once with different types: url.Values and In
+index.gohtml:2:31: form is passed more than once with different types: url.Values at the first use and In at use 2
 server.go:10:10: TwoForms is defined here
 
   GET /wrap/{id} Wrap(Echo(id), id)
                            ^^   ^^
-index.gohtml:3:36: id is passed more than once with different types: string and int
+index.gohtml:3:36: id is passed more than once with different types: string at the first use and int at use 2
 server.go:11:10: Wrap is defined here
 
   GET /{id} StringInt(id, id)
                       ^^  ^^
-index.gohtml:1:31: id is passed more than once with different types: string and int
+index.gohtml:1:31: id is passed more than once with different types: string at the first use and int at use 2
 server.go:9:10: StringInt is defined here

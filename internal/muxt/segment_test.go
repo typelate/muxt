@@ -38,6 +38,8 @@ func (T) Echo(string) string            { return "" }
 func (T) Inner(int) int                 { return 0 }
 func (T) Pair(int, int) any             { return nil }
 func (T) AnyString(any, string) any     { return nil }
+func (T) AnyAny(any, any) any           { return nil }
+func (T) Triple(int, int, string) any   { return nil }
 func (T) Sum(int, int) any              { return nil }
 func (T) Double(int) int                { return 0 }
 `
@@ -102,10 +104,34 @@ func TestPathValueTypes(t *testing.T) {
 			wantErr:    "id is passed more than once",
 		},
 		{
-			name:       "two direct occurrences of the same path value agree",
+			name:       "two direct occurrences need identical parameter types",
 			definition: "GET /{id} AnyString(id, id)",
 			param:      "id",
+			wantErr:    "id is passed more than once with different types: any at the first use and string at use 2",
+		},
+		{
+			name:       "two direct occurrences of one parameter type agree",
+			definition: "GET /{id} AnyAny(id, id)",
+			param:      "id",
 			want:       "string",
+		},
+		{
+			name:       "two parsing occurrences of one parameter type agree",
+			definition: "GET /{id} Pair(id, id)",
+			param:      "id",
+			want:       "int",
+		},
+		{
+			name:       "a nested call and the outer call that take one type agree",
+			definition: "GET /{id} Sum(Double(id), id)",
+			param:      "id",
+			want:       "int",
+		},
+		{
+			name:       "the third use is the one that differs",
+			definition: "GET /{id} Triple(id, id, id)",
+			param:      "id",
+			wantErr:    "id is passed more than once with different types: int at the first use and string at use 3",
 		},
 		{
 			name:       "two parameters",

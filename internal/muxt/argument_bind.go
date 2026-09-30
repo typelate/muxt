@@ -11,15 +11,20 @@ import (
 	"github.com/typelate/muxt/internal/astgen"
 )
 
-// linkArguments marks the first occurrence, depth first, of each request
-// value as the one that declares its local, links each wildcard segment to
-// its first occurrence, and rejects a repeat that needs a different value
-// than the first.
+// linkArguments walks the arguments depth first. The first use of an
+// identifier decides its type: a request value declares its local there and
+// a path value links its wildcard segment, and every later use must be passed
+// to a parameter of an identical type.
 func linkArguments(def *Definition, qual types.Qualifier) error {
-	return linkArgumentsSeen(def, qual, def.Arguments, make(map[string]*Argument))
+	return linkArgumentsSeen(def, qual, def.Arguments, make(map[string]*argumentUses))
 }
 
-func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]*Argument) error {
+type argumentUses struct {
+	first *Argument
+	count int
+}
+
+func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, seen map[string]*argumentUses) error {
 	for i := range args {
 		arg := &args[i]
 		switch arg.Type {
@@ -27,23 +32,35 @@ func linkArgumentsSeen(def *Definition, qual types.Qualifier, args []Argument, s
 			if err := linkArgumentsSeen(def, qual, arg.args, seen); err != nil {
 				return err
 			}
-		case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm,
-			ArgumentTypeRequestContext, ArgumentTypeRequestBody:
-			first, ok := seen[arg.Identifier]
+		case ArgumentTypeUnknown, ArgumentTypeRequestBodyJSON:
+		default:
+			uses, ok := seen[arg.Identifier]
 			if !ok {
-				seen[arg.Identifier] = arg
-				arg.declares = true
+				seen[arg.Identifier] = &argumentUses{first: arg, count: 1}
+				arg.declares = declaresLocal(arg.Type)
 				if arg.Type == ArgumentTypeRequestPathValue {
 					linkWildcardSegments(def, arg)
 				}
 				continue
 			}
-			if err := checkRepeatedArgument(def, qual, first, arg); err != nil {
+			uses.count++
+			if err := checkRepeatedArgument(def, qual, uses.first, arg, uses.count); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// declaresLocal reports whether the generated handler declares a local for
+// an argument of this kind, where its first use is.
+func declaresLocal(t ArgumentType) bool {
+	switch t {
+	case ArgumentTypeRequestPathValue, ArgumentTypeLastEventID, ArgumentTypeRequestForm, ArgumentTypeRequestMultipartForm,
+		ArgumentTypeRequestContext, ArgumentTypeRequestBody:
+		return true
+	}
+	return false
 }
 
 func linkWildcardSegments(def *Definition, arg *Argument) {
@@ -54,12 +71,14 @@ func linkWildcardSegments(def *Definition, arg *Argument) {
 	}
 }
 
-func checkRepeatedArgument(def *Definition, qual types.Qualifier, first, arg *Argument) error {
-	if first.direct && arg.direct || types.Identical(first.paramType, arg.paramType) {
+// checkRepeatedArgument compares the use-th use of an identifier with its
+// first, like a type parameter that every call site must resolve to one type.
+func checkRepeatedArgument(def *Definition, qual types.Qualifier, first, arg *Argument, use int) error {
+	if types.Identical(first.paramType, arg.paramType) {
 		return nil
 	}
-	return def.argUsesErrorf(arg.Identifier, "%s is passed more than once with different types: %s and %s",
-		arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual))
+	return def.argUsesErrorf(arg.Identifier, "%s is passed more than once with different types: %s at the first use and %s at use %d",
+		arg.Identifier, types.TypeString(first.paramType, qual), types.TypeString(arg.paramType, qual), use)
 }
 
 // defaultScopeType returns the type an argument identifier binds to: a
