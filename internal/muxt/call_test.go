@@ -486,8 +486,13 @@ func TestArgument(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, defs[0].Arguments, 2)
 		}},
+		// request and response are handler parameters, not locals the
+		// generated code shares, so each use only has to be assignable.
 		{Name: "request passed to parameters of different types", Receiver: serverType, Template: `{{define "GET / RequestAndAny(request, request)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
-			require.ErrorContains(t, err, "request is passed more than once with different types: *Request at the first use and any at use 2")
+			require.NoError(t, err)
+		}},
+		{Name: "response passed to parameters of different types", Receiver: serverType, Template: `{{define "GET / ResponseAndAny(response, response)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
+			require.NoError(t, err)
 		}},
 		{Name: "ctx passed twice to parameters of one type", Receiver: serverType, Template: `{{define "GET / ContextTwice(ctx, ctx)"}}{{end}}`, Expect: func(t *testing.T, defs []muxt.Definition, err error) {
 			require.NoError(t, err)

@@ -79,3 +79,33 @@ func TestCheckRepeatedArgument(t *testing.T) {
 		})
 	}
 }
+
+// TestDeclaresLocal states, for every argument kind, whether the generated
+// handler declares one local for it, which is what makes repeated uses share
+// a value and so need identical parameter types. A new kind fails here until
+// it is classified.
+func TestDeclaresLocal(t *testing.T) {
+	want := map[ArgumentType]bool{
+		ArgumentTypeUnknown:              false,
+		ArgumentTypeRequest:              false,
+		ArgumentTypeResponse:             false,
+		ArgumentTypeRequestContext:       true,
+		ArgumentTypeRequestPathValue:     true,
+		ArgumentTypeRequestForm:          true,
+		ArgumentTypeRequestMultipartForm: true,
+		ArgumentTypeExecute:              false,
+		ArgumentTypeSendMessage:          false,
+		ArgumentTypeSignalsCallback:      false,
+		ArgumentTypeLastEventID:          true,
+		ArgumentTypeRequestBody:          true,
+		ArgumentTypeRequestBodyJSON:      false,
+		ArgumentTypeCall:                 false,
+	}
+	for kind := ArgumentTypeUnknown; kind <= ArgumentTypeCall; kind++ {
+		got, ok := want[kind]
+		if !assert.True(t, ok, "ArgumentType %d is not classified", kind) {
+			continue
+		}
+		assert.Equal(t, got, declaresLocal(kind), "declaresLocal(%d)", kind)
+	}
+}

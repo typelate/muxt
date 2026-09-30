@@ -8,6 +8,7 @@ func (srv *Server) M() any                                { return nil }
 func (srv *Server) HTTPRequest(*Request) any              { return nil }
 func (srv *Server) RequestTwice(*Request, *Request) any   { return nil }
 func (srv *Server) RequestAndAny(*Request, any) any       { return nil }
+func (srv *Server) ResponseAndAny(ResponseWriter, any) any { return nil }
 func (srv *Server) ContextTwice(Context, Context) any     { return nil }
 func (srv *Server) ContextAndAny(Context, any) any        { return nil }
 func (srv *Server) HTTPResponseWriter(ResponseWriter) any { return nil }

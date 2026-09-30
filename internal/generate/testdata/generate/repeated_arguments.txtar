@@ -39,10 +39,14 @@ Command line: muxt generate --use-receiver-type=T
 {{define "GET /stream/{sseID} Int(sseID)"}}{{.Result}}{{end}}
 {{define "GET /pair/{id} Sum(id, id)"}}{{.Result}}{{end}}
 {{define "GET /requests Both(request, request)"}}{{.Result}}{{end}}
+{{define "GET /mixed Mixed(request, response, request, response)"}}{{.Result}}{{end}}
 -- server.go --
 package server
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+)
 
 type In struct{ Name string }
 
@@ -53,6 +57,9 @@ func (T) Double(int) int                     { return 0 }
 func (T) Sum(int, int) any                   { return nil }
 func (T) Int(int) int                        { return 0 }
 func (T) Both(*http.Request, *http.Request) any { return nil }
+func (T) Mixed(*http.Request, http.ResponseWriter, any, io.Writer) any { return nil }
+-- want/log.txt --
+warning: GET /mixed uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
 -- want/template_routes.go --
 package server
 
@@ -61,6 +68,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"path"
@@ -70,6 +78,7 @@ import (
 
 type RoutesReceiver interface {
 	Forms(In, In) any
+	Mixed(*http.Request, http.ResponseWriter, any, io.Writer) any
 	Double(int) int
 	Sum(int, int) any
 	Both(*http.Request, *http.Request) any
@@ -111,6 +120,22 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		}
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
 		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /mixed", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, any]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Mixed(request, response, request, response)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /mixed Mixed(request, response, request, response)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("GET /nested/{id}", func(response http.ResponseWriter, request *http.Request) {
@@ -325,6 +350,10 @@ type TemplateRoutePaths struct {
 
 func (routePaths TemplateRoutePaths) Forms() string {
 	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "form")
+}
+
+func (routePaths TemplateRoutePaths) Mixed() string {
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "mixed")
 }
 
 func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) string {
