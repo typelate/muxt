@@ -82,6 +82,9 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 	if config.OutputHTMX {
 		decls = append(decls, routeHTMXDecls(imports, config)...)
 	}
+	if config.OutputDatastar {
+		decls = append(decls, routeDatastarDecls(imports, config)...)
+	}
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
