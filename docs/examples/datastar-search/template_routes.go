@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -438,6 +439,71 @@ func (route TemplateRoute) String() string {
 
 func (route TemplateRoute) Method() string {
 	return route.method
+}
+
+type TemplateRouteDatastar struct {
+	route               TemplateRoute
+	contentType         string
+	selector            string
+	requestCancellation string
+	openWhenHidden      *bool
+}
+
+func (route TemplateRoute) Datastar() TemplateRouteDatastar {
+	return TemplateRouteDatastar{route: route}
+}
+
+func (action TemplateRouteDatastar) ContentType(kind string) TemplateRouteDatastar {
+	action.contentType = kind
+	return action
+}
+
+func (action TemplateRouteDatastar) Selector(selector string) TemplateRouteDatastar {
+	action.selector = selector
+	return action
+}
+
+func (action TemplateRouteDatastar) RequestCancellation(mode string) TemplateRouteDatastar {
+	action.requestCancellation = mode
+	return action
+}
+
+func (action TemplateRouteDatastar) OpenWhenHidden(open bool) TemplateRouteDatastar {
+	action.openWhenHidden = &open
+	return action
+}
+
+func (action TemplateRouteDatastar) Action() (template.JS, error) {
+	verb := strings.ToLower(action.route.method)
+	if verb == "" {
+		return "", fmt.Errorf("route %s has no HTTP method to build a datastar action from", action.route.path)
+	}
+	path, err := json.Marshal(action.route.path)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal the path of route %s: %w", action.route.path, err)
+	}
+	options := map[string]any{}
+	if action.contentType != "" {
+		options["contentType"] = action.contentType
+	}
+	if action.selector != "" {
+		options["selector"] = action.selector
+	}
+	if action.requestCancellation != "" {
+		options["requestCancellation"] = action.requestCancellation
+	}
+	if action.openWhenHidden != nil {
+		options["openWhenHidden"] = *action.openWhenHidden
+	}
+	call := "@" + verb + "(" + string(path)
+	if len(options) > 0 {
+		encoded, err := json.Marshal(options)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal the options of route %s: %w", action.route.path, err)
+		}
+		call += ", " + string(encoded)
+	}
+	return template.JS(call + ")"), nil
 }
 
 func (routePaths TemplateRoutePaths) Index() TemplateRoute {

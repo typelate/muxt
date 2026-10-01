@@ -1,0 +1,119 @@
+# With --output-datastar, a TemplateRoute builds the Datastar action for its
+# route: Datastar() starts the chain, ContentType, Selector, OpenWhenHidden and
+# RequestCancellation set an option, and Action renders @verb(path, {options})
+# as template.JS, which html/template writes as JavaScript into a data-on:*
+# attribute. The options are a JSON object, which is also a JavaScript one.
+# A route whose pattern names no method has no verb, so it fails the render.
+
+muxt generate --use-receiver-type=Server --output-datastar
+muxt check
+
+exec go test
+
+-- template.gohtml --
+{{define "GET /{$} Index()"}}<button data-on:click="{{(.Path.Delete 7).Datastar.Action}}">x</button>{{end}}
+
+{{define "GET /form Form()"}}<form data-on:submit="{{(((.Path.Create).Datastar.ContentType "form").Selector "#f").Action}}"></form>{{end}}
+
+{{define "GET /options Options()"}}<a data-on:click="{{(((.Path.Create).Datastar.OpenWhenHidden true).RequestCancellation "disabled").Action}}">o</a>{{end}}
+
+{{define "GET /quote Quote()"}}<a data-on:click="{{((.Path.Create).Datastar.Selector `a"b'c`).Action}}">q</a>{{end}}
+
+{{define "GET /bad Bad()"}}<a data-on:click="{{.Path.Ping.Datastar.Action}}">bad</a>{{end}}
+
+{{define "DELETE /items/{id} Delete(id)"}}{{end}}
+
+{{define "POST /items Create()"}}{{end}}
+
+{{define "/ping Ping()"}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index() string     { return "" }
+func (Server) Form() string      { return "" }
+func (Server) Options() string   { return "" }
+func (Server) Quote() string     { return "" }
+func (Server) Bad() string       { return "" }
+func (Server) Delete(id int) int { return id }
+func (Server) Create() string    { return "" }
+func (Server) Ping() string      { return "" }
+-- template_test.go --
+package server
+
+import (
+	"html"
+	"html/template"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func serve(t *testing.T, mux *http.ServeMux, target string) (int, string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	body, err := io.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rec.Code, string(body)
+}
+
+func TestRendered(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for _, tt := range []struct {
+		target, want string
+	}{
+		{"/", `@delete("/items/7")`},
+		{"/form", `@post("/items", {"contentType":"form","selector":"#f"})`},
+		{"/options", `@post("/items", {"openWhenHidden":true,"requestCancellation":"disabled"})`},
+		{"/quote", `@post("/items", {"selector":"a\"b'c"})`},
+	} {
+		code, body := serve(t, mux, tt.target)
+		if code != http.StatusOK || !strings.Contains(html.UnescapeString(body), tt.want) {
+			t.Errorf("GET %s = %d %q, want 200 containing %q once HTML-unescaped", tt.target, code, body, tt.want)
+		}
+	}
+}
+
+func TestUnsupportedMethodFailsTheRender(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	if code, body := serve(t, mux, "/bad"); code != http.StatusInternalServerError {
+		t.Errorf("GET /bad = %d %q, want 500", code, body)
+	}
+}
+
+func TestActionInGo(t *testing.T) {
+	got, err := TemplateRoutePaths{}.Create().Datastar().ContentType("form").Action()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := template.JS(`@post("/items", {"contentType":"form"})`); got != want {
+		t.Errorf("Action() = %q, want %q", got, want)
+	}
+	if _, err := (TemplateRoutePaths{}).Ping().Datastar().Action(); err == nil {
+		t.Error("Action() of a route without a method succeeded, want an error")
+	}
+}
