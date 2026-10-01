@@ -1,0 +1,113 @@
+# With --output-htmx, a TemplateRoute builds the htmx attributes for its route:
+# HTMX() starts the chain, Target, Swap, Trigger and PushURL set an attribute,
+# and Attributes renders them with the verb attribute for the route's method.
+# A route whose pattern names no method has no verb attribute, so it fails the
+# render.
+
+muxt generate --use-receiver-type=Server --output-htmx
+muxt check
+
+exec go test
+
+-- template.gohtml --
+{{define "GET /{$} Index()"}}<button {{(((.Path.Delete 7).HTMX.Target "#row").Swap "outerHTML").Attributes}}>x</button>{{end}}
+
+{{define "GET /form Form()"}}<form {{(((.Path.Create).HTMX.Trigger "submit").PushURL "true").Attributes}}></form>{{end}}
+
+{{define "GET /quote Quote()"}}<a {{((.Path.Delete 1).HTMX.Target `a"b<c`).Attributes}}>q</a>{{end}}
+
+{{define "GET /bad Bad()"}}<a {{.Path.Ping.HTMX.Attributes}}>bad</a>{{end}}
+
+{{define "DELETE /items/{id} Delete(id)"}}{{end}}
+
+{{define "POST /items Create()"}}{{end}}
+
+{{define "/ping Ping()"}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Index() string     { return "" }
+func (Server) Form() string      { return "" }
+func (Server) Quote() string     { return "" }
+func (Server) Bad() string       { return "" }
+func (Server) Delete(id int) int { return id }
+func (Server) Create() string    { return "" }
+func (Server) Ping() string      { return "" }
+-- template_test.go --
+package server
+
+import (
+	"html/template"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func serve(t *testing.T, mux *http.ServeMux, target string) (int, string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	body, err := io.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rec.Code, string(body)
+}
+
+func TestRendered(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for _, tt := range []struct {
+		target, want string
+	}{
+		{"/", `<button hx-delete="/items/7" hx-target="#row" hx-swap="outerHTML">x</button>`},
+		{"/form", `<form hx-post="/items" hx-trigger="submit" hx-push-url="true"></form>`},
+		{"/quote", `<a hx-delete="/items/1" hx-target="a&#34;b&lt;c">q</a>`},
+	} {
+		code, body := serve(t, mux, tt.target)
+		if code != http.StatusOK || !strings.Contains(body, tt.want) {
+			t.Errorf("GET %s = %d %q, want 200 containing %q", tt.target, code, body, tt.want)
+		}
+	}
+}
+
+func TestUnsupportedMethodFailsTheRender(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	if code, body := serve(t, mux, "/bad"); code != http.StatusInternalServerError {
+		t.Errorf("GET /bad = %d %q, want 500", code, body)
+	}
+}
+
+func TestAttributesInGo(t *testing.T) {
+	got, err := TemplateRoutePaths{}.Delete(7).HTMX().Target("#row").Attributes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := template.HTMLAttr(`hx-delete="/items/7" hx-target="#row"`); got != want {
+		t.Errorf("Attributes() = %q, want %q", got, want)
+	}
+	if _, err := (TemplateRoutePaths{}).Ping().HTMX().Attributes(); err == nil {
+		t.Error("Attributes() of a route without a method succeeded, want an error")
+	}
+}

@@ -41,9 +41,12 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"html"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -251,6 +254,53 @@ func (route TemplateRoute) String() string {
 
 func (route TemplateRoute) Method() string {
 	return route.method
+}
+
+type TemplateRouteHTMX struct {
+	route   TemplateRoute
+	target  string
+	swap    string
+	trigger string
+	pushURL string
+}
+
+func (route TemplateRoute) HTMX() TemplateRouteHTMX {
+	return TemplateRouteHTMX{route: route}
+}
+
+func (attrs TemplateRouteHTMX) Target(selector string) TemplateRouteHTMX {
+	attrs.target = selector
+	return attrs
+}
+
+func (attrs TemplateRouteHTMX) Swap(strategy string) TemplateRouteHTMX {
+	attrs.swap = strategy
+	return attrs
+}
+
+func (attrs TemplateRouteHTMX) Trigger(event string) TemplateRouteHTMX {
+	attrs.trigger = event
+	return attrs
+}
+
+func (attrs TemplateRouteHTMX) PushURL(value string) TemplateRouteHTMX {
+	attrs.pushURL = value
+	return attrs
+}
+
+func (attrs TemplateRouteHTMX) Attributes() (template.HTMLAttr, error) {
+	verb := strings.ToLower(attrs.route.method)
+	if verb == "" {
+		return "", fmt.Errorf("route %s has no HTTP method to build an htmx attribute from", attrs.route.path)
+	}
+	pairs := [][2]string{{"hx-" + verb, attrs.route.path}, {"hx-target", attrs.target}, {"hx-swap", attrs.swap}, {"hx-trigger", attrs.trigger}, {"hx-push-url", attrs.pushURL}}
+	var attributes []string
+	for _, pair := range pairs {
+		if pair[1] != "" {
+			attributes = append(attributes, pair[0]+"=\""+html.EscapeString(pair[1])+"\"")
+		}
+	}
+	return template.HTMLAttr(strings.Join(attributes, " ")), nil
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() TemplateRoute {
