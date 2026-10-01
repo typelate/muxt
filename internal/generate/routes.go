@@ -44,6 +44,7 @@ const (
 	DefaultRoutesFunctionName         = "TemplateRoutes"
 	DefaultReceiverInterfaceName      = "RoutesReceiver"
 	DefaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
+	DefaultTemplateRouteTypeName      = "TemplateRoute"
 )
 
 type GeneratedFile struct {
@@ -65,7 +66,8 @@ type RoutesFileConfiguration struct {
 	ReceiverInterface,
 	TemplateDataType,
 	SSETemplateDataType,
-	TemplateRoutePathsTypeName string
+	TemplateRoutePathsTypeName,
+	TemplateRouteTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
 	PathPrefix                       bool

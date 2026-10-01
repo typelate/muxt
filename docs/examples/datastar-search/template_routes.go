@@ -427,15 +427,27 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Index() string {
-	return "/"
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) ProverbsAPI() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "api/proverbs")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) SearchProverbs() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "search")
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Index() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) ProverbsAPI() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "api/proverbs")}
+}
+
+func (routePaths TemplateRoutePaths) SearchProverbs() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "search")}
 }

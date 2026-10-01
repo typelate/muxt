@@ -180,7 +180,19 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
+type TemplateRoute struct {
+	method string
+	path   string
+}
 
-func (routePaths TemplateRoutePaths) Resume() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "resume")
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Resume() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "resume")}
 }

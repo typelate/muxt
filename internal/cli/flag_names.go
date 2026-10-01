@@ -14,6 +14,7 @@ const (
 	outputTemplateDataType              = "output-template-data-type"
 	outputSSETemplateDataType           = "output-sse-template-data-type"
 	outputTemplateRoutePathsType        = "output-template-route-paths-type"
+	outputTemplateRouteType             = "output-template-route-type"
 	outputRoutesFuncWithLoggerParam     = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix      = "output-routes-func-with-path-prefix-param"
 	outputRoutesFuncWithMiddlewareParam = "output-routes-func-with-middleware-param"
@@ -50,6 +51,7 @@ This function also receives an argument with a type matching the name given by o
 	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
 	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
+	outputTemplateRouteTypeHelp      = `The type name for the type the path constructor helper methods return.`
 
 	outputRoutesFuncWithLoggerParamHelp     = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
@@ -70,6 +72,7 @@ const (
 	defaultOutputFileName             = "template_routes.go"
 	defaultReceiverInterfaceName      = generate.DefaultReceiverInterfaceName
 	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
+	defaultTemplateRouteTypeName      = generate.DefaultTemplateRouteTypeName
 	defaultTemplateDataTypeName       = "TemplateData"
 	defaultSSETemplateDataTypeName    = "SSETemplateData"
 	defaultPackageName                = "main"

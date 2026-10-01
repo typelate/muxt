@@ -259,19 +259,31 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "constant")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "created")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) Field() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "field")
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Method() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "method")
+func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "constant")}
+}
+
+func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "created")}
+}
+
+func (routePaths TemplateRoutePaths) Field() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "field")}
+}
+
+func (routePaths TemplateRoutePaths) Method() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "method")}
 }

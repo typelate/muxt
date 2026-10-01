@@ -228,17 +228,29 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Note() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "note")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Upload() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) Get(idPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Note() TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "note")}
+}
+
+func (routePaths TemplateRoutePaths) Upload() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")}
+}
+
+func (routePaths TemplateRoutePaths) Get(idPathParam string) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {

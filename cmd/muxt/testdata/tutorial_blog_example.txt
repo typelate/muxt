@@ -186,7 +186,7 @@ func TestCase(t *testing.T) {
 				})
 			},
 			When: func(t *testing.T, when When) *http.Request {
-				return httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
+				return httptest.NewRequest(http.MethodGet, when.path.Article(1).String(), nil)
 			},
 			Then: func(t *testing.T, then Then) {
 				document := domtest.ParseResponseDocument(t, then.response)
@@ -207,7 +207,7 @@ func TestCase(t *testing.T) {
 				})
 			},
 			When: func(t *testing.T, when When) *http.Request {
-				return httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
+				return httptest.NewRequest(http.MethodGet, when.path.Article(1).String(), nil)
 			},
 			Then: func(t *testing.T, then Then) {
 				if msg := domtest.ParseResponseDocument(t, then.response).QuerySelector("#error-message"); assert.NotNil(t, msg) {
@@ -223,7 +223,7 @@ func TestCase(t *testing.T) {
 				})
 			},
 			When: func(t *testing.T, when When) *http.Request {
-				req := httptest.NewRequest(http.MethodGet, when.path.Article(1), nil)
+				req := httptest.NewRequest(http.MethodGet, when.path.Article(1).String(), nil)
 				req.Header.Set("HX-Request", "true")
 				return req
 			},

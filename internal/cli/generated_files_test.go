@@ -96,6 +96,7 @@ func TestWriteGeneratedFiles(t *testing.T) {
 		TemplateDataType:                 defaultTemplateDataTypeName,
 		SSETemplateDataType:              defaultSSETemplateDataTypeName,
 		TemplateRoutePathsTypeName:       defaultTemplateRoutePathsTypeName,
+		TemplateRouteTypeName:            defaultTemplateRouteTypeName,
 	}
 	files := []generate.GeneratedFile{
 		{Path: filepath.Join(dir, "a.go"), Content: "package a\n", Routes: 1},

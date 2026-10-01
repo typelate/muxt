@@ -471,19 +471,31 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) List() string {
-	return "/"
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) CreateTodo() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")
+func (routePaths TemplateRoutePaths) List() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) CreateTodo() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")}
+}
+
+func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "DELETE", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")}
 }

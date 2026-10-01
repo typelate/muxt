@@ -1,0 +1,95 @@
+# A route path method returns a TemplateRoute. It prints as the path, so a
+# template renders {{.Path.GetItem 7}} as /item/7 as it always did, and it
+# names the HTTP method of the route.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test
+
+-- template.gohtml --
+{{define "GET /item/{id} GetItem(id)"}}<a href="{{.Path.GetItem 7}}">item</a>{{end}}
+
+{{define "POST /item/{id} PostItem(id)"}}{{.Path.PostItem 7}}{{end}}
+
+{{define "GET /{$} Index()"}}<a href="{{.Path.Index}}">home</a>{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) GetItem(id int) int  { return id }
+func (Server) PostItem(id int) int { return id }
+func (Server) Index() string       { return "" }
+-- template_test.go --
+package server
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func serve(t *testing.T, mux *http.ServeMux, method, target string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(method, target, nil))
+	body, err := io.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	paths := TemplateRoutes(mux, Server{})
+
+	if got := serve(t, mux, http.MethodGet, "/item/3"); !strings.Contains(got, `<a href="/item/7">item</a>`) {
+		t.Errorf("GET /item/3 = %q, want a link to /item/7", got)
+	}
+	if got := serve(t, mux, http.MethodPost, "/item/3"); !strings.Contains(got, "/item/7") {
+		t.Errorf("POST /item/3 = %q, want /item/7", got)
+	}
+	if got := serve(t, mux, http.MethodGet, "/"); !strings.Contains(got, `<a href="/">home</a>`) {
+		t.Errorf("GET / = %q, want a link to /", got)
+	}
+
+	getItem, postItem, index := paths.GetItem(7), paths.PostItem(7), paths.Index()
+	for _, tt := range []struct {
+		name                 string
+		route                TemplateRoute
+		wantMethod, wantPath string
+	}{
+		{"GET with a parameter", getItem, http.MethodGet, "/item/7"},
+		{"POST with a parameter", postItem, http.MethodPost, "/item/7"},
+		{"index", index, http.MethodGet, "/"},
+	} {
+		if got := tt.route.Method(); got != tt.wantMethod {
+			t.Errorf("%s: Method() = %q, want %q", tt.name, got, tt.wantMethod)
+		}
+		if got := tt.route.String(); got != tt.wantPath {
+			t.Errorf("%s: String() = %q, want %q", tt.name, got, tt.wantPath)
+		}
+		if got := fmt.Sprint(tt.route); got != tt.wantPath {
+			t.Errorf("%s: fmt.Sprint() = %q, want %q", tt.name, got, tt.wantPath)
+		}
+	}
+}

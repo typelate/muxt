@@ -191,11 +191,11 @@ func Test(t *testing.T) {
 		}
 	})
 	t.Run("id", func(t *testing.T) {
-		path, err := TemplateRoutePaths{}.PassID(7)
+		route, err := TemplateRoutePaths{}.PassID(7)
 		if err != nil {
 			t.Error("unexpected error when making the path", err)
 		}
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequest(http.MethodGet, route.String(), nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()
@@ -204,11 +204,11 @@ func Test(t *testing.T) {
 		}
 	})
 	t.Run("multipleIDs", func(t *testing.T) {
-		path, err := TemplateRoutePaths{}.PassMultipleIDs(7, 8, 9)
+		route, err := TemplateRoutePaths{}.PassMultipleIDs(7, 8, 9)
 		if err != nil {
 			t.Error("unexpected error when making the path", err)
 		}
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequest(http.MethodGet, route.String(), nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		res := rec.Result()

@@ -1,6 +1,6 @@
 The output flags rename the generated file and identifiers.
 
-Command line: muxt generate --use-receiver-type=Server --output-file=routes.go --output-routes-func=Routes --output-receiver-interface=Handlers --output-template-data-type=Data --output-template-route-paths-type=Paths
+Command line: muxt generate --use-receiver-type=Server --output-file=routes.go --output-routes-func=Routes --output-receiver-interface=Handlers --output-template-data-type=Data --output-template-route-paths-type=Paths --output-template-route-type=Route
 -- config.json --
 {
 	"MuxtVersion": "v1.2.3",
@@ -13,6 +13,7 @@ Command line: muxt generate --use-receiver-type=Server --output-file=routes.go -
 	"TemplateDataType": "Data",
 	"SSETemplateDataType": "SSETemplateData",
 	"TemplateRoutePathsTypeName": "Paths",
+	"TemplateRouteTypeName": "Route",
 	"TemplatesVariables": [
 		"templates"
 	],
@@ -175,9 +176,21 @@ func (data *Data[R, T]) String() string {
 type Paths struct {
 	pathsPrefix string
 }
+type Route struct {
+	method string
+	path   string
+}
 
-func (routePaths Paths) Show(idPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
+func (route Route) String() string {
+	return route.path
+}
+
+func (route Route) Method() string {
+	return route.method
+}
+
+func (routePaths Paths) Show(idPathParam string) Route {
+	return Route{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))}
 }
 
 func (routePaths Paths) escapePathSegment(value string) string {

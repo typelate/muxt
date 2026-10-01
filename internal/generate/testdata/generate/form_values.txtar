@@ -213,11 +213,23 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) CreateUnmarshalCallingValues() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "unmarshal")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) CreateValuesCallingValues() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "values")
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) CreateUnmarshalCallingValues() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "unmarshal")}
+}
+
+func (routePaths TemplateRoutePaths) CreateValuesCallingValues() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "values")}
 }
