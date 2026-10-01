@@ -268,19 +268,31 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) ValueError() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "error")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Function() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "function")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) ValueOk() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "ok")
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Value() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "value")
+func (routePaths TemplateRoutePaths) ValueError() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "error")}
+}
+
+func (routePaths TemplateRoutePaths) Function() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "function")}
+}
+
+func (routePaths TemplateRoutePaths) ValueOk() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "ok")}
+}
+
+func (routePaths TemplateRoutePaths) Value() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "value")}
 }

@@ -402,7 +402,19 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
+type TemplateRoute struct {
+	method string
+	path   string
+}
 
-func (routePaths TemplateRoutePaths) Count() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Count() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")}
 }

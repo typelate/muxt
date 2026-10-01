@@ -79,7 +79,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Ok` | `bool`, per the shape table above |
 | `.Request` | `*http.Request` |
 | `.Receiver` | `R` |
-| `.Path` | `TemplateRoutePaths`, one method per route named after the method with its first letter uppercased, taking one argument per path wildcard in order: `{{.Path.GetUser .Result.ID}}`. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)) |
+| `.Path` | `TemplateRoutePaths`, one method per route named after the method with its first letter uppercased, taking one argument per path wildcard in order: `{{.Path.GetUser .Result.ID}}`. Each returns a `TemplateRoute` that prints as the path and has `Method() string`, the route's HTTP method, empty when the pattern names none ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)). String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)) |
 | `.MuxtVersion` | the generating muxt version |
 | `.StatusCode code` | the data, for chaining |
 | `.Header key value` | the data, for chaining |

@@ -265,19 +265,31 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) ReadHelp() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "help")
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) List() string {
-	return "/"
+func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")}
+}
+
+func (routePaths TemplateRoutePaths) ReadHelp() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "help")}
+}
+
+func (routePaths TemplateRoutePaths) List() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }

@@ -204,17 +204,29 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) User(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) Home() string {
-	return "/"
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) User(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) Save(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) Home() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }
 -- want/user-profile_template_routes_gen.go --
 package server

@@ -406,27 +406,39 @@ func (data *TemplateData[R, T]) HXTriggerElementID() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) CreateTodo() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) ClearCompleted() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/clear-completed")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) ToggleAll() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/toggle-all")
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) CreateTodo() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")}
 }
 
-func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) ClearCompleted() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/clear-completed")}
 }
 
-func (routePaths TemplateRoutePaths) ListTodos() string {
-	return "/"
+func (routePaths TemplateRoutePaths) ToggleAll() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/toggle-all")}
+}
+
+func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "DELETE", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) ListTodos() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }

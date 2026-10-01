@@ -63,6 +63,7 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 		{outputTemplateDataType, config.TemplateDataType},
 		{outputSSETemplateDataType, config.SSETemplateDataType},
 		{outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName},
+		{outputTemplateRouteType, config.TemplateRouteTypeName},
 	} {
 		if id.value != "" && !token.IsIdentifier(id.value) {
 			return errors.New(id.flag + errIdentSuffix)
@@ -92,6 +93,7 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	args = appendValueArg(args, outputTemplateDataType, config.TemplateDataType, defaultTemplateDataTypeName)
 	args = appendValueArg(args, outputSSETemplateDataType, config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 	args = appendValueArg(args, outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+	args = appendValueArg(args, outputTemplateRouteType, config.TemplateRouteTypeName, defaultTemplateRouteTypeName)
 	args = appendSwitchArg(args, outputRoutesFuncWithLoggerParam, config.Logger)
 	args = appendSwitchArg(args, outputRoutesFuncWithPathPrefix, config.PathPrefix)
 	args = appendSwitchArg(args, outputRoutesFuncWithMiddlewareParam, config.Middleware)
@@ -139,11 +141,15 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		if !flagSet.Changed(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
+		if !flagSet.Changed(outputTemplateRouteType) {
+			config.TemplateRouteTypeName = strcase.ToGoCamel(defaultTemplateRouteTypeName)
+		}
 	} else {
 		config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
 		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
 		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
+		config.TemplateRouteTypeName = cmp.Or(config.TemplateRouteTypeName, defaultTemplateRouteTypeName)
 	}
 }

@@ -301,19 +301,31 @@ func (data *TemplateData[R, T]) HXTriggerElementID() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Count() string {
-	return "/"
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) CreateCount() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) Decrement() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement-count")
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Increment() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment-count")
+func (routePaths TemplateRoutePaths) Count() TemplateRoute {
+	return TemplateRoute{method: "", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) CreateCount() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")}
+}
+
+func (routePaths TemplateRoutePaths) Decrement() TemplateRoute {
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement-count")}
+}
+
+func (routePaths TemplateRoutePaths) Increment() TemplateRoute {
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment-count")}
 }

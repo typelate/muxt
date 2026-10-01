@@ -347,27 +347,39 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Forms() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "form")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Mixed() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "mixed")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))
+func (route TemplateRoute) Method() string {
+	return route.method
 }
 
-func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) Forms() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "form")}
 }
 
-func (routePaths TemplateRoutePaths) Both() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "requests")
+func (routePaths TemplateRoutePaths) Mixed() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "mixed")}
 }
 
-func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))
+func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) Both() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "requests")}
+}
+
+func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))}
 }

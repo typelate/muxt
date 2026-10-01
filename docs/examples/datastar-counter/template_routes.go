@@ -452,15 +452,27 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Home() string {
-	return "/"
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Decrement() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) Increment() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment")
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Home() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) Decrement() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement")}
+}
+
+func (routePaths TemplateRoutePaths) Increment() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment")}
 }

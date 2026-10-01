@@ -185,11 +185,23 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) ReadAbout() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "about")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) ReadExact() string {
-	return "/"
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) ReadAbout() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "about")}
+}
+
+func (routePaths TemplateRoutePaths) ReadExact() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }

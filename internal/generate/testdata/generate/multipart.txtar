@@ -231,11 +231,23 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) Raw() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "raw")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) Upload() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) Raw() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "raw")}
+}
+
+func (routePaths TemplateRoutePaths) Upload() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")}
 }

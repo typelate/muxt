@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"cmp"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -15,9 +16,54 @@ import (
 
 const (
 	routePathsReceiverName     = "routePaths"
+	routeReceiverName          = "route"
+	routeMethodFieldName       = "method"
+	routePathFieldName         = "path"
 	escapePathSegmentFuncName  = "escapePathSegment"
 	escapePathSegmentsFuncName = "escapePathSegments"
 )
+
+// routeTypeName is the name of the type the route path methods return. The
+// zero value names the default.
+func routeTypeName(config RoutesFileConfiguration) string {
+	return cmp.Or(config.TemplateRouteTypeName, DefaultTemplateRouteTypeName)
+}
+
+// routeTypeDecls emits the type a route path method returns. It renders as the
+// path, so a template that prints it gets the same text the method used to
+// return, and it knows the HTTP method of the route it names.
+func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
+	typeName := routeTypeName(config)
+	accessor := func(name, field string) *ast.FuncDecl {
+		return &ast.FuncDecl{
+			Name: ast.NewIdent(name),
+			Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(typeName), routeReceiverName)}},
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: fieldList(results(ast.NewIdent("string")))},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(selector(routeReceiverName, field))}},
+		}
+	}
+	return []ast.Decl{
+		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{
+			&ast.TypeSpec{Name: ast.NewIdent(typeName), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{
+				{Names: []*ast.Ident{ast.NewIdent(routeMethodFieldName)}, Type: ast.NewIdent("string")},
+				{Names: []*ast.Ident{ast.NewIdent(routePathFieldName)}, Type: ast.NewIdent("string")},
+			}}}},
+		}},
+		accessor("String", routePathFieldName),
+		accessor("Method", routeMethodFieldName),
+	}
+}
+
+// routeLiteral is the route a path method returns for def with the given path.
+func routeLiteral(config RoutesFileConfiguration, def *muxt.Definition, path ast.Expr) ast.Expr {
+	return &ast.CompositeLit{
+		Type: ast.NewIdent(routeTypeName(config)),
+		Elts: []ast.Expr{
+			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.String(def.HTTPMethod())},
+			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: path},
+		},
+	}
+}
 
 func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {
 	decls := []ast.Decl{
@@ -32,6 +78,7 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 			},
 		},
 	}
+	decls = append(decls, routeTypeDecls(config)...)
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
@@ -73,15 +120,16 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	if err != nil {
 		return nil, escaperUse{}, err
 	}
+	routeType := ast.NewIdent(routeTypeName(config))
 	if def.IsIndex() {
-		body := []ast.Stmt{returnExprs(astgen.String("/"))}
+		var indexPath ast.Expr = astgen.String("/")
 		if config.PathPrefix {
-			body = []ast.Stmt{returnExprs(astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file)))}
+			indexPath = astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file))
 		}
-		return routePathsMethod(config, ident, nil, results(ast.NewIdent("string")), body...), escaperUse{}, nil
+		return routePathsMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(config, def, indexPath))), escaperUse{}, nil
 	}
 
-	b := &routePathBuilder{file: file, def: def, segments: []ast.Expr{pathPrefixOrRoot(file)}}
+	b := &routePathBuilder{file: file, config: config, def: def, segments: []ast.Expr{pathPrefixOrRoot(file)}}
 	for i, segment := range def.Segments {
 		// The segment number counts as the path splits on "/", with the empty
 		// segment before the leading "/" at 0.
@@ -95,7 +143,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	if def.HasPathEndWildcard() {
 		joined = &ast.BinaryExpr{X: joined, Op: token.ADD, Y: astgen.String("/")}
 	}
-	returned, resultTypes := []ast.Expr{joined}, []ast.Expr{ast.NewIdent("string")}
+	returned, resultTypes := []ast.Expr{routeLiteral(config, def, joined)}, []ast.Expr{routeType}
 	if b.returnsError {
 		returned = append(returned, astgen.Nil())
 		resultTypes = append(resultTypes, ast.NewIdent("error"))
@@ -112,8 +160,9 @@ func pathPrefixOrRoot(file *File) ast.Expr {
 // routePathBuilder accumulates the parameters, statements and path segments of
 // one route path method.
 type routePathBuilder struct {
-	file *File
-	def  *muxt.Definition
+	file   *File
+	config RoutesFileConfiguration
+	def    *muxt.Definition
 
 	fields     []*ast.Field
 	lastType   source.Type
@@ -188,7 +237,7 @@ func (b *routePathBuilder) addMarshaledSegment(number int, segment muxt.Segment,
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(
-				astgen.String(""),
+				&ast.CompositeLit{Type: ast.NewIdent(routeTypeName(b.config))},
 				astgen.Call(b.file, "fmt", "fmt", "Errorf", astgen.String(message), ast.NewIdent(errIdent)),
 			)}},
 		},

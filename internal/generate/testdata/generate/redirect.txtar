@@ -236,15 +236,27 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "redirects")
+type TemplateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths TemplateRoutePaths) ReadStaysCallingSave() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stays")
+func (route TemplateRoute) String() string {
+	return route.path
 }
 
-func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "via-partial")
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "redirects")}
+}
+
+func (routePaths TemplateRoutePaths) ReadStaysCallingSave() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stays")}
+}
+
+func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "via-partial")}
 }

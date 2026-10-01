@@ -391,37 +391,49 @@ func (data *TemplateData[R, T]) String() string {
 type TemplateRoutePaths struct {
 	pathsPrefix string
 }
+type TemplateRoute struct {
+	method string
+	path   string
+}
 
-func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
+func (route TemplateRoute) String() string {
+	return route.path
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (TemplateRoute, error) {
 	segment2_06e81700, err := atPathParam.MarshalText()
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
+		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
 	}
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "at", routePaths.escapePathSegment(string(segment2_06e81700))), nil
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "at", routePaths.escapePathSegment(string(segment2_06e81700)))}, nil
 }
 
-func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))
+func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))}
 }
 
-func (routePaths TemplateRoutePaths) Exact() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "exact") + "/"
+func (routePaths TemplateRoutePaths) Exact() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "exact") + "/"}
 }
 
-func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "files", routePaths.escapePathSegments(pathPathParam))
+func (routePaths TemplateRoutePaths) Files(pathPathParam string) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "files", routePaths.escapePathSegments(pathPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) Int(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))
+func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))}
 }
 
-func (routePaths TemplateRoutePaths) String(namePathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "string", routePaths.escapePathSegment(namePathParam))
+func (routePaths TemplateRoutePaths) String(namePathParam string) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "string", routePaths.escapePathSegment(namePathParam))}
 }
 
 func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {

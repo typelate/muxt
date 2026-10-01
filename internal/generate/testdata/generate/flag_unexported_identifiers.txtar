@@ -14,6 +14,7 @@ Command line: muxt generate --use-receiver-type=Server --output-exported-default
 	"TemplateDataType": "templateData",
 	"SSETemplateDataType": "sseTemplateData",
 	"TemplateRoutePathsTypeName": "templateRoutePaths",
+	"TemplateRouteTypeName": "templateRoute",
 	"TemplatesVariables": [
 		"templates"
 	],
@@ -359,11 +360,23 @@ func (m *sseTemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 type templateRoutePaths struct {
 	pathsPrefix string
 }
-
-func (routePaths templateRoutePaths) Stream() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "events")
+type templateRoute struct {
+	method string
+	path   string
 }
 
-func (routePaths templateRoutePaths) ReadExact() string {
-	return "/"
+func (route templateRoute) String() string {
+	return route.path
+}
+
+func (route templateRoute) Method() string {
+	return route.method
+}
+
+func (routePaths templateRoutePaths) Stream() templateRoute {
+	return templateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "events")}
+}
+
+func (routePaths templateRoutePaths) ReadExact() templateRoute {
+	return templateRoute{method: "GET", path: "/"}
 }
