@@ -63,7 +63,7 @@ func Test(t *testing.T) {
 
 	paths := TemplateRoutes(mux, nil, "/path/prefix/")
 
-	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex(), nil)
 	rec := httptest.NewRecorder()
 
 	mux.ServeHTTP(rec, req)

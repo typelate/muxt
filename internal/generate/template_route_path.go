@@ -15,7 +15,9 @@ import (
 )
 
 const (
+	routeBuilderReceiverName   = "routes"
 	routePathsReceiverName     = "routePaths"
+	routeFieldName             = "Route"
 	routeReceiverName          = "route"
 	routeMethodFieldName       = "method"
 	routePathFieldName         = "path"
@@ -27,6 +29,22 @@ const (
 // zero value names the default.
 func routeTypeName(config RoutesFileConfiguration) string {
 	return cmp.Or(config.TemplateRouteTypeName, DefaultTemplateRouteTypeName)
+}
+
+// routeBuilderTypeName is the name of the type of the Route field of the paths
+// type. Its methods return the route a path method returns the path of.
+func routeBuilderTypeName(config RoutesFileConfiguration) string {
+	return routeTypeName(config) + "Builder"
+}
+
+// pathsLiteral is the paths value for a path prefix expression.
+func pathsLiteral(config RoutesFileConfiguration, prefix ast.Expr) *ast.CompositeLit {
+	return &ast.CompositeLit{Type: ast.NewIdent(config.TemplateRoutePathsTypeName), Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(routeFieldName), Value: &ast.CompositeLit{
+			Type: ast.NewIdent(routeBuilderTypeName(config)),
+			Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: prefix}},
+		}},
+	}}
 }
 
 // routeTypeDecls emits the type a route path method returns. It renders as the
@@ -72,6 +90,16 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 			Specs: []ast.Spec{
 				&ast.TypeSpec{Name: ast.NewIdent(config.TemplateRoutePathsTypeName), Type: &ast.StructType{Fields: &ast.FieldList{
 					List: []*ast.Field{
+						{Names: []*ast.Ident{ast.NewIdent(routeFieldName)}, Type: ast.NewIdent(routeBuilderTypeName(config))},
+					},
+				}}},
+			},
+		},
+		&ast.GenDecl{
+			Tok: token.TYPE,
+			Specs: []ast.Spec{
+				&ast.TypeSpec{Name: ast.NewIdent(routeBuilderTypeName(config)), Type: &ast.StructType{Fields: &ast.FieldList{
+					List: []*ast.Field{
 						{Names: []*ast.Ident{ast.NewIdent(pathPrefixPathsStructFieldName)}, Type: ast.NewIdent("string")},
 					},
 				}}},
@@ -90,7 +118,7 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 		}
 		used.segment = used.segment || escapers.segment
 		used.segments = used.segments || escapers.segments
-		decls = append(decls, decl)
+		decls = append(decls, decl, routePathWrapper(config, decl))
 	}
 	// escapePathSegments calls escapePathSegment, so needing the former
 	// implies emitting both.
@@ -106,10 +134,10 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs
 // escaperUse records which generated escaper methods a route path method calls.
 type escaperUse struct{ segment, segments bool }
 
-func routePathsMethod(config RoutesFileConfiguration, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
+func routeBuilderMethod(config RoutesFileConfiguration, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Name: ast.NewIdent(name),
-		Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(config.TemplateRoutePathsTypeName), routePathsReceiverName)}},
+		Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(routeBuilderTypeName(config)), routeBuilderReceiverName)}},
 		Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: fieldList(results)},
 		Body: &ast.BlockStmt{List: body},
 	}
@@ -126,7 +154,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		if config.PathPrefix {
 			indexPath = astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file))
 		}
-		return routePathsMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(config, def, indexPath))), escaperUse{}, nil
+		return routeBuilderMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(config, def, indexPath))), escaperUse{}, nil
 	}
 
 	b := &routePathBuilder{file: file, config: config, def: def, segments: []ast.Expr{pathPrefixOrRoot(file)}}
@@ -149,12 +177,56 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		resultTypes = append(resultTypes, ast.NewIdent("error"))
 	}
 	body := append(b.statements, returnExprs(returned...))
-	return routePathsMethod(config, ident, b.fields, results(resultTypes...), body...), b.escapers, nil
+	return routeBuilderMethod(config, ident, b.fields, results(resultTypes...), body...), b.escapers, nil
 }
 
-// pathPrefixOrRoot is cmp.Or(routePaths.pathsPrefix, "/").
+// routePathWrapper emits the path method that calls the route method builder
+// is, so code that uses the path as a string keeps working:
+//
+//	func (routePaths TemplateRoutePaths) GetItem(id int) string {
+//		return routePaths.Route.GetItem(id).String()
+//	}
+//
+// A builder method that returns an error gets a wrapper that returns it too.
+func routePathWrapper(config RoutesFileConfiguration, builder *ast.FuncDecl) *ast.FuncDecl {
+	var args []ast.Expr
+	for _, field := range builder.Type.Params.List {
+		for _, name := range field.Names {
+			args = append(args, ast.NewIdent(name.Name))
+		}
+	}
+	call := &ast.CallExpr{
+		Fun:  &ast.SelectorExpr{X: selector(routePathsReceiverName, routeFieldName), Sel: ast.NewIdent(builder.Name.Name)},
+		Args: args,
+	}
+	asString := func(route ast.Expr) ast.Expr {
+		return &ast.CallExpr{Fun: &ast.SelectorExpr{X: route, Sel: ast.NewIdent("String")}}
+	}
+	decl := &ast.FuncDecl{
+		Name: ast.NewIdent(builder.Name.Name),
+		Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(config.TemplateRoutePathsTypeName), routePathsReceiverName)}},
+		Type: &ast.FuncType{Params: builder.Type.Params},
+	}
+	if len(builder.Type.Results.List) == 1 {
+		decl.Type.Results = fieldList(results(ast.NewIdent("string")))
+		decl.Body = &ast.BlockStmt{List: []ast.Stmt{returnExprs(asString(call))}}
+		return decl
+	}
+	decl.Type.Results = fieldList(results(ast.NewIdent("string"), ast.NewIdent("error")))
+	decl.Body = &ast.BlockStmt{List: []ast.Stmt{
+		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(routeReceiverName), ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(astgen.String(""), ast.NewIdent(errIdent))}},
+		},
+		returnExprs(asString(ast.NewIdent(routeReceiverName)), astgen.Nil()),
+	}}
+	return decl
+}
+
+// pathPrefixOrRoot is cmp.Or(routes.pathsPrefix, "/").
 func pathPrefixOrRoot(file *File) ast.Expr {
-	return astgen.Call(file, "cmp", "cmp", "Or", selector(routePathsReceiverName, pathPrefixPathsStructFieldName), astgen.String("/"))
+	return astgen.Call(file, "cmp", "cmp", "Or", selector(routeBuilderReceiverName, pathPrefixPathsStructFieldName), astgen.String("/"))
 }
 
 // routePathBuilder accumulates the parameters, statements and path segments of
@@ -289,14 +361,14 @@ func pathSegmentHelperType(arg *muxt.Argument) source.Type {
 // escapedPathSegment wraps value in a call to the generated escapePathSegment
 // method; the caller must arrange for escapePathSegmentMethod to be emitted.
 func escapedPathSegment(value ast.Expr) ast.Expr {
-	return &ast.CallExpr{Fun: selector(routePathsReceiverName, escapePathSegmentFuncName), Args: []ast.Expr{value}}
+	return &ast.CallExpr{Fun: selector(routeBuilderReceiverName, escapePathSegmentFuncName), Args: []ast.Expr{value}}
 }
 
 // escapedPathSegments wraps a trailing-wildcard value in a call to the
 // generated escapePathSegments method; the caller must arrange for both
 // escaper methods to be emitted.
 func escapedPathSegments(value ast.Expr) ast.Expr {
-	return &ast.CallExpr{Fun: selector(routePathsReceiverName, escapePathSegmentsFuncName), Args: []ast.Expr{value}}
+	return &ast.CallExpr{Fun: selector(routeBuilderReceiverName, escapePathSegmentsFuncName), Args: []ast.Expr{value}}
 }
 
 // escapePathSegmentsMethod emits:
@@ -318,7 +390,7 @@ func escapePathSegmentsMethod(file *File, config RoutesFileConfiguration) *ast.F
 		indexIdent    = "i"
 		segmentIdent  = "segment"
 	)
-	return routePathsMethod(config, escapePathSegmentsFuncName,
+	return routeBuilderMethod(config, escapePathSegmentsFuncName,
 		[]*ast.Field{param(ast.NewIdent("string"), valueIdent)},
 		results(ast.NewIdent("string")),
 		&ast.AssignStmt{
@@ -365,7 +437,7 @@ func escapePathSegmentMethod(file *File, config RoutesFileConfiguration) *ast.Fu
 			Body: []ast.Stmt{returnExprs(astgen.String(encoded))},
 		}
 	}
-	return routePathsMethod(config, escapePathSegmentFuncName,
+	return routeBuilderMethod(config, escapePathSegmentFuncName,
 		[]*ast.Field{param(ast.NewIdent("string"), valueIdent)},
 		results(ast.NewIdent("string")),
 		&ast.SwitchStmt{

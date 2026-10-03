@@ -1,6 +1,7 @@
-# A route path method returns a TemplateRoute. It prints as the path, so a
-# template renders {{.Path.GetItem 7}} as /item/7 as it always did, and it
-# names the HTTP method of the route.
+# A route path method returns the path as a string, as it always did, so
+# {{.Path.GetItem 7}} renders /item/7. The Route field of the paths has the same
+# methods and returns a TemplateRoute, which prints as the path and names the
+# HTTP method of the route.
 
 muxt generate --use-receiver-type=Server
 muxt check
@@ -13,6 +14,8 @@ exec go test
 {{define "POST /item/{id} PostItem(id)"}}{{.Path.PostItem 7}}{{end}}
 
 {{define "GET /{$} Index()"}}<a href="{{.Path.Index}}">home</a>{{end}}
+
+{{define "GET /route/{id} GetRoute(id)"}}<a href="{{.Path.Route.GetItem 7}}">{{.Path.Route.GetItem 7}}</a>{{end}}
 -- go.mod --
 module server
 
@@ -35,6 +38,7 @@ type Server struct{}
 func (Server) GetItem(id int) int  { return id }
 func (Server) PostItem(id int) int { return id }
 func (Server) Index() string       { return "" }
+func (Server) GetRoute(id int) int { return id }
 -- template_test.go --
 package server
 
@@ -72,7 +76,21 @@ func Test(t *testing.T) {
 		t.Errorf("GET / = %q, want a link to /", got)
 	}
 
-	getItem, postItem, index := paths.GetItem(7), paths.PostItem(7), paths.Index()
+	if got := serve(t, mux, http.MethodGet, "/route/3"); !strings.Contains(got, `<a href="/item/7">/item/7</a>`) {
+		t.Errorf("GET /route/3 = %q, want a link to /item/7", got)
+	}
+
+	for _, tt := range []struct{ got, want string }{
+		{paths.GetItem(7), "/item/7"},
+		{paths.PostItem(7), "/item/7"},
+		{paths.Index(), "/"},
+	} {
+		if tt.got != tt.want {
+			t.Errorf("path = %q, want %q", tt.got, tt.want)
+		}
+	}
+
+	getItem, postItem, index := paths.Route.GetItem(7), paths.Route.PostItem(7), paths.Route.Index()
 	for _, tt := range []struct {
 		name                 string
 		route                TemplateRoute

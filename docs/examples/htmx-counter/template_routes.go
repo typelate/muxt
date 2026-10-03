@@ -139,7 +139,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -161,7 +161,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -299,6 +299,9 @@ func (data *TemplateData[R, T]) HXTriggerElementID() string {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -314,18 +317,34 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Count() TemplateRoute {
+func (routes TemplateRouteBuilder) Count() TemplateRoute {
 	return TemplateRoute{method: "", path: "/"}
 }
 
-func (routePaths TemplateRoutePaths) CreateCount() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")}
+func (routePaths TemplateRoutePaths) Count() string {
+	return routePaths.Route.Count().String()
 }
 
-func (routePaths TemplateRoutePaths) Decrement() TemplateRoute {
-	return TemplateRoute{method: "", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement-count")}
+func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
 }
 
-func (routePaths TemplateRoutePaths) Increment() TemplateRoute {
-	return TemplateRoute{method: "", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment-count")}
+func (routePaths TemplateRoutePaths) CreateCount() string {
+	return routePaths.Route.CreateCount().String()
+}
+
+func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement-count")}
+}
+
+func (routePaths TemplateRoutePaths) Decrement() string {
+	return routePaths.Route.Decrement().String()
+}
+
+func (routes TemplateRouteBuilder) Increment() TemplateRoute {
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment-count")}
+}
+
+func (routePaths TemplateRoutePaths) Increment() string {
+	return routePaths.Route.Increment().String()
 }
