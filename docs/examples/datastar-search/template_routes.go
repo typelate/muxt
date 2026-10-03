@@ -156,7 +156,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return nil
 		})
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -178,7 +178,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -283,7 +283,7 @@ func (m *SSETemplateData[R, T]) Retry(retryMilliseconds int) *SSETemplateData[R,
 }
 
 func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: m.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}
 }
 
 func (m *SSETemplateData[R, T]) Selector(selector string) *SSETemplateData[R, T] {
@@ -425,6 +425,9 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -440,14 +443,26 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Index() TemplateRoute {
+func (routes TemplateRouteBuilder) Index() TemplateRoute {
 	return TemplateRoute{method: "GET", path: "/"}
 }
 
-func (routePaths TemplateRoutePaths) ProverbsAPI() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "api/proverbs")}
+func (routePaths TemplateRoutePaths) Index() string {
+	return routePaths.Route.Index().String()
 }
 
-func (routePaths TemplateRoutePaths) SearchProverbs() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "search")}
+func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
+}
+
+func (routePaths TemplateRoutePaths) ProverbsAPI() string {
+	return routePaths.Route.ProverbsAPI().String()
+}
+
+func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
+}
+
+func (routePaths TemplateRoutePaths) SearchProverbs() string {
+	return routePaths.Route.SearchProverbs().String()
 }

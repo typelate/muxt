@@ -144,7 +144,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -166,7 +166,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -228,6 +228,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -243,10 +246,18 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) ReadArticleByIDCallingShow(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "article", strconv.Itoa(idPathParam))}
+func (routes TemplateRouteBuilder) ReadArticleByIDCallingShow(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "article", strconv.Itoa(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) ReadUserCallingShow() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user")}
+func (routePaths TemplateRoutePaths) ReadArticleByIDCallingShow(idPathParam int) string {
+	return routePaths.Route.ReadArticleByIDCallingShow(idPathParam).String()
+}
+
+func (routes TemplateRouteBuilder) ReadUserCallingShow() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user")}
+}
+
+func (routePaths TemplateRoutePaths) ReadUserCallingShow() string {
+	return routePaths.Route.ReadUserCallingShow().String()
 }

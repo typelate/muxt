@@ -52,7 +52,7 @@ func TestRoutes(t *testing.T) {
 				f.On("SubmitFormEditRow", 1, EditRow{5}).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
 			},
 			When: func(t *testing.T) *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, TemplateRoutePaths{}.SubmitFormEditRow(1).String(), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
+				req := httptest.NewRequest(http.MethodPatch, TemplateRoutePaths{}.SubmitFormEditRow(1), strings.NewReader(url.Values{"count": []string{"5"}}.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				return req
 			},
@@ -75,7 +75,7 @@ func TestRoutes(t *testing.T) {
 				f.On("GetFormEditRow", 1).Return(Row{ID: 1, Name: "a", Value: 97}, nil)
 			},
 			When: func(t *testing.T) *http.Request {
-				return httptest.NewRequest(http.MethodGet, TemplateRoutePaths{}.GetFormEditRow(1).String(), nil)
+				return httptest.NewRequest(http.MethodGet, TemplateRoutePaths{}.GetFormEditRow(1), nil)
 			},
 			Then: func(t *testing.T, res *http.Response, f *BackendMock) {
 				assert.Equal(t, http.StatusOK, res.StatusCode)

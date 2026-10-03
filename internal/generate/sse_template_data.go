@@ -195,7 +195,7 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 
 func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	return sseMethod(config.SSETemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(sseTemplateDataReceiverName, config.TemplateRoutePathsTypeName)))
+		returnExprs(templatePathsLiteral(config, sseTemplateDataReceiverName)))
 }
 
 const (

@@ -58,7 +58,7 @@ func Test1(t *testing.T) {
 
 	Routes1(mux, nil)
 
-	req := httptest.NewRequest(http.MethodGet, P1{}.ReadIndex().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, P1{}.ReadIndex(), nil)
 	rec := httptest.NewRecorder()
 
 	mux.ServeHTTP(rec, req)
@@ -75,7 +75,7 @@ func Test2(t *testing.T) {
 
 	Routes2(mux, nil)
 
-	req := httptest.NewRequest(http.MethodGet, P2{}.ReadIndex().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, P2{}.ReadIndex(), nil)
 	rec := httptest.NewRecorder()
 
 	mux.ServeHTTP(rec, req)

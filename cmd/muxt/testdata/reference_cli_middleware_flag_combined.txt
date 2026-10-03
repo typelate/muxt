@@ -45,7 +45,7 @@ func TestAllParams(t *testing.T) {
 		})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ReadIndex(), nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	res := rec.Result()

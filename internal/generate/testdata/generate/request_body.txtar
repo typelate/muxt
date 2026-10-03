@@ -134,7 +134,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -156,7 +156,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -218,6 +218,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -233,10 +236,18 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Decode() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "json")}
+func (routes TemplateRouteBuilder) Decode() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "json")}
 }
 
-func (routePaths TemplateRoutePaths) Raw() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "raw")}
+func (routePaths TemplateRoutePaths) Decode() string {
+	return routePaths.Route.Decode().String()
+}
+
+func (routes TemplateRouteBuilder) Raw() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "raw")}
+}
+
+func (routePaths TemplateRoutePaths) Raw() string {
+	return routePaths.Route.Raw().String()
 }

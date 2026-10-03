@@ -89,7 +89,7 @@ func TestCustomRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	CustomRoutes(mux, Handler{})
 
-	req := httptest.NewRequest(http.MethodGet, CustomPaths{}.Admin().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, CustomPaths{}.Admin(), nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

@@ -11,9 +11,8 @@ import (
 type Checker struct {
 	FileHeaderStub        func() (types.Type, error)
 	fileHeaderMutex       sync.RWMutex
-	fileHeaderArgsForCall []struct {
-	}
-	fileHeaderReturns struct {
+	fileHeaderArgsForCall []struct{}
+	fileHeaderReturns     struct {
 		result1 types.Type
 		result2 error
 	}
@@ -23,9 +22,8 @@ type Checker struct {
 	}
 	RawJSONStub        func() (types.Type, error)
 	rawJSONMutex       sync.RWMutex
-	rawJSONArgsForCall []struct {
-	}
-	rawJSONReturns struct {
+	rawJSONArgsForCall []struct{}
+	rawJSONReturns     struct {
 		result1 types.Type
 		result2 error
 	}
@@ -35,10 +33,8 @@ type Checker struct {
 	}
 	ScopeTypeStub        func(string) (types.Type, error)
 	scopeTypeMutex       sync.RWMutex
-	scopeTypeArgsForCall []struct {
-		arg1 string
-	}
-	scopeTypeReturns struct {
+	scopeTypeArgsForCall []CheckerScopeTypeArgs
+	scopeTypeReturns     struct {
 		result1 types.Type
 		result2 error
 	}
@@ -48,10 +44,8 @@ type Checker struct {
 	}
 	TextMarshalerStub        func(types.Type) bool
 	textMarshalerMutex       sync.RWMutex
-	textMarshalerArgsForCall []struct {
-		arg1 types.Type
-	}
-	textMarshalerReturns struct {
+	textMarshalerArgsForCall []CheckerTextMarshalerArgs
+	textMarshalerReturns     struct {
 		result1 bool
 	}
 	textMarshalerReturnsOnCall map[int]struct {
@@ -59,24 +53,37 @@ type Checker struct {
 	}
 	TextUnmarshalerStub        func(types.Type) bool
 	textUnmarshalerMutex       sync.RWMutex
-	textUnmarshalerArgsForCall []struct {
-		arg1 types.Type
-	}
-	textUnmarshalerReturns struct {
+	textUnmarshalerArgsForCall []CheckerTextUnmarshalerArgs
+	textUnmarshalerReturns     struct {
 		result1 bool
 	}
 	textUnmarshalerReturnsOnCall map[int]struct {
 		result1 bool
 	}
 	invocations      map[string][][]interface{}
+	callOrder        []string
 	invocationsMutex sync.RWMutex
+}
+
+// CheckerScopeTypeArgs holds the arguments of one call to ScopeType.
+type CheckerScopeTypeArgs struct {
+	Arg1 string
+}
+
+// CheckerTextMarshalerArgs holds the arguments of one call to TextMarshaler.
+type CheckerTextMarshalerArgs struct {
+	Arg1 types.Type
+}
+
+// CheckerTextUnmarshalerArgs holds the arguments of one call to TextUnmarshaler.
+type CheckerTextUnmarshalerArgs struct {
+	Arg1 types.Type
 }
 
 func (fake *Checker) FileHeader() (types.Type, error) {
 	fake.fileHeaderMutex.Lock()
 	ret, specificReturn := fake.fileHeaderReturnsOnCall[len(fake.fileHeaderArgsForCall)]
-	fake.fileHeaderArgsForCall = append(fake.fileHeaderArgsForCall, struct {
-	}{})
+	fake.fileHeaderArgsForCall = append(fake.fileHeaderArgsForCall, struct{}{})
 	stub := fake.FileHeaderStub
 	fakeReturns := fake.fileHeaderReturns
 	fake.recordInvocation("FileHeader", []interface{}{})
@@ -131,8 +138,7 @@ func (fake *Checker) FileHeaderReturnsOnCall(i int, result1 types.Type, result2 
 func (fake *Checker) RawJSON() (types.Type, error) {
 	fake.rawJSONMutex.Lock()
 	ret, specificReturn := fake.rawJSONReturnsOnCall[len(fake.rawJSONArgsForCall)]
-	fake.rawJSONArgsForCall = append(fake.rawJSONArgsForCall, struct {
-	}{})
+	fake.rawJSONArgsForCall = append(fake.rawJSONArgsForCall, struct{}{})
 	stub := fake.RawJSONStub
 	fakeReturns := fake.rawJSONReturns
 	fake.recordInvocation("RawJSON", []interface{}{})
@@ -187,9 +193,7 @@ func (fake *Checker) RawJSONReturnsOnCall(i int, result1 types.Type, result2 err
 func (fake *Checker) ScopeType(arg1 string) (types.Type, error) {
 	fake.scopeTypeMutex.Lock()
 	ret, specificReturn := fake.scopeTypeReturnsOnCall[len(fake.scopeTypeArgsForCall)]
-	fake.scopeTypeArgsForCall = append(fake.scopeTypeArgsForCall, struct {
-		arg1 string
-	}{arg1})
+	fake.scopeTypeArgsForCall = append(fake.scopeTypeArgsForCall, CheckerScopeTypeArgs{arg1})
 	stub := fake.ScopeTypeStub
 	fakeReturns := fake.scopeTypeReturns
 	fake.recordInvocation("ScopeType", []interface{}{arg1})
@@ -219,7 +223,15 @@ func (fake *Checker) ScopeTypeArgsForCall(i int) string {
 	fake.scopeTypeMutex.RLock()
 	defer fake.scopeTypeMutex.RUnlock()
 	argsForCall := fake.scopeTypeArgsForCall[i]
-	return argsForCall.arg1
+	return argsForCall.Arg1
+}
+
+func (fake *Checker) ScopeTypeArgs() []CheckerScopeTypeArgs {
+	fake.scopeTypeMutex.RLock()
+	defer fake.scopeTypeMutex.RUnlock()
+	args := make([]CheckerScopeTypeArgs, len(fake.scopeTypeArgsForCall))
+	copy(args, fake.scopeTypeArgsForCall)
+	return args
 }
 
 func (fake *Checker) ScopeTypeReturns(result1 types.Type, result2 error) {
@@ -251,9 +263,7 @@ func (fake *Checker) ScopeTypeReturnsOnCall(i int, result1 types.Type, result2 e
 func (fake *Checker) TextMarshaler(arg1 types.Type) bool {
 	fake.textMarshalerMutex.Lock()
 	ret, specificReturn := fake.textMarshalerReturnsOnCall[len(fake.textMarshalerArgsForCall)]
-	fake.textMarshalerArgsForCall = append(fake.textMarshalerArgsForCall, struct {
-		arg1 types.Type
-	}{arg1})
+	fake.textMarshalerArgsForCall = append(fake.textMarshalerArgsForCall, CheckerTextMarshalerArgs{arg1})
 	stub := fake.TextMarshalerStub
 	fakeReturns := fake.textMarshalerReturns
 	fake.recordInvocation("TextMarshaler", []interface{}{arg1})
@@ -283,7 +293,15 @@ func (fake *Checker) TextMarshalerArgsForCall(i int) types.Type {
 	fake.textMarshalerMutex.RLock()
 	defer fake.textMarshalerMutex.RUnlock()
 	argsForCall := fake.textMarshalerArgsForCall[i]
-	return argsForCall.arg1
+	return argsForCall.Arg1
+}
+
+func (fake *Checker) TextMarshalerArgs() []CheckerTextMarshalerArgs {
+	fake.textMarshalerMutex.RLock()
+	defer fake.textMarshalerMutex.RUnlock()
+	args := make([]CheckerTextMarshalerArgs, len(fake.textMarshalerArgsForCall))
+	copy(args, fake.textMarshalerArgsForCall)
+	return args
 }
 
 func (fake *Checker) TextMarshalerReturns(result1 bool) {
@@ -312,9 +330,7 @@ func (fake *Checker) TextMarshalerReturnsOnCall(i int, result1 bool) {
 func (fake *Checker) TextUnmarshaler(arg1 types.Type) bool {
 	fake.textUnmarshalerMutex.Lock()
 	ret, specificReturn := fake.textUnmarshalerReturnsOnCall[len(fake.textUnmarshalerArgsForCall)]
-	fake.textUnmarshalerArgsForCall = append(fake.textUnmarshalerArgsForCall, struct {
-		arg1 types.Type
-	}{arg1})
+	fake.textUnmarshalerArgsForCall = append(fake.textUnmarshalerArgsForCall, CheckerTextUnmarshalerArgs{arg1})
 	stub := fake.TextUnmarshalerStub
 	fakeReturns := fake.textUnmarshalerReturns
 	fake.recordInvocation("TextUnmarshaler", []interface{}{arg1})
@@ -344,7 +360,15 @@ func (fake *Checker) TextUnmarshalerArgsForCall(i int) types.Type {
 	fake.textUnmarshalerMutex.RLock()
 	defer fake.textUnmarshalerMutex.RUnlock()
 	argsForCall := fake.textUnmarshalerArgsForCall[i]
-	return argsForCall.arg1
+	return argsForCall.Arg1
+}
+
+func (fake *Checker) TextUnmarshalerArgs() []CheckerTextUnmarshalerArgs {
+	fake.textUnmarshalerMutex.RLock()
+	defer fake.textUnmarshalerMutex.RUnlock()
+	args := make([]CheckerTextUnmarshalerArgs, len(fake.textUnmarshalerArgsForCall))
+	copy(args, fake.textUnmarshalerArgsForCall)
+	return args
 }
 
 func (fake *Checker) TextUnmarshalerReturns(result1 bool) {
@@ -380,9 +404,18 @@ func (fake *Checker) Invocations() map[string][][]interface{} {
 	return copiedInvocations
 }
 
+func (fake *Checker) CallOrder() []string {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	order := make([]string, len(fake.callOrder))
+	copy(order, fake.callOrder)
+	return order
+}
+
 func (fake *Checker) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
+	fake.callOrder = append(fake.callOrder, key)
 	if fake.invocations == nil {
 		fake.invocations = map[string][][]interface{}{}
 	}

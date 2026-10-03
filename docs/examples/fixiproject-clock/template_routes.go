@@ -127,7 +127,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -149,7 +149,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -257,7 +257,7 @@ func (m *SSETemplateData[R, T]) Retry(retryMilliseconds int) *SSETemplateData[R,
 }
 
 func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: m.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}
 }
 
 func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
@@ -354,6 +354,9 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -369,19 +372,31 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) Time() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "time")}
+func (routes TemplateRouteBuilder) Time() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "time")}
 }
 
-func (routePaths TemplateRoutePaths) InZone(tzPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "zone", routePaths.escapePathSegments(tzPathParam))}
+func (routePaths TemplateRoutePaths) Time() string {
+	return routePaths.Route.Time().String()
 }
 
-func (routePaths TemplateRoutePaths) Index() TemplateRoute {
+func (routes TemplateRouteBuilder) InZone(tzPathParam string) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "zone", routes.escapePathSegments(tzPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) InZone(tzPathParam string) string {
+	return routePaths.Route.InZone(tzPathParam).String()
+}
+
+func (routes TemplateRouteBuilder) Index() TemplateRoute {
 	return TemplateRoute{method: "GET", path: "/"}
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+func (routePaths TemplateRoutePaths) Index() string {
+	return routePaths.Route.Index().String()
+}
+
+func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
 	switch value {
 	case ".":
 		return "%2E"
@@ -391,10 +406,10 @@ func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
 	return url.PathEscape(value)
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+func (routes TemplateRouteBuilder) escapePathSegments(value string) string {
 	segments := strings.Split(value, "/")
 	for i, segment := range segments {
-		segments[i] = routePaths.escapePathSegment(segment)
+		segments[i] = routes.escapePathSegment(segment)
 	}
 	return strings.Join(segments, "/")
 }

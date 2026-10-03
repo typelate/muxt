@@ -150,7 +150,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -172,7 +172,7 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -234,6 +234,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	Route TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -249,14 +252,26 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "redirects")}
+func (routes TemplateRouteBuilder) CreateRedirectsCallingSave() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "redirects")}
 }
 
-func (routePaths TemplateRoutePaths) ReadStaysCallingSave() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stays")}
+func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() string {
+	return routePaths.Route.CreateRedirectsCallingSave().String()
 }
 
-func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "via-partial")}
+func (routes TemplateRouteBuilder) ReadStaysCallingSave() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stays")}
+}
+
+func (routePaths TemplateRoutePaths) ReadStaysCallingSave() string {
+	return routePaths.Route.ReadStaysCallingSave().String()
+}
+
+func (routes TemplateRouteBuilder) CreateViaPartialCallingSave() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "via-partial")}
+}
+
+func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() string {
+	return routePaths.Route.CreateViaPartialCallingSave().String()
 }

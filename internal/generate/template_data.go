@@ -102,10 +102,8 @@ func returnExprs(exprs ...ast.Expr) *ast.ReturnStmt {
 	return &ast.ReturnStmt{Results: exprs}
 }
 
-func templatePathsLiteral(recv, pathsType string) *ast.CompositeLit {
-	return &ast.CompositeLit{Type: ast.NewIdent(pathsType), Elts: []ast.Expr{
-		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: selector(recv, pathPrefixPathsStructFieldName)},
-	}}
+func templatePathsLiteral(config RoutesFileConfiguration, recv string) *ast.CompositeLit {
+	return pathsLiteral(config, selector(recv, pathPrefixPathsStructFieldName))
 }
 
 func dataMethod(typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
@@ -194,7 +192,7 @@ func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl
 
 func templateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	return dataMethod(config.TemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(templateDataReceiverName, config.TemplateRoutePathsTypeName)))
+		returnExprs(templatePathsLiteral(config, templateDataReceiverName)))
 }
 
 func templateDataResultMethod(typeIdent string) *ast.FuncDecl {

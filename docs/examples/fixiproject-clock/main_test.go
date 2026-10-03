@@ -13,19 +13,19 @@ func TestInZone(t *testing.T) {
 	paths := TemplateRoutes(mux, clock{location: time.UTC})
 
 	t.Run("zone names keep their slashes", func(t *testing.T) {
-		if got, want := paths.InZone("America/New_York").String(), "/zone/America/New_York"; got != want {
+		if got, want := paths.InZone("America/New_York"), "/zone/America/New_York"; got != want {
 			t.Errorf("InZone(%q) = %q, want %q", "America/New_York", got, want)
 		}
 	})
 
 	t.Run("url metacharacters are escaped per segment", func(t *testing.T) {
-		if got, want := paths.InZone("50%/#1").String(), "/zone/50%25/%231"; got != want {
+		if got, want := paths.InZone("50%/#1"), "/zone/50%25/%231"; got != want {
 			t.Errorf("InZone(%q) = %q, want %q", "50%/#1", got, want)
 		}
 	})
 
 	t.Run("a known zone renders a timestamp", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, paths.InZone("America/New_York").String(), nil)
+		req := httptest.NewRequest(http.MethodGet, paths.InZone("America/New_York"), nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 
@@ -38,7 +38,7 @@ func TestInZone(t *testing.T) {
 	})
 
 	t.Run("an unknown zone renders the error branch", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, paths.InZone("Nowhere/Special").String(), nil)
+		req := httptest.NewRequest(http.MethodGet, paths.InZone("Nowhere/Special"), nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 
