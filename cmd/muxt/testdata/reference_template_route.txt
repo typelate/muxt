@@ -1,7 +1,8 @@
 # A route path method returns the path as a string, as it always did, so
-# {{.Path.GetItem 7}} renders /item/7. The Route field of the paths has the same
-# methods and returns a TemplateRoute, which prints as the path and names the
-# HTTP method of the route.
+# {{.Path.GetItem 7}} renders /item/7. The Route method of the template data
+# wraps the paths in a type with the same methods that return a TemplateRoute,
+# which prints as the path and names the HTTP method of the route. A handler
+# named Route does not collide with it.
 
 muxt generate --use-receiver-type=Server
 muxt check
@@ -15,7 +16,9 @@ exec go test
 
 {{define "GET /{$} Index()"}}<a href="{{.Path.Index}}">home</a>{{end}}
 
-{{define "GET /route/{id} GetRoute(id)"}}<a href="{{.Path.Route.GetItem 7}}">{{.Path.Route.GetItem 7}}</a>{{end}}
+{{define "GET /named Route()"}}{{.Path.Route}}|{{.Route.Route}}|{{.Route.Route.Method}}{{end}}
+
+{{define "GET /route/{id} GetRoute(id)"}}<a href="{{.Route.GetItem 7}}">{{.Route.GetItem 7}}</a>{{end}}
 -- go.mod --
 module server
 
@@ -39,6 +42,7 @@ func (Server) GetItem(id int) int  { return id }
 func (Server) PostItem(id int) int { return id }
 func (Server) Index() string       { return "" }
 func (Server) GetRoute(id int) int { return id }
+func (Server) Route() string       { return "" }
 -- template_test.go --
 package server
 
@@ -80,6 +84,10 @@ func Test(t *testing.T) {
 		t.Errorf("GET /route/3 = %q, want a link to /item/7", got)
 	}
 
+	if got := serve(t, mux, http.MethodGet, "/named"); got != "/named|/named|GET" {
+		t.Errorf("GET /named = %q, want /named|/named|GET", got)
+	}
+
 	for _, tt := range []struct{ got, want string }{
 		{paths.GetItem(7), "/item/7"},
 		{paths.PostItem(7), "/item/7"},
@@ -90,7 +98,8 @@ func Test(t *testing.T) {
 		}
 	}
 
-	getItem, postItem, index := paths.Route.GetItem(7), paths.Route.PostItem(7), paths.Route.Index()
+	routes := TemplateRouteBuilder{paths: paths}
+	getItem, postItem, index := routes.GetItem(7), routes.PostItem(7), routes.Index()
 	for _, tt := range []struct {
 		name                 string
 		route                TemplateRoute

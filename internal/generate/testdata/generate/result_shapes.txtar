@@ -182,7 +182,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[R any, T any] struct {
@@ -204,7 +204,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
+	return TemplateRouteBuilder{paths: data.Path()}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -266,9 +270,6 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
-	Route TemplateRouteBuilder
-}
-type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -284,34 +285,38 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routes TemplateRouteBuilder) ValueError() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "error")}
+type TemplateRouteBuilder struct {
+	paths TemplateRoutePaths
 }
 
 func (routePaths TemplateRoutePaths) ValueError() string {
-	return routePaths.Route.ValueError().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "error")
 }
 
-func (routes TemplateRouteBuilder) Function() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
+func (routes TemplateRouteBuilder) ValueError() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.ValueError()}
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
-	return routePaths.Route.Function().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "function")
 }
 
-func (routes TemplateRouteBuilder) ValueOk() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "ok")}
+func (routes TemplateRouteBuilder) Function() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Function()}
 }
 
 func (routePaths TemplateRoutePaths) ValueOk() string {
-	return routePaths.Route.ValueOk().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "ok")
 }
 
-func (routes TemplateRouteBuilder) Value() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "value")}
+func (routes TemplateRouteBuilder) ValueOk() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.ValueOk()}
 }
 
 func (routePaths TemplateRoutePaths) Value() string {
-	return routePaths.Route.Value().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "value")
+}
+
+func (routes TemplateRouteBuilder) Value() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Value()}
 }
