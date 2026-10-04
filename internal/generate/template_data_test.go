@@ -59,7 +59,12 @@ func TestTemplateDataMethods(t *testing.T) {
 		{
 			name: "path",
 			decl: templateDataPathMethod(config),
-			want: "func (data *TemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}\n}",
+			want: "func (data *TemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{pathsPrefix: data.pathsPrefix}\n}",
+		},
+		{
+			name: "route",
+			decl: templateDataRouteMethod(config),
+			want: "func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {\n\treturn TemplateRouteBuilder{paths: data.Path()}\n}",
 		},
 		{
 			name: "version",
@@ -84,7 +89,12 @@ func TestTemplateDataMethods(t *testing.T) {
 		{
 			name: "sse path",
 			decl: sseTemplateDataPathMethod(config),
-			want: "func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}\n}",
+			want: "func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{pathsPrefix: m.pathsPrefix}\n}",
+		},
+		{
+			name: "sse route",
+			decl: sseTemplateDataRouteMethod(config),
+			want: "func (m *SSETemplateData[R, T]) Route() TemplateRouteBuilder {\n\treturn TemplateRouteBuilder{paths: m.Path()}\n}",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

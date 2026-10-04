@@ -244,7 +244,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[R any, T any] struct {
@@ -266,7 +266,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
+	return TemplateRouteBuilder{paths: data.Path()}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -404,9 +408,6 @@ func (data *TemplateData[R, T]) HXTriggerElementID() string {
 }
 
 type TemplateRoutePaths struct {
-	Route TemplateRouteBuilder
-}
-type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -422,50 +423,54 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
+type TemplateRouteBuilder struct {
+	paths TemplateRoutePaths
 }
 
 func (routePaths TemplateRoutePaths) CreateTodo() string {
-	return routePaths.Route.CreateTodo().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")
 }
 
-func (routes TemplateRouteBuilder) ClearCompleted() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/clear-completed")}
+func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
+	return TemplateRoute{method: "POST", path: routes.paths.CreateTodo()}
 }
 
 func (routePaths TemplateRoutePaths) ClearCompleted() string {
-	return routePaths.Route.ClearCompleted().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/clear-completed")
 }
 
-func (routes TemplateRouteBuilder) ToggleAll() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/toggle-all")}
+func (routes TemplateRouteBuilder) ClearCompleted() TemplateRoute {
+	return TemplateRoute{method: "POST", path: routes.paths.ClearCompleted()}
 }
 
 func (routePaths TemplateRoutePaths) ToggleAll() string {
-	return routePaths.Route.ToggleAll().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos/toggle-all")
 }
 
-func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "DELETE", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+func (routes TemplateRouteBuilder) ToggleAll() TemplateRoute {
+	return TemplateRoute{method: "POST", path: routes.paths.ToggleAll()}
 }
 
 func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
-	return routePaths.Route.DeleteTodo(idPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
 }
 
-func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "DELETE", path: routes.paths.DeleteTodo(idPathParam)}
 }
 
 func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
-	return routePaths.Route.ToggleTodo(idPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
 }
 
-func (routes TemplateRouteBuilder) ListTodos() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: routes.paths.ToggleTodo(idPathParam)}
 }
 
 func (routePaths TemplateRoutePaths) ListTodos() string {
-	return routePaths.Route.ListTodos().String()
+	return "/"
+}
+
+func (routes TemplateRouteBuilder) ListTodos() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.ListTodos()}
 }

@@ -102,8 +102,10 @@ func returnExprs(exprs ...ast.Expr) *ast.ReturnStmt {
 	return &ast.ReturnStmt{Results: exprs}
 }
 
-func templatePathsLiteral(config RoutesFileConfiguration, recv string) *ast.CompositeLit {
-	return pathsLiteral(config, selector(recv, pathPrefixPathsStructFieldName))
+func templatePathsLiteral(recv, pathsType string) *ast.CompositeLit {
+	return &ast.CompositeLit{Type: ast.NewIdent(pathsType), Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: selector(recv, pathPrefixPathsStructFieldName)},
+	}}
 }
 
 func dataMethod(typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
@@ -192,7 +194,14 @@ func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl
 
 func templateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	return dataMethod(config.TemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(config, templateDataReceiverName)))
+		returnExprs(templatePathsLiteral(templateDataReceiverName, config.TemplateRoutePathsTypeName)))
+}
+
+// templateDataRouteMethod emits the Route method: the paths of the data's
+// path prefix, wrapped so each path method returns a route.
+func templateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+	return dataMethod(config.TemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
+		returnExprs(routeBuilderLiteral(config, &ast.CallExpr{Fun: selector(templateDataReceiverName, "Path")})))
 }
 
 func templateDataResultMethod(typeIdent string) *ast.FuncDecl {
@@ -346,6 +355,7 @@ func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 	}
 	decls = append(decls,
 		templateDataPathMethod(config),
+		templateDataRouteMethod(config),
 		templateDataResultMethod(config.TemplateDataType),
 		templateDataRequestMethod(file, config.TemplateDataType),
 		templateDataStatusCodeMethod(config.TemplateDataType),

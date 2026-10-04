@@ -44,6 +44,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
 		sseTemplateDataPathMethod(config),
+		sseTemplateDataRouteMethod(config),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
 }
@@ -64,6 +65,7 @@ func datastarSSETemplateDataDecls(file *File, config RoutesFileConfiguration) []
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
 		sseTemplateDataPathMethod(config),
+		sseTemplateDataRouteMethod(config),
 		sseTemplateDataPointerSetterMethod(typeIdent, "Selector", "selector", "string", sseTemplateDataFieldSelector),
 		sseTemplateDataPointerSetterMethod(typeIdent, "Mode", "mode", "string", sseTemplateDataFieldMode),
 		sseTemplateDataBoolSetterMethod(typeIdent, "UseViewTransition", sseTemplateDataFieldUseViewTransition),
@@ -195,7 +197,13 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 
 func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	return sseMethod(config.SSETemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(config, sseTemplateDataReceiverName)))
+		returnExprs(templatePathsLiteral(sseTemplateDataReceiverName, config.TemplateRoutePathsTypeName)))
+}
+
+// sseTemplateDataRouteMethod is templateDataRouteMethod for SSETemplateData.
+func sseTemplateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+	return sseMethod(config.SSETemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
+		returnExprs(routeBuilderLiteral(config, &ast.CallExpr{Fun: selector(sseTemplateDataReceiverName, "Path")})))
 }
 
 const (

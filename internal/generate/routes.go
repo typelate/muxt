@@ -251,7 +251,12 @@ func handleFuncStatement(file *File, config RoutesFileConfiguration, def muxt.De
 }
 
 func returnRoutePaths(config RoutesFileConfiguration) *ast.ReturnStmt {
-	return returnExprs(pathsLiteral(config, ast.NewIdent(pathPrefixPathsStructFieldName)))
+	return returnExprs(&ast.CompositeLit{
+		Type: ast.NewIdent(config.TemplateRoutePathsTypeName),
+		Elts: []ast.Expr{
+			&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},
+		},
+	})
 }
 
 func receiverInterfaceDecl(name string, receiverInterface *ast.InterfaceType) *ast.GenDecl {

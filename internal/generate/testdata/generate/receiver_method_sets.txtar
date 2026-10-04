@@ -150,7 +150,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[R any, T any] struct {
@@ -172,7 +172,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
+	return TemplateRouteBuilder{paths: data.Path()}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -234,9 +238,6 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
-	Route TemplateRouteBuilder
-}
-type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -252,26 +253,30 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routes TemplateRouteBuilder) Embedded() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "embedded")}
+type TemplateRouteBuilder struct {
+	paths TemplateRoutePaths
 }
 
 func (routePaths TemplateRoutePaths) Embedded() string {
-	return routePaths.Route.Embedded().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "embedded")
 }
 
-func (routes TemplateRouteBuilder) Function() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
+func (routes TemplateRouteBuilder) Embedded() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Embedded()}
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
-	return routePaths.Route.Function().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "function")
 }
 
-func (routes TemplateRouteBuilder) Pointer() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pointer")}
+func (routes TemplateRouteBuilder) Function() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Function()}
 }
 
 func (routePaths TemplateRoutePaths) Pointer() string {
-	return routePaths.Route.Pointer().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "pointer")
+}
+
+func (routes TemplateRouteBuilder) Pointer() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Pointer()}
 }

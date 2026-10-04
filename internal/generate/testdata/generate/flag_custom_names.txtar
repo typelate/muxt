@@ -90,7 +90,7 @@ func Routes(mux *http.ServeMux, receiver Handlers) Paths {
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return Paths{Route: RouteBuilder{pathsPrefix: pathsPrefix}}
+	return Paths{pathsPrefix: pathsPrefix}
 }
 
 type Data[R any, T any] struct {
@@ -112,7 +112,11 @@ func (data *Data[R, T]) MuxtVersion() string {
 }
 
 func (data *Data[R, T]) Path() Paths {
-	return Paths{Route: RouteBuilder{pathsPrefix: data.pathsPrefix}}
+	return Paths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *Data[R, T]) Route() RouteBuilder {
+	return RouteBuilder{paths: data.Path()}
 }
 
 func (data *Data[R, T]) Result() T {
@@ -174,9 +178,6 @@ func (data *Data[R, T]) String() string {
 }
 
 type Paths struct {
-	Route RouteBuilder
-}
-type RouteBuilder struct {
 	pathsPrefix string
 }
 type Route struct {
@@ -192,15 +193,19 @@ func (route Route) Method() string {
 	return route.method
 }
 
-func (routes RouteBuilder) Show(idPathParam string) Route {
-	return Route{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
+type RouteBuilder struct {
+	paths Paths
 }
 
 func (routePaths Paths) Show(idPathParam string) string {
-	return routePaths.Route.Show(idPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
 }
 
-func (routes RouteBuilder) escapePathSegment(value string) string {
+func (routes RouteBuilder) Show(idPathParam string) Route {
+	return Route{method: "GET", path: routes.paths.Show(idPathParam)}
+}
+
+func (routePaths Paths) escapePathSegment(value string) string {
 	switch value {
 	case ".":
 		return "%2E"

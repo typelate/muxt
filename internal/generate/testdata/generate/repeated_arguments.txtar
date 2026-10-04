@@ -261,7 +261,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
 }
 
 type TemplateData[R any, T any] struct {
@@ -283,7 +283,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{Route: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
+	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
+	return TemplateRouteBuilder{paths: data.Path()}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -345,9 +349,6 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
-	Route TemplateRouteBuilder
-}
-type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -363,50 +364,54 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-func (routes TemplateRouteBuilder) Forms() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "form")}
+type TemplateRouteBuilder struct {
+	paths TemplateRoutePaths
 }
 
 func (routePaths TemplateRoutePaths) Forms() string {
-	return routePaths.Route.Forms().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "form")
 }
 
-func (routes TemplateRouteBuilder) Mixed() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mixed")}
+func (routes TemplateRouteBuilder) Forms() TemplateRoute {
+	return TemplateRoute{method: "POST", path: routes.paths.Forms()}
 }
 
 func (routePaths TemplateRoutePaths) Mixed() string {
-	return routePaths.Route.Mixed().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "mixed")
 }
 
-func (routes TemplateRouteBuilder) ReadNestedByIDCallingSum(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))}
+func (routes TemplateRouteBuilder) Mixed() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Mixed()}
 }
 
 func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) string {
-	return routePaths.Route.ReadNestedByIDCallingSum(idPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))
 }
 
-func (routes TemplateRouteBuilder) ReadPairByIDCallingSum(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))}
+func (routes TemplateRouteBuilder) ReadNestedByIDCallingSum(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.ReadNestedByIDCallingSum(idPathParam)}
 }
 
 func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) string {
-	return routePaths.Route.ReadPairByIDCallingSum(idPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))
 }
 
-func (routes TemplateRouteBuilder) Both() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "requests")}
+func (routes TemplateRouteBuilder) ReadPairByIDCallingSum(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.ReadPairByIDCallingSum(idPathParam)}
 }
 
 func (routePaths TemplateRoutePaths) Both() string {
-	return routePaths.Route.Both().String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "requests")
 }
 
-func (routes TemplateRouteBuilder) Int(sseIDPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))}
+func (routes TemplateRouteBuilder) Both() TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Both()}
 }
 
 func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) string {
-	return routePaths.Route.Int(sseIDPathParam).String()
+	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))
+}
+
+func (routes TemplateRouteBuilder) Int(sseIDPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: routes.paths.Int(sseIDPathParam)}
 }
