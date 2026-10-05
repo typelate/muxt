@@ -8,6 +8,12 @@ import (
 	"github.com/typelate/muxt/internal/muxt"
 )
 
+// sseTemplateDataRouteMethod is templateDataRouteMethod for SSETemplateData.
+func sseTemplateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
+	return sseMethod(config.SSETemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
+		returnExprs(routeBuilderLiteral(config, selector(sseTemplateDataReceiverName, pathPrefixPathsStructFieldName))))
+}
+
 const (
 	sseTemplateDataReceiverName = "m"
 
@@ -197,13 +203,7 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 
 func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
 	return sseMethod(config.SSETemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(sseTemplateDataReceiverName, config.TemplateRoutePathsTypeName)))
-}
-
-// sseTemplateDataRouteMethod is templateDataRouteMethod for SSETemplateData.
-func sseTemplateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return sseMethod(config.SSETemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
-		returnExprs(routeBuilderLiteral(config, &ast.CallExpr{Fun: selector(sseTemplateDataReceiverName, "Path")})))
+		returnExprs(templatePathsLiteral(config, sseTemplateDataReceiverName)))
 }
 
 const (

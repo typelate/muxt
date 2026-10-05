@@ -131,7 +131,7 @@ func templateRoutes(mux *http.ServeMux, receiver routesReceiver) templateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return templateRoutePaths{pathsPrefix: pathsPrefix}
+	return templateRoutePaths{routes: templateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type templateData[R any, T any] struct {
@@ -153,11 +153,11 @@ func (data *templateData[R, T]) MuxtVersion() string {
 }
 
 func (data *templateData[R, T]) Path() templateRoutePaths {
-	return templateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return templateRoutePaths{routes: templateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *templateData[R, T]) Route() templateRouteBuilder {
-	return templateRouteBuilder{paths: data.Path()}
+	return templateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *templateData[R, T]) Result() T {
@@ -265,11 +265,11 @@ func (m *sseTemplateData[R, T]) Retry(retryMilliseconds int) *sseTemplateData[R,
 }
 
 func (m *sseTemplateData[R, T]) Path() templateRoutePaths {
-	return templateRoutePaths{pathsPrefix: m.pathsPrefix}
+	return templateRoutePaths{routes: templateRouteBuilder{pathsPrefix: m.pathsPrefix}}
 }
 
 func (m *sseTemplateData[R, T]) Route() templateRouteBuilder {
-	return templateRouteBuilder{paths: m.Path()}
+	return templateRouteBuilder{pathsPrefix: m.pathsPrefix}
 }
 
 func (m *sseTemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
@@ -366,6 +366,9 @@ func (m *sseTemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 }
 
 type templateRoutePaths struct {
+	routes templateRouteBuilder
+}
+type templateRouteBuilder struct {
 	pathsPrefix string
 }
 type templateRoute struct {
@@ -381,22 +384,18 @@ func (route templateRoute) Method() string {
 	return route.method
 }
 
-type templateRouteBuilder struct {
-	paths templateRoutePaths
+func (routes templateRouteBuilder) Stream() templateRoute {
+	return templateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "events")}
 }
 
 func (routePaths templateRoutePaths) Stream() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "events")
-}
-
-func (routes templateRouteBuilder) Stream() templateRoute {
-	return templateRoute{method: "GET", path: routes.paths.Stream()}
-}
-
-func (routePaths templateRoutePaths) ReadExact() string {
-	return "/"
+	return routePaths.routes.Stream().String()
 }
 
 func (routes templateRouteBuilder) ReadExact() templateRoute {
-	return templateRoute{method: "GET", path: routes.paths.ReadExact()}
+	return templateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths templateRoutePaths) ReadExact() string {
+	return routePaths.routes.ReadExact().String()
 }

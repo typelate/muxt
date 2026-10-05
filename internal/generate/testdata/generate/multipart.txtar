@@ -145,7 +145,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -167,11 +167,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -233,6 +233,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -248,22 +251,18 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) Raw() TemplateRoute {
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "raw")}
 }
 
 func (routePaths TemplateRoutePaths) Raw() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "raw")
-}
-
-func (routes TemplateRouteBuilder) Raw() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.Raw()}
-}
-
-func (routePaths TemplateRoutePaths) Upload() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")
+	return routePaths.routes.Raw().String()
 }
 
 func (routes TemplateRouteBuilder) Upload() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.Upload()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "upload")}
+}
+
+func (routePaths TemplateRoutePaths) Upload() string {
+	return routePaths.routes.Upload().String()
 }

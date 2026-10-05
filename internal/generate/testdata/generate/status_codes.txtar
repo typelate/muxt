@@ -173,7 +173,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -195,11 +195,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -261,6 +261,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -276,38 +279,34 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) ReadConstantCallingCreate() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "constant")}
 }
 
 func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "constant")
-}
-
-func (routes TemplateRouteBuilder) ReadConstantCallingCreate() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.ReadConstantCallingCreate()}
-}
-
-func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "created")
+	return routePaths.routes.ReadConstantCallingCreate().String()
 }
 
 func (routes TemplateRouteBuilder) CreateCreatedCallingCreate() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.CreateCreatedCallingCreate()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "created")}
 }
 
-func (routePaths TemplateRoutePaths) Field() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "field")
+func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
+	return routePaths.routes.CreateCreatedCallingCreate().String()
 }
 
 func (routes TemplateRouteBuilder) Field() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Field()}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "field")}
 }
 
-func (routePaths TemplateRoutePaths) Method() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "method")
+func (routePaths TemplateRoutePaths) Field() string {
+	return routePaths.routes.Field().String()
 }
 
 func (routes TemplateRouteBuilder) Method() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Method()}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "method")}
+}
+
+func (routePaths TemplateRoutePaths) Method() string {
+	return routePaths.routes.Method().String()
 }

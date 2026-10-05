@@ -200,7 +200,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return nil
 		})
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -222,11 +222,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -331,11 +331,11 @@ func (m *SSETemplateData[R, T]) Retry(retryMilliseconds int) *SSETemplateData[R,
 }
 
 func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: m.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}
 }
 
 func (m *SSETemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: m.Path()}
+	return TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}
 }
 
 func (m *SSETemplateData[R, T]) Selector(selector string) *SSETemplateData[R, T] {
@@ -477,6 +477,9 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -492,38 +495,34 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) List() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) List() string {
-	return "/"
-}
-
-func (routes TemplateRouteBuilder) List() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.List()}
-}
-
-func (routePaths TemplateRoutePaths) CreateTodo() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos")
+	return routePaths.routes.List().String()
 }
 
 func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.CreateTodo()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
 }
 
-func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) CreateTodo() string {
+	return routePaths.routes.CreateTodo().String()
 }
 
 func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "DELETE", path: routes.paths.DeleteTodo(idPathParam)}
+	return TemplateRoute{method: "DELETE", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")
+func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
+	return routePaths.routes.DeleteTodo(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.ToggleTodo(idPathParam)}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")}
+}
+
+func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
+	return routePaths.routes.ToggleTodo(idPathParam).String()
 }

@@ -118,7 +118,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, middleware func
 	}
 	indexTemplateRoutes(mux, receiver, pathsPrefix, middleware)
 	userProfileTemplateRoutes(mux, receiver, pathsPrefix, middleware)
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -140,11 +140,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -206,6 +206,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -221,32 +224,28 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) User(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) User(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
-}
-
-func (routes TemplateRouteBuilder) User(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.User(idPathParam)}
-}
-
-func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))
+	return routePaths.routes.User(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) Save(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.Save(idPathParam)}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) Home() string {
-	return "/"
+func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
+	return routePaths.routes.Save(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) Home() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Home()}
+	return TemplateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) Home() string {
+	return routePaths.routes.Home().String()
 }
 -- want/user-profile_template_routes_gen.go --
 package server

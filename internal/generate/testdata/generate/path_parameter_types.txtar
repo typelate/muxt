@@ -305,7 +305,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -327,11 +327,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -393,6 +393,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -408,75 +411,71 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) At(atPathParam time.Time) (TemplateRoute, error) {
+	segment2_06e81700, err := atPathParam.MarshalText()
+	if err != nil {
+		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
+	}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "at", routes.escapePathSegment(string(segment2_06e81700)))}, nil
 }
 
 func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
-	segment2_06e81700, err := atPathParam.MarshalText()
+	route, err := routePaths.routes.At(atPathParam)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
+		return "", err
 	}
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "at", routePaths.escapePathSegment(string(segment2_06e81700))), nil
-}
-
-func (routes TemplateRouteBuilder) At(atPathParam time.Time) (TemplateRoute, error) {
-	value, err := routes.paths.At(atPathParam)
-	if err != nil {
-		return TemplateRoute{}, err
-	}
-	return TemplateRoute{method: "GET", path: value}, nil
-}
-
-func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))
+	return route.String(), nil
 }
 
 func (routes TemplateRouteBuilder) Bool(flagPathParam bool) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Bool(flagPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))}
 }
 
-func (routePaths TemplateRoutePaths) Exact() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "exact") + "/"
+func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
+	return routePaths.routes.Bool(flagPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) Exact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Exact()}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "exact") + "/"}
 }
 
-func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "files", routePaths.escapePathSegments(pathPathParam))
+func (routePaths TemplateRoutePaths) Exact() string {
+	return routePaths.routes.Exact().String()
 }
 
 func (routes TemplateRouteBuilder) Files(pathPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Files(pathPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "files", routes.escapePathSegments(pathPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))
+func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
+	return routePaths.routes.Files(pathPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) Int(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Int(idPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))
+func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
+	return routePaths.routes.Int(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) Small(aPathParam int8, bPathParam uint16, cPathParam int64) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Small(aPathParam, bPathParam, cPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))}
 }
 
-func (routePaths TemplateRoutePaths) String(namePathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "string", routePaths.escapePathSegment(namePathParam))
+func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
+	return routePaths.routes.Small(aPathParam, bPathParam, cPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) String(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.String(namePathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "string", routes.escapePathSegment(namePathParam))}
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+func (routePaths TemplateRoutePaths) String(namePathParam string) string {
+	return routePaths.routes.String(namePathParam).String()
+}
+
+func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
 	switch value {
 	case ".":
 		return "%2E"
@@ -486,10 +485,10 @@ func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
 	return url.PathEscape(value)
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+func (routes TemplateRouteBuilder) escapePathSegments(value string) string {
 	segments := strings.Split(value, "/")
 	for i, segment := range segments {
-		segments[i] = routePaths.escapePathSegment(segment)
+		segments[i] = routes.escapePathSegment(segment)
 	}
 	return strings.Join(segments, "/")
 }
