@@ -98,7 +98,7 @@ func Test(t *testing.T) {
 		}
 	}
 
-	routes := TemplateRouteBuilder{paths: paths}
+	routes := paths.routes
 	getItem, postItem, index := routes.GetItem(7), routes.PostItem(7), routes.Index()
 	for _, tt := range []struct {
 		name                 string

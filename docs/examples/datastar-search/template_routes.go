@@ -156,7 +156,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			return nil
 		})
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -178,11 +178,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -287,11 +287,11 @@ func (m *SSETemplateData[R, T]) Retry(retryMilliseconds int) *SSETemplateData[R,
 }
 
 func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: m.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}
 }
 
 func (m *SSETemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: m.Path()}
+	return TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}
 }
 
 func (m *SSETemplateData[R, T]) Selector(selector string) *SSETemplateData[R, T] {
@@ -433,6 +433,9 @@ func (m *SSETemplateData[R, T]) WriteTo(w io.Writer) (int64, error) {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -448,30 +451,26 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) Index() TemplateRoute {
+	return TemplateRoute{method: "GET", path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
-	return "/"
-}
-
-func (routes TemplateRouteBuilder) Index() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Index()}
-}
-
-func (routePaths TemplateRoutePaths) ProverbsAPI() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "api/proverbs")
+	return routePaths.routes.Index().String()
 }
 
 func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.ProverbsAPI()}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
 }
 
-func (routePaths TemplateRoutePaths) SearchProverbs() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "search")
+func (routePaths TemplateRoutePaths) ProverbsAPI() string {
+	return routePaths.routes.ProverbsAPI().String()
 }
 
 func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.SearchProverbs()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
+}
+
+func (routePaths TemplateRoutePaths) SearchProverbs() string {
+	return routePaths.routes.SearchProverbs().String()
 }

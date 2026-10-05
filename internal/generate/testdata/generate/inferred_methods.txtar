@@ -142,7 +142,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -164,11 +164,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -230,6 +230,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -245,35 +248,31 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) Note() TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "note")}
 }
 
 func (routePaths TemplateRoutePaths) Note() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "note")
-}
-
-func (routes TemplateRouteBuilder) Note() TemplateRoute {
-	return TemplateRoute{method: "PATCH", path: routes.paths.Note()}
-}
-
-func (routePaths TemplateRoutePaths) Upload() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "upload")
+	return routePaths.routes.Note().String()
 }
 
 func (routes TemplateRouteBuilder) Upload() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.Upload()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "upload")}
 }
 
-func (routePaths TemplateRoutePaths) Get(idPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
+func (routePaths TemplateRoutePaths) Upload() string {
+	return routePaths.routes.Upload().String()
 }
 
 func (routes TemplateRouteBuilder) Get(idPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Get(idPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+func (routePaths TemplateRoutePaths) Get(idPathParam string) string {
+	return routePaths.routes.Get(idPathParam).String()
+}
+
+func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
 	switch value {
 	case ".":
 		return "%2E"

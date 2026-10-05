@@ -179,7 +179,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -201,11 +201,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -267,6 +267,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -282,38 +285,34 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) SubmitFormEditRow(idPathParam int) TemplateRoute {
+	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))
-}
-
-func (routes TemplateRouteBuilder) SubmitFormEditRow(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "PATCH", path: routes.paths.SubmitFormEditRow(idPathParam)}
-}
-
-func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")
+	return routePaths.routes.SubmitFormEditRow(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) GetFormEditRow(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.GetFormEditRow(idPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")}
 }
 
-func (routePaths TemplateRoutePaths) ReadHelp() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "help")
+func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
+	return routePaths.routes.GetFormEditRow(idPathParam).String()
 }
 
 func (routes TemplateRouteBuilder) ReadHelp() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.ReadHelp()}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "help")}
 }
 
-func (routePaths TemplateRoutePaths) List() string {
-	return "/"
+func (routePaths TemplateRoutePaths) ReadHelp() string {
+	return routePaths.routes.ReadHelp().String()
 }
 
 func (routes TemplateRouteBuilder) List() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.List()}
+	return TemplateRoute{method: "GET", path: "/"}
+}
+
+func (routePaths TemplateRoutePaths) List() string {
+	return routePaths.routes.List().String()
 }

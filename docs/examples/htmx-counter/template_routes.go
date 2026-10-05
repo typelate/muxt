@@ -139,7 +139,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -161,11 +161,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -303,6 +303,9 @@ func (data *TemplateData[R, T]) HXTriggerElementID() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -318,38 +321,34 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) Count() TemplateRoute {
+	return TemplateRoute{method: "", path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Count() string {
-	return "/"
-}
-
-func (routes TemplateRouteBuilder) Count() TemplateRoute {
-	return TemplateRoute{method: "", path: routes.paths.Count()}
-}
-
-func (routePaths TemplateRoutePaths) CreateCount() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "count")
+	return routePaths.routes.Count().String()
 }
 
 func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
-	return TemplateRoute{method: "POST", path: routes.paths.CreateCount()}
+	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
 }
 
-func (routePaths TemplateRoutePaths) Decrement() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "decrement-count")
+func (routePaths TemplateRoutePaths) CreateCount() string {
+	return routePaths.routes.CreateCount().String()
 }
 
 func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
-	return TemplateRoute{method: "", path: routes.paths.Decrement()}
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement-count")}
 }
 
-func (routePaths TemplateRoutePaths) Increment() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "increment-count")
+func (routePaths TemplateRoutePaths) Decrement() string {
+	return routePaths.routes.Decrement().String()
 }
 
 func (routes TemplateRouteBuilder) Increment() TemplateRoute {
-	return TemplateRoute{method: "", path: routes.paths.Increment()}
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment-count")}
+}
+
+func (routePaths TemplateRoutePaths) Increment() string {
+	return routePaths.routes.Increment().String()
 }

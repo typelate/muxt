@@ -123,7 +123,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
 	})
-	return TemplateRoutePaths{pathsPrefix: pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
 type TemplateData[R any, T any] struct {
@@ -145,11 +145,11 @@ func (data *TemplateData[R, T]) MuxtVersion() string {
 }
 
 func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
-	return TemplateRoutePaths{pathsPrefix: data.pathsPrefix}
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
 }
 
 func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
-	return TemplateRouteBuilder{paths: data.Path()}
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
 }
 
 func (data *TemplateData[R, T]) Result() T {
@@ -211,6 +211,9 @@ func (data *TemplateData[R, T]) String() string {
 }
 
 type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
@@ -226,27 +229,23 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
-type TemplateRouteBuilder struct {
-	paths TemplateRoutePaths
+func (routes TemplateRouteBuilder) Defined() TemplateRoute {
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "defined")}
 }
 
 func (routePaths TemplateRoutePaths) Defined() string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), "defined")
-}
-
-func (routes TemplateRouteBuilder) Defined() TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Defined()}
-}
-
-func (routePaths TemplateRoutePaths) Missing(idPathParam string) string {
-	return path.Join(cmp.Or(routePaths.pathsPrefix, "/"), routePaths.escapePathSegment(idPathParam))
+	return routePaths.routes.Defined().String()
 }
 
 func (routes TemplateRouteBuilder) Missing(idPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: routes.paths.Missing(idPathParam)}
+	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
-func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+func (routePaths TemplateRoutePaths) Missing(idPathParam string) string {
+	return routePaths.routes.Missing(idPathParam).String()
+}
+
+func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
 	switch value {
 	case ".":
 		return "%2E"
