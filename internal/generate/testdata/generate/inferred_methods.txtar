@@ -236,8 +236,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -252,8 +253,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) Note() TemplateRoute {
-	return TemplateRoute{method: http.MethodPatch, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "note")}
+	return TemplateRoute{method: http.MethodPatch, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "note")}
 }
 
 func (routePaths TemplateRoutePaths) Note() string {
@@ -261,7 +266,7 @@ func (routePaths TemplateRoutePaths) Note() string {
 }
 
 func (routes TemplateRouteBuilder) Upload() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "upload")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "upload")}
 }
 
 func (routePaths TemplateRoutePaths) Upload() string {
@@ -269,7 +274,7 @@ func (routePaths TemplateRoutePaths) Upload() string {
 }
 
 func (routes TemplateRouteBuilder) Get(idPathParam string) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Get(idPathParam string) string {

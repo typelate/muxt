@@ -309,8 +309,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -325,6 +326,10 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) Count() TemplateRoute {
 	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
@@ -334,7 +339,7 @@ func (routePaths TemplateRoutePaths) Count() string {
 }
 
 func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
 }
 
 func (routePaths TemplateRoutePaths) CreateCount() string {

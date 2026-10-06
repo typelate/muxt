@@ -227,8 +227,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -243,8 +244,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) Render() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "with-data")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "with-data")}
 }
 
 func (routePaths TemplateRoutePaths) Render() string {
@@ -252,7 +257,7 @@ func (routePaths TemplateRoutePaths) Render() string {
 }
 
 func (routes TemplateRouteBuilder) Plain() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "without-data")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "without-data")}
 }
 
 func (routePaths TemplateRoutePaths) Plain() string {

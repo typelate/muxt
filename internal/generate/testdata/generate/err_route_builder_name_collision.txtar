@@ -1,4 +1,4 @@
-The route builder type is the route type name with Builder appended, so it may not be the name of another generated type.
+The route builder type may not be the name of another generated type.
 
 Command line: muxt generate --output-template-route-type=Route --output-template-route-paths-type=RouteBuilder
 -- config.json --
@@ -14,6 +14,7 @@ Command line: muxt generate --output-template-route-type=Route --output-template
 	"SSETemplateDataType": "SSETemplateData",
 	"TemplateRoutePathsTypeName": "RouteBuilder",
 	"TemplateRouteTypeName": "Route",
+	"TemplateRouteBuilderTypeName": "RouteBuilder",
 	"TemplatesVariables": [
 		"templates"
 	],
@@ -35,4 +36,4 @@ Command line: muxt generate --output-template-route-type=Route --output-template
 -- server.go --
 package server
 -- want/error.txt --
-the route builder type RouteBuilder, the route type name Route with Builder appended, is also the value of --output-template-route-paths-type; change one of them
+--output-template-route-builder-type RouteBuilder is also the value of --output-template-route-paths-type; change one of them

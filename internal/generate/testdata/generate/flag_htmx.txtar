@@ -248,8 +248,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -264,8 +265,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: "/"}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() string {

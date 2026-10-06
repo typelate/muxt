@@ -64,6 +64,7 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 		{outputSSETemplateDataType, config.SSETemplateDataType},
 		{outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName},
 		{outputTemplateRouteType, config.TemplateRouteTypeName},
+		{outputTemplateRouteBuilderType, config.TemplateRouteBuilderTypeName},
 	} {
 		if id.value != "" && !token.IsIdentifier(id.value) {
 			return errors.New(id.flag + errIdentSuffix)
@@ -77,6 +78,10 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 	}
 	return nil
 }
+
+// routeBuilderSuffix is appended to the route type name to name the route
+// builder type when --output-template-route-builder-type is not set.
+const routeBuilderSuffix = "Builder"
 
 func configToArgs(config generate.RoutesFileConfiguration) []string {
 	var args []string
@@ -94,6 +99,7 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	args = appendValueArg(args, outputSSETemplateDataType, config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 	args = appendValueArg(args, outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 	args = appendValueArg(args, outputTemplateRouteType, config.TemplateRouteTypeName, defaultTemplateRouteTypeName)
+	args = appendValueArg(args, outputTemplateRouteBuilderType, config.TemplateRouteBuilderTypeName, config.TemplateRouteTypeName+routeBuilderSuffix)
 	args = appendSwitchArg(args, outputRoutesFuncWithLoggerParam, config.Logger)
 	args = appendSwitchArg(args, outputRoutesFuncWithPathPrefix, config.PathPrefix)
 	args = appendSwitchArg(args, outputRoutesFuncWithMiddlewareParam, config.Middleware)
@@ -151,5 +157,11 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
 		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
 		config.TemplateRouteTypeName = cmp.Or(config.TemplateRouteTypeName, defaultTemplateRouteTypeName)
+	}
+
+	// The route builder is named after the route type unless its own flag says
+	// otherwise. This is the only place that convention is applied.
+	if !flagSet.Changed(outputTemplateRouteBuilderType) {
+		config.TemplateRouteBuilderTypeName = config.TemplateRouteTypeName + routeBuilderSuffix
 	}
 }

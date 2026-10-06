@@ -22,6 +22,7 @@ const (
 	routesPathsFieldName       = "routes"
 	routeReceiverName          = "route"
 	routeMethodFieldName       = "method"
+	routeHasMethodFieldName    = "hasMethod"
 	routePathFieldName         = "path"
 	escapePathSegmentFuncName  = "escapePathSegment"
 	escapePathSegmentsFuncName = "escapePathSegments"
@@ -35,9 +36,9 @@ func routeTypeName(config RoutesFileConfiguration) string {
 
 // routeBuilderTypeName is the name of the type TemplateData.Route returns, and
 // of the paths type's routes field. Its methods return the route a path method
-// returns the path of.
+// returns the path of. The zero value names the default.
 func routeBuilderTypeName(config RoutesFileConfiguration) string {
-	return routeTypeName(config) + "Builder"
+	return cmp.Or(config.TemplateRouteBuilderTypeName, DefaultTemplateRouteBuilderTypeName)
 }
 
 // routeBuilderLiteral is the route builder for a path prefix expression.
@@ -57,7 +58,8 @@ func pathsLiteral(config RoutesFileConfiguration, prefix ast.Expr) *ast.Composit
 
 // routeTypeDecls emits the type a route path method returns. It renders as the
 // path, so a template that prints it gets the same text the method used to
-// return, and it knows the HTTP method of the route it names.
+// return, and it knows the HTTP method of the route it names and whether the
+// route pattern declared one.
 func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 	typeName := routeTypeName(config)
 	accessor := func(name, field string) *ast.FuncDecl {
@@ -72,6 +74,7 @@ func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{
 			&ast.TypeSpec{Name: ast.NewIdent(typeName), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent(routeMethodFieldName)}, Type: ast.NewIdent("string")},
+				{Names: []*ast.Ident{ast.NewIdent(routeHasMethodFieldName)}, Type: ast.NewIdent("bool")},
 				{Names: []*ast.Ident{ast.NewIdent(routePathFieldName)}, Type: ast.NewIdent("string")},
 			}}}},
 		}},
@@ -83,20 +86,26 @@ func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(&ast.CallExpr{Fun: selector(routeReceiverName, "Path")})}},
 		},
 		accessor("Method", routeMethodFieldName),
+		&ast.FuncDecl{
+			Name: ast.NewIdent("HasMethod"),
+			Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(typeName), routeReceiverName)}},
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: fieldList(results(ast.NewIdent("bool")))},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(selector(routeReceiverName, routeHasMethodFieldName))}},
+		},
 	}
 }
 
 // routeLiteral is the route a path method returns for def with the given path.
-// A pattern that names no HTTP method has GET as its method.
+// A pattern that names no HTTP method has GET as its method and does not set
+// hasMethod, so HasMethod tells it from a pattern that names GET.
 func routeLiteral(file *File, config RoutesFileConfiguration, def *muxt.Definition, path ast.Expr) ast.Expr {
 	method := cmp.Or(def.HTTPMethod(), http.MethodGet)
-	return &ast.CompositeLit{
-		Type: ast.NewIdent(routeTypeName(config)),
-		Elts: []ast.Expr{
-			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, method)},
-			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: path},
-		},
+	elts := []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, method)}}
+	if def.HTTPMethod() != "" {
+		elts = append(elts, &ast.KeyValueExpr{Key: ast.NewIdent(routeHasMethodFieldName), Value: ast.NewIdent("true")})
 	}
+	elts = append(elts, &ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: path})
+	return &ast.CompositeLit{Type: ast.NewIdent(routeTypeName(config)), Elts: elts}
 }
 
 func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, defs []muxt.Definition) ([]ast.Decl, error) {

@@ -15,6 +15,7 @@ Command line: muxt generate --use-receiver-type=Server --output-exported-default
 	"SSETemplateDataType": "sseTemplateData",
 	"TemplateRoutePathsTypeName": "templateRoutePaths",
 	"TemplateRouteTypeName": "templateRoute",
+	"TemplateRouteBuilderTypeName": "templateRouteBuilder",
 	"TemplatesVariables": [
 		"templates"
 	],
@@ -372,8 +373,9 @@ type templateRouteBuilder struct {
 	pathsPrefix string
 }
 type templateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route templateRoute) Path() string {
@@ -388,8 +390,12 @@ func (route templateRoute) Method() string {
 	return route.method
 }
 
+func (route templateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes templateRouteBuilder) Stream() templateRoute {
-	return templateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "events")}
+	return templateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "events")}
 }
 
 func (routePaths templateRoutePaths) Stream() string {
@@ -397,7 +403,7 @@ func (routePaths templateRoutePaths) Stream() string {
 }
 
 func (routes templateRouteBuilder) ReadExact() templateRoute {
-	return templateRoute{method: http.MethodGet, path: "/"}
+	return templateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
 }
 
 func (routePaths templateRoutePaths) ReadExact() string {

@@ -212,8 +212,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -228,8 +229,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) User(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) User(idPathParam int) string {
@@ -237,7 +242,7 @@ func (routePaths TemplateRoutePaths) User(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) Save(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
@@ -245,7 +250,7 @@ func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) Home() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: "/"}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Home() string {
