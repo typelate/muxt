@@ -385,7 +385,7 @@ func (route templateRoute) Method() string {
 }
 
 func (routes templateRouteBuilder) Stream() templateRoute {
-	return templateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "events")}
+	return templateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "events")}
 }
 
 func (routePaths templateRoutePaths) Stream() string {
@@ -393,7 +393,7 @@ func (routePaths templateRoutePaths) Stream() string {
 }
 
 func (routes templateRouteBuilder) ReadExact() templateRoute {
-	return templateRoute{method: "GET", path: "/"}
+	return templateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths templateRoutePaths) ReadExact() string {

@@ -241,7 +241,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Decode() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "json")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "json")}
 }
 
 func (routePaths TemplateRoutePaths) Decode() string {
@@ -249,7 +249,7 @@ func (routePaths TemplateRoutePaths) Decode() string {
 }
 
 func (routes TemplateRouteBuilder) Raw() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "raw")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "raw")}
 }
 
 func (routePaths TemplateRoutePaths) Raw() string {

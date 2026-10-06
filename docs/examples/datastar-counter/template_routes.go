@@ -477,7 +477,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Home() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Home() string {
@@ -485,7 +485,7 @@ func (routePaths TemplateRoutePaths) Home() string {
 }
 
 func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement")}
 }
 
 func (routePaths TemplateRoutePaths) Decrement() string {
@@ -493,7 +493,7 @@ func (routePaths TemplateRoutePaths) Decrement() string {
 }
 
 func (routes TemplateRouteBuilder) Increment() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment")}
 }
 
 func (routePaths TemplateRoutePaths) Increment() string {

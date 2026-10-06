@@ -330,7 +330,7 @@ func (routePaths TemplateRoutePaths) Count() string {
 }
 
 func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
 }
 
 func (routePaths TemplateRoutePaths) CreateCount() string {

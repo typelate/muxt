@@ -240,7 +240,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Render() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "with-data")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "with-data")}
 }
 
 func (routePaths TemplateRoutePaths) Render() string {
@@ -248,7 +248,7 @@ func (routePaths TemplateRoutePaths) Render() string {
 }
 
 func (routes TemplateRouteBuilder) Plain() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "without-data")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "without-data")}
 }
 
 func (routePaths TemplateRoutePaths) Plain() string {

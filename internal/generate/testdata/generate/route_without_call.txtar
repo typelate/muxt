@@ -206,7 +206,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) ReadAbout() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "about")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "about")}
 }
 
 func (routePaths TemplateRoutePaths) ReadAbout() string {
@@ -214,7 +214,7 @@ func (routePaths TemplateRoutePaths) ReadAbout() string {
 }
 
 func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() string {

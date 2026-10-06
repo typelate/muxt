@@ -234,7 +234,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) CreateUnmarshalCallingValues() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "unmarshal")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "unmarshal")}
 }
 
 func (routePaths TemplateRoutePaths) CreateUnmarshalCallingValues() string {
@@ -242,7 +242,7 @@ func (routePaths TemplateRoutePaths) CreateUnmarshalCallingValues() string {
 }
 
 func (routes TemplateRouteBuilder) CreateValuesCallingValues() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "values")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "values")}
 }
 
 func (routePaths TemplateRoutePaths) CreateValuesCallingValues() string {

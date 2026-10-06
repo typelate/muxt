@@ -452,7 +452,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Index() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
@@ -460,7 +460,7 @@ func (routePaths TemplateRoutePaths) Index() string {
 }
 
 func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
 }
 
 func (routePaths TemplateRoutePaths) ProverbsAPI() string {
@@ -468,7 +468,7 @@ func (routePaths TemplateRoutePaths) ProverbsAPI() string {
 }
 
 func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
 }
 
 func (routePaths TemplateRoutePaths) SearchProverbs() string {

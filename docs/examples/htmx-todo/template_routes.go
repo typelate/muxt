@@ -427,7 +427,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
 }
 
 func (routePaths TemplateRoutePaths) CreateTodo() string {
@@ -435,7 +435,7 @@ func (routePaths TemplateRoutePaths) CreateTodo() string {
 }
 
 func (routes TemplateRouteBuilder) ClearCompleted() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/clear-completed")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/clear-completed")}
 }
 
 func (routePaths TemplateRoutePaths) ClearCompleted() string {
@@ -443,7 +443,7 @@ func (routePaths TemplateRoutePaths) ClearCompleted() string {
 }
 
 func (routes TemplateRouteBuilder) ToggleAll() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/toggle-all")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos/toggle-all")}
 }
 
 func (routePaths TemplateRoutePaths) ToggleAll() string {
@@ -451,7 +451,7 @@ func (routePaths TemplateRoutePaths) ToggleAll() string {
 }
 
 func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "DELETE", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodDelete, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
@@ -459,7 +459,7 @@ func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "PATCH", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodPatch, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
@@ -467,7 +467,7 @@ func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) ListTodos() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) ListTodos() string {

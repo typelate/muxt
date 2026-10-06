@@ -132,6 +132,9 @@ func TestBuilders(t *testing.T) {
 		{name: "SlogString", node: func(im astgen.ImportManager) ast.Node { return astgen.SlogString(im, "k", v) }, want: `slog.String("k", v)`, imports: []string{"log/slog"}},
 		{name: "ExportedIdentifier", node: func(im astgen.ImportManager) ast.Node { return astgen.ExportedIdentifier(im, "", "sync", "Mutex") }, want: "sync.Mutex", imports: []string{"sync"}},
 		{name: "HTTPStatusCode known", node: func(im astgen.ImportManager) ast.Node { return astgen.HTTPStatusCode(im, 404) }, want: "http.StatusNotFound", imports: []string{"net/http"}},
+		{name: "HTTPMethod known", node: func(im astgen.ImportManager) ast.Node { return astgen.HTTPMethod(im, "PATCH") }, want: "http.MethodPatch", imports: []string{"net/http"}},
+		{name: "HTTPMethod unknown", node: func(im astgen.ImportManager) ast.Node { return astgen.HTTPMethod(im, "PURGE") }, want: `"PURGE"`},
+		{name: "HTTPMethod empty", node: func(im astgen.ImportManager) ast.Node { return astgen.HTTPMethod(im, "") }, want: `""`},
 		{name: "HTTPStatusCode unknown", node: func(im astgen.ImportManager) ast.Node { return astgen.HTTPStatusCode(im, 299) }, want: "299"},
 		{name: "HTTPErrorCall", node: func(im astgen.ImportManager) ast.Node {
 			return astgen.HTTPErrorCall(im, ast.NewIdent("w"), astgen.String("no"), 400)

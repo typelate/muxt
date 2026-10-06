@@ -218,7 +218,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Get(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Get(idPathParam int) string {
