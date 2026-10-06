@@ -151,9 +151,9 @@ func TestRoutePathFunc(t *testing.T) {
 			escapers: escaperUse{segment: true},
 		},
 		{
-			name: "a pattern without a method has an empty one", pattern: "/any/{name} ByName(name)",
+			name: "a pattern without a method is a GET", pattern: "/any/{name} ByName(name)",
 			want: `func (routes TemplateRouteBuilder) ByName(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "any", routes.escapePathSegment(namePathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "any", routes.escapePathSegment(namePathParam))}
 }`,
 			escapers: escaperUse{segment: true},
 		},

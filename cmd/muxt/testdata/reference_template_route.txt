@@ -16,6 +16,8 @@ exec go test
 
 {{define "GET /{$} Index()"}}<a href="{{.Path.Index}}">home</a>{{end}}
 
+{{define "/any Any()"}}{{.Route.Any.Method}}{{end}}
+
 {{define "GET /named Route()"}}{{.Path.Route}}|{{.Route.Route}}|{{.Route.Route.Method}}{{end}}
 
 {{define "GET /route/{id} GetRoute(id)"}}<a href="{{.Route.GetItem 7}}">{{.Route.GetItem 7}}</a>{{end}}
@@ -42,6 +44,7 @@ func (Server) GetItem(id int) int  { return id }
 func (Server) PostItem(id int) int { return id }
 func (Server) Index() string       { return "" }
 func (Server) GetRoute(id int) int { return id }
+func (Server) Any() string         { return "" }
 func (Server) Route() string       { return "" }
 -- template_test.go --
 package server
@@ -84,6 +87,9 @@ func Test(t *testing.T) {
 		t.Errorf("GET /route/3 = %q, want a link to /item/7", got)
 	}
 
+	if got := serve(t, mux, http.MethodGet, "/any"); got != http.MethodGet {
+		t.Errorf("GET /any = %q, want the method of a route that names none to be GET", got)
+	}
 	if got := serve(t, mux, http.MethodGet, "/named"); got != "/named|/named|GET" {
 		t.Errorf("GET /named = %q, want /named|/named|GET", got)
 	}

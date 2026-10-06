@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"net/http"
 	"strings"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -86,11 +87,13 @@ func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 }
 
 // routeLiteral is the route a path method returns for def with the given path.
+// A pattern that names no HTTP method has GET as its method.
 func routeLiteral(file *File, config RoutesFileConfiguration, def *muxt.Definition, path ast.Expr) ast.Expr {
+	method := cmp.Or(def.HTTPMethod(), http.MethodGet)
 	return &ast.CompositeLit{
 		Type: ast.NewIdent(routeTypeName(config)),
 		Elts: []ast.Expr{
-			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, def.HTTPMethod())},
+			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, method)},
 			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: path},
 		},
 	}
