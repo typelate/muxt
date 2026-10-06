@@ -15,6 +15,7 @@ const (
 	outputSSETemplateDataType           = "output-sse-template-data-type"
 	outputTemplateRoutePathsType        = "output-template-route-paths-type"
 	outputTemplateRouteType             = "output-template-route-type"
+	outputTemplateRouteBuilderType      = "output-template-route-builder-type"
 	outputRoutesFuncWithLoggerParam     = "output-routes-func-with-logger-param"
 	outputRoutesFuncWithPathPrefix      = "output-routes-func-with-path-prefix-param"
 	outputRoutesFuncWithMiddlewareParam = "output-routes-func-with-middleware-param"
@@ -48,10 +49,11 @@ const (
 	outputReceiverInterfaceHelp = `The interface name in the generated output file listing the methods used by handler routes in the routes function.`
 	outputRoutesFuncHelp        = `The function name for the package registering handler functions on an *"net/http".ServeMux.
 This function also receives an argument with a type matching the name given by output-receiver-interface.`
-	outputTemplateDataTypeHelp       = `The type name for the template data passed to root route templates.`
-	outputSSETemplateDataTypeHelp    = `The type name for the template data passed to Server-Sent Events route templates.`
-	outputTemplateRoutePathsTypeHelp = `The type name for the type with path constructor helper methods.`
-	outputTemplateRouteTypeHelp      = `The type name for the type the path constructor helper methods return.`
+	outputTemplateDataTypeHelp         = `The type name for the template data passed to root route templates.`
+	outputSSETemplateDataTypeHelp      = `The type name for the template data passed to Server-Sent Events route templates.`
+	outputTemplateRoutePathsTypeHelp   = `The type name for the type with path constructor helper methods.`
+	outputTemplateRouteTypeHelp        = `The type name for the type the path constructor helper methods return.`
+	outputTemplateRouteBuilderTypeHelp = `The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended.`
 
 	outputRoutesFuncWithLoggerParamHelp     = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
 	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
@@ -67,13 +69,14 @@ This function also receives an argument with a type matching the name given by o
 )
 
 const (
-	defaultTemplatesVariableName      = "templates"
-	defaultRoutesFunctionName         = generate.DefaultRoutesFunctionName
-	defaultOutputFileName             = "template_routes.go"
-	defaultReceiverInterfaceName      = generate.DefaultReceiverInterfaceName
-	defaultTemplateRoutePathsTypeName = generate.DefaultTemplateRoutePathsTypeName
-	defaultTemplateRouteTypeName      = generate.DefaultTemplateRouteTypeName
-	defaultTemplateDataTypeName       = "TemplateData"
-	defaultSSETemplateDataTypeName    = "SSETemplateData"
-	defaultPackageName                = "main"
+	defaultTemplatesVariableName        = "templates"
+	defaultRoutesFunctionName           = generate.DefaultRoutesFunctionName
+	defaultOutputFileName               = "template_routes.go"
+	defaultReceiverInterfaceName        = generate.DefaultReceiverInterfaceName
+	defaultTemplateRoutePathsTypeName   = generate.DefaultTemplateRoutePathsTypeName
+	defaultTemplateRouteTypeName        = generate.DefaultTemplateRouteTypeName
+	defaultTemplateRouteBuilderTypeName = generate.DefaultTemplateRouteBuilderTypeName
+	defaultTemplateDataTypeName         = "TemplateData"
+	defaultSSETemplateDataTypeName      = "SSETemplateData"
+	defaultPackageName                  = "main"
 )

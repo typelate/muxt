@@ -41,10 +41,11 @@ const (
 
 	executeTemplateErrorMessage = "failed to render page"
 
-	DefaultRoutesFunctionName         = "TemplateRoutes"
-	DefaultReceiverInterfaceName      = "RoutesReceiver"
-	DefaultTemplateRoutePathsTypeName = "TemplateRoutePaths"
-	DefaultTemplateRouteTypeName      = "TemplateRoute"
+	DefaultRoutesFunctionName           = "TemplateRoutes"
+	DefaultReceiverInterfaceName        = "RoutesReceiver"
+	DefaultTemplateRoutePathsTypeName   = "TemplateRoutePaths"
+	DefaultTemplateRouteTypeName        = "TemplateRoute"
+	DefaultTemplateRouteBuilderTypeName = "TemplateRouteBuilder"
 )
 
 type GeneratedFile struct {
@@ -67,7 +68,8 @@ type RoutesFileConfiguration struct {
 	TemplateDataType,
 	SSETemplateDataType,
 	TemplateRoutePathsTypeName,
-	TemplateRouteTypeName string
+	TemplateRouteTypeName,
+	TemplateRouteBuilderTypeName string
 	TemplatesVariables               []string
 	OutputFileName                   string
 	PathPrefix                       bool
@@ -102,12 +104,12 @@ func (c RoutesFileConfiguration) OutputDirectory(wd string) string {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
-// checkRouteBuilderTypeName reports a route builder type name, which is derived
-// from the route type name and so is not a flag of its own, that another
+// checkRouteBuilderTypeName reports a route builder type name that another
 // generated identifier already uses.
 func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
 	builder := routeBuilderTypeName(config)
 	for _, other := range []struct{ flag, name string }{
+		{"output-template-route-type", routeTypeName(config)},
 		{"output-routes-func", config.RoutesFunction},
 		{"output-receiver-interface", config.ReceiverInterface},
 		{"output-template-data-type", config.TemplateDataType},
@@ -115,7 +117,7 @@ func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
 		{"output-template-route-paths-type", config.TemplateRoutePathsTypeName},
 	} {
 		if other.name == builder {
-			return fmt.Errorf("the route builder type %s, the route type name %s with Builder appended, is also the value of --%s; change one of them", builder, routeTypeName(config), other.flag)
+			return fmt.Errorf("--output-template-route-builder-type %s is also the value of --%s; change one of them", builder, other.flag)
 		}
 	}
 	return nil

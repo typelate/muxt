@@ -267,8 +267,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -283,8 +284,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) ReadConstantCallingCreate() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "constant")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "constant")}
 }
 
 func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() string {
@@ -292,7 +297,7 @@ func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() string {
 }
 
 func (routes TemplateRouteBuilder) CreateCreatedCallingCreate() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "created")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "created")}
 }
 
 func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
@@ -300,7 +305,7 @@ func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
 }
 
 func (routes TemplateRouteBuilder) Field() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "field")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "field")}
 }
 
 func (routePaths TemplateRoutePaths) Field() string {
@@ -308,7 +313,7 @@ func (routePaths TemplateRoutePaths) Field() string {
 }
 
 func (routes TemplateRouteBuilder) Method() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "method")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "method")}
 }
 
 func (routePaths TemplateRoutePaths) Method() string {

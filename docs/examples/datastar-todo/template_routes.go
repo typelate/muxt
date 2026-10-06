@@ -483,8 +483,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -499,8 +500,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) List() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: "/"}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) List() string {
@@ -508,7 +513,7 @@ func (routePaths TemplateRoutePaths) List() string {
 }
 
 func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos")}
 }
 
 func (routePaths TemplateRoutePaths) CreateTodo() string {
@@ -516,7 +521,7 @@ func (routePaths TemplateRoutePaths) CreateTodo() string {
 }
 
 func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodDelete, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodDelete, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
@@ -524,7 +529,7 @@ func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "todos", strconv.Itoa(idPathParam), "toggle")}
 }
 
 func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {

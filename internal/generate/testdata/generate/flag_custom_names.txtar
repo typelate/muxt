@@ -14,6 +14,7 @@ Command line: muxt generate --use-receiver-type=Server --output-file=routes.go -
 	"SSETemplateDataType": "SSETemplateData",
 	"TemplateRoutePathsTypeName": "Paths",
 	"TemplateRouteTypeName": "Route",
+	"TemplateRouteBuilderTypeName": "RouteBuilder",
 	"TemplatesVariables": [
 		"templates"
 	],
@@ -184,8 +185,9 @@ type RouteBuilder struct {
 	pathsPrefix string
 }
 type Route struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route Route) Path() string {
@@ -200,8 +202,12 @@ func (route Route) Method() string {
 	return route.method
 }
 
+func (route Route) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes RouteBuilder) Show(idPathParam string) Route {
-	return Route{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
+	return Route{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
 func (routePaths Paths) Show(idPathParam string) string {

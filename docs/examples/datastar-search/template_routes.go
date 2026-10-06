@@ -439,8 +439,9 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method string
-	path   string
+	method    string
+	hasMethod bool
+	path      string
 }
 
 func (route TemplateRoute) Path() string {
@@ -455,8 +456,12 @@ func (route TemplateRoute) Method() string {
 	return route.method
 }
 
+func (route TemplateRoute) HasMethod() bool {
+	return route.hasMethod
+}
+
 func (routes TemplateRouteBuilder) Index() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: "/"}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
@@ -464,7 +469,7 @@ func (routePaths TemplateRoutePaths) Index() string {
 }
 
 func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
+	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "api/proverbs")}
 }
 
 func (routePaths TemplateRoutePaths) ProverbsAPI() string {
@@ -472,7 +477,7 @@ func (routePaths TemplateRoutePaths) ProverbsAPI() string {
 }
 
 func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
+	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "search")}
 }
 
 func (routePaths TemplateRoutePaths) SearchProverbs() string {
