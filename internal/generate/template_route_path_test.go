@@ -195,8 +195,12 @@ func TestRouteTypeDecls(t *testing.T) {
 	path   string
 }
 
-func (route TemplateRoute) String() string {
+func (route TemplateRoute) Path() string {
 	return route.path
+}
+
+func (route TemplateRoute) String() string {
+	return route.Path()
 }
 
 func (route TemplateRoute) Method() string {
@@ -210,8 +214,12 @@ func (route TemplateRoute) Method() string {
 	path   string
 }
 
-func (route TemplateRoute) String() string {
+func (route TemplateRoute) Path() string {
 	return route.path
+}
+
+func (route TemplateRoute) String() string {
+	return route.Path()
 }
 
 func (route TemplateRoute) Method() string {
@@ -225,8 +233,12 @@ func (route TemplateRoute) Method() string {
 	path   string
 }
 
-func (route Link) String() string {
+func (route Link) Path() string {
 	return route.path
+}
+
+func (route Link) String() string {
+	return route.Path()
 }
 
 func (route Link) Method() string {

@@ -188,8 +188,12 @@ type Route struct {
 	path   string
 }
 
-func (route Route) String() string {
+func (route Route) Path() string {
 	return route.path
+}
+
+func (route Route) String() string {
+	return route.Path()
 }
 
 func (route Route) Method() string {
