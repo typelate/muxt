@@ -102,6 +102,25 @@ func (c RoutesFileConfiguration) OutputDirectory(wd string) string {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
+// checkRouteBuilderTypeName reports a route builder type name, which is derived
+// from the route type name and so is not a flag of its own, that another
+// generated identifier already uses.
+func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
+	builder := routeBuilderTypeName(config)
+	for _, other := range []struct{ flag, name string }{
+		{"output-routes-func", config.RoutesFunction},
+		{"output-receiver-interface", config.ReceiverInterface},
+		{"output-template-data-type", config.TemplateDataType},
+		{"output-sse-template-data-type", config.SSETemplateDataType},
+		{"output-template-route-paths-type", config.TemplateRoutePathsTypeName},
+	} {
+		if other.name == builder {
+			return fmt.Errorf("the route builder type %s, the route type name %s with Builder appended, is also the value of --%s; change one of them", builder, routeTypeName(config), other.flag)
+		}
+	}
+	return nil
+}
+
 // TemplateRoutesFiles generates the routes files for pkg, written into wd:
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
@@ -115,6 +134,10 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	config.PackagePath = pkg.Types.Path()
 	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
+
+	if err := checkRouteBuilderTypeName(config); err != nil {
+		return nil, err
+	}
 
 	groups, err := groupTemplates(config, defs)
 	if err != nil {
