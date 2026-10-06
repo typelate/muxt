@@ -242,7 +242,7 @@ func (routes TemplateRouteBuilder) CreateUnmarshalCallingValues() TemplateRoute 
 }
 
 func (routePaths TemplateRoutePaths) CreateUnmarshalCallingValues() string {
-	return routePaths.routes.CreateUnmarshalCallingValues().String()
+	return routePaths.routes.CreateUnmarshalCallingValues().Path()
 }
 
 func (routes TemplateRouteBuilder) CreateValuesCallingValues() TemplateRoute {
@@ -250,5 +250,5 @@ func (routes TemplateRouteBuilder) CreateValuesCallingValues() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateValuesCallingValues() string {
-	return routePaths.routes.CreateValuesCallingValues().String()
+	return routePaths.routes.CreateValuesCallingValues().Path()
 }

@@ -376,7 +376,7 @@ func (routes TemplateRouteBuilder) Forms() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Forms() string {
-	return routePaths.routes.Forms().String()
+	return routePaths.routes.Forms().Path()
 }
 
 func (routes TemplateRouteBuilder) Mixed() TemplateRoute {
@@ -384,7 +384,7 @@ func (routes TemplateRouteBuilder) Mixed() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Mixed() string {
-	return routePaths.routes.Mixed().String()
+	return routePaths.routes.Mixed().Path()
 }
 
 func (routes TemplateRouteBuilder) ReadNestedByIDCallingSum(idPathParam int) TemplateRoute {
@@ -392,7 +392,7 @@ func (routes TemplateRouteBuilder) ReadNestedByIDCallingSum(idPathParam int) Tem
 }
 
 func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) string {
-	return routePaths.routes.ReadNestedByIDCallingSum(idPathParam).String()
+	return routePaths.routes.ReadNestedByIDCallingSum(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ReadPairByIDCallingSum(idPathParam int) TemplateRoute {
@@ -400,7 +400,7 @@ func (routes TemplateRouteBuilder) ReadPairByIDCallingSum(idPathParam int) Templ
 }
 
 func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) string {
-	return routePaths.routes.ReadPairByIDCallingSum(idPathParam).String()
+	return routePaths.routes.ReadPairByIDCallingSum(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Both() TemplateRoute {
@@ -408,7 +408,7 @@ func (routes TemplateRouteBuilder) Both() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Both() string {
-	return routePaths.routes.Both().String()
+	return routePaths.routes.Both().Path()
 }
 
 func (routes TemplateRouteBuilder) Int(sseIDPathParam int) TemplateRoute {
@@ -416,5 +416,5 @@ func (routes TemplateRouteBuilder) Int(sseIDPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) string {
-	return routePaths.routes.Int(sseIDPathParam).String()
+	return routePaths.routes.Int(sseIDPathParam).Path()
 }

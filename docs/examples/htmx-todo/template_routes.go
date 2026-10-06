@@ -435,7 +435,7 @@ func (routes TemplateRouteBuilder) CreateTodo() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateTodo() string {
-	return routePaths.routes.CreateTodo().String()
+	return routePaths.routes.CreateTodo().Path()
 }
 
 func (routes TemplateRouteBuilder) ClearCompleted() TemplateRoute {
@@ -443,7 +443,7 @@ func (routes TemplateRouteBuilder) ClearCompleted() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ClearCompleted() string {
-	return routePaths.routes.ClearCompleted().String()
+	return routePaths.routes.ClearCompleted().Path()
 }
 
 func (routes TemplateRouteBuilder) ToggleAll() TemplateRoute {
@@ -451,7 +451,7 @@ func (routes TemplateRouteBuilder) ToggleAll() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ToggleAll() string {
-	return routePaths.routes.ToggleAll().String()
+	return routePaths.routes.ToggleAll().Path()
 }
 
 func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
@@ -459,7 +459,7 @@ func (routes TemplateRouteBuilder) DeleteTodo(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) DeleteTodo(idPathParam int) string {
-	return routePaths.routes.DeleteTodo(idPathParam).String()
+	return routePaths.routes.DeleteTodo(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
@@ -467,7 +467,7 @@ func (routes TemplateRouteBuilder) ToggleTodo(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ToggleTodo(idPathParam int) string {
-	return routePaths.routes.ToggleTodo(idPathParam).String()
+	return routePaths.routes.ToggleTodo(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ListTodos() TemplateRoute {
@@ -475,5 +475,5 @@ func (routes TemplateRouteBuilder) ListTodos() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ListTodos() string {
-	return routePaths.routes.ListTodos().String()
+	return routePaths.routes.ListTodos().Path()
 }

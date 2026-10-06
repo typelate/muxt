@@ -248,7 +248,7 @@ func (routes TemplateRouteBuilder) Render() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Render() string {
-	return routePaths.routes.Render().String()
+	return routePaths.routes.Render().Path()
 }
 
 func (routes TemplateRouteBuilder) Plain() TemplateRoute {
@@ -256,5 +256,5 @@ func (routes TemplateRouteBuilder) Plain() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Plain() string {
-	return routePaths.routes.Plain().String()
+	return routePaths.routes.Plain().Path()
 }

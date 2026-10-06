@@ -371,5 +371,5 @@ func (routes TemplateRouteBuilder) Ticks(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Ticks(idPathParam int) string {
-	return routePaths.routes.Ticks(idPathParam).String()
+	return routePaths.routes.Ticks(idPathParam).Path()
 }

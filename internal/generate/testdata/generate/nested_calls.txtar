@@ -259,7 +259,7 @@ func (routes TemplateRouteBuilder) ReadArticleByIDCallingShow(idPathParam int) T
 }
 
 func (routePaths TemplateRoutePaths) ReadArticleByIDCallingShow(idPathParam int) string {
-	return routePaths.routes.ReadArticleByIDCallingShow(idPathParam).String()
+	return routePaths.routes.ReadArticleByIDCallingShow(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ReadUserCallingShow() TemplateRoute {
@@ -267,5 +267,5 @@ func (routes TemplateRouteBuilder) ReadUserCallingShow() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadUserCallingShow() string {
-	return routePaths.routes.ReadUserCallingShow().String()
+	return routePaths.routes.ReadUserCallingShow().Path()
 }

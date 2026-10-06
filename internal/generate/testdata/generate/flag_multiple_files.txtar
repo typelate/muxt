@@ -233,7 +233,7 @@ func (routes TemplateRouteBuilder) User(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) User(idPathParam int) string {
-	return routePaths.routes.User(idPathParam).String()
+	return routePaths.routes.User(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Save(idPathParam int) TemplateRoute {
@@ -241,7 +241,7 @@ func (routes TemplateRouteBuilder) Save(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
-	return routePaths.routes.Save(idPathParam).String()
+	return routePaths.routes.Save(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Home() TemplateRoute {
@@ -249,7 +249,7 @@ func (routes TemplateRouteBuilder) Home() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Home() string {
-	return routePaths.routes.Home().String()
+	return routePaths.routes.Home().Path()
 }
 -- want/user-profile_template_routes_gen.go --
 package server

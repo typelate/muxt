@@ -265,7 +265,7 @@ func (routes TemplateRouteBuilder) CreateRedirectsCallingSave() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() string {
-	return routePaths.routes.CreateRedirectsCallingSave().String()
+	return routePaths.routes.CreateRedirectsCallingSave().Path()
 }
 
 func (routes TemplateRouteBuilder) ReadStaysCallingSave() TemplateRoute {
@@ -273,7 +273,7 @@ func (routes TemplateRouteBuilder) ReadStaysCallingSave() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadStaysCallingSave() string {
-	return routePaths.routes.ReadStaysCallingSave().String()
+	return routePaths.routes.ReadStaysCallingSave().Path()
 }
 
 func (routes TemplateRouteBuilder) CreateViaPartialCallingSave() TemplateRoute {
@@ -281,5 +281,5 @@ func (routes TemplateRouteBuilder) CreateViaPartialCallingSave() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() string {
-	return routePaths.routes.CreateViaPartialCallingSave().String()
+	return routePaths.routes.CreateViaPartialCallingSave().Path()
 }

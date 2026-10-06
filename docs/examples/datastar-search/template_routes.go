@@ -460,7 +460,7 @@ func (routes TemplateRouteBuilder) Index() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
-	return routePaths.routes.Index().String()
+	return routePaths.routes.Index().Path()
 }
 
 func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
@@ -468,7 +468,7 @@ func (routes TemplateRouteBuilder) ProverbsAPI() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ProverbsAPI() string {
-	return routePaths.routes.ProverbsAPI().String()
+	return routePaths.routes.ProverbsAPI().Path()
 }
 
 func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
@@ -476,5 +476,5 @@ func (routes TemplateRouteBuilder) SearchProverbs() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) SearchProverbs() string {
-	return routePaths.routes.SearchProverbs().String()
+	return routePaths.routes.SearchProverbs().Path()
 }

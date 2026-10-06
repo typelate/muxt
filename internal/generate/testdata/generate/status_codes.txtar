@@ -288,7 +288,7 @@ func (routes TemplateRouteBuilder) ReadConstantCallingCreate() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadConstantCallingCreate() string {
-	return routePaths.routes.ReadConstantCallingCreate().String()
+	return routePaths.routes.ReadConstantCallingCreate().Path()
 }
 
 func (routes TemplateRouteBuilder) CreateCreatedCallingCreate() TemplateRoute {
@@ -296,7 +296,7 @@ func (routes TemplateRouteBuilder) CreateCreatedCallingCreate() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateCreatedCallingCreate() string {
-	return routePaths.routes.CreateCreatedCallingCreate().String()
+	return routePaths.routes.CreateCreatedCallingCreate().Path()
 }
 
 func (routes TemplateRouteBuilder) Field() TemplateRoute {
@@ -304,7 +304,7 @@ func (routes TemplateRouteBuilder) Field() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Field() string {
-	return routePaths.routes.Field().String()
+	return routePaths.routes.Field().Path()
 }
 
 func (routes TemplateRouteBuilder) Method() TemplateRoute {
@@ -312,5 +312,5 @@ func (routes TemplateRouteBuilder) Method() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Method() string {
-	return routePaths.routes.Method().String()
+	return routePaths.routes.Method().Path()
 }

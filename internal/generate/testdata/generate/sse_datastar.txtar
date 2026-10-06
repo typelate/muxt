@@ -435,5 +435,5 @@ func (routes TemplateRouteBuilder) Count() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Count() string {
-	return routePaths.routes.Count().String()
+	return routePaths.routes.Count().Path()
 }

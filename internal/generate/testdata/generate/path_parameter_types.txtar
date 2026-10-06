@@ -428,7 +428,7 @@ func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return route.String(), nil
+	return route.Path(), nil
 }
 
 func (routes TemplateRouteBuilder) Bool(flagPathParam bool) TemplateRoute {
@@ -436,7 +436,7 @@ func (routes TemplateRouteBuilder) Bool(flagPathParam bool) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
-	return routePaths.routes.Bool(flagPathParam).String()
+	return routePaths.routes.Bool(flagPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Exact() TemplateRoute {
@@ -444,7 +444,7 @@ func (routes TemplateRouteBuilder) Exact() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Exact() string {
-	return routePaths.routes.Exact().String()
+	return routePaths.routes.Exact().Path()
 }
 
 func (routes TemplateRouteBuilder) Files(pathPathParam string) TemplateRoute {
@@ -452,7 +452,7 @@ func (routes TemplateRouteBuilder) Files(pathPathParam string) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
-	return routePaths.routes.Files(pathPathParam).String()
+	return routePaths.routes.Files(pathPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Int(idPathParam int) TemplateRoute {
@@ -460,7 +460,7 @@ func (routes TemplateRouteBuilder) Int(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
-	return routePaths.routes.Int(idPathParam).String()
+	return routePaths.routes.Int(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Small(aPathParam int8, bPathParam uint16, cPathParam int64) TemplateRoute {
@@ -468,7 +468,7 @@ func (routes TemplateRouteBuilder) Small(aPathParam int8, bPathParam uint16, cPa
 }
 
 func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
-	return routePaths.routes.Small(aPathParam, bPathParam, cPathParam).String()
+	return routePaths.routes.Small(aPathParam, bPathParam, cPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) String(namePathParam string) TemplateRoute {
@@ -476,7 +476,7 @@ func (routes TemplateRouteBuilder) String(namePathParam string) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) String(namePathParam string) string {
-	return routePaths.routes.String(namePathParam).String()
+	return routePaths.routes.String(namePathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) escapePathSegment(value string) string {

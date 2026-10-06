@@ -265,7 +265,7 @@ func (routes TemplateRouteBuilder) Embedded() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Embedded() string {
-	return routePaths.routes.Embedded().String()
+	return routePaths.routes.Embedded().Path()
 }
 
 func (routes TemplateRouteBuilder) Function() TemplateRoute {
@@ -273,7 +273,7 @@ func (routes TemplateRouteBuilder) Function() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
-	return routePaths.routes.Function().String()
+	return routePaths.routes.Function().Path()
 }
 
 func (routes TemplateRouteBuilder) Pointer() TemplateRoute {
@@ -281,5 +281,5 @@ func (routes TemplateRouteBuilder) Pointer() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Pointer() string {
-	return routePaths.routes.Pointer().String()
+	return routePaths.routes.Pointer().Path()
 }

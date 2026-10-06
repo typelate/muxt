@@ -249,7 +249,7 @@ func (routes TemplateRouteBuilder) Decode() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Decode() string {
-	return routePaths.routes.Decode().String()
+	return routePaths.routes.Decode().Path()
 }
 
 func (routes TemplateRouteBuilder) Raw() TemplateRoute {
@@ -257,5 +257,5 @@ func (routes TemplateRouteBuilder) Raw() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Raw() string {
-	return routePaths.routes.Raw().String()
+	return routePaths.routes.Raw().Path()
 }

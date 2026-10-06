@@ -257,7 +257,7 @@ func (routes TemplateRouteBuilder) Note() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Note() string {
-	return routePaths.routes.Note().String()
+	return routePaths.routes.Note().Path()
 }
 
 func (routes TemplateRouteBuilder) Upload() TemplateRoute {
@@ -265,7 +265,7 @@ func (routes TemplateRouteBuilder) Upload() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Upload() string {
-	return routePaths.routes.Upload().String()
+	return routePaths.routes.Upload().Path()
 }
 
 func (routes TemplateRouteBuilder) Get(idPathParam string) TemplateRoute {
@@ -273,7 +273,7 @@ func (routes TemplateRouteBuilder) Get(idPathParam string) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Get(idPathParam string) string {
-	return routePaths.routes.Get(idPathParam).String()
+	return routePaths.routes.Get(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) escapePathSegment(value string) string {

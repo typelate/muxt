@@ -399,5 +399,5 @@ func (routes TemplateRouteBuilder) Events() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Events() string {
-	return routePaths.routes.Events().String()
+	return routePaths.routes.Events().Path()
 }
