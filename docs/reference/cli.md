@@ -52,7 +52,7 @@ muxt -C ./web generate --use-receiver-type=Server
 | `--output-template-data-type` | `TemplateData` | Type passed to route templates. |
 | `--output-sse-template-data-type` | `SSETemplateData` | Type passed to Server-Sent Events route templates. |
 | `--output-template-route-paths-type` | `TemplateRoutePaths` | Type whose methods build route paths. |
-| `--output-template-route-type` | `TemplateRoute` | Type the methods of `TemplateData.Route` return. Name it differently in each file generated into one package ([reference_multiple_generated_routes.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes.txt)). |
+| `--output-template-route-type` | `TemplateRoute` | Type the methods of `TemplateData.Route` return. The builder `Route` returns is named after it with `Builder` appended. Name it differently in each file generated into one package ([reference_multiple_generated_routes.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes.txt)). |
 | `--output-routes-func-with-logger-param` | `false` | Add a `*slog.Logger` parameter. |
 | `--output-routes-func-with-path-prefix-param` | `false` | Add a `pathsPrefix string` parameter. |
 | `--output-routes-func-with-middleware-param` | `false` | Add a `middleware func(http.Handler) http.Handler` parameter. |

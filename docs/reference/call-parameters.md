@@ -149,7 +149,7 @@ Return when `ctx` is done or `execute` returns an error: the client is gone, the
 | `response` argument | not allowed ([err_sse_with_response.txt](../../cmd/muxt/testdata/err_sse_with_response.txt)) |
 | Undefined method | fails generation: `method NAME using the execute callback must be defined on the receiver type` |
 | Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
-| Template data | `*SSETemplateData[R, T]`: `.Result`, `.Err`, `.Request`, `.Receiver`, `.Path`, `.String`, and chainable `.Event`, `.ID`, and `.Retry` setters. No `.Ok`, `.StatusCode`, `.Header`, or `.Redirect` |
+| Template data | `*SSETemplateData[R, T]`: `.Result`, `.Err`, `.Request`, `.Receiver`, `.Path`, `.Route`, `.String`, and chainable `.Event`, `.ID`, and `.Retry` setters. No `.Ok`, `.StatusCode`, `.Header`, or `.Redirect` |
 
 ### Datastar
 
