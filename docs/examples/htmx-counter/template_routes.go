@@ -309,9 +309,8 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method    string
-	hasMethod bool
-	path      string
+	method string
+	path   string
 }
 
 func (route TemplateRoute) Path() string {
@@ -327,11 +326,11 @@ func (route TemplateRoute) Method() string {
 }
 
 func (route TemplateRoute) HasMethod() bool {
-	return route.hasMethod
+	return route.method != ""
 }
 
 func (routes TemplateRouteBuilder) Count() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: "/"}
+	return TemplateRoute{method: "", path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Count() string {
@@ -339,7 +338,7 @@ func (routePaths TemplateRoutePaths) Count() string {
 }
 
 func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
-	return TemplateRoute{method: http.MethodPost, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "count")}
 }
 
 func (routePaths TemplateRoutePaths) CreateCount() string {
@@ -347,7 +346,7 @@ func (routePaths TemplateRoutePaths) CreateCount() string {
 }
 
 func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement-count")}
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "decrement-count")}
 }
 
 func (routePaths TemplateRoutePaths) Decrement() string {
@@ -355,7 +354,7 @@ func (routePaths TemplateRoutePaths) Decrement() string {
 }
 
 func (routes TemplateRouteBuilder) Increment() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment-count")}
+	return TemplateRoute{method: "", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "increment-count")}
 }
 
 func (routePaths TemplateRoutePaths) Increment() string {

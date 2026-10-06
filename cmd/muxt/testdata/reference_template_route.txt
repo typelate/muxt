@@ -16,7 +16,7 @@ exec go test
 
 {{define "GET /{$} Index()"}}<a href="{{.Path.Index}}">home</a>{{end}}
 
-{{define "/any Any()"}}{{.Route.Any.Method}} {{.Route.Any.HasMethod}}{{end}}
+{{define "/any Any()"}}{{or .Route.Any.Method "GET"}} {{.Route.Any.HasMethod}}{{end}}
 
 {{define "GET /named Route()"}}{{.Path.Route}}|{{.Route.Route}}|{{.Route.Route.Method}}{{end}}
 
@@ -88,7 +88,7 @@ func Test(t *testing.T) {
 	}
 
 	if got := serve(t, mux, http.MethodGet, "/any"); got != "GET false" {
-		t.Errorf("GET /any = %q, want GET without a declared method", got)
+		t.Errorf("GET /any = %q, want the fallback GET and no declared method", got)
 	}
 	if got := serve(t, mux, http.MethodGet, "/named"); got != "/named|/named|GET" {
 		t.Errorf("GET /named = %q, want /named|/named|GET", got)

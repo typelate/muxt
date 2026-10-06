@@ -368,9 +368,8 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method    string
-	hasMethod bool
-	path      string
+	method string
+	path   string
 }
 
 func (route TemplateRoute) Path() string {
@@ -386,11 +385,11 @@ func (route TemplateRoute) Method() string {
 }
 
 func (route TemplateRoute) HasMethod() bool {
-	return route.hasMethod
+	return route.method != ""
 }
 
 func (routes TemplateRouteBuilder) Time() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "time")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "time")}
 }
 
 func (routePaths TemplateRoutePaths) Time() string {
@@ -398,7 +397,7 @@ func (routePaths TemplateRoutePaths) Time() string {
 }
 
 func (routes TemplateRouteBuilder) InZone(tzPathParam string) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "zone", routes.escapePathSegments(tzPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "zone", routes.escapePathSegments(tzPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) InZone(tzPathParam string) string {
@@ -406,7 +405,7 @@ func (routePaths TemplateRoutePaths) InZone(tzPathParam string) string {
 }
 
 func (routes TemplateRouteBuilder) Index() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
