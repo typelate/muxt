@@ -330,7 +330,7 @@ func (routes TemplateRouteBuilder) Count() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Count() string {
-	return routePaths.routes.Count().String()
+	return routePaths.routes.Count().Path()
 }
 
 func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
@@ -338,7 +338,7 @@ func (routes TemplateRouteBuilder) CreateCount() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) CreateCount() string {
-	return routePaths.routes.CreateCount().String()
+	return routePaths.routes.CreateCount().Path()
 }
 
 func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
@@ -346,7 +346,7 @@ func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Decrement() string {
-	return routePaths.routes.Decrement().String()
+	return routePaths.routes.Decrement().Path()
 }
 
 func (routes TemplateRouteBuilder) Increment() TemplateRoute {
@@ -354,5 +354,5 @@ func (routes TemplateRouteBuilder) Increment() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Increment() string {
-	return routePaths.routes.Increment().String()
+	return routePaths.routes.Increment().Path()
 }

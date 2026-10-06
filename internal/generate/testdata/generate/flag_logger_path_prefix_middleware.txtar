@@ -238,7 +238,7 @@ func (routes TemplateRouteBuilder) Article(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Article(idPathParam int) string {
-	return routePaths.routes.Article(idPathParam).String()
+	return routePaths.routes.Article(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
@@ -246,5 +246,5 @@ func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() string {
-	return routePaths.routes.ReadExact().String()
+	return routePaths.routes.ReadExact().Path()
 }

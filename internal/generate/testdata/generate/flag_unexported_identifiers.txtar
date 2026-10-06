@@ -393,7 +393,7 @@ func (routes templateRouteBuilder) Stream() templateRoute {
 }
 
 func (routePaths templateRoutePaths) Stream() string {
-	return routePaths.routes.Stream().String()
+	return routePaths.routes.Stream().Path()
 }
 
 func (routes templateRouteBuilder) ReadExact() templateRoute {
@@ -401,5 +401,5 @@ func (routes templateRouteBuilder) ReadExact() templateRoute {
 }
 
 func (routePaths templateRoutePaths) ReadExact() string {
-	return routePaths.routes.ReadExact().String()
+	return routePaths.routes.ReadExact().Path()
 }

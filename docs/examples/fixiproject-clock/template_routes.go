@@ -389,7 +389,7 @@ func (routes TemplateRouteBuilder) Time() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Time() string {
-	return routePaths.routes.Time().String()
+	return routePaths.routes.Time().Path()
 }
 
 func (routes TemplateRouteBuilder) InZone(tzPathParam string) TemplateRoute {
@@ -397,7 +397,7 @@ func (routes TemplateRouteBuilder) InZone(tzPathParam string) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) InZone(tzPathParam string) string {
-	return routePaths.routes.InZone(tzPathParam).String()
+	return routePaths.routes.InZone(tzPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) Index() TemplateRoute {
@@ -405,7 +405,7 @@ func (routes TemplateRouteBuilder) Index() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Index() string {
-	return routePaths.routes.Index().String()
+	return routePaths.routes.Index().Path()
 }
 
 func (routes TemplateRouteBuilder) escapePathSegment(value string) string {

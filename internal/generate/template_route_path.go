@@ -200,7 +200,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 // is, so code that uses the path as a string keeps working:
 //
 //	func (routePaths TemplateRoutePaths) GetItem(id int) string {
-//		return routePaths.Route.GetItem(id).String()
+//		return routePaths.routes.GetItem(id).Path()
 //	}
 //
 // A builder method that returns an error gets a wrapper that returns it too.
@@ -216,7 +216,7 @@ func routePathWrapper(config RoutesFileConfiguration, builder *ast.FuncDecl) *as
 		Args: args,
 	}
 	asString := func(route ast.Expr) ast.Expr {
-		return &ast.CallExpr{Fun: &ast.SelectorExpr{X: route, Sel: ast.NewIdent("String")}}
+		return &ast.CallExpr{Fun: &ast.SelectorExpr{X: route, Sel: ast.NewIdent("Path")}}
 	}
 	decl := &ast.FuncDecl{
 		Name: ast.NewIdent(builder.Name.Name),

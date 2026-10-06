@@ -260,7 +260,7 @@ func (routes TemplateRouteBuilder) Raw() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Raw() string {
-	return routePaths.routes.Raw().String()
+	return routePaths.routes.Raw().Path()
 }
 
 func (routes TemplateRouteBuilder) Upload() TemplateRoute {
@@ -268,5 +268,5 @@ func (routes TemplateRouteBuilder) Upload() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Upload() string {
-	return routePaths.routes.Upload().String()
+	return routePaths.routes.Upload().Path()
 }

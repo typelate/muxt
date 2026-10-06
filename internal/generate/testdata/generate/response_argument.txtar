@@ -195,5 +195,5 @@ func (routes TemplateRouteBuilder) Download() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Download() string {
-	return routePaths.routes.Download().String()
+	return routePaths.routes.Download().Path()
 }

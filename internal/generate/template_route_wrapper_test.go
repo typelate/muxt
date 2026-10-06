@@ -23,7 +23,7 @@ func TestRoutePathWrapper(t *testing.T) {
 		{
 			name: "a path without an error", pattern: "GET /b/{ok} ByBool(ok)",
 			want: `func (routePaths TemplateRoutePaths) ByBool(okPathParam bool) string {
-	return routePaths.routes.ByBool(okPathParam).String()
+	return routePaths.routes.ByBool(okPathParam).Path()
 }`,
 		},
 		{
@@ -33,7 +33,7 @@ func TestRoutePathWrapper(t *testing.T) {
 	if err != nil {
 		return "", err
 	}
-	return route.String(), nil
+	return route.Path(), nil
 }`,
 		},
 	} {

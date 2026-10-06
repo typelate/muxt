@@ -226,5 +226,5 @@ func (routes TemplateRouteBuilder) Get(idPathParam int) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Get(idPathParam int) string {
-	return routePaths.routes.Get(idPathParam).String()
+	return routePaths.routes.Get(idPathParam).Path()
 }

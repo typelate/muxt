@@ -294,7 +294,7 @@ func (routes TemplateRouteBuilder) SubmitFormEditRow(idPathParam int) TemplateRo
 }
 
 func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
-	return routePaths.routes.SubmitFormEditRow(idPathParam).String()
+	return routePaths.routes.SubmitFormEditRow(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) GetFormEditRow(idPathParam int) TemplateRoute {
@@ -302,7 +302,7 @@ func (routes TemplateRouteBuilder) GetFormEditRow(idPathParam int) TemplateRoute
 }
 
 func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
-	return routePaths.routes.GetFormEditRow(idPathParam).String()
+	return routePaths.routes.GetFormEditRow(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) ReadHelp() TemplateRoute {
@@ -310,7 +310,7 @@ func (routes TemplateRouteBuilder) ReadHelp() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadHelp() string {
-	return routePaths.routes.ReadHelp().String()
+	return routePaths.routes.ReadHelp().Path()
 }
 
 func (routes TemplateRouteBuilder) List() TemplateRoute {
@@ -318,5 +318,5 @@ func (routes TemplateRouteBuilder) List() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) List() string {
-	return routePaths.routes.List().String()
+	return routePaths.routes.List().Path()
 }

@@ -209,5 +209,5 @@ func (routes TemplateRouteBuilder) Resume() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Resume() string {
-	return routePaths.routes.Resume().String()
+	return routePaths.routes.Resume().Path()
 }

@@ -283,5 +283,5 @@ func (routes TemplateRouteBuilder) Signup() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Signup() string {
-	return routePaths.routes.Signup().String()
+	return routePaths.routes.Signup().Path()
 }

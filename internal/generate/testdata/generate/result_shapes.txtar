@@ -297,7 +297,7 @@ func (routes TemplateRouteBuilder) ValueError() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ValueError() string {
-	return routePaths.routes.ValueError().String()
+	return routePaths.routes.ValueError().Path()
 }
 
 func (routes TemplateRouteBuilder) Function() TemplateRoute {
@@ -305,7 +305,7 @@ func (routes TemplateRouteBuilder) Function() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
-	return routePaths.routes.Function().String()
+	return routePaths.routes.Function().Path()
 }
 
 func (routes TemplateRouteBuilder) ValueOk() TemplateRoute {
@@ -313,7 +313,7 @@ func (routes TemplateRouteBuilder) ValueOk() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ValueOk() string {
-	return routePaths.routes.ValueOk().String()
+	return routePaths.routes.ValueOk().Path()
 }
 
 func (routes TemplateRouteBuilder) Value() TemplateRoute {
@@ -321,5 +321,5 @@ func (routes TemplateRouteBuilder) Value() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Value() string {
-	return routePaths.routes.Value().String()
+	return routePaths.routes.Value().Path()
 }

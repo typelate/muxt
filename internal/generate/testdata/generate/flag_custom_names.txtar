@@ -205,7 +205,7 @@ func (routes RouteBuilder) Show(idPathParam string) Route {
 }
 
 func (routePaths Paths) Show(idPathParam string) string {
-	return routePaths.routes.Show(idPathParam).String()
+	return routePaths.routes.Show(idPathParam).Path()
 }
 
 func (routes RouteBuilder) escapePathSegment(value string) string {

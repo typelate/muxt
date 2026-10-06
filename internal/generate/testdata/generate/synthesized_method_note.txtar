@@ -238,7 +238,7 @@ func (routes TemplateRouteBuilder) Defined() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Defined() string {
-	return routePaths.routes.Defined().String()
+	return routePaths.routes.Defined().Path()
 }
 
 func (routes TemplateRouteBuilder) Missing(idPathParam string) TemplateRoute {
@@ -246,7 +246,7 @@ func (routes TemplateRouteBuilder) Missing(idPathParam string) TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Missing(idPathParam string) string {
-	return routePaths.routes.Missing(idPathParam).String()
+	return routePaths.routes.Missing(idPathParam).Path()
 }
 
 func (routes TemplateRouteBuilder) escapePathSegment(value string) string {

@@ -269,5 +269,5 @@ func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() string {
-	return routePaths.routes.ReadExact().String()
+	return routePaths.routes.ReadExact().Path()
 }

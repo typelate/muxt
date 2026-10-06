@@ -485,7 +485,7 @@ func (routes TemplateRouteBuilder) Home() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Home() string {
-	return routePaths.routes.Home().String()
+	return routePaths.routes.Home().Path()
 }
 
 func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
@@ -493,7 +493,7 @@ func (routes TemplateRouteBuilder) Decrement() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Decrement() string {
-	return routePaths.routes.Decrement().String()
+	return routePaths.routes.Decrement().Path()
 }
 
 func (routes TemplateRouteBuilder) Increment() TemplateRoute {
@@ -501,5 +501,5 @@ func (routes TemplateRouteBuilder) Increment() TemplateRoute {
 }
 
 func (routePaths TemplateRoutePaths) Increment() string {
-	return routePaths.routes.Increment().String()
+	return routePaths.routes.Increment().Path()
 }
