@@ -112,6 +112,9 @@ func Test(t *testing.T) {
 		if got := tt.route.Method(); got != tt.wantMethod {
 			t.Errorf("%s: Method() = %q, want %q", tt.name, got, tt.wantMethod)
 		}
+		if got := tt.route.Path(); got != tt.wantPath {
+			t.Errorf("%s: Path() = %q, want %q", tt.name, got, tt.wantPath)
+		}
 		if got := tt.route.String(); got != tt.wantPath {
 			t.Errorf("%s: String() = %q, want %q", tt.name, got, tt.wantPath)
 		}

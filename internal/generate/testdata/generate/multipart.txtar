@@ -243,8 +243,12 @@ type TemplateRoute struct {
 	path   string
 }
 
-func (route TemplateRoute) String() string {
+func (route TemplateRoute) Path() string {
 	return route.path
+}
+
+func (route TemplateRoute) String() string {
+	return route.Path()
 }
 
 func (route TemplateRoute) Method() string {

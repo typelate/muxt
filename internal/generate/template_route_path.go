@@ -74,7 +74,13 @@ func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 				{Names: []*ast.Ident{ast.NewIdent(routePathFieldName)}, Type: ast.NewIdent("string")},
 			}}}},
 		}},
-		accessor("String", routePathFieldName),
+		accessor("Path", routePathFieldName),
+		&ast.FuncDecl{
+			Name: ast.NewIdent("String"),
+			Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(typeName), routeReceiverName)}},
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: fieldList(results(ast.NewIdent("string")))},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(&ast.CallExpr{Fun: selector(routeReceiverName, "Path")})}},
+		},
 		accessor("Method", routeMethodFieldName),
 	}
 }
