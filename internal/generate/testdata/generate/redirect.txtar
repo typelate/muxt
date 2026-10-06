@@ -257,7 +257,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) CreateRedirectsCallingSave() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "redirects")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "redirects")}
 }
 
 func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() string {
@@ -265,7 +265,7 @@ func (routePaths TemplateRoutePaths) CreateRedirectsCallingSave() string {
 }
 
 func (routes TemplateRouteBuilder) ReadStaysCallingSave() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stays")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stays")}
 }
 
 func (routePaths TemplateRoutePaths) ReadStaysCallingSave() string {
@@ -273,7 +273,7 @@ func (routePaths TemplateRoutePaths) ReadStaysCallingSave() string {
 }
 
 func (routes TemplateRouteBuilder) CreateViaPartialCallingSave() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "via-partial")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "via-partial")}
 }
 
 func (routePaths TemplateRoutePaths) CreateViaPartialCallingSave() string {

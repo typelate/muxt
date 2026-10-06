@@ -257,7 +257,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Embedded() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "embedded")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "embedded")}
 }
 
 func (routePaths TemplateRoutePaths) Embedded() string {
@@ -265,7 +265,7 @@ func (routePaths TemplateRoutePaths) Embedded() string {
 }
 
 func (routes TemplateRouteBuilder) Function() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
@@ -273,7 +273,7 @@ func (routePaths TemplateRoutePaths) Function() string {
 }
 
 func (routes TemplateRouteBuilder) Pointer() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pointer")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pointer")}
 }
 
 func (routePaths TemplateRoutePaths) Pointer() string {

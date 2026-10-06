@@ -261,7 +261,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) ReadExact() string {

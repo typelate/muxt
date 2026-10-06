@@ -80,11 +80,11 @@ func routeTypeDecls(config RoutesFileConfiguration) []ast.Decl {
 }
 
 // routeLiteral is the route a path method returns for def with the given path.
-func routeLiteral(config RoutesFileConfiguration, def *muxt.Definition, path ast.Expr) ast.Expr {
+func routeLiteral(file *File, config RoutesFileConfiguration, def *muxt.Definition, path ast.Expr) ast.Expr {
 	return &ast.CompositeLit{
 		Type: ast.NewIdent(routeTypeName(config)),
 		Elts: []ast.Expr{
-			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.String(def.HTTPMethod())},
+			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, def.HTTPMethod())},
 			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: path},
 		},
 	}
@@ -161,7 +161,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 		if config.PathPrefix {
 			indexPath = astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file))
 		}
-		return routeBuilderMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(config, def, indexPath))), escaperUse{}, nil
+		return routeBuilderMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(file, config, def, indexPath))), escaperUse{}, nil
 	}
 
 	b := &routePathBuilder{file: file, config: config, def: def, segments: []ast.Expr{pathPrefixOrRoot(file)}}
@@ -178,7 +178,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	if def.HasPathEndWildcard() {
 		joined = &ast.BinaryExpr{X: joined, Op: token.ADD, Y: astgen.String("/")}
 	}
-	returned, resultTypes := []ast.Expr{routeLiteral(config, def, joined)}, []ast.Expr{routeType}
+	returned, resultTypes := []ast.Expr{routeLiteral(file, config, def, joined)}, []ast.Expr{routeType}
 	if b.returnsError {
 		returned = append(returned, astgen.Nil())
 		resultTypes = append(resultTypes, ast.NewIdent("error"))

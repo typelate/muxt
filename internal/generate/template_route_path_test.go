@@ -49,51 +49,51 @@ func TestRoutePathFunc(t *testing.T) {
 		{
 			name: "index", pattern: "GET /{$}",
 			want: `func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }`,
 		},
 		{
 			name: "index with prefix", pattern: "GET /{$}", pathPrefix: true,
 			want: `func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"))}
 }`,
 		},
 		{
 			name: "literals fold into one segment", pattern: "GET /a/b/c",
 			want: `func (routes TemplateRouteBuilder) ReadABC() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "a/b/c")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "a/b/c")}
 }`,
 		},
 		{
 			name: "int", pattern: "GET /n/{n} ByNumber(n)",
 			want: `func (routes TemplateRouteBuilder) ByNumber(nPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "n", strconv.Itoa(nPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "n", strconv.Itoa(nPathParam))}
 }`,
 		},
 		{
 			name: "bool", pattern: "GET /b/{ok} ByBool(ok)",
 			want: `func (routes TemplateRouteBuilder) ByBool(okPathParam bool) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "b", strconv.FormatBool(bool(okPathParam)))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "b", strconv.FormatBool(bool(okPathParam)))}
 }`,
 		},
 		{
 			name: "string is escaped", pattern: "GET /s/{name} ByName(name)",
 			want: `func (routes TemplateRouteBuilder) ByName(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "s", routes.escapePathSegment(namePathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "s", routes.escapePathSegment(namePathParam))}
 }`,
 			escapers: escaperUse{segment: true},
 		},
 		{
 			name: "same typed parameters share a field", pattern: "GET /p/{a}/{b} ByPair(a, b)",
 			want: `func (routes TemplateRouteBuilder) ByPair(aPathParam, bPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "p", routes.escapePathSegment(aPathParam), routes.escapePathSegment(bPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "p", routes.escapePathSegment(aPathParam), routes.escapePathSegment(bPathParam))}
 }`,
 			escapers: escaperUse{segment: true},
 		},
 		{
 			name: "unlinked segment is a string", pattern: "GET /u/{name}",
 			want: `func (routes TemplateRouteBuilder) ReadUByName(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "u", routes.escapePathSegment(namePathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "u", routes.escapePathSegment(namePathParam))}
 }`,
 			escapers: escaperUse{segment: true},
 		},
@@ -104,7 +104,7 @@ func TestRoutePathFunc(t *testing.T) {
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {id} (segment 2) in /m/{id}: %w", err)
 	}
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "m", routes.escapePathSegment(string(segment2_4d0556ab)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "m", routes.escapePathSegment(string(segment2_4d0556ab)))}, nil
 }`,
 			escapers: escaperUse{segment: true},
 		},
@@ -119,34 +119,34 @@ func TestRoutePathFunc(t *testing.T) {
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {b} (segment 3) in /mm/{a}/{b}: %w", err)
 	}
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mm", routes.escapePathSegment(string(segment2_b8dad819)), routes.escapePathSegment(string(segment3_b8dad819)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mm", routes.escapePathSegment(string(segment2_b8dad819)), routes.escapePathSegment(string(segment3_b8dad819)))}, nil
 }`,
 			escapers: escaperUse{segment: true},
 		},
 		{
 			name: "remainder wildcard", pattern: "GET /r/{rest...} ByRest(rest)",
 			want: `func (routes TemplateRouteBuilder) ByRest(restPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "r", routes.escapePathSegments(restPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "r", routes.escapePathSegments(restPathParam))}
 }`,
 			escapers: escaperUse{segments: true},
 		},
 		{
 			name: "path end wildcard", pattern: "GET /w/{$}",
 			want: `func (routes TemplateRouteBuilder) ReadWExact() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w") + "/"}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w") + "/"}
 }`,
 		},
 		{
 			name: "path end wildcard after a parameter", pattern: "GET /w/{name}/{$} ByName(name)",
 			want: `func (routes TemplateRouteBuilder) ByName(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w", routes.escapePathSegment(namePathParam)) + "/"}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w", routes.escapePathSegment(namePathParam)) + "/"}
 }`,
 			escapers: escaperUse{segment: true},
 		},
 		{
 			name: "the route carries its HTTP method", pattern: "POST /w/{name} ByName(name)",
 			want: `func (routes TemplateRouteBuilder) ByName(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w", routes.escapePathSegment(namePathParam))}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "w", routes.escapePathSegment(namePathParam))}
 }`,
 			escapers: escaperUse{segment: true},
 		},

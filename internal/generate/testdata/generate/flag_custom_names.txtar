@@ -197,7 +197,7 @@ func (route Route) Method() string {
 }
 
 func (routes RouteBuilder) Show(idPathParam string) Route {
-	return Route{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
+	return Route{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
 func (routePaths Paths) Show(idPathParam string) string {

@@ -230,7 +230,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Defined() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "defined")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "defined")}
 }
 
 func (routePaths TemplateRoutePaths) Defined() string {
@@ -238,7 +238,7 @@ func (routePaths TemplateRoutePaths) Defined() string {
 }
 
 func (routes TemplateRouteBuilder) Missing(idPathParam string) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), routes.escapePathSegment(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Missing(idPathParam string) string {

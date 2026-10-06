@@ -368,7 +368,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) Forms() TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "form")}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "form")}
 }
 
 func (routePaths TemplateRoutePaths) Forms() string {
@@ -376,7 +376,7 @@ func (routePaths TemplateRoutePaths) Forms() string {
 }
 
 func (routes TemplateRouteBuilder) Mixed() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mixed")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mixed")}
 }
 
 func (routePaths TemplateRoutePaths) Mixed() string {
@@ -384,7 +384,7 @@ func (routePaths TemplateRoutePaths) Mixed() string {
 }
 
 func (routes TemplateRouteBuilder) ReadNestedByIDCallingSum(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "nested", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) string {
@@ -392,7 +392,7 @@ func (routePaths TemplateRoutePaths) ReadNestedByIDCallingSum(idPathParam int) s
 }
 
 func (routes TemplateRouteBuilder) ReadPairByIDCallingSum(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "pair", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) string {
@@ -400,7 +400,7 @@ func (routePaths TemplateRoutePaths) ReadPairByIDCallingSum(idPathParam int) str
 }
 
 func (routes TemplateRouteBuilder) Both() TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "requests")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "requests")}
 }
 
 func (routePaths TemplateRoutePaths) Both() string {
@@ -408,7 +408,7 @@ func (routePaths TemplateRoutePaths) Both() string {
 }
 
 func (routes TemplateRouteBuilder) Int(sseIDPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "stream", strconv.Itoa(sseIDPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Int(sseIDPathParam int) string {

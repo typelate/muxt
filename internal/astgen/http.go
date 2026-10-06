@@ -106,6 +106,28 @@ func HTTPStatusCode(im ImportManager, n int) ast.Expr {
 	return ExportedIdentifier(im, "", "net/http", ident)
 }
 
+var httpMethods = map[string]string{
+	http.MethodGet:     "MethodGet",
+	http.MethodHead:    "MethodHead",
+	http.MethodPost:    "MethodPost",
+	http.MethodPut:     "MethodPut",
+	http.MethodPatch:   "MethodPatch",
+	http.MethodDelete:  "MethodDelete",
+	http.MethodConnect: "MethodConnect",
+	http.MethodOptions: "MethodOptions",
+	http.MethodTrace:   "MethodTrace",
+}
+
+// HTTPMethod creates an AST expression for an HTTP method: the net/http
+// constant when there is one, otherwise a string literal.
+func HTTPMethod(im ImportManager, method string) ast.Expr {
+	ident, ok := httpMethods[method]
+	if !ok {
+		return String(method)
+	}
+	return ExportedIdentifier(im, "", "net/http", ident)
+}
+
 func HTTPErrorCall(im ImportManager, response, message ast.Expr, code int) *ast.CallExpr {
 	return Call(im, "", "net/http", "Error", response, message, HTTPStatusCode(im, code))
 }

@@ -225,7 +225,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (routes TemplateRouteBuilder) User(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "GET", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) User(idPathParam int) string {
@@ -233,7 +233,7 @@ func (routePaths TemplateRoutePaths) User(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) Save(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: "POST", path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodPost, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "user", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
@@ -241,7 +241,7 @@ func (routePaths TemplateRoutePaths) Save(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) Home() TemplateRoute {
-	return TemplateRoute{method: "GET", path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) Home() string {
