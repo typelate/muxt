@@ -273,9 +273,8 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method    string
-	hasMethod bool
-	path      string
+	method string
+	path   string
 }
 
 func (route TemplateRoute) Path() string {
@@ -291,11 +290,11 @@ func (route TemplateRoute) Method() string {
 }
 
 func (route TemplateRoute) HasMethod() bool {
-	return route.hasMethod
+	return route.method != ""
 }
 
 func (routes TemplateRouteBuilder) SubmitFormEditRow(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodPatch, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodPatch, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
@@ -303,7 +302,7 @@ func (routePaths TemplateRoutePaths) SubmitFormEditRow(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) GetFormEditRow(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "fruits", strconv.Itoa(idPathParam), "edit")}
 }
 
 func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
@@ -311,7 +310,7 @@ func (routePaths TemplateRoutePaths) GetFormEditRow(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) ReadHelp() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "help")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "help")}
 }
 
 func (routePaths TemplateRoutePaths) ReadHelp() string {
@@ -319,7 +318,7 @@ func (routePaths TemplateRoutePaths) ReadHelp() string {
 }
 
 func (routes TemplateRouteBuilder) List() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: "/"}
+	return TemplateRoute{method: http.MethodGet, path: "/"}
 }
 
 func (routePaths TemplateRoutePaths) List() string {

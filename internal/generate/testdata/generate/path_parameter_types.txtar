@@ -399,9 +399,8 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method    string
-	hasMethod bool
-	path      string
+	method string
+	path   string
 }
 
 func (route TemplateRoute) Path() string {
@@ -417,7 +416,7 @@ func (route TemplateRoute) Method() string {
 }
 
 func (route TemplateRoute) HasMethod() bool {
-	return route.hasMethod
+	return route.method != ""
 }
 
 func (routes TemplateRouteBuilder) At(atPathParam time.Time) (TemplateRoute, error) {
@@ -425,7 +424,7 @@ func (routes TemplateRouteBuilder) At(atPathParam time.Time) (TemplateRoute, err
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
 	}
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "at", routes.escapePathSegment(string(segment2_06e81700)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "at", routes.escapePathSegment(string(segment2_06e81700)))}, nil
 }
 
 func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
@@ -437,7 +436,7 @@ func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
 }
 
 func (routes TemplateRouteBuilder) Bool(flagPathParam bool) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "bool", strconv.FormatBool(bool(flagPathParam)))}
 }
 
 func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
@@ -445,7 +444,7 @@ func (routePaths TemplateRoutePaths) Bool(flagPathParam bool) string {
 }
 
 func (routes TemplateRouteBuilder) Exact() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "exact") + "/"}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "exact") + "/"}
 }
 
 func (routePaths TemplateRoutePaths) Exact() string {
@@ -453,7 +452,7 @@ func (routePaths TemplateRoutePaths) Exact() string {
 }
 
 func (routes TemplateRouteBuilder) Files(pathPathParam string) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "files", routes.escapePathSegments(pathPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "files", routes.escapePathSegments(pathPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
@@ -461,7 +460,7 @@ func (routePaths TemplateRoutePaths) Files(pathPathParam string) string {
 }
 
 func (routes TemplateRouteBuilder) Int(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "int", strconv.Itoa(idPathParam))}
 }
 
 func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
@@ -469,7 +468,7 @@ func (routePaths TemplateRoutePaths) Int(idPathParam int) string {
 }
 
 func (routes TemplateRouteBuilder) Small(aPathParam int8, bPathParam uint16, cPathParam int64) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "small", strconv.FormatInt(int64(aPathParam), 10), strconv.FormatUint(uint64(bPathParam), 10), strconv.FormatInt(int64(cPathParam), 10))}
 }
 
 func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, cPathParam int64) string {
@@ -477,7 +476,7 @@ func (routePaths TemplateRoutePaths) Small(aPathParam int8, bPathParam uint16, c
 }
 
 func (routes TemplateRouteBuilder) String(namePathParam string) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "string", routes.escapePathSegment(namePathParam))}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "string", routes.escapePathSegment(namePathParam))}
 }
 
 func (routePaths TemplateRoutePaths) String(namePathParam string) string {

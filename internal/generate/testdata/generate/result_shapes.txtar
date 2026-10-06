@@ -276,9 +276,8 @@ type TemplateRouteBuilder struct {
 	pathsPrefix string
 }
 type TemplateRoute struct {
-	method    string
-	hasMethod bool
-	path      string
+	method string
+	path   string
 }
 
 func (route TemplateRoute) Path() string {
@@ -294,11 +293,11 @@ func (route TemplateRoute) Method() string {
 }
 
 func (route TemplateRoute) HasMethod() bool {
-	return route.hasMethod
+	return route.method != ""
 }
 
 func (routes TemplateRouteBuilder) ValueError() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "error")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "error")}
 }
 
 func (routePaths TemplateRoutePaths) ValueError() string {
@@ -306,7 +305,7 @@ func (routePaths TemplateRoutePaths) ValueError() string {
 }
 
 func (routes TemplateRouteBuilder) Function() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "function")}
 }
 
 func (routePaths TemplateRoutePaths) Function() string {
@@ -314,7 +313,7 @@ func (routePaths TemplateRoutePaths) Function() string {
 }
 
 func (routes TemplateRouteBuilder) ValueOk() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "ok")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "ok")}
 }
 
 func (routePaths TemplateRoutePaths) ValueOk() string {
@@ -322,7 +321,7 @@ func (routePaths TemplateRoutePaths) ValueOk() string {
 }
 
 func (routes TemplateRouteBuilder) Value() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, hasMethod: true, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "value")}
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "value")}
 }
 
 func (routePaths TemplateRoutePaths) Value() string {
