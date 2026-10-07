@@ -137,25 +137,36 @@ func workspaceNote(dir string) string {
 	}
 }
 
-// loadFailedError frames a packages.Load failure. The driver's own
-// error arrives triple-wrapped ("err: exit status 1: stderr: go: …"),
-// so the go error is unwrapped from the plumbing and gets the same
-// workspace guidance a failed lookup gets.
+// loadFailedError frames a packages.Load failure. The short form carries
+// the go command's own message, since it is the cause and most commands
+// print only the short form; the workspace guidance a failed lookup gets
+// goes in the details.
 func loadFailedError(dir string, err error) error {
-	msg := err.Error()
-	if idx := strings.LastIndex(msg, "stderr: "); idx >= 0 {
-		msg = strings.TrimSpace(msg[idx+len("stderr: "):])
-	}
 	e := &PackageLookupError{
 		Dir:     dir,
-		Summary: "failed to load Go packages from " + dir,
-		Details: []string{msg},
+		Summary: "failed to load Go packages from " + dir + ": " + goMessage(err),
 	}
 	if note := workspaceNote(dir); note != "" {
 		e.Details = append(e.Details, note)
 	}
 	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
 	return e
+}
+
+// goMessage returns what the go command wrote to stderr when the go list
+// driver failed. The driver wraps it as "err: <exit status>: stderr: <go
+// message>"; only that leading plumbing is removed, so a go message that
+// itself contains "stderr: " is kept whole.
+func goMessage(err error) string {
+	msg := err.Error()
+	if rest, ok := strings.CutPrefix(msg, "err: "); ok {
+		if _, stderr, ok := strings.Cut(rest, ": stderr: "); ok {
+			msg = stderr
+		}
+	} else if stderr, ok := strings.CutPrefix(msg, "stderr: "); ok {
+		msg = stderr
+	}
+	return strings.TrimSpace(msg)
 }
 
 // moduleRoot walks up from dir to the nearest directory containing a

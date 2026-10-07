@@ -171,12 +171,21 @@ func TestLoadFailedError(t *testing.T) {
 		{name: "driver plumbing is stripped", msg: "err: exit status 1: stderr: go: boom\n", want: "go: boom"},
 		{name: "stderr at the start", msg: "stderr: go: boom", want: "go: boom"},
 		{name: "no plumbing", msg: "boom", want: "boom"},
+		{
+			name: "a go message mentioning stderr is kept whole",
+			msg:  "err: exit status 1: stderr: go: reading go.work: stderr: is not a module\n",
+			want: "go: reading go.work: stderr: is not a module",
+		},
+		{name: "only the leading plumbing is plumbing", msg: "go: x stderr: y", want: "go: x stderr: y"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			e, ok := loadFailedError(t.TempDir(), errors.New(tt.msg)).(*PackageLookupError)
+			dir := t.TempDir()
+			e, ok := loadFailedError(dir, errors.New(tt.msg)).(*PackageLookupError)
 			require.True(t, ok, "loadFailedError() is not a *PackageLookupError")
-			require.Len(t, e.Details, 2, "loadFailedError() details = %q, want the message then the environment note", e.Details)
-			assert.Equal(t, tt.want, e.Details[0], "loadFailedError() details = %q, want the message %q then the environment note", e.Details, tt.want)
+			want := "failed to load Go packages from " + dir + ": " + tt.want
+			assert.Equal(t, want, e.Error(), "loadFailedError(%q).Error() carries the go message", tt.msg)
+			require.Len(t, e.Details, 1, "loadFailedError() details = %q, want only the environment note", e.Details)
+			assert.Contains(t, e.Details[0], "inherits GOWORK", "loadFailedError() details")
 		})
 	}
 }
