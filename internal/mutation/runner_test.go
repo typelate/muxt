@@ -33,7 +33,7 @@ func runnerFixture(t *testing.T, kills []bool) (*Report, *plan) {
 		if kill {
 			marker = "K"
 		}
-		p.mutants = append(p.mutants, Mutant{
+		p.mutants = append(p.mutants, mutant{
 			Operator: OperatorActionEmpty,
 			File:     src.file,
 			src:      src,
@@ -87,7 +87,7 @@ func TestWriteMutantMapsTheFileToItsMutatedCopy(t *testing.T) {
 		require.True(t, ok, "mutant %d overlay = %v, want %s replaced", i, got.Replace, mutant.File)
 		require.Len(t, got.Replace, 1, "mutant %d overlay replaces only %s", i, mutant.File)
 
-		assert.Equal(t, mutant.Apply(), readMutated(t, overlay), "mutant %d copy", i)
+		assert.Equal(t, mutant.apply(), readMutated(t, overlay), "mutant %d copy", i)
 		assert.Equal(t, filepath.Base(mutant.File), filepath.Base(mutated), "mutant %d copy name", i)
 		assert.Equal(t, filepath.Dir(overlay), filepath.Dir(mutated), "mutant %d copy and overlay share a directory", i)
 		assert.Equal(t, scratch, filepath.Dir(filepath.Dir(overlay)), "mutant %d directory is directly under the scratch directory", i)

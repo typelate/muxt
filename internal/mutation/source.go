@@ -43,9 +43,10 @@ type templateSource struct {
 	// template file that is the whole file.
 	litStart, litEnd int
 
-	// offsets maps an offset in text to one in fileText. It is nil when
-	// the two differ only by litStart, which is the case for a template
-	// file and for a raw literal holding no carriage returns.
+	// offsets maps an offset in text to one in fileText. It is nil for a
+	// template file, whose text and file differ by nothing; a Go string
+	// literal always has one, since even a raw literal drops carriage
+	// returns from its value.
 	offsets []int
 
 	// encode turns mutated text back into the bytes that go between

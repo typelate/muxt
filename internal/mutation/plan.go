@@ -22,7 +22,7 @@ import (
 // Enumerating is fast and running is slow, so the plan is also what a dry
 // run reports and what the estimate is built from.
 type plan struct {
-	mutants    []Mutant
+	mutants    []mutant
 	groups     []Group
 	trimmed    []TrimmedTemplate
 	templates  int
@@ -300,31 +300,31 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 	p.templates++
 	p.complexity += report.Complexity
 
-	for _, mutant := range found {
+	for _, m := range found {
 		result := Result{
-			Operator: mutant.Operator,
-			Line:     mutant.Line,
-			Column:   mutant.Column,
-			Original: mutant.Action(),
-			Mutated:  mutant.Replacement(),
+			Operator: m.Operator,
+			Line:     m.Line,
+			Column:   m.Column,
+			Original: m.action,
+			Mutated:  m.detail,
 			Status:   StatusPending,
 		}
-		if mutant.Operator == OperatorConditionDead {
+		if m.Operator == OperatorConditionDead {
 			// Simplification already proved this condition cannot change
 			// the decision, so no test could be coupled to it and there
 			// is nothing to learn from running it, or from parsing and
 			// type checking it first.
 			result.Status = StatusSkipped
-			result.Reason = mutant.Replacement()
+			result.Reason = m.detail
 			result.Mutated = ""
-		} else if reason, broken := invalid(lt, sc, mutant); broken {
+		} else if reason, broken := invalid(lt, sc, m); broken {
 			result.Status = StatusSkipped
 			result.Reason = reason
 		} else {
 			p.runnableN++
 		}
 		result.mutantIndex = len(p.mutants)
-		p.mutants = append(p.mutants, mutant)
+		p.mutants = append(p.mutants, m)
 		report.Results = append(report.Results, result)
 	}
 
@@ -341,7 +341,9 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 			Reason:   note.reason(),
 		})
 	}
-	slices.SortFunc(report.Results, func(a, b Result) int {
+	// Stable, so results that tie keep the order they were enumerated in
+	// rather than whatever order the sort leaves them.
+	slices.SortStableFunc(report.Results, func(a, b Result) int {
 		return cmp.Or(
 			cmp.Compare(a.Line, b.Line),
 			cmp.Compare(a.Column, b.Column),
@@ -372,8 +374,8 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
-	mutated := sc.src.mutatedText(mutant.edits)
+func invalid(lt *checked, sc scope, m mutant) (string, bool) {
+	mutated := sc.src.mutatedText(m.edits)
 	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, lt.Functions)
 	if err != nil {
 		return "does not parse", true

@@ -14,12 +14,12 @@ import (
 // leaves a decision that is still a function of the data, so whether a
 // test notices depends on the data it renders with: that is what shows
 // whether anything is coupled to that condition in particular.
-const OperatorCondition = "condition"
+const OperatorCondition Operator = "condition"
 
 // OperatorConditionDead marks a condition that boolean simplification
 // proved cannot change the decision, so no test could ever be coupled to
 // it and no mutant is worth running.
-const OperatorConditionDead = "condition-dead"
+const OperatorConditionDead Operator = "condition-dead"
 
 type boolKind int
 

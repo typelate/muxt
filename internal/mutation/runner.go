@@ -196,19 +196,19 @@ func roundDuration(d time.Duration) string {
 // writeMutant writes the mutated file and the overlay pointing at it into
 // a directory of their own under scratch, returning the overlay's path.
 // No two mutants share a directory, so none can read another's mutation.
-func writeMutant(scratch string, mutant Mutant) (string, error) {
+func writeMutant(scratch string, m mutant) (string, error) {
 	dir, err := os.MkdirTemp(scratch, "mutant-")
 	if err != nil {
 		return "", err
 	}
-	mutated := filepath.Join(dir, filepath.Base(mutant.File))
-	if err := os.WriteFile(mutated, []byte(mutant.Apply()), 0o600); err != nil {
+	mutated := filepath.Join(dir, filepath.Base(m.File))
+	if err := os.WriteFile(mutated, []byte(m.apply()), 0o600); err != nil {
 		return "", err
 	}
 	overlay := filepath.Join(dir, "overlay.json")
 	b, err := json.Marshal(struct {
 		Replace map[string]string
-	}{Replace: map[string]string{mutant.File: mutated}})
+	}{Replace: map[string]string{m.File: mutated}})
 	if err != nil {
 		return "", err
 	}

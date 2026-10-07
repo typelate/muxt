@@ -308,13 +308,13 @@ func TestConstructDropReachesAChainedWith(t *testing.T) {
 
 // dropMutants enumerates the construct and template drops of a template
 // named t, in the order they are written.
-func dropMutants(t *testing.T, text string) []Mutant {
+func dropMutants(t *testing.T, text string) []mutant {
 	t.Helper()
 	trees, err := asteval.ParseTrees("t", text, "", "", nil)
 	require.NoError(t, err)
 	src := newFileSource("t.gohtml", "t.gohtml", text, "", "")
 	e := &enumerator{src: src, template: "t"}
-	walkActions(src.text, src.regions, nil, nil, trees["t"].Root, func(a action) {
+	walkActions(src.regions, nil, nil, trees["t"].Root, func(a action) {
 		switch a.node.(type) {
 		case *parse.WithNode, *parse.RangeNode, *parse.TemplateNode:
 			e.variations(a)

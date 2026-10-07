@@ -66,8 +66,8 @@ const (
 	OperatorTemplateDrop Operator = "template-drop"
 )
 
-// Mutant is one variation of one action in one template.
-type Mutant struct {
+// mutant is one variation of one action in one template.
+type mutant struct {
 	// Operator is the variation applied.
 	Operator Operator
 
@@ -116,27 +116,21 @@ type edit struct {
 
 // start reports where in the template text the mutation begins, which is
 // what orders mutants within a template.
-func (m Mutant) start() int {
+func (m mutant) start() int {
 	if len(m.edits) == 0 {
 		return 0
 	}
 	return m.edits[0].start
 }
 
-// Apply returns the whole file with the mutation in place.
-func (m Mutant) Apply() string {
+// apply returns the whole file with the mutation in place.
+func (m mutant) apply() string {
 	return m.src.apply(m.edits)
 }
 
-// Action returns the mutated action as it is written in the template.
-func (m Mutant) Action() string { return m.action }
-
-// Replacement returns what the mutation substituted.
-func (m Mutant) Replacement() string { return m.detail }
-
 // mutantsInScope enumerates every mutation available in one template,
 // rendered with the type of dot its scope carries.
-func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]Mutant, []budgetNote) {
+func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases int) ([]mutant, []budgetNote) {
 	e := &enumerator{
 		src:       sc.src,
 		template:  sc.template,
@@ -144,9 +138,9 @@ func mutantsInScope(sc scope, functions check.Functions, draw *values, maxCases 
 		values:    draw,
 		maxCases:  maxCases,
 	}
-	walkActions(sc.src.text, sc.src.regions, sc.dataType, functions, sc.tree.Root, e.variations)
+	walkActions(sc.src.regions, sc.dataType, functions, sc.tree.Root, e.variations)
 
-	slices.SortFunc(e.mutants, func(a, b Mutant) int {
+	slices.SortStableFunc(e.mutants, func(a, b mutant) int {
 		return cmp.Or(
 			cmp.Compare(a.start(), b.start()),
 			cmp.Compare(a.Operator, b.Operator),
@@ -170,7 +164,7 @@ type enumerator struct {
 	maxCases  int
 
 	// mutants and notes are what the variations have found so far.
-	mutants []Mutant
+	mutants []mutant
 	notes   []budgetNote
 }
 
@@ -307,7 +301,7 @@ func (e *enumerator) appendMutant(r region, operator Operator, change edit) {
 // appendEdits records a mutant made of one or more substitutions.
 func (e *enumerator) appendEdits(r region, operator Operator, edits []edit, detail string) {
 	line, column := e.src.lines.at(e.src.fileOffset(r.start))
-	e.mutants = append(e.mutants, Mutant{
+	e.mutants = append(e.mutants, mutant{
 		Operator: operator,
 		Template: e.template,
 		File:     e.src.file,
