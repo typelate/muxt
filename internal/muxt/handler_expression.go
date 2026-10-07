@@ -64,6 +64,11 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 func parseHandlerCall(fileSet *token.FileSet, def *Definition) (*ast.Ident, *ast.CallExpr, error) {
 	e, err := parser.ParseExprFrom(fileSet, "template_name.go", []byte(def.handler), 0)
 	if err != nil {
+		if def.template == nil || def.template.Tree == nil {
+			// A template declared but never parsed has no tree to
+			// locate the error in.
+			return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression: %v", err)
+		}
 		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
 		return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}

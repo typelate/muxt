@@ -387,7 +387,12 @@ func (def Definition) ExecuteArgumentIndex() (int, bool) {
 	return 0, false
 }
 
+// cloneCall deep copies call's argument tree, so a caller may edit the copy.
+// It returns nil for a route without a call.
 func cloneCall(call *ast.CallExpr) *ast.CallExpr {
+	if call == nil {
+		return nil
+	}
 	clone := *call
 	clone.Args = make([]ast.Expr, len(call.Args))
 	for i, arg := range call.Args {
