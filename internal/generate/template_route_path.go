@@ -171,7 +171,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	if def.IsIndex() {
 		var indexPath ast.Expr = astgen.String("/")
 		if config.PathPrefix {
-			indexPath = astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file))
+			// The index pattern is registered as the prefix with its
+			// trailing slash, so the path is too; without it the request
+			// would be redirected.
+			indexPath = concatenation(prefixedPath(file, selector(routeBuilderReceiverName, pathPrefixPathsStructFieldName), "/")...)
 		}
 		return routeBuilderMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(file, config, def, indexPath))), escaperUse{}, nil
 	}

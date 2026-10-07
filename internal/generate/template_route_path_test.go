@@ -55,7 +55,7 @@ func TestRoutePathFunc(t *testing.T) {
 		{
 			name: "index with prefix", pattern: "GET /{$}", pathPrefix: true,
 			want: `func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"))}
+	return TemplateRoute{method: http.MethodGet, path: strings.TrimSuffix(path.Join(routes.pathsPrefix, "/"), "/") + "/"}
 }`,
 		},
 		{
