@@ -40,20 +40,23 @@ func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.Fi
 		Env:  env,
 	}, patterns...)
 	if err != nil {
-		return nil, nil, loadFailedError(wd, err)
+		return nil, nil, loadFailedError(wd, env, err)
 	}
 	return fileSet, pl, err
 }
 
-// PackagesWithTests is PackagesWithEnv, loading each package with its
-// in-package test files too.
+// PackagesWithTests loads the package in wd with its in-package test
+// files too, in env as PackagesWithEnv does.
+//
+// Only wd is loaded: its result is read for the package in wd and never
+// for a StandardLibrary, and loading the standard library roots with
+// tests would type check their test variants from source for nothing.
 //
 // With tests, go list reports a package twice: once as it is written and
 // once compiled with its test files. The second holds a test's
 // ExecuteTemplate calls, so the test variants come first, ahead of the
 // packages as written, and a package picked by directory is the one with
-// its tests. Unlike PackagesWithEnv, a load failure is returned as the
-// loader reported it.
+// its tests.
 func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
 	pl, err := packages.Load(&packages.Config{
 		Fset:  token.NewFileSet(),
@@ -63,9 +66,9 @@ func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
 			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
 		Dir: wd,
 		Env: env,
-	}, wd, "encoding", "fmt", "net/http")
+	}, wd)
 	if err != nil {
-		return nil, err
+		return nil, loadFailedError(wd, env, err)
 	}
 	return testVariantsFirst(pl), nil
 }
@@ -78,11 +81,24 @@ func testVariantsFirst(pl []*packages.Package) []*packages.Package {
 	return ordered
 }
 
+// variantRank orders a package compiled with its in-package tests first,
+// then the packages as written, then the external test package and the
+// generated test main. The external test package's files are in the
+// package's directory too, so it ranks last whatever order go list
+// reported it in.
 func variantRank(pkg *packages.Package) int {
-	if strings.HasSuffix(pkg.ID, ".test]") {
+	switch {
+	case isExternalTest(pkg), strings.HasSuffix(pkg.ID, ".test"):
+		return 2
+	case strings.HasSuffix(pkg.ID, ".test]"):
 		return 0
+	default:
+		return 1
 	}
-	return 1
+}
+
+func isExternalTest(pkg *packages.Package) bool {
+	return strings.HasSuffix(pkg.Name, "_test") || strings.HasSuffix(pkg.PkgPath, "_test")
 }
 
 // ParseErrors returns the syntax errors the loader recovered from.
@@ -117,9 +133,9 @@ func ParseErrors(pl []*packages.Package) []packages.Error {
 	return found
 }
 
-// PackageInDirectory returns the package whose files are in dir, which is
+// packageInDirectory returns the package whose files are in dir, which is
 // always a directory, even one whose name ends in .go.
-func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package, bool) {
+func packageInDirectory(list []*packages.Package, dir string) (*packages.Package, bool) {
 	for _, pkg := range list {
 		if len(pkg.GoFiles) > 0 && filepath.Dir(pkg.GoFiles[0]) == dir {
 			return pkg, true
@@ -128,12 +144,12 @@ func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package
 	return nil, false
 }
 
-// HTMLTemplates evaluates the package-level template variable through
+// htmlTemplates evaluates the package-level template variable through
 // check.LoadTemplates and returns the loaded handle alongside the
 // html/template value; muxt introspects template names and trees without
 // executing, so a text/template set works through an html/template value
 // carrying the same trees.
-func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
+func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
 	lt, err := check.LoadTemplates(pkg, templatesVariable)
 	if err != nil {
 		return nil, nil, err
@@ -157,7 +173,7 @@ func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Temp
 	return lt, ts, nil
 }
 
-func FindType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
+func findType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
 	notFoundErr := fmt.Errorf("could not find receiver type %s in %s", ident, packagePath)
 	for _, pkg := range pl {
 		if pkg.PkgPath != packagePath {

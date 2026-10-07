@@ -3,6 +3,7 @@ package load
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -14,9 +15,16 @@ import (
 // MultiLineError form lists what did load, forwards the loader's own
 // errors, and names workspace state when a go.work file may be
 // excluding the module, since muxt loads packages like the go command
-// and inherits GOWORK, GOFLAGS, and GOROOT.
+// and inherits GOWORK, GOFLAGS, and GOROOT. The workspace is the one the
+// go command reports in the process's environment.
 func NoPackageError(dir string, pl []*packages.Package) error {
 	e := &PackageLookupError{Dir: dir}
+	if pkg, ok := packageWithoutFiles(pl, dir); ok {
+		// go list reports a package in a directory whose Go files are
+		// all tests or all excluded by build constraints; "no Go package
+		// found" above a listing that names it reads as a contradiction.
+		e.Summary = fmt.Sprintf("package %s at %s has no Go files for this build", pkg.PkgPath, dir)
+	}
 	if len(pl) == 0 {
 		e.Details = append(e.Details, "go/packages loaded no packages")
 	} else {
@@ -25,11 +33,22 @@ func NoPackageError(dir string, pl []*packages.Package) error {
 		e.Details = append(e.Details, listing)
 	}
 	e.Details = append(e.Details, loadErrorDetails(pl)...)
-	if note := workspaceNote(dir); note != "" {
+	if note := workspaceNote(dir, nil); note != "" {
 		e.Details = append(e.Details, note)
 	}
 	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
 	return e
+}
+
+// packageWithoutFiles returns the package go list reported in dir with no
+// Go files to build.
+func packageWithoutFiles(pl []*packages.Package, dir string) (*packages.Package, bool) {
+	for _, pkg := range pl {
+		if pkg.Dir == dir && len(pkg.GoFiles) == 0 {
+			return pkg, true
+		}
+	}
+	return nil, false
 }
 
 // describeLoaded lists the loaded package paths. It also reports whether the
@@ -107,55 +126,76 @@ func (e *PackageLookupError) MultiLineError() string {
 	return sb.String()
 }
 
-// workspaceNote reports the go.work file that governs dir, if any:
-// either the file GOWORK names or the nearest go.work in a parent
-// directory (the go command's own discovery rule). A workspace that
-// does not list dir's module makes every package lookup under dir come
-// up empty, which is otherwise invisible from the error.
-func workspaceNote(dir string) string {
-	// go work use wants the module root, not the package directory.
-	module := moduleRoot(dir)
-	switch gowork := os.Getenv("GOWORK"); gowork {
-	case "off":
+// workspaceNote reports the go.work file that governs dir, if any. A
+// workspace that does not list dir's module makes every package lookup
+// under dir come up empty, which is otherwise invisible from the error.
+//
+// The go command is asked, in env (nil for the process's own), the one
+// the load ran in: GOWORK may be set there, in the GOENV file, or not at
+// all, with the nearest go.work in a parent directory in effect.
+func workspaceNote(dir string, env []string) string {
+	cmd := exec.Command("go", "env", "GOWORK")
+	cmd.Dir = existingDir(dir)
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		// The hint is a guess at a cause; the failure it explains is
+		// reported either way.
 		return ""
-	case "", "auto":
-		// Empty and "auto" both mean the go command discovers the
-		// nearest go.work in a parent directory.
-		for d := dir; ; {
-			workFile := filepath.Join(d, "go.work")
-			if _, err := os.Stat(workFile); err == nil {
-				return fmt.Sprintf("a workspace file at %s is in effect; if it does not list this module, run with GOWORK=off or add the module with: go work use %s", workFile, module)
-			}
-			parent := filepath.Dir(d)
-			if parent == d {
-				return ""
-			}
-			d = parent
+	}
+	workFile := strings.TrimSpace(string(out))
+	if workFile == "" || workFile == "off" {
+		return ""
+	}
+	// go work use wants the module root, not the package directory.
+	return fmt.Sprintf("the workspace file %s is in effect; if it does not list this module, run with GOWORK=off or add the module with: go work use %s", workFile, moduleRoot(dir))
+}
+
+// existingDir returns dir, or its nearest ancestor that exists: a lookup
+// can name a directory nothing was ever written to.
+func existingDir(dir string) string {
+	for d := dir; ; {
+		if info, err := os.Stat(d); err == nil && info.IsDir() {
+			return d
 		}
-	default:
-		return fmt.Sprintf("GOWORK=%s is set; if that workspace does not list this module, run with GOWORK=off or add the module with: go work use %s", gowork, module)
+		parent := filepath.Dir(d)
+		if parent == d {
+			return d
+		}
+		d = parent
 	}
 }
 
-// loadFailedError frames a packages.Load failure. The driver's own
-// error arrives triple-wrapped ("err: exit status 1: stderr: go: …"),
-// so the go error is unwrapped from the plumbing and gets the same
-// workspace guidance a failed lookup gets.
-func loadFailedError(dir string, err error) error {
-	msg := err.Error()
-	if idx := strings.LastIndex(msg, "stderr: "); idx >= 0 {
-		msg = strings.TrimSpace(msg[idx+len("stderr: "):])
-	}
+// loadFailedError frames a packages.Load failure. The short form carries
+// the go command's own message, since it is the cause and most commands
+// print only the short form; the workspace guidance a failed lookup gets
+// goes in the details.
+func loadFailedError(dir string, env []string, err error) error {
 	e := &PackageLookupError{
 		Dir:     dir,
-		Summary: "failed to load Go packages from " + dir,
-		Details: []string{msg},
+		Summary: "failed to load Go packages from " + dir + ": " + goMessage(err),
 	}
-	if note := workspaceNote(dir); note != "" {
+	if note := workspaceNote(dir, env); note != "" {
 		e.Details = append(e.Details, note)
 	}
 	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
 	return e
+}
+
+// goMessage returns what the go command wrote to stderr when the go list
+// driver failed. The driver wraps it as "err: <exit status>: stderr: <go
+// message>"; only that leading plumbing is removed, so a go message that
+// itself contains "stderr: " is kept whole.
+func goMessage(err error) string {
+	msg := err.Error()
+	if rest, ok := strings.CutPrefix(msg, "err: "); ok {
+		if _, stderr, ok := strings.Cut(rest, ": stderr: "); ok {
+			msg = stderr
+		}
+	} else if stderr, ok := strings.CutPrefix(msg, "stderr: "); ok {
+		msg = stderr
+	}
+	return strings.TrimSpace(msg)
 }
 
 // moduleRoot walks up from dir to the nearest directory containing a

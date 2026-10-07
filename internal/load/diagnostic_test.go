@@ -113,7 +113,29 @@ func TestNoPackageError(t *testing.T) {
 		t.Setenv("GOWORK", "/somewhere/go.work")
 		err := load.NoPackageError(t.TempDir(), nil)
 		require.Error(t, err)
-		assert.Contains(t, multiLine(t, err), "GOWORK=/somewhere/go.work is set")
+		assert.Contains(t, multiLine(t, err), "the workspace file /somewhere/go.work is in effect")
+	})
+	t.Run("GOWORK=off in the GOENV file adds no workspace note", func(t *testing.T) {
+		// go env -w GOWORK=off writes the GOENV file, not the environment.
+		t.Setenv("GOWORK", "")
+		parent := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
+		goenv := filepath.Join(t.TempDir(), "env")
+		require.NoError(t, os.WriteFile(goenv, []byte("GOWORK=off\n"), 0o600))
+		t.Setenv("GOENV", goenv)
+		dir := filepath.Join(parent, "app")
+		require.NoError(t, os.Mkdir(dir, 0o700))
+		err := load.NoPackageError(dir, nil)
+		require.Error(t, err)
+		assert.NotContains(t, multiLine(t, err), "go work use")
+	})
+	t.Run("a directory that does not exist is asked about from its parent", func(t *testing.T) {
+		t.Setenv("GOWORK", "")
+		parent := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(parent, "go.work"), []byte("go 1.24\n"), 0o600))
+		err := load.NoPackageError(filepath.Join(parent, "app", "sub"), nil)
+		require.Error(t, err)
+		assert.Contains(t, multiLine(t, err), "go.work is in effect")
 	})
 	t.Run("the remediation names the module root, not the package dir", func(t *testing.T) {
 		t.Setenv("GOWORK", "")
@@ -146,7 +168,9 @@ func TestNoPackageError(t *testing.T) {
 		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
 		_, _, err := load.Packages(dir)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load Go packages from "+dir)
+		assert.Contains(t, err.Error(), "failed to load Go packages from "+dir+": go: ", "the short form carries the go command's message")
+		assert.NotContains(t, err.Error(), "stderr:")
+		assert.NotContains(t, err.Error(), "\n\t", "the hints stay in the details")
 		msg := multiLine(t, err)
 		assert.NotContains(t, msg, "stderr:")
 		assert.NotContains(t, msg, "exit status")
@@ -158,6 +182,40 @@ func TestNoPackageError(t *testing.T) {
 		require.Error(t, err)
 		assert.NotContains(t, multiLine(t, err), "go work use")
 	})
+}
+
+// TestNoGoFilesForThisBuild states what a directory whose Go files are all
+// tests, or all excluded by build constraints, is reported as: go list
+// reports a package there, with no files to read.
+func TestNoGoFilesForThisBuild(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+	}{
+		{name: "only test files", files: map[string]string{
+			"p_test.go": "package p\n\nimport \"testing\"\n\nfunc TestP(t *testing.T) {}\n",
+		}},
+		{name: "only excluded files", files: map[string]string{
+			"p.go": "//go:build ignore\n\npackage p\n",
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GOWORK", "off")
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			require.NoError(t, err)
+			tt.files["go.mod"] = "module example.com/p\n\ngo 1.24\n"
+			for name, content := range tt.files {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+			}
+			_, pl, err := load.Packages(dir)
+			require.NoError(t, err, "Packages()")
+
+			_, err = load.Package(dir, pl, nil)
+			require.Error(t, err, "Package()")
+			msg := multiLine(t, err)
+			assert.Contains(t, msg, "package example.com/p at "+dir+" has no Go files for this build", "Package() error")
+		})
+	}
 }
 
 // multiLine returns err's verbose rendering, failing when err has none.

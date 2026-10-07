@@ -29,36 +29,42 @@ func packageIDs(pl []*packages.Package) []string {
 
 func TestTestVariantsFirst(t *testing.T) {
 	in := []*packages.Package{
+		{ID: "example.com/a_test [example.com/a.test]", Name: "a_test", PkgPath: "example.com/a_test"},
 		{ID: "example.com/a"},
+		{ID: "example.com/b.test"},
 		{ID: "example.com/b [example.com/b.test]"},
 		{ID: "example.com/c"},
 		{ID: "example.com/a [example.com/a.test]"},
-		{ID: "example.com/b.test"},
 	}
 	want := []string{
 		"example.com/b [example.com/b.test]",
 		"example.com/a [example.com/a.test]",
 		"example.com/a",
 		"example.com/c",
+		"example.com/a_test [example.com/a.test]",
 		"example.com/b.test",
 	}
 
 	assert.Equal(t, want, packageIDs(testVariantsFirst(in)), "testVariantsFirst()")
-	assert.Equal(t, "example.com/a", packageIDs(in)[0], "testVariantsFirst reordered its argument")
+	assert.Equal(t, "example.com/a_test [example.com/a.test]", packageIDs(in)[0], "testVariantsFirst reordered its argument")
 }
 
 func TestPackagesWithTests(t *testing.T) {
+	t.Setenv("GOWORK", "off")
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"go.mod":    "module example.com/p\n\ngo 1.24\n",
 		"p.go":      "package p\n\nfunc F() int { return 1 }\n",
 		"p_test.go": "package p\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { _ = F() }\n",
+		// The external test package is in the directory too, and go
+		// list reports it as a variant of p.test.
+		"p_ext_test.go": "package p_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/p\"\n)\n\nfunc TestExternal(t *testing.T) { _ = p.F() }\n",
 	})
 
 	pl, err := PackagesWithTests(dir, nil)
 	require.NoError(t, err, "PackagesWithTests()")
 	require.NotEmpty(t, pl, "PackagesWithTests()")
-	require.True(t, strings.HasSuffix(pl[0].ID, ".test]"), "PackagesWithTests()[0] = %v, want the package compiled with its tests first", pl)
+	require.Equal(t, "example.com/p [example.com/p.test]", pl[0].ID, "PackagesWithTests()[0] = %v, want the package compiled with its tests first", packageIDs(pl))
 
 	t.Run("the first package holds the test files", func(t *testing.T) {
 		var files []string
@@ -66,13 +72,36 @@ func TestPackagesWithTests(t *testing.T) {
 			files = append(files, filepath.Base(f))
 		}
 		assert.Contains(t, files, "p_test.go", "first package files")
+		assert.NotContains(t, files, "p_ext_test.go", "first package files")
 	})
 
 	t.Run("the directory resolves to the test variant", func(t *testing.T) {
-		got, ok := PackageInDirectory(pl, dir)
-		assert.True(t, ok, "PackageInDirectory() ok")
-		assert.Same(t, pl[0], got, "PackageInDirectory() want the test variant")
+		got, ok := packageInDirectory(pl, dir)
+		assert.True(t, ok, "packageInDirectory() ok")
+		assert.Same(t, pl[0], got, "packageInDirectory() want the test variant")
 	})
+
+	t.Run("only the working directory is loaded", func(t *testing.T) {
+		// Nothing reads the standard library roots a test load would
+		// otherwise type check from source, test files and all.
+		for _, pkg := range pl {
+			assert.True(t, strings.HasPrefix(pkg.PkgPath, "example.com/p"), "PackagesWithTests() loaded %s, want only the working directory's packages", pkg.ID)
+		}
+	})
+}
+
+func TestPackagesWithTestsLoadFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"go.mod":  "module broken\n\ngo 1.24\n",
+		"go.work": "go 1.24\n\nuse (\n\t.\n\t./missing\n)\n",
+	})
+	t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+	_, err := PackagesWithTests(dir, nil)
+	require.Error(t, err, "PackagesWithTests()")
+	var lookupErr *PackageLookupError
+	require.ErrorAs(t, err, &lookupErr, "PackagesWithTests() frames a load failure as PackagesWithEnv does")
+	assert.Contains(t, err.Error(), "failed to load Go packages from "+dir+": go: ")
 }
 
 func loadError(kind packages.ErrorKind, pos, msg string) packages.Error {
@@ -171,12 +200,40 @@ func TestLoadFailedError(t *testing.T) {
 		{name: "driver plumbing is stripped", msg: "err: exit status 1: stderr: go: boom\n", want: "go: boom"},
 		{name: "stderr at the start", msg: "stderr: go: boom", want: "go: boom"},
 		{name: "no plumbing", msg: "boom", want: "boom"},
+		{
+			name: "a go message mentioning stderr is kept whole",
+			msg:  "err: exit status 1: stderr: go: reading go.work: stderr: is not a module\n",
+			want: "go: reading go.work: stderr: is not a module",
+		},
+		{name: "only the leading plumbing is plumbing", msg: "go: x stderr: y", want: "go: x stderr: y"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			e, ok := loadFailedError(t.TempDir(), errors.New(tt.msg)).(*PackageLookupError)
+			dir := t.TempDir()
+			e, ok := loadFailedError(dir, nil, errors.New(tt.msg)).(*PackageLookupError)
 			require.True(t, ok, "loadFailedError() is not a *PackageLookupError")
-			require.Len(t, e.Details, 2, "loadFailedError() details = %q, want the message then the environment note", e.Details)
-			assert.Equal(t, tt.want, e.Details[0], "loadFailedError() details = %q, want the message %q then the environment note", e.Details, tt.want)
+			want := "failed to load Go packages from " + dir + ": " + tt.want
+			assert.Equal(t, want, e.Error(), "loadFailedError(%q).Error() carries the go message", tt.msg)
+			require.Len(t, e.Details, 1, "loadFailedError() details = %q, want only the environment note", e.Details)
+			assert.Contains(t, e.Details[0], "inherits GOWORK", "loadFailedError() details")
 		})
 	}
+}
+
+// TestLoadFailedErrorWorkspaceEnv states that the workspace hint is about
+// the environment the load ran in, not the process's: the mutation run
+// loads its --diff copy with GOWORK=off.
+func TestLoadFailedErrorWorkspaceEnv(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	parent := t.TempDir()
+	writeFiles(t, parent, map[string]string{"go.work": "go 1.24\n"})
+	dir := filepath.Join(parent, "app")
+	require.NoError(t, os.Mkdir(dir, 0o700))
+	boom := errors.New("err: exit status 1: stderr: go: boom")
+
+	inProcess := loadFailedError(dir, nil, boom).(*PackageLookupError).MultiLineError()
+	assert.Contains(t, inProcess, filepath.Base(parent), "loadFailedError(nil env) names the discovered go.work")
+	assert.Contains(t, inProcess, "go work use", "loadFailedError(nil env)")
+
+	off := loadFailedError(dir, append(os.Environ(), "GOWORK=off"), boom).(*PackageLookupError).MultiLineError()
+	assert.NotContains(t, off, "go work use", "loadFailedError(GOWORK=off env) names a go.work that is not in effect")
 }
