@@ -16,8 +16,8 @@ import (
 
 // This file holds what each command does with its configuration: load the
 // package, run the implementation, and write what it produced. What the
-// flags decide, but for --format, happens before a runner is called, in
-// commands.go.
+// flags decide happens before a runner is called, in the command
+// constructors; only the --format a result is written in is read here.
 
 func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error {
 	_, pl, err := load.Packages(wd, config.ReceiverPackage)

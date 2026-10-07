@@ -44,6 +44,9 @@ working tree is never written to.`,
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 
 			if templatePattern != "" {
 				pattern, err := regexp.Compile(templatePattern)

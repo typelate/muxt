@@ -76,6 +76,21 @@ var resultJSON = json.JoinOptions(
 	})),
 )
 
+// checkFormat rejects a --format writeResult cannot write, so a command
+// refuses it before loading anything rather than after its work is done.
+func checkFormat(cmd *cobra.Command) error {
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
+	switch format {
+	case "text", "json":
+		return nil
+	default:
+		return fmt.Errorf("unknown format: %s", format)
+	}
+}
+
 func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 	format, err := cmd.Flags().GetString("format")
 	if err != nil {

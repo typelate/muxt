@@ -52,6 +52,9 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 		Short:   "Explore all muxt packages in the module",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
 			if err != nil {
 				return err
