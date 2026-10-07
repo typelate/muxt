@@ -62,6 +62,23 @@ func TestDefinitionHasResponseWriterArg(t *testing.T) {
 	}
 }
 
+func TestDefinitionsOrderRoutesThatDifferOnlyByHost(t *testing.T) {
+	ts := template.Must(template.New("").Parse(
+		`{{define "GET c.example/x F()"}}{{end}}` +
+			`{{define "GET a.example/x F()"}}{{end}}` +
+			`{{define "GET b.example/x F()"}}{{end}}` +
+			`{{define "GET /x F()"}}{{end}}`))
+	for range 16 {
+		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+		require.NoError(t, err)
+		var patterns []string
+		for _, def := range defs {
+			patterns = append(patterns, def.Pattern())
+		}
+		require.Equal(t, []string{"GET /x", "GET a.example/x", "GET b.example/x", "GET c.example/x"}, patterns, "Definitions() order")
+	}
+}
+
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
