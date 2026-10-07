@@ -209,13 +209,23 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
 	}
+	var list []ast.Stmt
+	// The result offers a status code only when the call succeeded: after
+	// an error it may be a nil pointer whose StatusCode panics.
+	var resultStatusCode ast.Expr
 	switch def.ResultStatusCode() {
 	case muxt.ResultStatusCodeMethod:
-		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}})
+		// The result is a field of the template data variable, so it is
+		// addressable and a pointer receiver method is called on it as
+		// well as a value receiver one.
+		resultStatusCode = &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}}
 	case muxt.ResultStatusCodeField:
-		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
+		resultStatusCode = &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}
 	}
-	var list []ast.Stmt
+	if resultStatusCode != nil {
+		list = append(list, resultStatusCodeStatements(resultDataIdent, resultStatusCode)...)
+		statusCodePriorityList = append(statusCodePriorityList, ast.NewIdent(resultStatusCodeIdent))
+	}
 	if fallbackStatusCode == http.StatusOK {
 		const defaultStatusIdent = "defaultStatusCode"
 		list = append(list,
@@ -279,6 +289,31 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 	}
 
 	return append(list, writeBodyAndWriteHeadersFunc(file, bufIdent, statusCode)...)
+}
+
+// resultStatusCodeStatements declares the status code the result offers,
+// read only when the template data has no errors:
+//
+//	var resultStatusCode int
+//	if len(td.errList) == 0 {
+//		resultStatusCode = td.result.StatusCode()
+//	}
+func resultStatusCodeStatements(resultDataIdent string, statusCode ast.Expr) []ast.Stmt {
+	return []ast.Stmt{
+		varDecl(resultStatusCodeIdent, ast.NewIdent("int"), nil),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}}},
+				Op: token.EQL,
+				Y:  astgen.Int(0),
+			},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(resultStatusCodeIdent)},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{statusCode},
+			}}},
+		},
+	}
 }
 
 func executeTemplateFailedLogLine(file *File, message, errIdent string) *ast.CallExpr {

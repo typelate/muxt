@@ -34,6 +34,7 @@ const (
 
 	errIdent                    = "err"
 	templateDataFieldStatusCode = "statusCode"
+	resultStatusCodeIdent       = "resultStatusCode"
 
 	pathPrefixPathsStructFieldName = "pathsPrefix"
 
