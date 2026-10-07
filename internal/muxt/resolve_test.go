@@ -118,6 +118,29 @@ func (T) Save(form Form) any { return nil }
 		require.Equal(t, muxt.UnmarshalInt, defs[1].Arguments[0].UnmarshalMethod(), "UnmarshalMethod() of an ID = int path value")
 	})
 
+	t.Run("a synthesized parameter is not named like another argument", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Context interface{ Done() }
+`})
+		for _, tt := range []struct {
+			name string
+			want string
+		}{
+			{name: "GET /{ctx2} Missing(ctx, ctx, ctx2)", want: "Missing(ctx Context, ctx3 Context, ctx2 string) any"},
+			{name: "GET /{ctx2} Missing(ctx2, ctx, ctx)", want: "Missing(ctx2 string, ctx Context, ctx3 Context) any"},
+			{name: "GET /{ctx2}/{ctx3} Missing(ctx, ctx3, ctx, ctx2)", want: "Missing(ctx Context, ctx3 string, ctx4 Context, ctx2 string) any"},
+		} {
+			src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+				variable("templates", `{{define "`+tt.name+`"}}{{end}}`),
+			}}
+			defs, err := muxt.ResolveDefinitions(src, nil, fake.StandInChecker(t, pkg).Fake())
+			require.NoError(t, err, "ResolveDefinitions(%s)", tt.name)
+			require.Len(t, defs, 1)
+			require.Equal(t, []string{tt.want}, defs[0].SynthesizedMethods(), "SynthesizedMethods() of %s", tt.name)
+		}
+	})
+
 	t.Run("resolution errors are combined", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
