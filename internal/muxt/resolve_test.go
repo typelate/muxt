@@ -87,6 +87,37 @@ type Nested struct{ Users func() any }
 		}
 	})
 
+	t.Run("an alias parameter type parses like the type it names", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type ID = int
+
+type Tags = []ID
+
+type Values map[string][]string
+
+type Form struct{ Tags Tags }
+
+type T struct{}
+
+func (T) Show(id ID) any     { return nil }
+func (T) Save(form Form) any { return nil }
+`})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("templates", `{{define "GET /{id} Show(id)"}}{{end}}{{define "POST / Save(form)"}}{{end}}`),
+		}}
+		defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.StandInChecker(t, pkg).Fake())
+		require.NoError(t, err)
+		require.Len(t, defs, 2)
+		require.Equal(t, "POST /", defs[0].Pattern())
+		fields := defs[0].Arguments[0].FormFields()
+		require.Len(t, fields, 1)
+		require.True(t, fields[0].Slice, "a Tags = []ID field binds every value")
+		require.Equal(t, muxt.UnmarshalInt, fields[0].Method, "Method of a Tags = []ID field")
+		require.Equal(t, "GET /{id}", defs[1].Pattern())
+		require.Equal(t, muxt.UnmarshalInt, defs[1].Arguments[0].UnmarshalMethod(), "UnmarshalMethod() of an ID = int path value")
+	})
+
 	t.Run("resolution errors are combined", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
