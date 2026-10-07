@@ -435,9 +435,6 @@ func generatePerFileRouteFunction(
 	config RoutesFileConfiguration,
 	receiverInterface *ast.InterfaceType,
 ) (*ast.FuncDecl, error) {
-	if sourceFile == "" {
-		return nil, fmt.Errorf("sourceFile cannot be empty")
-	}
 	routesFunc := routesFuncDecl(file, config, funcName, receiverInterfaceName, true)
 	handlers, err := routeStatements(file, config, defs, receiverInterface, receiverInterfaceName, logger, " in "+sourceFile)
 	if err != nil {

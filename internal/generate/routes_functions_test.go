@@ -168,11 +168,6 @@ func TestGeneratePerFileRouteFunction(t *testing.T) {
 		"a.gohtml": `{{define "GET /a/{id} A(id)"}}{{end}}{{define "GET /plain"}}{{end}}`,
 	})
 
-	t.Run("source file is required", func(t *testing.T) {
-		_, err := generatePerFileRouteFunction("", defs, newFile(pkg), "aRoutes", "aReceiver", log.New(&bytes.Buffer{}, "", 0), testConfig(), &ast.InterfaceType{Methods: new(ast.FieldList)})
-		assert.EqualError(t, err, "sourceFile cannot be empty")
-	})
-
 	for _, tt := range []struct {
 		name      string
 		configure func(*RoutesFileConfiguration)
