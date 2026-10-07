@@ -1,0 +1,81 @@
+# An sse route's call may take the result of another call. That call runs
+# before the event stream opens; when it returns an error the route
+# responds 500 and does not open the stream.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /events/{id} sse(Stream(ctx, Count(ctx, id), execute))" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"html/template"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) Count(ctx context.Context, id int) (int, error) {
+	if id < 0 {
+		return 0, errors.New("no count for a negative id")
+	}
+	return id * 2, nil
+}
+
+func (Server) Stream(ctx context.Context, count int, execute func(data string) error) error {
+	return execute(strconv.Itoa(count))
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestStream(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	t.Run("the call's result is the argument", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/events/21", nil))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, "data: 42\n\n") {
+			t.Fatalf("body = %q, want it to contain %q", got, "data: 42\n\n")
+		}
+	})
+
+	t.Run("the call's error responds 500 without opening the stream", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/events/-1", nil))
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+		if got := rec.Header().Get("Content-Type"); got == "text/event-stream" {
+			t.Fatalf("Content-Type = %q, want the stream not opened", got)
+		}
+	})
+}
