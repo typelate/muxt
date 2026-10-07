@@ -133,6 +133,13 @@ func TestCanTemplateRedirect(t *testing.T) {
 		{name: "dot handed to a function", template: `{{printf "%v" .}}`, want: true},
 		{name: "static text", template: `<p>hi</p>`},
 		{name: "a literal condition", template: `{{if true}}x{{end}}`},
+		{name: "a redirect from the root", template: `{{$.Redirect "/x"}}`, want: true},
+		{name: "a redirect from the root inside a range", template: `{{range .Items}}{{$.RedirectSeeOther "/x"}}{{end}}`, want: true},
+		{name: "a redirect from a variable holding dot", template: `{{$d := .}}{{$d.Redirect "/x"}}`, want: true},
+		{name: "an unknown method from a variable holding dot", template: `{{$d := .}}{{$d.Name}}`, want: true},
+		{name: "a variable holding dot handed to a function", template: `{{$d := .}}{{printf "%v" $d}}`, want: true},
+		{name: "a safe method from the root", template: `{{$.Path}}`},
+		{name: "a variable holding dot, unused", template: `{{$d := .}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, page := pageIn(t, tt.template)

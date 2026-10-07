@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/types"
 	"html/template"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -300,6 +301,28 @@ func TestArgumentDeclares(t *testing.T) {
 	require.False(t, outerID.Declares(), "the outer occurrence of id reuses the local the nested call declared")
 }
 
+// TestSegmentsServeMuxRejectsMarkTheSegment states that a path segment
+// http.ServeMux would reject is marked in the name.
+func TestSegmentsServeMuxRejectsMarkTheSegment(t *testing.T) {
+	for _, tt := range []struct {
+		definition string
+		segment    string
+	}{
+		{definition: "GET /x/a{b}/y", segment: "a{b}"},
+		{definition: "GET example.com/{rest...}/x", segment: "{rest...}"},
+		{definition: "GET /x/{rest...}/{$}", segment: "{rest...}"},
+	} {
+		t.Run(tt.definition, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			_, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
+			nameErr, ok := errors.AsType[*muxt.NameError](err)
+			require.True(t, ok, "Definitions(%q) = %v, want a *NameError", tt.definition, err)
+			assert.Equal(t, strings.Index(tt.definition, tt.segment), nameErr.Offset, "offset")
+			assert.Equal(t, len(tt.segment), nameErr.Length, "length")
+		})
+	}
+}
+
 // TestSegments states how a pattern's path splits into segments and which
 // wildcard spellings are rejected.
 func TestSegments(t *testing.T) {
@@ -319,6 +342,14 @@ func TestSegments(t *testing.T) {
 		{name: "an empty remainder name", definition: "GET /{...}", wantErr: `"" is not a Go identifier`},
 		{name: "a duplicate wildcard", definition: "GET /{id}/{id}", wantErr: `path parameter name "id" is used more than once`},
 		{name: "a reserved name", definition: "GET /{form}", wantErr: "path parameter name form conflicts with a reserved identifier"},
+		// http.ServeMux panics registering these, so the generated
+		// program would fail at startup.
+		{name: "a wildcard after text", definition: "GET /a{b}", wantErr: "path segment a{b} is not permitted: a wildcard is spelled {name} or {name...} and fills its segment"},
+		{name: "an opening brace in text", definition: "GET /x/a{b", wantErr: "path segment a{b is not permitted: a wildcard is spelled {name} or {name...} and fills its segment"},
+		{name: "a remainder before another segment", definition: "GET /{rest...}/x", wantErr: "path segment {rest...} is not permitted here: a {name...} wildcard must be the last segment"},
+		{name: "a remainder before the end wildcard", definition: "GET /{rest...}/{$}", wantErr: "path segment {rest...} is not permitted here: a {name...} wildcard must be the last segment"},
+		// http.ServeMux registers a closing brace as text.
+		{name: "a closing brace in text", definition: "GET /a}b", want: []string{"literal a}b"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
@@ -388,7 +419,7 @@ func TestPathParameterLookup(t *testing.T) {
 }
 
 // segmentByName finds the wildcard segment named name among segments, the
-// way muxt's own unexported pathParameter does.
+// way muxt's own unexported hasPathParameter looks for one.
 func segmentByName(segments []muxt.Segment, name string) (muxt.Segment, bool) {
 	for _, segment := range segments {
 		if segment.IsWildcard() && segment.Value() == name {

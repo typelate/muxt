@@ -21,6 +21,79 @@ func TestDefinitions(t *testing.T) {
 	})
 }
 
+func TestDefinitionMayRedirect(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "a redirect from dot", body: `{{.Redirect "/x"}}`, want: true},
+		{name: "a redirect from the root", body: `{{$.Redirect "/x"}}`, want: true},
+		{name: "a redirect from a variable", body: `{{$d := .}}{{$d.RedirectSeeOther "/x"}}`, want: true},
+		{name: "no redirect", body: `{{.Result}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(`{{define "GET / F()"}}` + tt.body + `{{end}}`))
+			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			assert.Equal(t, tt.want, defs[0].MayRedirect(), "MayRedirect() of %s", tt.body)
+		})
+	}
+}
+
+func TestDefinitionHasResponseWriterArg(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{name: "GET / F(response)", want: true},
+		{name: "GET / F(G(response))", want: true},
+		{name: "GET / F(request)"},
+		{name: "GET /"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(`{{define "` + tt.name + `"}}{{end}}`))
+			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			assert.Equal(t, tt.want, defs[0].HasResponseWriterArg(), "HasResponseWriterArg() of %s", tt.name)
+		})
+	}
+}
+
+func TestDefinitionsOrderRoutesThatDifferOnlyByHost(t *testing.T) {
+	ts := template.Must(template.New("").Parse(
+		`{{define "GET c.example/x F()"}}{{end}}` +
+			`{{define "GET a.example/x F()"}}{{end}}` +
+			`{{define "GET b.example/x F()"}}{{end}}` +
+			`{{define "GET /x F()"}}{{end}}`))
+	for range 16 {
+		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+		require.NoError(t, err)
+		var patterns []string
+		for _, def := range defs {
+			patterns = append(patterns, def.Pattern())
+		}
+		require.Equal(t, []string{"GET /x", "GET a.example/x", "GET b.example/x", "GET c.example/x"}, patterns, "Definitions() order")
+	}
+}
+
+func TestDefinitionCallExpressionWithoutAHandler(t *testing.T) {
+	ts := template.Must(template.New("").Parse(`{{define "GET /about"}}{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Nil(t, defs[0].CallExpression(), "CallExpression() of a route without a call")
+}
+
+func TestDefinitionsMalformedHandlerOfAnUnparsedTemplate(t *testing.T) {
+	ts := template.New("")
+	ts.New("GET / F(") // declared, never parsed: no tree
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression")
+}
+
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
@@ -78,6 +151,20 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 			assert.Equalf(t, "/abc", np, "expected normalized pattern (raw %q, normalized %q)", rawPat, np)
 		}
 		require.ErrorContains(t, muxt.CheckForDuplicatePatterns(definitions), `duplicate route pattern "/abc"`, "it should find the duplicate")
+	})
+
+	t.Run("a template parsed under its own name has no source file", func(t *testing.T) {
+		ts := template.Must(template.New("GET /a F()").Parse(`a`))
+		template.Must(ts.New("GET /a G()").Parse(`b`))
+		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+		require.NoError(t, err)
+		require.Len(t, definitions, 2)
+		for _, def := range definitions {
+			assert.Empty(t, def.SourceFile(), "SourceFile() of %s", def.Name())
+		}
+		dupErr, ok := errors.AsType[*muxt.DuplicatePatternError](muxt.CheckForDuplicatePatterns(definitions))
+		require.True(t, ok)
+		assert.Equal(t, dupErr.Error(), dupErr.MultiLineError(), "MultiLineError() names no location")
 	})
 
 	t.Run("the short form is one line and the long form has one location per line", func(t *testing.T) {

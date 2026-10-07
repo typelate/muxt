@@ -33,14 +33,11 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 		if pos, found := variable.NamePosition(t.Name()); found {
 			mt.namePosition = pos
 		}
+		mt.sourceFile = templateSourceFile(t)
 		if err != nil {
 			// Collect every malformed name so one run reports them all.
-			mt.sourceFile = templateSourceFile(t)
 			failures = append(failures, nameFailure{def: mt, err: mt.finishNameError(err, mt.handlerSpan())})
 			continue
-		}
-		if t.Tree != nil && t.Tree.ParseName != "" {
-			mt.sourceFile = t.Tree.ParseName
 		}
 		mt.templatesVariable = templatesVariable
 
@@ -139,8 +136,11 @@ type Definition struct {
 
 	hasResponseWriterArg bool
 
-	// sourceFile is the base filename (e.g., "index.gohtml") from which this template was parsed.
-	// Empty string means the template was defined via Parse() calls rather than from a file.
+	// sourceFile is what templateSourceFile reports the template was
+	// parsed from: the file name ParseFS or ParseFiles records (e.g.
+	// "index.gohtml"), or the name of the template a Parse call defined it
+	// in. It is empty for a template parsed under its own name, which
+	// names no file.
 	sourceFile string
 
 	// canRedirect is whether this template, or one it calls, may call a redirect method.
@@ -255,10 +255,10 @@ func (def Definition) SignalsCallback() (string, bool) {
 	return def.signalsCallback, def.signalsCallback != ""
 }
 
-// SynthesizedMethods lists the signatures ResolveCall inferred for
-// handler methods the receiver does not define. The results are
-// untyped (any), so template field checks are deferred until the
-// method exists.
+// SynthesizedMethods lists, once each, the inferred signatures of the
+// methods this route calls that the receiver does not define, including
+// one inferred while resolving an earlier route. The results are untyped
+// (any), so template field checks are deferred until the method exists.
 func (def Definition) SynthesizedMethods() []string { return def.synthesizedMethods }
 
 func (def Definition) String() string { return def.name }
@@ -387,7 +387,12 @@ func (def Definition) ExecuteArgumentIndex() (int, bool) {
 	return 0, false
 }
 
+// cloneCall deep copies call's argument tree, so a caller may edit the copy.
+// It returns nil for a route without a call.
 func cloneCall(call *ast.CallExpr) *ast.CallExpr {
+	if call == nil {
+		return nil
+	}
 	clone := *call
 	clone.Args = make([]ast.Expr, len(call.Args))
 	for i, arg := range call.Args {
