@@ -180,7 +180,7 @@ func TestLoadFailedError(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			e, ok := loadFailedError(dir, errors.New(tt.msg)).(*PackageLookupError)
+			e, ok := loadFailedError(dir, nil, errors.New(tt.msg)).(*PackageLookupError)
 			require.True(t, ok, "loadFailedError() is not a *PackageLookupError")
 			want := "failed to load Go packages from " + dir + ": " + tt.want
 			assert.Equal(t, want, e.Error(), "loadFailedError(%q).Error() carries the go message", tt.msg)
@@ -188,4 +188,23 @@ func TestLoadFailedError(t *testing.T) {
 			assert.Contains(t, e.Details[0], "inherits GOWORK", "loadFailedError() details")
 		})
 	}
+}
+
+// TestLoadFailedErrorWorkspaceEnv states that the workspace hint is about
+// the environment the load ran in, not the process's: the mutation run
+// loads its --diff copy with GOWORK=off.
+func TestLoadFailedErrorWorkspaceEnv(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	parent := t.TempDir()
+	writeFiles(t, parent, map[string]string{"go.work": "go 1.24\n"})
+	dir := filepath.Join(parent, "app")
+	require.NoError(t, os.Mkdir(dir, 0o700))
+	boom := errors.New("err: exit status 1: stderr: go: boom")
+
+	inProcess := loadFailedError(dir, nil, boom).(*PackageLookupError).MultiLineError()
+	assert.Contains(t, inProcess, filepath.Base(parent), "loadFailedError(nil env) names the discovered go.work")
+	assert.Contains(t, inProcess, "go work use", "loadFailedError(nil env)")
+
+	off := loadFailedError(dir, append(os.Environ(), "GOWORK=off"), boom).(*PackageLookupError).MultiLineError()
+	assert.NotContains(t, off, "go work use", "loadFailedError(GOWORK=off env) names a go.work that is not in effect")
 }
