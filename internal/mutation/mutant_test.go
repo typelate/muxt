@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -54,21 +55,43 @@ func TestValueStart(t *testing.T) {
 // For a template written as a Go literal the two differ by everything in
 // the file before the literal.
 func TestMutantsAreReportedWhereTheFileHoldsThem(t *testing.T) {
-	const goFile = "package p\n\nvar t = `x\n  {{.A}}`\n"
-	start, end := strings.Index(goFile, "`"), strings.LastIndex(goFile, "`")+1
-	literal, err := newLiteralSource("p.go", "p.go", "t", goFile, "", "", start, end)
-	require.NoError(t, err)
+	literalIn := func(goFile, quote string) *templateSource {
+		t.Helper()
+		start, end := strings.Index(goFile, quote), strings.LastIndex(goFile, quote)+1
+		src, err := newLiteralSource("p.go", "p.go", "t", goFile, "", "", start, end)
+		require.NoError(t, err)
+		return src
+	}
 	for _, tt := range []struct {
 		name         string
 		src          *templateSource
 		line, column int
 	}{
 		{name: "a template file", src: newFileSource("t.gohtml", "t.gohtml", "x\n  {{.A}}", "", ""), line: 2, column: 3},
-		{name: "a Go string literal", src: literal, line: 4, column: 3},
+		{name: "a Go string literal", src: literalIn("package p\n\nvar t = `x\n  {{.A}}`\n", "`"), line: 4, column: 3},
+		// Columns count bytes, and a line ends at \n whatever comes before
+		// it: é is two bytes, and \r is the last byte of the line it ends.
+		{
+			name: "a template file with CRLF line endings and a multi-byte character",
+			src:  newFileSource("t.gohtml", "t.gohtml", "{{define \"page\"}}\r\nhéllo {{.A}}\r\n{{end}}\r\n", "", ""),
+			line: 2, column: 8,
+		},
+		{
+			name: "a raw Go string literal in a CRLF file",
+			src:  literalIn("package p\r\n\r\nvar t = `x\r\nhéllo {{.A}}`\r\n", "`"),
+			line: 4, column: 8,
+		},
+		{
+			name: "an interpreted Go string literal holding escapes",
+			src:  literalIn("package p\n\nvar t = \"x\\r\\nhéllo {{.A}}\"\n", `"`),
+			line: 3, column: 22,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &enumerator{src: tt.src, template: "t"}
-			r := tt.src.regions[0]
+			i := slices.IndexFunc(tt.src.regions, func(r region) bool { return tt.src.text[r.start:r.end] == "{{.A}}" })
+			require.GreaterOrEqual(t, i, 0, "no {{.A}} region")
+			r := tt.src.regions[i]
 			e.appendEdits(r, OperatorActionEmpty, []edit{{start: r.start, end: r.end}}, "")
 			m := e.mutants[0]
 			assert.Equal(t, tt.line, m.Line, "mutant line")
