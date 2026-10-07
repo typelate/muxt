@@ -67,6 +67,26 @@ func (T) Form(In) any        { return nil }
 		require.True(t, defs[0].Signature().IsZero())
 	})
 
+	t.Run("a receiver field named like the call is not a method", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Store struct{}
+
+type T struct{ Users Store }
+
+type U struct{ Nested }
+
+type Nested struct{ Users func() any }
+`})
+		for _, receiver := range []string{"T", "U"} {
+			src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+				variable("templates", `{{define "GET /users Users()"}}{{end}}`),
+			}}
+			_, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, receiver).(*types.Named), fake.NewChecker().Fake())
+			require.ErrorContains(t, err, "Users is a field of "+receiver+", not a method", "ResolveDefinitions() with receiver %s", receiver)
+		}
+	})
+
 	t.Run("resolution errors are combined", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{

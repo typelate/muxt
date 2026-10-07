@@ -93,6 +93,12 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 // function, else a method synthesized from the call's arguments.
 func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg source.Package, receiver *types.Named, checker Checker) (types.Object, bool, error) {
 	if object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name); object != nil {
+		if _, isMethod := object.(*types.Func); !isMethod {
+			// Synthesizing a method would collide with the field, and
+			// a field of func type is not part of the receiver's
+			// method set, so the generated interface could not hold it.
+			return nil, false, errAt(fun, "%s is a field of %s, not a method", fun.Name, receiver.Obj().Name())
+		}
 		return object, true, nil
 	}
 	if function, ok := packageScopeFunc(pkg.Types, fun); ok {
