@@ -36,4 +36,11 @@ func TestFileImport(t *testing.T) {
 		}
 		assert.Equal(t, []string{`"example.com/other/http"`, `"net/http"`}, paths, "ImportSpecs paths")
 	})
+
+	t.Run("importing the output package is a generator bug, not a fatal exit", func(t *testing.T) {
+		file := outputFile()
+		assert.PanicsWithValue(t, "generate: a generated file cannot import its own package example.com/server", func() {
+			file.Import("", "example.com/server")
+		}, "Import of the output package")
+	})
 }

@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"log"
 	"maps"
 	"path"
 	"slices"
@@ -53,8 +52,10 @@ func (file *File) qualify(pkgName, pkgPath string) string {
 
 func (file *File) Import(pkgIdent, pkgPath string) string {
 	if pkgPath == file.pkg.Types.Path() {
-		log.Fatal("package path cannot be the same as the output package")
-		return ""
+		// qualify spells the output package's own names unqualified, and
+		// the generators import only other packages, so this is a bug in
+		// a generator.
+		panic("generate: a generated file cannot import its own package " + pkgPath)
 	}
 	return packageImportName(&file.importSpecs, file.packageIdentifiers, pkgPath, pkgIdent)
 }
