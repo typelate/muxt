@@ -42,7 +42,7 @@ Standard `http.ServeMux` pattern, optionally with a status code and method call:
 
 Example: `"POST /user/{id} 201 CreateUser(ctx, id, form)"`
 
-Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body), `multipart` (file uploads, including `*multipart.FileHeader` fields), `body` (raw `io.Reader`), `unmarshalJSON(body)` (JSON request bodies), `execute` (render callback), and `lastEventID`. Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
+Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body, also spelled `unmarshalForm(body)`), `multipart` (file uploads, including `*multipart.FileHeader` fields), `body` (raw `io.Reader`), `unmarshalJSON(body)` (JSON request bodies; `signals` is shorthand with `--output-datastar`), `execute` (render callback), and `lastEventID`. Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
 
 Wrapping the call changes the response representation: `sse(Stream(ctx, execute))` streams Server-Sent Events and `marshalJSON(GetUser(ctx))` responds `application/json`. Generate flags select a frontend library per package — `--output-htmx` adds HX* helper methods to `TemplateData`, and `--output-datastar` frames SSE events with Datastar's patch-elements protocol.
 
