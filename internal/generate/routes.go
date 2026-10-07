@@ -105,6 +105,24 @@ func (c RoutesFileConfiguration) OutputDirectory(wd string) string {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
+// generatedName is a name a run declares at package scope, and the flag
+// that sets it.
+type generatedName struct{ flag, name string }
+
+// generatedNames are the names the routes file declares at package scope,
+// after defaults.
+func generatedNames(config RoutesFileConfiguration) []generatedName {
+	return []generatedName{
+		{"output-routes-func", config.RoutesFunction},
+		{"output-receiver-interface", config.ReceiverInterface},
+		{"output-template-data-type", config.TemplateDataType},
+		{"output-sse-template-data-type", config.SSETemplateDataType},
+		{"output-template-route-paths-type", config.TemplateRoutePathsTypeName},
+		{"output-template-route-type", routeTypeName(config)},
+		{"output-template-route-builder-type", routeBuilderTypeName(config)},
+	}
+}
+
 // checkRouteBuilderTypeName reports a route builder type name that another
 // generated identifier already uses.
 func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
@@ -128,11 +146,16 @@ func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logger *log.Logger) ([]GeneratedFile, error) {
-	file := newFile(pkg)
-
 	config.PackagePath = pkg.Types.Path()
 	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
+
+	// An import may not have the name of a declaration the run generates.
+	var reserved []string
+	for _, generated := range generatedNames(config) {
+		reserved = append(reserved, generated.name)
+	}
+	file := newFile(pkg, reserved...)
 
 	if err := checkRouteBuilderTypeName(config); err != nil {
 		return nil, err
@@ -381,7 +404,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, file.sibling(), routesFuncName, receiverInterfaceName, logger, config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}

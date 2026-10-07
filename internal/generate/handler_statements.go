@@ -97,11 +97,6 @@ func concatenation(operands ...ast.Expr) ast.Expr {
 }
 
 func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
-	const (
-		bufIdent             = "buf"
-		statusCodeIdent      = "statusCode"
-		templateDataVarIdent = "td"
-	)
 	handlerFunc := &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
@@ -138,11 +133,7 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 }
 
 func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
-	const (
-		bufIdent        = "buf"
-		statusCodeIdent = "statusCode"
-		resultDataIdent = "td"
-	)
+	const resultDataIdent = templateDataVarIdent
 
 	if def.Signature().IsZero() {
 		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())
@@ -248,7 +239,6 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 		statusCodePriorityList = append(statusCodePriorityList, ast.NewIdent(resultStatusCodeIdent))
 	}
 	if fallbackStatusCode == http.StatusOK {
-		const defaultStatusIdent = "defaultStatusCode"
 		list = append(list,
 			&ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(defaultStatusIdent)},

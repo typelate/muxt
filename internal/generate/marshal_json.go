@@ -44,7 +44,6 @@ func marshalJSONHandlerFunc(file *File, config RoutesFileConfiguration, def muxt
 // possible on a marshal failure, and the shared write tail then reports the
 // correct content-length.
 func marshalJSONRespondStmts(file *File, resultDataIdent, bufIdent string) []ast.Stmt {
-	const jsonBodyIdent = "jsonBody"
 	// Success means no recorded errors: parse failures and method errors both
 	// append to the template data's error list (td.okay is only set for
 	// methods without an error result, so it cannot be the predicate here).

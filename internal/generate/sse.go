@@ -21,12 +21,6 @@ const sseArgumentCallErrorMessage = "failed to start event stream"
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
 func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
-	const (
-		flusherIdent = "flusher"
-		okIdent      = "ok"
-		mutexIdent   = "mut"
-		headerIdent  = "h"
-	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -184,10 +178,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //		return nil
 //	}
 func signalsClosure(file *File, resultType source.Type, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
-	const (
-		resultIdent  = "result"
-		payloadIdent = "payload"
-	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -270,11 +260,7 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 //
 // For the zero-arg form it omits the parameter and the result field.
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType source.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
-	const (
-		bufIdent    = "buf"
-		tdIdent     = "td"
-		resultIdent = "result"
-	)
+	const tdIdent = templateDataVarIdent
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 

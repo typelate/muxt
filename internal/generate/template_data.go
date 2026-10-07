@@ -251,7 +251,7 @@ func responseHeader() *ast.CallExpr {
 
 func setContentTypeHeaderSetOnTemplateData() *ast.IfStmt {
 	const (
-		ctIdent  = "contentType"
+		ctIdent  = contentTypeIdent
 		ctHeader = "content-type"
 	)
 	return &ast.IfStmt{

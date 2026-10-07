@@ -1,0 +1,77 @@
+# A package whose name the generated code declares (request, td, ...) or
+# the output package declares (templates, the templates variable) is
+# imported under an alias, so the handlers that spell its types compile.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- go.mod --
+module example.com/app
+
+go 1.24
+-- request/request.go --
+package request
+
+type Thing struct{ Name string }
+-- td/td.go --
+package td
+
+type Count int
+-- templates/templates.go --
+package templates
+
+type Title string
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- server.go --
+package server
+
+import (
+	"example.com/app/request"
+	"example.com/app/td"
+	titles "example.com/app/templates"
+)
+
+type Server struct{}
+
+func (Server) Thing() request.Thing { return request.Thing{Name: "thing"} }
+
+func (Server) Count() td.Count { return 3 }
+
+func (Server) Title() titles.Title { return "title" }
+-- index.gohtml --
+{{define "GET /thing Thing()"}}{{.Result.Name}}{{end}}
+{{define "GET /count Count()"}}{{.Result}}{{end}}
+{{define "GET /title Title()"}}{{.Result}}{{end}}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestImportsNamedLikeGeneratedLocals(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	for path, want := range map[string]string{"/thing": "thing", "/count": "3", "/title": "title"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK || rec.Body.String() != want {
+			t.Errorf("GET %s = %d %q, want 200 %q", path, rec.Code, rec.Body.String(), want)
+		}
+	}
+}
