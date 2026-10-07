@@ -45,15 +45,18 @@ func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.Fi
 	return fileSet, pl, err
 }
 
-// PackagesWithTests is PackagesWithEnv, loading each package with its
-// in-package test files too.
+// PackagesWithTests loads the package in wd with its in-package test
+// files too, in env as PackagesWithEnv does.
+//
+// Only wd is loaded: its result is read for the package in wd and never
+// for a StandardLibrary, and loading the standard library roots with
+// tests would type check their test variants from source for nothing.
 //
 // With tests, go list reports a package twice: once as it is written and
 // once compiled with its test files. The second holds a test's
 // ExecuteTemplate calls, so the test variants come first, ahead of the
 // packages as written, and a package picked by directory is the one with
-// its tests. Unlike PackagesWithEnv, a load failure is returned as the
-// loader reported it.
+// its tests.
 func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
 	pl, err := packages.Load(&packages.Config{
 		Fset:  token.NewFileSet(),
@@ -63,9 +66,9 @@ func PackagesWithTests(wd string, env []string) ([]*packages.Package, error) {
 			packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
 		Dir: wd,
 		Env: env,
-	}, wd, "encoding", "fmt", "net/http")
+	}, wd)
 	if err != nil {
-		return nil, err
+		return nil, loadFailedError(wd, env, err)
 	}
 	return testVariantsFirst(pl), nil
 }
@@ -78,11 +81,24 @@ func testVariantsFirst(pl []*packages.Package) []*packages.Package {
 	return ordered
 }
 
+// variantRank orders a package compiled with its in-package tests first,
+// then the packages as written, then the external test package and the
+// generated test main. The external test package's files are in the
+// package's directory too, so it ranks last whatever order go list
+// reported it in.
 func variantRank(pkg *packages.Package) int {
-	if strings.HasSuffix(pkg.ID, ".test]") {
+	switch {
+	case isExternalTest(pkg), strings.HasSuffix(pkg.ID, ".test"):
+		return 2
+	case strings.HasSuffix(pkg.ID, ".test]"):
 		return 0
+	default:
+		return 1
 	}
-	return 1
+}
+
+func isExternalTest(pkg *packages.Package) bool {
+	return strings.HasSuffix(pkg.Name, "_test") || strings.HasSuffix(pkg.PkgPath, "_test")
 }
 
 // ParseErrors returns the syntax errors the loader recovered from.
