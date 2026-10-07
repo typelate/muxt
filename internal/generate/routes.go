@@ -354,8 +354,10 @@ func accumulateReceiverMethods(name string, sig source.Type, isMethod bool, args
 	if !isMethod {
 		return nil
 	}
+	// The list also holds the per-file receiver interfaces that
+	// --output-multiple-files embeds, which have no names.
 	if slices.ContainsFunc(receiverInterface.Methods.List, func(field *ast.Field) bool {
-		return field.Names[0].Name == name
+		return len(field.Names) > 0 && field.Names[0].Name == name
 	}) {
 		return nil
 	}
