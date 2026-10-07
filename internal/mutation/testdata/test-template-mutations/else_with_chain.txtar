@@ -1,0 +1,55 @@
+Each with of an {{else with}} chain is dropped on its own: the second
+with-empty is reported at the else that opens it.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 -v
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": null,
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": true,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ A, B string }
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}{{with .A}}a{{.}}{{else with .B}}b{{.}}{{else}}c{{end}}{{end}}
+-- want/report.txt --
+4 mutants across 1 template (complexity 3, seed 1)
+dry run: no tests were run
+
+server.go:17:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" page.gohtml (complexity 3, dot: server.Page)
+    PEND 1:18 with-empty
+    PEND 1:30 action-zero
+    PEND 1:35 with-empty
+    PEND 1:52 action-zero
+
+4 mutants, 4 runnable, 0 skipped

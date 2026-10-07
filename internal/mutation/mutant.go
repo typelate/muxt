@@ -224,38 +224,78 @@ func (e *enumerator) addPipeline(a action, operator Operator, replacement string
 
 // addConstructDrop appends a mutant replacing a whole construct with its
 // else branch, or with nothing when it has none.
+//
+// The whitespace the construct trimmed stays trimmed. A mutant that also
+// changed the whitespace around the construct would be caught by any test
+// comparing the output exactly, whether or not anything observes the
+// construct itself.
 func (e *enumerator) addConstructDrop(a action, operator Operator) {
+	if a.region.keyword == "else" {
+		e.addChainedDrop(a, operator)
+		return
+	}
 	endIndex, elseIndex, ok := matchEnd(e.src.regions, a.index)
 	if !ok {
 		return
 	}
 	r := a.region
 	text, end := e.src.text, e.src.regions[endIndex]
-	replacement := ""
-	if elseIndex >= 0 {
-		els := e.src.regions[elseIndex]
-		left := cmp.Or(e.src.leftDelim, "{{")
-		content := text[trimLeft(text, els.start+len(left), els.innerEnd):els.innerEnd]
-		if chained := strings.TrimLeft(strings.TrimPrefix(content, "else"), spaceChars); chained != "" {
-			// {{else with .B}} is an else holding a second with, closed
-			// by the same end. Dropping the first construct leaves the
-			// second one standing, opened and closed.
-			replacement = left + chained + text[els.innerEnd:end.end]
-		} else {
-			replacement = text[els.end:end.start]
-		}
+	openTrims, _ := e.src.trimMarkers(r)
+	endTrimsBefore, endTrimsAfter := e.src.trimMarkers(end)
+	if elseIndex < 0 {
+		e.appendMutant(r, operator, edit{start: r.start, end: end.end, text: e.src.nothing(openTrims, endTrimsAfter)})
+		return
 	}
-	e.appendMutant(r, operator, edit{start: r.start, end: end.end, text: replacement})
+
+	els := e.src.regions[elseIndex]
+	content := e.src.content(els)
+	_, elseTrimsAfter := e.src.trimMarkers(els)
+	if chained := strings.TrimLeft(strings.TrimPrefix(content, "else"), spaceChars); chained != "" {
+		// {{else with .B}} is an else holding a second with, closed by
+		// the same end. Dropping the first construct leaves the second
+		// one standing, opened and closed, trimming before it what the
+		// first did.
+		opener := e.src.action(chained, openTrims, elseTrimsAfter)
+		e.appendMutant(r, operator, edit{start: r.start, end: end.end, text: opener + text[els.end:end.end]})
+		return
+	}
+	if !openTrims && !elseTrimsAfter && !endTrimsBefore && !endTrimsAfter {
+		e.appendMutant(r, operator, edit{start: r.start, end: end.end, text: text[els.end:end.start]})
+		return
+	}
+	// The else branch runs unconditionally, between the markers that
+	// trimmed around it.
+	e.appendMutant(r, operator, edit{start: r.start, end: els.end, text: e.src.action("if true", openTrims, elseTrimsAfter)})
 }
 
-// addTemplateDrop appends a mutant removing a {{template}} call.
+// addChainedDrop appends a mutant dropping a with chained onto another as
+// {{else with}}: the chain carries on from the else that follows it, or
+// ends in an empty else when nothing does.
+func (e *enumerator) addChainedDrop(a action, operator Operator) {
+	endIndex, elseIndex, ok := matchEnd(e.src.regions, a.index)
+	if !ok {
+		return
+	}
+	r := a.region
+	trimsBefore, _ := e.src.trimMarkers(r)
+	if elseIndex < 0 {
+		e.appendMutant(r, operator, edit{start: r.start, end: e.src.regions[endIndex].start, text: e.src.action("else", trimsBefore, false)})
+		return
+	}
+	next := e.src.regions[elseIndex]
+	_, trimsAfter := e.src.trimMarkers(next)
+	e.appendMutant(r, operator, edit{start: r.start, end: next.end, text: e.src.action(e.src.content(next), trimsBefore, trimsAfter)})
+}
+
+// addTemplateDrop appends a mutant removing a {{template}} call, keeping
+// whatever whitespace it trimmed trimmed.
 func (e *enumerator) addTemplateDrop(r region) {
 	if r.keyword != "template" {
 		// A block defines its body in place, so removing its call
 		// would leave the body and its {{end}} behind.
 		return
 	}
-	e.appendMutant(r, OperatorTemplateDrop, edit{start: r.start, end: r.end})
+	e.appendMutant(r, OperatorTemplateDrop, edit{start: r.start, end: r.end, text: e.src.nothing(e.src.trimMarkers(r))})
 }
 
 // appendMutant records a mutant made of one substitution, described by
