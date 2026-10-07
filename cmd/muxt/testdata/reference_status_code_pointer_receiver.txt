@@ -1,0 +1,56 @@
+# A value result whose StatusCode method has a pointer receiver still sets the
+# status: the generated handler calls the method on the addressable result.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -race -count=1
+
+-- index.gohtml --
+{{define "GET /page Page()"}}{{.Result.Title}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+type Page struct{ Title string }
+
+func (p *Page) StatusCode() int { return http.StatusAccepted }
+
+func (T) Page() Page { return Page{Title: "hello"} }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page", nil))
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("GET /page status = %d, want %d", rec.Code, http.StatusAccepted)
+	}
+	if got := rec.Body.String(); got != "hello" {
+		t.Errorf("GET /page body = %q, want hello", got)
+	}
+}
