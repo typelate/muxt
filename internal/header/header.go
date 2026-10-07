@@ -88,6 +88,12 @@ func Scan(dir string) (map[string]Header, error) {
 	return headers, nil
 }
 
+// Read parses the header of the file at path. It reports false when the
+// file's first line is not a muxt header.
+func Read(path string) (Header, bool, error) {
+	return readFile(path)
+}
+
 // readFile parses the header of the file at path.
 func readFile(path string) (Header, bool, error) {
 	f, err := os.Open(path)
