@@ -203,6 +203,28 @@ func (T) Save(form Form) any { return nil }
 		}, fields[3].Validations, "validations of the input named like a select")
 	})
 
+	t.Run("every variable's errors are reported", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("pages", `{{define "OPTIONS /a F()"}}{{end}}{{define "HEAD /b F()"}}{{end}}`),
+			variable("fragments", `{{define "GET /c/{id} Form(id)"}}{{end}}`),
+			variable("partials", `{{define "TRACE /d F()"}}{{end}}`),
+		}}
+		_, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.NewChecker().Fake())
+		list, ok := errors.AsType[muxt.ErrorList](err)
+		require.True(t, ok, "ResolveDefinitions() = %v, want a muxt.ErrorList", err)
+		var got []string
+		for _, err := range list {
+			got = append(got, err.Error())
+		}
+		require.Equal(t, []string{
+			"pages: HEAD method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE",
+			"pages: OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE",
+			"fragments: unsupported type: In (supported: string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, or a type whose pointer implements encoding.TextUnmarshaler)",
+			"partials: TRACE method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE",
+		}, got, "ResolveDefinitions() errors in variable order")
+	})
+
 	t.Run("resolution errors are combined", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
