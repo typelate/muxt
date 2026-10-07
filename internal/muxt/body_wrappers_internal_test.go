@@ -1,10 +1,36 @@
 package muxt
 
 import (
+	"go/ast"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// TestRewrittenArgumentsKeepTheirPositions states that an argument rewritten
+// to its explicit spelling still spans what was written, so an error about
+// it marks the right part of the template name.
+func TestRewrittenArgumentsKeepTheirPositions(t *testing.T) {
+	t.Run("signals", func(t *testing.T) {
+		call := mustParseCall(t, `F(ctx, signals)`)
+		written := call.Args[1]
+		require.True(t, rewriteSignalsArguments(call, nil), "rewriteSignalsArguments()")
+		rewritten, ok := call.Args[1].(*ast.CallExpr)
+		require.True(t, ok, "signals is rewritten to a call, got %T", call.Args[1])
+		assert.Equal(t, written.Pos(), rewritten.Pos(), "Pos() of the rewritten signals")
+		assert.Equal(t, written.End(), rewritten.End(), "End() of the rewritten signals")
+		assert.Equal(t, written.Pos(), rewritten.Args[0].Pos(), "Pos() of the rewritten signals body")
+	})
+	t.Run("unmarshalForm", func(t *testing.T) {
+		call := mustParseCall(t, `F(ctx, unmarshalForm(body))`)
+		written := call.Args[1]
+		rewriteBodyFormWrappers(call)
+		rewritten, ok := call.Args[1].(*ast.Ident)
+		require.True(t, ok, "unmarshalForm(body) is rewritten to an identifier, got %T", call.Args[1])
+		assert.Equal(t, written.Pos(), rewritten.Pos(), "Pos() of the rewritten unmarshalForm(body)")
+	})
+}
 
 func TestScanBodyBindings(t *testing.T) {
 	for _, tt := range []struct {

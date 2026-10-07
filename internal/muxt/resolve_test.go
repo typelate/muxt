@@ -1,8 +1,10 @@
 package muxt_test
 
 import (
+	"errors"
 	"go/types"
 	"html/template"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -139,6 +141,26 @@ type Context interface{ Done() }
 			require.Len(t, defs, 1)
 			require.Equal(t, []string{tt.want}, defs[0].SynthesizedMethods(), "SynthesizedMethods() of %s", tt.name)
 		}
+	})
+
+	t.Run("an error about a rewritten body wrapper points at the wrapper", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Values map[string][]string
+
+type T struct{}
+
+func (T) Save(form int) any { return nil }
+`})
+		const name = "POST / Save(unmarshalForm(body))"
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("templates", `{{define "`+name+`"}}{{end}}`),
+		}}
+		_, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.StandInChecker(t, pkg).Fake())
+		nameErr, ok := errors.AsType[*muxt.NameError](err)
+		require.True(t, ok, "ResolveDefinitions() = %v, want a *NameError", err)
+		require.ErrorContains(t, err, "expected form parameter type to be a struct")
+		require.Equal(t, strings.Index(name, "unmarshalForm"), nameErr.Offset, "NameError.Offset")
 	})
 
 	t.Run("resolution errors are combined", func(t *testing.T) {
