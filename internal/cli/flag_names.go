@@ -52,11 +52,11 @@ This function also receives an argument with a type matching the name given by o
 	outputTemplateDataTypeHelp         = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp      = `The type name for the template data passed to Server-Sent Events route templates.`
 	outputTemplateRoutePathsTypeHelp   = `The type name for the type with path constructor helper methods.`
-	outputTemplateRouteTypeHelp        = `The type name for the type the path constructor helper methods return.`
+	outputTemplateRouteTypeHelp        = `The type name for the type the route builder's methods return.`
 	outputTemplateRouteBuilderTypeHelp = `The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended.`
 
 	outputRoutesFuncWithLoggerParamHelp     = `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`
-	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathPrefix string parameter to the generated routes function and uses it in each path generator method.`
+	outputRoutesFuncWithPathPrefixHelp      = `Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method.`
 	outputRoutesFuncWithMiddlewareParamHelp = `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`
 	outputMultipleFilesHelp                 = `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`
 	outputHTMXHelp                          = `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`
