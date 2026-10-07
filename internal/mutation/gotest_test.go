@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,30 +97,119 @@ func TestConfigurationGoTest(t *testing.T) {
 	}
 }
 
-// TestVerdictOf states how a go test result reads as a verdict.
+// TestVerdictOf states how a go test result reads as a verdict: a kill
+// needs a test that failed, and anything else go test exits 1 for is a
+// run that could not happen, reported with what go test printed.
 func TestVerdictOf(t *testing.T) {
 	cannotRun := errors.New("go: no such tool")
+	exitOne := exitStatusOne(t)
+	exitTwo := exec.Command("sh", "-c", "exit 2").Run()
 	for _, tt := range []struct {
-		name       string
-		err        error
-		want       Status
-		wantErr    error
-		wantHasErr bool
+		name    string
+		output  string
+		err     error
+		want    Status
+		wantErr error
 	}{
-		{name: "tests passed", err: nil, want: StatusMissed},
-		{name: "tests failed", err: exitStatusOne(t), want: StatusKilled},
-		{name: "go test could not run", err: cannotRun, wantErr: cannotRun, wantHasErr: true},
+		{name: "tests passed", output: "ok  \tserver\t0.1s\n", want: StatusMissed},
+		{
+			name:   "a test failed",
+			output: "--- FAIL: TestGreeting (0.00s)\n    render_test.go:9: got \"\"\nFAIL\nFAIL\tserver\t0.1s\nFAIL\n",
+			err:    exitOne,
+			want:   StatusKilled,
+		},
+		{
+			name:   "a test binary failed without a test failing",
+			output: "panic: boom\nFAIL\tserver\t0.1s\nFAIL\n",
+			err:    exitOne,
+			want:   StatusKilled,
+		},
+		{
+			name:   "a test failed on a CRLF stream",
+			output: "--- FAIL: TestGreeting (0.00s)\r\nFAIL\tserver\t0.1s\r\n",
+			err:    exitOne,
+			want:   StatusKilled,
+		},
+		{
+			name:    "a package did not build",
+			output:  "# server\n./server.go:3:28: cannot use \"x\" (untyped string constant) as int value in return statement\nFAIL\tserver [build failed]\nFAIL\n",
+			err:     exitOne,
+			wantErr: exitOne,
+		},
+		{
+			name:    "a package did not build beside one whose test failed",
+			output:  "--- FAIL: TestA (0.00s)\nFAIL\tserver/a\t0.1s\nFAIL\tserver/b [build failed]\nFAIL\n",
+			err:     exitOne,
+			wantErr: exitOne,
+		},
+		{
+			name:    "a package did not set up",
+			output:  "FAIL\tserver [setup failed]\nFAIL\n",
+			err:     exitOne,
+			wantErr: exitOne,
+		},
+		{
+			name:    "the go command failed",
+			output:  "go: reading overlay file: open /tmp/overlay.json: no such file or directory\n",
+			err:     exitOne,
+			wantErr: exitOne,
+		},
+		{
+			name:    "exit status 1 saying nothing",
+			err:     exitOne,
+			wantErr: exitOne,
+		},
+		{
+			name:    "a usage error",
+			output:  "invalid value \"many\" for flag -count: parse error\n",
+			err:     exitTwo,
+			wantErr: exitTwo,
+		},
+		{name: "go test could not start", err: cannotRun, wantErr: cannotRun},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := verdictOf(tt.err)
-			assert.Equal(t, tt.want, got, "verdictOf(%v) status", tt.err)
-			if tt.wantHasErr {
-				assert.ErrorIs(t, err, tt.wantErr, "verdictOf(%v) error", tt.err)
-			} else {
-				assert.NoError(t, err, "verdictOf(%v) error", tt.err)
+			out := &goTestOutput{}
+			_, _ = out.Write([]byte(tt.output))
+			got, err := verdictOf(out, tt.err)
+			assert.Equal(t, tt.want, got, "verdictOf(%q, %v) status", tt.output, tt.err)
+			if tt.wantErr == nil {
+				assert.NoError(t, err, "verdictOf(%q, %v) error", tt.output, tt.err)
+				return
+			}
+			assert.ErrorIs(t, err, tt.wantErr, "verdictOf(%q, %v) error", tt.output, tt.err)
+			goTestErr, ok := errors.AsType[*GoTestError](err)
+			if assert.True(t, ok, "verdictOf(%q, %v) error = %v, want a GoTestError", tt.output, tt.err, err) {
+				assert.Equal(t, tt.output, goTestErr.Output, "the error carries what go test printed")
 			}
 		})
 	}
+}
+
+// TestGoTestOutputKeepsATailAndEveryMarker states that the output kept
+// for a mutant is bounded, from the end, while what decides its verdict
+// is read off every line, however early it was printed.
+func TestGoTestOutputKeepsATailAndEveryMarker(t *testing.T) {
+	out := &goTestOutput{limit: 16}
+	_, _ = out.Write([]byte("FAIL\tserver/b [build failed]\n"))
+	for range 100 {
+		_, _ = out.Write([]byte("--- FAIL: TestA (0.00s)\n"))
+	}
+	// A line split across writes is still read as one.
+	_, _ = out.Write([]byte("FAIL\tserv"))
+	_, _ = out.Write([]byte("er/a\t0.1s\nlast\n"))
+
+	assert.Equal(t, "ver/a\t0.1s\nlast\n", out.String(), "kept tail")
+	assert.True(t, out.testFailed, "a test failed")
+	assert.True(t, out.couldNotRun, "a package did not build")
+}
+
+// TestGoTestOutputIgnoresALongLine states that a line too long to be a
+// marker is not read as one, even when it starts like one.
+func TestGoTestOutputIgnoresALongLine(t *testing.T) {
+	out := &goTestOutput{}
+	_, _ = out.Write([]byte("go: " + strings.Repeat("x", 2*maxMarkerLine) + "\n--- FAIL: TestA (0.00s)\n"))
+	assert.False(t, out.couldNotRun, "the long line is not a go command error")
+	assert.True(t, out.testFailed, "the line after it is still read")
 }
 
 // TestIsTestFailureOnlyCountsATestThatRan states which go test exits mean

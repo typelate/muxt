@@ -128,7 +128,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 		return nil, err
 	}
 	tester := config.goTest(workingDirectory)
-	return runPlan(p, config, status, tester.run, tester.verdict)
+	return runPlan(p, config, status, tester.baseline, tester.verdict)
 }
 
 // runPlan runs an enumerated plan: the suite once unmutated, and then each
@@ -138,7 +138,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 // built here, because it is the slow part of a run and everything this
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
-func runPlan(p *plan, config Configuration, status io.Writer, baseline func(flags ...string) (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
+func runPlan(p *plan, config Configuration, status io.Writer, baseline func() (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -154,7 +154,9 @@ func runPlan(p *plan, config Configuration, status io.Writer, baseline func(flag
 	started := time.Now()
 	if out, err := baseline(); err != nil {
 		if !isTestFailure(err) {
-			return nil, err
+			// Discarding what go test printed would leave only its exit
+			// status, which says nothing about why it would not run.
+			return nil, &GoTestError{Err: err, Output: out}
 		}
 		return nil, &BaselineFailedError{Output: out}
 	}

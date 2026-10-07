@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"bytes"
 	"errors"
 	"os/exec"
 	"regexp"
@@ -43,7 +44,13 @@ func (t goTest) args(flags ...string) []string {
 	return append(args, t.extra...)
 }
 
-func (t goTest) run(flags ...string) (string, error) {
+// run runs go test and returns what it printed, stdout and stderr
+// together.
+//
+// limit bounds how much of the output is kept, from the end; zero keeps
+// all of it. Whether a test failed or a package did not build is read off
+// every line as it is printed, so the bound costs no verdict.
+func (t goTest) run(limit int, flags ...string) (*goTestOutput, error) {
 	cmd := exec.Command("go", t.args(flags...)...)
 	cmd.Dir = t.dir
 	if t.env != nil {
@@ -54,38 +61,140 @@ func (t goTest) run(flags ...string) (string, error) {
 		// reported as a mutation no test caught.
 		cmd.Env = append(slices.Clip(t.env), "PWD="+t.dir)
 	}
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	out := &goTestOutput{limit: limit}
+	// One writer for both streams is one pipe, so lines arrive whole and
+	// in the order go test wrote them.
+	cmd.Stdout, cmd.Stderr = out, out
+	err := cmd.Run()
+	return out, err
 }
+
+// baseline runs the tests with nothing mutated and returns everything they
+// printed, which is what a failing baseline shows.
+func (t goTest) baseline() (string, error) {
+	out, err := t.run(0)
+	return out.String(), err
+}
+
+// mutantOutputLimit is how much of one mutant's go test output is kept:
+// enough for the end of a failure, and bounded however many mutants run
+// at once or however much their tests print.
+const mutantOutputLimit = 64 << 10
 
 // verdict runs the tests against one mutant's overlay and reports whether
 // they caught it. An error means go test could not run at all.
 func (t goTest) verdict(overlay string) (Status, error) {
-	_, err := t.run("-overlay=" + overlay)
-	return verdictOf(err)
+	out, err := t.run(mutantOutputLimit, "-overlay="+overlay)
+	return verdictOf(out, err)
 }
 
-func verdictOf(err error) (Status, error) {
+// verdictOf reads a go test run as a verdict on the mutant it ran against.
+//
+// A mutant is killed only when a test failed. go test also exits 1 when a
+// package does not build or set up, and when the go command itself fails
+// -- a module that will not download, an overlay it cannot read -- and a
+// compiler the OS killed for memory under --workers is a build failure. A
+// mutant cannot break the build, since it only changes template text, so
+// all of those are a run that could not happen rather than a kill.
+func verdictOf(out *goTestOutput, err error) (Status, error) {
 	switch {
 	case err == nil:
 		return StatusMissed, nil
-	case isTestFailure(err):
+	case isTestFailure(err) && out.testFailed && !out.couldNotRun:
 		return StatusKilled, nil
 	default:
-		return "", err
+		return "", &GoTestError{Err: err, Output: out.String()}
 	}
 }
 
 // isTestFailure reports whether go test exited the way it does when a
-// test fails, as opposed to not running at all.
+// test fails. It is necessary for a kill and not sufficient: go test exits
+// 1 for a package that does not build too.
 //
-// Only exit status 1 counts. A usage error exits 2, and a go test the OS
-// killed -- for memory, say, under --workers -- has no exit status at
-// all; read as test failures, both would be recorded as mutants the tests
-// caught.
+// A usage error exits 2, and a go test the OS killed -- for memory, say,
+// under --workers -- has no exit status at all; read as test failures,
+// both would be recorded as mutants the tests caught.
 func isTestFailure(err error) bool {
 	var exitErr *exec.ExitError
 	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
+}
+
+// goTestOutput collects what go test prints, keeping at most limit bytes
+// from the end when limit is positive, and notes as each line arrives
+// whether it says a test failed or a package could not be tested.
+type goTestOutput struct {
+	limit int
+	kept  []byte
+
+	// line is the line being written, up to maxMarkerLine bytes of it; a
+	// longer one is test output and never a marker.
+	line     []byte
+	overflow bool
+
+	// testFailed is set by a "--- FAIL" line or a package's "FAIL" result
+	// line, couldNotRun by a package that did not build or set up, or by
+	// an error from the go command itself.
+	testFailed  bool
+	couldNotRun bool
+}
+
+const maxMarkerLine = 1 << 10
+
+func (o *goTestOutput) Write(p []byte) (int, error) {
+	o.keep(p)
+	for rest := p; len(rest) > 0; {
+		chunk, after, ended := bytes.Cut(rest, []byte("\n"))
+		if !o.overflow && len(o.line)+len(chunk) <= maxMarkerLine {
+			o.line = append(o.line, chunk...)
+		} else {
+			o.overflow = true
+		}
+		if !ended {
+			break
+		}
+		if !o.overflow {
+			o.mark(string(o.line))
+		}
+		o.line, o.overflow = o.line[:0], false
+		rest = after
+	}
+	return len(p), nil
+}
+
+func (o *goTestOutput) keep(p []byte) {
+	o.kept = append(o.kept, p...)
+	if o.limit > 0 && len(o.kept) > o.limit {
+		o.kept = append(o.kept[:0], o.kept[len(o.kept)-o.limit:]...)
+	}
+}
+
+// mark notes what one line of go test output says about the run.
+//
+// A package's result line is FAIL, a tab, its import path, and then either
+// a tab and how long its tests took, or a bracketed reason it was never
+// tested.
+func (o *goTestOutput) mark(line string) {
+	line = strings.TrimSuffix(line, "\r")
+	switch {
+	case strings.HasPrefix(strings.TrimLeft(line, " \t"), "--- FAIL"):
+		o.testFailed = true
+	case strings.HasPrefix(line, "FAIL\t"):
+		if strings.HasSuffix(line, "[build failed]") || strings.HasSuffix(line, "[setup failed]") {
+			o.couldNotRun = true
+		} else if strings.Count(line, "\t") >= 2 {
+			o.testFailed = true
+		}
+	case strings.HasPrefix(line, "go: ") && !strings.HasPrefix(line, "go: downloading "):
+		o.couldNotRun = true
+	}
+}
+
+// String returns the output kept, which is all of it or its tail.
+func (o *goTestOutput) String() string {
+	if o == nil {
+		return ""
+	}
+	return string(o.kept)
 }
 
 // CheckGoTestArgs refuses a pass-through flag muxt sets itself.

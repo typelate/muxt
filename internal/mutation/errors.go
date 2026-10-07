@@ -16,6 +16,25 @@ func (e *BaselineFailedError) Error() string {
 	return "baseline tests failed before mutation; fix them first:\n" + strings.TrimRight(e.Output, "\n")
 }
 
+// GoTestError reports that go test could not run: a flag it refused, a
+// package that would not build, the go command failing, or a process the
+// OS killed. Output is what it printed, which says why far better than
+// its exit status does; for a mutant's run it is the tail of the output.
+type GoTestError struct {
+	Err    error
+	Output string
+}
+
+func (e *GoTestError) Error() string {
+	out := strings.TrimSpace(e.Output)
+	if out == "" {
+		return fmt.Sprintf("go test could not run: %v", e.Err)
+	}
+	return fmt.Sprintf("go test could not run: %v:\n%s", e.Err, out)
+}
+
+func (e *GoTestError) Unwrap() error { return e.Err }
+
 // NoCallSitesError reports that nothing renders the templates, so there
 // is no type of dot to mutate against.
 type NoCallSitesError struct {
