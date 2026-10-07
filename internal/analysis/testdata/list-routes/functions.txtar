@@ -1,0 +1,51 @@
+The route listing names the functions registered with Funcs in name
+order, whatever order they were registered in.
+
+Command line: muxt
+-- config.json --
+{
+	"Verbose": false,
+	"ReceiverPackage": "",
+	"ReceiverType": "",
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "GET /{$} Home()"}}<h1>{{upper "home"}}</h1>{{end}}
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"strings"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.New("").Funcs(template.FuncMap{
+	"upper":   strings.ToUpper,
+	"lower":   strings.ToLower,
+	"trim":    strings.TrimSpace,
+	"repeat":  strings.Repeat,
+	"title":   strings.ToTitle,
+	"fields":  strings.Fields,
+	"join":    strings.Join,
+	"replace": strings.ReplaceAll,
+}).ParseFS(templateFiles, "*.gohtml"))
+-- want/stdout.txt --
+Template Routes:
+  - GET /{$} Home()
+
+Template Functions:
+  - func fields(s string) []string
+  - func join(elems []string, sep string) string
+  - func lower(s string) string
+  - func repeat(s string, count int) string
+  - func replace(s string, old string, new string) string
+  - func title(s string) string
+  - func trim(s string) string
+  - func upper(s string) string
+
