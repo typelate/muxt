@@ -98,7 +98,8 @@ func newSegment(in string) Segment {
 	return Segment{value: inner, kind: SegmentKindUnknown}
 }
 
-// pathParameter returns the wildcard segment that names the path parameter.
+// hasPathParameter reports whether a wildcard segment names the path
+// parameter.
 func hasPathParameter(segments []Segment, name string) bool {
 	return slices.ContainsFunc(segments, func(segment Segment) bool {
 		return segment.IsWildcard() && segment.value == name
