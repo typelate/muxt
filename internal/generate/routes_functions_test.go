@@ -122,6 +122,17 @@ func TestLogResolutionNotes(t *testing.T) {
 		config.ReceiverType = "T"
 		logResolutionNotes(defs, config, nil)
 	})
+
+	t.Run("a method several routes call is noted once", func(t *testing.T) {
+		_, defs := routesTestDefinitions(t, map[string]string{
+			"a.gohtml": `{{define "GET /a Missing()"}}{{end}}{{define "GET /b Missing()"}}{{end}}`,
+		})
+		config := testConfig()
+		config.ReceiverType = "T"
+		var buf bytes.Buffer
+		logResolutionNotes(defs, config, log.New(&buf, "", 0))
+		assert.Equal(t, 1, strings.Count(buf.String(), "note: T does not define Missing() any"), "notes about Missing in %q", buf.String())
+	})
 }
 
 func TestCollectReceiverMethods(t *testing.T) {

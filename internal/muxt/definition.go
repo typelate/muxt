@@ -255,10 +255,10 @@ func (def Definition) SignalsCallback() (string, bool) {
 	return def.signalsCallback, def.signalsCallback != ""
 }
 
-// SynthesizedMethods lists the signatures ResolveCall inferred for
-// handler methods the receiver does not define. The results are
-// untyped (any), so template field checks are deferred until the
-// method exists.
+// SynthesizedMethods lists, once each, the inferred signatures of the
+// methods this route calls that the receiver does not define, including
+// one inferred while resolving an earlier route. The results are untyped
+// (any), so template field checks are deferred until the method exists.
 func (def Definition) SynthesizedMethods() []string { return def.synthesizedMethods }
 
 func (def Definition) String() string { return def.name }

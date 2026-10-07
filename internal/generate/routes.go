@@ -303,7 +303,8 @@ func logResolutionNotes(defs []muxt.Definition, config RoutesFileConfiguration, 
 	if logger == nil {
 		return
 	}
-	synthesized := 0
+	// Every route calling a missing method lists it; note each one once.
+	noted := make(map[string]bool)
 	for _, def := range defs {
 		if !config.SilenceHTTPResponseWarning && def.HasResponseWriterArg() {
 			// Taking over the http.ResponseWriter is an escape hatch:
@@ -314,11 +315,14 @@ func logResolutionNotes(defs []muxt.Definition, config RoutesFileConfiguration, 
 			continue
 		}
 		for _, sig := range def.SynthesizedMethods() {
+			if noted[sig] {
+				continue
+			}
+			noted[sig] = true
 			logger.Printf("note: %s does not define %s", config.ReceiverType, sig)
-			synthesized++
 		}
 	}
-	if synthesized > 0 {
+	if len(noted) > 0 {
 		// The results are any until the methods exist, so field checks
 		// on .Result are deferred; say so once.
 		logger.Printf("note: the inferred signatures return any — implement the methods to type-check the templates against real types")
