@@ -20,6 +20,9 @@ type argumentParser struct {
 	config                 RoutesFileConfiguration
 	validationFailureBlock ValidationErrorBlock
 	parseErrBlock          func() *ast.BlockStmt
+	// nestedCallErrBlock is what runs when a call passed as an argument
+	// returns an error.
+	nestedCallErrBlock func() *ast.BlockStmt
 }
 
 func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
@@ -35,6 +38,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 		config:                 config,
 		validationFailureBlock: validationFailureBlock,
 		parseErrBlock:          parseErrBlock,
+		nestedCallErrBlock:     func() *ast.BlockStmt { return templateDataNestedCallErrBlock(file, rdIdent) },
 	}
 	return p.appendCall(statements, args, call)
 }
@@ -71,7 +75,6 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 }
 
 func (p argumentParser) appendBodyJSON(statements []ast.Stmt, call *ast.CallExpr, i int, argument muxt.Argument) ([]ast.Stmt, error) {
-	const bodyValueIdent = "bodyValue"
 	decode, err := decodeJSONBodyStatements(p.file, bodyValueIdent, argument.ParamType(), p.parseErrBlock)
 	if err != nil {
 		return nil, err
@@ -87,7 +90,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 	if err != nil {
 		return nil, err
 	}
-	resultVarIdent := "result" + strconv.Itoa(resultCount)
+	resultVarIdent := resultIdent + strconv.Itoa(resultCount)
 	call.Args[i] = ast.NewIdent(resultVarIdent)
 
 	funcIdent := nestedCall.Fun.(*ast.Ident).Name
@@ -96,9 +99,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		nestedCall.Fun = selector(receiverIdent, funcIdent)
 	}
 
-	errBody := appendTemplateDataError(p.file, p.rdIdent, ast.NewIdent(errIdent))
-	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(p.file, p.rdIdent, http.StatusInternalServerError))
-	receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, errBody)
+	receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,15 @@ func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
 	return b
 }
 
+// templateDataNestedCallErrBlock is the block normal handlers run when a
+// call passed as an argument fails: it appends the error to the template
+// data and sets the error status code to 500.
+func templateDataNestedCallErrBlock(file *File, rdIdent string) *ast.BlockStmt {
+	b := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+	b.List = append(b.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
+	return b
+}
+
 type receiverMethodCall struct {
 	VarDecl ast.Stmt        // var err/ok declaration; nil for 1-result
 	Assign  *ast.AssignStmt // dataVar[, err/ok] = call
@@ -244,7 +254,6 @@ func (r *receiverMethodCall) Stmts() []ast.Stmt {
 }
 
 func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape, callIdent string, call *ast.CallExpr, errBody *ast.BlockStmt) (*receiverMethodCall, error) {
-	const okIdent = "ok"
 	switch shape {
 	default:
 		return nil, fmt.Errorf("method %s has no results it should have one or two", callIdent)

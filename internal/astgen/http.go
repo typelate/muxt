@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -82,13 +84,14 @@ var httpCodes = map[int]string{
 // HTTPStatusName converts an http.Status constant name to its integer value
 func HTTPStatusName(name string) (int, error) {
 	n := strings.TrimPrefix(name, "http.")
-	candidates := make([]string, 0, len(httpCodes))
 	for code, constName := range httpCodes {
 		if constName == n {
 			return code, nil
 		}
-		candidates = append(candidates, constName)
 	}
+	// NearestString keeps the first of equally near candidates, so they
+	// are sorted for the suggestion not to depend on map order.
+	candidates := slices.Sorted(maps.Values(httpCodes))
 	// The caller prefixes the message with the token ("invalid status
 	// code X: …"), so neither branch repeats it.
 	if suggestion, ok := NearestString(n, candidates); ok {

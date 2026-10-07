@@ -49,11 +49,7 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 	pattern := ast.Expr(astgen.String(normalized))
 	if config.PathPrefix {
 		i := strings.Index(normalized, "/")
-		pattern = &ast.BinaryExpr{
-			X:  astgen.String(normalized[:i]),
-			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(normalized[i:])),
-		}
+		pattern = concatenation(append([]ast.Expr{astgen.String(normalized[:i])}, prefixedPath(file, ast.NewIdent(pathPrefixPathsStructFieldName), normalized[i:])...)...)
 	}
 	method, handler := httpHandleFuncIdent, ast.Expr(handlerFuncLit)
 	if config.Middleware {
@@ -75,12 +71,32 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 	}}
 }
 
+// prefixedPath is the operands of the string concatenation that spells
+// pattern path p under the path prefix: path.Join(prefix, p). path.Join
+// drops a trailing slash, which in a pattern means the subtree, so a path
+// ending in "/" (muxt allows only "/") keeps it:
+//
+//	strings.TrimSuffix(path.Join(prefix, "/"), "/") + "/"
+//
+// is "/" for an empty prefix and "/app/" for "/app" or "/app/".
+func prefixedPath(file *File, prefix ast.Expr, p string) []ast.Expr {
+	joined := astgen.Call(file, "path", "path", "Join", prefix, astgen.String(p))
+	if !strings.HasSuffix(p, "/") {
+		return []ast.Expr{joined}
+	}
+	return []ast.Expr{astgen.Call(file, "strings", "strings", "TrimSuffix", joined, astgen.String("/")), astgen.String("/")}
+}
+
+// concatenation adds the string operands left to right: a + b + c.
+func concatenation(operands ...ast.Expr) ast.Expr {
+	sum := operands[0]
+	for _, operand := range operands[1:] {
+		sum = &ast.BinaryExpr{X: sum, Op: token.ADD, Y: operand}
+	}
+	return sum
+}
+
 func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
-	const (
-		bufIdent             = "buf"
-		statusCodeIdent      = "statusCode"
-		templateDataVarIdent = "td"
-	)
 	handlerFunc := &ast.FuncLit{
 		Type: astgen.HTTPHandlerFuncType(file, muxt.TemplateNameScopeIdentifierHTTPResponse, muxt.TemplateNameScopeIdentifierHTTPRequest),
 		Body: &ast.BlockStmt{
@@ -117,11 +133,7 @@ func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConf
 }
 
 func callHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
-	const (
-		bufIdent        = "buf"
-		statusCodeIdent = "statusCode"
-		resultDataIdent = "td"
-	)
+	const resultDataIdent = templateDataVarIdent
 
 	if def.Signature().IsZero() {
 		return nil, fmt.Errorf("call for pattern %s was not resolved", def.Pattern())
@@ -168,25 +180,26 @@ func callWriteHeader(statusCode ast.Expr) *ast.ExprStmt {
 }
 
 func checkExecuteTemplateError(file *File, withLogger bool, pattern string) *ast.IfStmt {
-	var logStmts []ast.Stmt
-	if withLogger {
-		logStmts = []ast.Stmt{
-			&ast.ExprStmt{X: loggerErrorCall(file, executeTemplateErrorMessage, pattern, errIdent)},
-		}
-	} else {
-		logStmts = []ast.Stmt{
-			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
-		}
-	}
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{
-			List: append(logStmts,
+			List: []ast.Stmt{
+				logErrorStatement(file, withLogger, executeTemplateErrorMessage, pattern),
 				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), astgen.String(executeTemplateErrorMessage), http.StatusInternalServerError)},
 				&ast.ReturnStmt{},
-			),
+			},
 		},
 	}
+}
+
+// logErrorStatement logs message and err: with the logger the routes
+// function is passed when withLogger is set, otherwise with log/slog's
+// default logger.
+func logErrorStatement(file *File, withLogger bool, message, pattern string) ast.Stmt {
+	if withLogger {
+		return &ast.ExprStmt{X: loggerErrorCall(file, message, pattern, errIdent)}
+	}
+	return &ast.ExprStmt{X: executeTemplateFailedLogLine(file, message, errIdent)}
 }
 
 func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {
@@ -208,15 +221,24 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(templateDataFieldStatusCode)},
 		&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierErrStatusCode)},
 	}
+	var list []ast.Stmt
+	// The result offers a status code only when the call succeeded: after
+	// an error it may be a nil pointer whose StatusCode panics.
+	var resultStatusCode ast.Expr
 	switch def.ResultStatusCode() {
 	case muxt.ResultStatusCodeMethod:
-		statusCodePriorityList = append(statusCodePriorityList, &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}})
+		// The result is a field of the template data variable, so it is
+		// addressable and a pointer receiver method is called on it as
+		// well as a value receiver one.
+		resultStatusCode = &ast.CallExpr{Fun: &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}}
 	case muxt.ResultStatusCodeField:
-		statusCodePriorityList = append(statusCodePriorityList, &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")})
+		resultStatusCode = &ast.SelectorExpr{X: resultVar(), Sel: ast.NewIdent("StatusCode")}
 	}
-	var list []ast.Stmt
+	if resultStatusCode != nil {
+		list = append(list, resultStatusCodeStatements(resultDataIdent, resultStatusCode)...)
+		statusCodePriorityList = append(statusCodePriorityList, ast.NewIdent(resultStatusCodeIdent))
+	}
 	if fallbackStatusCode == http.StatusOK {
-		const defaultStatusIdent = "defaultStatusCode"
 		list = append(list,
 			&ast.AssignStmt{
 				Lhs: []ast.Expr{ast.NewIdent(defaultStatusIdent)},
@@ -278,6 +300,31 @@ func writeStatusAndHeaders(file *File, def muxt.Definition, fallbackStatusCode i
 	}
 
 	return append(list, writeBodyAndWriteHeadersFunc(file, bufIdent, statusCode)...)
+}
+
+// resultStatusCodeStatements declares the status code the result offers,
+// read only when the template data has no errors:
+//
+//	var resultStatusCode int
+//	if len(td.errList) == 0 {
+//		resultStatusCode = td.result.StatusCode()
+//	}
+func resultStatusCodeStatements(resultDataIdent string, statusCode ast.Expr) []ast.Stmt {
+	return []ast.Stmt{
+		varDecl(resultStatusCodeIdent, ast.NewIdent("int"), nil),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  &ast.CallExpr{Fun: ast.NewIdent("len"), Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent(resultDataIdent), Sel: ast.NewIdent(TemplateDataFieldIdentifierError)}}},
+				Op: token.EQL,
+				Y:  astgen.Int(0),
+			},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(resultStatusCodeIdent)},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{statusCode},
+			}}},
+		},
+	}
 }
 
 func executeTemplateFailedLogLine(file *File, message, errIdent string) *ast.CallExpr {

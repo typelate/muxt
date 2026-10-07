@@ -34,6 +34,7 @@ const (
 
 	errIdent                    = "err"
 	templateDataFieldStatusCode = "statusCode"
+	resultStatusCodeIdent       = "resultStatusCode"
 
 	pathPrefixPathsStructFieldName = "pathsPrefix"
 
@@ -104,20 +105,33 @@ func (c RoutesFileConfiguration) OutputDirectory(wd string) string {
 // request.ParseMultipartForm when no override is set.
 const DefaultMultipartMaxMemory int64 = 32 << 20
 
-// checkRouteBuilderTypeName reports a route builder type name that another
-// generated identifier already uses.
-func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
-	builder := routeBuilderTypeName(config)
-	for _, other := range []struct{ flag, name string }{
-		{"output-template-route-type", routeTypeName(config)},
+// generatedName is a name a run declares at package scope, and the flag
+// that sets it.
+type generatedName struct{ flag, name string }
+
+// generatedNames are the names the routes file declares at package scope,
+// after defaults.
+func generatedNames(config RoutesFileConfiguration) []generatedName {
+	return []generatedName{
 		{"output-routes-func", config.RoutesFunction},
 		{"output-receiver-interface", config.ReceiverInterface},
 		{"output-template-data-type", config.TemplateDataType},
 		{"output-sse-template-data-type", config.SSETemplateDataType},
 		{"output-template-route-paths-type", config.TemplateRoutePathsTypeName},
-	} {
-		if other.name == builder {
-			return fmt.Errorf("--output-template-route-builder-type %s is also the value of --%s; change one of them", builder, other.flag)
+		{"output-template-route-type", routeTypeName(config)},
+		{"output-template-route-builder-type", routeBuilderTypeName(config)},
+	}
+}
+
+// checkGeneratedNames reports two generated declarations with the same
+// name, naming the flags that set them.
+func checkGeneratedNames(config RoutesFileConfiguration) error {
+	names := generatedNames(config)
+	for i, later := range names {
+		for _, earlier := range names[:i] {
+			if later.name != "" && later.name == earlier.name {
+				return fmt.Errorf("--%s %s is also the value of --%s; change one of them", later.flag, later.name, earlier.flag)
+			}
 		}
 	}
 	return nil
@@ -127,17 +141,18 @@ func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logger *log.Logger) ([]GeneratedFile, error) {
-	if !token.IsIdentifier(config.PackageName) {
-		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
-	}
-
-	file := newFile(pkg)
-
 	config.PackagePath = pkg.Types.Path()
 	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
 
-	if err := checkRouteBuilderTypeName(config); err != nil {
+	// An import may not have the name of a declaration the run generates.
+	var reserved []string
+	for _, generated := range generatedNames(config) {
+		reserved = append(reserved, generated.name)
+	}
+	file := newFile(pkg, reserved...)
+
+	if err := checkGeneratedNames(config); err != nil {
 		return nil, err
 	}
 
@@ -145,6 +160,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	if err != nil {
 		return nil, err
 	}
+	logResolutionNotes(groups.all, config, logger)
 
 	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 	routesFunc := routesFuncDecl(file, config, config.RoutesFunction, config.ReceiverInterface, config.PathPrefix)
@@ -247,7 +263,6 @@ func routeStatements(file *File, config RoutesFileConfiguration, defs []muxt.Def
 	if len(defs) > 0 {
 		stmts = append(stmts, bytesBufferPoolDeclaration(file))
 	}
-	logResolutionNotes(defs, config, logger)
 	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
 		return nil, err
 	}
@@ -358,8 +373,10 @@ func accumulateReceiverMethods(name string, sig source.Type, isMethod bool, args
 	if !isMethod {
 		return nil
 	}
+	// The list also holds the per-file receiver interfaces that
+	// --output-multiple-files embeds, which have no names.
 	if slices.ContainsFunc(receiverInterface.Methods.List, func(field *ast.Field) bool {
-		return field.Names[0].Name == name
+		return len(field.Names) > 0 && field.Names[0].Name == name
 	}) {
 		return nil
 	}
@@ -386,7 +403,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		receiverInterfaceName := strcase.ToGoCamel(fileIdentifier + " " + config.ReceiverInterface)
 		routesFuncName := strcase.ToGoCamel(fileIdentifier + " " + config.RoutesFunction)
 
-		perFileAST, err := generatePerFileAST(sourceFile, definitions, newFile(file.OutputPackage()), routesFuncName, receiverInterfaceName, logger, config)
+		perFileAST, err := generatePerFileAST(sourceFile, definitions, file.sibling(), routesFuncName, receiverInterfaceName, logger, config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate routes for %s: %w", sourceFile, err)
 		}
@@ -441,9 +458,6 @@ func generatePerFileRouteFunction(
 	config RoutesFileConfiguration,
 	receiverInterface *ast.InterfaceType,
 ) (*ast.FuncDecl, error) {
-	if sourceFile == "" {
-		return nil, fmt.Errorf("sourceFile cannot be empty")
-	}
 	routesFunc := routesFuncDecl(file, config, funcName, receiverInterfaceName, true)
 	handlers, err := routeStatements(file, config, defs, receiverInterface, receiverInterfaceName, logger, " in "+sourceFile)
 	if err != nil {

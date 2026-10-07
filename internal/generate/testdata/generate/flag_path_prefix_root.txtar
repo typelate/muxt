@@ -1,13 +1,16 @@
-The routes function takes a logger, a path prefix, and a middleware.
+With --output-routes-func-with-path-prefix-param, the "/" route is
+registered as the prefix with a trailing slash, so it still matches every
+path under the prefix, and its route path is that too. path.Join alone
+would drop the slash and register an exact match.
 
-Command line: muxt generate --use-receiver-type=T --output-routes-func-with-logger-param --output-routes-func-with-path-prefix-param --output-routes-func-with-middleware-param
+Command line: muxt generate --output-routes-func-with-path-prefix-param
 -- config.json --
 {
 	"MuxtVersion": "v1.2.3",
 	"PackageName": "main",
 	"PackagePath": "",
 	"RoutesFunction": "TemplateRoutes",
-	"ReceiverType": "T",
+	"ReceiverType": "",
 	"ReceiverPackage": "",
 	"ReceiverInterface": "RoutesReceiver",
 	"TemplateDataType": "TemplateData",
@@ -18,8 +21,8 @@ Command line: muxt generate --use-receiver-type=T --output-routes-func-with-logg
 	],
 	"OutputFileName": "template_routes.go",
 	"PathPrefix": true,
-	"Logger": true,
-	"Middleware": true,
+	"Logger": false,
+	"Middleware": false,
 	"Verbose": false,
 	"OutputMultipleFiles": false,
 	"OutputHTMX": false,
@@ -30,14 +33,8 @@ Command line: muxt generate --use-receiver-type=T --output-routes-func-with-logg
 	"SilenceHTTPResponseWarning": false
 }
 -- index.gohtml --
-{{define "GET /{$}"}}home{{end}}
-{{define "GET /article/{id} Article(id)"}}{{.Result}}{{end}}
--- server.go --
-package server
-
-type T struct{}
-
-func (T) Article(id int) string { return "" }
+{{define "GET /"}}root{{end}}
+{{define "GET /a"}}a{{end}}
 -- want/template_routes.go --
 package server
 
@@ -55,60 +52,20 @@ import (
 )
 
 type RoutesReceiver interface {
-	Article(id int) string
 }
 
-func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Logger, pathsPrefix string, middleware func(next http.Handler) http.Handler) TemplateRoutePaths {
-	if middleware == nil {
-		middleware = func(next http.Handler) http.Handler {
-			return next
-		}
-	}
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathsPrefix string) TemplateRoutePaths {
 	bytesBufferPool := sync.Pool{New: func() any {
 		return bytes.NewBuffer(nil)
 	}}
-	mux.Handle("GET "+path.Join(pathsPrefix, "/article/{id}"), middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
-		idParsed, err := strconv.Atoi(request.PathValue("id"))
-		if err != nil {
-			td.errList = append(td.errList, err)
-			td.errStatusCode = http.StatusBadRequest
-		}
-		idPathParam := idParsed
-		buf := bytesBufferPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bytesBufferPool.Put(buf)
-		if len(td.errList) == 0 {
-			td.result = receiver.Article(idPathParam)
-			td.okay = true
-		}
-		logger.DebugContext(request.Context(), "handling request", slog.String("pattern", "GET /article/{id}"), slog.String("path", request.URL.Path), slog.String("method", request.Method))
-		if err := templates.ExecuteTemplate(buf, "GET /article/{id} Article(id)", &td); err != nil {
-			logger.ErrorContext(request.Context(), "failed to render page", slog.String("pattern", "GET /article/{id}"), slog.String("path", request.URL.Path), slog.String("error", err.Error()))
-			http.Error(response, "failed to render page", http.StatusInternalServerError)
-			return
-		}
-		defaultStatusCode := http.StatusOK
-		if buf.Len() == 0 {
-			defaultStatusCode = http.StatusNoContent
-		}
-		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
-		if contentType := response.Header().Get("content-type"); contentType == "" {
-			response.Header().Set("content-type", "text/html; charset=utf-8")
-		}
-		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
-		response.WriteHeader(statusCode)
-		_, _ = buf.WriteTo(response)
-	})))
-	mux.Handle("GET "+path.Join(pathsPrefix, "/{$}"), middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+strings.TrimSuffix(path.Join(pathsPrefix, "/"), "/")+"/", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, struct {
 		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
-		logger.DebugContext(request.Context(), "handling request", slog.String("pattern", "GET /{$}"), slog.String("path", request.URL.Path), slog.String("method", request.Method))
-		if err := templates.ExecuteTemplate(buf, "GET /{$}", &td); err != nil {
-			logger.ErrorContext(request.Context(), "failed to render page", slog.String("pattern", "GET /{$}"), slog.String("path", request.URL.Path), slog.String("error", err.Error()))
+		if err := templates.ExecuteTemplate(buf, "GET /", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
 			http.Error(response, "failed to render page", http.StatusInternalServerError)
 			return
 		}
@@ -123,7 +80,30 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, logger *slog.Lo
 		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
 		response.WriteHeader(statusCode)
 		_, _ = buf.WriteTo(response)
-	})))
+	})
+	mux.HandleFunc("GET "+path.Join(pathsPrefix, "/a"), func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, struct {
+		}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if err := templates.ExecuteTemplate(buf, "GET /a", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		defaultStatusCode := http.StatusOK
+		if buf.Len() == 0 {
+			defaultStatusCode = http.StatusNoContent
+		}
+		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
+		if contentType := response.Header().Get("content-type"); contentType == "" {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+		}
+		response.Header().Set("content-length", strconv.Itoa(buf.Len()))
+		response.WriteHeader(statusCode)
+		_, _ = buf.WriteTo(response)
+	})
 	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
 }
 
@@ -238,18 +218,18 @@ func (route TemplateRoute) HasMethod() bool {
 	return route.method != ""
 }
 
-func (routes TemplateRouteBuilder) Article(idPathParam int) TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "article", strconv.Itoa(idPathParam))}
-}
-
-func (routePaths TemplateRoutePaths) Article(idPathParam int) string {
-	return routePaths.routes.Article(idPathParam).Path()
-}
-
-func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
+func (routes TemplateRouteBuilder) ReadIndex() TemplateRoute {
 	return TemplateRoute{method: http.MethodGet, path: strings.TrimSuffix(path.Join(routes.pathsPrefix, "/"), "/") + "/"}
 }
 
-func (routePaths TemplateRoutePaths) ReadExact() string {
-	return routePaths.routes.ReadExact().Path()
+func (routePaths TemplateRoutePaths) ReadIndex() string {
+	return routePaths.routes.ReadIndex().Path()
+}
+
+func (routes TemplateRouteBuilder) ReadA() TemplateRoute {
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "a")}
+}
+
+func (routePaths TemplateRoutePaths) ReadA() string {
+	return routePaths.routes.ReadA().Path()
 }
