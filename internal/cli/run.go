@@ -24,6 +24,7 @@ func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfigu
 	if err != nil {
 		return err
 	}
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
 	pkg, receiver, err := load.PackageWithReceiver(wd, pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		printMultiLineError(cmd, err)
@@ -61,16 +62,19 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	return nil
 }
 
-func loadTemplates(wd string, templatesVariables []string) (source.Package, error) {
+// loadTemplates loads the package in wd for a listing, warning on stderr
+// when it has syntax errors.
+func loadTemplates(cmd *cobra.Command, wd string, templatesVariables []string) (source.Package, error) {
 	_, pl, err := load.Packages(wd)
 	if err != nil {
 		return source.Package{}, err
 	}
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
 	return load.Package(wd, pl, templatesVariables)
 }
 
 func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {
-	pkg, err := loadTemplates(wd, config.TemplatesVariables)
+	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
@@ -82,7 +86,7 @@ func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateC
 }
 
 func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error {
-	pkg, err := loadTemplates(wd, config.TemplatesVariables)
+	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
