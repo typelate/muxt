@@ -378,6 +378,9 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 // are gathered before the collector is built: a source scans its actions
 // as it is constructed, and it can only do that once the delimiters its
 // file was written with are known, which is something the definitions say.
+//
+// They are sorted by name: the set holds its templates in a map, and an
+// error naming the first unreadable one has to name the same one every run.
 func definitionsOf(lt *checked) []source.Definition {
 	var defs []source.Definition
 	for _, t := range lt.Set.Templates() {
@@ -385,6 +388,7 @@ func definitionsOf(lt *checked) []source.Definition {
 			defs = append(defs, definition)
 		}
 	}
+	slices.SortFunc(defs, func(a, b source.Definition) int { return cmp.Compare(a.Name, b.Name) })
 	return defs
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"go/token"
 	"go/types"
+	"html/template"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -233,6 +234,25 @@ func TestIndexTreesKeepsTheTreeTheSetKept(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, index["page"].src.path, "indexTrees(...)[page] source")
 		})
+	}
+}
+
+// TestDefinitionsOfListsByName states that the definitions come out in
+// name order however the set holds them, so a run that finds several
+// unreadable templates names the same one every time.
+func TestDefinitionsOfListsByName(t *testing.T) {
+	set := template.Must(template.New("c").Parse(`{{define "b"}}{{end}}{{define "e"}}{{end}}{{define "a"}}{{end}}{{define "d"}}{{end}}`))
+	definitions := make(map[string]source.Definition)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		definitions[name] = source.Definition{Name: name}
+	}
+	lt := &checked{Variable: source.Variable{Set: set, Definitions: definitions}}
+	for range 20 {
+		var got []string
+		for _, definition := range definitionsOf(lt) {
+			got = append(got, definition.Name)
+		}
+		require.Equal(t, []string{"a", "b", "c", "d", "e"}, got, "definitionsOf(...) names")
 	}
 }
 
