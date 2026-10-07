@@ -161,6 +161,29 @@ func TestSelectorReportsTrims(t *testing.T) {
 		chosen := newSelector(before).choose([]scope{page}, []trim{trimOf("page", str, "page.go", "page.go")})
 		assert.Empty(t, chosen.trimmed, "the page was mutated nowhere")
 	})
+
+	t.Run("a repeat of a template the pattern excludes is not reported", func(t *testing.T) {
+		sel := newSelector(nil)
+		sel.include = func(name string) bool { return name == "page" }
+		chosen := sel.choose([]scope{page}, []trim{trimOf("row", str, "page.go", "page.go")})
+		assert.Empty(t, chosen.trimmed, "the row is mutated nowhere")
+	})
+}
+
+// TestSelectorCountsWhatThePatternMatched states that a selection says how
+// many of the templates reached the pattern admitted, which is how a
+// pattern matching none of them is told from templates with nothing in
+// them to vary.
+func TestSelectorCountsWhatThePatternMatched(t *testing.T) {
+	str := types.Typ[types.String]
+	sel := newSelector(nil)
+	sel.include = func(name string) bool { return name == "page" }
+	chosen := sel.choose([]scope{
+		scopeOf(t, "page", `<b>{{.}}</b>`, str),
+		scopeOf(t, "footer", `<p>{{.}}</p>`, str),
+	}, nil)
+	assert.Equal(t, 2, chosen.reached, "reached")
+	assert.Equal(t, 1, chosen.matched, "matched")
 }
 
 // TestPlanReportCounts states how a plan's mutants are counted: an action
@@ -350,11 +373,13 @@ func TestPlanValidate(t *testing.T) {
 		unchanged = []UnchangedTemplate{{}}
 		trimmed   = []TrimmedTemplate{{}}
 	)
+	pattern := regexp.MustCompile("^footer$")
 	for _, tt := range []struct {
-		name         string
-		plan         plan
-		wantNoCalls  bool
-		wantNoMutant bool
+		name          string
+		plan          plan
+		wantNoCalls   bool
+		wantNoMutant  bool
+		wantNoMatches bool
 	}{
 		{name: "empty plan reached no call site", plan: plan{}, wantNoCalls: true},
 		{name: "templates counted without a group still reached no call site", plan: plan{templates: 1}, wantNoCalls: true},
@@ -364,14 +389,37 @@ func TestPlanValidate(t *testing.T) {
 		{name: "only unchanged templates", plan: plan{unchanged: unchanged}},
 		{name: "only trimmed templates", plan: plan{trimmed: trimmed}},
 		{name: "no templates counted", plan: plan{groups: group}},
+		{
+			name: "templates a pattern selected hold no actions",
+			plan: plan{groups: group, templates: 1, pattern: pattern, reached: 2, matched: 1},
+		},
+		{
+			name: "templates a --diff run selected hold no actions",
+			plan: plan{groups: group, templates: 1, diff: "main"},
+		},
+		{
+			name:          "a pattern matching no template reached",
+			plan:          plan{trimmed: trimmed, pattern: pattern, reached: 2},
+			wantNoMatches: true,
+		},
+		{
+			name:          "a pattern matching no template reached and nothing trimmed",
+			plan:          plan{pattern: pattern, reached: 1},
+			wantNoMatches: true,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.plan.validate([]string{"templates"})
 			noCalls, isNoCalls := errors.AsType[*NoCallSitesError](err)
 			noMutations, isNoMutations := errors.AsType[*NoMutationsError](err)
+			noMatches, isNoMatches := errors.AsType[*NoTemplateMatchesError](err)
 			require.Equal(t, tt.wantNoCalls, isNoCalls, "validate() = %v: no call sites", err)
 			require.Equal(t, tt.wantNoMutant, isNoMutations, "validate() = %v: no mutations", err)
-			require.Equal(t, tt.wantNoCalls || tt.wantNoMutant, err != nil, "validate() = %v: any error", err)
+			require.Equal(t, tt.wantNoMatches, isNoMatches, "validate() = %v: no template matches", err)
+			require.Equal(t, tt.wantNoCalls || tt.wantNoMutant || tt.wantNoMatches, err != nil, "validate() = %v: any error", err)
+			if isNoMatches {
+				assert.Equal(t, "^footer$", noMatches.Pattern, "validate() pattern")
+			}
 			if isNoCalls {
 				assert.Equal(t, []string{"templates"}, noCalls.Variables, "validate() variables")
 			}

@@ -131,6 +131,11 @@ type Report struct {
 	Diff      string              `json:"diff,omitempty"`
 	DiffError string              `json:"diff_error,omitempty"`
 	Unchanged []UnchangedTemplate `json:"unchanged,omitempty"`
+
+	// Note says why a run narrowed by --template-pattern or --diff has
+	// nothing to mutate, so an empty report is not read as one that
+	// caught everything.
+	Note string `json:"note,omitempty"`
 }
 
 // eachTemplate iterates the report's templates in the order they were
@@ -204,6 +209,9 @@ func (r *Report) writePreamble(out *bufio.Writer) {
 		r.Templates, pluralize(r.Templates, "template"),
 		r.Complexity, r.Seed)
 	r.writeDiff(out)
+	if r.Note != "" {
+		_, _ = fmt.Fprintln(out, r.Note)
+	}
 
 	switch {
 	case r.DryRun:

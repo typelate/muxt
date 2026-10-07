@@ -33,12 +33,29 @@ func (e *NoCallSitesError) Error() string {
 // "the tests catch everything". That is the most misleading thing this
 // tool can say, so finding nothing to ask about is an error rather than
 // an empty report that exits zero.
+//
+// It is not raised when --template-pattern or --diff narrowed what is
+// mutated: a commit that only touches static templates has nothing to
+// vary, and the report says so instead.
 type NoMutationsError struct {
 	Templates int
 }
 
 func (e *NoMutationsError) Error() string {
 	return fmt.Sprintf("no mutations available: the %d template(s) reached hold no dynamic or control flow actions, so a run would report every mutant killed without testing anything", e.Templates)
+}
+
+// NoTemplateMatchesError reports that --template-pattern matched none of
+// the templates the ExecuteTemplate calls reach.
+//
+// A run that mutates nothing because the pattern was mistyped would pass,
+// and read as the selected templates being covered.
+type NoTemplateMatchesError struct {
+	Pattern string
+}
+
+func (e *NoTemplateMatchesError) Error() string {
+	return fmt.Sprintf("no template matches --template-pattern %s", e.Pattern)
 }
 
 // UnreadableTemplateError reports a template the template set parsed into

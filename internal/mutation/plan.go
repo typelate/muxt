@@ -38,7 +38,18 @@ type plan struct {
 	diff      string
 	diffError string
 	unchanged []UnchangedTemplate
+
+	// pattern is --template-pattern, nil when every template is mutated.
+	// reached counts the templates the calls reach and matched those the
+	// pattern admitted, which is how a pattern that matches nothing is
+	// told from templates that hold nothing to vary.
+	pattern          *regexp.Regexp
+	reached, matched int
 }
+
+// narrowed reports whether the run was asked to mutate only some of the
+// templates it reaches.
+func (p *plan) narrowed() bool { return p.pattern != nil || p.diff != "" }
 
 func (p *plan) runnable() int { return p.runnableN }
 
@@ -51,7 +62,14 @@ func (p *plan) report() *Report {
 	if groups == nil {
 		groups = []Group{}
 	}
+	var note string
+	if len(p.mutants) == 0 && p.overBudget == 0 {
+		// Only a narrowed run gets this far with nothing to mutate; an
+		// unnarrowed one is a NoMutationsError.
+		note = "nothing to mutate: the selected templates hold no dynamic or control flow actions"
+	}
 	return &Report{
+		Note:       note,
 		Templates:  p.templates,
 		Complexity: p.complexity,
 		Seed:       p.seed,
@@ -74,6 +92,10 @@ type selection struct {
 	mutate    []scope
 	unchanged []UnchangedTemplate
 	trimmed   []TrimmedTemplate
+
+	// reached counts the scopes the traversal found and matched the ones
+	// the template pattern admitted.
+	reached, matched int
 }
 
 // selector decides what a run mutates. It holds what that decision needs
@@ -100,9 +122,11 @@ type selector struct {
 func (s selector) choose(scopes []scope, trims []trim) selection {
 	var chosen selection
 	for _, sc := range scopes {
+		chosen.reached++
 		if !s.include(sc.template) {
 			continue
 		}
+		chosen.matched++
 		key := executionKey(sc.template, sc.dataType)
 		if _, done := s.seen[key]; done {
 			continue
@@ -122,9 +146,13 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 
 	reported := make(map[TrimmedTemplate]struct{})
 	for _, t := range trims {
+		if !s.include(t.template) {
+			// A template the pattern excludes is mutated nowhere, so
+			// there is no first mutation for the trim to point at.
+			continue
+		}
 		if _, skipped := s.unchanged[executionKey(t.template, t.dataType)]; skipped {
-			// Unchanged means mutated nowhere, so there is no first
-			// mutation for the trim to point at.
+			// Unchanged means mutated nowhere too.
 			continue
 		}
 		entry := TrimmedTemplate{
@@ -182,6 +210,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		maxCases:  config.maxCases(),
 		diff:      config.Diff,
 		diffError: diffError,
+		pattern:   config.TemplatePattern,
 	}
 	sel := selector{
 		before:    before,
@@ -205,6 +234,8 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		}
 		p.unchanged = append(p.unchanged, chosen.unchanged...)
 		p.trimmed = append(p.trimmed, chosen.trimmed...)
+		p.reached += chosen.reached
+		p.matched += chosen.matched
 	}
 
 	if err := p.validate(config.TemplatesVariables); err != nil {
@@ -229,13 +260,17 @@ func templateFilter(pattern *regexp.Regexp) func(string) bool {
 }
 
 func (p *plan) validate(variables []string) error {
+	if p.pattern != nil && p.reached > 0 && p.matched == 0 {
+		return &NoTemplateMatchesError{Pattern: p.pattern.String()}
+	}
 	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {
 		return &NoCallSitesError{Variables: variables}
 	}
-	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {
+	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 && !p.narrowed() {
 		// A template that is entirely static is possible, but a whole run
 		// of them means the actions were not read, and reporting that as
-		// a pass would say the tests catch everything.
+		// a pass would say the tests catch everything. A run narrowed to
+		// some templates may well have picked only static ones.
 		return &NoMutationsError{Templates: p.templates}
 	}
 	return nil

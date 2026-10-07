@@ -1,0 +1,50 @@
+A --template-pattern selecting only templates with no action to vary is a
+run with nothing to mutate, which the report says, not an error.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 --template-pattern=^footer$
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": "^footer$",
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": false,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}<h1>{{.Title}}</h1>{{template "footer" .}}{{end}}
+{{define "footer"}}<footer>static</footer>{{end}}
+-- want/report.txt --
+0 mutants across 1 template (complexity 1, seed 1)
+nothing to mutate: the selected templates hold no dynamic or control flow actions
+dry run: no tests were run
+
+0 mutants, 0 runnable, 0 skipped
