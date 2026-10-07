@@ -3,7 +3,6 @@ package muxt
 import (
 	"fmt"
 	"html/template"
-	"slices"
 	"strings"
 	"text/template/parse"
 )
@@ -93,9 +92,12 @@ func responseStateCallInCommand(cmd *parse.CommandNode, dotIsTemplateData bool) 
 		return "", false
 	}
 	for _, arg := range cmd.Args {
+		// Only the first name is TemplateData's: the rest select from
+		// what it returned, so .Result.StatusCode reads the method's
+		// result rather than setting the response status.
 		names := templateDataNames(arg, dotIsTemplateData)
-		if i := slices.IndexFunc(names, writesResponseState); i >= 0 {
-			return names[i], true
+		if len(names) > 0 && writesResponseState(names[0]) {
+			return names[0], true
 		}
 	}
 	return "", false
@@ -138,11 +140,28 @@ func chainStartsAtTemplateData(chain *parse.ChainNode, dotIsTemplateData bool) b
 	case *parse.PipeNode:
 		// (.Redirect "/x").Header and the like: the parenthesised
 		// pipeline is walked on its own, so the chain only has to say
-		// whether its own fields are TemplateData's.
-		return dotIsTemplateData
+		// whether its own fields are TemplateData's. They are only when
+		// the pipeline is dot itself; (.Result).StatusCode selects from
+		// the result.
+		return pipeIsTemplateData(node, dotIsTemplateData)
 	default:
 		return false
 	}
+}
+
+// pipeIsTemplateData reports whether a parenthesised pipeline evaluates to
+// the TemplateData the handler passed in: (.) while dot still is, or ($).
+func pipeIsTemplateData(pipe *parse.PipeNode, dotIsTemplateData bool) bool {
+	if len(pipe.Decl) > 0 || len(pipe.Cmds) != 1 || len(pipe.Cmds[0].Args) != 1 {
+		return false
+	}
+	switch arg := pipe.Cmds[0].Args[0].(type) {
+	case *parse.DotNode:
+		return dotIsTemplateData
+	case *parse.VariableNode:
+		return len(arg.Ident) == 1 && arg.Ident[0] == "$"
+	}
+	return false
 }
 
 // writesResponseState reports whether a TemplateData method records something

@@ -23,6 +23,12 @@ func TestCheckResponseWriterConflicts(t *testing.T) {
 		{name: "a variable is not the root", body: `{{$x := .}}{{$x.StatusCode}}`},
 		{name: "dot inside with is not template data", body: `{{with .Field}}{{.StatusCode}}{{end}}`},
 		{name: "header is allowed", body: `{{.Header "X" "y"}}`},
+		// Only the first name is TemplateData's; the rest select from
+		// whatever it returned, here the method's result.
+		{name: "a result field named StatusCode", body: `{{.Result.StatusCode}}`},
+		{name: "a result field named StatusCode from root", body: `{{$.Result.StatusCode}}`},
+		{name: "a result field named Redirect in a chain", body: `{{(.Result).Redirect}}`},
+		{name: "a chain on parenthesised dot", body: `{{(.).StatusCode 201}}`, want: "StatusCode"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := template.Must(template.New("root").Parse(`{{define "GET /a A(response)"}}` + tt.body + `{{end}}`))
@@ -94,6 +100,13 @@ func TestResponseWriterTemplateStateErrorMessage(t *testing.T) {
 		redirect.Method = "Redirect"
 		assert.Contains(t, redirect.Error(), "or call http.Redirect in the method", "Error() for a redirect")
 	})
+}
+
+func TestDefinitionsAllowsReadingAResultStatusCode(t *testing.T) {
+	ts := template.Must(template.New("root").Parse(`{{define "GET /a WithResponse(response)"}}{{.Result.StatusCode}}{{end}}`))
+	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
+	require.NoError(t, err, "Definitions() of a template reading its result's StatusCode")
+	assert.Len(t, defs, 1, "Definitions() definitions")
 }
 
 func TestDefinitionsReportsResponseWriterConflicts(t *testing.T) {
