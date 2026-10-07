@@ -5,8 +5,9 @@
 # must therefore reach different verdicts, which they can only do if each is
 # run on its own.
 
-muxt test-template-mutations -v --seed 1
+! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server

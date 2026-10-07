@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -98,12 +102,22 @@ func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCal
 }
 
 func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configuration) error {
-	report, err := mutation.Run(config, wd, cmd.ErrOrStderr())
+	// An interrupt stops the go test runs in flight and removes the
+	// files the run wrote; a second one ends the process at once.
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	context.AfterFunc(ctx, stop)
+	report, err := mutation.Run(ctx, config, wd, cmd.ErrOrStderr())
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
 	}
-	return writeResult(cmd, cmd.OutOrStdout(), report)
+	if err := writeResult(cmd, cmd.OutOrStdout(), report); err != nil {
+		return err
+	}
+	// Like go test, the command fails once the report is out when a
+	// mutant was missed.
+	return report.Err()
 }
 
 func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error {

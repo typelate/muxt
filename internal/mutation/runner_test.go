@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -32,7 +33,7 @@ func runnerFixture(t *testing.T, kills []bool) (*Report, *plan) {
 		if kill {
 			marker = "K"
 		}
-		p.mutants = append(p.mutants, Mutant{
+		p.mutants = append(p.mutants, mutant{
 			Operator: OperatorActionEmpty,
 			File:     src.file,
 			src:      src,
@@ -86,7 +87,7 @@ func TestWriteMutantMapsTheFileToItsMutatedCopy(t *testing.T) {
 		require.True(t, ok, "mutant %d overlay = %v, want %s replaced", i, got.Replace, mutant.File)
 		require.Len(t, got.Replace, 1, "mutant %d overlay replaces only %s", i, mutant.File)
 
-		assert.Equal(t, mutant.Apply(), readMutated(t, overlay), "mutant %d copy", i)
+		assert.Equal(t, mutant.apply(), readMutated(t, overlay), "mutant %d copy", i)
 		assert.Equal(t, filepath.Base(mutant.File), filepath.Base(mutated), "mutant %d copy name", i)
 		assert.Equal(t, filepath.Dir(overlay), filepath.Dir(mutated), "mutant %d copy and overlay share a directory", i)
 		assert.Equal(t, scratch, filepath.Dir(filepath.Dir(overlay)), "mutant %d directory is directly under the scratch directory", i)
@@ -107,14 +108,14 @@ func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 				plan:    p,
 				scratch: t.TempDir(),
 				clock:   &estimate{remaining: len(kills), workers: workers},
-				test: func(overlay string) (Status, error) {
+				test: func(_ context.Context, overlay string) (Status, error) {
 					if strings.Contains(readMutated(t, overlay), "K") {
 						return StatusKilled, nil
 					}
 					return StatusMissed, nil
 				},
 			}
-			require.NoError(t, r.runAll(report, workers))
+			require.NoError(t, r.runAll(t.Context(), report, workers))
 
 			results := report.Groups[0].Templates[0].Results
 			for i, kill := range kills {
@@ -142,12 +143,12 @@ func TestRunAllStopsDispatchingAfterAnError(t *testing.T) {
 		plan:    p,
 		scratch: t.TempDir(),
 		clock:   &estimate{remaining: 3, workers: 1},
-		test: func(string) (Status, error) {
+		test: func(context.Context, string) (Status, error) {
 			calls.Add(1)
 			return "", errors.New("go could not run")
 		},
 	}
-	require.Error(t, r.runAll(report, 1), "runAll: the error the go command gave")
+	require.Error(t, r.runAll(t.Context(), report, 1), "runAll: the error the go command gave")
 	assert.Equal(t, int32(1), calls.Load(), "mutants started: nothing should start after the first error")
 }
 
@@ -168,14 +169,14 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 		// An hour a mutant until a run says otherwise: each run that
 		// finishes has to bring the estimate down with it.
 		clock: &estimate{perMutant: time.Hour, remaining: 2, workers: 1},
-		test: func(overlay string) (Status, error) {
+		test: func(_ context.Context, overlay string) (Status, error) {
 			if strings.Contains(readMutated(t, overlay), "K") {
 				return StatusKilled, nil
 			}
 			return StatusMissed, nil
 		},
 	}
-	require.NoError(t, r.runAll(report, 1))
+	require.NoError(t, r.runAll(t.Context(), report, 1))
 
 	want := []string{
 		fmt.Sprintf(`[1/3] KILL page.gohtml:0:0 "page" %s (0s, ~0s left)`, OperatorActionEmpty),

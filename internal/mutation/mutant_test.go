@@ -1,9 +1,11 @@
 package mutation
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	texttemplate "text/template"
 	"text/template/parse"
 
 	"github.com/stretchr/testify/assert"
@@ -53,21 +55,43 @@ func TestValueStart(t *testing.T) {
 // For a template written as a Go literal the two differ by everything in
 // the file before the literal.
 func TestMutantsAreReportedWhereTheFileHoldsThem(t *testing.T) {
-	const goFile = "package p\n\nvar t = `x\n  {{.A}}`\n"
-	start, end := strings.Index(goFile, "`"), strings.LastIndex(goFile, "`")+1
-	literal, err := newLiteralSource("p.go", "p.go", "t", goFile, "", "", start, end)
-	require.NoError(t, err)
+	literalIn := func(goFile, quote string) *templateSource {
+		t.Helper()
+		start, end := strings.Index(goFile, quote), strings.LastIndex(goFile, quote)+1
+		src, err := newLiteralSource("p.go", "p.go", "t", goFile, "", "", start, end)
+		require.NoError(t, err)
+		return src
+	}
 	for _, tt := range []struct {
 		name         string
 		src          *templateSource
 		line, column int
 	}{
 		{name: "a template file", src: newFileSource("t.gohtml", "t.gohtml", "x\n  {{.A}}", "", ""), line: 2, column: 3},
-		{name: "a Go string literal", src: literal, line: 4, column: 3},
+		{name: "a Go string literal", src: literalIn("package p\n\nvar t = `x\n  {{.A}}`\n", "`"), line: 4, column: 3},
+		// Columns count bytes, and a line ends at \n whatever comes before
+		// it: é is two bytes, and \r is the last byte of the line it ends.
+		{
+			name: "a template file with CRLF line endings and a multi-byte character",
+			src:  newFileSource("t.gohtml", "t.gohtml", "{{define \"page\"}}\r\nhéllo {{.A}}\r\n{{end}}\r\n", "", ""),
+			line: 2, column: 8,
+		},
+		{
+			name: "a raw Go string literal in a CRLF file",
+			src:  literalIn("package p\r\n\r\nvar t = `x\r\nhéllo {{.A}}`\r\n", "`"),
+			line: 4, column: 8,
+		},
+		{
+			name: "an interpreted Go string literal holding escapes",
+			src:  literalIn("package p\n\nvar t = \"x\\r\\nhéllo {{.A}}\"\n", `"`),
+			line: 3, column: 22,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &enumerator{src: tt.src, template: "t"}
-			r := tt.src.regions[0]
+			i := slices.IndexFunc(tt.src.regions, func(r region) bool { return tt.src.text[r.start:r.end] == "{{.A}}" })
+			require.GreaterOrEqual(t, i, 0, "no {{.A}} region")
+			r := tt.src.regions[i]
 			e.appendEdits(r, OperatorActionEmpty, []edit{{start: r.start, end: r.end}}, "")
 			m := e.mutants[0]
 			assert.Equal(t, tt.line, m.Line, "mutant line")
@@ -129,6 +153,42 @@ func TestConstructDropKeepsTheElseBranch(t *testing.T) {
 			left: "[[", right: "]]",
 			want: `[[with .B]]b[[end]]`,
 		},
+		{
+			name: "no else and trim markers on both sides",
+			text: `x {{- with .A -}} a {{- end -}} y`,
+			want: `x {{- /* */ -}} y`,
+		},
+		{
+			name: "no else and a trim marker before",
+			text: `x {{- with .A}} a {{end}} y`,
+			want: `x {{- /* */}} y`,
+		},
+		{
+			name: "no else and trim markers inside only",
+			text: `x {{with .A -}} a {{- end}} y`,
+			want: `x  y`,
+		},
+		{
+			name: "an else and trim markers on both sides",
+			text: `x {{- with .A -}} a {{- else -}} c {{- end -}} y`,
+			want: `x {{- if true -}} c {{- end -}} y`,
+		},
+		{
+			name: "an else and a trim marker after the else",
+			text: `x {{with .A}} a {{else -}} c {{end}} y`,
+			want: `x {{if true -}} c {{end}} y`,
+		},
+		{
+			name: "an else with and trim markers on both sides",
+			text: `x {{- with .A -}} a {{- else with .B -}} b {{- end -}} y`,
+			want: `x {{- with .B -}} b {{- end -}} y`,
+		},
+		{
+			name: "no else, trim markers and other delimiters",
+			text: `x [[- with .A -]] a [[- end -]] y`,
+			left: "[[", right: "]]",
+			want: `x [[- /* */ -]] y`,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, tt.left, tt.right)
@@ -138,4 +198,159 @@ func TestConstructDropKeepsTheElseBranch(t *testing.T) {
 			assert.Equal(t, tt.want, src.mutatedText(e.mutants[0].edits), "text left by dropping the with")
 		})
 	}
+}
+
+// TestDropsRenderWhatTheSkippedConstructRendered states that dropping a
+// construct or a {{template}} call changes only what the dropped part
+// would have rendered, never the whitespace around it.
+//
+// Each case renders with data under which the dropped part renders
+// nothing, so the mutant is equivalent: a test comparing the output
+// exactly must not catch it. Losing a trim marker along with the
+// construct changes the whitespace, and such a test would report a kill
+// that no assertion on the behaviour earned.
+func TestDropsRenderWhatTheSkippedConstructRendered(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		text     string
+		operator Operator
+		data     map[string]any
+	}{
+		{
+			name:     "a range with trim markers",
+			text:     "<ul>\n{{- range .Items}}\n<li>{{.}}</li>\n{{- end}}\n</ul>",
+			operator: OperatorRangeNever,
+			data:     map[string]any{"Items": []string{}},
+		},
+		{
+			name:     "a range with an else and trim markers",
+			text:     "<ul>\n{{- range .Items -}}\n<li>{{.}}</li>\n{{- else -}}\n<li>none</li>\n{{- end -}}\n</ul>",
+			operator: OperatorRangeNever,
+			data:     map[string]any{"Items": []string{}},
+		},
+		{
+			name:     "a with with trim markers",
+			text:     "a\n{{- with .A -}}\n{{.}}\n{{- end -}}\nb",
+			operator: OperatorWithEmpty,
+			data:     map[string]any{"A": ""},
+		},
+		{
+			name:     "a template call with trim markers",
+			text:     "<p>a</p>\n{{- template \"footer\" . -}}\n<p>end</p>{{define \"footer\"}}{{end}}",
+			operator: OperatorTemplateDrop,
+			data:     map[string]any{},
+		},
+		{
+			name:     "a template call with a trim marker after",
+			text:     "<p>a</p>\n{{template \"footer\" . -}}\n<p>end</p>{{define \"footer\"}}{{end}}",
+			operator: OperatorTemplateDrop,
+			data:     map[string]any{},
+		},
+		{
+			name:     "a chained with",
+			text:     "{{with .A}}a{{.}}{{else with .B}}b{{.}}{{else}}c{{end}}",
+			operator: OperatorWithEmpty,
+			data:     map[string]any{"A": "", "B": ""},
+		},
+		{
+			name:     "a chained with and trim markers",
+			text:     "x\n{{- with .A -}}\na\n{{- else with .B -}}\nb\n{{- else -}}\nc\n{{- end -}}\ny",
+			operator: OperatorWithEmpty,
+			data:     map[string]any{"A": "", "B": ""},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			want := render(t, tt.text, tt.data)
+			mutants := dropMutants(t, tt.text)
+			var tried int
+			for _, m := range mutants {
+				if m.Operator != tt.operator {
+					continue
+				}
+				tried++
+				mutated := m.src.mutatedText(m.edits)
+				assert.Equal(t, want, render(t, mutated, tt.data), "%s at %d:%d renders differently:\n%s", m.Operator, m.Line, m.Column, mutated)
+			}
+			assert.NotZero(t, tried, "no %s mutant among %d", tt.operator, len(mutants))
+		})
+	}
+}
+
+// TestConstructDropReachesAChainedWith states that each with of an
+// {{else with}} chain gets a mutant of its own, and that dropping a later
+// one leaves the chain around it standing.
+func TestConstructDropReachesAChainedWith(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		text string
+		want []string
+	}{
+		{
+			name: "a chain with an else",
+			text: `{{with .A}}a{{.}}{{else with .B}}b{{.}}{{else}}c{{end}}`,
+			want: []string{
+				`{{with .B}}b{{.}}{{else}}c{{end}}`,
+				`{{with .A}}a{{.}}{{else}}c{{end}}`,
+			},
+		},
+		{
+			name: "a chain without an else",
+			text: `{{with .A}}a{{else with .B}}b{{end}}`,
+			want: []string{
+				`{{with .B}}b{{end}}`,
+				`{{with .A}}a{{else}}{{end}}`,
+			},
+		},
+		{
+			name: "a chain of three",
+			text: `{{with .A}}a{{else with .B}}b{{else with .C}}c{{end}}`,
+			want: []string{
+				`{{with .B}}b{{else with .C}}c{{end}}`,
+				`{{with .A}}a{{else with .C}}c{{end}}`,
+				`{{with .A}}a{{else with .B}}b{{else}}{{end}}`,
+			},
+		},
+		{
+			name: "a chain with trim markers",
+			text: `{{with .A}} a {{- else with .B -}} b {{- else -}} c {{end}}`,
+			want: []string{
+				`{{with .B -}} b {{- else -}} c {{end}}`,
+				`{{with .A}} a {{- else -}} c {{end}}`,
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, m := range dropMutants(t, tt.text) {
+				got = append(got, m.src.mutatedText(m.edits))
+			}
+			assert.Equal(t, tt.want, got, "mutated texts")
+		})
+	}
+}
+
+// dropMutants enumerates the construct and template drops of a template
+// named t, in the order they are written.
+func dropMutants(t *testing.T, text string) []mutant {
+	t.Helper()
+	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	require.NoError(t, err)
+	src := newFileSource("t.gohtml", "t.gohtml", text, "", "")
+	e := &enumerator{src: src, template: "t"}
+	walkActions(src.regions, nil, nil, trees["t"].Root, func(a action) {
+		switch a.node.(type) {
+		case *parse.WithNode, *parse.RangeNode, *parse.TemplateNode:
+			e.variations(a)
+		}
+	})
+	return e.mutants
+}
+
+func render(t *testing.T, text string, data any) string {
+	t.Helper()
+	tmpl, err := texttemplate.New("t").Parse(text)
+	require.NoError(t, err, "parse:\n%s", text)
+	var out strings.Builder
+	require.NoError(t, tmpl.Execute(&out, data), "execute:\n%s", text)
+	return out.String()
 }

@@ -21,7 +21,7 @@ type variant struct {
 
 // variants describes mutants by operator and detail. An operands mutant's
 // values are drawn, so it is described by which operands it replaced.
-func variants(mutants []Mutant) []variant {
+func variants(mutants []mutant) []variant {
 	var got []variant
 	for _, m := range mutants {
 		detail := m.detail
@@ -40,7 +40,7 @@ func variants(mutants []Mutant) []variant {
 
 // enumerate lists the mutants of a template "t" holding body, rendered
 // with dot.
-func enumerate(t *testing.T, body string, dot types.Type, maxCases int) ([]Mutant, []budgetNote) {
+func enumerate(t *testing.T, body string, dot types.Type, maxCases int) ([]mutant, []budgetNote) {
 	t.Helper()
 	text := `{{define "t"}}` + body + `{{end}}`
 	trees, err := asteval.ParseTrees("t.gohtml", text, "", "", nil)

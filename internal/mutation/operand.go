@@ -16,7 +16,7 @@ import (
 // the combinations is an action reading more than one thing: a test may
 // assert on the rendered result without depending on all of it, and only
 // varying the operands separately shows which ones nothing is watching.
-const OperatorOperands = "operands"
+const OperatorOperands Operator = "operands"
 
 // operand is one leaf input of an action: a field access, a variable or
 // dot itself, with where it is written and what it evaluates to.

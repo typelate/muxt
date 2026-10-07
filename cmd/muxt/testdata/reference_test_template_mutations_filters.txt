@@ -12,8 +12,9 @@
 muxt test-template-mutations -v --template-pattern '^alpha$' --run TestAlpha --seed 1
 cmp stdout want-alpha.txt
 
-muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1
+! muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1
 cmp stdout want-beta.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server
