@@ -20,13 +20,13 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 		Aliases: []string{"c"},
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
 			return run(cmd, *workingDirectory, config)
 		},
 	}
@@ -62,10 +62,10 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 		Aliases: []string{"callers"},
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
 			filters, err := compilePatterns(patterns)
 			if err != nil {
 				return err
@@ -94,10 +94,10 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 		Aliases: []string{"calls"},
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
 			filters, err := compilePatterns(patterns)
 			if err != nil {
 				return err

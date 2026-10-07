@@ -37,13 +37,13 @@ one already there.
 Variations are delivered through the go command's -overlay flag, so the
 working tree is never written to.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
 
 			if templatePattern != "" {
 				pattern, err := regexp.Compile(templatePattern)

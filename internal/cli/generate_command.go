@@ -30,6 +30,9 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 		Aliases: []string{"gen", "g"},
 		Short:   "Generate HTTP routes from templates",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// The flags parsed, so what follows rejects their values, and
+			// the usage text would only bury the error that says why.
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -42,7 +45,6 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 				config.MuxtVersion = v
 			}
 			applyDefaults(&config, cmd.Flags())
-			cmd.SilenceUsage = true
 			return run(cmd, *workingDirectory, config)
 		},
 	}
