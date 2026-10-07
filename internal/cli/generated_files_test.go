@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -127,18 +128,86 @@ func TestWriteGeneratedFilesRollsBack(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "a.go still exists after rollback")
 }
 
-func TestWriteGeneratedFilesReportsRollbackFailure(t *testing.T) {
+// A failed run puts back the files an earlier run wrote: their content and
+// their mode, not a deletion.
+func TestWriteGeneratedFilesRestoresReplacedFiles(t *testing.T) {
 	dir := t.TempDir()
-	twice := filepath.Join(dir, "a.go")
+	previous := writeTestFile(t, dir, "old_template_routes_gen.go", "package old\n")
+	require.NoError(t, os.Chmod(previous, 0o600))
+	// A directory with something in it cannot be renamed over.
+	blocked := filepath.Join(dir, "template_routes.go")
+	require.NoError(t, os.Mkdir(blocked, 0o755))
+	writeTestFile(t, blocked, "child", "")
+
 	files := []generate.GeneratedFile{
-		{Path: twice},
-		{Path: twice},
+		{Path: previous, Content: "package new\n"},
+		{Path: blocked, Content: "package new\n"},
+	}
+	_, err := writeGeneratedFiles(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{})
+	require.Error(t, err, "writeGeneratedFiles() want the failed write")
+
+	content, err := os.ReadFile(previous)
+	require.NoError(t, err, "old_template_routes_gen.go after a failed run")
+	assert.Equal(t, "package old\n", string(content), "old_template_routes_gen.go after a failed run")
+	info, err := os.Stat(previous)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "old_template_routes_gen.go mode after a failed run")
+	assert.Equal(t, []string{"old_template_routes_gen.go", "template_routes.go"}, dirNames(t, dir), "files left, want no temporary file")
+}
+
+func TestWriteGeneratedFilesKeepsTheModeOfAReplacedFile(t *testing.T) {
+	dir := t.TempDir()
+	previous := writeTestFile(t, dir, "a.go", "package old\n")
+	require.NoError(t, os.Chmod(previous, 0o600))
+
+	_, err := writeGeneratedFiles(&bytes.Buffer{}, []generate.GeneratedFile{{Path: previous, Content: "package a\n"}}, generate.RoutesFileConfiguration{})
+	require.NoError(t, err, "writeGeneratedFiles()")
+	info, err := os.Stat(previous)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "a.go mode")
+	assert.Equal(t, []string{"a.go"}, dirNames(t, dir), "files left, want no temporary file")
+}
+
+func TestWriteGeneratedFilesReportsRollbackFailure(t *testing.T) {
+	replace := func(path string, _ []byte) (func() error, error) {
+		if filepath.Base(path) == "b.go" {
+			return nil, errors.New("writing b.go failed")
+		}
+		return func() error { return errors.New("restoring a.go failed") }, nil
+	}
+	files := []generate.GeneratedFile{{Path: "a.go"}, {Path: "b.go"}}
+	_, err := writeGeneratedFilesWith(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{}, replace)
+	require.Error(t, err, "writeGeneratedFiles() want both the failed write and the failed restore")
+	require.ErrorContains(t, err, "writing b.go failed", "the failed write")
+	require.ErrorContains(t, err, "restoring a.go failed", "the failed restore")
+}
+
+// A path written twice in one run is left as it was before the run.
+func TestWriteGeneratedFilesUndoesInReverse(t *testing.T) {
+	dir := t.TempDir()
+	twice := writeTestFile(t, dir, "a.go", "package before\n")
+	files := []generate.GeneratedFile{
+		{Path: twice, Content: "package first\n"},
+		{Path: twice, Content: "package second\n"},
 		{Path: filepath.Join(dir, "missing", "b.go")},
 	}
 	_, err := writeGeneratedFiles(&bytes.Buffer{}, files, generate.RoutesFileConfiguration{})
-	require.Error(t, err, "writeGeneratedFiles() want both the failed write and the failed removal")
-	require.ErrorContains(t, err, "b.go", "the failed write")
-	require.ErrorContains(t, err, "a.go", "the failed removal")
+	require.Error(t, err, "writeGeneratedFiles()")
+	content, err := os.ReadFile(twice)
+	require.NoError(t, err)
+	assert.Equal(t, "package before\n", string(content), "a.go after a failed run")
+}
+
+func dirNames(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	slices.Sort(names)
+	return names
 }
 
 func TestRemoveOrphans(t *testing.T) {
