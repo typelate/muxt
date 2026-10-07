@@ -17,7 +17,7 @@ import (
 // It fails when no loaded package is at dir, or at the first variable that
 // does not evaluate to a template set.
 func Package(dir string, pl []*packages.Package, variables []string) (source.Package, error) {
-	pkg, ok := PackageInDirectory(pl, dir)
+	pkg, ok := packageInDirectory(pl, dir)
 	if !ok {
 		return source.Package{}, NoPackageError(dir, pl)
 	}
@@ -26,7 +26,7 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 		Types: pkg.Types,
 	}
 	for _, name := range variables {
-		variable, err := Variable(pkg, name)
+		variable, err := readVariable(pkg, name)
 		if err != nil {
 			return source.Package{}, err
 		}
@@ -35,11 +35,11 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 	return result, nil
 }
 
-// Variable evaluates the templates variable name in pkg: its template set,
+// readVariable evaluates the templates variable name in pkg: its template set,
 // the functions its templates may call, where each template was defined,
 // and the ExecuteTemplate calls made on it.
-func Variable(pkg *packages.Package, name string) (source.Variable, error) {
-	lt, ts, err := HTMLTemplates(name, pkg)
+func readVariable(pkg *packages.Package, name string) (source.Variable, error) {
+	lt, ts, err := htmlTemplates(name, pkg)
 	if err != nil {
 		return source.Variable{}, err
 	}
@@ -76,9 +76,9 @@ func Variable(pkg *packages.Package, name string) (source.Variable, error) {
 // Receiver finds the receiver type named ident in the package at dir among
 // pl, or in the package with import path packagePath when it is set.
 func Receiver(dir string, pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
-	pkg, ok := PackageInDirectory(pl, dir)
+	pkg, ok := packageInDirectory(pl, dir)
 	if !ok {
 		return nil, NoPackageError(dir, pl)
 	}
-	return FindType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
+	return findType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
 }
