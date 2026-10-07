@@ -33,6 +33,10 @@ func TestFakeImportPath(t *testing.T) {
 		assert.NoError(t, err, "fakeImportPath(%q)", tt.outDir)
 		assert.Equal(t, tt.want, got, "fakeImportPath(%q)", tt.outDir)
 	}
+	for _, outDir := range []string{"/elsewhere", "/work-other/x", "/"} {
+		_, err := fakeImportPath(mod, outDir)
+		assert.EqualError(t, err, "-o "+outDir+" is outside the module at /work: the fake server must be in the module to import its package", "fakeImportPath(%q)", outDir)
+	}
 }
 
 func TestPackageInDirectory(t *testing.T) {
@@ -125,23 +129,13 @@ func (s *Server) Home() any { return nil }
 	return dir
 }
 
-// generate-fake-server takes several package directories but writes one
-// main.go and one receiver.go, so each package overwrites the one before.
-// This test records that; the command's help does not say which is intended.
-func TestGenerateFakeServerWithSeveralPackagesKeepsTheLast(t *testing.T) {
-	wd := newTwoPackageModule(t)
-	for _, name := range []string{"a", "b"} {
-		_, _, err := execute(t, wd, "-C", name, "generate", "--receiver-type=Server")
-		require.NoError(t, err, "generate in %s", name)
-	}
-
-	stdout, _, err := execute(t, wd, "generate-fake-server", "a", "b", "-o", "out")
-	require.NoError(t, err, "generate-fake-server")
-	assert.Equal(t, "Run: go run ./out\nRun: go run ./out\n", stdout, "stdout")
-	main, err := os.ReadFile(filepath.Join(wd, "out", "main.go"))
-	require.NoError(t, err)
-	assert.Contains(t, string(main), `b "example.com/b"`, "main.go want package b, the last argument")
-	assert.NotContains(t, string(main), `"example.com/a"`, "main.go want only package b, the last argument")
+// generate-fake-server writes one main.go and one receiver.go, so it serves
+// one package: a second package directory would overwrite the first.
+func TestGenerateFakeServerRejectsSeveralPackages(t *testing.T) {
+	wd := t.TempDir()
+	_, _, err := execute(t, wd, "generate-fake-server", "a", "b", "-o", "out")
+	require.EqualError(t, err, "generate-fake-server takes one package directory, got 2: a b", "generate-fake-server a b")
+	assert.NoDirExists(t, filepath.Join(wd, "out"), "generate-fake-server a b wrote output")
 }
 
 func TestExploreModuleListsGeneratedPackages(t *testing.T) {
