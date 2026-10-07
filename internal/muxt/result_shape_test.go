@@ -116,6 +116,68 @@ func TestClassifyResultShape(t *testing.T) {
 	}
 }
 
+func TestStatusCodeSource(t *testing.T) {
+	pkg := checkSource(t, `package p
+
+type Code int
+
+type ValueMethod struct{}
+
+func (ValueMethod) StatusCode() int { return 0 }
+
+type PointerMethod struct{}
+
+func (*PointerMethod) StatusCode() int { return 0 }
+
+type StringMethod struct{}
+
+func (StringMethod) StatusCode() string { return "" }
+
+type IntField struct{ StatusCode int }
+
+type CodeField struct{ StatusCode Code }
+
+type StringField struct{ StatusCode string }
+
+type Embedded struct{ IntField }
+
+type IntAlias = int
+
+type AliasField struct{ StatusCode IntAlias }
+
+type Coder interface{ StatusCode() int }
+
+type None struct{}
+`)
+	lookup := func(name string) types.Type { return pkg.Scope().Lookup(name).Type() }
+	for _, tt := range []struct {
+		name string
+		tp   types.Type
+		want ResultStatusCode
+	}{
+		{name: "value method", tp: lookup("ValueMethod"), want: ResultStatusCodeMethod},
+		{name: "pointer to a value method", tp: types.NewPointer(lookup("ValueMethod")), want: ResultStatusCodeMethod},
+		// The result is a field of the template data variable, so a
+		// pointer method is callable on it.
+		{name: "pointer method on a value result", tp: lookup("PointerMethod"), want: ResultStatusCodeMethod},
+		{name: "pointer method on a pointer result", tp: types.NewPointer(lookup("PointerMethod")), want: ResultStatusCodeMethod},
+		{name: "method not returning int", tp: lookup("StringMethod")},
+		{name: "int field", tp: lookup("IntField"), want: ResultStatusCodeField},
+		{name: "int field through a pointer", tp: types.NewPointer(lookup("IntField")), want: ResultStatusCodeField},
+		{name: "embedded int field", tp: lookup("Embedded"), want: ResultStatusCodeField},
+		{name: "int alias field", tp: lookup("AliasField"), want: ResultStatusCodeField},
+		{name: "named int field", tp: lookup("CodeField")},
+		{name: "string field", tp: lookup("StringField")},
+		{name: "interface", tp: lookup("Coder"), want: ResultStatusCodeMethod},
+		{name: "no status code", tp: lookup("None")},
+		{name: "no result", tp: nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, statusCodeSource(tt.tp, pkg), "statusCodeSource(%v)", tt.tp)
+		})
+	}
+}
+
 func TestClassifyNestedCallResultShape(t *testing.T) {
 	pkg := checkSource(t, resultShapeSource)
 	for _, tt := range []struct {
