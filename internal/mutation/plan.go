@@ -353,13 +353,18 @@ func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
 func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocation, error) {
 	defs := definitionsOf(lt)
 	collector := newSourceCollector(workingDirectory, defs)
+	defined := make(map[string]*templateSource, len(defs))
 	for _, definition := range defs {
-		if _, err := collector.add(definition); err != nil {
+		src, err := collector.add(definition)
+		if err != nil {
 			return nil, err
+		}
+		if src != nil {
+			defined[definition.Name] = src
 		}
 	}
 
-	index, err := indexTrees(collector.sorted(), lt.Functions)
+	index, err := indexTrees(collector.sorted(), defined, lt.Functions)
 	if err != nil {
 		return nil, err
 	}
@@ -383,9 +388,19 @@ func definitionsOf(lt *checked) []source.Definition {
 	return defs
 }
 
-// indexTrees parses each source and indexes the trees by template name.
-// A name that several sources hold keeps the first tree that is not empty.
-func indexTrees(sources []*templateSource, functions check.Functions) (map[string]treeLocation, error) {
+// indexTrees parses each source once and indexes the trees by template
+// name.
+//
+// A name several sources hold is taken from the source its definition
+// is in, which is the one the template set kept: text/template keeps the
+// last body that is not empty, so a {{block}} default overridden by a
+// later file's define is never rendered, and mutating it would measure
+// nothing. defined names that source for each template the loader
+// located.
+//
+// A name with no located definition keeps the last tree that is not
+// empty, the way the template set would have.
+func indexTrees(sources []*templateSource, defined map[string]*templateSource, functions check.Functions) (map[string]treeLocation, error) {
 	index := make(map[string]treeLocation)
 	for _, src := range sources {
 		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions)
@@ -396,7 +411,13 @@ func indexTrees(sources []*templateSource, functions check.Functions) (map[strin
 			if !hasRoot(tree) {
 				continue
 			}
-			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
+			if owner, ok := defined[name]; ok {
+				if owner == src {
+					index[name] = treeLocation{src: src, tree: tree}
+				}
+				continue
+			}
+			if existing, ok := index[name]; ok && parse.IsEmptyTree(tree.Root) && !parse.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
 			index[name] = treeLocation{src: src, tree: tree}
