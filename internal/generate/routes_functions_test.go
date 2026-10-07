@@ -124,6 +124,30 @@ func TestLogResolutionNotes(t *testing.T) {
 	})
 }
 
+// TestResolutionNotesAreLoggedOncePerRun generates routes from two template
+// files that each call a method the receiver does not define, writing each
+// file's routes to a file of its own. Each method is named once, and the
+// explanation after them is given once, not once per file.
+func TestResolutionNotesAreLoggedOncePerRun(t *testing.T) {
+	pkg, defs := routesTestDefinitions(t, map[string]string{
+		"a.gohtml": `{{define "GET /a MissingA()"}}{{end}}`,
+		"b.gohtml": `{{define "GET /b MissingB()"}}{{end}}`,
+	})
+	config := testConfig()
+	config.ReceiverType = "T"
+	config.OutputMultipleFiles = true
+	var buf bytes.Buffer
+	_, err := TemplateRoutesFiles(t.TempDir(), config, pkg, defs, log.New(&buf, "", 0))
+	require.NoError(t, err)
+	for _, line := range []string{
+		"note: T does not define MissingA() any",
+		"note: T does not define MissingB() any",
+		"note: the inferred signatures return any",
+	} {
+		assert.Equal(t, 1, strings.Count(buf.String(), line), "times the log has %q in\n%s", line, buf.String())
+	}
+}
+
 func TestCollectReceiverMethods(t *testing.T) {
 	pkg, defs := routesTestDefinitions(t, map[string]string{
 		"a.gohtml": `{{define "GET /a/{id} A(id)"}}{{end}}{{define "GET /b B()"}}{{end}}{{define "GET /n Nested(B())"}}{{end}}{{define "GET /plain"}}{{end}}`,

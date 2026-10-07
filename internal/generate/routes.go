@@ -141,6 +141,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	if err != nil {
 		return nil, err
 	}
+	logResolutionNotes(groups.all, config, logger)
 
 	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 	routesFunc := routesFuncDecl(file, config, config.RoutesFunction, config.ReceiverInterface, config.PathPrefix)
@@ -243,7 +244,6 @@ func routeStatements(file *File, config RoutesFileConfiguration, defs []muxt.Def
 	if len(defs) > 0 {
 		stmts = append(stmts, bytesBufferPoolDeclaration(file))
 	}
-	logResolutionNotes(defs, config, logger)
 	if err := collectReceiverMethods(defs, file, receiverInterface); err != nil {
 		return nil, err
 	}
