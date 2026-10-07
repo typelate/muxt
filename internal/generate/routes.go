@@ -127,10 +127,6 @@ func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logger *log.Logger) ([]GeneratedFile, error) {
-	if !token.IsIdentifier(config.PackageName) {
-		return nil, fmt.Errorf("package name %q is not an identifier", config.PackageName)
-	}
-
 	file := newFile(pkg)
 
 	config.PackagePath = pkg.Types.Path()
