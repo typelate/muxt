@@ -2,8 +2,6 @@ package generate
 
 import (
 	"cmp"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -173,7 +171,10 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	if def.IsIndex() {
 		var indexPath ast.Expr = astgen.String("/")
 		if config.PathPrefix {
-			indexPath = astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file))
+			// The index pattern is registered as the prefix with its
+			// trailing slash, so the path is too; without it the request
+			// would be redirected.
+			indexPath = concatenation(prefixedPath(file, selector(routeBuilderReceiverName, pathPrefixPathsStructFieldName), "/")...)
 		}
 		return routeBuilderMethod(config, ident, nil, results(routeType), returnExprs(routeLiteral(file, config, def, indexPath))), escaperUse{}, nil
 	}
@@ -210,11 +211,20 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 //
 // A builder method that returns an error gets a wrapper that returns it too.
 func routePathWrapper(config RoutesFileConfiguration, builder *ast.FuncDecl) *ast.FuncDecl {
-	var args []ast.Expr
+	// The wrapper declares the builder's parameters in a field list and
+	// names of its own, so a change to one declaration's parameters is not
+	// also a change to the other's. The type expressions are shared.
+	var (
+		args   []ast.Expr
+		params = &ast.FieldList{}
+	)
 	for _, field := range builder.Type.Params.List {
+		names := make([]*ast.Ident, 0, len(field.Names))
 		for _, name := range field.Names {
 			args = append(args, ast.NewIdent(name.Name))
+			names = append(names, ast.NewIdent(name.Name))
 		}
+		params.List = append(params.List, &ast.Field{Names: names, Type: field.Type})
 	}
 	call := &ast.CallExpr{
 		Fun:  &ast.SelectorExpr{X: selector(routePathsReceiverName, routesPathsFieldName), Sel: ast.NewIdent(builder.Name.Name)},
@@ -226,7 +236,7 @@ func routePathWrapper(config RoutesFileConfiguration, builder *ast.FuncDecl) *as
 	decl := &ast.FuncDecl{
 		Name: ast.NewIdent(builder.Name.Name),
 		Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(config.TemplateRoutePathsTypeName), routePathsReceiverName)}},
-		Type: &ast.FuncType{Params: builder.Type.Params},
+		Type: &ast.FuncType{Params: params},
 	}
 	if len(builder.Type.Results.List) == 1 {
 		decl.Type.Results = fieldList(results(ast.NewIdent("string")))
@@ -318,8 +328,9 @@ func (b *routePathBuilder) declareParameter(ident string, valueType source.Type)
 // the method then returns an error.
 func (b *routePathBuilder) addMarshaledSegment(number int, segment muxt.Segment, ident string) {
 	b.returnsError = true
-	hash := sha1.Sum([]byte(b.def.Name()))
-	segmentIdent := fmt.Sprintf("segment%d_%s", number, hex.EncodeToString(hash[:])[:8])
+	// Parameters end in PathParam, so a local named for the segment number
+	// cannot shadow one.
+	segmentIdent := fmt.Sprintf("segment%d", number)
 	message := fmt.Sprintf("failed to marshal path value {%s} (segment %d) in %s: %%w", segment.Value(), number, b.def.Path())
 	b.statements = append(b.statements,
 		&ast.AssignStmt{
@@ -394,10 +405,10 @@ func escapedPathSegments(value ast.Expr) ast.Expr {
 
 // escapePathSegmentsMethod emits:
 //
-//	func (routePaths TemplateRoutePaths) escapePathSegments(value string) string {
+//	func (routes TemplateRouteBuilder) escapePathSegments(value string) string {
 //		segments := strings.Split(value, "/")
 //		for i, segment := range segments {
-//			segments[i] = routePaths.escapePathSegment(segment)
+//			segments[i] = routes.escapePathSegment(segment)
 //		}
 //		return strings.Join(segments, "/")
 //	}
@@ -436,7 +447,7 @@ func escapePathSegmentsMethod(file *File, config RoutesFileConfiguration) *ast.F
 
 // escapePathSegmentMethod emits:
 //
-//	func (routePaths TemplateRoutePaths) escapePathSegment(value string) string {
+//	func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
 //		switch value {
 //		case ".":
 //			return "%2E"

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -10,32 +12,59 @@ import (
 
 func checkCommand(workingDirectory *string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
-		config analysis.CheckConfiguration
-		rt,
+		config                 analysis.CheckConfiguration
+		ignoredReceiverType    string
 		deprecatedTemplatesVar string
 	)
 
 	cmd := &cobra.Command{
-		Use:     checkCommandName,
+		Use:     checkCommandName + " [package-dir]",
 		Aliases: []string{"c"},
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
-			return run(cmd, *workingDirectory, config)
+			dir, err := packageDirectory(checkCommandName, *workingDirectory, args)
+			if err != nil {
+				return err
+			}
+			return run(cmd, dir, config)
 		},
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
-	addDeprecatedReceiverType(cmd.Flags(), &rt)
+	// v0.20.0 accepted --receiver-type here, so it still parses; check
+	// takes the receiver from the generated file and never reads it.
+	cmd.Flags().StringVar(&ignoredReceiverType, deprecatedReceiverType, "", "DEPRECATED and ignored: muxt check reads the receiver type from the generated routes file.")
+	if err := cmd.Flags().MarkDeprecated(deprecatedReceiverType, "muxt check reads the receiver type from the generated routes file and ignores this flag"); err != nil {
+		panic(err)
+	}
 
 	return cmd
+}
+
+// packageDirectory is the directory of the package a command reads: the
+// one directory argument, resolved against the working directory as -C
+// is, or the working directory itself when there is none. A command loads
+// one package, so a second argument or a pattern is rejected.
+func packageDirectory(command, wd string, args []string) (string, error) {
+	switch len(args) {
+	case 0:
+		return wd, nil
+	case 1:
+	default:
+		return "", fmt.Errorf("%s takes one package directory, got %d: %s", command, len(args), strings.Join(args, " "))
+	}
+	if strings.Contains(args[0], "...") {
+		return "", fmt.Errorf("%s takes one package directory, not a pattern: %s", command, args[0])
+	}
+	return absoluteDir(wd, args[0]), nil
 }
 
 func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
@@ -62,10 +91,13 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 		Aliases: []string{"callers"},
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			filters, err := compilePatterns(patterns)
 			if err != nil {
 				return err
@@ -94,10 +126,13 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 		Aliases: []string{"calls"},
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			filters, err := compilePatterns(patterns)
 			if err != nil {
 				return err

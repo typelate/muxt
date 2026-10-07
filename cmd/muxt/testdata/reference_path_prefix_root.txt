@@ -1,0 +1,94 @@
+# With a path prefix, the "/" route still matches every path: every path
+# under the prefix. The request for the prefix without its trailing slash
+# is redirected to it, as http.ServeMux does for any subtree, and the
+# index route path is the prefix with the slash.
+
+muxt generate --output-routes-func-with-path-prefix-param
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{define "GET /"}}root {{.Request.URL.Path}}{{end}}
+{{define "GET /a"}}a{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRootUnderPrefix(t *testing.T) {
+	for _, prefix := range []string{"/app", "/app/"} {
+		t.Run(prefix, func(t *testing.T) {
+			mux := http.NewServeMux()
+			paths := TemplateRoutes(mux, nil, prefix)
+
+			if got, want := paths.ReadIndex(), "/app/"; got != want {
+				t.Errorf("ReadIndex() = %q, want %q", got, want)
+			}
+
+			for _, tt := range []struct {
+				path, body string
+				code       int
+				location   string
+			}{
+				{path: "/app", location: "/app/"},
+				{path: "/app/", code: http.StatusOK, body: "root /app/"},
+				{path: "/app/anything", code: http.StatusOK, body: "root /app/anything"},
+				{path: "/app/a", code: http.StatusOK, body: "a"},
+				{path: "/elsewhere", code: http.StatusNotFound},
+			} {
+				rec := httptest.NewRecorder()
+				mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
+				// The redirect's status depends on the Go version.
+				if tt.location != "" && rec.Code/100 != 3 {
+					t.Errorf("GET %s status = %d, want a redirect", tt.path, rec.Code)
+				}
+				if tt.location == "" && rec.Code != tt.code {
+					t.Errorf("GET %s status = %d, want %d", tt.path, rec.Code, tt.code)
+				}
+				if tt.body != "" && rec.Body.String() != tt.body {
+					t.Errorf("GET %s body = %q, want %q", tt.path, rec.Body.String(), tt.body)
+				}
+				if got := rec.Header().Get("Location"); got != tt.location {
+					t.Errorf("GET %s Location = %q, want %q", tt.path, got, tt.location)
+				}
+			}
+		})
+	}
+}
+
+func TestRootWithoutPrefix(t *testing.T) {
+	mux := http.NewServeMux()
+	paths := TemplateRoutes(mux, nil, "")
+
+	if got, want := paths.ReadIndex(), "/"; got != want {
+		t.Errorf("ReadIndex() = %q, want %q", got, want)
+	}
+	for _, p := range []string{"/", "/anything", "/x/y"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if want := "root " + p; rec.Code != http.StatusOK || rec.Body.String() != want {
+			t.Errorf("GET %s = %d %q, want 200 %q", p, rec.Code, rec.Body.String(), want)
+		}
+	}
+}

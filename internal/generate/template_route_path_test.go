@@ -55,7 +55,7 @@ func TestRoutePathFunc(t *testing.T) {
 		{
 			name: "index with prefix", pattern: "GET /{$}", pathPrefix: true,
 			want: `func (routes TemplateRouteBuilder) ReadExact() TemplateRoute {
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"))}
+	return TemplateRoute{method: http.MethodGet, path: strings.TrimSuffix(path.Join(routes.pathsPrefix, "/"), "/") + "/"}
 }`,
 		},
 		{
@@ -100,26 +100,26 @@ func TestRoutePathFunc(t *testing.T) {
 		{
 			name: "text marshaler returns an error", pattern: "GET /m/{id} ByID(id)",
 			want: `func (routes TemplateRouteBuilder) ByID(idPathParam ID) (TemplateRoute, error) {
-	segment2_4d0556ab, err := idPathParam.MarshalText()
+	segment2, err := idPathParam.MarshalText()
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {id} (segment 2) in /m/{id}: %w", err)
 	}
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "m", routes.escapePathSegment(string(segment2_4d0556ab)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "m", routes.escapePathSegment(string(segment2)))}, nil
 }`,
 			escapers: escaperUse{segment: true},
 		},
 		{
 			name: "two text marshalers", pattern: "GET /mm/{a}/{b} ByTwoIDs(a, b)",
 			want: `func (routes TemplateRouteBuilder) ByTwoIDs(aPathParam, bPathParam ID) (TemplateRoute, error) {
-	segment2_b8dad819, err := aPathParam.MarshalText()
+	segment2, err := aPathParam.MarshalText()
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {a} (segment 2) in /mm/{a}/{b}: %w", err)
 	}
-	segment3_b8dad819, err := bPathParam.MarshalText()
+	segment3, err := bPathParam.MarshalText()
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {b} (segment 3) in /mm/{a}/{b}: %w", err)
 	}
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mm", routes.escapePathSegment(string(segment2_b8dad819)), routes.escapePathSegment(string(segment3_b8dad819)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "mm", routes.escapePathSegment(string(segment2)), routes.escapePathSegment(string(segment3)))}, nil
 }`,
 			escapers: escaperUse{segment: true},
 		},

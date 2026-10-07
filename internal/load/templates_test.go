@@ -53,34 +53,26 @@ func TestTemplates(t *testing.T) {
 	})
 	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := load.PackageInDirectory(pl, dir)
-	require.True(t, ok)
+	pkg, err := load.Package(dir, pl, []string{"templates"})
+	require.NoError(t, err)
+	require.Len(t, pkg.Variables, 1)
+	variable := pkg.Variables[0]
 
 	t.Run("parses the embedded files", func(t *testing.T) {
-		lt, ts, err := load.HTMLTemplates("templates", pkg)
-		require.NoError(t, err)
-		functions := lt.CollectedFunctions()
-
 		var names []string
-		for _, tmpl := range ts.Templates() {
+		for _, tmpl := range variable.Set.Templates() {
 			names = append(names, tmpl.Name())
 		}
 		slices.Sort(names)
 		assert.Equal(t, []string{"create", "form.gohtml", "home", "index.gohtml", "scratch"}, names)
-
-		_, ok := functions["upper"]
-		assert.True(t, ok, "functions holds only the Funcs-registered functions")
-		assert.Len(t, functions, 1)
 	})
 
 	t.Run("unknown variable", func(t *testing.T) {
-		_, _, err := load.HTMLTemplates("nope", pkg)
+		_, err := load.Package(dir, pl, []string{"nope"})
 		require.ErrorContains(t, err, "variable nope not found")
 	})
 
 	t.Run("a variable locates its definitions and functions", func(t *testing.T) {
-		variable, err := load.Variable(pkg, "templates")
-		require.NoError(t, err)
 		require.NotNil(t, variable.Set)
 
 		def, ok := variable.Definitions["home"]
@@ -107,14 +99,13 @@ func main() {}
 	})
 	_, pl, err := load.Packages(dir)
 	require.NoError(t, err)
-	pkg, ok := load.PackageInDirectory(pl, dir)
-	require.True(t, ok)
 
 	// Muxt introspects trees without executing, so a text/template
 	// variable loads through an html/template value with the same trees.
-	_, ts, err := load.HTMLTemplates("texts", pkg)
+	pkg, err := load.Package(dir, pl, []string{"texts"})
 	require.NoError(t, err)
-	require.NotNil(t, ts.Lookup("note"))
+	require.Len(t, pkg.Variables, 1)
+	require.NotNil(t, pkg.Variables[0].Set.Lookup("note"))
 }
 
 // TestPackageInADirectoryNamedLikeAGoFile states that the package a command

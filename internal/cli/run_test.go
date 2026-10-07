@@ -106,6 +106,7 @@ func TestRunListings(t *testing.T) {
 		want string
 	}{
 		{name: "routes", args: []string{"--format=json"}, want: `GET /`},
+		{name: "routes with a receiver", args: []string{"--use-receiver-type=Server", "--format=json"}, want: "\"Receiver\": {},\n\t\"ReceiverMethods\": [\n\t\t{\n\t\t\t\"Name\": \"Home\","},
 		{name: "callers", args: []string{"list-template-callers", "--format=json"}, want: `GET / Home()`},
 		{name: "calls", args: []string{"list-template-calls", "--format=json"}, want: `heading`},
 	} {
@@ -117,14 +118,39 @@ func TestRunListings(t *testing.T) {
 	}
 }
 
-func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
+// TestRunWarnsOfSyntaxErrors states that every command reading a package
+// says, on stderr, when the package has a syntax error: the listings ran
+// against what the parser could read, and might be missing something.
+func TestRunWarnsOfSyntaxErrors(t *testing.T) {
 	wd := newModule(t)
-	for _, args := range [][]string{{"--format=yaml"}, {"list-template-callers", "--format=yaml"}, {"list-template-calls", "--format=yaml"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			_, _, err := execute(t, wd, args...)
-			assert.EqualError(t, err, "unknown format: yaml", "muxt %v", args)
+	writeTestFile(t, wd, "broken.go", "package main\n\nfunc broken( {\n")
+	const warning = "warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture\n"
+	for _, args := range [][]string{{}, {"list-template-callers"}, {"list-template-calls"}} {
+		t.Run(strings.Join(append([]string{"muxt"}, args...), " "), func(t *testing.T) {
+			_, stderr, _ := execute(t, wd, args...)
+			assert.Contains(t, stderr, warning, "muxt %v stderr", args)
 		})
 	}
+}
+
+func TestExploreModuleFailsOutsideAModule(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	for _, command := range []string{exploreModuleCommandName, generateFakeServerCommandName} {
+		t.Run(command, func(t *testing.T) {
+			_, _, err := execute(t, t.TempDir(), command)
+			require.Error(t, err, "muxt %s outside a module", command)
+			assert.Contains(t, err.Error(), "not inside a Go module", "muxt %s outside a module", command)
+		})
+	}
+}
+
+// When go list fails, what it wrote to stderr is the reason.
+func TestExploreModuleReportsWhyGoListFailed(t *testing.T) {
+	wd := t.TempDir()
+	writeTestFile(t, wd, "go.mod", "this is not a go.mod file\n")
+	_, _, err := execute(t, wd, exploreModuleCommandName)
+	require.Error(t, err, "muxt explore-module with a broken go.mod")
+	assert.Contains(t, err.Error(), "go.mod", "muxt explore-module with a broken go.mod, want go list's stderr")
 }
 
 func TestRunFailsOutsideAModule(t *testing.T) {

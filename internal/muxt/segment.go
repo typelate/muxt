@@ -35,17 +35,28 @@ type Segment struct {
 }
 
 // initializeSegments splits the path into segments and checks each wildcard
-// names a distinct, unreserved Go identifier.
+// names a distinct, unreserved Go identifier, and that the path is one
+// http.ServeMux registers: a literal holds no wildcard and a {name...}
+// wildcard is last.
 func (def *Definition) initializeSegments() error {
-	templatePath := strings.TrimSuffix(def.path, "{$}")
+	templatePath, hasEnd := strings.CutSuffix(def.path, "{$}")
 	parts := strings.Split(templatePath, "/")[1:]
 	segments := make([]Segment, 0, len(parts))
-	for _, part := range parts {
+	// offset is where part starts in the name, after the path's leading "/".
+	offset := def.spans.path[0] + 1
+	for i, part := range parts {
+		start := offset
+		offset += len(part) + 1
 		if part == "" {
 			continue
 		}
 		segment := newSegment(part)
-		if !segment.IsLiteral() {
+		switch {
+		case segment.IsLiteral() && strings.Contains(part, "{"):
+			return def.nameErrorf(start, len(part), "path segment %s is not permitted: a wildcard is spelled {name} or {name...} and fills its segment", part)
+		case segment.IsRemainder() && (i < len(parts)-1 || hasEnd):
+			return def.nameErrorf(start, len(part), "path segment %s is not permitted here: a {name...} wildcard must be the last segment", part)
+		case !segment.IsLiteral():
 			if err := def.checkPathParameterName(segment, segments); err != nil {
 				return err
 			}
@@ -87,7 +98,8 @@ func newSegment(in string) Segment {
 	return Segment{value: inner, kind: SegmentKindUnknown}
 }
 
-// pathParameter returns the wildcard segment that names the path parameter.
+// hasPathParameter reports whether a wildcard segment names the path
+// parameter.
 func hasPathParameter(segments []Segment, name string) bool {
 	return slices.ContainsFunc(segments, func(segment Segment) bool {
 		return segment.IsWildcard() && segment.value == name

@@ -21,7 +21,7 @@ func appendParseFormToStructStatements(statements []ast.Stmt, file *File, arg *a
 // muxt.ResolveCall. Used by both `form` (parseCall = callParseForm(file)) and
 // `multipart` (parseCall = callParseMultipartForm(...)).
 func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *ast.Ident, argument muxt.Argument, validationBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt, parseCall ast.Stmt) ([]ast.Stmt, error) {
-	const parsedVariableName = "value"
+	const parsedVariableName = formFieldValueIdent
 	statements = append(statements, parseCall)
 
 	declareVar, err := typedVar(file, arg.Name, argument.ParamType(), nil)
@@ -50,7 +50,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 				}
 			}
 			parseStatements, err := scalarParse{
-				tmp: parsedVariableName, str: ast.NewIdent("val"), typ: fb.Elem(), method: fb.Method,
+				tmp: parsedVariableName, str: ast.NewIdent(formValueIdent), typ: fb.Elem(), method: fb.Method,
 				validations: validations, assign: parseResult, errBlock: parseErrBlock(),
 			}.statements(file)
 			if err != nil {
@@ -58,7 +58,7 @@ func appendStructFieldParseStatements(statements []ast.Stmt, file *File, arg *as
 			}
 			statements = append(statements, &ast.RangeStmt{
 				Key:   ast.NewIdent("_"),
-				Value: ast.NewIdent("val"),
+				Value: ast.NewIdent(formValueIdent),
 				Tok:   token.DEFINE,
 				X:     &ast.IndexExpr{X: requestField("Form"), Index: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(fb.InputName)}},
 				Body:  &ast.BlockStmt{List: parseStatements},
@@ -104,7 +104,7 @@ func appendParseMultipartFormToStructStatements(statements []ast.Stmt, file *Fil
 //	    }
 //	}
 func fileHeaderSingleAssignment(arg *ast.Ident, fieldName, inputName string) ast.Stmt {
-	const tmp = "fhs"
+	const tmp = fileHeadersIdent
 	inner := &ast.IfStmt{
 		Init: &ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(tmp)},

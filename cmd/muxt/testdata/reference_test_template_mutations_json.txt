@@ -14,7 +14,8 @@
 muxt test-template-mutations --dry-run --format json --seed 1
 cmp stdout want.txt
 
-muxt test-template-mutations --format json --seed 1
+! muxt test-template-mutations --format json --seed 1
+stderr '(?m)^Error: 1 mutant missed$'
 stdout '"status": "KILL"'
 stdout '"status": "MISS"'
 stdout '"operator": "if-false"'

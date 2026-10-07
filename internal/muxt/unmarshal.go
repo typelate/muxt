@@ -57,9 +57,10 @@ var basicUnmarshalMethods = map[string]UnmarshalMethod{
 // unmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
-// encoding.TextUnmarshaler, which checker decides.
+// encoding.TextUnmarshaler, which checker decides. An alias parses like the
+// type it names.
 func unmarshalMethodFor(checker Checker, tp types.Type) UnmarshalMethod {
-	switch t := tp.(type) {
+	switch t := types.Unalias(tp).(type) {
 	case *types.Basic:
 		return basicUnmarshalMethods[t.Name()]
 	case *types.Named:
@@ -85,7 +86,7 @@ const supportedUnmarshalFieldTypes = "float64, float32, " + supportedUnmarshalTy
 // types render in Go syntax. Both wordings list the supported set so
 // the fix needs no doc lookup.
 func unsupportedTypeError(tp types.Type, qual types.Qualifier, supported string) error {
-	if _, ok := tp.(*types.Basic); ok {
+	if _, ok := types.Unalias(tp).(*types.Basic); ok {
 		return fmt.Errorf("method param type %s not supported (supported: %s; bind as string and parse it yourself for other values)", tp.String(), supported)
 	}
 	return fmt.Errorf("unsupported type: %s (supported: %s)", types.TypeString(tp, qual), supported)
@@ -188,9 +189,11 @@ func bindFormArgument(a *Argument, def *Definition, checker Checker, qual types.
 func formStructBindings(def *Definition, checker Checker, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	var fileHeaderPtr types.Type
 	if allowFileFields {
-		if fileHeader, err := checker.FileHeader(); err == nil {
-			fileHeaderPtr = fileHeader
+		fileHeader, err := checker.FileHeader()
+		if err != nil {
+			return nil, err
 		}
+		fileHeaderPtr = fileHeader
 	}
 	bindings := make([]FieldBinding, 0, st.NumFields())
 	for i := 0; i < st.NumFields(); i++ {
@@ -226,7 +229,7 @@ func formFieldBinding(def *Definition, checker Checker, st *types.Struct, i int,
 		fb.Template = def.template.Lookup(name)
 	}
 	fb.elem = ft
-	if slice, ok := ft.(*types.Slice); ok {
+	if slice, ok := types.Unalias(ft).(*types.Slice); ok {
 		fb.Slice = true
 		fb.elem = slice.Elem()
 	}
@@ -243,22 +246,30 @@ func formFieldBinding(def *Definition, checker Checker, st *types.Struct, i int,
 }
 
 // fieldTemplateValidations parses the constraint attributes of the <input>
-// element bound to fb in its field template. Fields without a template tag or
-// whose template has no matching input have no validations.
+// or <textarea> element bound to fb in its field template: a textarea takes
+// minlength and maxlength. Fields without a template tag, or whose template
+// binds the name only to another element (a <select>, a <button>), have no
+// validations.
 func fieldTemplateValidations(fb FieldBinding) ([]InputValidation, error) {
-	if fb.Template == nil {
+	if fb.Template == nil || fb.Template.Tree == nil {
 		return nil, nil
 	}
-	nodes, _ := html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
+	nodes, err := html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
 		Type:     html.ElementNode,
 		DataAtom: atom.Body,
 		Data:     atom.Body.String(),
 	})
-	input := dom.NewDocumentFragment(nodes).QuerySelector(fmt.Sprintf("[name=%q]", fb.InputName))
-	if input == nil {
+	if err != nil {
+		return nil, fmt.Errorf("parsing template %s for field %s: %w", fb.Template.Name(), fb.Name, err)
+	}
+	element := dom.NewDocumentFragment(nodes).QuerySelector(fmt.Sprintf("input[name=%[1]q], textarea[name=%[1]q]", fb.InputName))
+	if element == nil {
 		return nil, nil
 	}
-	return ParseInputValidations(fb.InputName, input, fb.elem)
+	if strings.EqualFold(element.TagName(), atom.Textarea.String()) {
+		return parseLengthValidations(fb.InputName, element)
+	}
+	return ParseInputValidations(fb.InputName, element, fb.elem)
 }
 
 // Elem is the type parsed from one string value: the field type, or the

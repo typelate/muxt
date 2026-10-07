@@ -4,8 +4,9 @@
 # re-encoded, so the overlay replaces the .go file rather than a template
 # file. Positions are reported in the .go file, at the action itself.
 
-muxt test-template-mutations -v --seed 1
+! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server

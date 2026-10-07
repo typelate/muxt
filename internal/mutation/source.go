@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -42,9 +43,10 @@ type templateSource struct {
 	// template file that is the whole file.
 	litStart, litEnd int
 
-	// offsets maps an offset in text to one in fileText. It is nil when
-	// the two differ only by litStart, which is the case for a template
-	// file and for a raw literal holding no carriage returns.
+	// offsets maps an offset in text to one in fileText. It is nil for a
+	// template file, whose text and file differ by nothing; a Go string
+	// literal always has one, since even a raw literal drops carriage
+	// returns from its value.
 	offsets []int
 
 	// encode turns mutated text back into the bytes that go between
@@ -100,6 +102,61 @@ func delimiters(text string, definition source.Definition) (left, right string, 
 		return "", "", false
 	}
 	return left, right, true
+}
+
+// delimiters reports the delimiters the text was written with, the
+// text/template defaults when it names none.
+func (s *templateSource) delimiters() (left, right string) {
+	return cmp.Or(s.leftDelim, "{{"), cmp.Or(s.rightDelim, "}}")
+}
+
+// trimMarkers reports whether an action trims the whitespace before it and
+// the whitespace after it.
+func (s *templateSource) trimMarkers(r region) (before, after bool) {
+	left, right := s.delimiters()
+	inner := s.text[r.start+len(left) : r.end-len(right)]
+	n := len(inner)
+	before = n >= 2 && inner[0] == '-' && isSpace(inner[1])
+	after = n >= 2 && inner[n-1] == '-' && isSpace(inner[n-2])
+	return before, after
+}
+
+// content returns what an action holds, without its delimiters, trim
+// markers or the whitespace beside them.
+func (s *templateSource) content(r region) string {
+	left, _ := s.delimiters()
+	return s.text[trimLeft(s.text, r.start+len(left), r.innerEnd):r.innerEnd]
+}
+
+// action writes an action holding content in the text's delimiters, with
+// the trim markers asked for.
+func (s *templateSource) action(content string, trimBefore, trimAfter bool) string {
+	left, right := s.delimiters()
+	var b strings.Builder
+	b.WriteString(left)
+	if trimBefore {
+		b.WriteString("- ")
+	}
+	b.WriteString(content)
+	if trimAfter {
+		b.WriteString(" -")
+	}
+	b.WriteString(right)
+	return b.String()
+}
+
+// nothing returns text that renders nothing and trims the whitespace an
+// action with the same markers would: no text at all when there is
+// nothing to trim, and otherwise a comment carrying the markers.
+//
+// A comment rather than an empty string action: html/template prints an
+// empty string as "" inside a script, so {{""}} does not render nothing
+// everywhere a {{template}} call may be written.
+func (s *templateSource) nothing(trimBefore, trimAfter bool) string {
+	if !trimBefore && !trimAfter {
+		return ""
+	}
+	return s.action("/* */", trimBefore, trimAfter)
 }
 
 // mutatedText returns the template text with the edits in place, which

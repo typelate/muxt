@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -16,14 +20,15 @@ import (
 
 // This file holds what each command does with its configuration: load the
 // package, run the implementation, and write what it produced. What the
-// flags decide, but for --format, happens before a runner is called, in
-// commands.go.
+// flags decide happens before a runner is called, in the command
+// constructors; only the --format a result is written in is read here.
 
 func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error {
 	_, pl, err := load.Packages(wd, config.ReceiverPackage)
 	if err != nil {
 		return err
 	}
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
 	pkg, receiver, err := load.PackageWithReceiver(wd, pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		printMultiLineError(cmd, err)
@@ -61,16 +66,19 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	return nil
 }
 
-func loadTemplates(wd string, templatesVariables []string) (source.Package, error) {
+// loadTemplates loads the package in wd for a listing, warning on stderr
+// when it has syntax errors.
+func loadTemplates(cmd *cobra.Command, wd string, templatesVariables []string) (source.Package, error) {
 	_, pl, err := load.Packages(wd)
 	if err != nil {
 		return source.Package{}, err
 	}
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
 	return load.Package(wd, pl, templatesVariables)
 }
 
 func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {
-	pkg, err := loadTemplates(wd, config.TemplatesVariables)
+	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
@@ -82,7 +90,7 @@ func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateC
 }
 
 func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error {
-	pkg, err := loadTemplates(wd, config.TemplatesVariables)
+	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
 	if err != nil {
 		return err
 	}
@@ -94,12 +102,22 @@ func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCal
 }
 
 func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configuration) error {
-	report, err := mutation.Run(config, wd, cmd.ErrOrStderr())
+	// An interrupt stops the go test runs in flight and removes the
+	// files the run wrote; a second one ends the process at once.
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	context.AfterFunc(ctx, stop)
+	report, err := mutation.Run(ctx, config, wd, cmd.ErrOrStderr())
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
 	}
-	return writeResult(cmd, cmd.OutOrStdout(), report)
+	if err := writeResult(cmd, cmd.OutOrStdout(), report); err != nil {
+		return err
+	}
+	// Like go test, the command fails once the report is out when a
+	// mutant was missed.
+	return report.Err()
 }
 
 func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error {

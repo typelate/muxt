@@ -20,10 +20,12 @@ const (
 	// what the action does.
 	StatusMissed Status = "MISS"
 
-	// StatusSkipped means the mutation was never run, because it does
-	// not survive type checking against the dot it would render with.
-	// Running it would report a kill earned by a render error rather
-	// than by a test observing a behaviour change.
+	// StatusSkipped means the mutation was never run. It does not parse
+	// or type check against the dot it would render with, so running it
+	// would report a kill earned by a render error rather than by a test
+	// observing a behaviour change; or it is a condition simplification
+	// proved dead; or its action needs more combinations than
+	// --max-cases allows. Result.Reason says which.
 	StatusSkipped Status = "SKIP"
 
 	// StatusPending means the mutant was enumerated but not run, which
@@ -131,6 +133,23 @@ type Report struct {
 	Diff      string              `json:"diff,omitempty"`
 	DiffError string              `json:"diff_error,omitempty"`
 	Unchanged []UnchangedTemplate `json:"unchanged,omitempty"`
+
+	// Note says why a run narrowed by --template-pattern or --diff has
+	// nothing to mutate, so an empty report is not read as one that
+	// caught everything.
+	Note string `json:"note,omitempty"`
+}
+
+// Err returns a MissedMutantsError when the run let a mutant through, and
+// nil for a run that caught every mutant it ran and for a dry run.
+//
+// It is for after the report is written, the way go test fails once it
+// has printed which tests failed, so the command alone can fail a CI job.
+func (r *Report) Err() error {
+	if r.DryRun || r.Missed == 0 {
+		return nil
+	}
+	return &MissedMutantsError{Missed: r.Missed}
 }
 
 // eachTemplate iterates the report's templates in the order they were
@@ -204,6 +223,9 @@ func (r *Report) writePreamble(out *bufio.Writer) {
 		r.Templates, pluralize(r.Templates, "template"),
 		r.Complexity, r.Seed)
 	r.writeDiff(out)
+	if r.Note != "" {
+		_, _ = fmt.Fprintln(out, r.Note)
+	}
 
 	switch {
 	case r.DryRun:

@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 
 	"github.com/spf13/pflag"
 
@@ -62,24 +66,118 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 }
 
 // writeGeneratedFiles writes files, each after the header that records
-// config, and removes the ones already written if a write fails. It returns
-// the paths written.
+// config, and returns the paths written.
+//
+// Each file is written whole or not at all: its content goes to a temporary
+// file in the same directory, which is then renamed over the path. If a
+// write fails, the files this run already wrote are put back as they were:
+// a file that existed gets its previous content and mode again, and one
+// that did not is removed. Files from an earlier run are never lost to a
+// failed one.
 func writeGeneratedFiles(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration) (map[string]bool, error) {
+	return writeGeneratedFilesWith(stdout, files, config, replaceFile)
+}
+
+// writeGeneratedFilesWith is writeGeneratedFiles with the function that
+// writes one file, and returns how to undo that write, as a parameter.
+func writeGeneratedFilesWith(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration, replace func(path string, content []byte) (undo func() error, err error)) (map[string]bool, error) {
 	written := make(map[string]bool, len(files))
-	for i, file := range files {
+	var undos []func() error
+	for _, file := range files {
 		content := header.Format(configToArgs(config), config.MuxtVersion) + file.Content
-		if err := os.WriteFile(file.Path, []byte(content), 0o644); err != nil {
-			for _, f := range files[:i] {
-				if rmErr := os.Remove(f.Path); rmErr != nil {
-					err = errors.Join(err, rmErr)
-				}
+		undo, err := replace(file.Path, []byte(content))
+		if err != nil {
+			// Undo in reverse, so a path written twice ends as it began.
+			for _, undo := range slices.Backward(undos) {
+				err = errors.Join(err, undo())
 			}
 			return nil, err
 		}
+		undos = append(undos, undo)
 		_, _ = fmt.Fprintf(stdout, "wrote %s: %s\n", filepath.Base(file.Path), plural(file.Routes, "route"))
 		written[file.Path] = true
 	}
 	return written, nil
+}
+
+// newGeneratedFileMode is the mode a generated file is created with, before
+// the umask; a file that is replaced keeps its own.
+const newGeneratedFileMode = 0o644
+
+// replaceFile writes content to path through a temporary file renamed over
+// it, so path holds either its old content or all of the new. It returns a
+// function that restores what was at path before: the previous content and
+// mode, or no file.
+func replaceFile(path string, content []byte) (undo func() error, err error) {
+	previous, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		mode := info.Mode().Perm()
+		if err := writeThroughRename(path, content, mode, true); err != nil {
+			return nil, err
+		}
+		return func() error {
+			if err := writeThroughRename(path, previous, mode, true); err != nil {
+				return fmt.Errorf("failed to restore %s: %w", path, err)
+			}
+			return nil
+		}, nil
+	case errors.Is(err, fs.ErrNotExist):
+		if err := writeThroughRename(path, content, newGeneratedFileMode, false); err != nil {
+			return nil, err
+		}
+		return func() error {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("failed to remove %s: %w", path, err)
+			}
+			return nil
+		}, nil
+	default:
+		return nil, err
+	}
+}
+
+// writeThroughRename writes content to a new temporary file beside path and
+// renames it over path. The temporary file's name starts with a dot and
+// does not end in .go, so the go command ignores it if it is left behind.
+// keepMode sets mode exactly, as a replaced file had it; otherwise the
+// umask applies, as it does to any new file.
+func writeThroughRename(path string, content []byte, mode fs.FileMode, keepMode bool) error {
+	dir, base := filepath.Split(path)
+	var (
+		tmp *os.File
+		err error
+	)
+	for range 10000 {
+		name := filepath.Join(dir, "."+base+"."+strconv.FormatUint(rand.Uint64(), 36)+".tmp")
+		tmp, err = os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if !errors.Is(err, fs.ErrExist) {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	_, err = tmp.Write(content)
+	if err == nil && keepMode {
+		err = tmp.Chmod(mode)
+	}
+	err = errors.Join(err, tmp.Close())
+	if err == nil {
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		if rmErr := os.Remove(name); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			err = errors.Join(err, rmErr)
+		}
+		return err
+	}
+	return nil
 }
 
 // removeOrphans deletes the owned files a run did not write again.

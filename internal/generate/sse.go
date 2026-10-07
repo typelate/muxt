@@ -12,17 +12,15 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
+// sseArgumentCallErrorMessage is logged, and is the response, when a call
+// an sse route passes as an argument returns an error.
+const sseArgumentCallErrorMessage = "failed to start event stream"
+
 // sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
 // a callback closure that renders and writes one SSE frame per call.
 func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.Definition, receiverInterfaceName string) (*ast.FuncLit, error) {
-	const (
-		flusherIdent = "flusher"
-		okIdent      = "ok"
-		mutexIdent   = "mut"
-		headerIdent  = "h"
-	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -75,11 +73,26 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			&ast.ReturnStmt{},
 		}}
 	}
-	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
+	// A call passed as an argument runs before the stream is established
+	// too, so its error is logged and responds 500.
+	nestedCallErrBlock := func() *ast.BlockStmt {
+		return &ast.BlockStmt{List: []ast.Stmt{
+			logErrorStatement(file, config.Logger, sseArgumentCallErrorMessage, def.RawPattern()),
+			&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.String(sseArgumentCallErrorMessage), http.StatusInternalServerError)},
+			&ast.ReturnStmt{},
+		}}
+	}
+	parser := argumentParser{
+		file:                   file,
+		config:                 config,
+		validationFailureBlock: func(string) *ast.BlockStmt { return parseErrBlock() },
+		parseErrBlock:          parseErrBlock,
+		nestedCallErrBlock:     nestedCallErrBlock,
+	}
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := def.CallExpression()
-	body, err := appendParseArgumentStatements(body, file, def.Arguments, "", config, call, validationFailureBlock, parseErrBlock)
+	body, err := parser.appendCall(body, def.Arguments, call)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +151,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		body = append(body, &ast.IfStmt{
 			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{logErrorStatement(file, config.Logger, "sse handler returned an error", def.RawPattern())}},
 		})
 	} else {
 		body = append(body, &ast.ExprStmt{X: callExpr})
@@ -165,10 +178,6 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 //		return nil
 //	}
 func signalsClosure(file *File, resultType source.Type, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
-	const (
-		resultIdent  = "result"
-		payloadIdent = "payload"
-	)
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -251,11 +260,7 @@ func requestContextCancelledCheck(request string) ast.Stmt {
 //
 // For the zero-arg form it omits the parameter and the result field.
 func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition, templateName string, resultType source.Type, hasArg bool, receiverInterfaceName, flusherIdent, mutexIdent string) (*ast.FuncLit, error) {
-	const (
-		bufIdent    = "buf"
-		tdIdent     = "td"
-		resultIdent = "result"
-	)
+	const tdIdent = templateDataVarIdent
 	response := muxt.TemplateNameScopeIdentifierHTTPResponse
 	request := muxt.TemplateNameScopeIdentifierHTTPRequest
 
@@ -294,7 +299,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		}}},
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{List: []ast.Stmt{
-			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+			logErrorStatement(file, config.Logger, executeTemplateErrorMessage, def.RawPattern()),
 			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
 		}},
 	})

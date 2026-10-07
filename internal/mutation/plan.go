@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"go/token"
 	"regexp"
@@ -21,7 +22,7 @@ import (
 // Enumerating is fast and running is slow, so the plan is also what a dry
 // run reports and what the estimate is built from.
 type plan struct {
-	mutants    []Mutant
+	mutants    []mutant
 	groups     []Group
 	trimmed    []TrimmedTemplate
 	templates  int
@@ -38,7 +39,18 @@ type plan struct {
 	diff      string
 	diffError string
 	unchanged []UnchangedTemplate
+
+	// pattern is --template-pattern, nil when every template is mutated.
+	// reached counts the templates the calls reach and matched those the
+	// pattern admitted, which is how a pattern that matches nothing is
+	// told from templates that hold nothing to vary.
+	pattern          *regexp.Regexp
+	reached, matched int
 }
+
+// narrowed reports whether the run was asked to mutate only some of the
+// templates it reaches.
+func (p *plan) narrowed() bool { return p.pattern != nil || p.diff != "" }
 
 func (p *plan) runnable() int { return p.runnableN }
 
@@ -51,7 +63,14 @@ func (p *plan) report() *Report {
 	if groups == nil {
 		groups = []Group{}
 	}
+	var note string
+	if len(p.mutants) == 0 && p.overBudget == 0 {
+		// Only a narrowed run gets this far with nothing to mutate; an
+		// unnarrowed one is a NoMutationsError.
+		note = "nothing to mutate: the selected templates hold no dynamic or control flow actions"
+	}
 	return &Report{
+		Note:       note,
 		Templates:  p.templates,
 		Complexity: p.complexity,
 		Seed:       p.seed,
@@ -74,6 +93,10 @@ type selection struct {
 	mutate    []scope
 	unchanged []UnchangedTemplate
 	trimmed   []TrimmedTemplate
+
+	// reached counts the scopes the traversal found and matched the ones
+	// the template pattern admitted.
+	reached, matched int
 }
 
 // selector decides what a run mutates. It holds what that decision needs
@@ -100,9 +123,11 @@ type selector struct {
 func (s selector) choose(scopes []scope, trims []trim) selection {
 	var chosen selection
 	for _, sc := range scopes {
+		chosen.reached++
 		if !s.include(sc.template) {
 			continue
 		}
+		chosen.matched++
 		key := executionKey(sc.template, sc.dataType)
 		if _, done := s.seen[key]; done {
 			continue
@@ -122,9 +147,13 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 
 	reported := make(map[TrimmedTemplate]struct{})
 	for _, t := range trims {
+		if !s.include(t.template) {
+			// A template the pattern excludes is mutated nowhere, so
+			// there is no first mutation for the trim to point at.
+			continue
+		}
 		if _, skipped := s.unchanged[executionKey(t.template, t.dataType)]; skipped {
-			// Unchanged means mutated nowhere, so there is no first
-			// mutation for the trim to point at.
+			// Unchanged means mutated nowhere too.
 			continue
 		}
 		entry := TrimmedTemplate{
@@ -144,9 +173,14 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-func newPlan(config Configuration, workingDirectory string) (*plan, error) {
+func newPlan(ctx context.Context, config Configuration, workingDirectory string) (*plan, error) {
 	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
+		return nil, err
+	}
+	// Loading takes no context, so a run interrupted while loading
+	// stops here instead.
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	// before is what the templates looked like at the --diff revision.
@@ -157,13 +191,16 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		diffError string
 	)
 	if config.Diff != "" {
-		dir, cleanup, err := checkout(workingDirectory, config.Diff)
+		dir, cleanup, err := checkout(ctx, workingDirectory, config.Diff)
 		if err != nil {
 			return nil, err
 		}
 		defer cleanup()
 		if before, err = templatesAt(config, dir); err != nil {
 			diffError = err.Error()
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 	}
 	return planFrom(config, in, before, diffError)
@@ -182,6 +219,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		maxCases:  config.maxCases(),
 		diff:      config.Diff,
 		diffError: diffError,
+		pattern:   config.TemplatePattern,
 	}
 	sel := selector{
 		before:    before,
@@ -205,6 +243,8 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		}
 		p.unchanged = append(p.unchanged, chosen.unchanged...)
 		p.trimmed = append(p.trimmed, chosen.trimmed...)
+		p.reached += chosen.reached
+		p.matched += chosen.matched
 	}
 
 	if err := p.validate(config.TemplatesVariables); err != nil {
@@ -229,13 +269,17 @@ func templateFilter(pattern *regexp.Regexp) func(string) bool {
 }
 
 func (p *plan) validate(variables []string) error {
+	if p.pattern != nil && p.reached > 0 && p.matched == 0 {
+		return &NoTemplateMatchesError{Pattern: p.pattern.String()}
+	}
 	if len(p.groups) == 0 && len(p.trimmed) == 0 && len(p.unchanged) == 0 {
 		return &NoCallSitesError{Variables: variables}
 	}
-	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 {
+	if p.templates > 0 && len(p.mutants) == 0 && p.overBudget == 0 && !p.narrowed() {
 		// A template that is entirely static is possible, but a whole run
 		// of them means the actions were not read, and reporting that as
-		// a pass would say the tests catch everything.
+		// a pass would say the tests catch everything. A run narrowed to
+		// some templates may well have picked only static ones.
 		return &NoMutationsError{Templates: p.templates}
 	}
 	return nil
@@ -256,31 +300,31 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 	p.templates++
 	p.complexity += report.Complexity
 
-	for _, mutant := range found {
+	for _, m := range found {
 		result := Result{
-			Operator: mutant.Operator,
-			Line:     mutant.Line,
-			Column:   mutant.Column,
-			Original: mutant.Action(),
-			Mutated:  mutant.Replacement(),
+			Operator: m.Operator,
+			Line:     m.Line,
+			Column:   m.Column,
+			Original: m.action,
+			Mutated:  m.detail,
 			Status:   StatusPending,
 		}
-		switch reason, broken := invalid(lt, sc, mutant); {
-		case mutant.Operator == OperatorConditionDead:
+		if m.Operator == OperatorConditionDead {
 			// Simplification already proved this condition cannot change
 			// the decision, so no test could be coupled to it and there
-			// is nothing to learn from running it.
+			// is nothing to learn from running it, or from parsing and
+			// type checking it first.
 			result.Status = StatusSkipped
-			result.Reason = mutant.Replacement()
+			result.Reason = m.detail
 			result.Mutated = ""
-		case broken:
+		} else if reason, broken := invalid(lt, sc, m); broken {
 			result.Status = StatusSkipped
 			result.Reason = reason
-		default:
+		} else {
 			p.runnableN++
 		}
 		result.mutantIndex = len(p.mutants)
-		p.mutants = append(p.mutants, mutant)
+		p.mutants = append(p.mutants, m)
 		report.Results = append(report.Results, result)
 	}
 
@@ -297,7 +341,9 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 			Reason:   note.reason(),
 		})
 	}
-	slices.SortFunc(report.Results, func(a, b Result) int {
+	// Stable, so results that tie keep the order they were enumerated in
+	// rather than whatever order the sort leaves them.
+	slices.SortStableFunc(report.Results, func(a, b Result) int {
 		return cmp.Or(
 			cmp.Compare(a.Line, b.Line),
 			cmp.Compare(a.Column, b.Column),
@@ -328,8 +374,8 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 // the tests fail with a render error. That failure would be recorded as
 // the mutation being caught, which is a lie: nothing asserted on the
 // behaviour, the template just stopped working.
-func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
-	mutated := sc.src.mutatedText(mutant.edits)
+func invalid(lt *checked, sc scope, m mutant) (string, bool) {
+	mutated := sc.src.mutatedText(m.edits)
 	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, lt.Functions)
 	if err != nil {
 		return "does not parse", true
@@ -353,13 +399,18 @@ func invalid(lt *checked, sc scope, mutant Mutant) (string, bool) {
 func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocation, error) {
 	defs := definitionsOf(lt)
 	collector := newSourceCollector(workingDirectory, defs)
+	defined := make(map[string]*templateSource, len(defs))
 	for _, definition := range defs {
-		if _, err := collector.add(definition); err != nil {
+		src, err := collector.add(definition)
+		if err != nil {
 			return nil, err
+		}
+		if src != nil {
+			defined[definition.Name] = src
 		}
 	}
 
-	index, err := indexTrees(collector.sorted(), lt.Functions)
+	index, err := indexTrees(collector.sorted(), defined, lt.Functions)
 	if err != nil {
 		return nil, err
 	}
@@ -373,6 +424,9 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 // are gathered before the collector is built: a source scans its actions
 // as it is constructed, and it can only do that once the delimiters its
 // file was written with are known, which is something the definitions say.
+//
+// They are sorted by name: the set holds its templates in a map, and an
+// error naming the first unreadable one has to name the same one every run.
 func definitionsOf(lt *checked) []source.Definition {
 	var defs []source.Definition
 	for _, t := range lt.Set.Templates() {
@@ -380,12 +434,23 @@ func definitionsOf(lt *checked) []source.Definition {
 			defs = append(defs, definition)
 		}
 	}
+	slices.SortFunc(defs, func(a, b source.Definition) int { return cmp.Compare(a.Name, b.Name) })
 	return defs
 }
 
-// indexTrees parses each source and indexes the trees by template name.
-// A name that several sources hold keeps the first tree that is not empty.
-func indexTrees(sources []*templateSource, functions check.Functions) (map[string]treeLocation, error) {
+// indexTrees parses each source once and indexes the trees by template
+// name.
+//
+// A name several sources hold is taken from the source its definition
+// is in, which is the one the template set kept: text/template keeps the
+// last body that is not empty, so a {{block}} default overridden by a
+// later file's define is never rendered, and mutating it would measure
+// nothing. defined names that source for each template the loader
+// located.
+//
+// A name with no located definition keeps the last tree that is not
+// empty, the way the template set would have.
+func indexTrees(sources []*templateSource, defined map[string]*templateSource, functions check.Functions) (map[string]treeLocation, error) {
 	index := make(map[string]treeLocation)
 	for _, src := range sources {
 		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions)
@@ -396,7 +461,13 @@ func indexTrees(sources []*templateSource, functions check.Functions) (map[strin
 			if !hasRoot(tree) {
 				continue
 			}
-			if existing, ok := index[name]; ok && !parse.IsEmptyTree(existing.tree.Root) {
+			if owner, ok := defined[name]; ok {
+				if owner == src {
+					index[name] = treeLocation{src: src, tree: tree}
+				}
+				continue
+			}
+			if existing, ok := index[name]; ok && parse.IsEmptyTree(tree.Root) && !parse.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
 			index[name] = treeLocation{src: src, tree: tree}

@@ -32,7 +32,7 @@ func Check(t testing.TB, path string, files map[string]string) *types.Package {
 		syntax = append(syntax, file)
 	}
 	config := types.Config{Importer: importerFunc(func(path string) (*types.Package, error) {
-		return nil, fmt.Errorf("muxttest source imports %q; declare a stand-in in the package instead", path)
+		return nil, fmt.Errorf("fake source imports %q; declare a stand-in in the package instead", path)
 	})}
 	pkg, err := config.Check(path, FileSet, syntax, nil)
 	if err != nil {

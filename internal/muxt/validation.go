@@ -34,7 +34,9 @@ type MaxValidation struct {
 	Max  string
 }
 
-// PatternValidation is the pattern attribute of a textual input.
+// PatternValidation is the pattern attribute of a textual input. Pattern is
+// anchored at both ends, ^(?:pattern)$, since the attribute matches the
+// whole value.
 type PatternValidation struct {
 	Name    string
 	Pattern *regexp.Regexp
@@ -115,11 +117,19 @@ func parseBoundValidations(name string, input spec.Element, tp types.Type) ([]In
 	return result, nil
 }
 
+// parsePatternValidations reads the pattern attribute. As in HTML, the value
+// must match the whole pattern, so the compiled expression is anchored at
+// both ends; the pattern is compiled on its own first so a syntax error
+// quotes what was written.
 func parsePatternValidations(name string, input spec.Element) ([]InputValidation, error) {
 	if !input.HasAttribute("pattern") {
 		return nil, nil
 	}
-	pattern, err := regexp.Compile(input.GetAttribute("pattern"))
+	written := input.GetAttribute("pattern")
+	if _, err := regexp.Compile(written); err != nil {
+		return nil, err
+	}
+	pattern, err := regexp.Compile(`^(?:` + written + `)$`)
 	if err != nil {
 		return nil, err
 	}

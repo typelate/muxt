@@ -152,6 +152,103 @@ func TestCommandLineConfigurations(t *testing.T) {
 			},
 		},
 		{
+			// Several route sets can share a package when each names its
+			// own paths type, as they could before the route types were
+			// generated: the route types are named after the paths type.
+			name: "a route paths type names the route types after it",
+			args: "generate --output-template-route-paths-type=P1",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                      "v1.2.3",
+				PackageName:                      "main",
+				RoutesFunction:                   "TemplateRoutes",
+				ReceiverInterface:                "RoutesReceiver",
+				TemplateDataType:                 "TemplateData",
+				SSETemplateDataType:              "SSETemplateData",
+				TemplateRoutePathsTypeName:       "P1",
+				TemplateRouteTypeName:            "P1Route",
+				TemplateRouteBuilderTypeName:     "P1RouteBuilder",
+				TemplatesVariables:               []string{"templates"},
+				OutputFileName:                   "template_routes.go",
+				OutputExportedDefaultIdentifiers: true,
+				OutputMuxtVersion:                true,
+			},
+		},
+		{
+			name: "a deprecated route paths type flag names the route types after it",
+			args: "generate --template-route-paths-type=P1",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                      "v1.2.3",
+				PackageName:                      "main",
+				RoutesFunction:                   "TemplateRoutes",
+				ReceiverInterface:                "RoutesReceiver",
+				TemplateDataType:                 "TemplateData",
+				SSETemplateDataType:              "SSETemplateData",
+				TemplateRoutePathsTypeName:       "P1",
+				TemplateRouteTypeName:            "P1Route",
+				TemplateRouteBuilderTypeName:     "P1RouteBuilder",
+				TemplatesVariables:               []string{"templates"},
+				OutputFileName:                   "template_routes.go",
+				OutputExportedDefaultIdentifiers: true,
+				OutputMuxtVersion:                true,
+			},
+		},
+		{
+			name: "a route paths type that is the default names the default route types",
+			args: "generate --output-template-route-paths-type=TemplateRoutePaths",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                      "v1.2.3",
+				PackageName:                      "main",
+				RoutesFunction:                   "TemplateRoutes",
+				ReceiverInterface:                "RoutesReceiver",
+				TemplateDataType:                 "TemplateData",
+				SSETemplateDataType:              "SSETemplateData",
+				TemplateRoutePathsTypeName:       "TemplateRoutePaths",
+				TemplateRouteTypeName:            "TemplateRoute",
+				TemplateRouteBuilderTypeName:     "TemplateRouteBuilder",
+				TemplatesVariables:               []string{"templates"},
+				OutputFileName:                   "template_routes.go",
+				OutputExportedDefaultIdentifiers: true,
+				OutputMuxtVersion:                true,
+			},
+		},
+		{
+			name: "a route paths type and a route builder type",
+			args: "generate --output-template-route-paths-type=P1 --output-template-route-builder-type=Link",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                      "v1.2.3",
+				PackageName:                      "main",
+				RoutesFunction:                   "TemplateRoutes",
+				ReceiverInterface:                "RoutesReceiver",
+				TemplateDataType:                 "TemplateData",
+				SSETemplateDataType:              "SSETemplateData",
+				TemplateRoutePathsTypeName:       "P1",
+				TemplateRouteTypeName:            "P1Route",
+				TemplateRouteBuilderTypeName:     "Link",
+				TemplatesVariables:               []string{"templates"},
+				OutputFileName:                   "template_routes.go",
+				OutputExportedDefaultIdentifiers: true,
+				OutputMuxtVersion:                true,
+			},
+		},
+		{
+			name: "unexported default identifiers name the route types after a route paths type",
+			args: "generate --output-exported-default-identifiers=false --output-template-route-paths-type=p1",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                  "v1.2.3",
+				PackageName:                  "main",
+				RoutesFunction:               "templateRoutes",
+				ReceiverInterface:            "routesReceiver",
+				TemplateDataType:             "templateData",
+				SSETemplateDataType:          "sseTemplateData",
+				TemplateRoutePathsTypeName:   "p1",
+				TemplateRouteTypeName:        "p1Route",
+				TemplateRouteBuilderTypeName: "p1RouteBuilder",
+				TemplatesVariables:           []string{"templates"},
+				OutputFileName:               "template_routes.go",
+				OutputMuxtVersion:            true,
+			},
+		},
+		{
 			name: "htmx helpers",
 			args: "generate --output-htmx",
 			want: generate.RoutesFileConfiguration{
@@ -284,6 +381,24 @@ func TestCommandLineConfigurations(t *testing.T) {
 				TemplateRoutePathsTypeName:   "templateRoutePaths",
 				TemplateRouteTypeName:        "templateRoute",
 				TemplateRouteBuilderTypeName: "templateRouteBuilder",
+				TemplatesVariables:           []string{"templates"},
+				OutputFileName:               "template_routes.go",
+				OutputMuxtVersion:            true,
+			},
+		},
+		{
+			name: "unexported default identifiers keep names given by deprecated flags",
+			args: "generate --output-exported-default-identifiers=false --routes-func=Routes --receiver-interface=Handlers --template-data-type=Data --template-route-paths-type=Paths",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                  "v1.2.3",
+				PackageName:                  "main",
+				RoutesFunction:               "Routes",
+				ReceiverInterface:            "Handlers",
+				TemplateDataType:             "Data",
+				SSETemplateDataType:          "sseTemplateData",
+				TemplateRoutePathsTypeName:   "Paths",
+				TemplateRouteTypeName:        "PathsRoute",
+				TemplateRouteBuilderTypeName: "PathsRouteBuilder",
 				TemplatesVariables:           []string{"templates"},
 				OutputFileName:               "template_routes.go",
 				OutputMuxtVersion:            true,
@@ -539,9 +654,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			want: mutation.Configuration{TemplatesVariables: []string{"pages"}, Packages: []string{}, DryRun: true, Seed: 1, SeedSet: true, MaxCases: mutation.DefaultMaxCases, Workers: 1},
 		},
 		{
-			name: "mutations with packages, patterns and go test flags",
-			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./... -- -count=1",
-			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{"./..."}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
+			// The package directory is where the command runs; see
+			// TestChangeDirectory. go test runs ./... from there.
+			name: "mutations of a package directory, with patterns and go test flags",
+			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./internal/preview -- -count=1",
+			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -553,7 +670,9 @@ func TestCommandLineConfigurations(t *testing.T) {
 }
 
 // TestChangeDirectory states the working directory a command runs in: the
-// one it was started in, joined with -C when -C is relative.
+// one it was started in, joined with -C when -C is relative, and then with
+// the package directory check and test-template-mutations take, resolved
+// the same way.
 func TestChangeDirectory(t *testing.T) {
 	for _, tt := range []struct {
 		args, want string
@@ -562,6 +681,15 @@ func TestChangeDirectory(t *testing.T) {
 		{args: "-C sub generate", want: "/work/sub"},
 		{args: "-C ../other check", want: "/other"},
 		{args: "-C /abs check", want: "/abs"},
+		{args: "check ./internal/preview", want: "/work/internal/preview"},
+		{args: "check internal/preview/", want: "/work/internal/preview"},
+		{args: "check /abs/preview", want: "/abs/preview"},
+		{args: "-C sub check ./preview", want: "/work/sub/preview"},
+		{args: "check .", want: "/work"},
+		{args: "test-template-mutations ./internal/preview --dry-run", want: "/work/internal/preview"},
+		{args: "test-template-mutations --dry-run ./internal/preview -- -count=1", want: "/work/internal/preview"},
+		{args: "-C sub test-template-mutations ../preview", want: "/work/preview"},
+		{args: "test-template-mutations -- -count=1", want: "/work"},
 	} {
 		t.Run(tt.args, func(t *testing.T) {
 			var got string
@@ -570,8 +698,9 @@ func TestChangeDirectory(t *testing.T) {
 				return nil
 			}
 			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
-				check:    func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
-				generate: func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
+				check:     func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
+				generate:  func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
+				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
 			})
 			require.NoError(t, err)
 			assert.Equal(t, filepath.FromSlash(tt.want), got)
@@ -597,6 +726,24 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a route paths type that is not an identifier", args: "generate --output-template-route-paths-type=a-b", wantErr: "output-template-route-paths-type value must be a well-formed Go identifier"},
 		{name: "htmx and datastar together", args: "generate --output-htmx --output-datastar", wantErr: "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"},
 		{name: "an output file that is not Go", args: "generate --output-file=routes.txt", wantErr: "output filename must use .go extension"},
+		{name: "an output file in another directory", args: "generate --output-file=sub/routes.go", wantErr: "--output-file must be a file name in the working directory: sub/routes.go"},
+		{name: "an output file with no name", args: "generate --output-file=.go", wantErr: "--output-file needs a file name before the .go extension"},
+		{name: "an empty output file", args: "generate --output-file=", wantErr: "--output-file value must not be empty"},
+		{name: "an empty routes function", args: "generate --output-routes-func=", wantErr: "--output-routes-func value must not be empty"},
+		{name: "an empty routes function with unexported defaults", args: "generate --output-exported-default-identifiers=false --output-routes-func=", wantErr: "--output-routes-func value must not be empty"},
+		{name: "an empty routes function through a deprecated flag", args: "generate --routes-func=", wantErr: "--routes-func value must not be empty"},
+		{name: "an empty receiver interface", args: "generate --output-receiver-interface=", wantErr: "--output-receiver-interface value must not be empty"},
+		{name: "an empty template data type", args: "generate --output-template-data-type=", wantErr: "--output-template-data-type value must not be empty"},
+		{name: "an empty sse template data type", args: "generate --output-sse-template-data-type=", wantErr: "--output-sse-template-data-type value must not be empty"},
+		{name: "an empty route paths type", args: "generate --output-template-route-paths-type=", wantErr: "--output-template-route-paths-type value must not be empty"},
+		{name: "an empty route type", args: "generate --output-template-route-type=", wantErr: "--output-template-route-type value must not be empty"},
+		{name: "an empty route builder type", args: "generate --output-template-route-builder-type=", wantErr: "--output-template-route-builder-type value must not be empty"},
+		{name: "two generated types with one name", args: "generate --output-receiver-interface=Server --output-template-data-type=Server", wantErr: "--output-receiver-interface and --output-template-data-type are both Server; each generated type needs its own name"},
+		{name: "a generated type named like a default", args: "generate --output-template-data-type=TemplateRoutes", wantErr: "--output-routes-func and --output-template-data-type are both TemplateRoutes; each generated type needs its own name"},
+		{name: "a route type named like the paths type", args: "generate --output-template-route-type=TemplateRoutePaths", wantErr: "--output-template-route-paths-type and --output-template-route-type are both TemplateRoutePaths; each generated type needs its own name"},
+		{name: "a route builder named like the route type", args: "generate --output-template-route-builder-type=TemplateRoute", wantErr: "--output-template-route-type and --output-template-route-builder-type are both TemplateRoute; each generated type needs its own name"},
+		{name: "a generated type named like a derived route type", args: "generate --output-template-route-paths-type=P1 --output-template-data-type=P1Route", wantErr: "--output-template-data-type and --output-template-route-type are both P1Route; each generated type needs its own name"},
+		{name: "unexported defaults and a name that collides with one", args: "generate --output-exported-default-identifiers=false --output-template-data-type=templateRoutes", wantErr: "--output-routes-func and --output-template-data-type are both templateRoutes; each generated type needs its own name"},
 		{name: "a multipart limit of zero", args: "generate --output-multipart-max-memory=0", wantErr: `invalid argument "0" for "--output-multipart-max-memory" flag: multipart max memory must be positive, got "0"`},
 		{name: "a repeated templates variable", args: "generate --use-templates-variable=pages --use-templates-variable=pages", wantErr: "duplicate template variable: pages"},
 		{name: "the deprecated and new templates variable flags together", args: "check --templates-variable=a --use-templates-variable=b", wantErr: "deprecated flag templates-variable not permitted along with use-templates-variable"},
@@ -604,6 +751,15 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a template pattern that does not compile", args: "test-template-mutations --template-pattern=(", wantErr: "--template-pattern: error parsing regexp: missing closing ): `(`"},
 		{name: "a run pattern that does not compile", args: "test-template-mutations --run=(", wantErr: "--run: error parsing regexp: missing closing ): `(`"},
 		{name: "a callers match that does not compile", args: "list-template-callers --match=(", wantErr: "error parsing regexp: missing closing ): `(`"},
+		{name: "check of two package directories", args: "check ./a ./b", wantErr: "check takes one package directory, got 2: ./a ./b"},
+		{name: "check of a package pattern", args: "check ./...", wantErr: "check takes one package directory, not a pattern: ./..."},
+		{name: "mutations of two package directories", args: "test-template-mutations ./a ./b -- -count=1", wantErr: "test-template-mutations takes one package directory, got 2: ./a ./b"},
+		{name: "mutations of a package pattern", args: "test-template-mutations ./internal/... --dry-run", wantErr: "test-template-mutations takes one package directory, not a pattern: ./internal/..."},
+		{name: "an unknown route listing format", args: "--format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown callers format", args: "list-template-callers --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown calls format", args: "list-template-calls --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown mutation report format", args: "test-template-mutations --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown explore-module format", args: "explore-module --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -612,4 +768,54 @@ func TestCommandLineRejections(t *testing.T) {
 			assert.Nil(t, got, "a rejected command line reached its command")
 		})
 	}
+}
+
+// TestCheckIgnoresAReceiverType states that check, which reads the
+// receiver from the generated routes file, still accepts the --receiver-type
+// v0.20.0 accepted, and says it is ignored rather than pointing at a flag
+// check does not have.
+func TestCheckIgnoresAReceiverType(t *testing.T) {
+	var stderr strings.Builder
+	var got any
+	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, &stderr, runners{
+		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error {
+			got = c
+			return nil
+		},
+	})
+	require.NoError(t, err, "muxt check --receiver-type=T")
+	assert.Equal(t, analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}}, got, "muxt check --receiver-type=T")
+	assert.Equal(t, "Flag --receiver-type has been deprecated, muxt check reads the receiver type from the generated routes file and ignores this flag\n", stderr.String(), "stderr")
+}
+
+// TestCommandLineRejectionsDoNotPrintUsage states that a command line the
+// flags parse but validation rejects prints only its error: the usage text
+// would bury it and says nothing about what was wrong. A flag that does not
+// parse still gets the usage, as cobra prints it.
+func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
+	output := func(t *testing.T, commandLine string) string {
+		t.Helper()
+		var out strings.Builder
+		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, &out, &out, runners{})
+		require.Error(t, err, "muxt %s", commandLine)
+		return out.String()
+	}
+	for _, commandLine := range []string{
+		"generate --output-routes-func=1x",
+		"check --use-templates-variable=not-ok",
+		"list-template-callers --match=(",
+		"list-template-calls --match=(",
+		"test-template-mutations --run=(",
+		"test-template-mutations --use-templates-variable=a --use-templates-variable=a",
+		"list-template-callers --use-templates-variable=a --use-templates-variable=a",
+		"list-template-calls --use-templates-variable=a --use-templates-variable=a",
+		"--templates-variable=a --use-templates-variable=b",
+	} {
+		t.Run(commandLine, func(t *testing.T) {
+			assert.NotContains(t, output(t, commandLine), "Usage:", "muxt %s printed the usage", commandLine)
+		})
+	}
+	t.Run("an unknown flag", func(t *testing.T) {
+		assert.Contains(t, output(t, "generate --no-such-flag"), "Usage:", "muxt generate --no-such-flag want the usage")
+	})
 }

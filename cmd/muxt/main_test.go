@@ -31,15 +31,22 @@ func TestDocumentation(t *testing.T) {
 		cmd.Stdout = os.Stdout
 		require.NoError(t, cmd.Run())
 	})
-	t.Run("check example", func(t *testing.T) {
-		ctx := t.Context()
-		buf := bytes.NewBuffer(nil)
-		cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/htmx-counter"), "check")
-		cmd.Dir = "."
-		cmd.Stderr = buf
-		cmd.Stdout = buf
-		require.NoError(t, cmd.Run(), buf.String())
-	})
+	examples, err := os.ReadDir(filepath.FromSlash("../../docs/examples"))
+	require.NoError(t, err)
+	for _, example := range examples {
+		if !example.IsDir() {
+			continue
+		}
+		t.Run("check example "+example.Name(), func(t *testing.T) {
+			ctx := t.Context()
+			buf := bytes.NewBuffer(nil)
+			cmd := exec.CommandContext(ctx, "go", "run", mainPackage, "-C", filepath.FromSlash("../../docs/examples/"+example.Name()), "check")
+			cmd.Dir = "."
+			cmd.Stderr = buf
+			cmd.Stdout = buf
+			require.NoError(t, cmd.Run(), buf.String())
+		})
+	}
 }
 
 func TestEntrypoint(t *testing.T) {

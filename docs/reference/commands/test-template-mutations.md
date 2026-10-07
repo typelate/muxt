@@ -24,13 +24,13 @@ The [tutorial](../../tutorials/find-untested-template-behavior.md) turns a miss 
 ## Usage
 
 ```text
-muxt test-template-mutations [packages] [-- go test flags] [flags]
+muxt test-template-mutations [package-dir] [-- go test flags] [flags]
 ```
 
-Packages default to `./...`. Everything after `--` is passed to `go test` as written, except `-overlay`.
+The package directory defaults to the working directory and is resolved like `-C`; `go test ./...` runs from it ([reference_package_directory_argument.txt](../../../cmd/muxt/testdata/reference_package_directory_argument.txt)). Everything after `--` is passed to `go test` as written, except `-overlay`. To bound each mutant's run, pass `go test`'s own `-timeout`, for example `-- -timeout=2m`.
 
 ```bash
-muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web/... -- -tags=integration -race
+muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web -- -tags=integration -race
 ```
 
 ## Flags
@@ -125,14 +125,16 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 
 The command exits non-zero when:
 
+- any mutant is a `MISS`. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants and `--dry-run` do not fail.
+  [reference_test_template_mutations_go_test_flags.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_go_test_flags.txt)
 - the baseline (unmutated) test run fails. Nothing is mutated.
   [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
-- the templates reached hold no dynamic or control-flow action.
+- `go test` cannot run, or a mutant's run fails without a test failing (a package that does not build, an error from the `go` command). Its output is printed.
+- the templates reached hold no dynamic or control-flow action, unless `--template-pattern` or `--diff` narrowed them; then the report says there is nothing to mutate.
   [err_test_template_mutations_no_actions.txt](../../../cmd/muxt/testdata/err_test_template_mutations_no_actions.txt)
+- `--template-pattern` matches no template reached.
 - no `ExecuteTemplate` call is found; the type of dot comes from the call site.
 - `--diff` names a revision git does not know.
-
-Misses do not change the exit status.
 
 ## Timing
 
