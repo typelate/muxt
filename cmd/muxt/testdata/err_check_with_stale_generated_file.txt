@@ -1,0 +1,36 @@
+# A generated file left behind by an earlier run with other names, here
+# the per-template file of an unexported run, no longer type checks beside
+# the file a later run wrote. muxt check reports that instead of crashing.
+
+muxt generate --output-multiple-files --output-exported-default-identifiers=false
+muxt generate
+exists index_template_routes_gen.go
+
+! muxt check
+cmpenv stderr want-err.txt
+
+muxt list-template-callers
+muxt list-template-calls
+
+-- want-err.txt --
+$WORK/index_template_routes_gen.go:32:13 ExecuteTemplate "GET / Home()"
+ -  the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)
+Error: fail: 1 error
+-- index.gohtml --
+{{define "GET / Home()"}}<h1>{{.Result}}</h1>{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))

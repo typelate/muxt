@@ -23,6 +23,10 @@ import (
 // positions for.
 const executeTemplateFunc = "ExecuteTemplate"
 
+// errDataTypeUnknown is reported for an ExecuteTemplate call whose data
+// argument has no type because the package does not type check.
+var errDataTypeUnknown = errors.New("the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)")
+
 type CheckConfiguration struct {
 	Verbose            bool
 	TemplatesVariables []string
@@ -44,10 +48,24 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (i
 		}
 
 		executedTemplates := make(map[string][]TemplateExecution)
+		// walkedEveryCall is false once a call cannot be walked, and then
+		// what the calls reach is unknown, so nothing is reported unused.
+		walkedEveryCall := true
 		for _, c := range lt.Calls {
 			totalChecked++
 			if config.Verbose {
 				logger.Println("checking endpoint", c.Template)
+			}
+			if c.Data == nil {
+				// The type checker recorded no type for the data argument,
+				// as when the call is in code it skipped over a
+				// redeclaration, so there is no type of dot to check with.
+				err := errDataTypeUnknown
+				logger.Println(c.Position, executeTemplateFunc, strconv.Quote(c.Template))
+				logger.Println(" - ", err)
+				errs = append(errs, err)
+				walkedEveryCall = false
+				continue
 			}
 			err := findTemplateExecution(executedTemplates, global, qualifier, lt.Set, c.Position, c.Template, c.Data)
 			if err != nil {
@@ -56,7 +74,9 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (i
 			}
 		}
 
-		errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates)...)
+		if walkedEveryCall {
+			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates)...)
+		}
 	}
 
 	switch len(errs) {
@@ -291,8 +311,12 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 
 // executeTemplateTree walks the template called name with data so that
 // global's InspectTemplateNode sees each {{template}} action. Type errors
-// are not reported: a listing shows what the walk reached.
+// are not reported: a listing shows what the walk reached. A call with no
+// data type, in code the type checker skipped, is not walked.
 func executeTemplateTree(global *check.Global, ts *template.Template, name string, data types.Type) {
+	if data == nil {
+		return
+	}
 	if t := ts.Lookup(name); t != nil && t.Tree != nil {
 		_ = check.Execute(global, t.Tree, data)
 	}
