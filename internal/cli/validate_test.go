@@ -33,6 +33,15 @@ func TestValidateGenerateConfiguration(t *testing.T) {
 		{name: "first failure wins", config: generate.RoutesFileConfiguration{RoutesFunction: "1x", TemplateDataType: "2y"}, wantErr: "output-routes-func value must be a well-formed Go identifier"},
 		{name: "both frontends", config: generate.RoutesFileConfiguration{OutputHTMX: true, OutputDatastar: true}, wantErr: "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"},
 		{name: "output file extension", config: generate.RoutesFileConfiguration{OutputFileName: "x.txt"}, wantErr: "output filename must use .go extension"},
+		{name: "output file in the working directory", config: generate.RoutesFileConfiguration{OutputFileName: "./x.go"}},
+		{name: "output file in a subdirectory", config: generate.RoutesFileConfiguration{OutputFileName: "sub/x.go"}, wantErr: "--output-file must be a file name in the working directory: sub/x.go"},
+		{name: "output file in a parent directory", config: generate.RoutesFileConfiguration{OutputFileName: "../x.go"}, wantErr: "--output-file must be a file name in the working directory: ../x.go"},
+		{name: "output file with no stem", config: generate.RoutesFileConfiguration{OutputFileName: ".go"}, wantErr: "--output-file needs a file name before the .go extension"},
+		// The generated header records the command line as words joined by
+		// spaces, so a value holding whitespace would read back as two.
+		{name: "output file with a space", config: generate.RoutesFileConfiguration{OutputFileName: "my routes.go"}, wantErr: `--output-file must not contain whitespace: "my routes.go"`},
+		{name: "receiver package with a space", config: generate.RoutesFileConfiguration{ReceiverPackage: "example.com/a b"}, wantErr: `--use-receiver-type-package must not contain whitespace: "example.com/a b"`},
+		{name: "two generated names alike", config: generate.RoutesFileConfiguration{RoutesFunction: "X", TemplateRouteBuilderTypeName: "X"}, wantErr: "--output-routes-func and --output-template-route-builder-type are both X; each generated type needs its own name"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateGenerateConfiguration(tt.config)
