@@ -265,18 +265,18 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 			Mutated:  mutant.Replacement(),
 			Status:   StatusPending,
 		}
-		switch reason, broken := invalid(lt, sc, mutant); {
-		case mutant.Operator == OperatorConditionDead:
+		if mutant.Operator == OperatorConditionDead {
 			// Simplification already proved this condition cannot change
 			// the decision, so no test could be coupled to it and there
-			// is nothing to learn from running it.
+			// is nothing to learn from running it, or from parsing and
+			// type checking it first.
 			result.Status = StatusSkipped
 			result.Reason = mutant.Replacement()
 			result.Mutated = ""
-		case broken:
+		} else if reason, broken := invalid(lt, sc, mutant); broken {
 			result.Status = StatusSkipped
 			result.Reason = reason
-		default:
+		} else {
 			p.runnableN++
 		}
 		result.mutantIndex = len(p.mutants)
