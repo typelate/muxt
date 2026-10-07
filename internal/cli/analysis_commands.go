@@ -10,8 +10,8 @@ import (
 
 func checkCommand(workingDirectory *string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
-		config analysis.CheckConfiguration
-		rt,
+		config                 analysis.CheckConfiguration
+		ignoredReceiverType    string
 		deprecatedTemplatesVar string
 	)
 
@@ -33,7 +33,12 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
-	addDeprecatedReceiverType(cmd.Flags(), &rt)
+	// v0.20.0 accepted --receiver-type here, so it still parses; check
+	// takes the receiver from the generated file and never reads it.
+	cmd.Flags().StringVar(&ignoredReceiverType, deprecatedReceiverType, "", "DEPRECATED and ignored: muxt check reads the receiver type from the generated routes file.")
+	if err := cmd.Flags().MarkDeprecated(deprecatedReceiverType, "muxt check reads the receiver type from the generated routes file and ignores this flag"); err != nil {
+		panic(err)
+	}
 
 	return cmd
 }
