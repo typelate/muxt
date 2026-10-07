@@ -2,11 +2,13 @@ package mutation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // goTest runs the project's tests, optionally with extra flags.
@@ -50,8 +52,14 @@ func (t goTest) args(flags ...string) []string {
 // limit bounds how much of the output is kept, from the end; zero keeps
 // all of it. Whether a test failed or a package did not build is read off
 // every line as it is printed, so the bound costs no verdict.
-func (t goTest) run(limit int, flags ...string) (*goTestOutput, error) {
-	cmd := exec.Command("go", t.args(flags...)...)
+//
+// When ctx is done the run is interrupted, along with the compilers and
+// test binaries it started, and the error is ctx's.
+func (t goTest) run(ctx context.Context, limit int, flags ...string) (*goTestOutput, error) {
+	cmd := exec.CommandContext(ctx, "go", t.args(flags...)...)
+	interruptTogether(cmd)
+	// A go test that ignores the interrupt is killed after this long.
+	cmd.WaitDelay = 10 * time.Second
 	cmd.Dir = t.dir
 	if t.env != nil {
 		// os/exec points PWD at Dir only when it supplies the environment
@@ -66,13 +74,17 @@ func (t goTest) run(limit int, flags ...string) (*goTestOutput, error) {
 	// in the order go test wrote them.
 	cmd.Stdout, cmd.Stderr = out, out
 	err := cmd.Run()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		// Whatever the interrupted run said, it was not a verdict.
+		return out, ctxErr
+	}
 	return out, err
 }
 
 // baseline runs the tests with nothing mutated and returns everything they
 // printed, which is what a failing baseline shows.
-func (t goTest) baseline() (string, error) {
-	out, err := t.run(0)
+func (t goTest) baseline(ctx context.Context) (string, error) {
+	out, err := t.run(ctx, 0)
 	return out.String(), err
 }
 
@@ -83,8 +95,11 @@ const mutantOutputLimit = 64 << 10
 
 // verdict runs the tests against one mutant's overlay and reports whether
 // they caught it. An error means go test could not run at all.
-func (t goTest) verdict(overlay string) (Status, error) {
-	out, err := t.run(mutantOutputLimit, "-overlay="+overlay)
+func (t goTest) verdict(ctx context.Context, overlay string) (Status, error) {
+	out, err := t.run(ctx, mutantOutputLimit, "-overlay="+overlay)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
 	return verdictOf(out, err)
 }
 

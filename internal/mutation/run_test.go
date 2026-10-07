@@ -1,9 +1,13 @@
 package mutation
 
 import (
+	"context"
 	"errors"
+	"io/fs"
+	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +31,7 @@ func TestRun(t *testing.T) {
 	config.Run = regexp.MustCompile("TestGreeting")
 
 	var status strings.Builder
-	report, err := Run(config, dir, &status)
+	report, err := Run(t.Context(), config, dir, &status)
 	require.NoError(t, err)
 	assert.True(t, report.Baseline.Passed, "baseline passed")
 	var got []string
@@ -55,7 +59,7 @@ func TestRunDryRun(t *testing.T) {
 	config := greetingConfig()
 	config.DryRun = true
 	var status strings.Builder
-	report, err := Run(config, dir, &status)
+	report, err := Run(t.Context(), config, dir, &status)
 	require.NoError(t, err)
 	assert.True(t, report.DryRun, "the report is a dry run")
 	assert.Equal(t, 3, report.Total, "mutants")
@@ -71,7 +75,7 @@ func TestRunStopsWhenTheBaselineFails(t *testing.T) {
 		"template.go":    greetingGo,
 		"render_test.go": "package server\n\nimport \"testing\"\n\nfunc TestBroken(t *testing.T) { t.Fatal(\"broken before mutation\") }\n",
 	})
-	_, err := Run(greetingConfig(), dir, nil)
+	_, err := Run(t.Context(), greetingConfig(), dir, nil)
 	baseline, ok := errors.AsType[*BaselineFailedError](err)
 	require.True(t, ok, "Run = %v, want a failing baseline", err)
 	assert.Contains(t, baseline.Output, "broken before mutation", "baseline output holds the failure")
@@ -85,7 +89,7 @@ func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
 	config := greetingConfig()
 	config.GoTestArgs = []string{"-count=many"}
-	_, err := Run(config, dir, nil)
+	_, err := Run(t.Context(), config, dir, nil)
 	require.Error(t, err, "Run")
 	assert.NotErrorAs(t, err, new(*BaselineFailedError), "Run: an error other than a failing baseline")
 	assert.ErrorAs(t, err, new(*GoTestError), "Run: go test could not run")
@@ -107,12 +111,12 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 			"func TestGreeting(t *testing.T) {\n\tif err := templates.ExecuteTemplate(io.Discard, \"greeting\", Greeting{Name: \"World\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n",
 	})
 
-	_, err := newPlan(greetingConfig(), dir)
+	_, err := newPlan(t.Context(), greetingConfig(), dir)
 	require.ErrorAs(t, err, new(*NoCallSitesError), "newPlan: the only call site is in a test")
 
 	config := greetingConfig()
 	config.IncludeTests = true
-	p, err := newPlan(config, dir)
+	p, err := newPlan(t.Context(), config, dir)
 	require.NoError(t, err)
 	require.Len(t, p.mutants, 1, "the one action")
 	m := p.mutants[0]
@@ -122,12 +126,12 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 }
 
 // neverRun is a suite that fails the test if anything runs it.
-func neverRun(t *testing.T) (func() (string, error), func(string) (Status, error)) {
+func neverRun(t *testing.T) (func(context.Context) (string, error), func(context.Context, string) (Status, error)) {
 	t.Helper()
-	return func() (string, error) {
+	return func(context.Context) (string, error) {
 			assert.Fail(t, "the suite ran")
 			return "", nil
-		}, func(string) (Status, error) {
+		}, func(context.Context, string) (Status, error) {
 			assert.Fail(t, "a mutant ran")
 			return StatusMissed, nil
 		}
@@ -141,7 +145,7 @@ func TestRunPlanDryRun(t *testing.T) {
 	baseline, verdict := neverRun(t)
 
 	var status strings.Builder
-	report, err := runPlan(p, Configuration{DryRun: true}, &status, baseline, verdict)
+	report, err := runPlan(t.Context(), p, Configuration{DryRun: true}, &status, baseline, verdict)
 	require.NoError(t, err)
 	assert.True(t, report.DryRun, "the report says it was a dry run")
 	assert.Empty(t, status.String(), "status")
@@ -156,7 +160,7 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	_, verdict := neverRun(t)
 	failed := exitStatusOne(t)
 
-	_, err := runPlan(p, Configuration{}, nil, func() (string, error) {
+	_, err := runPlan(t.Context(), p, Configuration{}, nil, func(context.Context) (string, error) {
 		return "--- FAIL: TestIndex (0.00s)\n", failed
 	}, verdict)
 
@@ -174,12 +178,46 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 	_, verdict := neverRun(t)
 	cannotRun := errors.New("go: no such tool")
 
-	_, err := runPlan(p, Configuration{}, nil, func() (string, error) {
+	_, err := runPlan(t.Context(), p, Configuration{}, nil, func(context.Context) (string, error) {
 		return "", cannotRun
 	}, verdict)
 
 	require.ErrorIs(t, err, cannotRun, "runPlan: the error go gave")
 	assert.NotErrorAs(t, err, new(*BaselineFailedError), "a command that could not run is not a failing baseline")
+}
+
+// TestRunPlanStopsWhenCancelled states that a run whose context is done
+// stops starting mutants, returns the context's error rather than a
+// report, and removes the files it wrote for the mutants it had started.
+func TestRunPlanStopsWhenCancelled(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true, false, true, false})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	var (
+		mu       sync.Mutex
+		overlays []string
+	)
+	_, err := runPlan(ctx, p, Configuration{Workers: 2}, nil, func(context.Context) (string, error) {
+		return "", nil
+	}, func(ctx context.Context, overlay string) (Status, error) {
+		mu.Lock()
+		overlays = append(overlays, overlay)
+		if len(overlays) == 2 {
+			cancel()
+		}
+		mu.Unlock()
+		<-ctx.Done()
+		return "", ctx.Err()
+	})
+
+	require.ErrorIs(t, err, context.Canceled, "runPlan after cancelling")
+	assert.Len(t, overlays, 2, "mutants started: none after the context was cancelled")
+	for _, overlay := range overlays {
+		_, statErr := os.Stat(overlay)
+		assert.ErrorIs(t, statErr, fs.ErrNotExist, "overlay %s outlived the run", overlay)
+	}
 }
 
 // TestRunPlanReportsWhatTheSuiteSaid states a whole run without a suite of
@@ -190,9 +228,9 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true, false, true})
 
 	var status strings.Builder
-	got, err := runPlan(p, Configuration{Verbose: true}, &status, func() (string, error) {
+	got, err := runPlan(t.Context(), p, Configuration{Verbose: true}, &status, func(context.Context) (string, error) {
 		return "", nil
-	}, func(overlay string) (Status, error) {
+	}, func(_ context.Context, overlay string) (Status, error) {
 		if strings.Contains(readMutated(t, overlay), "K") {
 			return StatusKilled, nil
 		}

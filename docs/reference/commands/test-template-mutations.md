@@ -27,7 +27,7 @@ The [tutorial](../../tutorials/find-untested-template-behavior.md) turns a miss 
 muxt test-template-mutations [packages] [-- go test flags] [flags]
 ```
 
-Packages default to `./...`. Everything after `--` is passed to `go test` as written, except `-overlay`.
+Packages default to `./...`. Everything after `--` is passed to `go test` as written, except `-overlay`. To bound each mutant's run, pass `go test`'s own `-timeout`, for example `-- -timeout=2m`.
 
 ```bash
 muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web/... -- -tags=integration -race

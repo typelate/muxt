@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"go/token"
 	"regexp"
@@ -172,9 +173,14 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-func newPlan(config Configuration, workingDirectory string) (*plan, error) {
+func newPlan(ctx context.Context, config Configuration, workingDirectory string) (*plan, error) {
 	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
+		return nil, err
+	}
+	// Loading takes no context, so a run interrupted while loading
+	// stops here instead.
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	// before is what the templates looked like at the --diff revision.
@@ -185,13 +191,16 @@ func newPlan(config Configuration, workingDirectory string) (*plan, error) {
 		diffError string
 	)
 	if config.Diff != "" {
-		dir, cleanup, err := checkout(workingDirectory, config.Diff)
+		dir, cleanup, err := checkout(ctx, workingDirectory, config.Diff)
 		if err != nil {
 			return nil, err
 		}
 		defer cleanup()
 		if before, err = templatesAt(config, dir); err != nil {
 			diffError = err.Error()
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 	}
 	return planFrom(config, in, before, diffError)

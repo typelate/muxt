@@ -3,6 +3,7 @@ package mutation
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -83,16 +84,16 @@ func revisionOf(in input) (revision, error) {
 //
 // git archive writes nothing into the repository, unlike a worktree, so a
 // run that is interrupted leaves nothing behind in it.
-func checkout(workingDirectory, ref string) (string, func(), error) {
-	commit, err := git(workingDirectory, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+func checkout(ctx context.Context, workingDirectory, ref string) (string, func(), error) {
+	commit, err := git(ctx, workingDirectory, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
 	if err != nil {
 		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
 	}
-	top, err := git(workingDirectory, "rev-parse", "--show-toplevel")
+	top, err := git(ctx, workingDirectory, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
 	}
-	prefix, err := git(workingDirectory, "rev-parse", "--show-prefix")
+	prefix, err := git(ctx, workingDirectory, "rev-parse", "--show-prefix")
 	if err != nil {
 		return "", nil, fmt.Errorf("--diff %s: %w", ref, err)
 	}
@@ -106,7 +107,7 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 	// Run from a subdirectory, git archive writes only that subdirectory.
 	// The whole tree is needed: the go.mod the package loads with, and
 	// anything else it imports, may sit above it.
-	archive := exec.Command("git", "archive", "--format=tar", commit)
+	archive := exec.CommandContext(ctx, "git", "archive", "--format=tar", commit)
 	archive.Dir = top
 	var stderr bytes.Buffer
 	archive.Stderr = &stderr
@@ -134,8 +135,8 @@ func checkout(workingDirectory, ref string) (string, func(), error) {
 
 // git runs a git command in dir and returns its output, or what git said
 // when it failed.
-func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+func git(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {

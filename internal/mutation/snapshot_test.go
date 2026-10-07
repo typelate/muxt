@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"flag"
@@ -159,10 +160,10 @@ func dryRunSnapshot(t *testing.T, config Configuration, archive *txtar.Archive) 
 	if err != nil {
 		return fail(err)
 	}
-	report, err := runPlan(p, config, nil, func() (string, error) {
+	report, err := runPlan(t.Context(), p, config, nil, func(context.Context) (string, error) {
 		require.Fail(t, "a dry run ran the baseline")
 		return "", nil
-	}, func(string) (Status, error) {
+	}, func(context.Context, string) (Status, error) {
 		require.Fail(t, "a dry run ran a mutant")
 		return "", nil
 	})

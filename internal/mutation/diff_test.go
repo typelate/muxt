@@ -260,7 +260,7 @@ func TestNewPlanWithDiff(t *testing.T) {
 				config.env = tt.env(r)
 			}
 
-			p, err := newPlan(config, web)
+			p, err := newPlan(t.Context(), config, web)
 			require.NoError(t, err)
 			require.Empty(t, p.diffError, "the templates at HEAD could not be read")
 			assert.Equal(t, tt.mutated, mutatedTemplates(p), "mutated")
@@ -285,7 +285,7 @@ func TestNewPlanWithDiffAtARevisionItCannotRead(t *testing.T) {
 	config := diffConfig()
 	config.Diff = "empty"
 
-	p, err := newPlan(config, web)
+	p, err := newPlan(t.Context(), config, web)
 	require.NoError(t, err)
 	assert.NotEmpty(t, p.diffError, "diffError says why the templates could not be read")
 	assert.Equal(t, []string{"page server.Summary", "name string", "count float64"}, mutatedTemplates(p), "mutated: every template")
@@ -302,7 +302,7 @@ func TestNewPlanWithDiffAtARevisionGitDoesNotKnow(t *testing.T) {
 	config := diffConfig()
 	config.Diff = "no-such-revision"
 
-	_, err := newPlan(config, web)
+	_, err := newPlan(t.Context(), config, web)
 	require.Error(t, err, "newPlan")
 	require.ErrorContains(t, err, "no-such-revision", "newPlan names the revision")
 	assert.ErrorContains(t, err, "fatal:", "newPlan says what git said")
