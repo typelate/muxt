@@ -247,6 +247,24 @@ func (T) Save(form Form) any { return nil }
 		}, got, "ResolveDefinitions() errors in variable order")
 	})
 
+	t.Run("a multipart struct needs the file header type", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Form struct{}
+
+type Upload struct{ Name string }
+
+type T struct{}
+
+func (T) Save(multipart Upload) any { return nil }
+`})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("templates", `{{define "POST / Save(multipart)"}}{{end}}`),
+		}}
+		_, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.StandInChecker(t, pkg).Fake())
+		require.ErrorContains(t, err, "the checker has no multipart file header type")
+	})
+
 	t.Run("resolution errors are combined", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
