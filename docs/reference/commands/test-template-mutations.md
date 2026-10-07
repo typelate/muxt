@@ -125,14 +125,16 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 
 The command exits non-zero when:
 
+- any mutant is a `MISS`. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants and `--dry-run` do not fail.
+  [reference_test_template_mutations_go_test_flags.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_go_test_flags.txt)
 - the baseline (unmutated) test run fails. Nothing is mutated.
   [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
-- the templates reached hold no dynamic or control-flow action.
+- `go test` cannot run, or a mutant's run fails without a test failing (a package that does not build, an error from the `go` command). Its output is printed.
+- the templates reached hold no dynamic or control-flow action, unless `--template-pattern` or `--diff` narrowed them; then the report says there is nothing to mutate.
   [err_test_template_mutations_no_actions.txt](../../../cmd/muxt/testdata/err_test_template_mutations_no_actions.txt)
+- `--template-pattern` matches no template reached.
 - no `ExecuteTemplate` call is found; the type of dot comes from the call site.
 - `--diff` names a revision git does not know.
-
-Misses do not change the exit status.
 
 ## Timing
 

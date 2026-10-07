@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -130,4 +131,33 @@ func TestReportSaysTheBaselineFailed(t *testing.T) {
 	report := sampleReport()
 	report.Baseline = BaselineResult{}
 	assert.Contains(t, writeReport(t, report), "(complexity 4, seed 1)\nbaseline failed\n", "report says the baseline failed")
+}
+
+// TestReportErr states which runs fail the command once their report is
+// written: one that let a mutant through. Skipped mutants are not run, so
+// they fail nothing, and a dry run has no verdicts at all.
+func TestReportErr(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		report     Report
+		wantMissed int
+	}{
+		{name: "a mutant missed", report: Report{Total: 2, Killed: 1, Missed: 1}, wantMissed: 1},
+		{name: "mutants missed", report: Report{Total: 5, Killed: 1, Missed: 3, Skipped: 1}, wantMissed: 3},
+		{name: "every mutant killed", report: Report{Total: 2, Killed: 2}},
+		{name: "killed and skipped", report: Report{Total: 3, Killed: 2, Skipped: 1}},
+		{name: "nothing to mutate", report: Report{}},
+		{name: "a dry run", report: Report{DryRun: true, Total: 2}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.report.Err()
+			if tt.wantMissed == 0 {
+				assert.NoError(t, err, "Err()")
+				return
+			}
+			missed, ok := errors.AsType[*MissedMutantsError](err)
+			require.True(t, ok, "Err() = %v, want a MissedMutantsError", err)
+			assert.Equal(t, tt.wantMissed, missed.Missed, "Err() missed")
+		})
+	}
 }

@@ -16,8 +16,9 @@ cmp stdout want-killed.txt
 # tested here, and its test does not look at the text, so the mutant lives --
 # which it can only do if muxt's own -overlay reached go test rather than the
 # test binary.
-muxt test-template-mutations --seed 1 . -- -args -update
+! muxt test-template-mutations --seed 1 . -- -args -update
 cmp stdout want-root-only.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server

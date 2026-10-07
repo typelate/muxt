@@ -35,6 +35,17 @@ func (e *GoTestError) Error() string {
 
 func (e *GoTestError) Unwrap() error { return e.Err }
 
+// MissedMutantsError reports that a run let mutants through: the tests
+// passed with each of them in place. The report lists them; this only
+// says how many, for an exit status.
+type MissedMutantsError struct {
+	Missed int
+}
+
+func (e *MissedMutantsError) Error() string {
+	return fmt.Sprintf("%d %s missed", e.Missed, pluralize(e.Missed, "mutant"))
+}
+
 // NoCallSitesError reports that nothing renders the templates, so there
 // is no type of dot to mutate against.
 type NoCallSitesError struct {

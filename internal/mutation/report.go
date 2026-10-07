@@ -138,6 +138,18 @@ type Report struct {
 	Note string `json:"note,omitempty"`
 }
 
+// Err returns a MissedMutantsError when the run let a mutant through, and
+// nil for a run that caught every mutant it ran and for a dry run.
+//
+// It is for after the report is written, the way go test fails once it
+// has printed which tests failed, so the command alone can fail a CI job.
+func (r *Report) Err() error {
+	if r.DryRun || r.Missed == 0 {
+		return nil
+	}
+	return &MissedMutantsError{Missed: r.Missed}
+}
+
 // eachTemplate iterates the report's templates in the order they were
 // traversed, which is depth first from each call site.
 func (r *Report) eachTemplate() func(func(*TemplateReport) bool) {

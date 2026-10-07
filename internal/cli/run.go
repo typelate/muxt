@@ -108,7 +108,12 @@ func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configu
 		printMultiLineError(cmd, err)
 		return err
 	}
-	return writeResult(cmd, cmd.OutOrStdout(), report)
+	if err := writeResult(cmd, cmd.OutOrStdout(), report); err != nil {
+		return err
+	}
+	// Like go test, the command fails once the report is out when a
+	// mutant was missed.
+	return report.Err()
 }
 
 func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error {
