@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json/v2"
+	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -122,11 +124,19 @@ func listModule(workingDirectory string) (goModule, error) {
 	cmd.Dir = workingDirectory
 	out, err := cmd.Output()
 	if err != nil {
-		return goModule{}, err
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
+			return goModule{}, fmt.Errorf("go list -m: %w: %s", err, bytes.TrimSpace(exitErr.Stderr))
+		}
+		return goModule{}, fmt.Errorf("go list -m: %w", err)
 	}
 	var mod goModule
 	if err := json.Unmarshal(out, &mod); err != nil {
 		return goModule{}, err
+	}
+	// Outside a module go list reports the command-line-arguments
+	// pseudo-module, which has no directory.
+	if mod.Dir == "" {
+		return goModule{}, fmt.Errorf("%s is not inside a Go module (no go.mod applies)", workingDirectory)
 	}
 	return mod, nil
 }
@@ -149,7 +159,7 @@ func scanGeneratedHeaders(moduleDir string) (map[string]headerEntry, error) {
 			return nil
 		}
 
-		parsed, ok, err := readGeneratedHeader(path)
+		parsed, ok, err := header.Read(path)
 		if err != nil || !ok {
 			return err
 		}
@@ -167,29 +177,6 @@ func scanGeneratedHeaders(moduleDir string) (map[string]headerEntry, error) {
 
 func isSkippedDir(name string) bool {
 	return name == ".git" || name == "vendor" || name == "node_modules" || name == "testdata"
-}
-
-// readGeneratedHeader parses the first two lines of the Go file at path.
-func readGeneratedHeader(path string) (header.Header, bool, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return header.Header{}, false, err
-	}
-	defer func() { _ = f.Close() }()
-	scanner := bufio.NewScanner(f)
-	var (
-		lines     [2]string
-		lineCount int
-	)
-	for lineCount < len(lines) && scanner.Scan() {
-		lines[lineCount] = scanner.Text()
-		lineCount++
-	}
-	if lineCount == 0 {
-		return header.Header{}, false, nil
-	}
-	parsed, ok := header.Parse(lines[0], lines[1])
-	return parsed, ok, nil
 }
 
 // newPackageInfo describes the package in entry's directory.

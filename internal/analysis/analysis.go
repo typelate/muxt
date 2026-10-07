@@ -94,7 +94,10 @@ func newReferences(pkgPath string, refs map[string][]TemplateReference, filter [
 func NewNamedReferences(pkgPath, name string, refs []TemplateReference) NamedReferences {
 	im := astgen.NewTypeFormatter(pkgPath)
 	for i, ref := range refs {
-		refs[i].Data = types.TypeString(ref.data, im.Qualifier)
+		// A call in code the type checker skipped has no data type.
+		if ref.data != nil {
+			refs[i].Data = types.TypeString(ref.data, im.Qualifier)
+		}
 	}
 
 	slices.SortFunc(refs, func(a, b TemplateReference) int {

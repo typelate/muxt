@@ -17,8 +17,8 @@ import (
 // halves of that round trip together: a flag recorded by one and not read
 // by the other silently changes what a later run deletes.
 
-// parseGeneratedHeader reads the arguments a header records, the way
-// generateCommand does when it looks for files it may replace.
+// parseGeneratedHeader reads the arguments a header records the way a run
+// of the recorded command line reads them: parsed, then defaulted.
 func parseGeneratedHeader(t *testing.T, args []string) generate.RoutesFileConfiguration {
 	t.Helper()
 	var (
@@ -29,6 +29,7 @@ func parseGeneratedHeader(t *testing.T, args []string) generate.RoutesFileConfig
 	set.SetOutput(io.Discard)
 	addGenerateFlags(set, &config, &deprecated)
 	require.NoError(t, set.Parse(args), "parsing the header %q", args)
+	applyDefaults(&config, set)
 	return config
 }
 
@@ -106,6 +107,21 @@ func TestGeneratedHeaderRoundTrip(t *testing.T) {
 			config: withDatastar(defaultsConfig()),
 			want:   withDatastar(defaultsConfig()),
 		},
+		{
+			name:   "route types named after a route paths type",
+			config: withRoutePaths(defaultsConfig(), "P1", "P1Route", "P1RouteBuilder"),
+			want:   withRoutePaths(defaultsConfig(), "P1", "P1Route", "P1RouteBuilder"),
+		},
+		{
+			name:   "a route type of its own beside a route paths type",
+			config: withRoutePaths(defaultsConfig(), "P1", "Route1", "Route1Builder"),
+			want:   withRoutePaths(defaultsConfig(), "P1", "Route1", "Route1Builder"),
+		},
+		{
+			name:   "unexported default identifiers",
+			config: unexportedDefaultsConfig(),
+			want:   unexportedDefaultsConfig(),
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseGeneratedHeader(t, configToArgs(tt.config))
@@ -117,6 +133,28 @@ func TestGeneratedHeaderRoundTrip(t *testing.T) {
 func withDatastar(c generate.RoutesFileConfiguration) generate.RoutesFileConfiguration {
 	c.OutputDatastar = true
 	return c
+}
+
+func withRoutePaths(c generate.RoutesFileConfiguration, paths, route, builder string) generate.RoutesFileConfiguration {
+	c.TemplateRoutePathsTypeName, c.TemplateRouteTypeName, c.TemplateRouteBuilderTypeName = paths, route, builder
+	return c
+}
+
+// unexportedDefaultsConfig is what the flags give a run that passes only
+// --output-exported-default-identifiers=false.
+func unexportedDefaultsConfig() generate.RoutesFileConfiguration {
+	return generate.RoutesFileConfiguration{
+		TemplatesVariables:           []string{defaultTemplatesVariableName},
+		OutputFileName:               defaultOutputFileName,
+		ReceiverInterface:            "routesReceiver",
+		RoutesFunction:               "templateRoutes",
+		TemplateDataType:             "templateData",
+		SSETemplateDataType:          "sseTemplateData",
+		TemplateRoutePathsTypeName:   "templateRoutePaths",
+		TemplateRouteTypeName:        "templateRoute",
+		TemplateRouteBuilderTypeName: "templateRouteBuilder",
+		OutputMuxtVersion:            true,
+	}
 }
 
 // TestConfigToArgsOrder pins the order of the recorded flags: generated files
@@ -198,6 +236,20 @@ func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 			name:   "the version left out",
 			change: func(c *generate.RoutesFileConfiguration) { c.OutputMuxtVersion = false },
 			want:   []string{"--output-muxt-version=false"},
+		},
+		{
+			name: "route types named after a route paths type",
+			change: func(c *generate.RoutesFileConfiguration) {
+				*c = withRoutePaths(*c, "P1", "P1Route", "P1RouteBuilder")
+			},
+			want: []string{"--output-template-route-paths-type=P1"},
+		},
+		{
+			name: "a route type of its own beside a route paths type",
+			change: func(c *generate.RoutesFileConfiguration) {
+				*c = withRoutePaths(*c, "P1", "Route1", "Route1Builder")
+			},
+			want: []string{"--output-template-route-paths-type=P1", "--output-template-route-type=Route1"},
 		},
 		{
 			name:   "a multipart limit",

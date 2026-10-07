@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -51,6 +52,9 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 		Short:   "Explore all muxt packages in the module",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
 			if err != nil {
 				return err
@@ -68,7 +72,7 @@ func generateFakeServerCommand(workingDirectory *string) *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
-		Use:   generateFakeServerCommandName + " [package-dirs...]",
+		Use:   generateFakeServerCommandName + " [package-dir]",
 		Short: "Generate a fake server main.go for exploring routes (unstable -- do not depend on the fake interface)",
 		Long: `Generate a main.go and internal/fake/receiver.go containing a counterfeiter fake
 and an httptest server for interactively exploring routes. The target package
@@ -78,15 +82,20 @@ WARNING: The generated fake interface is unstable and should not be relied upon.
 This command is intended for exploratory use only.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			// One main.go is written, so one package is served.
+			if len(args) > 1 {
+				return fmt.Errorf("%s takes one package directory, got %d: %s", generateFakeServerCommandName, len(args), strings.Join(args, " "))
+			}
+			packageDir := *workingDirectory
+			if len(args) == 1 {
+				packageDir = absoluteDir(*workingDirectory, args[0])
+			}
 
 			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
 			if err != nil {
 				return err
 			}
 
-			if len(args) == 0 {
-				args = []string{*workingDirectory}
-			}
 			outDir := absoluteDir(*workingDirectory, cmp.Or(outputDir, filepath.Join("cmd", "explore-goland")))
 			importPath, err := fakeImportPath(mod, outDir)
 			if err != nil {
@@ -97,24 +106,22 @@ This command is intended for exploratory use only.`,
 				relOut = outDir
 			}
 
-			for _, arg := range args {
-				pkg, err := packageInDirectory(mod, absoluteDir(*workingDirectory, arg))
-				if err != nil {
-					return err
-				}
-				_, pl, err := load.Packages(pkg.Dir)
-				if err != nil {
-					return err
-				}
-				files, err := fakeserver.Generate(newFakeServerConfig(pkg, importPath), pl)
-				if err != nil {
-					return err
-				}
-				if err := writeFakeServer(outDir, files); err != nil {
-					return err
-				}
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run: go run ./%s\n", relOut)
+			pkg, err := packageInDirectory(mod, packageDir)
+			if err != nil {
+				return err
 			}
+			_, pl, err := load.Packages(pkg.Dir)
+			if err != nil {
+				return err
+			}
+			files, err := fakeserver.Generate(newFakeServerConfig(pkg, importPath), pl)
+			if err != nil {
+				return err
+			}
+			if err := writeFakeServer(outDir, files); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run: go run ./%s\n", relOut)
 			return nil
 		},
 	}
@@ -135,6 +142,9 @@ func fakeImportPath(mod *analysis.Module, outDir string) (string, error) {
 	rel, err := filepath.Rel(mod.ModuleDir, outDir)
 	if err != nil {
 		return "", fmt.Errorf("computing fake import path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("-o %s is outside the module at %s: the fake server must be in the module to import its package", outDir, mod.ModuleDir)
 	}
 	return mod.ModulePath + "/" + filepath.ToSlash(rel) + "/internal/fake", nil
 }

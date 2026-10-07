@@ -21,7 +21,7 @@ func testTemplateMutationsCommand(workingDirectory *string, run func(*cobra.Comm
 	)
 
 	cmd := &cobra.Command{
-		Use:   testTemplateMutationsName + " [packages] [-- go test flags]",
+		Use:   testTemplateMutationsName + " [package-dir] [-- go test flags]",
 		Short: "Vary template actions and report the ones no test catches",
 		Long: `Vary each dynamic and control flow action in the project's templates, one
 at a time, and re-run the tests against each variation.
@@ -37,13 +37,16 @@ one already there.
 Variations are delivered through the go command's -overlay flag, so the
 working tree is never written to.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 
 			if templatePattern != "" {
 				pattern, err := regexp.Compile(templatePattern)
@@ -59,19 +62,24 @@ working tree is never written to.`,
 				}
 				config.Run = pattern
 			}
-			// Everything before a -- names packages; everything after it
+			// Before a -- is the package directory; everything after it
 			// is handed to go test as written.
+			dirArgs := args
 			if dash := cmd.ArgsLenAtDash(); dash >= 0 {
-				config.Packages = args[:dash]
+				dirArgs = args[:dash]
 				config.GoTestArgs = args[dash:]
-			} else {
-				config.Packages = args
 			}
+			dir, err := packageDirectory(testTemplateMutationsName, *workingDirectory, dirArgs)
+			if err != nil {
+				return err
+			}
+			// go test runs its default, ./..., from the package directory.
+			config.Packages = []string{}
 			if err := mutation.CheckGoTestArgs(config.GoTestArgs); err != nil {
 				return err
 			}
 			config.SeedSet = cmd.Flags().Changed("seed")
-			return run(cmd, *workingDirectory, config)
+			return run(cmd, dir, config)
 		},
 	}
 

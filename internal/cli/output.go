@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"go/types"
 	"io"
 	"log"
 
@@ -58,8 +59,10 @@ func printMultiLineError(cmd *cobra.Command, err error) bool {
 
 // resultJSON writes a --format=json result as encoding/json wrote it before
 // muxt moved to encoding/json/v2, so a script reading it sees no change:
-// map members sorted by key, a nil list or map as null, and <, >, &, U+2028
-// and U+2029 escaped.
+// map members sorted by key, a nil list or map as null, <, >, &, U+2028
+// and U+2029 escaped, and a go/types named type -- the route listing's
+// Receiver, which has no exported fields -- as an empty object, or null
+// when there is none. encoding/json/v2 refuses to write such a type at all.
 var resultJSON = json.JoinOptions(
 	jsontext.WithIndent("\t"),
 	json.Deterministic(true),
@@ -67,7 +70,26 @@ var resultJSON = json.JoinOptions(
 	json.FormatNilMapAsNull(true),
 	jsontext.EscapeForHTML(true),
 	jsontext.EscapeForJS(true),
+	json.WithMarshalers(json.MarshalToFunc(func(enc *jsontext.Encoder, _ *types.Named) error {
+		// Called only for a non-nil pointer; nil is written as null.
+		return enc.WriteValue(jsontext.Value("{}"))
+	})),
 )
+
+// checkFormat rejects a --format writeResult cannot write, so a command
+// refuses it before loading anything rather than after its work is done.
+func checkFormat(cmd *cobra.Command) error {
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
+	switch format {
+	case "text", "json":
+		return nil
+	default:
+		return fmt.Errorf("unknown format: %s", format)
+	}
+}
 
 func writeResult(cmd *cobra.Command, w io.Writer, result io.WriterTo) error {
 	format, err := cmd.Flags().GetString("format")

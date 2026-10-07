@@ -41,8 +41,8 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 //
 // Parsing the flags, applying their defaults and rejecting what cannot
 // work is the command line's job, and for these six commands it is decided
-// before a package is loaded; --format alone is still read when a result is
-// written. Commands runs the real runners; a test runs ones that record the
+// before a package is loaded; --format is checked then too, and read again
+// when a result is written. Commands runs the real runners; a test runs ones that record the
 // configuration, which is how what a command line means is stated without
 // loading anything. generate-fake-server and explore-module load packages
 // in their own RunE and have no runner yet.
@@ -84,10 +84,13 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&rootCommandConfig.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			return run.routes(cmd, *workingDirectory, rootCommandConfig)
 		},
 	}
@@ -105,7 +108,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 
 	rootCmd.AddCommand(
 		generateCommand(workingDirectory, getEnv, version, run.generate),
-		versionCommand(),
+		versionCommand(version),
 		checkCommand(workingDirectory, run.check),
 		listTemplateCallersCommand(workingDirectory, run.callers),
 		listTemplateCallsCommand(workingDirectory, run.calls),
@@ -125,7 +128,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	return rootCmd.Execute()
 }
 
-func versionCommand() *cobra.Command {
+func versionCommand(version func() (string, bool)) *cobra.Command {
 	var verbose bool
 
 	cmd := &cobra.Command{
@@ -134,7 +137,7 @@ func versionCommand() *cobra.Command {
 		Short:   "Print the version number",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			v, ok := cliVersion()
+			v, ok := version()
 			if !ok {
 				return fmt.Errorf("missing CLI version")
 			}
