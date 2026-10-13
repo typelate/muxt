@@ -4,9 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -62,24 +67,184 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 }
 
 // writeGeneratedFiles writes files, each after the header that records
-// config, and removes the ones already written if a write fails. It returns
-// the paths written.
+// config, and returns the paths written.
+//
+// Each file is written whole or not at all: its content goes to a temporary
+// file in the same directory, which is then renamed over the path. If a
+// write fails, the files this run already wrote are put back as they were:
+// a file that existed gets its previous content and mode again, and one
+// that did not is removed. Files from an earlier run are never lost to a
+// failed one.
 func writeGeneratedFiles(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration) (map[string]bool, error) {
+	return writeGeneratedFilesWith(stdout, files, config, replaceFile)
+}
+
+// writeGeneratedFilesWith is writeGeneratedFiles with the function that
+// writes one file, and returns how to undo that write, as a parameter.
+func writeGeneratedFilesWith(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration, replace func(path string, content []byte) (undo func() error, err error)) (map[string]bool, error) {
 	written := make(map[string]bool, len(files))
-	for i, file := range files {
+	var undos []func() error
+	for _, file := range files {
 		content := header.Format(configToArgs(config), config.MuxtVersion) + file.Content
-		if err := os.WriteFile(file.Path, []byte(content), 0o644); err != nil {
-			for _, f := range files[:i] {
-				if rmErr := os.Remove(f.Path); rmErr != nil {
-					err = errors.Join(err, rmErr)
-				}
+		undo, err := replace(file.Path, []byte(content))
+		if err != nil {
+			// Undo in reverse, so a path written twice ends as it began.
+			for _, undo := range slices.Backward(undos) {
+				err = errors.Join(err, undo())
 			}
 			return nil, err
 		}
+		undos = append(undos, undo)
 		_, _ = fmt.Fprintf(stdout, "wrote %s: %s\n", filepath.Base(file.Path), plural(file.Routes, "route"))
 		written[file.Path] = true
 	}
 	return written, nil
+}
+
+// newGeneratedFileMode is the mode a generated file is created with, before
+// the umask; a file that is replaced keeps its own.
+const newGeneratedFileMode = 0o644
+
+// maxLinkHops is how many symlinks replaceFile follows before it gives up.
+const maxLinkHops = 16
+
+// replaceFile writes content to path through a temporary file renamed over
+// it, so path holds either its old content or all of the new. It returns a
+// function that restores what was at path before: the previous content and
+// mode, or no file.
+//
+// A path that is a symlink is written through: the file it points at is
+// replaced and the link stays, as os.WriteFile would have it. Every
+// operation goes through an os.Root of the directory the file is generated
+// into, so none of them can reach outside it, however the directory
+// changes while the file is written: a checked-out repository cannot have
+// `muxt generate` overwrite a file elsewhere on the machine. A link whose
+// target is an absolute path, or leaves the directory, is refused.
+func replaceFile(path string, content []byte) (undo func() error, err error) {
+	dir, base := filepath.Dir(path), filepath.Base(path)
+	var (
+		name     string
+		previous []byte
+		mode     = fs.FileMode(newGeneratedFileMode)
+		existed  bool
+	)
+	err = inRoot(dir, func(root *os.Root) error {
+		var err error
+		if name, err = resolveLink(root, base); err != nil {
+			return fmt.Errorf("refusing to write %s: %w", path, err)
+		}
+		previous, err = root.ReadFile(name)
+		switch {
+		case err == nil:
+			info, err := root.Stat(name)
+			if err != nil {
+				return err
+			}
+			mode, existed = info.Mode().Perm(), true
+		case !errors.Is(err, fs.ErrNotExist):
+			return err
+		}
+		return writeThroughRename(root, name, content, mode, existed)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if existed {
+		return func() error {
+			err := inRoot(dir, func(root *os.Root) error {
+				return writeThroughRename(root, name, previous, mode, true)
+			})
+			if err != nil {
+				return fmt.Errorf("failed to restore %s: %w", path, err)
+			}
+			return nil
+		}, nil
+	}
+	return func() error {
+		err := inRoot(dir, func(root *os.Root) error { return root.Remove(name) })
+		if err != nil {
+			return fmt.Errorf("failed to remove %s: %w", path, err)
+		}
+		return nil
+	}, nil
+}
+
+// inRoot runs f with a root of dir and closes it again.
+func inRoot(dir string, f func(root *os.Root) error) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	return errors.Join(f(root), root.Close())
+}
+
+// resolveLink follows name, a path in root, through the symlinks it names
+// and returns the path of what it ends at, which may not exist. A link must
+// have a relative target that stays inside root.
+func resolveLink(root *os.Root, name string) (string, error) {
+	for range maxLinkHops {
+		info, err := root.Lstat(name)
+		if errors.Is(err, fs.ErrNotExist) {
+			return name, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&fs.ModeSymlink == 0 {
+			return name, nil
+		}
+		target, err := root.Readlink(name)
+		if err != nil {
+			return "", err
+		}
+		if filepath.IsAbs(target) {
+			return "", fmt.Errorf("%s is a symlink to the absolute path %s", name, target)
+		}
+		name = filepath.Join(filepath.Dir(name), target)
+		if name == ".." || strings.HasPrefix(name, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("it is a symlink to %s, outside its directory", target)
+		}
+	}
+	return "", fmt.Errorf("%s is a symlink in a chain of more than %d", name, maxLinkHops)
+}
+
+// writeThroughRename writes content to a new temporary file beside name in
+// root and renames it over name. The temporary file's name starts with a
+// dot and does not end in .go, so the go command ignores it if it is left
+// behind. keepMode sets mode exactly, as a replaced file had it; otherwise
+// the umask applies, as it does to any new file.
+func writeThroughRename(root *os.Root, name string, content []byte, mode fs.FileMode, keepMode bool) error {
+	dir, base := filepath.Split(name)
+	var (
+		tmp     *os.File
+		tmpName string
+		err     error
+	)
+	for range 10000 {
+		tmpName = filepath.Join(dir, "."+base+"."+strconv.FormatUint(rand.Uint64(), 36)+".tmp")
+		tmp, err = root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if !errors.Is(err, fs.ErrExist) {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(content)
+	if err == nil && keepMode {
+		err = tmp.Chmod(mode)
+	}
+	err = errors.Join(err, tmp.Close())
+	if err == nil {
+		err = root.Rename(tmpName, name)
+	}
+	if err != nil {
+		if rmErr := root.Remove(tmpName); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			err = errors.Join(err, rmErr)
+		}
+		return err
+	}
+	return nil
 }
 
 // removeOrphans deletes the owned files a run did not write again.
