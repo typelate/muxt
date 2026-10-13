@@ -21,6 +21,7 @@
 package mutation
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -116,19 +117,23 @@ const DefaultMaxCases = 8
 // Run mutates every action the configuration selects and reports which
 // variations the tests catch.
 //
-// progress receives a line per mutant as it completes when the
-// configuration is verbose; it may be nil.
-func Run(config Configuration, workingDirectory string, status io.Writer) (*Report, error) {
+// status receives the preamble once the baseline has run, and when the
+// configuration is verbose a line per mutant as it completes; it may be
+// nil.
+//
+// When ctx is done the go test runs in flight are interrupted, the
+// temporary files the run wrote are removed, and Run returns ctx's error.
+func Run(ctx context.Context, config Configuration, workingDirectory string, status io.Writer) (*Report, error) {
 	if !config.SeedSet {
 		// A drawn seed is reported so the run can be repeated exactly.
 		config.Seed = rand.Uint64()
 	}
-	p, err := newPlan(config, workingDirectory)
+	p, err := newPlan(ctx, config, workingDirectory)
 	if err != nil {
 		return nil, err
 	}
 	tester := config.goTest(workingDirectory)
-	return runPlan(p, config, status, tester.baseline, tester.verdict)
+	return runPlan(ctx, p, config, status, tester.baseline, tester.verdict)
 }
 
 // runPlan runs an enumerated plan: the suite once unmutated, and then each
@@ -138,7 +143,7 @@ func Run(config Configuration, workingDirectory string, status io.Writer) (*Repo
 // built here, because it is the slow part of a run and everything this
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
-func runPlan(p *plan, config Configuration, status io.Writer, baseline func() (string, error), verdict func(overlay string) (Status, error)) (*Report, error) {
+func runPlan(ctx context.Context, p *plan, config Configuration, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -152,7 +157,10 @@ func runPlan(p *plan, config Configuration, status io.Writer, baseline func() (s
 	}
 
 	started := time.Now()
-	if out, err := baseline(); err != nil {
+	if out, err := baseline(ctx); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if !isTestFailure(err) {
 			// Discarding what go test printed would leave only its exit
 			// status, which says nothing about why it would not run.
@@ -186,7 +194,7 @@ func runPlan(p *plan, config Configuration, status io.Writer, baseline func() (s
 		progress: progress,
 		clock:    clock,
 	}
-	if err := runner.runAll(report, workers); err != nil {
+	if err := runner.runAll(ctx, report, workers); err != nil {
 		return nil, err
 	}
 	return report, nil

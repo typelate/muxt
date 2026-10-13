@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"io"
@@ -21,7 +22,7 @@ type mutantRunner struct {
 	// test runs the suite against one mutant's overlay and says whether
 	// the tests caught it. An error means the tests could not be run at
 	// all, which stops the run.
-	test func(overlay string) (Status, error)
+	test func(ctx context.Context, overlay string) (Status, error)
 
 	// mu guards everything below it, which every run updates as it
 	// finishes.
@@ -39,7 +40,8 @@ type mutantRunner struct {
 // the runs finish; only the progress stream comes out in the order they
 // complete. The first error that is not a test failure stops new runs
 // starting, and is returned once the ones already running have finished.
-func (r *mutantRunner) runAll(report *Report, workers int) error {
+// ctx being done is such an error, and interrupts the ones running.
+func (r *mutantRunner) runAll(ctx context.Context, report *Report, workers int) error {
 	total := 0
 	for group := range report.eachTemplate() {
 		total += len(group.Results)
@@ -54,7 +56,7 @@ dispatch:
 			// Checked only once a slot is free: the run that failed frees
 			// its slot after recording the error, so this is the first
 			// point at which a failure is certain to be seen.
-			if r.failed() {
+			if r.failed() || ctx.Err() != nil {
 				<-slots
 				break dispatch
 			}
@@ -62,7 +64,7 @@ dispatch:
 			go func(group *TemplateReport, result *Result) {
 				defer running.Done()
 				defer func() { <-slots }()
-				r.finish(group, result, total, r.run(result))
+				r.finish(group, result, total, r.run(ctx, result))
 			}(group, &group.Results[i])
 		}
 	}
@@ -71,12 +73,15 @@ dispatch:
 	if r.err != nil {
 		return r.err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	report.tally()
 	return nil
 }
 
 // run runs one mutant's tests and writes the verdict into result.
-func (r *mutantRunner) run(result *Result) error {
+func (r *mutantRunner) run(ctx context.Context, result *Result) error {
 	if result.Status == StatusSkipped {
 		return nil
 	}
@@ -85,7 +90,7 @@ func (r *mutantRunner) run(result *Result) error {
 		return err
 	}
 	started := time.Now()
-	status, err := r.test(overlay)
+	status, err := r.test(ctx, overlay)
 	result.Seconds = time.Since(started).Seconds()
 	if err != nil {
 		return err
