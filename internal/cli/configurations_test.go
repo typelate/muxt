@@ -737,6 +737,11 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a template pattern that does not compile", args: "test-template-mutations --template-pattern=(", wantErr: "--template-pattern: error parsing regexp: missing closing ): `(`"},
 		{name: "a run pattern that does not compile", args: "test-template-mutations --run=(", wantErr: "--run: error parsing regexp: missing closing ): `(`"},
 		{name: "a callers match that does not compile", args: "list-template-callers --match=(", wantErr: "error parsing regexp: missing closing ): `(`"},
+		{name: "an unknown route listing format", args: "--format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown callers format", args: "list-template-callers --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown calls format", args: "list-template-calls --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown mutation report format", args: "test-template-mutations --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "an unknown explore-module format", args: "explore-module --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

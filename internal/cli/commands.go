@@ -41,8 +41,8 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 //
 // Parsing the flags, applying their defaults and rejecting what cannot
 // work is the command line's job, and for these six commands it is decided
-// before a package is loaded; --format alone is still read when a result is
-// written. Commands runs the real runners; a test runs ones that record the
+// before a package is loaded; --format is checked then too, and read again
+// when a result is written. Commands runs the real runners; a test runs ones that record the
 // configuration, which is how what a command line means is stated without
 // loading anything. generate-fake-server and explore-module load packages
 // in their own RunE and have no runner yet.
@@ -86,6 +86,9 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&rootCommandConfig.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+				return err
+			}
+			if err := checkFormat(cmd); err != nil {
 				return err
 			}
 			return run.routes(cmd, *workingDirectory, rootCommandConfig)

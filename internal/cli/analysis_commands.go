@@ -71,6 +71,9 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
+			if err := checkFormat(cmd); err != nil {
+				return err
+			}
 			filters, err := compilePatterns(patterns)
 			if err != nil {
 				return err
@@ -101,6 +104,9 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+				return err
+			}
+			if err := checkFormat(cmd); err != nil {
 				return err
 			}
 			filters, err := compilePatterns(patterns)
