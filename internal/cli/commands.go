@@ -84,10 +84,10 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if err := fixTemplateVariables(&rootCommandConfig.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
-			cmd.SilenceUsage = true
 			return run.routes(cmd, *workingDirectory, rootCommandConfig)
 		},
 	}

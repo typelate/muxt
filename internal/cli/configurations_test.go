@@ -613,3 +613,35 @@ func TestCommandLineRejections(t *testing.T) {
 		})
 	}
 }
+
+// TestCommandLineRejectionsDoNotPrintUsage states that a command line the
+// flags parse but validation rejects prints only its error: the usage text
+// would bury it and says nothing about what was wrong. A flag that does not
+// parse still gets the usage, as cobra prints it.
+func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
+	output := func(t *testing.T, commandLine string) string {
+		t.Helper()
+		var out strings.Builder
+		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, &out, &out, runners{})
+		require.Error(t, err, "muxt %s", commandLine)
+		return out.String()
+	}
+	for _, commandLine := range []string{
+		"generate --output-routes-func=1x",
+		"check --use-templates-variable=not-ok",
+		"list-template-callers --match=(",
+		"list-template-calls --match=(",
+		"test-template-mutations --run=(",
+		"test-template-mutations --use-templates-variable=a --use-templates-variable=a",
+		"list-template-callers --use-templates-variable=a --use-templates-variable=a",
+		"list-template-calls --use-templates-variable=a --use-templates-variable=a",
+		"--templates-variable=a --use-templates-variable=b",
+	} {
+		t.Run(commandLine, func(t *testing.T) {
+			assert.NotContains(t, output(t, commandLine), "Usage:", "muxt %s printed the usage", commandLine)
+		})
+	}
+	t.Run("an unknown flag", func(t *testing.T) {
+		assert.Contains(t, output(t, "generate --no-such-flag"), "Usage:", "muxt generate --no-such-flag want the usage")
+	})
+}
