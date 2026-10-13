@@ -53,7 +53,15 @@ func TestRoutePathWrapper(t *testing.T) {
 			require.NoError(t, err)
 			builder, _, err := routePathFunc(newFile(src), testConfig(), &defs[0])
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, astgen.Format(routePathWrapper(testConfig(), builder)))
+			wrapper := routePathWrapper(testConfig(), builder)
+			assert.Equal(t, tt.want, astgen.Format(wrapper))
+
+			// The two declarations are separate nodes in the file:
+			// changing the wrapper's parameters leaves the builder's alone.
+			before := astgen.Format(builder)
+			wrapper.Type.Params.List[0].Names[0].Name = "changed"
+			wrapper.Type.Params.List = nil
+			assert.Equal(t, before, astgen.Format(builder), "the builder after changing the wrapper's parameters")
 		})
 	}
 }
