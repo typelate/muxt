@@ -48,8 +48,20 @@ jobs:
         cache: true
         cache-dependency-path: .github/workflows/go.yml
 
+    # gosec is built against this module's golang.org/x/tools. The version
+    # gosec pins cannot read the export data the Go toolchain writes now
+    # ("export data version 5 is greater than maximum supported version 4"),
+    # so every package fails to type check and the scan exits 1 with no
+    # findings.
     - name: Install gosec
-      run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+      run: |
+        tools="$(go list -m -f '{{.Version}}' golang.org/x/tools)"
+        mkdir "$RUNNER_TEMP/gosec-build"
+        cd "$RUNNER_TEMP/gosec-build"
+        go mod init gosec-build
+        go get "github.com/securego/gosec/v2/cmd/gosec@v2.29.0" "golang.org/x/tools@${tools}"
+        go build -o "$(go env GOPATH)/bin/gosec" github.com/securego/gosec/v2/cmd/gosec
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
     - name: Scan
       run: gosec -exclude=G112,G114,G304,G306,G706 ./docs/examples/...
