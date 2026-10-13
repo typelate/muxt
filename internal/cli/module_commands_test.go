@@ -92,6 +92,22 @@ func TestWriteFakeServer(t *testing.T) {
 	}
 }
 
+// TestWriteFakeServerRefusesASymlinkOutOfItsDirectory states that the fake
+// server's files get the protection generated files have: a link that leaves
+// the directory is not written through.
+func TestWriteFakeServerRefusesASymlinkOutOfItsDirectory(t *testing.T) {
+	victim := writeTestFile(t, t.TempDir(), "victim.txt", "keep\n")
+	out := t.TempDir()
+	require.NoError(t, os.Symlink(victim, filepath.Join(out, "main.go")))
+
+	err := writeFakeServer(out, &fakeserver.Files{Main: []byte("package main\n"), Fake: []byte("package fake\n")})
+	require.Error(t, err, "writeFakeServer() through a link out of the directory")
+
+	got, readErr := os.ReadFile(victim)
+	require.NoError(t, readErr)
+	assert.Equal(t, "keep\n", string(got), "the file the link points at")
+}
+
 func TestWriteFakeServerFailsUnderAFile(t *testing.T) {
 	blocker := writeTestFile(t, t.TempDir(), "file", "")
 	err := writeFakeServer(filepath.Join(blocker, "out"), &fakeserver.Files{})
