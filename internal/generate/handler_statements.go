@@ -168,25 +168,26 @@ func callWriteHeader(statusCode ast.Expr) *ast.ExprStmt {
 }
 
 func checkExecuteTemplateError(file *File, withLogger bool, pattern string) *ast.IfStmt {
-	var logStmts []ast.Stmt
-	if withLogger {
-		logStmts = []ast.Stmt{
-			&ast.ExprStmt{X: loggerErrorCall(file, executeTemplateErrorMessage, pattern, errIdent)},
-		}
-	} else {
-		logStmts = []ast.Stmt{
-			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
-		}
-	}
 	return &ast.IfStmt{
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{
-			List: append(logStmts,
+			List: []ast.Stmt{
+				logErrorStatement(file, withLogger, executeTemplateErrorMessage, pattern),
 				&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), astgen.String(executeTemplateErrorMessage), http.StatusInternalServerError)},
 				&ast.ReturnStmt{},
-			),
+			},
 		},
 	}
+}
+
+// logErrorStatement logs message and err: with the logger the routes
+// function is passed when withLogger is set, otherwise with log/slog's
+// default logger.
+func logErrorStatement(file *File, withLogger bool, message, pattern string) ast.Stmt {
+	if withLogger {
+		return &ast.ExprStmt{X: loggerErrorCall(file, message, pattern, errIdent)}
+	}
+	return &ast.ExprStmt{X: executeTemplateFailedLogLine(file, message, errIdent)}
 }
 
 func callWriteOnResponse(bufferIdent string) *ast.AssignStmt {

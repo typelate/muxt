@@ -138,7 +138,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		body = append(body, &ast.IfStmt{
 			Init: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr}},
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: executeTemplateFailedLogLine(file, "sse handler returned an error", errIdent)}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{logErrorStatement(file, config.Logger, "sse handler returned an error", def.RawPattern())}},
 		})
 	} else {
 		body = append(body, &ast.ExprStmt{X: callExpr})
@@ -294,7 +294,7 @@ func sseClosure(file *File, config RoutesFileConfiguration, def muxt.Definition,
 		}}},
 		Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
 		Body: &ast.BlockStmt{List: []ast.Stmt{
-			&ast.ExprStmt{X: executeTemplateFailedLogLine(file, executeTemplateErrorMessage, errIdent)},
+			logErrorStatement(file, config.Logger, executeTemplateErrorMessage, def.RawPattern()),
 			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent(errIdent)}},
 		}},
 	})
