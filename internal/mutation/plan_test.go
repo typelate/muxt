@@ -4,6 +4,7 @@ import (
 	"errors"
 	"go/token"
 	"go/types"
+	"html/template"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -172,27 +173,49 @@ func TestPlanReportCounts(t *testing.T) {
 	assert.Equal(t, 4, report.Skipped, "skipped")
 }
 
-func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
+// TestIndexTreesKeepsTheTreeTheSetKept states which of several sources
+// holding one name the index reads: the one the name's definition is in,
+// which is the body text/template kept, and otherwise the last that is
+// not empty, which is the one text/template would keep.
+func TestIndexTreesKeepsTheTreeTheSetKept(t *testing.T) {
 	sourceOf := func(name, text string) *templateSource {
 		return newFileSource(name, name, text, "", "")
 	}
 	for _, tt := range []struct {
 		name    string
 		sources []*templateSource
+		defined string
 		want    string
 	}{
 		{
-			name:    "a later tree does not replace a non-empty one",
+			name:    "the definition is in the later source",
 			sources: []*templateSource{sourceOf("a.gohtml", "{{.A}}"), sourceOf("b.gohtml", "{{.B}}")},
+			defined: "b.gohtml",
+			want:    "b.gohtml",
+		},
+		{
+			name:    "the definition is in the earlier source",
+			sources: []*templateSource{sourceOf("a.gohtml", "{{.A}}"), sourceOf("b.gohtml", "{{.B}}")},
+			defined: "a.gohtml",
 			want:    "a.gohtml",
 		},
 		{
-			name:    "a non-empty tree replaces an empty one",
+			name:    "no definition: a later non-empty tree replaces an earlier one",
+			sources: []*templateSource{sourceOf("a.gohtml", "{{.A}}"), sourceOf("b.gohtml", "{{.B}}")},
+			want:    "b.gohtml",
+		},
+		{
+			name:    "no definition: a later empty tree does not replace a non-empty one",
+			sources: []*templateSource{sourceOf("a.gohtml", "{{.A}}"), sourceOf("b.gohtml", " ")},
+			want:    "a.gohtml",
+		},
+		{
+			name:    "no definition: a non-empty tree replaces an empty one",
 			sources: []*templateSource{sourceOf("a.gohtml", ""), sourceOf("b.gohtml", "{{.B}}")},
 			want:    "b.gohtml",
 		},
 		{
-			name:    "an empty tree replaces an empty one",
+			name:    "no definition: an empty tree replaces an empty one",
 			sources: []*templateSource{sourceOf("a.gohtml", ""), sourceOf("b.gohtml", " ")},
 			want:    "b.gohtml",
 		},
@@ -200,19 +223,42 @@ func TestIndexTreesKeepsTheFirstNonEmptyTree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Each file names the template it holds after its base name, so
 			// a shared define is what makes two sources compete for one name.
+			defined := make(map[string]*templateSource)
 			for _, src := range tt.sources {
 				src.rootName = "page"
+				if src.path == tt.defined {
+					defined["page"] = src
+				}
 			}
-			index, err := indexTrees(tt.sources, nil)
+			index, err := indexTrees(tt.sources, defined, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, index["page"].src.path, "indexTrees(...)[page] source")
 		})
 	}
 }
 
+// TestDefinitionsOfListsByName states that the definitions come out in
+// name order however the set holds them, so a run that finds several
+// unreadable templates names the same one every time.
+func TestDefinitionsOfListsByName(t *testing.T) {
+	set := template.Must(template.New("c").Parse(`{{define "b"}}{{end}}{{define "e"}}{{end}}{{define "a"}}{{end}}{{define "d"}}{{end}}`))
+	definitions := make(map[string]source.Definition)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		definitions[name] = source.Definition{Name: name}
+	}
+	lt := &checked{Variable: source.Variable{Set: set, Definitions: definitions}}
+	for range 20 {
+		var got []string
+		for _, definition := range definitionsOf(lt) {
+			got = append(got, definition.Name)
+		}
+		require.Equal(t, []string{"a", "b", "c", "d", "e"}, got, "definitionsOf(...) names")
+	}
+}
+
 func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
 	src := newFileSource("bad.gohtml", "bad.gohtml", "{{if}}", "", "")
-	_, err := indexTrees([]*templateSource{src}, nil)
+	_, err := indexTrees([]*templateSource{src}, nil, nil)
 	require.Error(t, err, "indexTrees(bad source)")
 	assert.True(t, strings.HasPrefix(err.Error(), "bad.gohtml: "), "indexTrees(bad source) error = %v, want one naming bad.gohtml", err)
 }
