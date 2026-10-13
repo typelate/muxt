@@ -65,8 +65,7 @@ func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
 		}
 
 		var funcList []Function
-		names := slices.Collect(maps.Keys(functions))
-		for _, name := range names {
+		for _, name := range slices.Sorted(maps.Keys(functions)) {
 			s := strings.TrimPrefix(functions[name].String(), "func")
 			funcList = append(funcList, Function{Name: name, Signature: s})
 		}
