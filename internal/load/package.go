@@ -40,7 +40,7 @@ func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.Fi
 		Env:  env,
 	}, patterns...)
 	if err != nil {
-		return nil, nil, loadFailedError(wd, err)
+		return nil, nil, loadFailedError(wd, env, err)
 	}
 	return fileSet, pl, err
 }
