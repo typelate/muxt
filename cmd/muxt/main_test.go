@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"rsc.io/script"
@@ -50,10 +51,22 @@ func TestEntrypoint(t *testing.T) {
 	require.Equal(t, string(cmdMainGo), string(mainGo))
 }
 
+// scriptWaitDelay is how long a script's exec waits for a subprocess's output
+// to drain after it exits, and, when the script is cancelled, between the
+// interrupt and the kill.
+const scriptWaitDelay = 10 * time.Second
+
 func Test(t *testing.T) {
 	e := script.NewEngine()
 	e.Quiet = true
 	e.Cmds = scripttest.DefaultCmds()
+	// The engine reads a subprocess's output through a pipe and, once the
+	// subprocess has exited, waits only scriptWaitDelay for that pipe to
+	// drain before failing the script with "exec: WaitDelay expired before
+	// I/O complete". The default of 100ms is too short when this process is
+	// starved of CPU, as it is when CI runs many scripts at once under -race:
+	// a script whose go test has already passed then fails.
+	e.Cmds["exec"] = script.Exec(func(cmd *exec.Cmd) error { return cmd.Process.Signal(os.Interrupt) }, scriptWaitDelay)
 	e.Cmds["muxt"] = scriptCommand()
 	e.Cmds["count-matches"] = countRedirectBlocksCommand()
 	ctx := t.Context()
