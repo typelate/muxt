@@ -77,7 +77,7 @@ func Test(t *testing.T) {
 	buf, _ := io.ReadAll(res.Body)
 	got := string(buf)
 
-	if exp := `<a href="/path/prefix">Index</a>`; !strings.Contains(got, exp) {
+	if exp := `<a href="/path/prefix/">Index</a>`; !strings.Contains(got, exp) {
 		t.Log("got:", got)
 		t.Log("expected:", exp)
 		t.Error("html did not contain expected value")

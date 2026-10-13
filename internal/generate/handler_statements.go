@@ -49,11 +49,7 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 	pattern := ast.Expr(astgen.String(normalized))
 	if config.PathPrefix {
 		i := strings.Index(normalized, "/")
-		pattern = &ast.BinaryExpr{
-			X:  astgen.String(normalized[:i]),
-			Op: token.ADD,
-			Y:  astgen.Call(file, "path", "path", "Join", ast.NewIdent(pathPrefixPathsStructFieldName), astgen.String(normalized[i:])),
-		}
+		pattern = concatenation(append([]ast.Expr{astgen.String(normalized[:i])}, prefixedPath(file, ast.NewIdent(pathPrefixPathsStructFieldName), normalized[i:])...)...)
 	}
 	method, handler := httpHandleFuncIdent, ast.Expr(handlerFuncLit)
 	if config.Middleware {
@@ -73,6 +69,31 @@ func callHandleFunc(file *File, def muxt.Definition, handlerFuncLit *ast.FuncLit
 		},
 		Args: []ast.Expr{pattern, handler},
 	}}
+}
+
+// prefixedPath is the operands of the string concatenation that spells
+// pattern path p under the path prefix: path.Join(prefix, p). path.Join
+// drops a trailing slash, which in a pattern means the subtree, so a path
+// ending in "/" (muxt allows only "/") keeps it:
+//
+//	strings.TrimSuffix(path.Join(prefix, "/"), "/") + "/"
+//
+// is "/" for an empty prefix and "/app/" for "/app" or "/app/".
+func prefixedPath(file *File, prefix ast.Expr, p string) []ast.Expr {
+	joined := astgen.Call(file, "path", "path", "Join", prefix, astgen.String(p))
+	if !strings.HasSuffix(p, "/") {
+		return []ast.Expr{joined}
+	}
+	return []ast.Expr{astgen.Call(file, "strings", "strings", "TrimSuffix", joined, astgen.String("/")), astgen.String("/")}
+}
+
+// concatenation adds the string operands left to right: a + b + c.
+func concatenation(operands ...ast.Expr) ast.Expr {
+	sum := operands[0]
+	for _, operand := range operands[1:] {
+		sum = &ast.BinaryExpr{X: sum, Op: token.ADD, Y: operand}
+	}
+	return sum
 }
 
 func noReceiverMethodCall(file *File, def muxt.Definition, config RoutesFileConfiguration, receiverInterfaceName string) *ast.FuncLit {
