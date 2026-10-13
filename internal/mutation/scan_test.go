@@ -174,6 +174,16 @@ func TestMatchEnd(t *testing.T) {
 	}
 }
 
+// TestMatchEndFromAChainedElse states that an {{else with}} opens the with
+// it chains: the end is the chain's, and the else is the next link.
+func TestMatchEndFromAChainedElse(t *testing.T) {
+	found := regions(`{{with .A}}a{{else with .B}}{{if .C}}{{else}}{{end}}{{else}}c{{end}}`, "", "")
+	end, elseIndex, ok := matchEnd(found, 1)
+	assert.True(t, ok, "matchEnd ok")
+	assert.Equal(t, 6, end, "matchEnd end")
+	assert.Equal(t, 5, elseIndex, "matchEnd else")
+}
+
 // TestRegionsKeepsScanningPastSomethingItCannotRead states that one
 // unreadable action does not cost the rest of the template its mutants.
 //

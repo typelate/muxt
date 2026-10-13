@@ -240,8 +240,12 @@ func regionAt(found []region, pos int) (int, region, bool) {
 //
 // Actions nested inside are skipped by depth, so the else and end
 // reported are the ones at the opening action's own level.
+//
+// An else may stand in for the opening action: an {{else with}} opens the
+// with it chains, which the same {{end}} closes, and the else reported is
+// the next one in the chain.
 func matchEnd(found []region, open int) (endIndex int, elseIndex int, ok bool) {
-	if !found[open].opensBlock() {
+	if !found[open].opensBlock() && found[open].keyword != "else" {
 		return 0, 0, false
 	}
 	elseIndex = -1
