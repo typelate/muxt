@@ -1,0 +1,46 @@
+A --template-pattern matching none of the templates reached is an error
+even when no template is reached twice: the call sites are there, the
+pattern selects none of what they render.
+
+Command line: muxt test-template-mutations --dry-run --seed=1 --template-pattern=^sidebar$
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"TemplatePattern": "^sidebar$",
+	"Run": null,
+	"Packages": [],
+	"DryRun": true,
+	"Verbose": false,
+	"IncludeTests": false,
+	"Seed": 1,
+	"SeedSet": true,
+	"MaxCases": 8,
+	"Workers": 1,
+	"Diff": "",
+	"GoTestArgs": null
+}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- page.gohtml --
+{{define "page"}}<h1>{{.Title}}</h1>{{end}}
+-- want/error.txt --
+no template matches --template-pattern ^sidebar$
