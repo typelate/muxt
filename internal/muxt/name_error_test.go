@@ -285,10 +285,44 @@ func TestErrorListForms(t *testing.T) {
 }
 
 func TestDefinitionPathParamErrorfAdjacentNames(t *testing.T) {
+	// Only the second "{a" is the whole parameter: the first is followed
+	// by more of a name, so the one missing occurrence marks the path.
 	def := &Definition{name: "{a{a}", path: "{a{a}", spans: nameSpans{path: [2]int{0, 5}}}
-	for occurrence, want := range []int{1, 3} {
+	for occurrence, want := range []int{3, 0} {
 		nameErr, ok := def.pathParamErrorf("a", occurrence, "boom").(*NameError)
 		require.True(t, ok)
 		assert.Equal(t, want, nameErr.Offset, "offset of occurrence %d", occurrence)
 	}
+}
+
+// TestDefinitionPathParamErrorfWholeNames states that a parameter is
+// found by its whole name, not by a name it is the prefix of.
+func TestDefinitionPathParamErrorfWholeNames(t *testing.T) {
+	for _, tt := range []struct {
+		path       string
+		param      string
+		occurrence int
+		want       int
+	}{
+		{path: "/{formx}/{form}", param: "form", want: len("/{formx}/{")},
+		{path: "/{formx}/{form...}", param: "form", want: len("/{formx}/{")},
+		{path: "/{ab}/{a}/{a}", param: "a", occurrence: 1, want: len("/{ab}/{a}/{")},
+		{path: "/{abc/x", param: "abc", want: len("/{")},
+		{path: "/{abcd/{abc", param: "abc", want: len("/{abcd/{")},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			def := &Definition{name: tt.path, path: tt.path, spans: nameSpans{path: [2]int{0, len(tt.path)}}}
+			nameErr, ok := def.pathParamErrorf(tt.param, tt.occurrence, "boom").(*NameError)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, nameErr.Offset, "offset of %s occurrence %d", tt.param, tt.occurrence)
+			assert.Equal(t, len(tt.param), nameErr.Length, "length")
+		})
+	}
+	t.Run("through Definitions", func(t *testing.T) {
+		const name = "GET /{formx}/{form} F(formx, form)"
+		_, err := Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("").Parse(`{{define "` + name + `"}}{{end}}`))})
+		nameErr, ok := errors.AsType[*NameError](err)
+		require.True(t, ok, "Definitions() = %v, want a *NameError", err)
+		assert.Equal(t, len("GET /{formx}/{"), nameErr.Offset, "offset")
+	})
 }

@@ -209,22 +209,32 @@ func (def *Definition) argUsesErrorf(name, format string, args ...any) error {
 }
 
 // pathParamErrorf reports an error about the occurrence-th path
-// parameter named n, pointing at the name inside its braces.
+// parameter named n, pointing at the name inside its braces. The name must
+// be whole -- {n}, {n...}, or an unclosed {n ending its segment -- so the
+// error about {form} does not mark {formx}.
 func (def *Definition) pathParamErrorf(n string, occurrence int, format string, args ...any) error {
 	needle := "{" + n
-	offset := def.spans.path[0]
-	rest := def.path
-	for i := 0; ; i++ {
-		idx := strings.Index(rest, needle)
+	for i, start := 0, 0; ; {
+		idx := strings.Index(def.path[start:], needle)
 		if idx < 0 {
 			return def.spanErrorf(def.spans.path, format, args...)
 		}
-		if i == occurrence {
-			return def.nameErrorf(offset+idx+1, len(n), format, args...)
+		nameStart := start + idx + 1
+		start = nameStart + len(n)
+		if !endsPathParameterName(def.path[start:]) {
+			continue
 		}
-		offset += idx + len(needle)
-		rest = rest[idx+len(needle):]
+		if i == occurrence {
+			return def.nameErrorf(def.spans.path[0]+nameStart, len(n), format, args...)
+		}
+		i++
 	}
+}
+
+// endsPathParameterName reports whether rest, the path after a parameter
+// name, starts with what can follow a whole name.
+func endsPathParameterName(rest string) bool {
+	return rest == "" || strings.HasPrefix(rest, "}") || strings.HasPrefix(rest, "...}") || strings.HasPrefix(rest, "/")
 }
 
 // handlerSpan spans the trimmed handler expression within the name,
