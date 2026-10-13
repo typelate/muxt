@@ -143,6 +143,26 @@ func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
 	}
 }
 
+func TestExploreModuleFailsOutsideAModule(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	for _, command := range []string{exploreModuleCommandName, generateFakeServerCommandName} {
+		t.Run(command, func(t *testing.T) {
+			_, _, err := execute(t, t.TempDir(), command)
+			require.Error(t, err, "muxt %s outside a module", command)
+			assert.Contains(t, err.Error(), "not inside a Go module", "muxt %s outside a module", command)
+		})
+	}
+}
+
+// When go list fails, what it wrote to stderr is the reason.
+func TestExploreModuleReportsWhyGoListFailed(t *testing.T) {
+	wd := t.TempDir()
+	writeTestFile(t, wd, "go.mod", "this is not a go.mod file\n")
+	_, _, err := execute(t, wd, exploreModuleCommandName)
+	require.Error(t, err, "muxt explore-module with a broken go.mod")
+	assert.Contains(t, err.Error(), "go.mod", "muxt explore-module with a broken go.mod, want go list's stderr")
+}
+
 func TestRunFailsOutsideAModule(t *testing.T) {
 	for _, args := range [][]string{{"check"}, {"generate"}, {"list-template-callers"}, {testTemplateMutationsName}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
