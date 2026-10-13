@@ -76,9 +76,9 @@ func TestPackagesWithTests(t *testing.T) {
 	})
 
 	t.Run("the directory resolves to the test variant", func(t *testing.T) {
-		got, ok := PackageInDirectory(pl, dir)
-		assert.True(t, ok, "PackageInDirectory() ok")
-		assert.Same(t, pl[0], got, "PackageInDirectory() want the test variant")
+		got, ok := packageInDirectory(pl, dir)
+		assert.True(t, ok, "packageInDirectory() ok")
+		assert.Same(t, pl[0], got, "packageInDirectory() want the test variant")
 	})
 
 	t.Run("only the working directory is loaded", func(t *testing.T) {

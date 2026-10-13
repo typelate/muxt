@@ -71,6 +71,24 @@ func TestHydration(t *testing.T) {
 		require.EqualError(t, err, "variable nope not found in package example.com/server")
 	})
 
+	t.Run("a receiver in another package", func(t *testing.T) {
+		models := loadtest.Package(t, t.TempDir(), "example.com/models", map[string]string{
+			"models.go": "package models\n\ntype Handler struct{}\n",
+		})
+		withModels := append(append(pl[:1:1], models[0]), pl[1:]...)
+
+		pkg, receiver, err := load.PackageWithReceiver(dir, withModels, "example.com/models", "Handler", []string{"templates"})
+		require.NoError(t, err)
+		assert.Equal(t, "example.com/models", receiver.Obj().Pkg().Path(), "the receiver is looked up in the package named")
+		assert.Equal(t, "example.com/server", pkg.Types.Path(), "the templates are read from the package at dir")
+
+		_, _, err = load.PackageWithReceiver(dir, withModels, "example.com/models", "Server", nil)
+		assert.EqualError(t, err, "could not find receiver type Server in example.com/models", "a receiver package is not the package at dir")
+
+		_, _, err = load.PackageWithReceiver(dir, pl, "example.com/models", "Handler", nil)
+		assert.EqualError(t, err, "could not find receiver type Handler in example.com/models", "a receiver package the load did not reach")
+	})
+
 	t.Run("the routes file belongs to the package in its own directory", func(t *testing.T) {
 		config := generate.RoutesFileConfiguration{OutputFileName: filepath.Join("sub", "routes.go"), ReceiverType: "Srever"}
 		_, _, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
