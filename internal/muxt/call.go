@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"html/template"
+	"slices"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
@@ -94,11 +96,17 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 // function, else a method synthesized from the call's arguments.
 func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg source.Package, receiver *types.Named, checker Checker) (types.Object, bool, error) {
 	if object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name); object != nil {
-		if _, isMethod := object.(*types.Func); !isMethod {
+		method, isMethod := object.(*types.Func)
+		if !isMethod {
 			// Synthesizing a method would collide with the field, and
 			// a field of func type is not part of the receiver's
 			// method set, so the generated interface could not hold it.
 			return nil, false, errAt(fun, "%s is a field of %s, not a method", fun.Name, receiver.Obj().Name())
+		}
+		if isSynthesized(method) {
+			// An earlier route synthesized it; this route calls a
+			// method the receiver does not define all the same.
+			def.recordSynthesized(method, receiver)
 		}
 		return object, true, nil
 	}
@@ -109,10 +117,26 @@ func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg sourc
 	if err != nil {
 		return nil, false, err
 	}
-	method := types.NewFunc(0, receiver.Obj().Pkg(), fun.Name, sig)
+	method := types.NewFunc(token.NoPos, receiver.Obj().Pkg(), fun.Name, sig)
 	receiver.AddMethod(method)
-	def.synthesizedMethods = append(def.synthesizedMethods, signatureString(fun.Name, sig, typeQualifier(receiver.Obj().Pkg())))
+	def.recordSynthesized(method, receiver)
 	return method, true, nil
+}
+
+// isSynthesized reports whether method is one lookupCallee added to the
+// receiver: those alone have no position, since a method declared in source
+// or read from export data has one.
+func isSynthesized(method *types.Func) bool {
+	return !method.Pos().IsValid()
+}
+
+// recordSynthesized notes that def calls method, which the receiver does
+// not define, once however many times def calls it.
+func (def *Definition) recordSynthesized(method *types.Func, receiver *types.Named) {
+	signature := signatureString(method.Name(), method.Signature(), typeQualifier(receiver.Obj().Pkg()))
+	if !slices.Contains(def.synthesizedMethods, signature) {
+		def.synthesizedMethods = append(def.synthesizedMethods, signature)
+	}
 }
 
 // argumentCountError reports a call whose arguments do not match sig's
