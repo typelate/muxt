@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/fake"
@@ -161,6 +162,45 @@ func (T) Save(form int) any { return nil }
 		require.True(t, ok, "ResolveDefinitions() = %v, want a *NameError", err)
 		require.ErrorContains(t, err, "expected form parameter type to be a struct")
 		require.Equal(t, strings.Index(name, "unmarshalForm"), nameErr.Offset, "NameError.Offset")
+	})
+
+	t.Run("a form field's validations come from its input or textarea", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Values map[string][]string
+
+type Form struct {
+	Color string ` + "`" + `template:"color"` + "`" + `
+	Note  string ` + "`" + `template:"note"` + "`" + `
+	Go    string ` + "`" + `template:"go"` + "`" + `
+	Code  string ` + "`" + `template:"code"` + "`" + `
+}
+
+type T struct{}
+
+func (T) Save(form Form) any { return nil }
+`})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("templates", `{{define "POST / Save(form)"}}{{end}}`+
+				`{{define "color"}}<select name="Color"><option>red</option></select>{{end}}`+
+				`{{define "note"}}<textarea name="Note" minlength="2" maxlength="9"></textarea>{{end}}`+
+				`{{define "go"}}<button name="Go" value="x">Go</button>{{end}}`+
+				`{{define "code"}}<label for="Code">Code</label><select name="Code"></select><input name="Code" minlength="3">{{end}}`),
+		}}
+		defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.StandInChecker(t, pkg).Fake())
+		require.NoError(t, err)
+		require.Len(t, defs, 1)
+		fields := defs[0].Arguments[0].FormFields()
+		require.Len(t, fields, 4)
+		assert.Empty(t, fields[0].Validations, "validations of a select")
+		assert.Equal(t, []muxt.InputValidation{
+			muxt.MinLengthValidation{Name: "Note", MinLength: 2},
+			muxt.MaxLengthValidation{Name: "Note", MaxLength: 9},
+		}, fields[1].Validations, "validations of a textarea")
+		assert.Empty(t, fields[2].Validations, "validations of a button")
+		assert.Equal(t, []muxt.InputValidation{
+			muxt.MinLengthValidation{Name: "Code", MinLength: 3},
+		}, fields[3].Validations, "validations of the input named like a select")
 	})
 
 	t.Run("resolution errors are combined", func(t *testing.T) {

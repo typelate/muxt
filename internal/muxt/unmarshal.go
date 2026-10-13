@@ -244,22 +244,30 @@ func formFieldBinding(def *Definition, checker Checker, st *types.Struct, i int,
 }
 
 // fieldTemplateValidations parses the constraint attributes of the <input>
-// element bound to fb in its field template. Fields without a template tag or
-// whose template has no matching input have no validations.
+// or <textarea> element bound to fb in its field template: a textarea takes
+// minlength and maxlength. Fields without a template tag, or whose template
+// binds the name only to another element (a <select>, a <button>), have no
+// validations.
 func fieldTemplateValidations(fb FieldBinding) ([]InputValidation, error) {
-	if fb.Template == nil {
+	if fb.Template == nil || fb.Template.Tree == nil {
 		return nil, nil
 	}
-	nodes, _ := html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
+	nodes, err := html.ParseFragment(strings.NewReader(fb.Template.Tree.Root.String()), &html.Node{
 		Type:     html.ElementNode,
 		DataAtom: atom.Body,
 		Data:     atom.Body.String(),
 	})
-	input := dom.NewDocumentFragment(nodes).QuerySelector(fmt.Sprintf("[name=%q]", fb.InputName))
-	if input == nil {
+	if err != nil {
+		return nil, fmt.Errorf("parsing template %s for field %s: %w", fb.Template.Name(), fb.Name, err)
+	}
+	element := dom.NewDocumentFragment(nodes).QuerySelector(fmt.Sprintf("input[name=%[1]q], textarea[name=%[1]q]", fb.InputName))
+	if element == nil {
 		return nil, nil
 	}
-	return ParseInputValidations(fb.InputName, input, fb.elem)
+	if strings.EqualFold(element.TagName(), atom.Textarea.String()) {
+		return parseLengthValidations(fb.InputName, element)
+	}
+	return ParseInputValidations(fb.InputName, element, fb.elem)
 }
 
 // Elem is the type parsed from one string value: the field type, or the
