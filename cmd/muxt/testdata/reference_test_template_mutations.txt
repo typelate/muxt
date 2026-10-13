@@ -9,9 +9,13 @@
 # it catches emptying {{.Name}} and catches forcing {{if .Loud}} true. It
 # never renders with Loud true, so forcing the branch false changes nothing it
 # observes, and that mutant survives.
+#
+# Like go test with a failing test, a run that misses a mutant exits non-zero
+# once the report is written.
 
-muxt test-template-mutations -v --seed 1
+! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server

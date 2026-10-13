@@ -14,8 +14,9 @@
 # for the same template written with the default delimiters. Which delimiters
 # a project chose is not something a mutation report should depend on.
 
-muxt test-template-mutations -v --seed 1
+! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server

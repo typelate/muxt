@@ -10,8 +10,9 @@
 # changes nothing it sees and that mutant survives. Forcing it false swaps
 # the branch and is caught.
 
-muxt test-template-mutations --seed 1
+! muxt test-template-mutations --seed 1
 cmp stdout want.txt
+stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --
 module server
