@@ -200,7 +200,18 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 	params := synthesizedParameters{
 		callName: call.Fun.(*ast.Ident).Name,
 		pkg:      receiver.Obj().Pkg(),
-		uses:     make(map[string]int),
+		used:     make(map[string]bool),
+		taken:    make(map[string]bool),
+	}
+	for _, a := range call.Args {
+		switch arg := a.(type) {
+		case *ast.Ident:
+			params.taken[arg.Name] = true
+		case *ast.CallExpr:
+			if isCallTo(arg, callWrapperUnmarshalJSON) {
+				params.taken[TemplateNameScopeIdentifierRequestBody] = true
+			}
+		}
 	}
 	for _, a := range call.Args {
 		var err error
@@ -219,21 +230,28 @@ func synthesizeCallSignature(def *Definition, call *ast.CallExpr, pkg source.Pac
 
 // synthesizedParameters collects the parameters of a synthesized method.
 // Each use of an argument becomes a parameter of its default type, named after
-// the argument; later uses of a repeated argument are numbered (request2).
+// the argument; later uses of a repeated argument are numbered (request2),
+// skipping any number that would repeat the name of another argument
+// (ctx3 when the call also passes a path value named ctx2).
 type synthesizedParameters struct {
 	callName string
 	pkg      *types.Package
-	uses     map[string]int
-	vars     []*types.Var
-	hasSSE   bool
+	// used holds the parameter names given so far and taken the names of
+	// the call's arguments, which each keep their own name.
+	used, taken map[string]bool
+	vars        []*types.Var
+	hasSSE      bool
 }
 
 func (p *synthesizedParameters) add(name string, tp types.Type) {
-	p.uses[name]++
-	if n := p.uses[name]; n > 1 {
-		name = fmt.Sprintf("%s%d", name, n)
+	candidate := name
+	for n := 2; p.used[candidate]; n++ {
+		if numbered := fmt.Sprintf("%s%d", name, n); !p.used[numbered] && !p.taken[numbered] {
+			candidate = numbered
+		}
 	}
-	p.vars = append(p.vars, types.NewVar(0, p.pkg, name, tp))
+	p.used[candidate] = true
+	p.vars = append(p.vars, types.NewVar(0, p.pkg, candidate, tp))
 }
 
 func (p *synthesizedParameters) addIdentifier(def *Definition, checker Checker, arg *ast.Ident) error {
