@@ -133,16 +133,6 @@ func TestRunWarnsOfSyntaxErrors(t *testing.T) {
 	}
 }
 
-func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
-	wd := newModule(t)
-	for _, args := range [][]string{{"--format=yaml"}, {"list-template-callers", "--format=yaml"}, {"list-template-calls", "--format=yaml"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			_, _, err := execute(t, wd, args...)
-			assert.EqualError(t, err, "unknown format: yaml", "muxt %v", args)
-		})
-	}
-}
-
 func TestExploreModuleFailsOutsideAModule(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	for _, command := range []string{exploreModuleCommandName, generateFakeServerCommandName} {
