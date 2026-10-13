@@ -747,6 +747,24 @@ func TestCommandLineRejections(t *testing.T) {
 	}
 }
 
+// TestCheckIgnoresAReceiverType states that check, which reads the
+// receiver from the generated routes file, still accepts the --receiver-type
+// v0.20.0 accepted, and says it is ignored rather than pointing at a flag
+// check does not have.
+func TestCheckIgnoresAReceiverType(t *testing.T) {
+	var stderr strings.Builder
+	var got any
+	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, &stderr, runners{
+		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error {
+			got = c
+			return nil
+		},
+	})
+	require.NoError(t, err, "muxt check --receiver-type=T")
+	assert.Equal(t, analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}}, got, "muxt check --receiver-type=T")
+	assert.Equal(t, "Flag --receiver-type has been deprecated, muxt check reads the receiver type from the generated routes file and ignores this flag\n", stderr.String(), "stderr")
+}
+
 // TestCommandLineRejectionsDoNotPrintUsage states that a command line the
 // flags parse but validation rejects prints only its error: the usage text
 // would bury it and says nothing about what was wrong. A flag that does not
