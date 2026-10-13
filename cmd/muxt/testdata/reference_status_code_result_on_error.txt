@@ -1,0 +1,88 @@
+# A result's status code is consulted only when the call succeeded. When
+# the method returns an error, its result may be a nil pointer whose
+# StatusCode method would panic, so the error's status is used instead.
+
+muxt generate --use-receiver-type=T
+muxt check
+
+exec go test -race -count=1
+
+-- index.gohtml --
+{{define "GET /page/{id} Page(id)"}}{{with .Err}}{{.}}{{else}}{{.Result.Title}}{{end}}{{end}}
+{{define "GET /field/{id} Field(id)"}}{{with .Err}}{{.}}{{else}}ok{{end}}{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"embed"
+	"errors"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+type Page struct {
+	Title string
+	code  int
+}
+
+func (p *Page) StatusCode() int { return p.code }
+
+func (T) Page(id int) (*Page, error) {
+	if id < 0 {
+		return nil, errors.New("boom")
+	}
+	return &Page{Title: "found", code: http.StatusAccepted}, nil
+}
+
+type Coded struct{ StatusCode int }
+
+func (T) Field(id int) (*Coded, error) {
+	if id < 0 {
+		return nil, errors.New("boom")
+	}
+	return &Coded{StatusCode: http.StatusAccepted}, nil
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestResultStatusCode(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	for _, tt := range []struct {
+		path string
+		want int
+	}{
+		{path: "/page/1", want: http.StatusAccepted},
+		{path: "/page/-1", want: http.StatusInternalServerError},
+		{path: "/page/not-a-number", want: http.StatusBadRequest},
+		{path: "/field/1", want: http.StatusAccepted},
+		{path: "/field/-1", want: http.StatusInternalServerError},
+		{path: "/field/not-a-number", want: http.StatusBadRequest},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
+			if rec.Code != tt.want {
+				t.Errorf("GET %s status = %d, want %d", tt.path, rec.Code, tt.want)
+			}
+		})
+	}
+}
