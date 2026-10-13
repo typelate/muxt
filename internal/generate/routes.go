@@ -123,20 +123,15 @@ func generatedNames(config RoutesFileConfiguration) []generatedName {
 	}
 }
 
-// checkRouteBuilderTypeName reports a route builder type name that another
-// generated identifier already uses.
-func checkRouteBuilderTypeName(config RoutesFileConfiguration) error {
-	builder := routeBuilderTypeName(config)
-	for _, other := range []struct{ flag, name string }{
-		{"output-template-route-type", routeTypeName(config)},
-		{"output-routes-func", config.RoutesFunction},
-		{"output-receiver-interface", config.ReceiverInterface},
-		{"output-template-data-type", config.TemplateDataType},
-		{"output-sse-template-data-type", config.SSETemplateDataType},
-		{"output-template-route-paths-type", config.TemplateRoutePathsTypeName},
-	} {
-		if other.name == builder {
-			return fmt.Errorf("--output-template-route-builder-type %s is also the value of --%s; change one of them", builder, other.flag)
+// checkGeneratedNames reports two generated declarations with the same
+// name, naming the flags that set them.
+func checkGeneratedNames(config RoutesFileConfiguration) error {
+	names := generatedNames(config)
+	for i, later := range names {
+		for _, earlier := range names[:i] {
+			if later.name != "" && later.name == earlier.name {
+				return fmt.Errorf("--%s %s is also the value of --%s; change one of them", later.flag, later.name, earlier.flag)
+			}
 		}
 	}
 	return nil
@@ -157,7 +152,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	}
 	file := newFile(pkg, reserved...)
 
-	if err := checkRouteBuilderTypeName(config); err != nil {
+	if err := checkGeneratedNames(config); err != nil {
 		return nil, err
 	}
 
