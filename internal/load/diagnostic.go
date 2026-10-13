@@ -19,6 +19,12 @@ import (
 // go command reports in the process's environment.
 func NoPackageError(dir string, pl []*packages.Package) error {
 	e := &PackageLookupError{Dir: dir}
+	if pkg, ok := packageWithoutFiles(pl, dir); ok {
+		// go list reports a package in a directory whose Go files are
+		// all tests or all excluded by build constraints; "no Go package
+		// found" above a listing that names it reads as a contradiction.
+		e.Summary = fmt.Sprintf("package %s at %s has no Go files for this build", pkg.PkgPath, dir)
+	}
 	if len(pl) == 0 {
 		e.Details = append(e.Details, "go/packages loaded no packages")
 	} else {
@@ -32,6 +38,17 @@ func NoPackageError(dir string, pl []*packages.Package) error {
 	}
 	e.Details = append(e.Details, "muxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT")
 	return e
+}
+
+// packageWithoutFiles returns the package go list reported in dir with no
+// Go files to build.
+func packageWithoutFiles(pl []*packages.Package, dir string) (*packages.Package, bool) {
+	for _, pkg := range pl {
+		if pkg.Dir == dir && len(pkg.GoFiles) == 0 {
+			return pkg, true
+		}
+	}
+	return nil, false
 }
 
 // describeLoaded lists the loaded package paths. It also reports whether the

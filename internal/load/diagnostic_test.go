@@ -184,6 +184,40 @@ func TestNoPackageError(t *testing.T) {
 	})
 }
 
+// TestNoGoFilesForThisBuild states what a directory whose Go files are all
+// tests, or all excluded by build constraints, is reported as: go list
+// reports a package there, with no files to read.
+func TestNoGoFilesForThisBuild(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+	}{
+		{name: "only test files", files: map[string]string{
+			"p_test.go": "package p\n\nimport \"testing\"\n\nfunc TestP(t *testing.T) {}\n",
+		}},
+		{name: "only excluded files", files: map[string]string{
+			"p.go": "//go:build ignore\n\npackage p\n",
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GOWORK", "off")
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			require.NoError(t, err)
+			tt.files["go.mod"] = "module example.com/p\n\ngo 1.24\n"
+			for name, content := range tt.files {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+			}
+			_, pl, err := load.Packages(dir)
+			require.NoError(t, err, "Packages()")
+
+			_, err = load.Package(dir, pl, nil)
+			require.Error(t, err, "Package()")
+			msg := multiLine(t, err)
+			assert.Contains(t, msg, "package example.com/p at "+dir+" has no Go files for this build", "Package() error")
+		})
+	}
+}
+
 // multiLine returns err's verbose rendering, failing when err has none.
 func multiLine(t *testing.T, err error) string {
 	t.Helper()
