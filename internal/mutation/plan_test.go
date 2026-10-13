@@ -190,7 +190,7 @@ func TestSelectorCountsWhatThePatternMatched(t *testing.T) {
 // too wide to enumerate counts once, as skipped, alongside the mutants
 // skipped for not type checking.
 func TestPlanReportCounts(t *testing.T) {
-	p := &plan{mutants: make([]Mutant, 5), runnableN: 3, overBudget: 2}
+	p := &plan{mutants: make([]mutant, 5), runnableN: 3, overBudget: 2}
 	report := p.report()
 	assert.Equal(t, 7, report.Total, "total")
 	assert.Equal(t, 4, report.Skipped, "skipped")
@@ -369,7 +369,7 @@ func TestVerifyReadable(t *testing.T) {
 func TestPlanValidate(t *testing.T) {
 	var (
 		group     = []Group{{}}
-		mutants   = make([]Mutant, 1)
+		mutants   = make([]mutant, 1)
 		unchanged = []UnchangedTemplate{{}}
 		trimmed   = []TrimmedTemplate{{}}
 	)
