@@ -1,0 +1,93 @@
+# A package named like a local the generated code declares per call, such as
+# result0 for the result of a nested call or idParsed for a parsed path
+# parameter, is imported under an alias: otherwise the local declared before
+# the handler spells the package's types would shadow the package.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- go.mod --
+module example.com/app
+
+go 1.24
+-- result0/result0.go --
+package result0
+
+type Form struct {
+	Name string `name:"name"`
+}
+-- idParsed/idParsed.go --
+package idParsed
+
+type Form struct {
+	Name string `name:"name"`
+}
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- server.go --
+package server
+
+import (
+	"context"
+	"fmt"
+
+	"example.com/app/idParsed"
+	"example.com/app/result0"
+)
+
+type Server struct{}
+
+func (Server) Count(context.Context) int { return 3 }
+
+func (Server) Nested(n int, form result0.Form) string {
+	return fmt.Sprintf("%d %s", n, form.Name)
+}
+
+func (Server) Parsed(id int, form idParsed.Form) string {
+	return fmt.Sprintf("%d %s", id, form.Name)
+}
+-- index.gohtml --
+{{define "POST /nested Nested(Count(ctx), form)"}}<form><input name="name"></form>{{.Result}}{{end}}
+{{define "POST /parsed/{id} Parsed(id, form)"}}<form><input name="name"></form>{{.Result}}{{end}}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func post(t *testing.T, mux *http.ServeMux, target string) string {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(url.Values{"name": {"gopher"}}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, request)
+	return recorder.Body.String()
+}
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+	if got := post(t, mux, "/nested"); !strings.Contains(got, "3 gopher") {
+		t.Errorf("POST /nested = %q, want it to contain %q", got, "3 gopher")
+	}
+	if got := post(t, mux, "/parsed/7"); !strings.Contains(got, "7 gopher") {
+		t.Errorf("POST /parsed/7 = %q, want it to contain %q", got, "7 gopher")
+	}
+}

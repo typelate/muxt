@@ -75,7 +75,6 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 }
 
 func (p argumentParser) appendBodyJSON(statements []ast.Stmt, call *ast.CallExpr, i int, argument muxt.Argument) ([]ast.Stmt, error) {
-	const bodyValueIdent = "bodyValue"
 	decode, err := decodeJSONBodyStatements(p.file, bodyValueIdent, argument.ParamType(), p.parseErrBlock)
 	if err != nil {
 		return nil, err
@@ -91,7 +90,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 	if err != nil {
 		return nil, err
 	}
-	resultVarIdent := "result" + strconv.Itoa(resultCount)
+	resultVarIdent := resultIdent + strconv.Itoa(resultCount)
 	call.Args[i] = ast.NewIdent(resultVarIdent)
 
 	funcIdent := nestedCall.Fun.(*ast.Ident).Name
@@ -255,7 +254,6 @@ func (r *receiverMethodCall) Stmts() []ast.Stmt {
 }
 
 func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape, callIdent string, call *ast.CallExpr, errBody *ast.BlockStmt) (*receiverMethodCall, error) {
-	const okIdent = "ok"
 	switch shape {
 	default:
 		return nil, fmt.Errorf("method %s has no results it should have one or two", callIdent)

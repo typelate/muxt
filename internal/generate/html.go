@@ -34,7 +34,7 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 		return nil, err
 	}
 
-	const guardIdent = "executed"
+	const guardIdent = executedIdent
 	closure, err := executeClosure(file, def, resultDataIdent, bufIdent, guardIdent, resultType, execHasArg)
 	if err != nil {
 		return nil, err
@@ -222,7 +222,7 @@ func callExecuteTemplate(file *File, config RoutesFileConfiguration, def muxt.De
 // guard is an atomic.Bool compared-and-swapped so a callback invoked from
 // another goroutine still renders exactly once.
 func executeClosure(file *File, def muxt.Definition, tdIdent, bufIdent, guardIdent string, resultType source.Type, hasArg bool) (*ast.FuncLit, error) {
-	const dataIdent = "data"
+	const dataIdent = executeDataIdent
 	var params []*ast.Field
 	body := []ast.Stmt{
 		&ast.IfStmt{
