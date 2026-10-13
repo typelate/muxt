@@ -53,3 +53,15 @@ func TestHTTPStatusNameRejectsWhatIsNotAConstant(t *testing.T) {
 		})
 	}
 }
+
+// TestHTTPStatusNameSuggestsTheSameNameEveryTime states that a name two
+// constants are equally near gets one suggestion, the same on every run:
+// StatusGo is two edits from both StatusGone and StatusOK.
+func TestHTTPStatusNameSuggestsTheSameNameEveryTime(t *testing.T) {
+	const want = "did you mean http.StatusGone?"
+	for range 50 {
+		_, err := HTTPStatusName("StatusGo")
+		require.Error(t, err)
+		require.Equal(t, want, err.Error(), "HTTPStatusName(%q) error", "StatusGo")
+	}
+}
