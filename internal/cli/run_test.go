@@ -118,6 +118,21 @@ func TestRunListings(t *testing.T) {
 	}
 }
 
+// TestRunWarnsOfSyntaxErrors states that every command reading a package
+// says, on stderr, when the package has a syntax error: the listings ran
+// against what the parser could read, and might be missing something.
+func TestRunWarnsOfSyntaxErrors(t *testing.T) {
+	wd := newModule(t)
+	writeTestFile(t, wd, "broken.go", "package main\n\nfunc broken( {\n")
+	const warning = "warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture\n"
+	for _, args := range [][]string{{}, {"list-template-callers"}, {"list-template-calls"}} {
+		t.Run(strings.Join(append([]string{"muxt"}, args...), " "), func(t *testing.T) {
+			_, stderr, _ := execute(t, wd, args...)
+			assert.Contains(t, stderr, warning, "muxt %v stderr", args)
+		})
+	}
+}
+
 func TestRunListingsRejectAnUnknownFormat(t *testing.T) {
 	wd := newModule(t)
 	for _, args := range [][]string{{"--format=yaml"}, {"list-template-callers", "--format=yaml"}, {"list-template-calls", "--format=yaml"}} {
