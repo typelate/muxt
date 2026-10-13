@@ -51,14 +51,16 @@ func TestParseInputValidations(t *testing.T) {
 		{name: "week", markup: `<input name="field" type="week" min="3">`, tp: intType, want: []string{"min 3"}},
 		{name: "time", markup: `<input name="field" type="time" min="3">`, tp: intType, want: []string{"min 3"}},
 		{name: "datetime-local", markup: `<input name="field" type="datetime-local" min="3">`, tp: intType, want: []string{"min 3"}},
-		{name: "pattern defaults to text", markup: `<input name="field" pattern="[a-z]+">`, tp: stringType, want: []string{"pattern [a-z]+"}},
-		{name: "pattern on search", markup: `<input name="field" type="search" pattern="a">`, tp: stringType, want: []string{"pattern a"}},
-		{name: "pattern on url", markup: `<input name="field" type="url" pattern="a">`, tp: stringType, want: []string{"pattern a"}},
-		{name: "pattern on tel", markup: `<input name="field" type="tel" pattern="a">`, tp: stringType, want: []string{"pattern a"}},
-		{name: "pattern on email", markup: `<input name="field" type="email" pattern="a">`, tp: stringType, want: []string{"pattern a"}},
-		{name: "pattern on password", markup: `<input name="field" type="password" pattern="a">`, tp: stringType, want: []string{"pattern a"}},
+		// The pattern attribute matches the whole value, so it is anchored.
+		{name: "pattern defaults to text", markup: `<input name="field" pattern="[a-z]+">`, tp: stringType, want: []string{"pattern ^(?:[a-z]+)$"}},
+		{name: "pattern on search", markup: `<input name="field" type="search" pattern="a">`, tp: stringType, want: []string{"pattern ^(?:a)$"}},
+		{name: "pattern on url", markup: `<input name="field" type="url" pattern="a">`, tp: stringType, want: []string{"pattern ^(?:a)$"}},
+		{name: "pattern on tel", markup: `<input name="field" type="tel" pattern="a">`, tp: stringType, want: []string{"pattern ^(?:a)$"}},
+		{name: "pattern on email", markup: `<input name="field" type="email" pattern="a">`, tp: stringType, want: []string{"pattern ^(?:a)$"}},
+		{name: "pattern on password", markup: `<input name="field" type="password" pattern="a">`, tp: stringType, want: []string{"pattern ^(?:a)$"}},
+		{name: "an alternation is anchored as a whole", markup: `<input name="field" pattern="a|b">`, tp: stringType, want: []string{"pattern ^(?:a|b)$"}},
 		{name: "pattern is ignored on a number input", markup: `<input name="field" type="number" pattern="(">`, tp: intType},
-		{name: "invalid pattern", markup: `<input name="field" pattern="(">`, tp: stringType, wantErr: "error parsing regexp"},
+		{name: "invalid pattern", markup: `<input name="field" pattern="(">`, tp: stringType, wantErr: "error parsing regexp: missing closing ): `(`"},
 		{name: "minlength", markup: `<input name="field" minlength="2">`, tp: stringType, want: []string{"minlength 2"}},
 		{name: "maxlength", markup: `<input name="field" maxlength="5">`, tp: stringType, want: []string{"maxlength 5"}},
 		{name: "minlength and maxlength", markup: `<input name="field" minlength="2" maxlength="5">`, tp: stringType, want: []string{"minlength 2", "maxlength 5"}},
@@ -69,7 +71,7 @@ func TestParseInputValidations(t *testing.T) {
 		{name: "maxlength not an integer", markup: `<input name="field" maxlength="x">`, tp: stringType, wantErr: "maxlength must be an integer: "},
 		{name: "maxlength negative", markup: `<input name="field" maxlength="-1">`, tp: stringType, wantErr: "maxlength must not be negative"},
 		{name: "maxlength below minlength", markup: `<input name="field" minlength="5" maxlength="2">`, tp: stringType, wantErr: "maxlength (2) must be greater than or equal to minlength (5)"},
-		{name: "the constraints of every kind in order", markup: `<input name="field" type="text" pattern="a" minlength="1" maxlength="2">`, tp: stringType, want: []string{"pattern a", "minlength 1", "maxlength 2"}},
+		{name: "the constraints of every kind in order", markup: `<input name="field" type="text" pattern="a" minlength="1" maxlength="2">`, tp: stringType, want: []string{"pattern ^(?:a)$", "minlength 1", "maxlength 2"}},
 		{name: "not an input", markup: `<textarea name="field"></textarea>`, tp: stringType, wantErr: "expected element to have tag <input> got <textarea>"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,6 +83,18 @@ func TestParseInputValidations(t *testing.T) {
 			require.NoError(t, err, "ParseInputValidations(%s)", tt.markup)
 			assert.Equal(t, tt.want, describeValidations(got), "ParseInputValidations(%s)", tt.markup)
 		})
+	}
+}
+
+// TestPatternValidationMatchesTheWholeValue states the HTML semantics of the
+// pattern attribute: the value must match it from start to end.
+func TestPatternValidationMatchesTheWholeValue(t *testing.T) {
+	validations, err := muxt.ParseInputValidations("field", inputElement(t, `<input name="field" pattern="[0-9]{3}|x">`), types.Typ[types.String])
+	require.NoError(t, err)
+	require.Len(t, validations, 1)
+	pattern := validations[0].(muxt.PatternValidation).Pattern
+	for value, want := range map[string]bool{"123": true, "x": true, "1234": false, "a123": false, "xx": false, "": false} {
+		assert.Equal(t, want, pattern.MatchString(value), "%s matches %q", pattern, value)
 	}
 }
 

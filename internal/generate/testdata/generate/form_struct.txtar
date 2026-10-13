@@ -103,8 +103,8 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		}
 		{
 			value := request.FormValue("handle")
-			if !regexp.MustCompile("[a-z]+").MatchString(value) {
-				td.errList = append(td.errList, errors.New("handle must match \"[a-z]+\""))
+			if !regexp.MustCompile("^(?:[a-z]+)$").MatchString(value) {
+				td.errList = append(td.errList, errors.New("handle must match \"^(?:[a-z]+)$\""))
 				td.errStatusCode = http.StatusBadRequest
 			}
 			if len(value) < 2 {
