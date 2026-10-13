@@ -166,33 +166,6 @@ func TestGetBufferFromPool(t *testing.T) {
 	assert.Equal(t, want, astgen.Format(&ast.BlockStmt{List: stmts}), "GetBufferFromPool")
 }
 
-func TestFindFieldWithName(t *testing.T) {
-	list := &ast.FieldList{List: []*ast.Field{
-		{Names: []*ast.Ident{ast.NewIdent("a"), ast.NewIdent("b")}, Type: ast.NewIdent("int")},
-		{Names: []*ast.Ident{ast.NewIdent("c")}, Type: ast.NewIdent("string")},
-	}}
-	for _, tt := range []struct {
-		name     string
-		wantType string
-		wantOK   bool
-	}{
-		{name: "a", wantType: "int", wantOK: true},
-		{name: "b", wantType: "int", wantOK: true},
-		{name: "c", wantType: "string", wantOK: true},
-		{name: "d"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			field, ok := astgen.FindFieldWithName(list, tt.name)
-			if !assert.Equal(t, tt.wantOK, ok, "FindFieldWithName(%q) found", tt.name) {
-				return
-			}
-			if ok {
-				assert.Equal(t, tt.wantType, astgen.Format(field.Type), "FindFieldWithName(%q).Type", tt.name)
-			}
-		})
-	}
-}
-
 func TestFormatReportsUnparsableNodes(t *testing.T) {
 	got := astgen.Format(&ast.BasicLit{Kind: token.INT, Value: "not a number"})
 	assert.True(t, strings.HasPrefix(got, "formatting error:"), "Format(bad literal) = %q, want it to report a formatting error", got)

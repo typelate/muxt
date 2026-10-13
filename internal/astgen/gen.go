@@ -8,7 +8,7 @@ import (
 // needed for AST generation. This allows AST generation functions to work
 // with source.File without creating a circular dependency.
 //
-// It generally is a *muxt.File
+// It generally is a *generate.File
 type ImportManager interface {
 	// Import registers an import and returns the package identifier to use
 	Import(pkgIdent, pkgPath string) string

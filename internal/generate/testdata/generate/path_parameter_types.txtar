@@ -420,11 +420,11 @@ func (route TemplateRoute) HasMethod() bool {
 }
 
 func (routes TemplateRouteBuilder) At(atPathParam time.Time) (TemplateRoute, error) {
-	segment2_06e81700, err := atPathParam.MarshalText()
+	segment2, err := atPathParam.MarshalText()
 	if err != nil {
 		return TemplateRoute{}, fmt.Errorf("failed to marshal path value {at} (segment 2) in /at/{at}: %w", err)
 	}
-	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "at", routes.escapePathSegment(string(segment2_06e81700)))}, nil
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "at", routes.escapePathSegment(string(segment2)))}, nil
 }
 
 func (routePaths TemplateRoutePaths) At(atPathParam time.Time) (string, error) {
