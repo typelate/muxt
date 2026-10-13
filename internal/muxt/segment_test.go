@@ -419,7 +419,7 @@ func TestPathParameterLookup(t *testing.T) {
 }
 
 // segmentByName finds the wildcard segment named name among segments, the
-// way muxt's own unexported pathParameter does.
+// way muxt's own unexported hasPathParameter looks for one.
 func segmentByName(segments []muxt.Segment, name string) (muxt.Segment, bool) {
 	for _, segment := range segments {
 		if segment.IsWildcard() && segment.Value() == name {

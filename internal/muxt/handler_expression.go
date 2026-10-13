@@ -137,10 +137,10 @@ func peelRepresentationWrapper(fun *ast.Ident, call *ast.CallExpr) (Representati
 	return "", nil, nil, false
 }
 
-// isSSEArgument reports whether name is an SSE render-callback argument: the
-// reserved "sse" identifier, or a camelCase "sse"-prefixed name (sseClock,
-// sseMetrics, ...). Prefixed callbacks render a same-named template; they are
-// only valid on a route that also has the base "sse" argument.
+// isSSEArgument reports whether name is a render-callback argument: the
+// reserved "execute" identifier, or a camelCase "sse"-prefixed name (sseClock,
+// sseMetrics, ...). Prefixed callbacks render a same-named template and are
+// only in scope on an sse route.
 func isSSEArgument(name string) bool {
 	if name == TemplateNameScopeIdentifierExecute {
 		return true
