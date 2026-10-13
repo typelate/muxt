@@ -30,7 +30,9 @@ func rewriteBodyFormWrappers(call *ast.CallExpr) {
 			continue
 		}
 		if isCallTo(nested, callWrapperUnmarshalForm) {
-			call.Args[i] = ast.NewIdent(TemplateNameScopeIdentifierForm)
+			// The identifier starts where the wrapper was written, so
+			// an error about it marks the wrapper.
+			call.Args[i] = &ast.Ident{NamePos: nested.Pos(), Name: TemplateNameScopeIdentifierForm}
 			continue
 		}
 		rewriteBodyFormWrappers(nested)
@@ -70,9 +72,13 @@ func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
 		switch arg := a.(type) {
 		case *ast.Ident:
 			if arg.Name == TemplateNameScopeIdentifierSignals {
+				// The call spans what was written, so an error about
+				// it marks signals.
 				call.Args[i] = &ast.CallExpr{
-					Fun:  ast.NewIdent(callWrapperUnmarshalJSON),
-					Args: []ast.Expr{ast.NewIdent(TemplateNameScopeIdentifierRequestBody)},
+					Fun:    &ast.Ident{NamePos: arg.Pos(), Name: callWrapperUnmarshalJSON},
+					Lparen: arg.Pos(),
+					Args:   []ast.Expr{&ast.Ident{NamePos: arg.Pos(), Name: TemplateNameScopeIdentifierRequestBody}},
+					Rparen: arg.End() - 1,
 				}
 				rewritten = true
 			}
