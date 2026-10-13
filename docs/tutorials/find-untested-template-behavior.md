@@ -2,9 +2,9 @@
 
 `muxt test-template-mutations` ([reference](../reference/commands/test-template-mutations.md)) reports the template actions no test depends on. This tutorial turns one miss into an assertion.
 
-Prerequisites: `muxt` installed and a checkout of this repository for the example. A full run takes about half a minute.
+Prerequisites: `muxt` installed and a checkout of this repository for the example.
 
-> `test-template-mutations` ships in v0.21.0. Until then, install muxt from main: `go install github.com/typelate/muxt@main`.
+> `test-template-mutations` is available from v0.21.0-dev.1: `go install github.com/typelate/muxt@v0.21.0-dev.1`.
 
 ## Step 1: Confirm the example passes
 
