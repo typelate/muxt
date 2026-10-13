@@ -12,6 +12,10 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
+// sseArgumentCallErrorMessage is logged, and is the response, when a call
+// an sse route passes as an argument returns an error.
+const sseArgumentCallErrorMessage = "failed to start event stream"
+
 // sseMethodHandlerFunc builds the http.HandlerFunc for a route that streams
 // Server-Sent Events. Unlike a normal handler it establishes an event stream
 // (Content-Type text/event-stream, flush) and invokes the receiver method with
@@ -75,11 +79,26 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 			&ast.ReturnStmt{},
 		}}
 	}
-	validationFailureBlock := func(string) *ast.BlockStmt { return parseErrBlock() }
+	// A call passed as an argument runs before the stream is established
+	// too, so its error is logged and responds 500.
+	nestedCallErrBlock := func() *ast.BlockStmt {
+		return &ast.BlockStmt{List: []ast.Stmt{
+			logErrorStatement(file, config.Logger, sseArgumentCallErrorMessage, def.RawPattern()),
+			&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(response), astgen.String(sseArgumentCallErrorMessage), http.StatusInternalServerError)},
+			&ast.ReturnStmt{},
+		}}
+	}
+	parser := argumentParser{
+		file:                   file,
+		config:                 config,
+		validationFailureBlock: func(string) *ast.BlockStmt { return parseErrBlock() },
+		parseErrBlock:          parseErrBlock,
+		nestedCallErrBlock:     nestedCallErrBlock,
+	}
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := def.CallExpression()
-	body, err := appendParseArgumentStatements(body, file, def.Arguments, "", config, call, validationFailureBlock, parseErrBlock)
+	body, err := parser.appendCall(body, def.Arguments, call)
 	if err != nil {
 		return nil, err
 	}

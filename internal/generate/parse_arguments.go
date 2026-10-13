@@ -20,6 +20,9 @@ type argumentParser struct {
 	config                 RoutesFileConfiguration
 	validationFailureBlock ValidationErrorBlock
 	parseErrBlock          func() *ast.BlockStmt
+	// nestedCallErrBlock is what runs when a call passed as an argument
+	// returns an error.
+	nestedCallErrBlock func() *ast.BlockStmt
 }
 
 func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
@@ -35,6 +38,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 		config:                 config,
 		validationFailureBlock: validationFailureBlock,
 		parseErrBlock:          parseErrBlock,
+		nestedCallErrBlock:     func() *ast.BlockStmt { return templateDataNestedCallErrBlock(file, rdIdent) },
 	}
 	return p.appendCall(statements, args, call)
 }
@@ -96,9 +100,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		nestedCall.Fun = selector(receiverIdent, funcIdent)
 	}
 
-	errBody := appendTemplateDataError(p.file, p.rdIdent, ast.NewIdent(errIdent))
-	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(p.file, p.rdIdent, http.StatusInternalServerError))
-	receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, errBody)
+	receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +208,15 @@ func mismatchedArgumentError(file *File, argument muxt.Argument) error {
 func templateDataParseErrBlock(file *File, rdIdent string) *ast.BlockStmt {
 	b := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
 	b.List = append(b.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusBadRequest))
+	return b
+}
+
+// templateDataNestedCallErrBlock is the block normal handlers run when a
+// call passed as an argument fails: it appends the error to the template
+// data and sets the error status code to 500.
+func templateDataNestedCallErrBlock(file *File, rdIdent string) *ast.BlockStmt {
+	b := appendTemplateDataError(file, rdIdent, ast.NewIdent(errIdent))
+	b.List = append(b.List, assignTemplateDataErrStatusCode(file, rdIdent, http.StatusInternalServerError))
 	return b
 }
 
