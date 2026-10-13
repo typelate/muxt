@@ -25,6 +25,10 @@ func TestContainsRedirectCall(t *testing.T) {
 		{template: `{{.RedirectSeeOther "/x"}}`, want: true},
 		{template: `{{.Header.Redirect "/x"}}`, want: true},
 		{template: `{{(.A).Redirect}}`, want: true},
+		{template: `{{$.Redirect "/x"}}`, want: true},
+		{template: `{{$.RedirectFound "/x"}}`, want: true},
+		{template: `{{$.Name}}`},
+		{template: `{{$}}`},
 		{template: `{{.Name}}`},
 		{template: `{{.Header}}`},
 		{template: `{{"literal"}}`},
@@ -55,6 +59,10 @@ func TestCallsMethodOnTemplateData(t *testing.T) {
 		{name: "chain passed to a function", template: `{{printf "%v" (.A).B}}`, want: true},
 		{name: "literal passed to a function", template: `{{printf "%v" "x"}}`},
 		{name: "literal", template: `{{"x"}}`},
+		{name: "safe method from root", template: `{{$.Path}}`},
+		{name: "unknown method from root", template: `{{$.Name}}`, want: true},
+		{name: "root passed to a function", template: `{{printf "%v" $}}`, want: true},
+		{name: "root alone", template: `{{$}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, callsMethodOnTemplateData(firstCommand(t, tt.template)), "callsMethodOnTemplateData(%s)", tt.template)
