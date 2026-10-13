@@ -654,9 +654,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			want: mutation.Configuration{TemplatesVariables: []string{"pages"}, Packages: []string{}, DryRun: true, Seed: 1, SeedSet: true, MaxCases: mutation.DefaultMaxCases, Workers: 1},
 		},
 		{
-			name: "mutations with packages, patterns and go test flags",
-			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./... -- -count=1",
-			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{"./..."}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
+			// The package directory is where the command runs; see
+			// TestChangeDirectory. go test runs ./... from there.
+			name: "mutations of a package directory, with patterns and go test flags",
+			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./internal/preview -- -count=1",
+			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -668,7 +670,9 @@ func TestCommandLineConfigurations(t *testing.T) {
 }
 
 // TestChangeDirectory states the working directory a command runs in: the
-// one it was started in, joined with -C when -C is relative.
+// one it was started in, joined with -C when -C is relative, and then with
+// the package directory check and test-template-mutations take, resolved
+// the same way.
 func TestChangeDirectory(t *testing.T) {
 	for _, tt := range []struct {
 		args, want string
@@ -677,6 +681,15 @@ func TestChangeDirectory(t *testing.T) {
 		{args: "-C sub generate", want: "/work/sub"},
 		{args: "-C ../other check", want: "/other"},
 		{args: "-C /abs check", want: "/abs"},
+		{args: "check ./internal/preview", want: "/work/internal/preview"},
+		{args: "check internal/preview/", want: "/work/internal/preview"},
+		{args: "check /abs/preview", want: "/abs/preview"},
+		{args: "-C sub check ./preview", want: "/work/sub/preview"},
+		{args: "check .", want: "/work"},
+		{args: "test-template-mutations ./internal/preview --dry-run", want: "/work/internal/preview"},
+		{args: "test-template-mutations --dry-run ./internal/preview -- -count=1", want: "/work/internal/preview"},
+		{args: "-C sub test-template-mutations ../preview", want: "/work/preview"},
+		{args: "test-template-mutations -- -count=1", want: "/work"},
 	} {
 		t.Run(tt.args, func(t *testing.T) {
 			var got string
@@ -685,8 +698,9 @@ func TestChangeDirectory(t *testing.T) {
 				return nil
 			}
 			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
-				check:    func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
-				generate: func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
+				check:     func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
+				generate:  func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
+				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
 			})
 			require.NoError(t, err)
 			assert.Equal(t, filepath.FromSlash(tt.want), got)
@@ -737,6 +751,10 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a template pattern that does not compile", args: "test-template-mutations --template-pattern=(", wantErr: "--template-pattern: error parsing regexp: missing closing ): `(`"},
 		{name: "a run pattern that does not compile", args: "test-template-mutations --run=(", wantErr: "--run: error parsing regexp: missing closing ): `(`"},
 		{name: "a callers match that does not compile", args: "list-template-callers --match=(", wantErr: "error parsing regexp: missing closing ): `(`"},
+		{name: "check of two package directories", args: "check ./a ./b", wantErr: "check takes one package directory, got 2: ./a ./b"},
+		{name: "check of a package pattern", args: "check ./...", wantErr: "check takes one package directory, not a pattern: ./..."},
+		{name: "mutations of two package directories", args: "test-template-mutations ./a ./b -- -count=1", wantErr: "test-template-mutations takes one package directory, got 2: ./a ./b"},
+		{name: "mutations of a package pattern", args: "test-template-mutations ./internal/... --dry-run", wantErr: "test-template-mutations takes one package directory, not a pattern: ./internal/..."},
 		{name: "an unknown route listing format", args: "--format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown callers format", args: "list-template-callers --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown calls format", args: "list-template-calls --format=yaml", wantErr: "unknown format: yaml"},
