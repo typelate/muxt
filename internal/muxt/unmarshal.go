@@ -189,9 +189,11 @@ func bindFormArgument(a *Argument, def *Definition, checker Checker, qual types.
 func formStructBindings(def *Definition, checker Checker, st *types.Struct, argName string, qual types.Qualifier, allowFileFields bool) ([]FieldBinding, error) {
 	var fileHeaderPtr types.Type
 	if allowFileFields {
-		if fileHeader, err := checker.FileHeader(); err == nil {
-			fileHeaderPtr = fileHeader
+		fileHeader, err := checker.FileHeader()
+		if err != nil {
+			return nil, err
 		}
+		fileHeaderPtr = fileHeader
 	}
 	bindings := make([]FieldBinding, 0, st.NumFields())
 	for i := 0; i < st.NumFields(); i++ {
