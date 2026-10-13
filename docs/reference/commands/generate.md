@@ -1,6 +1,6 @@
 # muxt generate
 
-Writes `template_routes.go`: one `http.Handler` per route template, the `RoutesReceiver` interface those handlers call, `TemplateData`, and `TemplateRoutePaths`.
+Writes `template_routes.go`: one `http.Handler` per route template, the `RoutesReceiver` interface those handlers call, `TemplateData`, `TemplateRoutePaths`, `TemplateRoute`, `TemplateRouteBuilder`, and, when a route uses `sse`, `SSETemplateData`.
 
 ```bash
 muxt generate --use-receiver-type=Server
