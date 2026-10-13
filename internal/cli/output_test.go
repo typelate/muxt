@@ -126,18 +126,23 @@ func TestWriteResultFormats(t *testing.T) {
 }
 
 func TestVersionCommand(t *testing.T) {
+	run := func(t *testing.T, args []string, version func() (string, bool)) (string, error) {
+		t.Helper()
+		var stdout bytes.Buffer
+		err := commands(t.TempDir(), args, func(string) string { return "" }, version, &stdout, io.Discard, runners{})
+		return stdout.String(), err
+	}
 	for _, args := range [][]string{{"version"}, {"v"}, {"version", "--verbose"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			var stdout bytes.Buffer
-			err := Commands(t.TempDir(), args, func(string) string { return "" }, &stdout, io.Discard)
-			v, ok := cliVersion()
-			if !ok {
-				assert.EqualError(t, err, "missing CLI version", "muxt %v, want the missing CLI version error", args)
-				return
-			}
-			assert.True(t, strings.HasPrefix(stdout.String(), v+"\n"), "muxt %v printed %q, want it to start with %q", args, stdout.String(), v+"\n")
+			stdout, err := run(t, args, func() (string, bool) { return "v1.2.3", true })
+			require.NoError(t, err, "muxt %v", args)
+			assert.True(t, strings.HasPrefix(stdout, "v1.2.3\n"), "muxt %v printed %q, want it to start with %q", args, stdout, "v1.2.3\n")
 		})
 	}
+	t.Run("no version in the build", func(t *testing.T) {
+		_, err := run(t, []string{"version"}, func() (string, bool) { return "", false })
+		assert.EqualError(t, err, "missing CLI version", "muxt version")
+	})
 }
 
 func TestCommandsAreWired(t *testing.T) {

@@ -105,7 +105,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 
 	rootCmd.AddCommand(
 		generateCommand(workingDirectory, getEnv, version, run.generate),
-		versionCommand(),
+		versionCommand(version),
 		checkCommand(workingDirectory, run.check),
 		listTemplateCallersCommand(workingDirectory, run.callers),
 		listTemplateCallsCommand(workingDirectory, run.calls),
@@ -125,7 +125,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	return rootCmd.Execute()
 }
 
-func versionCommand() *cobra.Command {
+func versionCommand(version func() (string, bool)) *cobra.Command {
 	var verbose bool
 
 	cmd := &cobra.Command{
@@ -134,7 +134,7 @@ func versionCommand() *cobra.Command {
 		Short:   "Print the version number",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			v, ok := cliVersion()
+			v, ok := version()
 			if !ok {
 				return fmt.Errorf("missing CLI version")
 			}
