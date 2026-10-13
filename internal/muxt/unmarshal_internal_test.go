@@ -27,6 +27,9 @@ func TestUnmarshalMethodFor(t *testing.T) {
 type ID int
 type Plain int
 type Alias = string
+type IntAlias = int
+type IDAlias = ID
+type PlainAlias = Plain
 
 var (
 	Slice []string
@@ -62,6 +65,10 @@ var (
 		{name: "float64", tp: types.Typ[types.Float64], want: UnmarshalFloat64},
 		{name: "named type the checker says unmarshals text", tp: lookup("ID"), want: UnmarshalTextUnmarshaler},
 		{name: "named type the checker does not know", tp: lookup("Plain"), want: UnmarshalUnsupported},
+		{name: "alias of string", tp: lookup("Alias"), want: UnmarshalString},
+		{name: "alias of int", tp: lookup("IntAlias"), want: UnmarshalInt},
+		{name: "alias of a type the checker says unmarshals text", tp: lookup("IDAlias"), want: UnmarshalTextUnmarshaler},
+		{name: "alias of a named type the checker does not know", tp: lookup("PlainAlias"), want: UnmarshalUnsupported},
 		{name: "byte alias is matched by name and not supported", tp: lookup("Byte"), want: UnmarshalUnsupported},
 		{name: "rune alias is matched by name and not supported", tp: lookup("Rune"), want: UnmarshalUnsupported},
 		{name: "complex", tp: lookup("Complex"), want: UnmarshalUnsupported},
