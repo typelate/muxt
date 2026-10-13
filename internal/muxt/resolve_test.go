@@ -59,6 +59,28 @@ func (T) Form(In) any        { return nil }
 		require.Equal(t, []string{"Missing(id string) any"}, defs[0].SynthesizedMethods())
 	})
 
+	t.Run("every route calling an inferred method records it", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type T struct{}
+
+func (T) Wrap(any) any      { return nil }
+func (T) Pair(any, any) any { return nil }
+`})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("pages", `{{define "GET /a/{id} Missing(id)"}}{{end}}{{define "GET /b/{id} Missing(id)"}}{{end}}`),
+			variable("fragments", `{{define "GET /c/{id} Wrap(Missing(id))"}}{{end}}{{define "GET /d/{id} Pair(Missing(id), Missing(id))"}}{{end}}`),
+			variable("partials", `{{define "GET /e Wrap(ctx)"}}{{end}}`),
+		}}
+		defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.NewChecker().Binds(muxt.TemplateNameScopeIdentifierContext, types.Universe.Lookup("any").Type()).Fake())
+		require.NoError(t, err)
+		require.Len(t, defs, 5)
+		for _, def := range defs[:4] {
+			require.Equal(t, []string{"Missing(id string) any"}, def.SynthesizedMethods(), "SynthesizedMethods() of %s", def.Name())
+		}
+		require.Empty(t, defs[4].SynthesizedMethods(), "SynthesizedMethods() of %s, which calls a defined method", defs[4].Name())
+	})
+
 	t.Run("a route without a call is left alone", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": server})
 		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
