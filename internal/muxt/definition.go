@@ -33,14 +33,11 @@ func Definitions(variable source.Variable) ([]Definition, error) {
 		if pos, found := variable.NamePosition(t.Name()); found {
 			mt.namePosition = pos
 		}
+		mt.sourceFile = templateSourceFile(t)
 		if err != nil {
 			// Collect every malformed name so one run reports them all.
-			mt.sourceFile = templateSourceFile(t)
 			failures = append(failures, nameFailure{def: mt, err: mt.finishNameError(err, mt.handlerSpan())})
 			continue
-		}
-		if t.Tree != nil && t.Tree.ParseName != "" {
-			mt.sourceFile = t.Tree.ParseName
 		}
 		mt.templatesVariable = templatesVariable
 
@@ -139,8 +136,11 @@ type Definition struct {
 
 	hasResponseWriterArg bool
 
-	// sourceFile is the base filename (e.g., "index.gohtml") from which this template was parsed.
-	// Empty string means the template was defined via Parse() calls rather than from a file.
+	// sourceFile is what templateSourceFile reports the template was
+	// parsed from: the file name ParseFS or ParseFiles records (e.g.
+	// "index.gohtml"), or the name of the template a Parse call defined it
+	// in. It is empty for a template parsed under its own name, which
+	// names no file.
 	sourceFile string
 
 	// canRedirect is whether this template, or one it calls, may call a redirect method.

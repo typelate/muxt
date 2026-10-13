@@ -153,6 +153,20 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 		require.ErrorContains(t, muxt.CheckForDuplicatePatterns(definitions), `duplicate route pattern "/abc"`, "it should find the duplicate")
 	})
 
+	t.Run("a template parsed under its own name has no source file", func(t *testing.T) {
+		ts := template.Must(template.New("GET /a F()").Parse(`a`))
+		template.Must(ts.New("GET /a G()").Parse(`b`))
+		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+		require.NoError(t, err)
+		require.Len(t, definitions, 2)
+		for _, def := range definitions {
+			assert.Empty(t, def.SourceFile(), "SourceFile() of %s", def.Name())
+		}
+		dupErr, ok := errors.AsType[*muxt.DuplicatePatternError](muxt.CheckForDuplicatePatterns(definitions))
+		require.True(t, ok)
+		assert.Equal(t, dupErr.Error(), dupErr.MultiLineError(), "MultiLineError() names no location")
+	})
+
 	t.Run("the short form is one line and the long form has one location per line", func(t *testing.T) {
 		dupErr := &muxt.DuplicatePatternError{
 			Pattern:   "GET /",
