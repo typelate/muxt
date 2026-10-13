@@ -16,6 +16,7 @@
 package loadtest
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -26,6 +27,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -107,16 +109,15 @@ func importStdLocked(path string) (*types.Package, error) {
 	if !ok {
 		return nil, fmt.Errorf("loadtest imports only the standard library, and %q is not in it", path)
 	}
-	f, err := os.Open(entry.export)
+	archive, err := os.ReadFile(entry.export)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
-	r, err := gcexportdata.NewReader(f)
+	data, err := exportData(archive)
 	if err != nil {
 		return nil, fmt.Errorf("reading export data for %s: %w", path, err)
 	}
-	pkg, err := gcexportdata.Read(r, FileSet, stdlib, path)
+	pkg, err := gcexportdata.Read(bytes.NewReader(data), FileSet, stdlib, path)
 	if err != nil {
 		return nil, fmt.Errorf("reading export data for %s: %w", path, err)
 	}
@@ -134,6 +135,46 @@ func importStdLocked(path string) (*types.Package, error) {
 	}
 	pkg.SetImports(imports)
 	return pkg, nil
+}
+
+// exportData returns the export data in a file go list -export names:
+// gcexportdata.Read reads export data itself, not the archive the
+// compiler writes it into. A file that is not an archive is returned as
+// it is.
+//
+// The archive starts with its __.PKGDEF member: a 60-byte header holding
+// the member's size, then object header lines, then "$$B\n", the export
+// data, and the end-of-section marker "\n$$\n".
+func exportData(archive []byte) ([]byte, error) {
+	const (
+		magic      = "!<arch>\n"
+		headerSize = 60
+		sizeStart  = 48
+		sizeEnd    = 58
+		begin      = "\n$$B\n"
+		end        = "\n$$\n"
+	)
+	rest, ok := bytes.CutPrefix(archive, []byte(magic))
+	if !ok {
+		return archive, nil
+	}
+	if len(rest) < headerSize {
+		return nil, fmt.Errorf("archive too short for a member header")
+	}
+	header := rest[:headerSize]
+	if name := strings.TrimSpace(string(header[:16])); name != "__.PKGDEF" {
+		return nil, fmt.Errorf("first archive member is %q, not __.PKGDEF", name)
+	}
+	size, err := strconv.Atoi(strings.TrimSpace(string(header[sizeStart:sizeEnd])))
+	if err != nil || size < 0 || size > len(rest)-headerSize {
+		return nil, fmt.Errorf("bad __.PKGDEF size %q", header[sizeStart:sizeEnd])
+	}
+	member := rest[headerSize : headerSize+size]
+	_, data, ok := bytes.Cut(member, []byte(begin))
+	if !ok {
+		return nil, fmt.Errorf("no export data in __.PKGDEF")
+	}
+	return bytes.TrimSuffix(data, []byte(end)), nil
 }
 
 type importerFunc func(path string) (*types.Package, error)
