@@ -12,11 +12,11 @@ cmp stdout want-killed.txt
 muxt test-template-mutations --seed 1 -- -update=false
 cmp stdout want-killed.txt
 
-# Everything after -args belongs to the test binary. Only the root package is
-# tested here, and its test does not look at the text, so the mutant lives --
+# Everything after -args belongs to the test binary. Only the root package's
+# test runs here, and it does not look at the text, so the mutant lives --
 # which it can only do if muxt's own -overlay reached go test rather than the
 # test binary.
-muxt test-template-mutations --seed 1 . -- -args -update
+muxt test-template-mutations --seed 1 --run=TestGreetRenders -- -args -update
 cmp stdout want-root-only.txt
 
 -- go.mod --

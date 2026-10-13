@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -16,7 +18,7 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 	)
 
 	cmd := &cobra.Command{
-		Use:     checkCommandName,
+		Use:     checkCommandName + " [package-dir]",
 		Aliases: []string{"c"},
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -27,7 +29,11 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 				return err
 			}
-			return run(cmd, *workingDirectory, config)
+			dir, err := packageDirectory(checkCommandName, *workingDirectory, args)
+			if err != nil {
+				return err
+			}
+			return run(cmd, dir, config)
 		},
 	}
 
@@ -41,6 +47,24 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 	}
 
 	return cmd
+}
+
+// packageDirectory is the directory of the package a command reads: the
+// one directory argument, resolved against the working directory as -C
+// is, or the working directory itself when there is none. A command loads
+// one package, so a second argument or a pattern is rejected.
+func packageDirectory(command, wd string, args []string) (string, error) {
+	switch len(args) {
+	case 0:
+		return wd, nil
+	case 1:
+	default:
+		return "", fmt.Errorf("%s takes one package directory, got %d: %s", command, len(args), strings.Join(args, " "))
+	}
+	if strings.Contains(args[0], "...") {
+		return "", fmt.Errorf("%s takes one package directory, not a pattern: %s", command, args[0])
+	}
+	return absoluteDir(wd, args[0]), nil
 }
 
 func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {

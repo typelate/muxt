@@ -1,0 +1,65 @@
+# check and test-template-mutations take the directory of the package to
+# read, resolved like -C, so they can run from the module root against a
+# package whose templates variable the root package does not have.
+
+muxt check ./internal/preview
+stdout 'ok: 1 template'
+
+muxt -C internal check ./preview
+stdout 'ok: 1 template'
+
+muxt test-template-mutations ./internal/preview --dry-run --seed 1
+stdout '1 mutant across 1 template'
+
+muxt test-template-mutations ./internal/preview --seed 1 -- -count=1
+stdout '1 mutant, 1 killed, 0 missed, 0 skipped'
+
+! muxt check
+stderr 'templates'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- main.go --
+package main
+
+func main() {}
+-- internal/preview/greeting.gohtml --
+{{define "greeting"}}Hello, {{.Name}}!{{end}}
+-- internal/preview/template.go --
+package preview
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+
+type Greeting struct{ Name string }
+
+func Render(w io.Writer, g Greeting) error {
+	return templates.ExecuteTemplate(w, "greeting", g)
+}
+-- internal/preview/template_test.go --
+package preview
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRender(t *testing.T) {
+	var sb strings.Builder
+	if err := Render(&sb, Greeting{Name: "World"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sb.String(), "Hello, World!") {
+		t.Errorf("got %q", sb.String())
+	}
+}
