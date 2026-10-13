@@ -33,7 +33,7 @@ func testConfig() RoutesFileConfiguration {
 // templates into the templates variable. When receiverType is not empty
 // it returns that type as the receiver, as --use-receiver-type would name
 // it. The source imports nothing; resolving routes over it takes a
-// a muxttest checker.
+// a fake checker.
 func testSource(t *testing.T, goSource, receiverType, templates string) (source.Package, *types.Named) {
 	t.Helper()
 	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": goSource})

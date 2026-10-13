@@ -33,12 +33,12 @@ var builtinFunctionNames = [...]string{
 // functions supplies the names the template set registered beyond the
 // builtins; it may be nil.
 func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*types.Signature) (map[string]*parse.Tree, error) {
-	return parse.Parse(name, text, leftDelim, rightDelim, TemplateFuncNames(functions))
+	return parse.Parse(name, text, leftDelim, rightDelim, templateFuncNames(functions))
 }
 
-// TemplateFuncNames returns the function names a template may call, in
+// templateFuncNames returns the function names a template may call, in
 // the shape text/template/parse wants.
-func TemplateFuncNames(functions map[string]*types.Signature) map[string]any {
+func templateFuncNames(functions map[string]*types.Signature) map[string]any {
 	names := make(map[string]any, len(functions)+len(builtinFunctionNames))
 	for _, name := range builtinFunctionNames {
 		names[name] = nothing

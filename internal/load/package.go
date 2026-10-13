@@ -133,9 +133,9 @@ func ParseErrors(pl []*packages.Package) []packages.Error {
 	return found
 }
 
-// PackageInDirectory returns the package whose files are in dir, which is
+// packageInDirectory returns the package whose files are in dir, which is
 // always a directory, even one whose name ends in .go.
-func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package, bool) {
+func packageInDirectory(list []*packages.Package, dir string) (*packages.Package, bool) {
 	for _, pkg := range list {
 		if len(pkg.GoFiles) > 0 && filepath.Dir(pkg.GoFiles[0]) == dir {
 			return pkg, true
@@ -144,12 +144,12 @@ func PackageInDirectory(list []*packages.Package, dir string) (*packages.Package
 	return nil, false
 }
 
-// HTMLTemplates evaluates the package-level template variable through
+// htmlTemplates evaluates the package-level template variable through
 // check.LoadTemplates and returns the loaded handle alongside the
 // html/template value; muxt introspects template names and trees without
 // executing, so a text/template set works through an html/template value
 // carrying the same trees.
-func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
+func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
 	lt, err := check.LoadTemplates(pkg, templatesVariable)
 	if err != nil {
 		return nil, nil, err
@@ -173,7 +173,7 @@ func HTMLTemplates(templatesVariable string, pkg *packages.Package) (*check.Temp
 	return lt, ts, nil
 }
 
-func FindType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
+func findType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
 	notFoundErr := fmt.Errorf("could not find receiver type %s in %s", ident, packagePath)
 	for _, pkg := range pl {
 		if pkg.PkgPath != packagePath {
