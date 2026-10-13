@@ -54,17 +54,34 @@ func (def *Definition) resultType() types.Type {
 	return nil
 }
 
+// statusCodeSource reports where a result of type tp offers its status
+// code. The generated handler reads it from the result field of a template
+// data variable, which is addressable, so a StatusCode() int method with a
+// pointer receiver counts for a value result. A StatusCode member of any
+// other shape -- a method returning something else, a field that is not an
+// int -- offers none, rather than generating code that does not compile.
 func statusCodeSource(tp types.Type, pkg *types.Package) ResultStatusCode {
 	if tp == nil {
 		return ResultStatusCodeNone
 	}
-	if types.Implements(tp, statusCoder) {
+	if types.Implements(tp, statusCoder) || hasPointerMethods(tp) && types.Implements(types.NewPointer(tp), statusCoder) {
 		return ResultStatusCodeMethod
 	}
-	if obj, _, _ := types.LookupFieldOrMethod(tp, true, pkg, "StatusCode"); obj != nil {
+	obj, _, _ := types.LookupFieldOrMethod(tp, true, pkg, "StatusCode")
+	if field, ok := obj.(*types.Var); ok && field.IsField() && types.Identical(field.Type(), types.Typ[types.Int]) {
 		return ResultStatusCodeField
 	}
 	return ResultStatusCodeNone
+}
+
+// hasPointerMethods reports whether a pointer to tp may have methods tp does
+// not: not when tp is itself a pointer or an interface.
+func hasPointerMethods(tp types.Type) bool {
+	switch tp.Underlying().(type) {
+	case *types.Pointer, *types.Interface:
+		return false
+	}
+	return true
 }
 
 var statusCoder = types.NewInterfaceType([]*types.Func{
