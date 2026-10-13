@@ -12,6 +12,7 @@ func Test_packageImportName(t *testing.T) {
 		given struct {
 			importSpecs        []*ast.ImportSpec
 			packageIdentifiers map[string]string
+			taken              map[string]bool
 			outPkgPath         string
 			pkgPath            string
 			pkgIdent           string
@@ -134,10 +135,25 @@ func Test_packageImportName(t *testing.T) {
 				require.Equal(t, "existing4075376d1c12", then.ident, "it uses the cached value ident")
 			},
 		},
+		{
+			name: "the name is taken by something other than an import",
+			given: given{
+				outPkgPath:         "example/cmd/cli",
+				importSpecs:        []*ast.ImportSpec{},
+				packageIdentifiers: map[string]string{},
+				taken:              map[string]bool{"existing": true},
+				pkgPath:            "example.com/pkg/internal/existing",
+			},
+			then: func(t *testing.T, then then) {
+				require.Equal(t, "existing4075376d1c12", then.ident, "it hashes the taken name")
+				require.Len(t, then.importSpecs, 1)
+				require.Equal(t, "existing4075376d1c12", then.importSpecs[0].Name.Name, "it imports the package under the hashed name")
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := packageImportName(&tt.given.importSpecs, tt.given.packageIdentifiers, tt.given.pkgPath, tt.given.pkgIdent)
+			result := packageImportName(&tt.given.importSpecs, tt.given.packageIdentifiers, tt.given.taken, tt.given.pkgPath, tt.given.pkgIdent)
 			if tt.then != nil {
 				tt.then(t, then{
 					importSpecs:        tt.given.importSpecs,
