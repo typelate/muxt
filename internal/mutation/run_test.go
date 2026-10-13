@@ -79,7 +79,7 @@ func TestRunStopsWhenTheBaselineFails(t *testing.T) {
 
 // TestRunStopsWhenGoTestCannotRun states that go test refusing to run, here
 // over a flag value it cannot read, is an error of its own rather than a
-// failing baseline.
+// failing baseline, and that it says what go test said.
 func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
 	t.Parallel()
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
@@ -88,6 +88,8 @@ func TestRunStopsWhenGoTestCannotRun(t *testing.T) {
 	_, err := Run(config, dir, nil)
 	require.Error(t, err, "Run")
 	assert.NotErrorAs(t, err, new(*BaselineFailedError), "Run: an error other than a failing baseline")
+	assert.ErrorAs(t, err, new(*GoTestError), "Run: go test could not run")
+	assert.Contains(t, err.Error(), `invalid value "many" for flag -count`, "Run: the error carries what go test printed")
 }
 
 // TestNewPlanIncludesTestCallersWhenAsked states that a template rendered
@@ -120,9 +122,9 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 }
 
 // neverRun is a suite that fails the test if anything runs it.
-func neverRun(t *testing.T) (func(...string) (string, error), func(string) (Status, error)) {
+func neverRun(t *testing.T) (func() (string, error), func(string) (Status, error)) {
 	t.Helper()
-	return func(...string) (string, error) {
+	return func() (string, error) {
 			assert.Fail(t, "the suite ran")
 			return "", nil
 		}, func(string) (Status, error) {
@@ -154,7 +156,7 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	_, verdict := neverRun(t)
 	failed := exitStatusOne(t)
 
-	_, err := runPlan(p, Configuration{}, nil, func(...string) (string, error) {
+	_, err := runPlan(p, Configuration{}, nil, func() (string, error) {
 		return "--- FAIL: TestIndex (0.00s)\n", failed
 	}, verdict)
 
@@ -172,7 +174,7 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 	_, verdict := neverRun(t)
 	cannotRun := errors.New("go: no such tool")
 
-	_, err := runPlan(p, Configuration{}, nil, func(...string) (string, error) {
+	_, err := runPlan(p, Configuration{}, nil, func() (string, error) {
 		return "", cannotRun
 	}, verdict)
 
@@ -188,7 +190,7 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true, false, true})
 
 	var status strings.Builder
-	got, err := runPlan(p, Configuration{Verbose: true}, &status, func(...string) (string, error) {
+	got, err := runPlan(p, Configuration{Verbose: true}, &status, func() (string, error) {
 		return "", nil
 	}, func(overlay string) (Status, error) {
 		if strings.Contains(readMutated(t, overlay), "K") {
