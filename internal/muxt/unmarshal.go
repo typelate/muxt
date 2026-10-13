@@ -57,9 +57,10 @@ var basicUnmarshalMethods = map[string]UnmarshalMethod{
 // unmarshalMethodFor classifies how tp parses from its string form: a basic
 // type parsed with strconv (matched by name, so the byte and rune aliases are
 // not supported), or a named type whose pointer implements
-// encoding.TextUnmarshaler, which checker decides.
+// encoding.TextUnmarshaler, which checker decides. An alias parses like the
+// type it names.
 func unmarshalMethodFor(checker Checker, tp types.Type) UnmarshalMethod {
-	switch t := tp.(type) {
+	switch t := types.Unalias(tp).(type) {
 	case *types.Basic:
 		return basicUnmarshalMethods[t.Name()]
 	case *types.Named:
@@ -85,7 +86,7 @@ const supportedUnmarshalFieldTypes = "float64, float32, " + supportedUnmarshalTy
 // types render in Go syntax. Both wordings list the supported set so
 // the fix needs no doc lookup.
 func unsupportedTypeError(tp types.Type, qual types.Qualifier, supported string) error {
-	if _, ok := tp.(*types.Basic); ok {
+	if _, ok := types.Unalias(tp).(*types.Basic); ok {
 		return fmt.Errorf("method param type %s not supported (supported: %s; bind as string and parse it yourself for other values)", tp.String(), supported)
 	}
 	return fmt.Errorf("unsupported type: %s (supported: %s)", types.TypeString(tp, qual), supported)
@@ -226,7 +227,7 @@ func formFieldBinding(def *Definition, checker Checker, st *types.Struct, i int,
 		fb.Template = def.template.Lookup(name)
 	}
 	fb.elem = ft
-	if slice, ok := ft.(*types.Slice); ok {
+	if slice, ok := types.Unalias(ft).(*types.Slice); ok {
 		fb.Slice = true
 		fb.elem = slice.Elem()
 	}

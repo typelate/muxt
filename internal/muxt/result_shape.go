@@ -212,7 +212,7 @@ func classifyNestedCallResultShape(name string, sig *types.Signature, qual types
 		if implementsError(last) {
 			return ResultShapeDataError, nil
 		}
-		if basic, ok := last.(*types.Basic); ok && basic.Kind() == types.Bool {
+		if basic, ok := types.Unalias(last).(*types.Basic); ok && basic.Kind() == types.Bool {
 			return ResultShapeDataOK, nil
 		}
 		return ResultShapeInvalid, fmt.Errorf("the second result of %s must be an error or a bool, got %s", sigStr, types.TypeString(last, qual))

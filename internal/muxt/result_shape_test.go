@@ -55,11 +55,14 @@ func TwoErrorImpl() (T, E)
 func TwoBool() (T, bool)
 func TwoInt() (T, int)
 func TwoNamedBool() (T, namedBool)
+func TwoAliasBool() (T, aliasBool)
 func ErrorFirst() (error, T)
 func ErrorBool() (error, bool)
 func Three() (T, T, error)
 
 type namedBool bool
+
+type aliasBool = bool
 `
 
 func TestClassifyResultShape(t *testing.T) {
@@ -123,6 +126,7 @@ func TestClassifyNestedCallResultShape(t *testing.T) {
 		{fn: "One", want: ResultShapeData},
 		{fn: "TwoError", want: ResultShapeDataError},
 		{fn: "TwoBool", want: ResultShapeDataOK},
+		{fn: "TwoAliasBool", want: ResultShapeDataOK},
 		{fn: "TwoInt", want: ResultShapeInvalid, wantErr: "the second result of TwoInt() (T, int) must be an error or a bool, got int"},
 		{fn: "None", want: ResultShapeInvalid, wantErr: "method None() has no results; it should have one or two"},
 		{fn: "Three", want: ResultShapeInvalid, wantErr: "method Three() (T, T, error) has 3 results; it should have one or two"},
