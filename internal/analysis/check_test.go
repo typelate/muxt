@@ -1,6 +1,8 @@
 package analysis
 
 import (
+	"go/token"
+	"go/types"
 	"html/template"
 	"log"
 	"strings"
@@ -239,6 +241,39 @@ func TestReportDefinitionErrorsIsSilentWithoutErrors(t *testing.T) {
 	err := reportDefinitionErrors(log.New(&logs, "", 0), source.Variable{Set: parseTemplates(t, `{{define "footer"}}x{{end}}`)})
 	assert.NoError(t, err, "reportDefinitionErrors()")
 	assert.Empty(t, logs.String(), "reportDefinitionErrors() log")
+}
+
+// untypedCallPackage holds one ExecuteTemplate call with no data type, as
+// load reports a call in code the type checker skipped: a package that
+// does not compile, such as one beside a stale generated file.
+func untypedCallPackage(t *testing.T) source.Package {
+	t.Helper()
+	return source.Package{
+		Fset:  token.NewFileSet(),
+		Types: types.NewPackage("example.com/server", "server"),
+		Variables: []source.Variable{{
+			Name:  "templates",
+			Set:   parseTemplates(t, `{{define "page"}}<p>{{.Title}}</p>{{template "row" .}}{{end}}{{define "row"}}{{.}}{{end}}`),
+			Calls: []source.Call{{Position: token.Position{Filename: "routes.go", Line: 3, Column: 9}, Template: "page"}},
+		}},
+	}
+}
+
+func TestCheckReportsACallWithNoDataType(t *testing.T) {
+	var logs strings.Builder
+	n, err := Check(CheckConfiguration{}, log.New(&logs, "", 0), untypedCallPackage(t))
+	require.EqualError(t, err, "1 error", "Check()")
+	assert.Equal(t, 1, n, "Check() checked")
+	assert.Equal(t, "routes.go:3:9 ExecuteTemplate \"page\"\n -  the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)\n", logs.String(), "Check() logged")
+}
+
+func TestListingsSkipACallWithNoDataType(t *testing.T) {
+	pkg := untypedCallPackage(t)
+	callers, err := NewTemplateCallers(TemplateCallersConfiguration{}, pkg)
+	require.NoError(t, err, "NewTemplateCallers()")
+	require.NotNil(t, callers)
+	_, err = NewTemplateCalls(TemplateCallsConfiguration{}, pkg)
+	require.NoError(t, err, "NewTemplateCalls()")
 }
 
 // TestIsEmptyTemplate states what counts as a template with nothing to
