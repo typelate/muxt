@@ -1,13 +1,14 @@
 package generate
 
 import (
+	"cmp"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"go/types"
-	"log"
 	"maps"
 	"path"
 	"slices"
@@ -36,6 +37,9 @@ type File struct {
 	// reserved are the names newFile was passed, for the other files of
 	// the run.
 	reserved []string
+	// err is the first thing a generator asked of the file that it cannot
+	// do, such as importing the output package; Err returns it.
+	err error
 }
 
 // newFile returns a File for a generated file in pkg. reserved are more
@@ -148,13 +152,27 @@ func (file *File) qualify(pkgName, pkgPath string) string {
 	return file.Import(pkgName, pkgPath)
 }
 
+// Import returns the name to qualify pkgPath's identifiers with, and
+// records the import.
+//
+// qualify spells the output package's own names unqualified, and the
+// generators import only other packages, so asking for the output package
+// is a bug in a generator. It is recorded for Err, which generation checks
+// before formatting, and the name the package would have is returned so
+// the generator can finish.
 func (file *File) Import(pkgIdent, pkgPath string) string {
 	if pkgPath == file.pkg.Types.Path() {
-		log.Fatal("package path cannot be the same as the output package")
-		return ""
+		if file.err == nil {
+			file.err = fmt.Errorf("generate: a generated file cannot import its own package %s", pkgPath)
+		}
+		return cmp.Or(pkgIdent, path.Base(pkgPath))
 	}
 	return packageImportName(&file.importSpecs, file.packageIdentifiers, file.taken, pkgPath, pkgIdent)
 }
+
+// Err returns the first thing a generator asked of the file that it
+// cannot do, or nil.
+func (file *File) Err() error { return file.err }
 
 func (file *File) ImportSpecs() []*ast.ImportSpec {
 	result := slices.Clone(file.importSpecs)
