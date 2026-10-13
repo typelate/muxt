@@ -3,6 +3,7 @@ package load
 import (
 	"fmt"
 	"go/types"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 
@@ -63,7 +64,11 @@ func (std standardLibrary) implements(tp types.Type, encodingInterface string) b
 	if err != nil {
 		return false
 	}
-	return types.Implements(tp, iface.Underlying().(*types.Interface))
+	underlying, ok := iface.Underlying().(*types.Interface)
+	if !ok {
+		return false
+	}
+	return types.Implements(tp, underlying)
 }
 
 func (std standardLibrary) lookup(path, name string, pointer bool) (types.Type, error) {
@@ -75,7 +80,11 @@ func (std standardLibrary) lookup(path, name string, pointer bool) (types.Type, 
 	if obj == nil {
 		return nil, fmt.Errorf("package %q declares no %s", path, name)
 	}
-	tp := obj.Type()
+	typeName, ok := obj.(*types.TypeName)
+	if !ok {
+		return nil, fmt.Errorf("package %q declares no type %s", path, name)
+	}
+	tp := typeName.Type()
 	if pointer {
 		tp = types.NewPointer(tp)
 	}
@@ -83,13 +92,17 @@ func (std standardLibrary) lookup(path, name string, pointer bool) (types.Type, 
 }
 
 // indexImports indexes, by import path, every package in pl and every
-// package they import. A path loaded more than once -- a package and its
-// test variant -- keeps the first in pl.
+// package they import.
+//
+// A test variant ("p [p.test]", "p_test [p.test]") and a test main
+// ("p.test") are skipped: a variant shares its path with the package as
+// written but is another *types.Package, compiled with test files, and
+// the package as written is the one a package under test imports.
 func indexImports(pl []*packages.Package) map[string]*types.Package {
 	index := make(map[string]*types.Package)
 	var queue []*types.Package
 	for _, pkg := range pl {
-		if pkg.Types == nil {
+		if pkg.Types == nil || isTestVariant(pkg) {
 			continue
 		}
 		if _, seen := index[pkg.Types.Path()]; !seen {
@@ -109,4 +122,8 @@ func indexImports(pl []*packages.Package) map[string]*types.Package {
 		}
 	}
 	return index
+}
+
+func isTestVariant(pkg *packages.Package) bool {
+	return strings.HasSuffix(pkg.ID, ".test]") || strings.HasSuffix(pkg.ID, ".test")
 }
