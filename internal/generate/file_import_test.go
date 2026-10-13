@@ -75,6 +75,13 @@ func TestFileImport(t *testing.T) {
 			assert.Equal(t, path.Base(importPath), file.Import("", importPath), "Import(%s)", importPath)
 		}
 	})
+
+	t.Run("importing the output package is a generator bug, reported as an error", func(t *testing.T) {
+		file := outputFile()
+		assert.NotPanics(t, func() { file.Import("", "example.com/server") }, "Import of the output package")
+		assert.EqualError(t, file.Err(), "generate: a generated file cannot import its own package example.com/server")
+		assert.NoError(t, outputFile().Err(), "a file nothing was asked of")
+	})
 }
 
 // TestGeneratesLocalNamed states which names the generated handlers declare

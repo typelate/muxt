@@ -214,6 +214,10 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		Decls: append([]ast.Decl{importDecl(file)}, decls...),
 	}
 
+	if err := file.Err(); err != nil {
+		return nil, err
+	}
+
 	filePath := filepath.Join(wd, config.OutputFileName)
 	content, err := formatFile(filePath, outputFile)
 	if err != nil {
@@ -483,6 +487,9 @@ func generatePerFileAST(
 	scopedReceiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 	routesFunc, err := generatePerFileRouteFunction(sourceFile, defs, file, funcName, receiverInterfaceName, logger, config, scopedReceiverInterface)
 	if err != nil {
+		return nil, err
+	}
+	if err := file.Err(); err != nil {
 		return nil, err
 	}
 	return &ast.File{
