@@ -106,6 +106,7 @@ func TestRunListings(t *testing.T) {
 		want string
 	}{
 		{name: "routes", args: []string{"--format=json"}, want: `GET /`},
+		{name: "routes with a receiver", args: []string{"--use-receiver-type=Server", "--format=json"}, want: "\"Receiver\": {},\n\t\"ReceiverMethods\": [\n\t\t{\n\t\t\t\"Name\": \"Home\","},
 		{name: "callers", args: []string{"list-template-callers", "--format=json"}, want: `GET / Home()`},
 		{name: "calls", args: []string{"list-template-calls", "--format=json"}, want: `heading`},
 	} {

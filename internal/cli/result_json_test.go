@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"go/token"
+	"go/types"
 	"io"
 	"strings"
 	"testing"
@@ -25,6 +27,37 @@ type jsonResult struct {
 }
 
 func (jsonResult) WriteTo(io.Writer) (int64, error) { return 0, nil }
+
+// receiverResult has the shape of the route listing's receiver: a go/types
+// named type, which has no exported fields.
+type receiverResult struct {
+	Receiver *types.Named
+}
+
+func (receiverResult) WriteTo(io.Writer) (int64, error) { return 0, nil }
+
+// TestWriteResultJSONReceiver states that a go/types named type is written
+// as encoding/json wrote it: an empty object, or null when there is none.
+// encoding/json/v2 refuses a struct with no exported fields.
+func TestWriteResultJSONReceiver(t *testing.T) {
+	named := types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("example.com/server", "server"), "Server", nil), types.NewStruct(nil, nil), nil)
+	cmd := &cobra.Command{}
+	cmd.Flags().String("format", "json", "")
+	for _, tt := range []struct {
+		name   string
+		result receiverResult
+		want   string
+	}{
+		{name: "a receiver", result: receiverResult{Receiver: named}, want: "{\n\t\"Receiver\": {}\n}\n"},
+		{name: "no receiver", result: receiverResult{}, want: "{\n\t\"Receiver\": null\n}\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var got bytes.Buffer
+			require.NoError(t, writeResult(cmd, &got, tt.result))
+			assert.Equal(t, tt.want, got.String())
+		})
+	}
+}
 
 // TestWriteResultJSON states that --format=json writes a result as
 // encoding/json did before muxt moved to encoding/json/v2: map members,
