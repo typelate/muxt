@@ -1,6 +1,7 @@
 package muxt
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/types"
@@ -352,6 +353,10 @@ func templateNames(ts *template.Template) []string {
 // ResolveDefinitions parses the route definitions of every templates variable in pkg
 // and resolves each call against receiver, or against an empty struct named
 // Receiver when there is none, so handler methods are inferred.
+//
+// Every variable is parsed and resolved even when an earlier one fails, so
+// one run reports every error, in variable order. A variable whose names
+// fail is not resolved.
 func ResolveDefinitions(pkg source.Package, receiver *types.Named, checker Checker) ([]Definition, error) {
 	if receiver == nil {
 		receiver = asteval.NamedEmptyStruct("Receiver", pkg.Types)
@@ -363,7 +368,12 @@ func ResolveDefinitions(pkg source.Package, receiver *types.Named, checker Check
 	for _, variable := range pkg.Variables {
 		defs, err := Definitions(variable)
 		if err != nil {
-			return nil, err
+			if list, ok := errors.AsType[ErrorList](err); ok {
+				errs = append(errs, list...)
+			} else {
+				errs = append(errs, err)
+			}
+			continue
 		}
 		for i := range defs {
 			if err := ResolveCall(&defs[i], pkg, receiver, checker); err != nil {
