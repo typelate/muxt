@@ -4,23 +4,23 @@ type Empty struct{}
 
 type Server struct{}
 
-func (srv *Server) M() any                                { return nil }
-func (srv *Server) HTTPRequest(*Request) any              { return nil }
-func (srv *Server) RequestTwice(*Request, *Request) any   { return nil }
-func (srv *Server) RequestAndAny(*Request, any) any       { return nil }
+func (srv *Server) M() any                                 { return nil }
+func (srv *Server) HTTPRequest(*Request) any               { return nil }
+func (srv *Server) RequestTwice(*Request, *Request) any    { return nil }
+func (srv *Server) RequestAndAny(*Request, any) any        { return nil }
 func (srv *Server) ResponseAndAny(ResponseWriter, any) any { return nil }
-func (srv *Server) ContextTwice(Context, Context) any     { return nil }
-func (srv *Server) ContextAndAny(Context, any) any        { return nil }
-func (srv *Server) HTTPResponseWriter(ResponseWriter) any { return nil }
-func (srv *Server) Context(Context) any                   { return nil }
-func (srv *Server) String(string) any                     { return nil }
-func (srv *Server) Any(any) any                           { return nil }
-func (srv *Server) URLValues(Values) any                  { return nil }
-func (srv *Server) MultipartForm(Form) any                { return nil }
-func (srv *Server) MultipartFormPtr(*Form) any            { return nil }
-func (srv *Server) PtrServer(*Server) any                 { return nil }
-func (srv *Server) Reader(Reader) any                     { return nil }
-func (srv *Server) RawJSON(RawMessage) any                { return nil }
+func (srv *Server) ContextTwice(Context, Context) any      { return nil }
+func (srv *Server) ContextAndAny(Context, any) any         { return nil }
+func (srv *Server) HTTPResponseWriter(ResponseWriter) any  { return nil }
+func (srv *Server) Context(Context) any                    { return nil }
+func (srv *Server) String(string) any                      { return nil }
+func (srv *Server) Any(any) any                            { return nil }
+func (srv *Server) URLValues(Values) any                   { return nil }
+func (srv *Server) MultipartForm(Form) any                 { return nil }
+func (srv *Server) MultipartFormPtr(*Form) any             { return nil }
+func (srv *Server) PtrServer(*Server) any                  { return nil }
+func (srv *Server) Reader(Reader) any                      { return nil }
+func (srv *Server) RawJSON(RawMessage) any                 { return nil }
 
 // CustomError implements error to prove signals callbacks require the exact
 // error result type.
