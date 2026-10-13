@@ -166,8 +166,11 @@ func writeFakeServer(outDir string, files *fakeserver.Files) error {
 	if err := os.MkdirAll(fakeDir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(outDir, "main.go"), files.Main, 0o644); err != nil {
+	// Written as generated files are, so a symlink that leaves the
+	// directory is refused and a file is replaced whole or not at all.
+	if _, err := replaceFile(filepath.Join(outDir, "main.go"), files.Main); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(fakeDir, "receiver.go"), files.Fake, 0o644)
+	_, err := replaceFile(filepath.Join(fakeDir, "receiver.go"), files.Fake)
+	return err
 }
