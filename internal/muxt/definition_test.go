@@ -21,6 +21,47 @@ func TestDefinitions(t *testing.T) {
 	})
 }
 
+func TestDefinitionMayRedirect(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "a redirect from dot", body: `{{.Redirect "/x"}}`, want: true},
+		{name: "a redirect from the root", body: `{{$.Redirect "/x"}}`, want: true},
+		{name: "a redirect from a variable", body: `{{$d := .}}{{$d.RedirectSeeOther "/x"}}`, want: true},
+		{name: "no redirect", body: `{{.Result}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(`{{define "GET / F()"}}` + tt.body + `{{end}}`))
+			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			assert.Equal(t, tt.want, defs[0].MayRedirect(), "MayRedirect() of %s", tt.body)
+		})
+	}
+}
+
+func TestDefinitionHasResponseWriterArg(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{name: "GET / F(response)", want: true},
+		{name: "GET / F(G(response))", want: true},
+		{name: "GET / F(request)"},
+		{name: "GET /"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := template.Must(template.New("").Parse(`{{define "` + tt.name + `"}}{{end}}`))
+			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+			require.NoError(t, err)
+			require.Len(t, defs, 1)
+			assert.Equal(t, tt.want, defs[0].HasResponseWriterArg(), "HasResponseWriterArg() of %s", tt.name)
+		})
+	}
+}
+
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))

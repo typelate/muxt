@@ -165,8 +165,9 @@ func isRedirectMethod(methodName string) bool {
 }
 
 // containsRedirectCall reports whether a command names a redirect method in a
-// field or chain, wherever dot points. A parenthesised pipeline in a chain is
-// its own command to the walker, so it is not looked into here.
+// field, chain or variable ($.Redirect, $d.Redirect), wherever dot or the
+// variable points. A parenthesised pipeline in a chain is its own command to
+// the walker, so it is not looked into here.
 func containsRedirectCall(cmd *parse.CommandNode) bool {
 	if cmd == nil {
 		return false
@@ -177,35 +178,43 @@ func containsRedirectCall(cmd *parse.CommandNode) bool {
 			return slices.ContainsFunc(a.Ident, isRedirectMethod)
 		case *parse.ChainNode:
 			return slices.ContainsFunc(a.Field, isRedirectMethod)
+		case *parse.VariableNode:
+			return len(a.Ident) > 1 && slices.ContainsFunc(a.Ident[1:], isRedirectMethod)
 		}
 		return false
 	})
 }
 
 // callsMethodOnTemplateData reports whether a command may call a TemplateData
-// method that is not known to be safe: by naming one, or by handing a
-// function dot or a chain, which it might call methods on.
+// method that is not known to be safe: by naming one on dot or on a variable,
+// which may hold dot ({{$d := .}}), or by handing a function dot, a variable
+// or a chain, which it might call methods on.
 func callsMethodOnTemplateData(cmd *parse.CommandNode) bool {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return false
 	}
-	if _, isFunctionCall := cmd.Args[0].(*parse.IdentifierNode); isFunctionCall && slices.ContainsFunc(cmd.Args[1:], isDotOrChain) {
+	if _, isFunctionCall := cmd.Args[0].(*parse.IdentifierNode); isFunctionCall && slices.ContainsFunc(cmd.Args[1:], mayHoldTemplateData) {
 		return true
 	}
 	return slices.ContainsFunc(cmd.Args, hasUnsafeField)
 }
 
-func isDotOrChain(arg parse.Node) bool {
+func mayHoldTemplateData(arg parse.Node) bool {
 	switch arg.(type) {
-	case *parse.DotNode, *parse.ChainNode:
+	case *parse.DotNode, *parse.ChainNode, *parse.VariableNode:
 		return true
 	}
 	return false
 }
 
 func hasUnsafeField(arg parse.Node) bool {
-	field, ok := arg.(*parse.FieldNode)
-	return ok && !isSafeTemplateDataMethod(field.Ident[0])
+	switch a := arg.(type) {
+	case *parse.FieldNode:
+		return !isSafeTemplateDataMethod(a.Ident[0])
+	case *parse.VariableNode:
+		return len(a.Ident) > 1 && !isSafeTemplateDataMethod(a.Ident[1])
+	}
+	return false
 }
 
 // isSafeTemplateDataMethod reports whether a TemplateData method definitely
