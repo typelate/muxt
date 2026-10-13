@@ -20,10 +20,12 @@ const (
 	// what the action does.
 	StatusMissed Status = "MISS"
 
-	// StatusSkipped means the mutation was never run, because it does
-	// not survive type checking against the dot it would render with.
-	// Running it would report a kill earned by a render error rather
-	// than by a test observing a behaviour change.
+	// StatusSkipped means the mutation was never run. It does not parse
+	// or type check against the dot it would render with, so running it
+	// would report a kill earned by a render error rather than by a test
+	// observing a behaviour change; or it is a condition simplification
+	// proved dead; or its action needs more combinations than
+	// --max-cases allows. Result.Reason says which.
 	StatusSkipped Status = "SKIP"
 
 	// StatusPending means the mutant was enumerated but not run, which

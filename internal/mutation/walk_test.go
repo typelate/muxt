@@ -25,8 +25,8 @@ func TestWalkActionsOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	var got []string
-	walkActions(text, regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
-		got = append(got, a.text)
+	walkActions(regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
+		got = append(got, text[a.region.start:a.region.end])
 	})
 
 	want := []string{
@@ -55,8 +55,8 @@ func TestWalkActionsNarrowsDot(t *testing.T) {
 	require.NoError(t, err)
 
 	var got []string
-	walkActions(text, regions(text, "", ""), dataType(t, pageSource, "Page"), nil, trees["t"].Root, func(a action) {
-		if a.text == "{{.}}" {
+	walkActions(regions(text, "", ""), dataType(t, pageSource, "Page"), nil, trees["t"].Root, func(a action) {
+		if text[a.region.start:a.region.end] == "{{.}}" {
 			got = append(got, types.TypeString(a.dot, nil))
 		}
 	})

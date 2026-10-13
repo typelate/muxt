@@ -122,7 +122,7 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 	m := p.mutants[0]
 	assert.Equal(t, "template.go", m.Path, "mutant path")
 	assert.Equal(t, 5, m.Line, "mutant line")
-	assert.Contains(t, m.Apply(), `Parse("Hello, {{\"\"}}!\n")`, "mutated file")
+	assert.Contains(t, m.apply(), `Parse("Hello, {{\"\"}}!\n")`, "mutated file")
 }
 
 // neverRun is a suite that fails the test if anything runs it.

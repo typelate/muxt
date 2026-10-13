@@ -27,9 +27,6 @@ type action struct {
 	// else and end that belong to it.
 	region region
 	index  int
-
-	// text is the action as written, delimiters included.
-	text string
 }
 
 // walkActions reports every action of a template, in the order they are
@@ -37,7 +34,7 @@ type action struct {
 //
 // The order is the walk's own: an action before the bodies it encloses,
 // and a body before the else beside it.
-func walkActions(templateText string, found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
+func walkActions(found []region, dot types.Type, functions check.Functions, root parse.Node, visit func(action)) {
 	var walk func(parse.Node, types.Type)
 	report := func(node parse.Node, pipe *parse.PipeNode, at int, dot types.Type) {
 		index, r, ok := regionAt(found, at)
@@ -50,7 +47,6 @@ func walkActions(templateText string, found []region, dot types.Type, functions 
 			dot:    dot,
 			region: r,
 			index:  index,
-			text:   templateText[r.start:r.end],
 		})
 	}
 
