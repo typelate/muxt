@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json/v2"
+	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -122,11 +124,19 @@ func listModule(workingDirectory string) (goModule, error) {
 	cmd.Dir = workingDirectory
 	out, err := cmd.Output()
 	if err != nil {
-		return goModule{}, err
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
+			return goModule{}, fmt.Errorf("go list -m: %w: %s", err, bytes.TrimSpace(exitErr.Stderr))
+		}
+		return goModule{}, fmt.Errorf("go list -m: %w", err)
 	}
 	var mod goModule
 	if err := json.Unmarshal(out, &mod); err != nil {
 		return goModule{}, err
+	}
+	// Outside a module go list reports the command-line-arguments
+	// pseudo-module, which has no directory.
+	if mod.Dir == "" {
+		return goModule{}, fmt.Errorf("%s is not inside a Go module (no go.mod applies)", workingDirectory)
 	}
 	return mod, nil
 }
