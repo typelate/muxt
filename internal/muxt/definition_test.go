@@ -79,6 +79,21 @@ func TestDefinitionsOrderRoutesThatDifferOnlyByHost(t *testing.T) {
 	}
 }
 
+func TestDefinitionCallExpressionWithoutAHandler(t *testing.T) {
+	ts := template.Must(template.New("").Parse(`{{define "GET /about"}}{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Nil(t, defs[0].CallExpression(), "CallExpression() of a route without a call")
+}
+
+func TestDefinitionsMalformedHandlerOfAnUnparsedTemplate(t *testing.T) {
+	ts := template.New("")
+	ts.New("GET / F(") // declared, never parsed: no tree
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression")
+}
+
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
 		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
