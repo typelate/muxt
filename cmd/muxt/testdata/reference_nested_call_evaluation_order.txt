@@ -1,0 +1,95 @@
+# A call passed as an argument is evaluated after the whole request has been
+# parsed, so a malformed value anywhere in the call never reaches the receiver;
+# its result keeps the type the call returned, a nil concrete error is not an
+# error, and a package function may be named like a generated local.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- index.gohtml --
+{{define "GET /pair/{left}/{right} Pair(Load(left), right)"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /lookup Show(Find())"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /shadow Show(result0())"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+-- server.go --
+package server
+
+import "fmt"
+
+type Server struct{ loads *int }
+
+type LookupError struct{ Key string }
+
+func (e *LookupError) Error() string { return "lookup " + e.Key }
+
+func (s Server) Load(n int) int {
+	*s.loads++
+	return n * 10
+}
+
+func (Server) Pair(a, b int) string { return fmt.Sprint("pair ", a, " ", b) }
+
+// Find returns a nil *LookupError: the call succeeded.
+func (Server) Find() (int, *LookupError) { return 7, nil }
+
+func (Server) Show(n int) string { return fmt.Sprint("show ", n) }
+
+func result0() int { return 42 }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestEvaluationOrder(t *testing.T) {
+	var loads int
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{loads: &loads})
+
+	for _, tt := range []struct {
+		target    string
+		wantCode  int
+		wantBody  string
+		wantLoads int
+	}{
+		{"/pair/1/2", http.StatusOK, "pair 10 2", 1},
+		{"/pair/1/bad", http.StatusBadRequest, "failed: ", 0},
+		{"/pair/bad/2", http.StatusBadRequest, "failed: ", 0},
+		{"/lookup", http.StatusOK, "show 7", 0},
+		{"/shadow", http.StatusOK, "show 42", 0},
+	} {
+		loads = 0
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+		if rec.Code != tt.wantCode {
+			t.Errorf("GET %s status = %d, want %d (body %q)", tt.target, rec.Code, tt.wantCode, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), tt.wantBody) {
+			t.Errorf("GET %s body = %q, want it to contain %q", tt.target, rec.Body.String(), tt.wantBody)
+		}
+		if loads != tt.wantLoads {
+			t.Errorf("GET %s called Load %d times, want %d", tt.target, loads, tt.wantLoads)
+		}
+	}
+}
