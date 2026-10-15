@@ -77,6 +77,21 @@ func (a Argument) Signature() source.Type {
 	return source.NewType(a.sig)
 }
 
+// ErrorCanBeNil reports whether the second result of a nested call argument
+// can be nil. An error type that is a struct or another value type cannot:
+// every value of it is an error. It is true for a leaf argument and for a
+// call with one result.
+func (a Argument) ErrorCanBeNil() bool {
+	if a.sig == nil || a.sig.Results().Len() < 2 {
+		return true
+	}
+	switch types.Unalias(a.sig.Results().At(1).Type()).Underlying().(type) {
+	case *types.Pointer, *types.Interface, *types.Map, *types.Slice, *types.Chan, *types.Signature:
+		return true
+	}
+	return false
+}
+
 // IsMethod reports whether a nested call argument resolves to a receiver method
 // (as opposed to a package-scope function).
 func (a Argument) IsMethod() bool { return a.isMethod }

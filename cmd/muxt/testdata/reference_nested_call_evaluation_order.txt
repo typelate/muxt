@@ -1,7 +1,8 @@
 # A call passed as an argument is evaluated after the whole request has been
 # parsed, so a malformed value anywhere in the call never reaches the receiver;
 # its result keeps the type the call returned, a nil concrete error is not an
-# error, and a package function may be named like a generated local.
+# error, an error that is a struct always is, and a package function may be
+# named like a generated local or a request value.
 
 muxt generate --use-receiver-type=Server
 muxt check
@@ -28,10 +29,16 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 {{define "GET /pair/{left}/{right} Pair(Load(left), right)"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
 {{define "GET /lookup Show(Find())"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
 {{define "GET /shadow Show(result0())"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /context ShowWithContext(ctx(), ctx)"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /parsed/{right} Pair(rightParsed(), right)"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /value Show(Value())"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
 -- server.go --
 package server
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type Server struct{ loads *int }
 
@@ -52,6 +59,23 @@ func (Server) Find() (int, *LookupError) { return 7, nil }
 func (Server) Show(n int) string { return fmt.Sprint("show ", n) }
 
 func result0() int { return 42 }
+
+// ctx and rightParsed are named like locals the handler declares for the
+// request context and for a parsed path value.
+func ctx() int { return 5 }
+
+func rightParsed() int { return 3 }
+
+func (Server) ShowWithContext(n int, ctx context.Context) string {
+	return fmt.Sprint("context ", n, " ", ctx != nil)
+}
+
+// ValueError is an error that is a struct: any value of it is an error.
+type ValueError struct{}
+
+func (ValueError) Error() string { return "value error" }
+
+func (Server) Value() (int, ValueError) { return 1, ValueError{} }
 -- server_test.go --
 package server
 
@@ -77,6 +101,10 @@ func TestEvaluationOrder(t *testing.T) {
 		{"/pair/1/bad", http.StatusBadRequest, "failed: ", 0},
 		{"/pair/bad/2", http.StatusBadRequest, "failed: ", 0},
 		{"/lookup", http.StatusOK, "show 7", 0},
+		{"/context", http.StatusOK, "context 5 true", 0},
+		{"/parsed/4", http.StatusOK, "pair 3 4", 0},
+		{"/parsed/bad", http.StatusBadRequest, "failed: ", 0},
+		{"/value", http.StatusInternalServerError, "failed: value error", 0},
 		{"/shadow", http.StatusOK, "show 42", 0},
 	} {
 		loads = 0
