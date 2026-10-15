@@ -1,6 +1,6 @@
 # Call Parameters
 
-Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and calls to other receiver methods are allowed; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
+Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and calls are allowed: a receiver method or, when the receiver has none of that name, a function declared in the package, which is called directly and is not added to `RoutesReceiver`; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
 
 ```gotmpl
 {{define "POST /user/{id} UpdateUser(ctx, id, form)"}}{{end}}
@@ -25,10 +25,10 @@ Value and pointer receivers both work ([reference_receiver_with_pointer.txt](../
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` |
 | `body` | `io.Reader`, exactly | `request.Body` ([err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt)) |
 | `unmarshalJSON(body)` | any type `encoding/json` decodes | `request.Body` |
-| `signals` | same as `unmarshalJSON(body)` | shorthand for it, and diagnostics print that form; requires `--output-datastar` ([err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt) · [datastar-live-view.md](../how-to/datastar-live-view.md)) |
+| `signals` | same as `unmarshalJSON(body)` | shorthand for it, and diagnostics print that form; requires `--output-datastar`. It reads only the body: Datastar sends a GET request's signals in the `datastar` query parameter, so a GET route taking `signals` responds 400 and the route should be POST ([err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt) · [datastar-live-view.md](../how-to/datastar-live-view.md)) |
 | `lastEventID` | a [parseable type](#parseable-types) | the `Last-Event-Id` header ([reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)) |
 | `execute` | `func(T) error` or `func() error` | a callback that renders the template: [the `execute` callback](call-results.md#the-execute-callback), or [below](#server-sent-events) inside `sse` |
-| a receiver method call, such as `Author(id)` | its first result | called before the outer method under the same argument rules, except that `execute` and sse callbacks cannot be nested; a second `error` or `bool` result ends the handler as in [Result Shapes](call-results.md#result-shapes) ([reference_call_with_expression_arg.txt](../../cmd/muxt/testdata/reference_call_with_expression_arg.txt) · [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)) |
+| a call, such as `Author(id)` | its first result | called after every argument has parsed and before the outer method, under the same argument rules, except that `execute` and sse callbacks cannot be nested; a second `error` or `bool` result ends the handler as in [Result Shapes](call-results.md#result-shapes) ([reference_call_with_expression_arg.txt](../../cmd/muxt/testdata/reference_call_with_expression_arg.txt) · [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)) |
 
 Form fields are not arguments; bind them through `form` or `multipart`.
 
@@ -43,7 +43,8 @@ A path value, `lastEventID`, `form`, `multipart`, `ctx` or `body` may appear mor
 | Parameter type | Parser |
 |---|---|
 | `string` | none |
-| `int`, `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt`, base 10 |
+| `int` | `strconv.Atoi` |
+| `int8`, `int16`, `int32`, `int64` | `strconv.ParseInt`, base 10 |
 | `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `strconv.ParseUint`, base 10 |
 | `bool` | `strconv.ParseBool` |
 | `float32`, `float64` | `strconv.ParseFloat`; form and multipart fields only, never path values or `lastEventID` |
@@ -53,7 +54,7 @@ A path value, `lastEventID`, `form`, `multipart`, `ctx` or `body` may appear mor
 
 ## Parse Failures
 
-A path value, typed form field, or `lastEventID` that fails to parse responds 400. The method is not called. The template still renders with a zero [`.Result`](call-results.md#templatedata) and the error in `.Err`. On an `execute` route nothing renders; the response is an empty 400. On an sse route the 400 is sent before the stream opens ([reference_sse_with_typed_form_field.txt](../../cmd/muxt/testdata/reference_sse_with_typed_form_field.txt)).
+A path value, typed form field, or `lastEventID` that fails to parse responds 400. Neither the method nor a call nested in its arguments runs ([reference_nested_call_evaluation_order.txt](../../cmd/muxt/testdata/reference_nested_call_evaluation_order.txt)). The template still renders with a zero [`.Result`](call-results.md#templatedata) and the error in `.Err`. On an `execute` route nothing renders; the response is an empty 400. On an sse route the 400 is sent before the stream opens ([reference_sse_with_typed_form_field.txt](../../cmd/muxt/testdata/reference_sse_with_typed_form_field.txt)).
 
 A url-encoded body that `request.ParseForm` rejects responds 400 through `http.Error` without rendering ([reference_form_parse_error.txt](../../cmd/muxt/testdata/reference_form_parse_error.txt)). A malformed multipart body sets `.Err` and responds 400 ([reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)).
 
@@ -148,7 +149,7 @@ Return when `ctx` is done or `execute` returns an error: the client is gone, the
 | Method results | none, or `error`; a returned error is logged and the stream closes ([reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt)) |
 | `response` argument | not allowed ([err_sse_with_response.txt](../../cmd/muxt/testdata/err_sse_with_response.txt)) |
 | Undefined method | fails generation: `method NAME using the execute callback must be defined on the receiver type` |
-| Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
+| Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call; a path wildcard with such a name is a path value, not a callback ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
 | Template data | `*SSETemplateData[R, T]`: `.Result`, `.Err`, `.Request`, `.Receiver`, `.Path`, `.Route`, `.String`, and chainable `.Event`, `.ID`, and `.Retry` setters. No `.Ok`, `.StatusCode`, `.Header`, or `.Redirect` |
 
 ### Datastar
@@ -158,5 +159,5 @@ Under `--output-datastar`:
 | Rule | Detail |
 |---|---|
 | Events | `datastar-patch-elements`, with each rendered line as a `data: elements` line; `.Selector`, `.Mode`, and `.UseViewTransition` replace `.Event` ([reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt)) |
-| `Signals` suffix | a callback named like `countsSignals`, typed `func(T) error`, marshals its argument as a `datastar-patch-signals` event instead of rendering; the prefix is only a label ([reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt) · [err_signals_callback_without_datastar.txt](../../cmd/muxt/testdata/err_signals_callback_without_datastar.txt)) |
+| `Signals` suffix | a callback named like `countsSignals`, typed `func(T) error`, marshals its argument as a `datastar-patch-signals` event instead of rendering; the prefix is only a label, and a path wildcard with such a name is a path value ([reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt) · [err_signals_callback_without_datastar.txt](../../cmd/muxt/testdata/err_signals_callback_without_datastar.txt)) |
 | `--output-htmx` | mutually exclusive ([err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)) |
