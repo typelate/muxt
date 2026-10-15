@@ -82,7 +82,12 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 	}
 
 	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
-	errBody.List = append(errBody.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError))
+	errStatusCode := assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError)
+	if def.ErrorHasStatusCode() {
+		// The error's declared type says which status it means.
+		errStatusCode.Rhs = []ast.Expr{&ast.CallExpr{Fun: selector(errIdent, "StatusCode")}}
+	}
+	errBody.List = append(errBody.List, errStatusCode)
 	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
 		X:   ast.NewIdent(resultDataIdent),
 		Sel: ast.NewIdent(TemplateDataFieldIdentifierResult),

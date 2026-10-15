@@ -235,6 +235,10 @@ func (def Definition) IsMethod() bool                     { return def.isMethod 
 func (def Definition) ResultShape() ResultShape           { return def.resultShape }
 func (def Definition) ResultStatusCode() ResultStatusCode { return def.resultStatusCode }
 
+// ErrorHasStatusCode reports whether a route whose method returns only an
+// error responds with the error's StatusCode() instead of 500.
+func (def Definition) ErrorHasStatusCode() bool { return def.errorHasStatusCode() }
+
 // ResultType is the type of the template data's Result field.
 func (def Definition) ResultType() source.Type { return source.NewType(def.resultType()) }
 func (def Definition) UsesSignals() bool       { return def.usesSignals }
