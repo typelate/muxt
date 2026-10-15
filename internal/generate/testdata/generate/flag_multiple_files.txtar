@@ -310,7 +310,7 @@ func userProfileTemplateRoutes(mux *http.ServeMux, receiver userProfileRoutesRec
 		_, _ = buf.WriteTo(response)
 	})))
 	mux.Handle("POST /user/{id}", middleware(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[userProfileRoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[userProfileRoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		idParsed, err := strconv.Atoi(request.PathValue("id"))
 		if err != nil {
 			td.errList = append(td.errList, err)
@@ -326,8 +326,13 @@ func userProfileTemplateRoutes(mux *http.ServeMux, receiver userProfileRoutesRec
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.Save(idPathParam, form)
-			td.okay = true
+			err := receiver.Save(idPathParam, form)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			} else {
+				td.okay = true
+			}
 		}
 		if err := templates.ExecuteTemplate(buf, "POST /user/{id} Save(id, form)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))

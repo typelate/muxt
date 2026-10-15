@@ -76,7 +76,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		return bytes.NewBuffer(nil)
 	}}
 	mux.HandleFunc("POST /json", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[RoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[RoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
 		var bodyValue Payload
 		if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil {
@@ -87,8 +87,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.Decode(ctx, bodyValue)
-			td.okay = true
+			err := receiver.Decode(ctx, bodyValue)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			} else {
+				td.okay = true
+			}
 		}
 		if err := templates.ExecuteTemplate(buf, "POST /json Decode(ctx, unmarshalJSON(body))", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -108,14 +113,19 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("POST /raw", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[RoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[RoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		body := request.Body
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.Raw(body)
-			td.okay = true
+			err := receiver.Raw(body)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			} else {
+				td.okay = true
+			}
 		}
 		if err := templates.ExecuteTemplate(buf, "POST /raw Raw(body)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))

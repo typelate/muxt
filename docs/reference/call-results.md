@@ -9,9 +9,10 @@ What the method returns sets `.Result`, `.Err`, and the status code.
 | `T` | the value | nil | true |
 | `(T, error)` | the value, even on error | the error; status 500 | always false |
 | `(T, bool)` | the value | nil | true; on `false` the handler responds 200 with an empty body |
+| `error`, or an interface embedding it | `struct{}` | the error; status 500, or its `StatusCode()` when the declared type has one ([howto_error_only_return.txt](../../cmd/muxt/testdata/howto_error_only_return.txt) · [reference_error_only_with_status_code.txt](../../cmd/muxt/testdata/reference_error_only_with_status_code.txt)) | true when the error is nil |
 | `error`, with an `execute` argument | the callback's argument, `struct{}` for `func() error` | nil; a returned error responds `500 failed to render page` and discards any rendered output | true after a successful call |
 
-The second of two results must be `error` or `bool`. Zero results, or three or more, fail generation outside `sse`. A lone `error` result without `execute` is the `T` shape: the error is `.Result`.
+The second of two results must be `error` or `bool`. Zero results, or three or more, fail generation outside `sse`. A lone result of a concrete type that implements `error` is the `T` shape: the value is `.Result`.
 
 ```go
 func (s Server) About() AboutPage

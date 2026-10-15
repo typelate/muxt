@@ -26,7 +26,9 @@ const (
 	// ResultShapeDataOK is func(...) (T, bool)
 	ResultShapeDataOK
 	// ResultShapeError is func(...) error: required for methods receiving the
-	// execute callback and permitted for sse handler methods.
+	// execute callback, permitted for sse handler methods, and, for any other
+	// route, a method whose one result is the error interface or an interface
+	// embedding it: the error is .Err and .Result is struct{}.
 	ResultShapeError
 )
 
@@ -50,8 +52,30 @@ func (def *Definition) resultType() types.Type {
 	switch def.resultShape {
 	case ResultShapeData, ResultShapeDataError, ResultShapeDataOK:
 		return def.sig.Results().At(0).Type()
+	case ResultShapeError:
+		if def.Representation == "" {
+			return types.NewStruct(nil, nil)
+		}
 	}
 	return nil
+}
+
+// errorHasStatusCode reports whether a route returning only an error takes
+// the response status from it: when the error's declared type has a
+// StatusCode() int method.
+func (def *Definition) errorHasStatusCode() bool {
+	if def.resultShape != ResultShapeError || def.Representation != "" || def.sig == nil || def.sig.Results().Len() != 1 {
+		return false
+	}
+	return types.Implements(def.sig.Results().At(0).Type(), statusCoder)
+}
+
+// isErrorInterface reports whether tp is the error interface or an interface
+// embedding it. A concrete type that implements error is not: a route
+// returning one returns data.
+func isErrorInterface(tp types.Type) bool {
+	_, ok := types.Unalias(tp).Underlying().(*types.Interface)
+	return ok && implementsError(tp)
 }
 
 // statusCodeSource reports where a result of type tp offers its status
@@ -188,6 +212,8 @@ func classifyResultShape(def *Definition, qual types.Qualifier) (ResultShape, er
 		return classifySSEResultShape(results, sigStr)
 	case receivesExecuteCallback(def):
 		return classifyExecuteResultShape(results, sigStr)
+	case results.Len() == 1 && isErrorInterface(results.At(0).Type()):
+		return ResultShapeError, nil
 	}
 	return classifyNestedCallResultShape(def.fun.Name, def.sig, qual)
 }

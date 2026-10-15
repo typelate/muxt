@@ -75,7 +75,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		return bytes.NewBuffer(nil)
 	}}
 	mux.HandleFunc("POST /raw", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[RoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[RoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		if err := request.ParseMultipartForm(1048576); err != nil && !errors.Is(err, http.ErrNotMultipart) {
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
@@ -85,8 +85,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.Raw(multipart)
-			td.okay = true
+			err := receiver.Raw(multipart)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			} else {
+				td.okay = true
+			}
 		}
 		if err := templates.ExecuteTemplate(buf, "POST /raw Raw(multipart)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
@@ -106,7 +111,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		_, _ = buf.WriteTo(response)
 	})
 	mux.HandleFunc("POST /upload", func(response http.ResponseWriter, request *http.Request) {
-		var td = TemplateData[RoutesReceiver, error]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		var td = TemplateData[RoutesReceiver, struct{}]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		if err := request.ParseMultipartForm(1048576); err != nil && !errors.Is(err, http.ErrNotMultipart) {
 			td.errList = append(td.errList, err)
 			td.errStatusCode = http.StatusBadRequest
@@ -125,8 +130,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
 		if len(td.errList) == 0 {
-			td.result = receiver.Upload(multipart)
-			td.okay = true
+			err := receiver.Upload(multipart)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			} else {
+				td.okay = true
+			}
 		}
 		if err := templates.ExecuteTemplate(buf, "POST /upload Upload(multipart)", &td); err != nil {
 			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))

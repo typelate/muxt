@@ -1,0 +1,73 @@
+# A method that returns only an error, such as a health check, reports it as
+# .Err: the template renders with .Result as struct{}, a nil error answers 200
+# with .Ok true, and an error answers 500.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- index.gohtml --
+{{define "GET /health Healthcheck(ctx)"}}{{if .Err}}Unhealthy: {{.Err.Error}}{{else}}OK {{.Ok}}{{end}}{{end}}
+-- server.go --
+package server
+
+import (
+	"context"
+	"errors"
+)
+
+type Server struct{ down bool }
+
+func (s Server) Healthcheck(ctx context.Context) error {
+	if s.down {
+		return errors.New("database unavailable")
+	}
+	return nil
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestHealthcheck(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		server   Server
+		wantCode int
+		wantBody string
+	}{
+		{"healthy", Server{}, http.StatusOK, "OK true"},
+		{"unhealthy", Server{down: true}, http.StatusInternalServerError, "Unhealthy: database unavailable"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			TemplateRoutes(mux, tt.server)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+			if rec.Code != tt.wantCode || rec.Body.String() != tt.wantBody {
+				t.Errorf("GET /health = %d %q, want %d %q", rec.Code, rec.Body.String(), tt.wantCode, tt.wantBody)
+			}
+		})
+	}
+}

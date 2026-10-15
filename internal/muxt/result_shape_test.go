@@ -58,6 +58,12 @@ func TwoNamedBool() (T, namedBool)
 func TwoAliasBool() (T, aliasBool)
 func ErrorFirst() (error, T)
 func ErrorBool() (error, bool)
+func OneStatusError() StatusError
+
+type StatusError interface {
+	error
+	StatusCode() int
+}
 func Three() (T, T, error)
 
 type namedBool bool
@@ -81,6 +87,9 @@ func TestClassifyResultShape(t *testing.T) {
 		{name: "html data error", fn: "TwoError", want: ResultShapeDataError},
 		{name: "html data error implementation", fn: "TwoErrorImpl", want: ResultShapeDataError},
 		{name: "html data ok", fn: "TwoBool", want: ResultShapeDataOK},
+		{name: "html only error", fn: "OneError", want: ResultShapeError},
+		{name: "html only an interface embedding error", fn: "OneStatusError", want: ResultShapeError},
+		{name: "html only a concrete type implementing error is data", fn: "OneErrorImpl", want: ResultShapeData},
 		{name: "html second result is int", fn: "TwoInt", want: ResultShapeInvalid, wantErr: "the second result of TwoInt() (T, int) must be an error or a bool, got int"},
 		{name: "html second result is a named bool", fn: "TwoNamedBool", want: ResultShapeInvalid, wantErr: "the second result of TwoNamedBool() (T, namedBool) must be an error or a bool, got namedBool"},
 		{name: "html no results", fn: "None", want: ResultShapeInvalid, wantErr: "method None() has no results; it should have one or two"},

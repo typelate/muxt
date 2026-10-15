@@ -463,6 +463,23 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape
 				Body: errBody,
 			},
 		}, nil
+	case muxt.ResultShapeError:
+		// A method returning only an error: the error is the template
+		// data's error, and the call succeeded when it is nil.
+		//
+		//	err := receiver.Healthcheck(ctx)
+		//	if err != nil { ... } else { td.okay = true }
+		return &receiverMethodCall{
+			Assign: &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(errIdent)}, Tok: token.DEFINE, Rhs: []ast.Expr{call}},
+			Check: &ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
+				Body: errBody,
+				Else: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{&ast.SelectorExpr{
+					X:   ast.NewIdent(rdIdent),
+					Sel: ast.NewIdent(TemplateDataFieldIdentifierOkay),
+				}}, Tok: token.ASSIGN, Rhs: []ast.Expr{astgen.Bool(true)}}}},
+			},
+		}, nil
 	case muxt.ResultShapeDataOK:
 		return &receiverMethodCall{
 			VarDecl: varDecl(okIdent, ast.NewIdent("bool"), nil),
