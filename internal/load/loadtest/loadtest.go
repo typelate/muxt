@@ -217,7 +217,7 @@ func Package(t testing.TB, dir, pkgPath string, files map[string]string) []*pack
 	// checked: a package the checker reaches only through another's imports
 	// is read shallowly, and it is these complete ones -- fmt, whose
 	// functions a template calls -- that the load's other packages share.
-	roots := []string{"encoding", "fmt", "net/http"}
+	roots := []string{"encoding", "encoding/json", "fmt", "net/http"}
 	std := make([]*types.Package, 0, len(roots))
 	for _, stdPath := range roots {
 		pkg, err := importStd(stdPath)
