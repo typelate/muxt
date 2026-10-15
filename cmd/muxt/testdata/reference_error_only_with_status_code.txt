@@ -1,6 +1,7 @@
 # A method returning only an error takes the response status from the error
 # when its declared type is an interface with StatusCode() int. A concrete
 # type that implements error is a value: it is .Result, as any other result.
+# An error whose StatusCode() is 0 still answers 500.
 
 muxt generate --use-receiver-type=Server
 muxt check
@@ -42,14 +43,24 @@ func (e ServiceUnavailableError) Error() string { return e.Message }
 
 func (ServiceUnavailableError) StatusCode() int { return 503 }
 
-type Server struct{ down bool }
+type Server struct{ down, unset bool }
 
 func (s Server) Healthcheck(ctx context.Context) StatusErr {
 	if s.down {
 		return ServiceUnavailableError{Message: "database unavailable"}
 	}
+	if s.unset {
+		return UnsetStatusError{}
+	}
 	return nil
 }
+
+// UnsetStatusError has a StatusCode method that says nothing.
+type UnsetStatusError struct{}
+
+func (UnsetStatusError) Error() string { return "no status" }
+
+func (UnsetStatusError) StatusCode() int { return 0 }
 
 // Problem returns a concrete type that implements error: it is data.
 func (Server) Problem() ServiceUnavailableError {
@@ -73,6 +84,7 @@ func Test(t *testing.T) {
 	}{
 		{Server{}, "/health", http.StatusOK, "OK"},
 		{Server{down: true}, "/health", http.StatusServiceUnavailable, "unavailable: database unavailable"},
+		{Server{unset: true}, "/health", http.StatusInternalServerError, "unavailable: no status"},
 		{Server{}, "/problem", http.StatusServiceUnavailable, "a value "},
 	} {
 		mux := http.NewServeMux()
