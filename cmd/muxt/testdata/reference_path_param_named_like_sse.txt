@@ -1,0 +1,61 @@
+# A path parameter whose name starts with sse is a path value like any other:
+# only a name that is not in scope is read as an sse callback.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- index.gohtml --
+{{define "GET /items/{sseID} Item(sseID)"}}{{with .Err}}failed: {{.}}{{else}}item {{.Result}}{{end}}{{end}}
+-- server.go --
+package server
+
+type Server struct{}
+
+func (Server) Item(id int) int { return id }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for _, tt := range []struct {
+		target   string
+		wantCode int
+		wantBody string
+	}{
+		{"/items/5", http.StatusOK, "item 5"},
+		{"/items/five", http.StatusBadRequest, "failed: "},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+		if rec.Code != tt.wantCode || !strings.Contains(rec.Body.String(), tt.wantBody) {
+			t.Errorf("GET %s = %d %q, want %d containing %q", tt.target, rec.Code, rec.Body.String(), tt.wantCode, tt.wantBody)
+		}
+	}
+}
