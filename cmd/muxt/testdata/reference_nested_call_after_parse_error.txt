@@ -1,0 +1,91 @@
+# A call passed as an argument runs only when the request parsed: a path value
+# that is not an int answers 400 without the nested method being called, as it
+# does for a call at the top level.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- index.gohtml --
+{{define "GET /article/{id} Show(ctx, Load(ctx, id))"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /pair/{id} Pair(ctx, Load(ctx, id), Load(ctx, id))"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+{{define "GET /deep/{id} Show(ctx, Wrap(ctx, Load(ctx, id)))"}}{{with .Err}}failed: {{.}}{{else}}{{.Result}}{{end}}{{end}}
+-- server.go --
+package server
+
+import (
+	"context"
+	"fmt"
+)
+
+type Server struct{ loads *int }
+
+func (s Server) Load(ctx context.Context, id int) (int, error) {
+	*s.loads++
+	return id * 10, nil
+}
+
+func (Server) Wrap(ctx context.Context, n int) (int, error) { return n + 1, nil }
+
+func (Server) Show(ctx context.Context, n int) string { return fmt.Sprint("article ", n) }
+
+func (Server) Pair(ctx context.Context, a, b int) string { return fmt.Sprint("pair ", a+b) }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestNestedCalls(t *testing.T) {
+	var loads int
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{loads: &loads})
+
+	for _, tt := range []struct {
+		target    string
+		wantCode  int
+		wantBody  string
+		wantLoads int
+	}{
+		{"/article/7", http.StatusOK, "article 70", 1},
+		{"/article/not-an-int", http.StatusBadRequest, "failed: ", 0},
+		{"/pair/2", http.StatusOK, "pair 40", 2},
+		{"/pair/not-an-int", http.StatusBadRequest, "failed: ", 0},
+		{"/deep/3", http.StatusOK, "article 31", 1},
+		{"/deep/not-an-int", http.StatusBadRequest, "failed: ", 0},
+	} {
+		loads = 0
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+		if rec.Code != tt.wantCode {
+			t.Errorf("GET %s status = %d, want %d", tt.target, rec.Code, tt.wantCode)
+		}
+		if !strings.Contains(rec.Body.String(), tt.wantBody) {
+			t.Errorf("GET %s body = %q, want it to contain %q", tt.target, rec.Body.String(), tt.wantBody)
+		}
+		if loads != tt.wantLoads {
+			t.Errorf("GET %s called Load %d times, want %d", tt.target, loads, tt.wantLoads)
+		}
+	}
+}

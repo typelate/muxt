@@ -88,6 +88,7 @@ func sseMethodHandlerFunc(file *File, config RoutesFileConfiguration, def muxt.D
 		validationFailureBlock: func(string) *ast.BlockStmt { return parseErrBlock() },
 		parseErrBlock:          parseErrBlock,
 		nestedCallErrBlock:     nestedCallErrBlock,
+		results:                new(int),
 	}
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.

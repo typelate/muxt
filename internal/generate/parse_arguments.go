@@ -23,6 +23,10 @@ type argumentParser struct {
 	// nestedCallErrBlock is what runs when a call passed as an argument
 	// returns an error.
 	nestedCallErrBlock func() *ast.BlockStmt
+	// results counts the locals that hold nested calls' results across the
+	// whole handler, so a call nested in another call does not reuse the
+	// name of the one it is nested in.
+	results *int
 }
 
 func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []muxt.Argument, rdIdent string, config RoutesFileConfiguration, call *ast.CallExpr, validationFailureBlock ValidationErrorBlock, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
@@ -39,6 +43,7 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 		validationFailureBlock: validationFailureBlock,
 		parseErrBlock:          parseErrBlock,
 		nestedCallErrBlock:     func() *ast.BlockStmt { return templateDataNestedCallErrBlock(file, rdIdent) },
+		results:                new(int),
 	}
 	return p.appendCall(statements, args, call)
 }
@@ -51,7 +56,6 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 	if len(args) != len(call.Args) {
 		return nil, fmt.Errorf("call %s was not resolved", fun.Name)
 	}
-	resultCount := 0
 	for i, a := range call.Args {
 		var err error
 		switch arg := a.(type) {
@@ -60,8 +64,7 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 				statements, err = p.appendBodyJSON(statements, call, i, args[i])
 				break
 			}
-			statements, err = p.appendNestedCall(statements, call, i, args[i], arg, resultCount)
-			resultCount++
+			statements, err = p.appendNestedCall(statements, call, i, args[i], arg)
 		case *ast.Ident:
 			statements, err = p.appendIdentifier(statements, call, i, args[i], arg)
 		default:
@@ -84,13 +87,25 @@ func (p argumentParser) appendBodyJSON(statements []ast.Stmt, call *ast.CallExpr
 }
 
 // appendNestedCall renders nested, an argument that is itself a call, as a
-// call whose result the outer call takes as result<resultCount>.
-func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallExpr, i int, nested muxt.Argument, nestedCall *ast.CallExpr, resultCount int) ([]ast.Stmt, error) {
+// call whose result the outer call takes as result0, result1 and so on.
+//
+// In a handler that collects errors in the template data, the call runs only
+// while there are none, as the call it is an argument of does, so a request
+// that failed to parse never reaches the receiver:
+//
+//	var result0 Article
+//	if len(td.errList) == 0 {
+//		var err error
+//		result0, err = receiver.Load(ctx, idPathParam)
+//		if err != nil { ... }
+//	}
+func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallExpr, i int, nested muxt.Argument, nestedCall *ast.CallExpr) ([]ast.Stmt, error) {
 	statements, err := p.appendCall(statements, nested.Arguments(), nestedCall)
 	if err != nil {
 		return nil, err
 	}
-	resultVarIdent := resultIdent + strconv.Itoa(resultCount)
+	resultVarIdent := resultIdent + strconv.Itoa(*p.results)
+	*p.results++
 	call.Args[i] = ast.NewIdent(resultVarIdent)
 
 	funcIdent := nestedCall.Fun.(*ast.Ident).Name
@@ -103,7 +118,26 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 	if err != nil {
 		return nil, err
 	}
-	return append(statements, receiverCall.DefineStmts()...), nil
+	if p.rdIdent == "" || nested.ParamType().IsZero() {
+		// An sse handler answers a request that failed to parse before it
+		// gets here, and with no type to declare the result with there is
+		// nothing to hoist.
+		return append(statements, receiverCall.DefineStmts()...), nil
+	}
+	declare, err := typedVar(p.file, resultVarIdent, nested.ParamType(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var body []ast.Stmt
+	if receiverCall.VarDecl != nil {
+		body = append(body, receiverCall.VarDecl)
+	}
+	body = append(body, receiverCall.Assign)
+	if receiverCall.Check != nil {
+		body = append(body, receiverCall.Check)
+	}
+	noErrors := guard(astgen.CallBuiltinLen(selector(p.rdIdent, TemplateDataFieldIdentifierError)), token.EQL, astgen.Int(0), &ast.BlockStmt{List: body})
+	return append(statements, declare, noErrors), nil
 }
 
 func (p argumentParser) appendIdentifier(statements []ast.Stmt, call *ast.CallExpr, i int, argument muxt.Argument, arg *ast.Ident) ([]ast.Stmt, error) {
