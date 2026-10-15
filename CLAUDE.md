@@ -96,10 +96,13 @@ rm -rf ./cmd/muxt/testdata/your-test
 # Test a single package
 go test ./cmd/muxt
 
-# Test a specific test
-go test ./cmd/muxt -run TestName
+# Run one script: the scripts are subtests of Test
+go test ./cmd/muxt -run 'Test/reference_template_route'
 
-# Run all tests (only when making cross-package changes)
+# The fast loop: everything but the scripts
+go test ./internal/... ./docs/...
+
+# Run all tests (only when making cross-package changes; about 3 minutes)
 go test ./...
 ```
 
@@ -285,6 +288,99 @@ go -C ./cmd/muxt/testdata/debug-test test -v
 - Generator should be fast (run during `go generate`)
 - Generated code has no runtime reflection
 - All type checking happens at generation time
+
+## Working Notes
+
+Lessons from the project's history. Read them before a change.
+
+### Running tests
+
+- Under heavy CPU load a script can fail with `exec: WaitDelay expired before
+  I/O complete`, a different one each run. A script that passes on its own
+  failed from load; `go test ./cmd/muxt -parallel 4` keeps a laptop usable.
+- `TestEntrypoint` compares the root `main.go` with `cmd/muxt/main.go`; keep
+  them identical, including whitespace.
+- `go test ./docs/` checks every relative Markdown link, so a docs link to a
+  script that exists only on another branch fails.
+- A script reproduces a bug in a scratch module far more cheaply than reading
+  generated code: write the failing script first, then fix.
+
+### Writing tests
+
+- Scripts assert behavior, not generated text. Drive `TemplateRoutes` with
+  `httptest` in an `exec go test` step; use `muxt check`, or `! muxt check`
+  with `stderr`, for what a template may call. Do not `grep` generated source.
+- Error output is compared byte-exact; changing a message means updating the
+  `err_*` goldens. See `.claude/skills/testscript-error-assertions`.
+- Every bug fix gets a regression test at the lowest layer that states it.
+
+### Generator
+
+- Build code with `go/ast` builders that return the most specific node type
+  (`*ast.FuncDecl`, `[]ast.Stmt`). Do not parse Go source from string
+  constants.
+- Build the import declaration last: building the other declarations is what
+  registers imports, and goimports guesses a wrong package for a symbol whose
+  import is missing.
+- A local the generated handler declares shadows an import or a package-level
+  name of the same name. `File` aliases imports named like a generated local
+  (`generatedLocalIdentifiers`, `generatesLocalNamed`); add new locals there.
+- `html/template` treats `data-on-*` attributes as JavaScript, so a value that
+  must render verbatim there is a `template.JS`.
+- Generated output must stay deterministic: sort anything read from a map.
+
+### Mutation testing
+
+- `--workers N` under CPU contention reports false kills. Compare runs made
+  under the same conditions, and re-check a large delta with `--workers 1`.
+
+### Conventions
+
+- Flag names follow `docs/explanation/decisions/00005_rename_flags.md`:
+  `--use-*` names what the generator reads, `--output-*` what it writes. Ask
+  the maintainer before a user-facing name that bends this, and put renames in
+  their own PR.
+- `internal/asteval` stays its own small package; folding it into its
+  consumers was tried and rejected.
+- Template type checking lives in `github.com/typelate/check`, a separate
+  module; a change there needs a release before muxt can use it.
+- Docs: the fewest words that state the fact, every claim verified against a
+  script or `--help`, links instead of repetition, and no `go tool` directive
+  or versioned install lines for third-party tools. See
+  `.claude/skills/muxt-docs`.
+
+### Git and GitHub
+
+- Stage explicit paths. Never `git add -A`, `git stash`, or `sed`/`perl`
+  edits of source: several sessions may share a worktree, and the maintainer
+  may keep a deliberate staged arrangement.
+- End commit messages with exactly one trailer,
+  `Assisted-by: Claude:<model> [tools]`; no `Co-Authored-By`, no session
+  links.
+- PR descriptions stand alone: what the change does for a user, briefly, with
+  no PR or decision-number history.
+- The repository merges by rebase only, so a branch with merge commits cannot
+  be merged and every commit lands on `main`. Rebase onto `origin/main` (fetch
+  first; a local `main` may lag) instead of merging `main` in, and check each
+  commit builds and passes before pushing.
+- Copilot reviews each PR; read it with
+  `gh api repos/typelate/muxt/pulls/<n>/comments`. Replies to its comments fail
+  while the maintainer has a pending review on the PR; answer in a PR comment
+  and resolve threads with the GraphQL `resolveReviewThread` mutation.
+- CI runs `build` (`go test -race`) and `gosec` over `docs/examples`. gosec is
+  built against this module's `golang.org/x/tools`, because the version gosec
+  pins cannot read the export data newer Go toolchains write.
+- Pre-releases are tagged `vX.Y.0-dev.N` with `gh release create --prerelease`.
+  `go install github.com/typelate/muxt@latest` resolves to the newest tag that
+  is not a pre-release.
+
+### Environment
+
+- Use the Go version in `go.mod`. `compile: version "goA" does not match go
+  tool version "goB"` means a stale `GOROOT` is exported; run
+  `env -u GOROOT go ...` or fix the shell.
+- Tools the workflow uses: `gofumpt`, `goimports`, `staticcheck`, `gh`, and
+  `counterfeiter` for `go generate ./internal/muxt`.
 
 ## Pull Request Checklist
 
