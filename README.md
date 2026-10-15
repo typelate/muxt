@@ -46,12 +46,12 @@ Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-enc
 
 Wrapping the call changes the response representation: `sse(Stream(ctx, execute))` streams Server-Sent Events and `marshalJSON(GetUser(ctx))` responds `application/json`. Generate flags select a frontend library per package — `--output-htmx` adds HX* helper methods to `TemplateData`, and `--output-datastar` frames SSE events with Datastar's patch-elements protocol.
 
-`TemplateRoutePaths` extends type safety to URLs: `{{$.Path.GetArticle 42}}` instead of hardcoded `href="/article/42"`. Change the route pattern, the compiler finds every stale reference.
+`TemplateRoutePaths` extends type safety to URLs: `{{$.Path.GetArticle 42}}` instead of hardcoded `href="/article/42"`. `{{$.Route.GetArticle 42}}` also carries the HTTP method. Change a route's wildcards and `muxt check` reports each template that still passes the old arguments; Go callers fail to compile.
 
 ## Examples
 
-- **[Local example](./docs/examples/simple/)**: complete application with tests ([pkg.go.dev](https://pkg.go.dev/github.com/typelate/muxt/docs/examples/simple/hypertext))
-- **[Sortable Example](http://github.com/typelate/sortable-example)**: HTMX-enabled table row sorting
+- **[Local example](./docs/examples/simple/)**: complete application with tests
+- **[Sortable Example](https://github.com/typelate/sortable-example)**: HTMX-enabled table row sorting
 - **[HTMX Template](https://github.com/typelate/htmx-template)**: full HTMX integration patterns
 
 The [command tests](./cmd/muxt/testdata) double as readable examples of every feature.

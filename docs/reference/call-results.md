@@ -79,13 +79,14 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Ok` | `bool`, per the shape table above |
 | `.Request` | `*http.Request` |
 | `.Receiver` | `R` |
-| `.Path` | `TemplateRoutePaths`, one method per route named after the method with its first letter uppercased, taking one argument per path wildcard in order: `{{.Path.GetUser .Result.ID}}`. Each returns the path as a `string`. `.Route` is a `TemplateRouteBuilder` with the same methods, which return a `TemplateRoute` with `Path() string`, the path the same method of `.Path` returns, which `String()` returns too so it prints as the path, and `Method() string`, the route's HTTP method, empty when the pattern names none, in which case `HasMethod() bool` is false; fall back in the template with `{{or .Route.GetUser.Method "GET"}}`: `{{.Route.GetUser .Result.ID}}` ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)). An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)) |
+| `.Path` | `TemplateRoutePaths`: one method per route ([names](#route-methods)), taking one argument per path wildcard in order and returning the path as a `string`: `{{.Path.GetUser .Result.ID}}` |
+| `.Route` | `TemplateRouteBuilder`: the same methods, each returning a `TemplateRoute` with `Path()`, `String()` (the path, so `{{.Route.GetUser .Result.ID}}` prints it), `Method()` (empty when the pattern names none) and `HasMethod()`. A method that takes arguments is called in parentheses before its result is selected from: `{{(.Route.GetUser .Result.ID).Method}}`, or `{{or .Route.Index.Method "GET"}}` to fall back for a pattern with no method ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)) |
 | `.MuxtVersion` | the generating muxt version |
 | `.StatusCode code` | the data, for chaining |
 | `.Header key value` | the data, for chaining |
 | `.Redirect url code` | the data and an error when `code` is outside 300 to 399 |
 | `.RedirectMultipleChoices url`, `.RedirectMovedPermanently url`, `.RedirectFound url`, `.RedirectSeeOther url` | `.Redirect` with 300, 301, 302, or 303 |
-| `.String` | `""`, so `{{.Header "HX-Trigger" "saved"}}` prints nothing |
+| `.String` | `""`: a stray `{{.}}` and a chained setter such as `{{.Header "HX-Trigger" "saved"}}` print nothing, and `muxt check` does not flag `{{.}}`. Print `{{.Result}}` for the value |
 
 ```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{if .Request.Header.Get "HX-Request"}}{{.Result.Name}}{{else}}<html>...</html>{{end}}{{end}}
@@ -93,6 +94,16 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 ```
 
 [reference_template_data_stringer.txt](../../cmd/muxt/testdata/reference_template_data_stringer.txt) · [reference_redirect_helpers.txt](../../cmd/muxt/testdata/reference_redirect_helpers.txt)
+
+With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`, `.HXPushURL`, `.HXRedirect`, `.HXRefresh`, `.HXReplaceURL`, `.HXReswap`, `.HXRetarget`, `.HXReselect`, `.HXTrigger`, `.HXTriggerAfterSettle` and `.HXTriggerAfterSwap`, which chain and print nothing, and the request readers `.HXBoosted`, `.HXCurrentURL`, `.HXHistoryRestoreRequest`, `.HXPrompt`, `.HXRequest`, `.HXTargetElementID`, `.HXTriggerName` and `.HXTriggerElementID`.
+
+### Route methods
+
+A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two routes call the same method, each is named `<route name>Calling<Method>`, for example `ReadDupOneCallingDup`.
+
+A route without a call is named from its pattern: a verb for the HTTP method (`GET` is `Read`, `POST` `Create`, `PUT` `Replace`, `PATCH` `Update`, `DELETE` `Delete`, and none for a pattern without a method), the host and literal segments in PascalCase (`/` alone is `Index`, `{$}` is `Exact`), then `By` and the wildcards joined with `And`: `GET /hello/{name}` is `ReadHelloByName`. Two routes may not produce the same name ([known issues](known-issues.md)).
+
+`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/` and `{$}` keep their trailing slash: `/app/`. An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
 
 ## Status Code Control
 
