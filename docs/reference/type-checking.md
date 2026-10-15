@@ -51,3 +51,4 @@ Check also fails on:
 |------|--------|
 | Anything after the initializer (`init`, a later `templates = ...`) | Not evaluated. Only the variable's initializer expression is read; a `Funcs`/`ParseFS` chain in `init` leaves `muxt check` reporting `ok: 0 templates` and `muxt generate` writing 0 routes. |
 | GoLand `gotype` comments | Not read. |
+| Go compile errors | Not reported: a package that does not build can pass `muxt check`. Run `go vet`. |

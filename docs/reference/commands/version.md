@@ -7,8 +7,8 @@ muxt version -v
 ```
 
 ```text
-v0.17.0
-go version: go1.25.0
+v0.21.0-dev.2
+go version: go1.27.0
 ```
 
 `-v` adds the Go version muxt was compiled with.

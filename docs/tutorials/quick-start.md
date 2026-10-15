@@ -137,6 +137,8 @@ Routes here read `.Request` because none calls a method. Name one and the templa
 {{define "GET /square/{n} Square(ctx, n)"}}{{.Result}}{{end}}
 ```
 
+Define `Square` on a type, pass a value of it to `TemplateRoutes` instead of `nil`, and add `--use-receiver-type` to the directive so `n` parses as an `int`.
+
 - [Template names](../reference/template-names.md): methods, status codes, and the full syntax.
 - [Find untested template behavior](find-untested-template-behavior.md): which parts of the HTML your tests hold you to.
 - [Structure a project for testing](../how-to/receiver-package-and-testing.md): keep the receiver out of `package main` so tests can fake it.

@@ -66,7 +66,7 @@ muxt -C ./web generate --use-receiver-type=Server
 
 ### Deprecated flags
 
-Each still works and prints `Flag --old has been deprecated, use --new instead`.
+Each still works and prints `Flag --old has been deprecated, use --new instead`. `check` accepts the `--receiver-type` spellings only to ignore them: it reads the receiver from the generated routes file.
 
 | Old | New |
 |---|---|
