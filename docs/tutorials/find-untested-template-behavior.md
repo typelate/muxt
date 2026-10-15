@@ -4,7 +4,7 @@
 
 Prerequisites: `muxt` installed and a checkout of this repository for the example.
 
-> `test-template-mutations` is new in v0.21.0-dev.1, which does not yet exit non-zero on a missed mutant or take a package directory. Until a release includes those, install from `main`: `go install github.com/typelate/muxt@main`.
+> Needs muxt v0.21.0-dev.2 or later: `go install github.com/typelate/muxt@v0.21.0-dev.2`.
 
 ## Step 1: Confirm the example passes
 

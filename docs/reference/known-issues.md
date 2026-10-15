@@ -18,12 +18,8 @@ A handler name whose first character has no uppercase form (`一覧`) fails with
 
 [err_route_paths_method_collision.txt](../../cmd/muxt/testdata/err_route_paths_method_collision.txt)
 
-## `sse` is no longer a call argument
+## `muxt check` misses the argument count of a method called mid-chain
 
-`GET /events Stream(ctx, lastEventID, sse)` fails with `unknown argument sse`. Wrap the call and take `execute` as the callback ([Server-Sent Events](call-parameters.md#server-sent-events)):
-
-```gotmpl
-{{define "GET /events sse(Stream(ctx, lastEventID, execute))"}}{{end}}
-```
+`{{.Route.GetUser.Path}}` or `{{or .Route.GetUser.Method "GET"}}`, where `GetUser` takes an argument, passes `muxt check` and fails at render with `wrong number of args for GetUser: want 1 got 0` (a 500). The same call at the end of a chain, `{{.Path.GetUser}}`, is caught. Call the method in parentheses, with its arguments, before selecting from the result: `{{(.Route.GetUser .Result.ID).Method}}`.
 
 [Open an issue](https://github.com/typelate/muxt/issues/new) with a minimal reproduction, or send a PR that adds a `cmd/muxt/testdata/err_*.txt` script.

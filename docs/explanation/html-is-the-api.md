@@ -47,7 +47,7 @@ An `hx-swap-oob="true"` element's `id` has to exist in the page being patched.
 
 ### Datastar hides the URL in an expression
 
-`data-on:click="@post('{{.Path.Increment}}')"` holds the URL inside a JavaScript expression, so extract it from the attribute. `html/template` escapes `/` as `\/` in that context, so unescape before routing ([datastar-counter test](../examples/datastar-counter/template_test.go), `jsPath`).
+`data-on:click="@post('{{.Path.Increment}}')"` holds the URL inside a JavaScript expression, so extract it from the attribute. `html/template` escapes `/` as `\/` in that context, so compare against the escaped form, as `jsPath` does in the [datastar-counter test](../examples/datastar-counter/template_test.go), or replace `\/` with `/` before routing.
 
 ## Where it stops
 
