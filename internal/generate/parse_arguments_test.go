@@ -51,9 +51,31 @@ func TestAppendParseArgumentStatementsNumbersNestedCallResults(t *testing.T) {
 	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
 	require.NoError(t, err)
 	got := astgen.Format(handler.Body)
-	for _, want := range []string{"result0 := receiver.B()", "result1 := receiver.B()", "receiver.Two(result0, result1)"} {
+	for _, want := range []string{"result0 = receiver.B()", "result1 = receiver.B()", "receiver.Two(result0, result1)"} {
 		assert.Contains(t, got, want, "handler body")
 	}
+}
+
+// TestNestedCallsRunOnlyWithoutErrors states that a call passed as an
+// argument is guarded as the call it is an argument of is: a request that
+// failed to parse must not reach the receiver. Each nesting level has a
+// result of its own.
+func TestNestedCallsRunOnlyWithoutErrors(t *testing.T) {
+	pkg, defs := routesTestDefinitions(t, map[string]string{
+		"a.gohtml": `{{define "GET /deep Two(Nested(B()), B())"}}{{end}}`,
+	})
+	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
+	require.NoError(t, err)
+	got := astgen.Format(handler.Body)
+	for _, want := range []string{
+		"var result0 string\n\tif len(td.errList) == 0 {\n\t\tresult0 = receiver.B()\n\t}",
+		"var result1 string\n\tif len(td.errList) == 0 {\n\t\tresult1 = receiver.Nested(result0)\n\t}",
+		"var result2 string\n\tif len(td.errList) == 0 {\n\t\tresult2 = receiver.B()\n\t}",
+		"receiver.Two(result1, result2)",
+	} {
+		assert.Contains(t, got, want, "handler body")
+	}
+	assert.NotContains(t, got, ":= receiver.", "a nested call defined inline, outside the guard")
 }
 
 func TestMismatchedArgumentError(t *testing.T) {

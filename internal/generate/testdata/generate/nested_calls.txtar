@@ -84,10 +84,14 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errStatusCode = http.StatusBadRequest
 		}
 		idPathParam := idParsed
-		result0, err := receiver.Load(ctx, idPathParam)
-		if err != nil {
-			td.errList = append(td.errList, err)
-			td.errStatusCode = http.StatusInternalServerError
+		var result0 Article
+		if len(td.errList) == 0 {
+			var err error
+			result0, err = receiver.Load(ctx, idPathParam)
+			if err != nil {
+				td.errList = append(td.errList, err)
+				td.errStatusCode = http.StatusInternalServerError
+			}
 		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
@@ -116,9 +120,13 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 	mux.HandleFunc("GET /user", func(response http.ResponseWriter, request *http.Request) {
 		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
 		ctx := request.Context()
-		result0, ok := Current(request)
-		if !ok {
-			return
+		var result0 Article
+		if len(td.errList) == 0 {
+			var ok bool
+			result0, ok = Current(request)
+			if !ok {
+				return
+			}
 		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()

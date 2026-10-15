@@ -146,7 +146,10 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			td.errStatusCode = http.StatusBadRequest
 		}
 		idPathParam := idParsed
-		result0 := receiver.Double(idPathParam)
+		var result0 int
+		if len(td.errList) == 0 {
+			result0 = receiver.Double(idPathParam)
+		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bytesBufferPool.Put(buf)
