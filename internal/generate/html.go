@@ -84,8 +84,11 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 	errBody := appendTemplateDataError(file, resultDataIdent, ast.NewIdent(errIdent))
 	errStatusCode := assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusInternalServerError)
 	if def.ErrorHasStatusCode() {
-		// The error's declared type says which status it means.
-		errStatusCode.Rhs = []ast.Expr{&ast.CallExpr{Fun: selector(errIdent, "StatusCode")}}
+		// The error's declared type says which status it means; one
+		// that says 0 keeps the 500.
+		errStatusCode.Rhs = []ast.Expr{astgen.Call(file, "cmp", "cmp", "Or",
+			&ast.CallExpr{Fun: selector(errIdent, "StatusCode")},
+			astgen.HTTPStatusCode(file, http.StatusInternalServerError))}
 	}
 	errBody.List = append(errBody.List, errStatusCode)
 	receiverCall, err := callReceiverMethod(resultDataIdent, &ast.SelectorExpr{
