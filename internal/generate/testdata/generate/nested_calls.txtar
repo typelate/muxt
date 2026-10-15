@@ -86,12 +86,12 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		idPathParam := idParsed
 		var result0 Article
 		if len(td.errList) == 0 {
-			var err error
-			result0, err = receiver.Load(ctx, idPathParam)
+			result, err := receiver.Load(ctx, idPathParam)
 			if err != nil {
 				td.errList = append(td.errList, err)
 				td.errStatusCode = http.StatusInternalServerError
 			}
+			result0 = result
 		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()
@@ -122,11 +122,11 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 		ctx := request.Context()
 		var result0 Article
 		if len(td.errList) == 0 {
-			var ok bool
-			result0, ok = Current(request)
+			result, ok := Current(request)
 			if !ok {
 				return
 			}
+			result0 = result
 		}
 		buf := bytesBufferPool.Get().(*bytes.Buffer)
 		buf.Reset()

@@ -3,6 +3,8 @@ package generate
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,6 +78,40 @@ func TestNestedCallsRunOnlyWithoutErrors(t *testing.T) {
 		assert.Contains(t, got, want, "handler body")
 	}
 	assert.NotContains(t, got, ":= receiver.", "a nested call defined inline, outside the guard")
+}
+
+// TestNestedCallResultsDoNotShadowPackageNames states that a result local
+// takes a name the package does not declare: declared before a call written as
+// result0(), a local named result0 would be what the call names.
+func TestNestedCallResultsDoNotShadowPackageNames(t *testing.T) {
+	pkg, defs := routesTestDefinitions(t, map[string]string{
+		"a.gohtml": `{{define "GET /two Two(B(), B())"}}{{end}}`,
+	})
+	pkg.Types.Scope().Insert(types.NewFunc(token.NoPos, pkg.Types, "result0", types.NewSignatureType(nil, nil, nil, nil, nil, false)))
+	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
+	require.NoError(t, err)
+	got := astgen.Format(handler.Body)
+	assert.NotContains(t, got, "result0", "a name the package declares")
+	for _, want := range []string{"result1 = receiver.B()", "result2 = receiver.B()", "receiver.Two(result1, result2)"} {
+		assert.Contains(t, got, want, "handler body")
+	}
+}
+
+// TestRequestArgumentsAreParsedBeforeNestedCalls states that no call passed
+// as an argument runs before every value of the request is read: an invalid
+// value after the call must stop it.
+func TestRequestArgumentsAreParsedBeforeNestedCalls(t *testing.T) {
+	pkg, defs := routesTestDefinitions(t, map[string]string{
+		"a.gohtml": `{{define "GET /x/{id} Two(Nested(B()), id)"}}{{end}}`,
+	})
+	handler, err := callHandlerFunc(newFile(pkg), testConfig(), defs[0], "RoutesReceiver")
+	require.NoError(t, err)
+	got := astgen.Format(handler.Body)
+	parse := strings.Index(got, `request.PathValue("id")`)
+	call := strings.Index(got, "receiver.B()")
+	require.NotEqual(t, -1, parse, "the path value is read")
+	require.NotEqual(t, -1, call, "the nested call is made")
+	assert.Less(t, parse, call, "the path value is read before the nested call")
 }
 
 func TestMismatchedArgumentError(t *testing.T) {

@@ -48,7 +48,22 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 	return p.appendCall(statements, args, call)
 }
 
+// appendCall renders the statements a call needs before it runs: first every
+// value read from the request, in every call of the tree, and then the calls
+// passed as arguments. A request that fails to parse is therefore known to
+// have failed before any of those calls could run.
 func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, call *ast.CallExpr) ([]ast.Stmt, error) {
+	statements, err := p.appendRequestArguments(statements, args, call)
+	if err != nil {
+		return nil, err
+	}
+	return p.appendNestedCalls(statements, args, call)
+}
+
+// appendRequestArguments renders the arguments of call, and of the calls
+// passed to it, that are read from the request, and rewrites call to use the
+// locals they declare.
+func (p argumentParser) appendRequestArguments(statements []ast.Stmt, args []muxt.Argument, call *ast.CallExpr) ([]ast.Stmt, error) {
 	fun, ok := call.Fun.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("expected function to be identifier")
@@ -64,12 +79,33 @@ func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, 
 				statements, err = p.appendBodyJSON(statements, call, i, args[i])
 				break
 			}
-			statements, err = p.appendNestedCall(statements, call, i, args[i], arg)
+			statements, err = p.appendRequestArguments(statements, args[i].Arguments(), arg)
 		case *ast.Ident:
 			statements, err = p.appendIdentifier(statements, call, i, args[i], arg)
 		default:
 			err = fmt.Errorf("unsupported argument %s in call to %s", astgen.Format(a), fun.Name)
 		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return statements, nil
+}
+
+// appendNestedCalls renders the calls passed as arguments of call, the
+// innermost first, and rewrites call to take their results.
+func (p argumentParser) appendNestedCalls(statements []ast.Stmt, args []muxt.Argument, call *ast.CallExpr) ([]ast.Stmt, error) {
+	for i, a := range call.Args {
+		nestedCall, ok := a.(*ast.CallExpr)
+		if !ok || args[i].Type == muxt.ArgumentTypeRequestBodyJSON {
+			continue
+		}
+		var err error
+		statements, err = p.appendNestedCalls(statements, args[i].Arguments(), nestedCall)
+		if err != nil {
+			return nil, err
+		}
+		statements, err = p.appendNestedCall(statements, call, i, args[i], nestedCall)
 		if err != nil {
 			return nil, err
 		}
@@ -86,26 +122,36 @@ func (p argumentParser) appendBodyJSON(statements []ast.Stmt, call *ast.CallExpr
 	return append(statements, decode...), nil
 }
 
+// nextResultIdent names the local that holds the next nested call's result:
+// result0, result1 and so on, skipping a name the package declares, which the
+// local would shadow where the call is written.
+func (p argumentParser) nextResultIdent() string {
+	for {
+		name := resultIdent + strconv.Itoa(*p.results)
+		*p.results++
+		if !p.file.taken[name] {
+			return name
+		}
+	}
+}
+
 // appendNestedCall renders nested, an argument that is itself a call, as a
 // call whose result the outer call takes as result0, result1 and so on.
 //
 // In a handler that collects errors in the template data, the call runs only
-// while there are none, as the call it is an argument of does, so a request
-// that failed to parse never reaches the receiver:
+// while there are none, as the call it is an argument of does. The result is
+// declared first, with the type the outer call takes, and what the call
+// returned is copied into it, so the call's own result and error types are
+// the ones the compiler infers: a nil *LookupError is not an error.
 //
 //	var result0 Article
 //	if len(td.errList) == 0 {
-//		var err error
-//		result0, err = receiver.Load(ctx, idPathParam)
+//		result, err := receiver.Load(ctx, idPathParam)
 //		if err != nil { ... }
+//		result0 = result
 //	}
 func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallExpr, i int, nested muxt.Argument, nestedCall *ast.CallExpr) ([]ast.Stmt, error) {
-	statements, err := p.appendCall(statements, nested.Arguments(), nestedCall)
-	if err != nil {
-		return nil, err
-	}
-	resultVarIdent := resultIdent + strconv.Itoa(*p.results)
-	*p.results++
+	resultVarIdent := p.nextResultIdent()
 	call.Args[i] = ast.NewIdent(resultVarIdent)
 
 	funcIdent := nestedCall.Fun.(*ast.Ident).Name
@@ -114,14 +160,14 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		nestedCall.Fun = selector(receiverIdent, funcIdent)
 	}
 
-	receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
-	if err != nil {
-		return nil, err
-	}
 	if p.rdIdent == "" || nested.ParamType().IsZero() {
 		// An sse handler answers a request that failed to parse before it
 		// gets here, and with no type to declare the result with there is
 		// nothing to hoist.
+		receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
+		if err != nil {
+			return nil, err
+		}
 		return append(statements, receiverCall.DefineStmts()...), nil
 	}
 	declare, err := typedVar(p.file, resultVarIdent, nested.ParamType(), nil)
@@ -129,12 +175,22 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		return nil, err
 	}
 	var body []ast.Stmt
-	if receiverCall.VarDecl != nil {
-		body = append(body, receiverCall.VarDecl)
-	}
-	body = append(body, receiverCall.Assign)
-	if receiverCall.Check != nil {
-		body = append(body, receiverCall.Check)
+	if nested.ResultShape() == muxt.ResultShapeData {
+		receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultVarIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
+		if err != nil {
+			return nil, err
+		}
+		body = []ast.Stmt{receiverCall.Assign}
+	} else {
+		receiverCall, err := callReceiverMethod(p.rdIdent, ast.NewIdent(resultIdent), nested.ResultShape(), funcIdent, nestedCall, p.nestedCallErrBlock())
+		if err != nil {
+			return nil, err
+		}
+		body = append(receiverCall.DefineStmts(), &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent(resultVarIdent)},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{ast.NewIdent(resultIdent)},
+		})
 	}
 	noErrors := guard(astgen.CallBuiltinLen(selector(p.rdIdent, TemplateDataFieldIdentifierError)), token.EQL, astgen.Int(0), &ast.BlockStmt{List: body})
 	return append(statements, declare, noErrors), nil
