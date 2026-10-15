@@ -1,0 +1,38 @@
+# text/template calls a method with no arguments when it is not the last name
+# of a chain, so .Route.GetUser.Method fails at render; muxt check reports it.
+# Call the method in parentheses with its arguments instead:
+# {{(.Route.GetUser 1).Method}}.
+
+muxt generate --use-receiver-type=T
+! muxt check
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module server
+
+go 1.24
+-- t.gohtml --
+{{define "GET /user/{id} GetUser(id)"}}{{.Route.GetUser.Method}}{{end}}
+-- server.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var fs embed.FS
+
+var templates = template.Must(template.ParseFS(fs, "*"))
+
+type T struct{}
+
+func (T) GetUser(id int) int { return id }
+-- want-err.txt --
+$WORK/template_routes.go:42:13 ExecuteTemplate "GET /user/{id} GetUser(id)" *TemplateData[RoutesReceiver, int]
+$WORK/t.gohtml:1:48: executing "GET /user/{id} GetUser(id)" at <.Route.GetUser.Method>: wrong number of args expected 1 but got 0
+
+  signature: GetUser(idPathParam int) TemplateRoute
+
+Error: fail: 1 error
