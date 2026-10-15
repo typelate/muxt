@@ -24,8 +24,13 @@ func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Pa
 // PackagesWithEnv is Packages with the environment the go command
 // runs in. A nil env is the process's own.
 func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	// The standard library packages beside the working directory's are the
+	// ones a route argument can bind to when the package does not import them:
+	// encoding/json is reached through html/template's imports, but not
+	// through text/template's, and unmarshalJSON(body) for a method that is
+	// not defined yet needs json.RawMessage.
 	patterns := []string{
-		wd, "encoding", "fmt", "net/http",
+		wd, "encoding", "encoding/json", "fmt", "net/http",
 	}
 	for _, pat := range morePatterns {
 		if pat != "" {
