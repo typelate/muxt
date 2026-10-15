@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/typelate/muxt/internal/astgen"
@@ -52,12 +53,90 @@ func appendParseArgumentStatements(statements []ast.Stmt, file *File, args []mux
 // value read from the request, in every call of the tree, and then the calls
 // passed as arguments. A request that fails to parse is therefore known to
 // have failed before any of those calls could run.
+//
+// A package function called as an argument is named before the request's
+// values are read when one of the locals they declare has its name, as
+// `ctx()` beside a `ctx` argument would be:
+//
+//	ctxFunc := ctx
+//	ctx := request.Context()
+//	...
+//	result0 = ctxFunc()
 func (p argumentParser) appendCall(statements []ast.Stmt, args []muxt.Argument, call *ast.CallExpr) ([]ast.Stmt, error) {
+	start := len(statements)
 	statements, err := p.appendRequestArguments(statements, args, call)
 	if err != nil {
 		return nil, err
 	}
+	declared := namesDeclaredBy(statements[start:])
+	captures := p.captureShadowedFunctions(nil, args, call, declared, make(map[string]string))
+	statements = slices.Insert(statements, start, captures...)
 	return p.appendNestedCalls(statements, args, call)
+}
+
+// namesDeclaredBy are the names statements declare at their own level.
+func namesDeclaredBy(statements []ast.Stmt) map[string]bool {
+	names := make(map[string]bool)
+	for _, statement := range statements {
+		switch s := statement.(type) {
+		case *ast.AssignStmt:
+			if s.Tok != token.DEFINE {
+				continue
+			}
+			for _, lhs := range s.Lhs {
+				if ident, ok := lhs.(*ast.Ident); ok {
+					names[ident.Name] = true
+				}
+			}
+		case *ast.DeclStmt:
+			decl, ok := s.Decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range decl.Specs {
+				if value, ok := spec.(*ast.ValueSpec); ok {
+					for _, name := range value.Names {
+						names[name.Name] = true
+					}
+				}
+			}
+		}
+	}
+	return names
+}
+
+// captureShadowedFunctions declares a local for each package function called
+// as an argument whose name a local in declared shadows, and rewrites the
+// call to use it. captured maps a function's name to its local, so a function
+// called twice is captured once.
+func (p argumentParser) captureShadowedFunctions(statements []ast.Stmt, args []muxt.Argument, call *ast.CallExpr, declared map[string]bool, captured map[string]string) []ast.Stmt {
+	for i, a := range call.Args {
+		nestedCall, ok := a.(*ast.CallExpr)
+		if !ok || i >= len(args) || args[i].Type == muxt.ArgumentTypeRequestBodyJSON {
+			continue
+		}
+		statements = p.captureShadowedFunctions(statements, args[i].Arguments(), nestedCall, declared, captured)
+		fun, ok := nestedCall.Fun.(*ast.Ident)
+		if !ok || args[i].IsMethod() || !declared[fun.Name] {
+			continue
+		}
+		local, ok := captured[fun.Name]
+		if !ok {
+			local = fun.Name + "Func"
+			for n := 2; declared[local] || p.file.taken[local]; n++ {
+				local = fun.Name + "Func" + strconv.Itoa(n)
+			}
+			captured[fun.Name] = local
+			declared[local] = true
+			statements = append(statements, &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent(local)},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{ast.NewIdent(fun.Name)},
+			})
+		}
+		nestedCall.Fun = ast.NewIdent(local)
+	}
+	return statements
 }
 
 // appendRequestArguments renders the arguments of call, and of the calls
@@ -168,6 +247,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		if err != nil {
 			return nil, err
 		}
+		compareValueErrorAsError(receiverCall, nested)
 		return append(statements, receiverCall.DefineStmts()...), nil
 	}
 	declare, err := typedVar(p.file, resultVarIdent, nested.ParamType(), nil)
@@ -186,6 +266,7 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 		if err != nil {
 			return nil, err
 		}
+		compareValueErrorAsError(receiverCall, nested)
 		body = append(receiverCall.DefineStmts(), &ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent(resultVarIdent)},
 			Tok: token.ASSIGN,
@@ -194,6 +275,24 @@ func (p argumentParser) appendNestedCall(statements []ast.Stmt, call *ast.CallEx
 	}
 	noErrors := guard(astgen.CallBuiltinLen(selector(p.rdIdent, TemplateDataFieldIdentifierError)), token.EQL, astgen.Int(0), &ast.BlockStmt{List: body})
 	return append(statements, declare, noErrors), nil
+}
+
+// compareValueErrorAsError rewrites the error check of a nested call whose
+// error type is a value, such as a struct, to `if error(err) != nil`: `err !=
+// nil` does not compile for a struct, and every value of such a type is an
+// error. A pointer or interface error keeps `err != nil`, so a nil
+// *LookupError is not an error.
+func compareValueErrorAsError(receiverCall *receiverMethodCall, nested muxt.Argument) {
+	if nested.ResultShape() != muxt.ResultShapeDataError || nested.ErrorCanBeNil() {
+		return
+	}
+	check, ok := receiverCall.Check.(*ast.IfStmt)
+	if !ok {
+		return
+	}
+	if cond, ok := check.Cond.(*ast.BinaryExpr); ok {
+		cond.X = &ast.CallExpr{Fun: ast.NewIdent("error"), Args: []ast.Expr{cond.X}}
+	}
 }
 
 func (p argumentParser) appendIdentifier(statements []ast.Stmt, call *ast.CallExpr, i int, argument muxt.Argument, arg *ast.Ident) ([]ast.Stmt, error) {
