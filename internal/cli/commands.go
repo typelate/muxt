@@ -115,6 +115,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 		exploreModuleCommand(workingDirectory),
 		generateFakeServerCommand(workingDirectory),
 		testTemplateMutationsCommand(workingDirectory, run.mutations),
+		documentationCommand(),
 	)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr

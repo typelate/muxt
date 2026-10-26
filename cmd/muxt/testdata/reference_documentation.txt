@@ -1,0 +1,28 @@
+# muxt documentation prints embedded docs and an index
+
+muxt documentation
+stdout '^reference$'
+stdout '^  template-names — Template Name Syntax$'
+stdout '^  commands/generate — '
+stdout '^how-to$'
+stdout 'muxt documentation <topic>'
+stdout 'relative to the muxt repository'
+
+muxt documentation template-names
+stdout '^# Template Name Syntax$'
+
+muxt documentation commands/generate
+stdout '^# muxt generate'
+
+muxt documentation --format json
+stdout '"id": "call-parameters"'
+stdout '"section": "reference"'
+
+! muxt documentation template-nam
+stderr 'did you mean: template-names'
+
+! muxt documentation templ-names
+stderr 'did you mean: template-names'
+
+muxt help documentation
+stdout 'documentation'

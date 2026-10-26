@@ -14,6 +14,7 @@
 | [`generate-fake-server`](commands/generate-fake-server.md) | | Write a fake server for browsing routes. |
 | [`test-template-mutations`](commands/test-template-mutations.md) | | Report template actions no test catches. |
 | [`version`](commands/version.md) | `v` | Print the version. |
+| [`documentation`](commands/documentation.md) | `docs` | Print the embedded documentation pages. |
 | `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |
 
 `muxt` with no subcommand prints the package's routes and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods:
