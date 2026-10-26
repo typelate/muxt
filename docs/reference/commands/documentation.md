@@ -25,7 +25,7 @@ A topic ID is the page's path under `docs/` without `.md`. Pages under `referenc
 | `tutorials` | `tutorials/quick-start` |
 | `explanation` | `explanation/manifesto`, `explanation/decisions/00002_use_code_generation_instead_of_reflection` |
 
-`reference/template-names` and `template-names.md` also resolve.
+`reference/template-names` and `template-names.md` also resolve, as does a final path segment that names exactly one topic (`check` for `commands/check`, `quick-start` for `tutorials/quick-start`). An ambiguous segment is an unknown topic.
 
 Links inside a page are relative to the muxt repository's `docs/` directory. They are not URLs; resolve them to another topic ID.
 
