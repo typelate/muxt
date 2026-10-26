@@ -36,6 +36,7 @@ The [README](../README.md) introduces muxt.
   - [`muxt explore-module`](reference/commands/explore-module.md)
   - [`muxt generate-fake-server`](reference/commands/generate-fake-server.md)
   - [`muxt version`](reference/commands/version.md)
+  - [`muxt documentation`](reference/commands/documentation.md)
 - [Template Name Syntax](reference/template-names.md): method, host, path, status, call
 - [Call Parameters](reference/call-parameters.md): what each argument binds and how it is parsed
 - [Call Results](reference/call-results.md): what a method may return and how it renders
