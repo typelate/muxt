@@ -35,6 +35,26 @@ func TestComplexity(t *testing.T) {
 	}
 }
 
+// TestTypeKeyUnaliases states that two spellings of one type share a key,
+// so an alias hides neither a change to what it stands for nor sameness.
+func TestTypeKeyUnaliases(t *testing.T) {
+	pkg := types.NewPackage("example.com/data", "data")
+	data := types.NewNamed(types.NewTypeName(0, pkg, "Data", nil), types.NewStruct(nil, nil), nil)
+	alias := types.NewAlias(types.NewTypeName(0, pkg, "Page", nil), data)
+	for _, tt := range []struct {
+		name         string
+		alias, plain types.Type
+	}{
+		{name: "alias", alias: alias, plain: data},
+		{name: "pointer to alias", alias: types.NewPointer(alias), plain: types.NewPointer(data)},
+		{name: "map of slices of alias", alias: types.NewMap(types.Typ[types.String], types.NewSlice(alias)), plain: types.NewMap(types.Typ[types.String], types.NewSlice(data))},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, typeKey(tt.plain), typeKey(tt.alias), "typeKey(%v)", tt.alias)
+		})
+	}
+}
+
 // TestTypeNames states the two ways a type is written: exactly, with its
 // full package path, to decide whether a template was already mutated with
 // it, and by package name for a reader.

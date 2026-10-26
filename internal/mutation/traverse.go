@@ -176,11 +176,34 @@ func executeWith(lt *checked, tree *parse.Tree, dot types.Type, inspect func(*pa
 // typeKey identifies a type exactly, for deciding whether a template has
 // already been mutated with this dot. It keeps full package paths so that
 // two same named types from different packages never collide.
+//
+// An alias is replaced by the type it stands for, so retargeting an alias
+// -- type Page = page.Data becoming page.Model -- changes the key where the
+// alias's own name would not.
 func typeKey(t types.Type) string {
 	if t == nil {
 		return "<nil>"
 	}
-	return t.String()
+	return unaliased(t).String()
+}
+
+// unaliased replaces the aliases in t with what they stand for, through the
+// types that wrap another: pointers, slices, arrays, maps and channels.
+func unaliased(t types.Type) types.Type {
+	switch t := types.Unalias(t).(type) {
+	case *types.Pointer:
+		return types.NewPointer(unaliased(t.Elem()))
+	case *types.Slice:
+		return types.NewSlice(unaliased(t.Elem()))
+	case *types.Array:
+		return types.NewArray(unaliased(t.Elem()), t.Len())
+	case *types.Map:
+		return types.NewMap(unaliased(t.Key()), unaliased(t.Elem()))
+	case *types.Chan:
+		return types.NewChan(t.Dir(), unaliased(t.Elem()))
+	default:
+		return t
+	}
 }
 
 // typeDisplay renders a type for a report, qualified by package name
