@@ -28,5 +28,3 @@ func RenderIndex(w io.Writer, data any) error {
 server.go:6:9 ExecuteTemplate "index" any
 index.gohtml:1:25: executing "index" at <.Title>: field or method Title not found on any
 
-any has no exported fields or methods
-

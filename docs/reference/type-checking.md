@@ -64,10 +64,12 @@ Each error names the call site, then the template position and what failed:
   }
 ```
 
-A partial that several calls render with the same type of dot fails the same way from each. The error is printed once, under the first call, with the others listed after it ([check_shared_partial_error.txtar](../../internal/analysis/testdata/check/check_shared_partial_error.txtar)):
+A partial that several calls render with the same type of dot fails the same way from each. The error is printed once, under the first call that reaches it; after every call is checked, it is repeated once with the other calls that reach it ([check_shared_partial_error.txtar](../../internal/analysis/testdata/check/check_shared_partial_error.txtar)):
 
 ```text
 /home/me/app/server.go:17:9 ExecuteTemplate "intakes" AdminPage
+/home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+
 /home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
   also reached from:
     /home/me/app/server.go:21:9 ExecuteTemplate "users" AdminPage

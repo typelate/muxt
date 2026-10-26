@@ -32,9 +32,5 @@ func RenderIndex(w io.Writer, page Page) error {
 server.go:10:9 ExecuteTemplate "index" Page
 index.gohtml:1:25: executing "index" at <.Heading>: field or method Heading not found on Page
 
-  type Page struct {
-    Title string
-  }
-
 Unused templates (allowed by --allow-unused):
   - index.gohtml:2:20: "orphan"

@@ -1,7 +1,8 @@
 A type error in a partial that several pages call with the same type of
-dot is reported once, under the first call that reaches it, with the other
-calls listed after it (issue #130). The same partial called with a
-different type of dot is a different error and is reported on its own.
+dot is reported once, under the first call that reaches it; once every
+call is checked, the error is repeated with the other calls that reach it.
+The same partial called with a different type of dot is a different error
+and is reported on its own.
 
 Command line: muxt check
 -- config.json --
@@ -56,10 +57,12 @@ func Login(w io.Writer, page LoginPage) error {
 -- want/log.txt --
 server.go:17:9 ExecuteTemplate "intakes" AdminPage
 footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
-  also reached from:
-    server.go:21:9 ExecuteTemplate "users" AdminPage
-    server.go:25:9 ExecuteTemplate "settings" AdminPage
 
 server.go:29:9 ExecuteTemplate "login" LoginPage
 footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on LoginPage
+
+footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+  also reached from:
+    server.go:21:9 ExecuteTemplate "users" AdminPage
+    server.go:25:9 ExecuteTemplate "settings" AdminPage
 

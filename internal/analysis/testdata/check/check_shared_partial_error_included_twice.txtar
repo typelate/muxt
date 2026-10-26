@@ -1,0 +1,35 @@
+A page that renders a broken partial twice reaches its error once: the
+page is not listed as also reaching it.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- pages.gohtml --
+{{define "intakes"}}{{template "footer" .}}<h1>Intakes</h1>{{template "footer" .}}{{end}}
+-- footer.gohtml --
+{{define "footer"}}<footer>{{.Viewer}}</footer>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type AdminPage struct {
+	Title string
+}
+
+func Intakes(w io.Writer, page AdminPage) error {
+	return templates.ExecuteTemplate(w, "intakes", page)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:10:9 ExecuteTemplate "intakes" AdminPage
+footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+
