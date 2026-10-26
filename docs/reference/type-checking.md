@@ -20,7 +20,7 @@ A call whose name is not a literal, such as one in a `render(w, name, data)` hel
 ok: 4 templates, 1 call site skipped
 ```
 
-A template only such a helper renders is also reported unused. To check it, call `ExecuteTemplate` with a literal name and a typed value at each call site:
+Such a call may render any template, so while one exists in the package no template is reported unused. To check the templates it renders, call `ExecuteTemplate` with a literal name and a typed value at each call site:
 
 ```go
 // not checked
@@ -34,7 +34,7 @@ err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
 
 Alternatively, make the page a route template with a call, so the generated handler renders it.
 
-A call whose name is a literal but whose data is `any` (or another interface) is checked against that interface type: any field access on dot fails with `field or method Name not found on any`. Pass the concrete type.
+A call whose name is a literal but whose data is `any` (or another interface) is not skipped: it is checked against that interface type, so any field access on dot fails with `field or method Name not found on any` ([check_any_data.txtar](../../internal/analysis/testdata/check/check_any_data.txtar)). Pass the concrete type.
 
 ## What is checked
 
@@ -64,7 +64,7 @@ Error: fail: 1 error
 
 Check also fails on:
 
-- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt))
+- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)); not reported while a call with a non-literal template name exists, since that call may render any template
 - content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
 - a field or method access on an `any` value: `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt))
 

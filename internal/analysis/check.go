@@ -67,7 +67,9 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 		executedTemplates := make(map[string][]TemplateExecution)
 		// walkedEveryCall is false once a call cannot be walked, and then
 		// what the calls reach is unknown, so nothing is reported unused.
-		walkedEveryCall := true
+		// A call whose template name is not a literal may render any
+		// template, so it is one of those.
+		walkedEveryCall := len(lt.NonLiteralCalls) == 0
 		for _, c := range lt.Calls {
 			result.Checked++
 			if config.Verbose {
