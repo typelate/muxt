@@ -53,7 +53,7 @@ func RenderPage(w io.Writer, page Page) error {
 dry run: no tests were run
 
 server.go:23:9 ExecuteTemplate "page" (dot: server.Page)
-  "page" page.gohtml (complexity 3, dot: server.Page)
+  "page" page.gohtml (complexity 3, 7 mutants, dot: server.Page)
     SKIP 1:18 action-empty (does not type check against server.Page)
     PEND 1:38 action-empty
     PEND 1:53 condition .Banned=false

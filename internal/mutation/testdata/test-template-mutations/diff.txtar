@@ -73,7 +73,7 @@ func RenderPage(w io.Writer, page Page) error {
 dry run: no tests were run
 
 server.go:17:9 ExecuteTemplate "page" (dot: server.Page)
-  "body" page.gohtml via {{template}} (complexity 2, dot: server.Page)
+  "body" page.gohtml via {{template}} (complexity 2, 3 mutants, dot: server.Page)
     PEND 3:24 action-zero
     PEND 3:33 if-false
     PEND 3:33 if-true

@@ -19,6 +19,10 @@ type mutantRunner struct {
 	scratch  string
 	progress io.Writer
 
+	// templates, when set, receives one line as each template's last
+	// mutant finishes. Unlike progress it is short enough for a log.
+	templates io.Writer
+
 	// test runs the suite against one mutant's overlay and says whether
 	// the tests caught it. An error means the tests could not be run at
 	// all, which stops the run.
@@ -30,6 +34,19 @@ type mutantRunner struct {
 	clock *estimate
 	done  int
 	err   error
+
+	// pending tracks the mutants each template still has to finish.
+	pending       map[*TemplateReport]*templateProgress
+	templatesDone int
+	templateTotal int
+}
+
+// templateProgress sums the verdicts of one template as they arrive.
+type templateProgress struct {
+	remaining               int
+	total, killed, survived int
+	skipped                 int
+	seconds                 float64
 }
 
 // runAll runs every mutant in the report, at most workers at a time.
@@ -43,9 +60,14 @@ type mutantRunner struct {
 // ctx being done is such an error, and interrupts the ones running.
 func (r *mutantRunner) runAll(ctx context.Context, report *Report, workers int) error {
 	total := 0
+	r.pending = make(map[*TemplateReport]*templateProgress)
 	for group := range report.eachTemplate() {
 		total += len(group.Results)
+		if n := len(group.Results); n > 0 {
+			r.pending[group] = &templateProgress{remaining: n, total: n}
+		}
 	}
+	r.templateTotal = len(r.pending)
 
 	slots := make(chan struct{}, workers)
 	var running sync.WaitGroup
@@ -115,6 +137,42 @@ func (r *mutantRunner) finish(group *TemplateReport, result *Result, total int, 
 	}
 	reportProgress(r.progress, r.done, total, group, *result, r.clock)
 	r.done++
+	r.finishTemplate(group, *result)
+}
+
+// finishTemplate adds one verdict to its template, and writes the
+// template's line once every mutant in it is done. r.mu is held.
+func (r *mutantRunner) finishTemplate(group *TemplateReport, result Result) {
+	t := r.pending[group]
+	if t == nil {
+		return
+	}
+	switch result.Status {
+	case StatusKilled:
+		t.killed++
+	case StatusMissed:
+		t.survived++
+	case StatusSkipped:
+		t.skipped++
+	}
+	t.seconds += result.Seconds
+	if t.remaining--; t.remaining > 0 {
+		return
+	}
+	delete(r.pending, group)
+	r.templatesDone++
+	if r.templates == nil {
+		return
+	}
+	line := fmt.Sprintf("[%*d/%d] %s %s: %d %s, %d killed, %d survived",
+		len(fmt.Sprint(r.templateTotal)), r.templatesDone, r.templateTotal,
+		group.File, strconv.Quote(group.Template),
+		t.total, pluralize(t.total, "mutant"), t.killed, t.survived)
+	if t.skipped > 0 {
+		line += fmt.Sprintf(", %d skipped", t.skipped)
+	}
+	line += ", " + roundDuration(time.Duration(t.seconds*float64(time.Second)))
+	_, _ = fmt.Fprintln(r.templates, line)
 }
 
 func (r *mutantRunner) failed() bool {

@@ -16,6 +16,8 @@ cmp stdout want.txt
 
 ! muxt test-template-mutations --format json --seed 1
 stderr '(?m)^Error: 1 mutant missed$'
+# Piped and without -v, stderr carries no per-template progress lines.
+! stderr '(?m)^\['
 stdout '"status": "KILL"'
 stdout '"status": "MISS"'
 stdout '"operator": "if-false"'

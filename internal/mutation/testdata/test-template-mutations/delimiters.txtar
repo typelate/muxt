@@ -37,7 +37,7 @@ func RenderNote(w io.Writer, note string) error {
 dry run: no tests were run
 
 server.go:11:9 ExecuteTemplate "note" (dot: string)
-  "note" server.go (complexity 1, dot: string)
+  "note" server.go (complexity 1, 1 mutant, dot: string)
     PEND 8:98 action-zero
 
 1 mutant, 1 runnable, 0 skipped

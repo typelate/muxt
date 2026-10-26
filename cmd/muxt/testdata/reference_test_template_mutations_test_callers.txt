@@ -57,7 +57,7 @@ func TestGreeting(t *testing.T) {
 dry run: no tests were run
 
 render_test.go:10:12 ExecuteTemplate "greeting" (dot: server.Greeting)
-  "greeting" templates.gohtml (complexity 1, dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 1, 1 mutant, dot: server.Greeting)
     PEND 1:29 action-zero
 
 1 mutant, 1 runnable, 0 skipped

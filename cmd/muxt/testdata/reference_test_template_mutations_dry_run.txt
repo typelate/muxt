@@ -59,7 +59,7 @@ func TestGreeting(t *testing.T) {
 dry run: no tests were run
 
 template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
-  "greeting" templates.gohtml (complexity 2, dot: server.Greeting)
+  "greeting" templates.gohtml (complexity 2, 3 mutants, dot: server.Greeting)
     PEND 1:29 action-zero
     PEND 1:39 if-false
     PEND 1:39 if-true

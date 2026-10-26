@@ -43,7 +43,7 @@ func Render(w io.Writer, greeting Greeting) error {
 dry run: no tests were run
 
 server.go:16:9 ExecuteTemplate "greeting" (dot: server.Greeting)
-  "greeting" server.go (complexity 2, dot: server.Greeting)
+  "greeting" server.go (complexity 2, 3 mutants, dot: server.Greeting)
     PEND 8:70 action-zero
     PEND 8:80 if-false
     PEND 8:80 if-true
