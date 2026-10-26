@@ -1,6 +1,8 @@
 # An sse route's call may take the result of another call. That call runs
 # before the event stream opens; when it returns an error the route
-# responds 500 and does not open the stream.
+# responds 500 and does not open the stream. The nested call takes the same
+# arguments as one on a plain route, request among them, and may sit before
+# a path value.
 
 muxt generate --use-receiver-type=Server
 muxt check
@@ -9,6 +11,8 @@ exec go test -race -count=1
 
 -- template.gohtml --
 {{- define "GET /events/{id} sse(Stream(ctx, Count(ctx, id), execute))" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /gated/{id} sse(Stream(ctx, Gate(request, id), execute))" -}}{{- .Result -}}{{- end -}}
+{{- define "GET /sessions/{id} sse(Watch(ctx, Session(request), id, execute))" -}}{{- .Result -}}{{- end -}}
 -- go.mod --
 module server
 
@@ -21,6 +25,7 @@ import (
 	"embed"
 	"errors"
 	"html/template"
+	"net/http"
 	"strconv"
 )
 
@@ -36,6 +41,21 @@ func (Server) Count(ctx context.Context, id int) (int, error) {
 		return 0, errors.New("no count for a negative id")
 	}
 	return id * 2, nil
+}
+
+func (Server) Gate(request *http.Request, id int) (int, error) {
+	if request.Header.Get("Authorization") == "" {
+		return 0, errors.New("unauthorized")
+	}
+	return id + 1, nil
+}
+
+func (Server) Session(request *http.Request) string {
+	return request.Header.Get("Session")
+}
+
+func (Server) Watch(ctx context.Context, session string, id int, execute func(data string) error) error {
+	return execute(session + "-" + strconv.Itoa(id))
 }
 
 func (Server) Stream(ctx context.Context, count int, execute func(data string) error) error {
@@ -76,6 +96,39 @@ func TestStream(t *testing.T) {
 		}
 		if got := rec.Header().Get("Content-Type"); got == "text/event-stream" {
 			t.Fatalf("Content-Type = %q, want the stream not opened", got)
+		}
+	})
+	t.Run("a nested call takes request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/gated/41", nil)
+		req.Header.Set("Authorization", "token")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, "data: 42\n\n") {
+			t.Fatalf("body = %q, want it to contain %q", got, "data: 42\n\n")
+		}
+	})
+
+	t.Run("a nested call's error that takes request responds 500", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/gated/41", nil))
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("a nested call before a path value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/sessions/7", nil)
+		req.Header.Set("Session", "abc")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if got := rec.Body.String(); !strings.Contains(got, "data: abc-7\n\n") {
+			t.Fatalf("body = %q, want it to contain %q", got, "data: abc-7\n\n")
 		}
 	})
 }

@@ -175,6 +175,7 @@ Return when `ctx` is done or `execute` returns an error: the client is gone, the
 | Wrapper | exactly one method call; any other shape, such as `sse()`, is an ordinary call to a function named `sse` ([reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt)) |
 | Callback | `func(T) error` or `func() error`, inline or a named or aliased func type ([reference_callback_named_func_type.txt](../../cmd/muxt/testdata/reference_callback_named_func_type.txt)) |
 | Method results | none, or `error`; a returned error is logged and the stream closes ([reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt)) |
+| Nested calls | allowed, with the same arguments as on any route, such as `sse(Stream(ctx, Gate(request, id), execute))`; they run before the stream opens, and a returned error is logged and responds 500 without opening it ([reference_sse_nested_call.txt](../../cmd/muxt/testdata/reference_sse_nested_call.txt)) |
 | `response` argument | not allowed ([err_sse_with_response.txt](../../cmd/muxt/testdata/err_sse_with_response.txt)) |
 | Undefined method | fails generation: `method NAME using the execute callback must be defined on the receiver type` |
 | Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call; a path wildcard with such a name is a path value, not a callback ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
