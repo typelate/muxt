@@ -1,6 +1,6 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt)
 
-Muxt is a command-line tool for Go's `html/template` and `net/http`. Not a framework. Not a router. No runtime. Two commands do most of the work: `generate` and `check`.
+Muxt is a command-line tool that generates `net/http` handlers from `html/template` names and type-checks your templates against the Go data they render. Two commands do most of the work: `generate` and `check`.
 
 A template name defines the contract between the hypermedia and the `http.Handler`:
 
@@ -18,7 +18,7 @@ func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 
 `muxt check` type-checks a template against the data it receives. It checks each `ExecuteTemplate` call on the templates variable whose template name is a literal string and whose data has a statically known type. Generated handlers meet both conditions. Rename a field and the template that still uses it fails a static `muxt check`.
 
-The simplest web-app architecture is a single binary with an HTTP server. The Go standard library has all the runtime you need for the HTTP endpoints and hypermedia generation. When you need more complicated front-end interaction, reach for fixi, htmx, and Datastar. What it lacks is statically type-checked coupling between your Go code and HTML templates.
+Muxt is built for web apps that ship as a single Go binary serving hypermedia from the standard library, with fixi, htmx, or Datastar added when the front end needs more interaction. It supplies the statically type-checked coupling between your Go code and HTML templates that the standard library leaves out.
 
 ## Install
 
