@@ -55,6 +55,50 @@ func TestTypeKeyUnaliases(t *testing.T) {
 	}
 }
 
+// TestTypeKeyUnaliasesInsideGenerics states that an alias is removed
+// wherever it sits: as the type argument of a generic type, which is how a
+// route's dot carries its data, and in struct fields and signatures. A
+// type holding no alias keeps its key.
+func TestTypeKeyUnaliasesInsideGenerics(t *testing.T) {
+	const src = `
+type Data struct{ Name string }
+type Page = Data
+type Box[R, T any] struct{ Receiver R; Data T }
+type Cases struct {
+	ViaAlias Box[int, Page]
+	Rows Box[int, []Page]
+	Field struct{ P Page }
+	PlainField struct{ P Data }
+	Func func(Page) (Page, error)
+	PlainFunc func(Data) (Data, error)
+	Untouched Box[int, string]
+}
+`
+	cases := dataType(t, src, "Cases").Underlying().(*types.Struct)
+	field := func(name string) types.Type {
+		for f := range cases.Fields() {
+			if f.Name() == name {
+				return f.Type()
+			}
+		}
+		t.Fatalf("no field %s", name)
+		return nil
+	}
+	data := dataType(t, src, "Data")
+	box := cases.Field(0).Type().(*types.Named).Origin()
+	want := func(arg types.Type) string {
+		instance, err := types.Instantiate(nil, box, []types.Type{types.Typ[types.Int], arg}, false)
+		require.NoError(t, err)
+		return typeKey(instance)
+	}
+	assert.NotEqual(t, field("ViaAlias").String(), want(data), "the alias is visible to String, so the test means something")
+	assert.Equal(t, want(data), typeKey(field("ViaAlias")), "Box[int, Page]")
+	assert.Equal(t, want(types.NewSlice(data)), typeKey(field("Rows")), "Box[int, []Page]")
+	assert.Equal(t, typeKey(field("PlainField")), typeKey(field("Field")), "struct{ P Page }")
+	assert.Equal(t, typeKey(field("PlainFunc")), typeKey(field("Func")), "func(Page) (Page, error)")
+	assert.Equal(t, field("Untouched").String(), typeKey(field("Untouched")), "a type with no alias keeps its key")
+}
+
 // TestTypeNames states the two ways a type is written: exactly, with its
 // full package path, to decide whether a template was already mutated with
 // it, and by package name for a reader.
