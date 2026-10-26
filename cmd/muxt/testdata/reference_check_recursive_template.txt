@@ -1,0 +1,46 @@
+# muxt check handles a template that renders itself with the same dot type
+# (a tree), and reports an error inside it exactly once.
+
+muxt generate --use-receiver-type=T
+muxt check
+stdout 'ok:'
+
+cp bad-template.gohtml template.gohtml
+! muxt check
+stderr -count=1 'field or method Missing not found'
+
+-- template.gohtml --
+{{define "GET / Index()"}}<html><body>{{template "node" .Result}}</body></html>{{end}}
+
+{{define "node"}}<li>{{.Name}}<ul>{{range .Children}}{{template "node" .}}{{end}}</ul></li>{{end}}
+-- bad-template.gohtml --
+{{define "GET / Index()"}}<html><body>{{template "node" .Result}}</body></html>{{end}}
+
+{{define "node"}}<li>{{.Missing}}<ul>{{range .Children}}{{template "node" .}}{{end}}</ul></li>{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "template.gohtml"))
+
+type Node struct {
+	Name     string
+	Children []Node
+}
+
+type T struct{}
+
+func (T) Index() Node {
+	return Node{Name: "root", Children: []Node{{Name: "leaf"}}}
+}

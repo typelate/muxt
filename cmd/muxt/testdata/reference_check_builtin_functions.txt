@@ -1,0 +1,32 @@
+# muxt check knows the escaping builtins urlquery, js, and html.
+
+muxt generate --use-receiver-type=T
+muxt check
+stdout 'ok:'
+
+-- template.gohtml --
+{{define "GET / Index()"}}<a href="/search?q={{urlquery .Result.Q}}">{{html .Result.Q}}</a><script>var q = "{{js .Result.Q}}";</script>{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type Search struct{ Q string }
+
+type T struct{}
+
+func (T) Index() Search {
+	return Search{Q: "a b"}
+}
