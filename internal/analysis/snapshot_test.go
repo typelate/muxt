@@ -63,7 +63,9 @@ var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
 //     gets one declaring the templates variable over every .gohtml file.
 //   - want/ files are what was reported: want/stdout.txt for what a listing
 //     writes, want/checked.txt for the number of ExecuteTemplate calls
-//     check returns, want/log.txt for what check logged, and want/error.txt
+//     check type checked, want/unchecked.txt for the number it could not
+//     because the template name is not a string literal (when there are
+//     any), want/log.txt for what check logged, and want/error.txt
 //     for the error returned.
 //
 // Paths in the output are relative to the directory the package was
@@ -176,9 +178,12 @@ func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]strin
 			break
 		}
 		var logs strings.Builder
-		var n int
-		n, runErr = analysis.Check(config, log.New(&logs, "", 0), pkg)
-		got["checked.txt"] = fmt.Sprintf("%d\n", n)
+		var result analysis.CheckResult
+		result, runErr = analysis.Check(config, log.New(&logs, "", 0), pkg)
+		got["checked.txt"] = fmt.Sprintf("%d\n", result.Checked)
+		if result.NonLiteral > 0 {
+			got["unchecked.txt"] = fmt.Sprintf("%d\n", result.NonLiteral)
+		}
 		if logs.Len() > 0 {
 			got["log.txt"] = relative(logs.String())
 		}

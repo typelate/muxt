@@ -2,7 +2,9 @@ package load
 
 import (
 	"cmp"
+	"go/ast"
 	"go/types"
+	"iter"
 
 	"golang.org/x/tools/go/packages"
 
@@ -63,14 +65,56 @@ func readVariable(pkg *packages.Package, name string) (source.Variable, error) {
 			Tree:         d.Tree,
 		}
 	}
+	literal := make(map[*ast.CallExpr]bool)
 	for call := range lt.ExecuteTemplateCalls() {
+		literal[call.Call] = true
 		variable.Calls = append(variable.Calls, source.Call{
 			Position: pkg.Fset.Position(call.Call.Pos()),
 			Template: call.TemplateName,
 			Data:     call.DataType,
 		})
 	}
+	for call := range executeTemplateCalls(pkg, pkg.Types.Scope().Lookup(name)) {
+		if !literal[call] {
+			variable.NonLiteralCalls = append(variable.NonLiteralCalls, pkg.Fset.Position(call.Pos()))
+		}
+	}
 	return variable, nil
+}
+
+// executeTemplateCalls yields every variable.ExecuteTemplate(w, name, data)
+// call in pkg, whatever its template name argument is.
+func executeTemplateCalls(pkg *packages.Package, variable types.Object) iter.Seq[*ast.CallExpr] {
+	return func(yield func(*ast.CallExpr) bool) {
+		if variable == nil || pkg.TypesInfo == nil {
+			return
+		}
+		for _, file := range pkg.Syntax {
+			keepWalking := true
+			ast.Inspect(file, func(node ast.Node) bool {
+				if !keepWalking {
+					return false
+				}
+				call, ok := node.(*ast.CallExpr)
+				if !ok || len(call.Args) != 3 {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "ExecuteTemplate" {
+					return true
+				}
+				receiver, ok := sel.X.(*ast.Ident)
+				if !ok || pkg.TypesInfo.Uses[receiver] != variable {
+					return true
+				}
+				keepWalking = yield(call)
+				return keepWalking
+			})
+			if !keepWalking {
+				return
+			}
+		}
+	}
 }
 
 // Receiver finds the receiver type named ident in the package at dir among

@@ -32,12 +32,24 @@ type CheckConfiguration struct {
 	TemplatesVariables []string
 }
 
-// Check validates the package's templates and returns how many
-// ExecuteTemplate call sites it checked, so the caller can report the
-// count on success.
-func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (int, error) {
+// CheckResult counts the ExecuteTemplate calls Check found, so the caller
+// can report them on success.
+type CheckResult struct {
+	// Checked is how many calls were type checked.
+	Checked int
+
+	// NonLiteral is how many were not, because their template name is not
+	// a string literal.
+	NonLiteral int
+}
+
+// Check validates the package's templates. It logs each ExecuteTemplate
+// call it cannot check because the template name is not a string literal:
+// the templates such a call renders are otherwise left unchecked without
+// a word.
+func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (CheckResult, error) {
 	var errs []error
-	totalChecked := 0
+	var result CheckResult
 	qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
 
 	for _, lt := range pkg.Variables {
@@ -47,12 +59,17 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (i
 			errs = append(errs, err)
 		}
 
+		for _, position := range lt.NonLiteralCalls {
+			result.NonLiteral++
+			logger.Printf("%s: %s not checked: the template name is not a string literal, so which template it renders is not known until run time", position, executeTemplateFunc)
+		}
+
 		executedTemplates := make(map[string][]TemplateExecution)
 		// walkedEveryCall is false once a call cannot be walked, and then
 		// what the calls reach is unknown, so nothing is reported unused.
 		walkedEveryCall := true
 		for _, c := range lt.Calls {
-			totalChecked++
+			result.Checked++
 			if config.Verbose {
 				logger.Println("checking endpoint", c.Template)
 			}
@@ -81,11 +98,11 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (i
 
 	switch len(errs) {
 	case 0:
-		return totalChecked, nil
+		return result, nil
 	case 1:
-		return totalChecked, fmt.Errorf("1 error")
+		return result, fmt.Errorf("1 error")
 	default:
-		return totalChecked, fmt.Errorf("%d errors", len(errs))
+		return result, fmt.Errorf("%d errors", len(errs))
 	}
 }
 

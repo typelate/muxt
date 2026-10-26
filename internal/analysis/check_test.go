@@ -263,7 +263,7 @@ func TestCheckReportsACallWithNoDataType(t *testing.T) {
 	var logs strings.Builder
 	n, err := Check(CheckConfiguration{}, log.New(&logs, "", 0), untypedCallPackage(t))
 	require.EqualError(t, err, "1 error", "Check()")
-	assert.Equal(t, 1, n, "Check() checked")
+	assert.Equal(t, CheckResult{Checked: 1}, n, "Check() checked")
 	assert.Equal(t, "routes.go:3:9 ExecuteTemplate \"page\"\n -  the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)\n", logs.String(), "Check() logged")
 }
 

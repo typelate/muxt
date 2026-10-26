@@ -60,6 +60,13 @@ type Variable struct {
 	// Calls are the variable's ExecuteTemplate calls with a string
 	// literal template name, in file order.
 	Calls []Call
+
+	// NonLiteralCalls are where the variable's other ExecuteTemplate calls
+	// are written, in file order: those whose template name is not a
+	// string literal, as in a render helper taking the name as a
+	// parameter. Which template such a call renders is not known until
+	// run time, so it cannot be type checked.
+	NonLiteralCalls []token.Position
 }
 
 // NamePosition reports where a template's name begins in the source that
