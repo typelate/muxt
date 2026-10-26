@@ -27,10 +27,10 @@ muxt list-template-callers ./internal/preview
 stdout 'greeting'
 
 ! muxt check ./internal/missing
-stderr 'check: package directory'
+stderr 'package directory'
 
 ! muxt check ./main.go
-stderr 'is not one'
+stderr 'is not a package directory'
 
 ! muxt check
 stderr 'templates'
