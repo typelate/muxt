@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -136,4 +137,34 @@ func readLine(br *bufio.Reader) (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// pseudoVersion matches the suffix the go command gives a version built from
+// an untagged commit, with or without a dirty-tree marker.
+var pseudoVersion = regexp.MustCompile(`[-.]\d{14}-[0-9a-f]{12}(\+dirty)?$`)
+
+// Tagged reports whether version names a released or tagged build: not
+// "(devel)", not a pseudo-version, and not a dirty build.
+func Tagged(version string) bool {
+	if version == "" || version == "(devel)" || strings.HasSuffix(version, "+dirty") {
+		return false
+	}
+	return !pseudoVersion.MatchString(version)
+}
+
+// Stable picks the version to record when generating over the file at path.
+//
+// A tagged running version is recorded as is. Any other, such as a local
+// build's pseudo-version or "(devel)", would rewrite the header on every
+// developer's machine, so the version the file already records is kept.
+// With no such file the running version is recorded.
+func Stable(running, path string) string {
+	if Tagged(running) {
+		return running
+	}
+	existing, ok, err := Read(path)
+	if err != nil || !ok || existing.Version == "" {
+		return running
+	}
+	return existing.Version
 }
