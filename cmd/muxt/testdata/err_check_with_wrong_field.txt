@@ -1,5 +1,6 @@
 ! muxt check
 cmpenv stderr want-err.txt
+! stderr '(?m)^Error:'
 
 -- want-err.txt --
 $WORK/main.go:26:6 ExecuteTemplate "template.gohtml" struct{Field2 int}
