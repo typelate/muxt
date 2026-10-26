@@ -1,6 +1,6 @@
 # How to map domain errors to HTTP status codes
 
-A returned error is always 500 and its methods are not consulted ([status codes](../reference/call-results.md#status-code-control)). To respond 404 for a missing record, give the error a `StatusCode() int` method and apply it from the template.
+A returned error responds 500, and its methods are consulted only for a method that returns just an error whose declared type has `StatusCode() int` ([status codes](../reference/call-results.md#status-code-control)). A `(T, error)` method, the usual shape for a lookup, always responds 500 unless the template sets another code. To respond 404 for a missing record, give the error a `StatusCode() int` method and apply it from the template.
 
 Define the error in the package that holds the templates so the services it wraps stay HTTP-free. `database` and `security` stand for your own packages.
 

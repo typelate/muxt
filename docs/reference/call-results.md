@@ -121,7 +121,7 @@ The first non-zero value wins:
 | 3 | the result's `StatusCode() int` method, else its `StatusCode` field |
 | 4 | the template name's code, else 200, or 204 when the rendered body is empty |
 
-An error's own `StatusCode` method is not consulted.
+An error's own `StatusCode` method is consulted only for a method that returns just an error, and only when the declared result type has that method, as with an interface that embeds `error` and adds `StatusCode() int`. A result declared as plain `error` and a `(T, error)` result always respond 500, whatever the returned value's concrete type offers ([internal/muxt/result_shape.go](../../internal/muxt/result_shape.go)).
 
 ```gotmpl
 {{if .Err}}{{.StatusCode 404}}<p>not found</p>{{end}}
