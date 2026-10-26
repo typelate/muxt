@@ -599,6 +599,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			want: analysis.CheckConfiguration{Verbose: true, TemplatesVariables: []string{"templates"}},
 		},
 		{
+			name: "check allowing unused templates",
+			args: "check --allow-unused",
+			want: analysis.CheckConfiguration{AllowUnused: true, TemplatesVariables: []string{"templates"}},
+		},
+		{
 			name: "the route listing",
 			args: "--use-receiver-type=T",
 			want: analysis.DefinitionsConfiguration{ReceiverType: "T", TemplatesVariables: []string{"templates"}},

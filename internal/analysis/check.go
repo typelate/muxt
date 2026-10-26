@@ -28,7 +28,14 @@ const executeTemplateFunc = "ExecuteTemplate"
 var errDataTypeUnknown = errors.New("the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)")
 
 type CheckConfiguration struct {
-	Verbose            bool
+	Verbose bool
+
+	// AllowUnused lists templates nothing executes as a note instead of
+	// failing: a project may render some templates outside muxt, through
+	// a helper whose template name is not a literal. Route templates with
+	// no generated handler still fail.
+	AllowUnused bool
+
 	TemplatesVariables []string
 }
 
@@ -94,7 +101,7 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 		}
 
 		if walkedEveryCall {
-			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates)...)
+			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates, config.AllowUnused)...)
 		}
 	}
 
@@ -141,8 +148,9 @@ func reportExecutionError(logger *log.Logger, qualifier types.Qualifier, call so
 }
 
 // reportUnusedTemplates logs the templates no ExecuteTemplate call reaches
-// and returns one error per kind.
-func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTemplates map[string][]TemplateExecution) []error {
+// and returns one error per kind. With allowUnused, unused templates that
+// are not routes are listed without an error.
+func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTemplates map[string][]TemplateExecution, allowUnused bool) []error {
 	var errs []error
 	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates))
 	if len(unusedRoutes) > 0 {
@@ -153,7 +161,12 @@ func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTe
 		logTemplatePositions(logger, ts, unusedRoutes)
 		errs = append(errs, fmt.Errorf("%d route templates are not wired to generated handlers", len(unusedRoutes)))
 	}
-	if len(unusedPartials) > 0 {
+	switch {
+	case len(unusedPartials) == 0:
+	case allowUnused:
+		logger.Println("Unused templates (allowed by --allow-unused):")
+		logTemplatePositions(logger, ts, unusedPartials)
+	default:
 		logger.Println("Unused templates:")
 		logTemplatePositions(logger, ts, unusedPartials)
 		errs = append(errs, fmt.Errorf("unused templates %d", len(unusedPartials)))

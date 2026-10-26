@@ -39,6 +39,7 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
+	cmd.Flags().BoolVar(&config.AllowUnused, "allow-unused", false, "list templates nothing executes without failing; for templates rendered outside muxt")
 	// v0.20.0 accepted --receiver-type here, so it still parses; check
 	// takes the receiver from the generated file and never reads it.
 	cmd.Flags().StringVar(&ignoredReceiverType, deprecatedReceiverType, "", "DEPRECATED and ignored: muxt check reads the receiver type from the generated routes file.")

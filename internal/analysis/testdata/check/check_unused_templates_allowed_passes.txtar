@@ -1,0 +1,32 @@
+With --allow-unused, a package whose only finding is unused templates
+passes; the unused templates are still listed.
+
+Command line: muxt check --allow-unused
+-- config.json --
+{
+	"Verbose": false,
+	"AllowUnused": true,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+{{define "orphan"}}<p>rendered by a helper muxt does not see</p>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+-- want/checked.txt --
+1
+-- want/log.txt --
+Unused templates (allowed by --allow-unused):
+  - index.gohtml:2:20: "orphan"

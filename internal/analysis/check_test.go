@@ -172,7 +172,7 @@ func TestReportUnusedTemplates(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs strings.Builder
-			errs := reportUnusedTemplates(log.New(&logs, "", 0), parseTemplates(t, templates), tt.executed)
+			errs := reportUnusedTemplates(log.New(&logs, "", 0), parseTemplates(t, templates), tt.executed, false)
 			var got []string
 			for _, err := range errs {
 				got = append(got, err.Error())
