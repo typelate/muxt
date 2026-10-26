@@ -72,6 +72,7 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 		}
 
 		executedTemplates := make(map[string][]TemplateExecution)
+		var diagnostics typeErrors
 		// walkedEveryCall is false once a call cannot be walked, and then
 		// what the calls reach is unknown, so nothing is reported unused.
 		// A call whose template name is not a literal may render any
@@ -95,10 +96,10 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 			}
 			err := findTemplateExecution(executedTemplates, global, qualifier, lt.Set, c.Position, c.Template, c.Data)
 			if err != nil {
-				reportExecutionError(logger, qualifier, c, err)
-				errs = append(errs, err)
+				diagnostics.add(qualifier, c, err)
 			}
 		}
+		errs = append(errs, diagnostics.report(logger, config.Verbose)...)
 
 		if walkedEveryCall {
 			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates, config.AllowUnused)...)
@@ -132,19 +133,115 @@ func reportDefinitionErrors(logger *log.Logger, variable source.Variable) error 
 	return err
 }
 
-func reportExecutionError(logger *log.Logger, qualifier types.Qualifier, call source.Call, err error) {
-	logger.Println(call.Position, executeTemplateFunc, strconv.Quote(call.Template), types.TypeString(call.Data, qualifier))
-	if checkErr, ok := errors.AsType[*check.Error](err); ok {
-		var sb strings.Builder
-		if detailErr := checkErr.DetailedError(&sb, qualifier); detailErr != nil {
-			// The compact error must still reach the user.
-			logger.Println(" - ", err)
-		}
-		logger.Println(sb.String())
-	} else {
-		logger.Println(" - ", err)
+// typeErrors collects the errors the ExecuteTemplate calls of one
+// templates variable reach. A partial several calls render with the same
+// type of dot fails the same way from each, so an error is kept once, with
+// every call that reached it, rather than once per call.
+type typeErrors struct {
+	byText map[string]*typeError
+	// first lists, per call in the order they were added, the errors that
+	// call was the first to reach.
+	first []callTypeErrors
+}
+
+type callTypeErrors struct {
+	call   string
+	errors []*typeError
+}
+
+type typeError struct {
+	// line is the one-line error; detail is what DetailedError adds after
+	// it: the signature of a function called wrongly, or the declaration
+	// of the type a field or method was looked up on.
+	line, detail string
+	// declaration is set when detail is a type declaration. A struct's
+	// field list can run long and buries the error, so it is logged only
+	// with -v.
+	declaration bool
+	err         error
+	// calls are the calls that reached the error, formatted by callLine.
+	calls []string
+}
+
+func (te *typeErrors) add(qualifier types.Qualifier, call source.Call, err error) {
+	if te.byText == nil {
+		te.byText = make(map[string]*typeError)
 	}
-	logger.Println()
+	callText := callLine(qualifier, call)
+	var reached []*typeError
+	for _, e := range splitTypeError(qualifier, err) {
+		key := e.line + "\n" + e.detail
+		if seen, ok := te.byText[key]; ok {
+			seen.calls = append(seen.calls, callText)
+			continue
+		}
+		e.calls = []string{callText}
+		te.byText[key] = e
+		reached = append(reached, e)
+	}
+	if len(reached) > 0 {
+		te.first = append(te.first, callTypeErrors{call: callText, errors: reached})
+	}
+}
+
+// splitTypeError returns one typeError per independent failure in err.
+func splitTypeError(qualifier types.Qualifier, err error) []*typeError {
+	checkErr, ok := errors.AsType[*check.Error](err)
+	if !ok {
+		return []*typeError{{line: " -  " + err.Error(), err: err}}
+	}
+	var result []*typeError
+	for leaf := range checkErr.All {
+		if leaf.Type == check.ErrorTypeAggregate {
+			continue
+		}
+		var sb strings.Builder
+		if detailErr := leaf.DetailedError(&sb, qualifier); detailErr != nil {
+			// The compact error must still reach the user.
+			result = append(result, &typeError{line: leaf.Error(), err: leaf})
+			continue
+		}
+		line, detail, _ := strings.Cut(sb.String(), "\n\n")
+		_, declaration := errors.AsType[*check.IdentifierError](leaf)
+		result = append(result, &typeError{line: line, detail: detail, declaration: declaration, err: leaf})
+	}
+	return result
+}
+
+// report logs each error under the first call that reached it, followed by
+// the other calls that reached it, and returns one error per logged error.
+// A type declaration is logged only when verbose.
+func (te *typeErrors) report(logger *log.Logger, verbose bool) []error {
+	var errs []error
+	for _, first := range te.first {
+		logger.Println(first.call)
+		endsWithBlank := false
+		for _, e := range first.errors {
+			errs = append(errs, e.err)
+			logger.Println(e.line)
+			endsWithBlank = false
+			if len(e.calls) > 1 {
+				logger.Println("  also reached from:")
+				for _, c := range e.calls[1:] {
+					logger.Println("    " + c)
+				}
+			}
+			if e.detail != "" && (verbose || !e.declaration) {
+				logger.Println()
+				logger.Println(e.detail)
+				logger.Println()
+				endsWithBlank = true
+			}
+		}
+		if !endsWithBlank {
+			logger.Println()
+		}
+	}
+	return errs
+}
+
+func callLine(qualifier types.Qualifier, call source.Call) string {
+	return fmt.Sprintf("%s %s %s %s", call.Position, executeTemplateFunc, strconv.Quote(call.Template), types.TypeString(call.Data, qualifier))
 }
 
 // reportUnusedTemplates logs the templates no ExecuteTemplate call reaches
