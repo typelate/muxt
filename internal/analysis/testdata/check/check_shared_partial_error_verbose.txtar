@@ -1,0 +1,78 @@
+With -v, each error is followed by the declaration of the type the field
+or method was looked up on.
+
+Command line: muxt check -v
+-- config.json --
+{
+	"Verbose": true,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- pages.gohtml --
+{{define "intakes"}}<h1>Intakes</h1>{{template "footer" .}}{{end}}
+{{define "users"}}<h1>Users</h1>{{template "footer" .}}{{end}}
+{{define "settings"}}<h1>Settings</h1>{{template "footer" .}}{{end}}
+{{define "login"}}<h1>Login</h1>{{template "footer" .}}{{end}}
+-- footer.gohtml --
+{{define "footer"}}<footer>{{.Viewer}}</footer>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type AdminPage struct {
+	Title    string
+	Subtitle string
+	Rows     []string
+	Total    int
+}
+
+type LoginPage struct {
+	Next string
+}
+
+func Intakes(w io.Writer, page AdminPage) error {
+	return templates.ExecuteTemplate(w, "intakes", page)
+}
+
+func Users(w io.Writer, page AdminPage) error {
+	return templates.ExecuteTemplate(w, "users", page)
+}
+
+func Settings(w io.Writer, page AdminPage) error {
+	return templates.ExecuteTemplate(w, "settings", page)
+}
+
+func Login(w io.Writer, page LoginPage) error {
+	return templates.ExecuteTemplate(w, "login", page)
+}
+-- want/checked.txt --
+4
+-- want/error.txt --
+2 errors
+-- want/log.txt --
+checking endpoint intakes
+checking endpoint users
+checking endpoint settings
+checking endpoint login
+server.go:17:9 ExecuteTemplate "intakes" AdminPage
+footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+  also reached from:
+    server.go:21:9 ExecuteTemplate "users" AdminPage
+    server.go:25:9 ExecuteTemplate "settings" AdminPage
+
+  type AdminPage struct {
+    Title    string
+    Subtitle string
+    Rows     []string
+    Total    int
+  }
+
+server.go:29:9 ExecuteTemplate "login" LoginPage
+footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on LoginPage
+
+  type LoginPage struct {
+    Next string
+  }
+

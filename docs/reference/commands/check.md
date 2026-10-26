@@ -28,4 +28,4 @@ What fails: [Type Checking](../type-checking.md#what-is-checked). A template sha
 muxt check --allow-unused
 ```
 
-`-v` prints `checking endpoint NAME` for each call site. Flags: [cli.md](../cli.md#flags).
+`-v` prints `checking endpoint NAME` for each call site, and the declaration of the type under each field or method error. Flags: [cli.md](../cli.md#flags).

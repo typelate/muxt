@@ -34,20 +34,9 @@ func RenderIndex(w io.Writer, page Page) error {
 -- want/checked.txt --
 1
 -- want/error.txt --
-1 error
+2 errors
 -- want/log.txt --
 server.go:16:9 ExecuteTemplate "index" Page
 index.gohtml:1:25: executing "index" at <.Heading>: field or method Heading not found on Page
-
-  type Page struct {
-    Title string
-    Items []Item
-  }
-
 index.gohtml:2:24: executing "item" at <.Cost>: field or method Cost not found on Item
-
-  type Item struct {
-    Name  string
-    Price int
-  }
 
