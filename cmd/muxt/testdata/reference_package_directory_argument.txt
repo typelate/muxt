@@ -32,6 +32,20 @@ stderr 'package directory'
 ! muxt check ./main.go
 stderr 'is not a package directory'
 
+! muxt list-template-calls ./internal/missing
+stderr 'package directory'
+! stderr 'failed to load'
+
+! muxt list-template-callers ./main.go
+stderr 'is not a package directory'
+
+! muxt -C nope
+stderr 'package directory'
+! stderr 'failed to load'
+
+! muxt -C nope generate
+stderr 'package directory'
+
 ! muxt check
 stderr 'templates'
 
