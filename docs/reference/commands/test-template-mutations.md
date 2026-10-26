@@ -124,7 +124,7 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 
 ### Flaky kills
 
-Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed. If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
+Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed (all the tests when a package failed without naming one, and exactly the tests `--run` or a `-run` after `--` selected when you gave one). If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
 
 ```text
     FLAKY 1:39 if-true (TestGreeting failed beside other mutants, passed when run alone)
@@ -132,7 +132,9 @@ Mutants run with `--workers` above 1 share whatever the tests share: a port, a f
 3 mutants, 1 killed, 1 flaky, 1 missed, 0 skipped
 ```
 
-A flaky mutant is unknown, not caught, so close the gap by making the suite tolerate `--workers`, or run with `--workers 1`. It does not fail the exit status. With one worker nothing is repeated. `--format json` adds a top-level `flaky` count when it is not zero.
+A flaky mutant is unknown, not caught, so close the gap by making the suite tolerate `--workers`, or run with `--workers 1`. It does not fail the exit status. With one worker nothing is repeated.
+
+The repeat is serial on purpose, since contention is what it checks for, and it costs up to one more run of the suite per kill. On a suite that kills most mutants it takes back much of what `--workers` saved. On a terminal, or with `-v`, each repeat writes a line: `[recheck 3/12] templates.gohtml "page" 1:39 if-true: killed`. The template lines written while the mutants run count kills as `(unconfirmed)` for the same reason. A repeat that cannot run keeps the kill and says why in its reason. `--format json` adds a top-level `flaky` count when it is not zero.
 
 ## Exit status
 

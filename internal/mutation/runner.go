@@ -47,6 +47,10 @@ type mutantRunner struct {
 	pending       map[*TemplateReport]*templateProgress
 	templatesDone int
 	templateTotal int
+
+	// rechecking is set when kills will be repeated alone, which makes a
+	// kill seen by a template's line provisional.
+	rechecking bool
 }
 
 // templateProgress sums the verdicts of one template as they arrive.
@@ -76,6 +80,7 @@ func (r *mutantRunner) runAll(ctx context.Context, report *Report, workers int) 
 		}
 	}
 	r.templateTotal = len(r.pending)
+	r.rechecking = workers > 1 && r.recheck != nil
 
 	slots := make(chan struct{}, workers)
 	var running sync.WaitGroup
@@ -106,7 +111,7 @@ dispatch:
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if workers > 1 && r.recheck != nil {
+	if r.rechecking {
 		if err := r.confirmKills(ctx, report); err != nil {
 			return err
 		}
@@ -120,27 +125,56 @@ dispatch:
 //
 // A mutant run beside others can fail a test that has nothing to do with
 // the mutation, from a shared port, a timeout or a busy machine, and
-// would be counted as caught. Kills are the minority of a run and each
-// repeat runs only the tests that failed, so the check costs little.
+// would be counted as caught. Each repeat is at most one more run of the
+// mutant, narrowed to the tests that failed when it can be, and it is
+// serial because contention is what it checks for.
+//
+// A repeat that cannot run keeps the kill it started with, and says why in
+// the result's reason, rather than throwing away a report of runs that
+// took minutes. Only ctx being done stops it.
 func (r *mutantRunner) confirmKills(ctx context.Context, report *Report) error {
+	kills := 0
+	for group := range report.eachTemplate() {
+		for _, result := range group.Results {
+			if result.Status == StatusKilled {
+				kills++
+			}
+		}
+	}
+	n := 0
 	for group := range report.eachTemplate() {
 		for i := range group.Results {
 			result := &group.Results[i]
 			if result.Status != StatusKilled {
 				continue
 			}
+			n++
 			status, err := r.recheck(ctx, result.overlay, result.failed)
-			if err != nil {
-				return err
+			outcome := "killed"
+			switch {
+			case ctx.Err() != nil:
+				return ctx.Err()
+			case err != nil:
+				result.Reason = "not re-checked alone: " + firstLine(err.Error())
+				outcome = "kept as killed, " + result.Reason
+			case status != StatusKilled:
+				result.Status = StatusFlaky
+				result.Reason = flakyReason(result.failed)
+				outcome = "flaky"
 			}
-			if status == StatusKilled {
-				continue
+			if r.templates != nil {
+				_, _ = fmt.Fprintf(r.templates, "[recheck %*d/%d] %s %s %d:%d %s: %s\n",
+					len(fmt.Sprint(kills)), n, kills, group.File, strconv.Quote(group.Template),
+					result.Line, result.Column, result.label(), outcome)
 			}
-			result.Status = StatusFlaky
-			result.Reason = flakyReason(result.failed)
 		}
 	}
 	return nil
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return line
 }
 
 func flakyReason(failed []string) string {
@@ -213,10 +247,16 @@ func (r *mutantRunner) finishTemplate(group *TemplateReport, result Result) {
 	if r.templates == nil {
 		return
 	}
-	line := fmt.Sprintf("[%*d/%d] %s %s: %d %s, %d killed, %d missed",
+	killed := fmt.Sprintf("%d killed", t.killed)
+	if r.rechecking && t.killed > 0 {
+		// Repeated alone once every mutant has run; the lines for that
+		// say which of these hold.
+		killed += " (unconfirmed)"
+	}
+	line := fmt.Sprintf("[%*d/%d] %s %s: %d %s, %s, %d missed",
 		len(fmt.Sprint(r.templateTotal)), r.templatesDone, r.templateTotal,
 		group.File, strconv.Quote(group.Template),
-		t.total, pluralize(t.total, "mutant"), t.killed, t.missed)
+		t.total, pluralize(t.total, "mutant"), killed, t.missed)
 	if t.skipped > 0 {
 		line += fmt.Sprintf(", %d skipped", t.skipped)
 	}
