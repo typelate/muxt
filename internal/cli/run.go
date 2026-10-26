@@ -25,6 +25,9 @@ import (
 // constructors; only the --format a result is written in is read here.
 
 func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error {
+	if err := requireDirectory(cmd.Name(), wd); err != nil {
+		return err
+	}
 	_, pl, err := load.Packages(wd, config.ReceiverPackage)
 	if err != nil {
 		return err
@@ -93,6 +96,9 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 // loadTemplates loads the package in wd for a listing, warning on stderr
 // when it has syntax errors.
 func loadTemplates(cmd *cobra.Command, wd string, templatesVariables []string) (source.Package, error) {
+	if err := requireDirectory(cmd.Name(), wd); err != nil {
+		return source.Package{}, err
+	}
 	_, pl, err := load.Packages(wd)
 	if err != nil {
 		return source.Package{}, err
@@ -153,6 +159,9 @@ func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configu
 }
 
 func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error {
+	if err := requireDirectory(cmd.Name(), wd); err != nil {
+		return err
+	}
 	stdout := cmd.OutOrStdout()
 	_, pl, err := load.Packages(wd, config.ReceiverPackage)
 	if err != nil {
