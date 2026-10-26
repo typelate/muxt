@@ -96,10 +96,10 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 			}
 			err := findTemplateExecution(executedTemplates, global, qualifier, lt.Set, c.Position, c.Template, c.Data)
 			if err != nil {
-				diagnostics.add(qualifier, c, err)
+				errs = append(errs, diagnostics.report(logger, config.Verbose, qualifier, c, err)...)
 			}
 		}
-		errs = append(errs, diagnostics.report(logger, config.Verbose)...)
+		diagnostics.reportOtherCalls(logger)
 
 		if walkedEveryCall {
 			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates, config.AllowUnused)...)
@@ -133,20 +133,15 @@ func reportDefinitionErrors(logger *log.Logger, variable source.Variable) error 
 	return err
 }
 
-// typeErrors collects the errors the ExecuteTemplate calls of one
-// templates variable reach. A partial several calls render with the same
-// type of dot fails the same way from each, so an error is kept once, with
-// every call that reached it, rather than once per call.
+// typeErrors logs the errors the ExecuteTemplate calls of one templates
+// variable reach. A partial several calls render with the same type of dot
+// fails the same way from each, so an error is logged once, under the
+// first call that reaches it, rather than once per call; the other calls
+// are listed after the last call is checked.
 type typeErrors struct {
 	byText map[string]*typeError
-	// first lists, per call in the order they were added, the errors that
-	// call was the first to reach.
-	first []callTypeErrors
-}
-
-type callTypeErrors struct {
-	call   string
-	errors []*typeError
+	// order lists the errors in the order they were first logged.
+	order []*typeError
 }
 
 type typeError struct {
@@ -159,28 +154,66 @@ type typeError struct {
 	// with -v.
 	declaration bool
 	err         error
-	// calls are the calls that reached the error, formatted by callLine.
+	// calls are the calls that reached the error, formatted by callLine,
+	// each once.
 	calls []string
 }
 
-func (te *typeErrors) add(qualifier types.Qualifier, call source.Call, err error) {
+// report logs the errors in err that no earlier call reached, under call,
+// and returns one error per error logged. Errors an earlier call reached
+// are remembered for reportOtherCalls. A type declaration is logged only
+// when verbose.
+func (te *typeErrors) report(logger *log.Logger, verbose bool, qualifier types.Qualifier, call source.Call, err error) []error {
 	if te.byText == nil {
 		te.byText = make(map[string]*typeError)
 	}
 	callText := callLine(qualifier, call)
-	var reached []*typeError
+	var errs []error
+	endsWithBlank := true
 	for _, e := range splitTypeError(qualifier, err) {
 		key := e.line + "\n" + e.detail
 		if seen, ok := te.byText[key]; ok {
-			seen.calls = append(seen.calls, callText)
+			// A call that renders a partial twice reaches its error twice.
+			if !slices.Contains(seen.calls, callText) {
+				seen.calls = append(seen.calls, callText)
+			}
 			continue
 		}
 		e.calls = []string{callText}
 		te.byText[key] = e
-		reached = append(reached, e)
+		te.order = append(te.order, e)
+		errs = append(errs, e.err)
+		if len(errs) == 1 {
+			logger.Println(callText)
+		}
+		logger.Println(e.line)
+		endsWithBlank = false
+		if e.detail != "" && (verbose || !e.declaration) {
+			logger.Println()
+			logger.Println(e.detail)
+			logger.Println()
+			endsWithBlank = true
+		}
 	}
-	if len(reached) > 0 {
-		te.first = append(te.first, callTypeErrors{call: callText, errors: reached})
+	if !endsWithBlank {
+		logger.Println()
+	}
+	return errs
+}
+
+// reportOtherCalls logs, for each error more than one call reached, the
+// calls after the first.
+func (te *typeErrors) reportOtherCalls(logger *log.Logger) {
+	for _, e := range te.order {
+		if len(e.calls) < 2 {
+			continue
+		}
+		logger.Println(e.line)
+		logger.Println("  also reached from:")
+		for _, c := range e.calls[1:] {
+			logger.Println("    " + c)
+		}
+		logger.Println()
 	}
 }
 
@@ -206,38 +239,6 @@ func splitTypeError(qualifier types.Qualifier, err error) []*typeError {
 		result = append(result, &typeError{line: line, detail: detail, declaration: declaration, err: leaf})
 	}
 	return result
-}
-
-// report logs each error under the first call that reached it, followed by
-// the other calls that reached it, and returns one error per logged error.
-// A type declaration is logged only when verbose.
-func (te *typeErrors) report(logger *log.Logger, verbose bool) []error {
-	var errs []error
-	for _, first := range te.first {
-		logger.Println(first.call)
-		endsWithBlank := false
-		for _, e := range first.errors {
-			errs = append(errs, e.err)
-			logger.Println(e.line)
-			endsWithBlank = false
-			if len(e.calls) > 1 {
-				logger.Println("  also reached from:")
-				for _, c := range e.calls[1:] {
-					logger.Println("    " + c)
-				}
-			}
-			if e.detail != "" && (verbose || !e.declaration) {
-				logger.Println()
-				logger.Println(e.detail)
-				logger.Println()
-				endsWithBlank = true
-			}
-		}
-		if !endsWithBlank {
-			logger.Println()
-		}
-	}
-	return errs
 }
 
 func callLine(qualifier types.Qualifier, call source.Call) string {

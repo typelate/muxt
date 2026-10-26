@@ -53,14 +53,8 @@ func Login(w io.Writer, page LoginPage) error {
 2 errors
 -- want/log.txt --
 checking endpoint intakes
-checking endpoint users
-checking endpoint settings
-checking endpoint login
 server.go:17:9 ExecuteTemplate "intakes" AdminPage
 footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
-  also reached from:
-    server.go:21:9 ExecuteTemplate "users" AdminPage
-    server.go:25:9 ExecuteTemplate "settings" AdminPage
 
   type AdminPage struct {
     Title    string
@@ -69,10 +63,18 @@ footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not 
     Total    int
   }
 
+checking endpoint users
+checking endpoint settings
+checking endpoint login
 server.go:29:9 ExecuteTemplate "login" LoginPage
 footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on LoginPage
 
   type LoginPage struct {
     Next string
   }
+
+footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+  also reached from:
+    server.go:21:9 ExecuteTemplate "users" AdminPage
+    server.go:25:9 ExecuteTemplate "settings" AdminPage
 
