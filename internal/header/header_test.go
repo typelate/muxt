@@ -213,8 +213,19 @@ func TestStable(t *testing.T) {
 			if tt.existing != "" {
 				require.NoError(t, os.WriteFile(path, []byte(tt.existing), 0o644))
 			}
-			got := header.Stable(tt.running, path)
+			got, err := header.Stable(tt.running, path)
+			require.NoError(t, err)
 			assert.Equal(t, tt.want, got, "Stable(%q, existing %q)", tt.running, tt.existing)
 		})
 	}
+}
+
+func TestStableUnreadable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "template_routes.go")
+	require.NoError(t, os.Mkdir(path, 0o755))
+	_, err := header.Stable("(devel)", path)
+	assert.Error(t, err, "Stable on a directory path")
+	got, err := header.Stable("v0.21.0", path)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.21.0", got, "tagged version never reads the file")
 }

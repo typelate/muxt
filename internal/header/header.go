@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -157,14 +158,21 @@ func Tagged(version string) bool {
 // A tagged running version is recorded as is. Any other, such as a local
 // build's pseudo-version or "(devel)", would rewrite the header on every
 // developer's machine, so the version the file already records is kept.
-// With no such file the running version is recorded.
-func Stable(running, path string) string {
+// With no such file the running version is recorded. A file that exists
+// but cannot be read is an error.
+func Stable(running, path string) (string, error) {
 	if Tagged(running) {
-		return running
+		return running, nil
 	}
 	existing, ok, err := Read(path)
-	if err != nil || !ok || existing.Version == "" {
-		return running
+	if errors.Is(err, fs.ErrNotExist) {
+		return running, nil
 	}
-	return existing.Version
+	if err != nil {
+		return "", err
+	}
+	if !ok || existing.Version == "" {
+		return running, nil
+	}
+	return existing.Version, nil
 }
