@@ -104,7 +104,7 @@ A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser
 
 A route without a call is named from its pattern: a verb for the HTTP method (`GET` is `Read`, `POST` `Create`, `PUT` `Replace`, `PATCH` `Update`, `DELETE` `Delete`, and none for a pattern without a method), the host and literal segments in PascalCase (`/` alone is `Index`, `{$}` is `Exact`), then `By` and the wildcards joined with `And`: `GET /hello/{name}` is `ReadHelloByName`. Two routes may not produce the same name ([known issues](known-issues.md)).
 
-`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/` and `{$}` keep their trailing slash: `/app/`. An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
+`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`. An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
 
 ## Status Code Control
 
