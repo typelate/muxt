@@ -253,6 +253,14 @@ func (def Definition) HasPathEndWildcard() bool {
 	return strings.HasSuffix(def.Path(), "{$}")
 }
 
+// HasTrailingSlash reports when the path is an http.ServeMux subtree pattern
+// such as "/static/", which matches every path under it. The index path "/"
+// is not reported; IsIndex covers it.
+func (def Definition) HasTrailingSlash() bool {
+	p := def.Path()
+	return p != "/" && strings.HasSuffix(p, "/")
+}
+
 // SignalsCallback returns the first Signals-suffixed callback argument name,
 // if the route has one.
 func (def Definition) SignalsCallback() (string, bool) {
@@ -350,9 +358,6 @@ func (def Definition) checkPathAndMethod() error {
 	if len(def.path) > 1 {
 		if idx := strings.Index(def.path, "//"); idx >= 0 {
 			return def.nameErrorf(def.spans.path[0]+idx+1, 1, "path has an empty segment")
-		}
-		if strings.HasSuffix(def.path, "/") {
-			return def.nameErrorf(def.spans.path[0]+len(def.path)-1, 1, "path has an empty segment")
 		}
 	}
 	switch def.method {

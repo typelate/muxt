@@ -190,7 +190,7 @@ func routePathFunc(file *File, config RoutesFileConfiguration, def *muxt.Definit
 	b.flushLiteral()
 
 	var joined ast.Expr = astgen.Call(file, "path", "path", "Join", b.segments...)
-	if def.HasPathEndWildcard() {
+	if def.HasPathEndWildcard() || def.HasTrailingSlash() {
 		joined = &ast.BinaryExpr{X: joined, Op: token.ADD, Y: astgen.String("/")}
 	}
 	returned, resultTypes := []ast.Expr{routeLiteral(file, config, def, joined)}, []ast.Expr{routeType}

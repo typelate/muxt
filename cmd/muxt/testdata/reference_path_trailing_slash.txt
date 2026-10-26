@@ -1,0 +1,62 @@
+# A path ending in "/" is an http.ServeMux subtree pattern: "GET /static/"
+# matches every path under /static/. The generated pattern keeps the slash and
+# the path helper returns "/static/".
+muxt generate
+muxt check
+
+exec go test
+
+grep '"GET /static/"' template_routes.go
+
+-- template.gohtml --
+{{define "GET /{$}"}}<a href="{{.Path.Serve}}">static</a>{{end}}
+{{define "GET /static/ Serve(request, response)"}}{{end}}
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Serve(request *http.Request, response http.ResponseWriter) any {
+	_, _ = response.Write([]byte("served " + request.URL.Path))
+	return nil
+}
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	req := httptest.NewRequest(http.MethodGet, "/static/css/app.css", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "served /static/css/app.css" {
+		t.Errorf("got %d %q", rec.Code, rec.Body.String())
+	}
+
+	if got := (TemplateRoutePaths{}).Serve(); got != "/static/" {
+		t.Errorf("Serve() = %q, want /static/", got)
+	}
+}
