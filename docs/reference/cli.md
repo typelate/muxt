@@ -17,6 +17,8 @@
 | [`documentation`](commands/documentation.md) | `docs` | Print the embedded documentation pages. |
 | `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |
 
+`check`, `list-template-calls`, `list-template-callers` and `test-template-mutations` take one optional `[package-dir]`, resolved like `-C`. Import paths and `...` patterns are rejected.
+
 `muxt` with no subcommand prints the package's routes and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods:
 
 ```text
