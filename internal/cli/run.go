@@ -48,7 +48,23 @@ func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfigu
 	return nil
 }
 
+// requireDirectory says why a package directory cannot be read before the go
+// command is asked to load it, whose own message for a missing one is empty.
+func requireDirectory(command, dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("%s: package directory: %w", command, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s: %s is not a package directory", command, dir)
+	}
+	return nil
+}
+
 func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error {
+	if err := requireDirectory(cmd.Name(), wd); err != nil {
+		return err
+	}
 	_, pl, err := load.Packages(wd)
 	if err != nil {
 		return err
@@ -115,6 +131,9 @@ func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configu
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	context.AfterFunc(ctx, stop)
+	if err := requireDirectory(cmd.Name(), wd); err != nil {
+		return err
+	}
 	// A person watching a terminal gets a line per template; a log gets
 	// them only with -v. stdout is never written to, so --format json
 	// stays machine-clean.

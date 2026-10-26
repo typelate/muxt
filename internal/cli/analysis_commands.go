@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -65,15 +64,7 @@ func packageDirectory(command, wd string, args []string) (string, error) {
 	if strings.Contains(args[0], "...") {
 		return "", fmt.Errorf("%s takes one package directory, not a pattern: %s", command, args[0])
 	}
-	dir := absoluteDir(wd, args[0])
-	info, err := os.Stat(dir)
-	if err != nil {
-		return "", fmt.Errorf("%s: package directory: %w", command, err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("%s takes a package directory, %s is not one", command, args[0])
-	}
-	return dir, nil
+	return absoluteDir(wd, args[0]), nil
 }
 
 func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
