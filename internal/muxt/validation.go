@@ -101,14 +101,20 @@ var (
 func parseBoundValidations(name string, input spec.Element, tp types.Type) ([]InputValidation, error) {
 	var result []InputValidation
 	if input.HasAttribute("min") {
-		val := input.GetAttribute("min")
+		val, err := literalAttribute(name, input, "min")
+		if err != nil {
+			return nil, err
+		}
 		if err := asteval.CheckParses(val, tp); err != nil {
 			return nil, err
 		}
 		result = append(result, MinValidation{Name: name, Min: val})
 	}
 	if input.HasAttribute("max") {
-		val := input.GetAttribute("max")
+		val, err := literalAttribute(name, input, "max")
+		if err != nil {
+			return nil, err
+		}
 		if err := asteval.CheckParses(val, tp); err != nil {
 			return nil, err
 		}
@@ -125,7 +131,10 @@ func parsePatternValidations(name string, input spec.Element) ([]InputValidation
 	if !input.HasAttribute("pattern") {
 		return nil, nil
 	}
-	written := input.GetAttribute("pattern")
+	written, err := literalAttribute(name, input, "pattern")
+	if err != nil {
+		return nil, err
+	}
 	if _, err := regexp.Compile(written); err != nil {
 		return nil, err
 	}
@@ -138,14 +147,14 @@ func parsePatternValidations(name string, input spec.Element) ([]InputValidation
 
 func parseLengthValidations(name string, input spec.Element) ([]InputValidation, error) {
 	var result []InputValidation
-	minLength, hasMin, err := lengthAttribute(input, "minlength")
+	minLength, hasMin, err := lengthAttribute(name, input, "minlength")
 	if err != nil {
 		return nil, err
 	}
 	if hasMin {
 		result = append(result, MinLengthValidation{Name: name, MinLength: minLength})
 	}
-	maxLength, hasMax, err := lengthAttribute(input, "maxlength")
+	maxLength, hasMax, err := lengthAttribute(name, input, "maxlength")
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +169,11 @@ func parseLengthValidations(name string, input spec.Element) ([]InputValidation,
 
 // lengthAttribute reads a non-negative integer attribute; an empty or absent
 // one is not present.
-func lengthAttribute(input spec.Element, attribute string) (int, bool, error) {
-	val := input.GetAttribute(attribute)
+func lengthAttribute(name string, input spec.Element, attribute string) (int, bool, error) {
+	val, err := literalAttribute(name, input, attribute)
+	if err != nil {
+		return 0, false, err
+	}
 	if val == "" {
 		return 0, false, nil
 	}
@@ -173,4 +185,16 @@ func lengthAttribute(input spec.Element, attribute string) (int, bool, error) {
 		return 0, false, fmt.Errorf("%s must not be negative", attribute)
 	}
 	return n, true, nil
+}
+
+// literalAttribute reads a validation attribute of the input bound to name.
+// Its value is read at generate time, so it must be written out: the field
+// template's source renders every action as {{...}}, which would otherwise
+// fail to parse with an error that does not say why.
+func literalAttribute(name string, input spec.Element, attribute string) (string, error) {
+	val := input.GetAttribute(attribute)
+	if strings.Contains(val, "{{") {
+		return "", fmt.Errorf("validation attribute %s on input %q must be a literal; got the template action %s — use a constant, or drop the template struct tag", attribute, name, val)
+	}
+	return val, nil
 }

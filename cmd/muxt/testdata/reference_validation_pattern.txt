@@ -5,6 +5,12 @@ cat template_routes.go
 
 exec go test
 
+# Attribute values are read at generate time, so a template action in
+# pattern fails generation, naming the template, the input, and the attribute.
+cp index_with_action.gohtml.txt index.gohtml
+! muxt generate --use-receiver-type=T
+cmpenv stderr want-err.txt
+
 -- index.gohtml --
 {{define "GET / UpdateValue(form)" }}
 	{{block "pat" .Result -}}
@@ -79,3 +85,15 @@ func Test(t *testing.T) {
 		}
 	})
 }
+-- index_with_action.gohtml.txt --
+{{define "GET / UpdateValue(form)" }}
+	{{block "pat" .Result -}}
+    <input type="text" name="value" pattern="{{.Pattern}}">
+  {{- end}}
+{{end}}
+-- want-err.txt --
+Error:
+  GET / UpdateValue(form)
+                    ^^^^
+$WORK/index.gohtml:1:29: template "pat": validation attribute pattern on input "value" must be a literal; got the template action {{.Pattern}} — use a constant, or drop the template struct tag
+$WORK/template.go:15:10: UpdateValue is defined here
