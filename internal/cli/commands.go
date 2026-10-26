@@ -102,12 +102,9 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
 	rootCmd.Flags().String("format", "text", "output format (text or json)")
 
-	if v, ok := version(); ok {
-		rootCmd.Version = v
-		rootCmd.SetVersionTemplate("{{.Version}}\n")
-	}
+	rootCmd.Flags().Bool("version", false, "print the version, as the version command does")
 
-	rootCmd.SetArgs(args)
+	rootCmd.SetArgs(versionArgs(args))
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
 
@@ -132,6 +129,34 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	rootCmd.PersistentFlags().SetOutput(stderr)
 
 	return rootCmd.Execute()
+}
+
+// versionArgs turns a command line asking for --version into the version
+// command's, so both print the same thing. Whatever else the line says is
+// ignored, except -v/--verbose, which the version command understands.
+func versionArgs(args []string) []string {
+	var asked, verbose bool
+	for _, a := range args {
+		switch a {
+		case "--":
+			return versionLine(asked, verbose, args)
+		case "--version":
+			asked = true
+		case "-v", "--verbose":
+			verbose = true
+		}
+	}
+	return versionLine(asked, verbose, args)
+}
+
+func versionLine(asked, verbose bool, args []string) []string {
+	if !asked {
+		return args
+	}
+	if verbose {
+		return []string{versionCommandName, "--verbose"}
+	}
+	return []string{versionCommandName}
 }
 
 func versionCommand(version func() (string, bool)) *cobra.Command {
