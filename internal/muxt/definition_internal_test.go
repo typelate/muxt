@@ -715,3 +715,21 @@ func TestDefinition_IsIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestDefinition_HasTrailingSlash(t *testing.T) {
+	for _, tt := range []struct {
+		path string
+		want bool
+	}{
+		{path: "/", want: false},
+		{path: "/x", want: false},
+		{path: "/x/", want: true},
+		{path: "/x/{id}/", want: true},
+		{path: "/x/{$}", want: false},
+		{path: "/x/{p...}", want: false},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			assert.Equal(t, tt.want, Definition{path: tt.path}.HasTrailingSlash(), "HasTrailingSlash() of %q", tt.path)
+		})
+	}
+}

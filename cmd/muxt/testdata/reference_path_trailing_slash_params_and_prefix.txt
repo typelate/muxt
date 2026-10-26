@@ -1,0 +1,50 @@
+# A trailing slash after a path with parameters is kept by the path helper,
+# and by the path prefix.
+muxt generate --output-routes-func-with-path-prefix-param
+muxt check
+
+exec go test
+
+-- template.gohtml --
+{{define "GET /users/{id}/ User(ctx, id)"}}u{{end}}
+{{define "GET /static/ Static(ctx)"}}s{{end}}
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) User(_ context.Context, id string) any { return id }
+func (T) Static(_ context.Context) any          { return "" }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	paths := TemplateRoutes(http.NewServeMux(), T{}, "/app")
+	if got, want := paths.User("1"), "/app/users/1/"; got != want {
+		t.Errorf("User(1) = %q, want %q", got, want)
+	}
+	if got, want := paths.Static(), "/app/static/"; got != want {
+		t.Errorf("Static() = %q, want %q", got, want)
+	}
+}

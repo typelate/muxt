@@ -1,0 +1,25 @@
+# Without a call, GET /static and GET /static/ both name ReadStatic.
+
+! muxt generate
+stderr 'collision'
+stderr 'ReadStatic'
+
+-- template.gohtml --
+{{define "GET /static"}}a{{end}}
+{{define "GET /static/"}}b{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
