@@ -147,11 +147,11 @@ The preamble counts mutants, templates and total complexity (per template, one p
 Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took. With `--workers` above 1 templates finish in whatever order their last mutant does.
 
 ```text
-[ 1/6] templates.gohtml "greeting": 8 mutants, 7 killed, 1 survived, 3.2s
-[ 2/6] templates.gohtml "footer": 3 mutants, 2 killed, 0 survived, 1 skipped, 1.1s
+[ 1/6] templates.gohtml "greeting": 8 mutants, 7 killed, 1 missed, 3.2s
+[ 2/6] templates.gohtml "footer": 3 mutants, 2 killed, 0 missed, 1 skipped, 1.1s
 ```
 
-`survived` is a `MISS`. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else, so a log stays short; the line per template is what to tail to see a long run is alive.
+`missed` counts `MISS` results, as the summary line does. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else, so a log stays short; the line per template is what to tail to see a long run is alive.
 
 With `-v` each mutant also prints its duration and the time left:
 

@@ -273,7 +273,7 @@ func TestRunPlanProgressWithoutVerbose(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.lines, strings.Count(strings.TrimSpace(status.String()), "\n")+1, "status lines:\n%s", status.String())
 			if tt.config.Progress {
-				assert.Contains(t, status.String(), `[1/1] page.gohtml "page": 3 mutants, 2 killed, 1 survived, `, "template line")
+				assert.Contains(t, status.String(), `[1/1] page.gohtml "page": 3 mutants, 2 killed, 1 missed, `, "template line")
 			}
 		})
 	}

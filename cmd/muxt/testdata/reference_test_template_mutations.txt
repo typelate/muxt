@@ -18,7 +18,7 @@
 
 ! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
-stderr '(?m)^\[1/1\] templates.gohtml "greeting": 3 mutants, 2 killed, 1 survived, [0-9.]+m?s$'
+stderr '(?m)^\[1/1\] templates.gohtml "greeting": 3 mutants, 2 killed, 1 missed, [0-9.]+m?s$'
 stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --

@@ -43,10 +43,10 @@ type mutantRunner struct {
 
 // templateProgress sums the verdicts of one template as they arrive.
 type templateProgress struct {
-	remaining               int
-	total, killed, survived int
-	skipped                 int
-	seconds                 float64
+	remaining             int
+	total, killed, missed int
+	skipped               int
+	seconds               float64
 }
 
 // runAll runs every mutant in the report, at most workers at a time.
@@ -151,7 +151,7 @@ func (r *mutantRunner) finishTemplate(group *TemplateReport, result Result) {
 	case StatusKilled:
 		t.killed++
 	case StatusMissed:
-		t.survived++
+		t.missed++
 	case StatusSkipped:
 		t.skipped++
 	}
@@ -164,10 +164,10 @@ func (r *mutantRunner) finishTemplate(group *TemplateReport, result Result) {
 	if r.templates == nil {
 		return
 	}
-	line := fmt.Sprintf("[%*d/%d] %s %s: %d %s, %d killed, %d survived",
+	line := fmt.Sprintf("[%*d/%d] %s %s: %d %s, %d killed, %d missed",
 		len(fmt.Sprint(r.templateTotal)), r.templatesDone, r.templateTotal,
 		group.File, strconv.Quote(group.Template),
-		t.total, pluralize(t.total, "mutant"), t.killed, t.survived)
+		t.total, pluralize(t.total, "mutant"), t.killed, t.missed)
 	if t.skipped > 0 {
 		line += fmt.Sprintf(", %d skipped", t.skipped)
 	}

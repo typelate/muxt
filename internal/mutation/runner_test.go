@@ -222,8 +222,8 @@ func TestRunAllReportsEachTemplateAsItFinishes(t *testing.T) {
 
 			lines := strings.Split(strings.TrimSpace(templates.String()), "\n")
 			assert.ElementsMatch(t, []string{
-				`[1/2] page.gohtml "page": 3 mutants, 1 killed, 1 survived, 1 skipped, 0s`,
-				`[1/2] row.gohtml "row": 1 mutant, 1 killed, 0 survived, 0s`,
+				`[1/2] page.gohtml "page": 3 mutants, 1 killed, 1 missed, 1 skipped, 0s`,
+				`[1/2] row.gohtml "row": 1 mutant, 1 killed, 0 missed, 0s`,
 			}, stripIndex(lines), "template lines")
 			assert.Len(t, lines, 2, "one line per template with mutants:\n%s", templates.String())
 		})
