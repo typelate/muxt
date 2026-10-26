@@ -104,7 +104,10 @@ func (t goTest) verdict(ctx context.Context, overlay string) (Status, []string, 
 		return "", nil, ctxErr
 	}
 	status, err := verdictOf(out, err)
-	if status != StatusKilled {
+	if status != StatusKilled || out.unnamed {
+		// A package that failed without naming a test leaves nothing to
+		// narrow a repeat by: some other package's named failure would
+		// leave it out.
 		return status, nil, err
 	}
 	return status, out.failed, nil
@@ -120,6 +123,20 @@ func onlyTests(names []string) *regexp.Regexp {
 	return regexp.MustCompile("^(" + strings.Join(quoted, "|") + ")$")
 }
 
+// hasRunFlag reports whether the caller's go test flags select tests.
+func hasRunFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "-args" || arg == "--args" {
+			return false
+		}
+		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if strings.HasPrefix(arg, "-") && name == "run" {
+			return true
+		}
+	}
+	return false
+}
+
 // recheck runs only the tests that failed against a mutant, again, and
 // says whether they still do.
 //
@@ -127,11 +144,20 @@ func onlyTests(names []string) *regexp.Regexp {
 // load alone. With no names to narrow by, because the failure was a
 // package and not a test, it repeats the whole run.
 func (t goTest) recheck(ctx context.Context, overlay string, failed []string) (Status, error) {
-	if len(failed) > 0 {
+	status, _, err := t.repeating(failed).verdict(ctx, overlay)
+	return status, err
+}
+
+// repeating is t narrowed to the tests that failed.
+//
+// The caller's own -run, as --run or after --, already says which tests
+// the baseline ran; replacing it could run subtests it never did, so the
+// repeat keeps it and runs everything it selects.
+func (t goTest) repeating(failed []string) goTest {
+	if len(failed) > 0 && t.match == nil && !hasRunFlag(t.extra) {
 		t.match = onlyTests(failed)
 	}
-	status, _, err := t.verdict(ctx, overlay)
-	return status, err
+	return t
 }
 
 // verdictOf reads a go test run as a verdict on the mutant it ran against.
@@ -185,6 +211,12 @@ type goTestOutput struct {
 	// failed holds the top level name of each test a "--- FAIL" line
 	// named, once each, in the order they were printed.
 	failed []string
+
+	// named is whether a "--- FAIL" has been read since the last package
+	// result, and unnamed whether a package failed without one: a test
+	// binary that timed out, panicked outside a test, or exited from
+	// TestMain.
+	named, unnamed bool
 }
 
 const maxMarkerLine = 1 << 10
@@ -233,12 +265,17 @@ func (o *goTestOutput) mark(line string) {
 	switch {
 	case strings.HasPrefix(strings.TrimLeft(line, " \t"), "--- FAIL"):
 		o.testFailed = true
+		o.named = true
 		o.noteFailed(strings.TrimLeft(line, " \t"))
+	case strings.HasPrefix(line, "ok  \t"):
+		o.named = false
 	case strings.HasPrefix(line, "FAIL\t"):
 		if strings.HasSuffix(line, "[build failed]") || strings.HasSuffix(line, "[setup failed]") {
 			o.couldNotRun = true
 		} else if strings.Count(line, "\t") >= 2 {
 			o.testFailed = true
+			o.unnamed = o.unnamed || !o.named
+			o.named = false
 		}
 	}
 }

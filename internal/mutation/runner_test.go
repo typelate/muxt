@@ -259,11 +259,11 @@ func TestRunAllReportsEachTemplateAsItFinishes(t *testing.T) {
 				scratch:   t.TempDir(),
 				templates: &templates,
 				clock:     &estimate{remaining: 3, workers: workers},
-				test: func(_ context.Context, overlay string) (Status, error) {
+				test: func(_ context.Context, overlay string) (Status, []string, error) {
 					if strings.Contains(readMutated(t, overlay), "K") {
-						return StatusKilled, nil
+						return StatusKilled, nil, nil
 					}
-					return StatusMissed, nil
+					return StatusMissed, nil, nil
 				},
 			}
 			for i := range report.Groups[0].Templates {
@@ -322,4 +322,38 @@ func TestRoundDuration(t *testing.T) {
 			assert.Equal(t, tt.want, roundDuration(tt.d), "roundDuration(%v)", tt.d)
 		})
 	}
+}
+
+// TestRunAllKeepsAKillWhoseRepeatCannotRun states that a repeat which
+// fails to run does not discard the report: the kill stands, with the
+// error in its reason, and the other kills are still repeated.
+func TestRunAllKeepsAKillWhoseRepeatCannotRun(t *testing.T) {
+	report, p := runnerFixture(t, []bool{true, true})
+	var templates strings.Builder
+	r := &mutantRunner{
+		plan:      p,
+		scratch:   t.TempDir(),
+		templates: &templates,
+		clock:     &estimate{remaining: 2, workers: 2},
+		test: func(context.Context, string) (Status, []string, error) {
+			return StatusKilled, []string{"TestPage"}, nil
+		},
+		recheck: func(_ context.Context, overlay string, _ []string) (Status, error) {
+			if overlay == report.Groups[0].Templates[0].Results[0].overlay {
+				return "", errors.New("go: cannot start\nmore detail")
+			}
+			return StatusMissed, nil
+		},
+	}
+	require.NoError(t, r.runAll(t.Context(), report, 2))
+
+	results := report.Groups[0].Templates[0].Results
+	assert.Equal(t, StatusKilled, results[0].Status, "the kill whose repeat failed")
+	assert.Equal(t, "not re-checked alone: go: cannot start", results[0].Reason, "its reason")
+	assert.Equal(t, StatusFlaky, results[1].Status, "the other kill was still repeated")
+	assert.Equal(t, 1, report.Killed, "killed")
+	assert.Equal(t, 1, report.Flaky, "flaky")
+	assert.Contains(t, templates.String(), `[recheck 1/2] page.gohtml "page" 0:0 action-empty: kept as killed, not re-checked alone: go: cannot start`, "repeat progress")
+	assert.Contains(t, templates.String(), `[recheck 2/2] page.gohtml "page" 0:0 action-empty: flaky`, "repeat progress")
+	assert.Contains(t, templates.String(), "2 killed (unconfirmed)", "the template line says its kills are not yet confirmed")
 }

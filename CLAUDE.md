@@ -331,8 +331,11 @@ Lessons from the project's history. Read them before a change.
 
 ### Mutation testing
 
-- `--workers N` under CPU contention reports false kills. Compare runs made
-  under the same conditions, and re-check a large delta with `--workers 1`.
+- With `--workers N` above 1 every kill is repeated alone once the mutants
+  have run, and one the tests pass the second time is reported `FLAKY`, not
+  killed. That repeat costs up to one more run per kill, so a suite that
+  kills most mutants gains less from `--workers` than it appears to. A
+  `FLAKY` count means the suite does not tolerate running beside itself.
 
 ### Conventions
 

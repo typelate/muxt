@@ -275,3 +275,49 @@ func TestOnlyTests(t *testing.T) {
 		assert.Equal(t, want, pattern.MatchString(name), "%s matches %s", pattern, name)
 	}
 }
+
+// TestGoTestOutputNotesAPackageThatFailedWithoutANamedTest states that a
+// failing package which printed no "--- FAIL" is recorded, even beside
+// another package that did name one: narrowing a repeat to the named test
+// would never run the package that failed alone.
+func TestGoTestOutputNotesAPackageThatFailedWithoutANamedTest(t *testing.T) {
+	for _, tt := range []struct {
+		name, output string
+		unnamed      bool
+	}{
+		{name: "named", output: "--- FAIL: TestA (0.00s)\nFAIL\nFAIL\tserver/a\t0.1s\nFAIL\n"},
+		{name: "a panic", output: "panic: boom\nFAIL\tserver/a\t0.1s\nFAIL\n", unnamed: true},
+		{name: "named beside a timeout", output: "--- FAIL: TestA (0.00s)\nFAIL\nFAIL\tserver/a\t0.1s\npanic: test timed out after 10m0s\nFAIL\tserver/b\t600.0s\nFAIL\n", unnamed: true},
+		{name: "a timeout beside a named failure", output: "panic: test timed out\nFAIL\tserver/a\t600.0s\n--- FAIL: TestB (0.00s)\nFAIL\nFAIL\tserver/b\t0.1s\nFAIL\n", unnamed: true},
+		{name: "a pass between", output: "--- FAIL: TestA (0.00s)\nFAIL\tserver/a\t0.1s\nok  \tserver/b\t0.1s\nFAIL\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out := &goTestOutput{}
+			_, _ = out.Write([]byte(tt.output))
+			assert.Equal(t, tt.unnamed, out.unnamed, "unnamed")
+		})
+	}
+}
+
+// TestRepeating states what a repeat runs: the failed tests alone, unless
+// the caller already chose tests with --run or a -run after --, in which
+// case exactly those, and everything when no test was named.
+func TestRepeating(t *testing.T) {
+	failed := []string{"TestA"}
+	for _, tt := range []struct {
+		name   string
+		tester goTest
+		failed []string
+		want   []string
+	}{
+		{name: "narrowed", tester: goTest{packages: []string{"./..."}}, failed: failed, want: []string{"test", "-count=1", "-run=^(TestA)$", "./..."}},
+		{name: "nothing named", tester: goTest{packages: []string{"./..."}}, want: []string{"test", "-count=1", "./..."}},
+		{name: "the callers --run", tester: goTest{packages: []string{"./..."}, match: regexp.MustCompile("TestA/fast")}, failed: failed, want: []string{"test", "-count=1", "-run=TestA/fast", "./..."}},
+		{name: "a -run after --", tester: goTest{packages: []string{"./..."}, extra: []string{"-run", "TestA/fast"}}, failed: failed, want: []string{"test", "-count=1", "./...", "-run", "TestA/fast"}},
+		{name: "a -run=pattern after --", tester: goTest{packages: []string{"./..."}, extra: []string{"-run=TestA/fast"}}, failed: failed, want: []string{"test", "-count=1", "./...", "-run=TestA/fast"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.tester.repeating(tt.failed).args(), "args")
+		})
+	}
+}

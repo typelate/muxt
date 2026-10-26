@@ -43,7 +43,7 @@ func TestRun(t *testing.T) {
 	assert.Equal(t, 1, report.Missed, "missed")
 
 	lines := strings.Split(strings.TrimSpace(status.String()), "\n")
-	assert.Len(t, lines, 5, "status has the preamble, a line per mutant and one for the template:\n%s", status.String())
+	assert.Len(t, lines, 7, "status has the preamble, a line per mutant, one for the template and one per repeated kill:\n%s", status.String())
 	assert.True(t, strings.HasPrefix(lines[0], "3 mutants across 1 template (complexity 2), baseline "), "status opens with the preamble:\n%s", status.String())
 }
 
@@ -264,12 +264,12 @@ func TestRunPlanProgressWithoutVerbose(t *testing.T) {
 			var status strings.Builder
 			_, err := runPlan(t.Context(), p, tt.config, &status, func(context.Context) (string, error) {
 				return "", nil
-			}, func(_ context.Context, overlay string) (Status, error) {
+			}, func(_ context.Context, overlay string) (Status, []string, error) {
 				if strings.Contains(readMutated(t, overlay), "K") {
-					return StatusKilled, nil
+					return StatusKilled, nil, nil
 				}
-				return StatusMissed, nil
-			})
+				return StatusMissed, nil, nil
+			}, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.lines, strings.Count(strings.TrimSpace(status.String()), "\n")+1, "status lines:\n%s", status.String())
 			if tt.config.Progress {
