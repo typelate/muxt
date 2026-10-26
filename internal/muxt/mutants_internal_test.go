@@ -119,7 +119,7 @@ func TestCheckPathAndMethod(t *testing.T) {
 		{name: "root", def: Definition{name: "GET /", method: "GET", path: "/", spans: nameSpans{path: [2]int{4, 5}}}},
 		{name: "no method", def: Definition{name: "/a", path: "/a", spans: nameSpans{path: [2]int{0, 2}}}},
 		{name: "empty segment", def: Definition{name: "GET /a//b", method: "GET", path: "/a//b", spans: nameSpans{path: [2]int{4, 9}}}, wantOffset: 7, wantLength: 1, wantErr: "path has an empty segment"},
-		{name: "trailing slash", def: Definition{name: "GET /a/", method: "GET", path: "/a/", spans: nameSpans{path: [2]int{4, 7}}}, wantOffset: 6, wantLength: 1, wantErr: "path has an empty segment"},
+		{name: "trailing slash", def: Definition{name: "GET /a/", method: "GET", path: "/a/", spans: nameSpans{path: [2]int{4, 7}}}},
 		{name: "method not allowed", def: Definition{name: "TRACE /a", method: "TRACE", path: "/a", spans: nameSpans{method: [2]int{0, 5}, path: [2]int{6, 8}}}, wantOffset: 0, wantLength: 5, wantErr: "TRACE method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -33,9 +33,9 @@ Muxt registers the METHOD, HOST and PATH text on an `http.ServeMux`, so [its pat
 {{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}
 ```
 
-Muxt adds three rules. A path other than `/` may not contain an empty segment, a trailing `/` or `//` (`path has an empty segment`), so ServeMux's trailing-slash prefix matching is reachable only through `/`, which matches every path, or a `{name...}` wildcard. A wildcard name must be a Go identifier, unique within the path, and not one of `ctx`, `request`, `response`, `form`, `multipart`, `body`, `execute`, `lastEventID` (`path parameter name NAME conflicts with a reserved identifier`). The same pattern in two templates fails with `duplicate route pattern`.
+Muxt adds three rules. A path may not contain an empty segment, `//` (`path has an empty segment`); only a single trailing `/` is allowed. A trailing `/` is ServeMux's subtree pattern: `GET /static/` matches `/static/css/app.css` and is registered exactly as written, with no path parameters (`{path...}` is the alternative that binds the rest of the path). Its path helper, `Serve` for `GET /static/ Serve(request, response)` (`ReadStatic` when the name has no call), returns `/static/`. A wildcard name must be a Go identifier, unique within the path, and not one of `ctx`, `request`, `response`, `form`, `multipart`, `body`, `execute`, `lastEventID` (`path parameter name NAME conflicts with a reserved identifier`). The same pattern in two templates fails with `duplicate route pattern`.
 
-[reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) · [err_duplicate_pattern.txt](../../cmd/muxt/testdata/err_duplicate_pattern.txt)
+[reference_path_trailing_slash.txt](../../cmd/muxt/testdata/reference_path_trailing_slash.txt) · [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) · [err_duplicate_pattern.txt](../../cmd/muxt/testdata/err_duplicate_pattern.txt)
 
 ## Status
 
