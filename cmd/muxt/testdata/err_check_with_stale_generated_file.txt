@@ -15,7 +15,6 @@ muxt list-template-calls
 -- want-err.txt --
 $WORK/index_template_routes_gen.go:32:13 ExecuteTemplate "GET / Home()"
  -  the data argument has no type because the package does not type check; run go build (a stale generated file can cause this)
-Error: fail: 1 error
 -- index.gohtml --
 {{define "GET / Home()"}}<h1>{{.Result}}</h1>{{end}}
 -- go.mod --

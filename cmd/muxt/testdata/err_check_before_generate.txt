@@ -10,7 +10,6 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
 Route templates with no generated handler; run muxt generate to wire them up:
   - $WORK/template.gohtml:1:29: "GET / Home(ctx)"
-Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Home(ctx)"}}
 {{template "greeting" .}}

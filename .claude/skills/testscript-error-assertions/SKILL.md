@@ -23,11 +23,12 @@ cmpenv stderr want-err.txt
 {{define "GET /x F()"}}{{end}}
 -- want-err.txt --
 $WORK/template.gohtml:1:1: F not found in package
-Error: fail: 1 error
 ```
 
-The final `Error: <summary>` line is cobra's error printer — muxt's stderr
-always ends with it, newline included.
+`muxt check` prints its diagnostics once and no cobra `Error:` summary after
+them, so the golden file ends with the last diagnostic. Failures that have no
+diagnostics of their own (a package that would not load) still end with
+cobra's `Error: <message>` line.
 
 - `stderr`, not `stdout` — check where the tool actually writes.
 - `cmpenv` doesn't check the exit code; keep the leading `!`.

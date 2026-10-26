@@ -30,7 +30,6 @@ $WORK/template.gohtml:1:3: executing "template.gohtml" at <.Missing>: field or m
     Field4 int
   }
 
-Error: fail: 4 errors
 -- template.gohtml --
 {{.Missing}}
 -- go.mod --

@@ -14,7 +14,6 @@ $WORK/template.gohtml:2:21: executing "GET /fruits/{name}/tree ToUpper(name)" at
 
 any has no exported fields or methods
 
-Error: fail: 1 error
 -- template.gohtml --
 {{define "GET /fruits/{name}/tree ToUpper(name)" }}
 	<h1>Fruit {{.Result.Name}}</h1>
