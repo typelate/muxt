@@ -19,7 +19,9 @@ func TestFind(t *testing.T) {
 		{id: "how-to/template-functions", wantID: "how-to/template-functions"},
 		{id: "template-names.md", wantID: "template-names"},
 		{id: "template-nam", wantErr: "did you mean: template-names"},
-		{id: "generate", wantErr: "commands/generate"},
+		{id: "generate", wantID: "commands/generate"},
+		{id: "check", wantID: "commands/check"},
+		{id: "quick-start", wantID: "tutorials/quick-start"},
 		{id: "templ-names", wantErr: "did you mean: template-names"},
 		{id: "zzz", wantErr: `unknown documentation topic "zzz"`},
 	} {

@@ -26,3 +26,6 @@ stderr 'did you mean: template-names'
 
 muxt help documentation
 stdout 'documentation'
+
+muxt documentation check
+stdout '^# muxt check'
