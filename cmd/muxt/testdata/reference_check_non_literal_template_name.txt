@@ -1,27 +1,18 @@
 # An ExecuteTemplate call whose template name is not a string literal, as in
 # a render helper, is not type checked: which template it renders is known
 # only at run time. check names each such call on stderr so the templates it
-# renders are not silently unchecked, and counts them in its summary.
+# renders are not silently unchecked, and counts them in its summary. Such
+# a call may render any template, so none is reported unused: "about",
+# rendered only through the helper, does not fail the check.
 
-! muxt check
-cmpenv stderr want-err.txt
-
-# Once every template has a call check can read, check passes and still
-# counts the call it skipped.
-cp about.go.txt about.go
 muxt check
 cmpenv stderr want-skipped.txt
 cmp stdout want-ok.txt
 
--- want-err.txt --
-$WORK/server.go:24:9: ExecuteTemplate not checked: the template name is not a string literal, so which template it renders is not known until run time
-Unused templates:
-  - $WORK/index.gohtml:2:19: "about"
-Error: fail: 1 error
 -- want-skipped.txt --
 $WORK/server.go:24:9: ExecuteTemplate not checked: the template name is not a string literal, so which template it renders is not known until run time
 -- want-ok.txt --
-ok: 2 templates, 1 call site skipped
+ok: 1 template, 1 call site skipped
 -- go.mod --
 module example.com
 
@@ -54,12 +45,4 @@ func RenderIndex(w io.Writer, page Page) error {
 // render is a helper; check cannot tell which template name it is passed.
 func render(w io.Writer, name string, data any) error {
 	return templates.ExecuteTemplate(w, name, data)
-}
--- about.go.txt --
-package server
-
-import "io"
-
-func RenderAbout(w io.Writer, page Page) error {
-	return templates.ExecuteTemplate(w, "about", page)
 }

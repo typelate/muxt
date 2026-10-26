@@ -1,0 +1,32 @@
+An ExecuteTemplate call with a literal template name and data of type any
+is not skipped: the template is checked with dot as any, so a field access
+fails.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer, data any) error {
+	return templates.ExecuteTemplate(w, "index", data)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:6:9 ExecuteTemplate "index" any
+index.gohtml:1:25: executing "index" at <.Title>: field or method Title not found on any
+
+any has no exported fields or methods
+

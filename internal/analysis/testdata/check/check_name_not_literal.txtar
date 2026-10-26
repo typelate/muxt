@@ -1,8 +1,8 @@
 An ExecuteTemplate call whose template name is not a string literal, as in
 a render helper, cannot be checked: which template it renders is not known
 until run time. Each such call is reported, so the templates it renders
-are not silently left unchecked, and counted. The templates only it
-renders are reported unused.
+are not silently left unchecked, and counted. Such a call may render any
+template, so none is reported unused.
 
 Command line: muxt check
 -- config.json --
@@ -33,11 +33,7 @@ func render(w io.Writer, name string, data any) error {
 }
 -- want/checked.txt --
 1
--- want/error.txt --
-1 error
 -- want/log.txt --
 server.go:14:9: ExecuteTemplate not checked: the template name is not a string literal, so which template it renders is not known until run time
-Unused templates:
-  - index.gohtml:2:19: "about"
 -- want/unchecked.txt --
 1
