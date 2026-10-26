@@ -14,6 +14,24 @@ stdout '1 mutant across 1 template'
 muxt test-template-mutations ./internal/preview --seed 1 -- -count=1
 stdout '1 mutant, 1 killed, 0 missed, 0 skipped'
 
+# The listings read the package the argument names; the root package has
+# no templates variable.
+! muxt list-template-calls
+stderr 'templates'
+muxt list-template-calls ./internal/preview
+! stderr .
+
+! muxt list-template-callers
+stderr 'templates'
+muxt list-template-callers ./internal/preview
+stdout 'greeting'
+
+! muxt check ./internal/missing
+stderr 'check: package directory'
+
+! muxt check ./main.go
+stderr 'is not one'
+
 ! muxt check
 stderr 'templates'
 

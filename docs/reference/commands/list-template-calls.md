@@ -14,4 +14,6 @@ template "PATCH /todos/{id} ToggleTodo(id)" calls:
   - template.gohtml:86:12 template "todo-item" *Todo
 ```
 
+Takes an optional `[package-dir]`, resolved like `-C`; a missing directory, a file, or a pattern is an error ([reference_package_directory_argument.txt](../../../cmd/muxt/testdata/reference_package_directory_argument.txt)).
+
 Each line is the action's position, the kind (`template`), the called template, and the type passed as dot. `--match` filters by a regular expression on the template name; repeatable. Flags: [cli.md](../cli.md#flags). Inverse: [`list-template-callers`](list-template-callers.md). Script: [howto_list_template_calls.txt](../../../cmd/muxt/testdata/howto_list_template_calls.txt).

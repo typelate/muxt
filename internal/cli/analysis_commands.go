@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -64,7 +65,15 @@ func packageDirectory(command, wd string, args []string) (string, error) {
 	if strings.Contains(args[0], "...") {
 		return "", fmt.Errorf("%s takes one package directory, not a pattern: %s", command, args[0])
 	}
-	return absoluteDir(wd, args[0]), nil
+	dir := absoluteDir(wd, args[0])
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", fmt.Errorf("%s: package directory: %w", command, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s takes a package directory, %s is not one", command, args[0])
+	}
+	return dir, nil
 }
 
 func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
@@ -87,7 +96,7 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 	)
 
 	cmd := &cobra.Command{
-		Use:     listTemplateCallersCommandName,
+		Use:     listTemplateCallersCommandName + " [package-dir]",
 		Aliases: []string{"callers"},
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -103,7 +112,11 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 				return err
 			}
 			config.FilterTemplates = filters
-			return run(cmd, *wd, config)
+			dir, err := packageDirectory(cmd.Name(), *wd, args)
+			if err != nil {
+				return err
+			}
+			return run(cmd, dir, config)
 		},
 	}
 
@@ -123,7 +136,7 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 	)
 
 	cmd := &cobra.Command{
-		Use:     listTemplateCallsCommandName,
+		Use:     listTemplateCallsCommandName + " [package-dir]",
 		Aliases: []string{"calls"},
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -139,7 +152,11 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 				return err
 			}
 			config.FilterTemplates = filters
-			return run(cmd, *wd, config)
+			dir, err := packageDirectory(cmd.Name(), *wd, args)
+			if err != nil {
+				return err
+			}
+			return run(cmd, dir, config)
 		},
 	}
 
