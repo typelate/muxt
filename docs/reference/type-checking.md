@@ -13,6 +13,22 @@ templates.ExecuteTemplate(w, name, data)           // not checked: name is not a
 
 Generated handlers meet both conditions, so every route template is checked.
 
+A template that only a hand-written helper renders is checked only when the helper's call has both properties. A wrapper such as `renderTemplate(w http.ResponseWriter, name string, data any)` has neither: its `ExecuteTemplate` call receives a variable name and an `any` value. Templates rendered through it, or from middleware that does the same, are not checked, and because no checked call reaches them, `muxt check` lists them as unused templates. The unused-template report is built in [internal/analysis/check.go](../../internal/analysis/check.go) from the literal-name calls alone.
+
+To get these templates checked, call `ExecuteTemplate` with a literal name and a typed value at each call site:
+
+```go
+// not checked, and "page" is reported unused
+func renderTemplate(w http.ResponseWriter, name string, data any) error {
+	return templates.ExecuteTemplate(w, name, data)
+}
+
+// checked against PageData
+err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
+```
+
+Alternatively, make the page a route template with a call, so the generated handler renders it.
+
 ## What is checked
 
 Each action is resolved against the type of dot at that point: field accesses, method calls (including on interface-typed values), registered template functions, and `{{template}}` calls with the type they pass along.

@@ -80,3 +80,19 @@ Each still works and prints `Flag --old has been deprecated, use --new instead`.
 | `--logger` | `--output-routes-func-with-logger-param` |
 | `--path-prefix` | `--output-routes-func-with-path-prefix-param` |
 | `--output-htmx-helpers` | `--output-htmx` |
+
+## Troubleshooting
+
+These are the messages that most often stop `generate` and `check`, with the usual cause.
+
+| Message | Cause and fix |
+|---|---|
+| `no Go package found at DIR` | `DIR` holds no Go files, as at a repository root whose packages are in subdirectories. Run the command from the package directory that declares the templates variable, or pass `-C <dir>` (`go tool muxt -C ./web check`). The next lines list what the loader did load, and `GOWORK`, `GOFLAGS` and `GOROOT` are inherited ([internal/load/diagnostic.go](../../internal/load/diagnostic.go)). |
+| `variable templates not found in package PATH` | The package has no package-level `var` with that name and an initializer. Check that the directory is the right one, and that `--use-templates-variable` names the variable if it is not `templates`. A variable declared without a value and assigned in `init` or another function is not found, because only the initializer expression is read ([templates-variable.md](templates-variable.md)). |
+| `expected a template.FuncMap composite literal got funcMap` | `Funcs` was given a variable or a function call. Write the `template.FuncMap{...}` literal inline in the initializer ([supported initializers](templates-variable.md#supported-initializers)). |
+| `unsupported function ParseGlob` | The initializer calls a package-level template function muxt does not evaluate, here `template.ParseGlob`. Use `template.ParseFS` with an `embed.FS` ([supported initializers](templates-variable.md#supported-initializers)). A chained call it does not evaluate reports `unsupported method NAME`. |
+| `expected string literal got pattern` | A file pattern or template name argument is a variable or constant. Pass a string literal ([supported initializers](templates-variable.md#supported-initializers)). |
+| `unknown command "test-template-mutations"` | The `muxt` found first on `PATH` predates that command. This is the usual sign of a stale `~/bin/muxt` or `$(go env GOPATH)/bin/muxt` beside a project that expects a newer one. Run the version the project pins with `go tool muxt`, installed by `go get -tool github.com/typelate/muxt`, or update the binary. `muxt version` prints which one ran. |
+| `unknown argument sse` | A template name call passes `sse` as an argument. The render callback is named `execute`; the other names in scope are listed after the message. `sse` is only the wrapper `sse(Method(...))`, and a callback with an `sse` prefix such as `sseClock` is in scope only inside that wrapper ([call parameters](call-parameters.md#server-sent-events)). [TODO: confirm in which release `sse` the argument became `execute`.] |
+
+The messages about `FuncMap`, `ParseGlob` and string literals come from the template evaluator in `github.com/typelate/check`, not from this repository, so [TODO: link the evaluator's documentation once it publishes one].

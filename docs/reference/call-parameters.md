@@ -18,7 +18,7 @@ Value and pointer receivers both work ([reference_receiver_with_pointer.txt](../
 |---|---|---|
 | `ctx` | `context.Context` | `request.Context()` ([howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)) |
 | `request` | `*http.Request` | the request ([howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt)) |
-| `response` | `http.ResponseWriter` | the response; muxt sets no status code or headers, and still renders the template after the method returns. Generate [warns](commands/generate.md#warnings) |
+| `response` | `http.ResponseWriter` | the response; muxt sets no status code or headers, and still renders the template after the method returns. Generate [warns](commands/generate.md#warnings). See [routes that take `response`](#routes-that-take-response) |
 | path wildcard | a [parseable type](#parseable-types) | `request.PathValue(name)` ([howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)) |
 | `form` | struct or `url.Values` | `request.Form`: the query string plus a url-encoded body on POST, PUT, and PATCH |
 | `unmarshalForm(body)` | same as `form` | the same binding, spelled out ([reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)) |
@@ -114,6 +114,34 @@ A call that reads the body twice, such as `(form, body)` or `(body, unmarshalJSO
 ```
 
 [reference_unmarshal_json.txt](../../cmd/muxt/testdata/reference_unmarshal_json.txt) · [reference_unmarshal_json_undefined.txt](../../cmd/muxt/testdata/reference_unmarshal_json_undefined.txt)
+
+## Routes that take `response`
+
+A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and copies the buffer to `response` with one `Write` call. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route.
+
+The consequence is that every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id therefore renders its error page at 200 rather than 400.
+
+To keep the right status on such a route, the method has to do three things itself:
+
+- Call `response.WriteHeader(code)` before it returns, choosing the code for each error it can produce.
+- Call `http.Redirect(response, request, url, code)` to redirect, and return before the template is expected to render anything meaningful.
+- Expect its template output to follow whatever it already wrote, since the buffer is written after the method returns.
+
+```go
+func (s *Server) GetUser(ctx context.Context, response http.ResponseWriter, id int) (User, error) {
+	user, err := s.db.User(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		response.WriteHeader(http.StatusNotFound)
+	}
+	return user, err
+}
+```
+
+`.Header` in the template still works, because it writes to the response header map. A template that calls `.StatusCode` or one of the `.Redirect*` methods on such a route fails `generate` and `check` with an error that names the template and the method ([err_redirect_with_response_argument.txt](../../cmd/muxt/testdata/err_redirect_with_response_argument.txt)). The detection is textual: a `TemplateData` method you wrote yourself that sets the status, such as `.ErrorStatusCode` in [domain error status codes](../how-to/domain-error-status-codes.md), is not recognized and is silently ignored on these routes.
+
+If the only reason to take `response` was to set a status or a redirect, drop the argument instead. Set the status from the template with `.StatusCode` or `.Redirect*` ([domain error status codes](../how-to/domain-error-status-codes.md)), and muxt applies it.
+
+[reference_response_argument_warning.txt](../../cmd/muxt/testdata/reference_response_argument_warning.txt) · [reference_header_with_response_argument.txt](../../cmd/muxt/testdata/reference_header_with_response_argument.txt) · [internal/generate/html.go](../../internal/generate/html.go) (`writeHeadersAndStatusCode`)
 
 ## Server-Sent Events
 

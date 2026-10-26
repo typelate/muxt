@@ -100,7 +100,11 @@ With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`
 
 ### Route methods
 
-A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two routes call the same method, each is named `<route name>Calling<Method>`, for example `ReadDupOneCallingDup`.
+A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two or more routes call the same method, every one of them, including the first, is named `<route name>Calling<Method>`, where the route name is built from the pattern as described below: `GET /one Dup(ctx)` and `GET /two Dup(ctx)` become `ReadOneCallingDup` and `ReadTwoCallingDup`. Only the method's name is compared, so routes that pass different arguments to it still collide. A long path therefore produces a long name, such as `CreateExAnteCompositionsPolicyByIDCallingEvaluateComposition`.
+
+For a shorter name, give each route its own receiver method, even if the new method only forwards to a shared helper. A route whose method name appears once takes that name as is, so `POST /policy/{id}/evaluate EvaluatePolicy(ctx, id)` is `EvaluatePolicy`. Shortening the path in the pattern also shortens the name, since the route name is part of it. Templates that call `.Path.OldName` or `.Route.OldName` need the new name.
+
+[internal/muxt/definition_name.go](../../internal/muxt/definition_name.go) (`calculateIdentifiers`)
 
 A route without a call is named from its pattern: a verb for the HTTP method (`GET` is `Read`, `POST` `Create`, `PUT` `Replace`, `PATCH` `Update`, `DELETE` `Delete`, and none for a pattern without a method), the host and literal segments in PascalCase (`/` alone is `Index`, `{$}` is `Exact`), then `By` and the wildcards joined with `And`: `GET /hello/{name}` is `ReadHelloByName`. Two routes may not produce the same name ([known issues](known-issues.md)).
 
@@ -124,3 +128,17 @@ An error's own `StatusCode` method is not consulted.
 ```
 
 [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt) · [reference_empty_body_status.txt](../../cmd/muxt/testdata/reference_empty_body_status.txt)
+
+### When status and redirect handling is generated
+
+Every route that does not take a [`response`](call-parameters.md#routes-that-take-response) argument gets the status selection in the table above, whatever its template contains. The redirect handling is separate. It is the `if td.redirectURL != ""` block that calls `http.Redirect` with the selected status, and muxt writes it only when it finds a reason to think the template can set a redirect.
+
+The decision reads the route's template body, not the call in its name, and follows `{{template}}` and `{{block}}` invocations into the templates they name, including ones invoked without a dot. A route gets the redirect block when any command in that tree does one of these things:
+
+- Names `Redirect`, `RedirectMultipleChoices`, `RedirectMovedPermanently`, `RedirectFound` or `RedirectSeeOther` on dot, on a variable such as `$.Redirect`, or in a chain.
+- Selects a first field from dot or a variable that is not one of `Path`, `Result`, `Request`, `Receiver`, `Ok`, `Err`, `MuxtVersion`, `StatusCode` or `Header`. This includes any method you add to `TemplateData` ([extend TemplateData](../how-to/extend-template-data.md)) and any field read inside a `range` or `with` body, because muxt does not track what dot has been rebound to.
+- Passes dot, a variable or a chain to a function.
+
+A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, gets no redirect block and its handler never calls `http.Redirect`. The scan errs toward emitting the block, because an unneeded block is harmless and a missing one would drop a redirect. The receiver method cannot set a redirect on its own, since it never receives the `TemplateData`, so a route that must redirect from Go code takes `response` and calls `http.Redirect` itself.
+
+[internal/muxt/redirect.go](../../internal/muxt/redirect.go) · [internal/generate/handler_statements.go](../../internal/generate/handler_statements.go)

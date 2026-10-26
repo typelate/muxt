@@ -23,10 +23,14 @@ Muxt is built for web apps that ship as a single Go binary serving hypermedia fr
 ## Install
 
 ```bash
-go install github.com/typelate/muxt@latest
+go get -tool github.com/typelate/muxt
 ```
 
-Or as a project tool: `go get -tool github.com/typelate/muxt`.
+Then call it from a directive with `//go:generate go tool muxt generate`, or from a shell with `go tool muxt check`. The tool version is recorded in `go.mod`, so everyone who builds the project runs the same muxt. Projects that installed a binary instead drifted: a stale `~/bin/muxt` silently ran an older version and failed with errors such as `unknown command "test-template-mutations"`.
+
+To install a single binary on your `PATH`, use `go install github.com/typelate/muxt@latest`.
+
+`muxt check` and the other commands read the package in the working directory. Run them from the package directory, or pass `-C <dir>` (`go tool muxt -C ./web check`), because running at a repository root without a Go package there fails with `no Go package found at ...`.
 
 muxt loads Go packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
 

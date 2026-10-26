@@ -49,4 +49,6 @@ func (data *TemplateData[R, T]) ErrorStatusCode() *TemplateData[R, T] {
 {{end}}
 ```
 
+This works only on routes whose method does not take `response`. When it does, muxt writes the template buffer without applying any status code, so a missing record renders at 200 and `ErrorStatusCode` is silently ignored. See [routes that take `response`](../reference/call-parameters.md#routes-that-take-response).
+
 Keep `Error()` text user-facing and the wrapped cause for logs and `errors.Is`.
