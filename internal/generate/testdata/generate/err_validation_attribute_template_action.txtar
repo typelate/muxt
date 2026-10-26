@@ -1,0 +1,51 @@
+A validation attribute on a bound input is read at generate time, so a
+template action in its value cannot be used. Generation names the template,
+the input, and the attribute, and says how to fix it.
+
+Command line: muxt generate --use-receiver-type=T
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "TemplateRoutes",
+	"ReceiverType": "T",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "RoutesReceiver",
+	"TemplateDataType": "TemplateData",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "POST /signup Signup(form)"}}{{template "age-field" .}}{{end}}
+{{define "age-field"}}<input type="number" name="age" min="{{.Result.MinAge}}" max="120">{{end}}
+-- server.go --
+package server
+
+type T struct{}
+
+type SignupForm struct {
+	Age int `name:"age" template:"age-field"`
+}
+
+func (T) Signup(form SignupForm) string { return "" }
+-- want/error.txt --
+  POST /signup Signup(form)
+                      ^^^^
+index.gohtml:1:31: template "age-field": validation attribute min on input "age" must be a literal; got the template action {{.Result.MinAge}} — use a constant, or drop the template struct tag
+server.go:9:10: Signup is defined here

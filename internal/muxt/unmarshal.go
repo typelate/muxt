@@ -266,10 +266,16 @@ func fieldTemplateValidations(fb FieldBinding) ([]InputValidation, error) {
 	if element == nil {
 		return nil, nil
 	}
+	var validations []InputValidation
 	if strings.EqualFold(element.TagName(), atom.Textarea.String()) {
-		return parseLengthValidations(fb.InputName, element)
+		validations, err = parseLengthValidations(fb.InputName, element)
+	} else {
+		validations, err = ParseInputValidations(fb.InputName, element, fb.elem)
 	}
-	return ParseInputValidations(fb.InputName, element, fb.elem)
+	if err != nil {
+		return nil, fmt.Errorf("template %q: %w", fb.Template.Name(), err)
+	}
+	return validations, nil
 }
 
 // Elem is the type parsed from one string value: the field type, or the
