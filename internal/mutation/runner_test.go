@@ -108,11 +108,11 @@ func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 				plan:    p,
 				scratch: t.TempDir(),
 				clock:   &estimate{remaining: len(kills), workers: workers},
-				test: func(_ context.Context, overlay string) (Status, error) {
+				test: func(_ context.Context, overlay string) (Status, []string, error) {
 					if strings.Contains(readMutated(t, overlay), "K") {
-						return StatusKilled, nil
+						return StatusKilled, nil, nil
 					}
-					return StatusMissed, nil
+					return StatusMissed, nil, nil
 				},
 			}
 			require.NoError(t, r.runAll(t.Context(), report, workers))
@@ -131,6 +131,61 @@ func TestRunAllWritesVerdictsInPlanOrder(t *testing.T) {
 	}
 }
 
+// TestRunAllReportsAKillThatDoesNotRepeatAsFlaky states the rule for
+// workers beyond one: a kill is repeated alone, once, and counts only if
+// the failing tests fail again. One the tests pass the second time is
+// flaky, and names the tests that failed.
+func TestRunAllReportsAKillThatDoesNotRepeatAsFlaky(t *testing.T) {
+	kills := []bool{true, true, false, true}
+	for _, tt := range []struct {
+		name         string
+		workers      int
+		wantStatus   []Status
+		wantRechecks int
+	}{
+		{name: "beside other mutants", workers: 3, wantStatus: []Status{StatusKilled, StatusFlaky, StatusMissed, StatusFlaky}, wantRechecks: 3},
+		{name: "one at a time nothing is repeated", workers: 1, wantStatus: []Status{StatusKilled, StatusKilled, StatusMissed, StatusKilled}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			report, p := runnerFixture(t, kills)
+			var rechecks atomic.Int32
+			r := &mutantRunner{
+				plan:    p,
+				scratch: t.TempDir(),
+				clock:   &estimate{remaining: len(kills), workers: tt.workers},
+				test: func(_ context.Context, overlay string) (Status, []string, error) {
+					if strings.Contains(readMutated(t, overlay), "K") {
+						return StatusKilled, []string{"TestPage"}, nil
+					}
+					return StatusMissed, nil, nil
+				},
+				// Only the first mutant's failure survives being repeated.
+				recheck: func(_ context.Context, overlay string, failed []string) (Status, error) {
+					rechecks.Add(1)
+					assert.Equal(t, []string{"TestPage"}, failed, "tests handed to the repeat")
+					if overlay == report.Groups[0].Templates[0].Results[0].overlay {
+						return StatusKilled, nil
+					}
+					return StatusMissed, nil
+				},
+			}
+			require.NoError(t, r.runAll(t.Context(), report, tt.workers))
+
+			var got []Status
+			for _, result := range report.Groups[0].Templates[0].Results {
+				got = append(got, result.Status)
+			}
+			assert.Equal(t, tt.wantStatus, got, "statuses")
+			assert.Equal(t, int32(tt.wantRechecks), rechecks.Load(), "kills repeated")
+			if tt.workers > 1 {
+				assert.Equal(t, 1, report.Killed, "killed")
+				assert.Equal(t, 2, report.Flaky, "flaky")
+				assert.Equal(t, "TestPage failed beside other mutants, passed when run alone", report.Groups[0].Templates[0].Results[1].Reason, "reason")
+			}
+		})
+	}
+}
+
 // TestRunAllStopsDispatchingAfterAnError states that once the go command
 // fails to run at all, no further mutant is started.
 //
@@ -143,9 +198,9 @@ func TestRunAllStopsDispatchingAfterAnError(t *testing.T) {
 		plan:    p,
 		scratch: t.TempDir(),
 		clock:   &estimate{remaining: 3, workers: 1},
-		test: func(context.Context, string) (Status, error) {
+		test: func(context.Context, string) (Status, []string, error) {
 			calls.Add(1)
-			return "", errors.New("go could not run")
+			return "", nil, errors.New("go could not run")
 		},
 	}
 	require.Error(t, r.runAll(t.Context(), report, 1), "runAll: the error the go command gave")
@@ -169,11 +224,11 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 		// An hour a mutant until a run says otherwise: each run that
 		// finishes has to bring the estimate down with it.
 		clock: &estimate{perMutant: time.Hour, remaining: 2, workers: 1},
-		test: func(_ context.Context, overlay string) (Status, error) {
+		test: func(_ context.Context, overlay string) (Status, []string, error) {
 			if strings.Contains(readMutated(t, overlay), "K") {
-				return StatusKilled, nil
+				return StatusKilled, nil, nil
 			}
-			return StatusMissed, nil
+			return StatusMissed, nil, nil
 		},
 	}
 	require.NoError(t, r.runAll(t.Context(), report, 1))

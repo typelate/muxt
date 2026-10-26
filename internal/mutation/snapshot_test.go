@@ -163,10 +163,10 @@ func dryRunSnapshot(t *testing.T, config Configuration, archive *txtar.Archive) 
 	report, err := runPlan(t.Context(), p, config, nil, func(context.Context) (string, error) {
 		require.Fail(t, "a dry run ran the baseline")
 		return "", nil
-	}, func(context.Context, string) (Status, error) {
+	}, func(context.Context, string) (Status, []string, error) {
 		require.Fail(t, "a dry run ran a mutant")
-		return "", nil
-	})
+		return "", nil, nil
+	}, nil)
 	if err != nil {
 		return fail(err)
 	}

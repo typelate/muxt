@@ -95,12 +95,43 @@ const mutantOutputLimit = 64 << 10
 
 // verdict runs the tests against one mutant's overlay and reports whether
 // they caught it. An error means go test could not run at all.
-func (t goTest) verdict(ctx context.Context, overlay string) (Status, error) {
+//
+// For a kill it also returns the tests that failed, by their top level
+// names, so a kill that cannot be repeated can name them.
+func (t goTest) verdict(ctx context.Context, overlay string) (Status, []string, error) {
 	out, err := t.run(ctx, mutantOutputLimit, "-overlay="+overlay)
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return "", ctxErr
+		return "", nil, ctxErr
 	}
-	return verdictOf(out, err)
+	status, err := verdictOf(out, err)
+	if status != StatusKilled {
+		return status, nil, err
+	}
+	return status, out.failed, nil
+}
+
+// onlyTests is the -run pattern selecting exactly the named top level
+// tests.
+func onlyTests(names []string) *regexp.Regexp {
+	quoted := make([]string, len(names))
+	for i, name := range names {
+		quoted[i] = regexp.QuoteMeta(name)
+	}
+	return regexp.MustCompile("^(" + strings.Join(quoted, "|") + ")$")
+}
+
+// recheck runs only the tests that failed against a mutant, again, and
+// says whether they still do.
+//
+// It is for a kill earned beside other runs, where a test can fail from
+// load alone. With no names to narrow by, because the failure was a
+// package and not a test, it repeats the whole run.
+func (t goTest) recheck(ctx context.Context, overlay string, failed []string) (Status, error) {
+	if len(failed) > 0 {
+		t.match = onlyTests(failed)
+	}
+	status, _, err := t.verdict(ctx, overlay)
+	return status, err
 }
 
 // verdictOf reads a go test run as a verdict on the mutant it ran against.
@@ -150,6 +181,10 @@ type goTestOutput struct {
 	// line, couldNotRun by a package that did not build or set up.
 	testFailed  bool
 	couldNotRun bool
+
+	// failed holds the top level name of each test a "--- FAIL" line
+	// named, once each, in the order they were printed.
+	failed []string
 }
 
 const maxMarkerLine = 1 << 10
@@ -198,12 +233,28 @@ func (o *goTestOutput) mark(line string) {
 	switch {
 	case strings.HasPrefix(strings.TrimLeft(line, " \t"), "--- FAIL"):
 		o.testFailed = true
+		o.noteFailed(strings.TrimLeft(line, " \t"))
 	case strings.HasPrefix(line, "FAIL\t"):
 		if strings.HasSuffix(line, "[build failed]") || strings.HasSuffix(line, "[setup failed]") {
 			o.couldNotRun = true
 		} else if strings.Count(line, "\t") >= 2 {
 			o.testFailed = true
 		}
+	}
+}
+
+// noteFailed records the test a "--- FAIL: Name (0.00s)" line names. A
+// subtest is recorded as the test it belongs to, which is what -run can
+// select on its own.
+func (o *goTestOutput) noteFailed(line string) {
+	name, ok := strings.CutPrefix(line, "--- FAIL: ")
+	if !ok {
+		return
+	}
+	name, _, _ = strings.Cut(name, " ")
+	name, _, _ = strings.Cut(name, "/")
+	if name != "" && !slices.Contains(o.failed, name) {
+		o.failed = append(o.failed, name)
 	}
 }
 

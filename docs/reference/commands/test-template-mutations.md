@@ -44,7 +44,7 @@ muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./
 | `--include-test-callers` | `false` | Also start from `ExecuteTemplate` calls in `_test.go` files. |
 | `--seed` | random; printed in the preamble | Seed for the values substituted by `operands`. |
 | `--max-cases` | `8` | Most operand combinations one action may contribute. |
-| `--workers` | `1` | Mutants to run at once, each in its own `go test`; the tests must tolerate running beside themselves. |
+| `--workers` | `1` | Mutants to run at once, each in its own `go test`; the tests must tolerate running beside themselves. Above 1, every kill is [repeated alone](#flaky-kills). |
 | `--diff` | none | Mutate only templates that changed since this git revision. |
 
 Common flags (`--format`, `--use-templates-variable`, `-C`): [cli.md](../cli.md#flags).
@@ -119,13 +119,26 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 | `KILL` | A test failed. |
 | `MISS` | Every test passed: a missing assertion, an untested branch, or an equivalent mutant whose output cannot differ. |
 | `SKIP` | Not run: the mutant does not parse or type check (else its render error would count as a kill), is `condition-dead`, or exceeds `--max-cases`. [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
+| `FLAKY` | A test failed, then passed when run again alone (`--workers` above 1 only). Neither a kill nor a miss; the reason names the tests. See [flaky kills](#flaky-kills). |
 | `PEND` | Enumerated but not run (`--dry-run`). |
+
+### Flaky kills
+
+Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed. If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
+
+```text
+    FLAKY 1:39 if-true (TestGreeting failed beside other mutants, passed when run alone)
+
+3 mutants, 1 killed, 1 flaky, 1 missed, 0 skipped
+```
+
+A flaky mutant is unknown, not caught, so close the gap by making the suite tolerate `--workers`, or run with `--workers 1`. It does not fail the exit status. With one worker nothing is repeated. `--format json` adds a top-level `flaky` count when it is not zero.
 
 ## Exit status
 
 The command exits non-zero when:
 
-- any mutant is a `MISS`. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants and `--dry-run` do not fail.
+- any mutant is a `MISS`. A `FLAKY` one does not fail the run. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants and `--dry-run` do not fail.
   [reference_test_template_mutations_go_test_flags.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_go_test_flags.txt)
 - the baseline (unmutated) test run fails. Nothing is mutated.
   [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
