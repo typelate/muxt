@@ -161,3 +161,24 @@ func TestReportErr(t *testing.T) {
 		})
 	}
 }
+
+// TestReportListsFlakyKills states that a kill which did not repeat is
+// listed without -v, like a miss, with the tests that failed, and is
+// counted on the summary line; a run with none leaves the line as it was.
+func TestReportListsFlakyKills(t *testing.T) {
+	report := &Report{
+		Templates: 1, Total: 2, Killed: 1, Flaky: 1, Baseline: BaselineResult{Passed: true},
+		Groups: []Group{{CallSite: "page.go:9:9", Entry: "page", DataType: "server.Page", Templates: []TemplateReport{{
+			Template: "page", File: "page.gohtml", DataType: "server.Page",
+			Results: []Result{
+				{Status: StatusKilled, Operator: OperatorActionZero, Line: 1, Column: 1},
+				{Status: StatusFlaky, Operator: OperatorIfFalse, Line: 1, Column: 9, Reason: "TestPage failed beside other mutants, passed when run alone"},
+			},
+		}}}},
+	}
+	text := writeReport(t, report)
+	assert.Contains(t, text, "    FLAKY 1:9 if-false (TestPage failed beside other mutants, passed when run alone)\n", "flaky result")
+	assert.NotContains(t, text, "KILL 1:1", "a repeated kill is not listed without -v")
+	assert.Contains(t, text, "2 mutants, 1 killed, 1 flaky, 0 missed, 0 skipped\n", "summary")
+	assert.NoError(t, report.Err(), "a flaky kill does not fail the run")
+}

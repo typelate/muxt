@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,7 +27,14 @@ type mutantRunner struct {
 	// test runs the suite against one mutant's overlay and says whether
 	// the tests caught it. An error means the tests could not be run at
 	// all, which stops the run.
-	test func(ctx context.Context, overlay string) (Status, error)
+	// For a kill it also returns the tests that failed, by name.
+	test func(ctx context.Context, overlay string) (Status, []string, error)
+
+	// recheck, when set, runs a kill's failing tests again alone. With
+	// more than one worker every kill goes through it once the parallel
+	// runs are done, and one the tests pass this time is flaky, not
+	// killed. It says whether the failure is still there.
+	recheck func(ctx context.Context, overlay string, failed []string) (Status, error)
 
 	// mu guards everything below it, which every run updates as it
 	// finishes.
@@ -98,8 +106,48 @@ dispatch:
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if workers > 1 && r.recheck != nil {
+		if err := r.confirmKills(ctx, report); err != nil {
+			return err
+		}
+	}
 	report.tally()
 	return nil
+}
+
+// confirmKills repeats every kill alone, one at a time, with nothing else
+// running, and turns the ones that do not repeat into flaky results.
+//
+// A mutant run beside others can fail a test that has nothing to do with
+// the mutation, from a shared port, a timeout or a busy machine, and
+// would be counted as caught. Kills are the minority of a run and each
+// repeat runs only the tests that failed, so the check costs little.
+func (r *mutantRunner) confirmKills(ctx context.Context, report *Report) error {
+	for group := range report.eachTemplate() {
+		for i := range group.Results {
+			result := &group.Results[i]
+			if result.Status != StatusKilled {
+				continue
+			}
+			status, err := r.recheck(ctx, result.overlay, result.failed)
+			if err != nil {
+				return err
+			}
+			if status == StatusKilled {
+				continue
+			}
+			result.Status = StatusFlaky
+			result.Reason = flakyReason(result.failed)
+		}
+	}
+	return nil
+}
+
+func flakyReason(failed []string) string {
+	if len(failed) == 0 {
+		return "failed beside other mutants, passed when run alone"
+	}
+	return strings.Join(failed, ", ") + " failed beside other mutants, passed when run alone"
 }
 
 // run runs one mutant's tests and writes the verdict into result.
@@ -112,12 +160,13 @@ func (r *mutantRunner) run(ctx context.Context, result *Result) error {
 		return err
 	}
 	started := time.Now()
-	status, err := r.test(ctx, overlay)
+	status, failed, err := r.test(ctx, overlay)
 	result.Seconds = time.Since(started).Seconds()
 	if err != nil {
 		return err
 	}
 	result.Status = status
+	result.overlay, result.failed = overlay, failed
 	return nil
 }
 

@@ -139,7 +139,7 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 		return nil, err
 	}
 	tester := config.goTest(workingDirectory)
-	return runPlan(ctx, p, config, status, tester.baseline, tester.verdict)
+	return runPlan(ctx, p, config, status, tester.baseline, tester.verdict, tester.recheck)
 }
 
 // runPlan runs an enumerated plan: the suite once unmutated, and then each
@@ -149,7 +149,7 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 // built here, because it is the slow part of a run and everything this
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
-func runPlan(ctx context.Context, p *plan, config Configuration, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, error)) (*Report, error) {
+func runPlan(ctx context.Context, p *plan, config Configuration, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -201,6 +201,7 @@ func runPlan(ctx context.Context, p *plan, config Configuration, status io.Write
 	runner := &mutantRunner{
 		plan:      p,
 		test:      verdict,
+		recheck:   recheck,
 		scratch:   scratch,
 		progress:  progress,
 		templates: templates,

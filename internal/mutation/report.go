@@ -28,6 +28,13 @@ const (
 	// --max-cases allows. Result.Reason says which.
 	StatusSkipped Status = "SKIP"
 
+	// StatusFlaky means a test failed while the mutation was in place and
+	// did not fail when run again alone, so the failure came from running
+	// beside other mutants and not from the mutation. It is neither a kill
+	// nor a miss: nothing is known about the mutant. Result.Reason names
+	// the tests.
+	StatusFlaky Status = "FLAKY"
+
 	// StatusPending means the mutant was enumerated but not run, which
 	// is every mutant in a dry run.
 	StatusPending Status = "PEND"
@@ -51,6 +58,11 @@ type Result struct {
 	// mutantIndex locates the mutant this result came from, so the run
 	// does not have to carry the mutants inside the report it prints.
 	mutantIndex int
+
+	// overlay and failed are what a kill leaves for the run to repeat it
+	// with: the overlay it ran against and the tests that failed.
+	overlay string
+	failed  []string
 }
 
 // label names the mutation: its operator, and for a combination or
@@ -122,6 +134,7 @@ type Report struct {
 	Complexity int               `json:"complexity"`
 	Total      int               `json:"total"`
 	Killed     int               `json:"killed"`
+	Flaky      int               `json:"flaky,omitzero"`
 	Missed     int               `json:"missed"`
 	Skipped    int               `json:"skipped"`
 	Groups     []Group           `json:"groups"`
@@ -173,6 +186,8 @@ func (r *Report) tally() {
 			switch result.Status {
 			case StatusKilled:
 				r.Killed++
+			case StatusFlaky:
+				r.Flaky++
 			case StatusMissed:
 				r.Missed++
 			}
@@ -260,7 +275,8 @@ func (r *Report) visibleResults(template TemplateReport) []Result {
 	}
 	var missed []Result
 	for _, result := range template.Results {
-		if result.Status == StatusMissed {
+		if result.Status == StatusMissed || result.Status == StatusFlaky {
+			// A flaky kill is as much a thing to act on as a miss.
 			missed = append(missed, result)
 		}
 	}
@@ -334,8 +350,14 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 			r.Total, pluralize(r.Total, "mutant"), r.Total-r.Skipped, r.Skipped)
 		return
 	}
-	_, _ = fmt.Fprintf(out, "%d %s, %d killed, %d missed, %d skipped\n",
-		r.Total, pluralize(r.Total, "mutant"), r.Killed, r.Missed, r.Skipped)
+	flaky := ""
+	if r.Flaky > 0 {
+		// Left out of a run that had none, so the line reads as it
+		// always has unless --workers produced a failure to explain.
+		flaky = fmt.Sprintf(", %d flaky", r.Flaky)
+	}
+	_, _ = fmt.Fprintf(out, "%d %s, %d killed%s, %d missed, %d skipped\n",
+		r.Total, pluralize(r.Total, "mutant"), r.Killed, flaky, r.Missed, r.Skipped)
 }
 
 func pluralize(n int, word string) string {

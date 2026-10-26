@@ -257,3 +257,21 @@ func TestIsTestFailureOnlyCountsATestThatRan(t *testing.T) {
 		})
 	}
 }
+
+// TestGoTestOutputNamesTheTestsThatFailed states that a kill can name the
+// tests behind it: top level names, once each, with a subtest reported as
+// the test it belongs to because that is what -run can select alone.
+func TestGoTestOutputNamesTheTestsThatFailed(t *testing.T) {
+	out := &goTestOutput{}
+	_, _ = out.Write([]byte("--- FAIL: TestPage (0.01s)\n    --- FAIL: TestPage/empty (0.00s)\n--- FAIL: TestList (0.00s)\n--- FAIL: TestPage (0.00s)\nFAIL\tserver\t0.1s\n"))
+	assert.Equal(t, []string{"TestPage", "TestList"}, out.failed, "failed")
+}
+
+// TestOnlyTests states the pattern of a repeat: the failed tests, anchored,
+// so TestPage does not also select TestPageList.
+func TestOnlyTests(t *testing.T) {
+	pattern := onlyTests([]string{"TestPage", "TestList"})
+	for name, want := range map[string]bool{"TestPage": true, "TestList": true, "TestPageList": false, "TestOther": false} {
+		assert.Equal(t, want, pattern.MatchString(name), "%s matches %s", pattern, name)
+	}
+}
