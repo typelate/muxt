@@ -59,11 +59,15 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	if err != nil {
 		return checkFailure(cmd, err)
 	}
-	checked, err := analysis.Check(config, logger, pkg)
+	result, err := analysis.Check(config, logger, pkg)
 	if err != nil {
 		return checkFailure(cmd, err)
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", plural(checked, "template"))
+	summary := plural(result.Checked, "template")
+	if result.NonLiteral > 0 {
+		summary += ", " + plural(result.NonLiteral, "call site") + " skipped"
+	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", summary)
 	return nil
 }
 

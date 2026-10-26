@@ -13,12 +13,17 @@ templates.ExecuteTemplate(w, name, data)           // not checked: name is not a
 
 Generated handlers meet both conditions, so every route template is checked.
 
-A template that only a hand-written helper renders is checked only when the helper's call has both properties. A wrapper such as `renderTemplate(w http.ResponseWriter, name string, data any)` has neither: its `ExecuteTemplate` call receives a variable name and an `any` value. Templates rendered through it, or from middleware that does the same, are not checked, and because no checked call reaches them, `muxt check` lists them as unused templates. The unused-template report is built in [internal/analysis/check.go](../../internal/analysis/check.go) from the literal-name calls alone.
+A call whose name is not a literal, such as one in a `render(w, name, data)` helper, is skipped, and check says so on stderr, once per call site, so the templates it renders are not silently unchecked. The count is in the summary ([reference_check_non_literal_template_name.txt](../../cmd/muxt/testdata/reference_check_non_literal_template_name.txt)):
 
-To get these templates checked, call `ExecuteTemplate` with a literal name and a typed value at each call site:
+```text
+/home/me/app/render.go:42:9: ExecuteTemplate not checked: the template name is not a string literal, so which template it renders is not known until run time
+ok: 4 templates, 1 call site skipped
+```
+
+A template only such a helper renders is also reported unused. To check it, call `ExecuteTemplate` with a literal name and a typed value at each call site:
 
 ```go
-// not checked, and "page" is reported unused
+// not checked
 func renderTemplate(w http.ResponseWriter, name string, data any) error {
 	return templates.ExecuteTemplate(w, name, data)
 }
@@ -28,6 +33,8 @@ err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
 ```
 
 Alternatively, make the page a route template with a call, so the generated handler renders it.
+
+A call whose name is a literal but whose data is `any` (or another interface) is checked against that interface type: any field access on dot fails with `field or method Name not found on any`. Pass the concrete type.
 
 ## What is checked
 
