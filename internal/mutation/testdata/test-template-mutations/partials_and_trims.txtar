@@ -60,12 +60,12 @@ func RenderAgain(w io.Writer, page Page) error {
 dry run: no tests were run
 
 server.go:25:9 ExecuteTemplate "page" (dot: server.Page)
-  "page" page.gohtml (complexity 2, dot: server.Page)
+  "page" page.gohtml (complexity 2, 4 mutants, dot: server.Page)
     PEND 1:22 action-zero
     PEND 1:37 range-never
     PEND 1:53 template-drop
     PEND 1:81 template-drop
-  "item" page.gohtml via {{template}} (complexity 2, dot: server.Item)
+  "item" page.gohtml via {{template}} (complexity 2, 3 mutants, dot: server.Item)
     PEND 2:22 action-zero
     PEND 2:31 if-false
     PEND 2:31 if-true

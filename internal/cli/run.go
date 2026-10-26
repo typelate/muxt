@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -107,7 +108,12 @@ func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configu
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	context.AfterFunc(ctx, stop)
-	report, err := mutation.Run(ctx, config, wd, cmd.ErrOrStderr())
+	// A person watching a terminal gets a line per template; a log gets
+	// them only with -v. stdout is never written to, so --format json
+	// stays machine-clean.
+	stderr := cmd.ErrOrStderr()
+	config.Progress = isTerminal(stderr)
+	report, err := mutation.Run(ctx, config, wd, stderr)
 	if err != nil {
 		printMultiLineError(cmd, err)
 		return err
@@ -152,4 +158,14 @@ func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfig
 		return err
 	}
 	return removeOrphans(owned, written)
+}
+
+// isTerminal reports whether w is a character device such as a terminal.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

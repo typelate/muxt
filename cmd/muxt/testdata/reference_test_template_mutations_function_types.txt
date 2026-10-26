@@ -76,7 +76,7 @@ func TestPage(t *testing.T) {
 dry run: no tests were run
 
 template.go:24:9 ExecuteTemplate "page" (dot: server.Page)
-  "page" templates.gohtml (complexity 1, dot: server.Page)
+  "page" templates.gohtml (complexity 1, 3 mutants, dot: server.Page)
     PEND 1:18 action-zero
     PEND 1:34 action-zero
     PEND 1:49 action-empty

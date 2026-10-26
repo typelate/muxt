@@ -43,7 +43,7 @@ func TestRun(t *testing.T) {
 	assert.Equal(t, 1, report.Missed, "missed")
 
 	lines := strings.Split(strings.TrimSpace(status.String()), "\n")
-	assert.Len(t, lines, 4, "status has the preamble and a line per mutant:\n%s", status.String())
+	assert.Len(t, lines, 5, "status has the preamble, a line per mutant and one for the template:\n%s", status.String())
 	assert.True(t, strings.HasPrefix(lines[0], "3 mutants across 1 template (complexity 2), baseline "), "status opens with the preamble:\n%s", status.String())
 }
 
@@ -242,5 +242,39 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	assert.True(t, got.Baseline.Passed, "the report says the baseline passed")
 	assert.True(t, strings.HasPrefix(status.String(), "3 mutants across 1 template (complexity 0), baseline "), "status opens with the preamble:\n%s", status.String())
 	lines := strings.Count(strings.TrimSpace(status.String()), "\n") + 1
-	assert.Equal(t, 4, lines, "status has the preamble and one line per mutant:\n%s", status.String())
+	assert.Equal(t, 5, lines, "status has the preamble, a line per mutant and one for the template:\n%s", status.String())
+}
+
+// TestRunPlanProgressWithoutVerbose states that Progress alone, which the
+// command sets for a terminal, writes the preamble and a line per template
+// but none per mutant, and that without either nothing but the preamble is
+// written.
+func TestRunPlanProgressWithoutVerbose(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		config Configuration
+		lines  int
+	}{
+		{name: "progress", config: Configuration{Progress: true}, lines: 2},
+		{name: "neither", config: Configuration{}, lines: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, p := runnerFixture(t, []bool{true, false, true})
+			var status strings.Builder
+			_, err := runPlan(t.Context(), p, tt.config, &status, func(context.Context) (string, error) {
+				return "", nil
+			}, func(_ context.Context, overlay string) (Status, error) {
+				if strings.Contains(readMutated(t, overlay), "K") {
+					return StatusKilled, nil
+				}
+				return StatusMissed, nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tt.lines, strings.Count(strings.TrimSpace(status.String()), "\n")+1, "status lines:\n%s", status.String())
+			if tt.config.Progress {
+				assert.Contains(t, status.String(), `[1/1] page.gohtml "page": 3 mutants, 2 killed, 1 survived, `, "template line")
+			}
+		})
+	}
 }

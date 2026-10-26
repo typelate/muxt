@@ -186,6 +186,61 @@ func TestRunAllReportsEachMutantAsItFinishes(t *testing.T) {
 	assert.Equal(t, want, strings.Split(strings.TrimSpace(progress.String()), "\n"), "progress")
 }
 
+// TestRunAllReportsEachTemplateAsItFinishes states the template progress
+// stream: one line when the last mutant of a template is done, numbered
+// among the templates that have mutants, and nothing per mutant.
+func TestRunAllReportsEachTemplateAsItFinishes(t *testing.T) {
+	report, p := runnerFixture(t, []bool{true, false, false})
+	first := &report.Groups[0].Templates[0]
+	first.Results[1].Status, first.Results[1].Reason = StatusSkipped, "does not type check"
+	second := TemplateReport{Template: "row", File: "row.gohtml", Results: []Result{{Status: StatusPending, Operator: OperatorActionEmpty, mutantIndex: 0}}}
+	report.Groups[0].Templates = append(report.Groups[0].Templates, second, TemplateReport{Template: "empty", File: "empty.gohtml"})
+
+	for _, workers := range []int{1, 3} {
+		t.Run(fmt.Sprintf("workers %d", workers), func(t *testing.T) {
+			var templates strings.Builder
+			r := &mutantRunner{
+				plan:      p,
+				scratch:   t.TempDir(),
+				templates: &templates,
+				clock:     &estimate{remaining: 3, workers: workers},
+				test: func(_ context.Context, overlay string) (Status, error) {
+					if strings.Contains(readMutated(t, overlay), "K") {
+						return StatusKilled, nil
+					}
+					return StatusMissed, nil
+				},
+			}
+			for i := range report.Groups[0].Templates {
+				for j := range report.Groups[0].Templates[i].Results {
+					if report.Groups[0].Templates[i].Results[j].Status != StatusSkipped {
+						report.Groups[0].Templates[i].Results[j].Status = StatusPending
+					}
+				}
+			}
+			require.NoError(t, r.runAll(t.Context(), report, workers))
+
+			lines := strings.Split(strings.TrimSpace(templates.String()), "\n")
+			assert.ElementsMatch(t, []string{
+				`[1/2] page.gohtml "page": 3 mutants, 1 killed, 1 survived, 1 skipped, 0s`,
+				`[1/2] row.gohtml "row": 1 mutant, 1 killed, 0 survived, 0s`,
+			}, stripIndex(lines), "template lines")
+			assert.Len(t, lines, 2, "one line per template with mutants:\n%s", templates.String())
+		})
+	}
+}
+
+// stripIndex drops the [n/N] prefix so lines can be compared in any
+// completion order.
+func stripIndex(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		_, rest, _ := strings.Cut(l, "] ")
+		out[i] = "[1/2] " + rest
+	}
+	return out
+}
+
 // TestReportTrims states the progress line for a trimmed subtree, which
 // says where the same template was already mutated with the same dot. A
 // nil writer means progress is not wanted.

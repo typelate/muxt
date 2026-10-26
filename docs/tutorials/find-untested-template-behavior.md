@@ -122,6 +122,8 @@ Narrow the run to one template while you add assertions:
 muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
 ```
 
+You do not need to narrow a run just to see it is alive. On a terminal, or with `-v`, stderr gets a line as each template finishes, for example `[12/27] templates.gohtml "articles": 8 mutants, 7 killed, 1 survived, 41s`, so a long run can be left running over the whole project.
+
 The operator names the missing assertion:
 
 | Operator | What to assert |

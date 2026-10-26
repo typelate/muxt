@@ -272,9 +272,14 @@ func (r *Report) writeTemplate(out *bufio.Writer, template TemplateReport) {
 	if template.Via {
 		via = " via {{template}}"
 	}
-	_, _ = fmt.Fprintf(out, "  %s %s%s (complexity %d, dot: %s)\n",
+	count := ""
+	if r.DryRun {
+		// A dry run lists what would run, so say how much per template.
+		count = fmt.Sprintf(", %d %s", len(template.Results), pluralize(len(template.Results), "mutant"))
+	}
+	_, _ = fmt.Fprintf(out, "  %s %s%s (complexity %d%s, dot: %s)\n",
 		strconv.Quote(template.Template), template.File, via,
-		template.Complexity, template.DataType)
+		template.Complexity, count, template.DataType)
 
 	for _, result := range template.Results {
 		line := fmt.Sprintf("    %s %d:%d %s",

@@ -10,11 +10,15 @@
 # never renders with Loud true, so forcing the branch false changes nothing it
 # observes, and that mutant survives.
 #
+# Progress goes to stderr: with -v, one line as each template finishes, with
+# its counts. Stdout holds only the report.
+#
 # Like go test with a failing test, a run that misses a mutant exits non-zero
 # once the report is written.
 
 ! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
+stderr '(?m)^\[1/1\] templates.gohtml "greeting": 3 mutants, 2 killed, 1 survived, [0-9.]+m?s$'
 stderr '(?m)^Error: 1 mutant missed$'
 
 -- go.mod --

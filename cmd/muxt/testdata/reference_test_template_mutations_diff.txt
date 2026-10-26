@@ -122,10 +122,10 @@ func Render(w io.Writer, summary Summary) error {
 dry run: no tests were run
 
 template.go:20:9 ExecuteTemplate "page" (dot: server.Summary)
-  "page" templates.gohtml (complexity 1, dot: server.Summary)
+  "page" templates.gohtml (complexity 1, 2 mutants, dot: server.Summary)
     PEND 1:18 template-drop
     PEND 1:43 template-drop
-  "count" templates.gohtml via {{template}} (complexity 1, dot: float64)
+  "count" templates.gohtml via {{template}} (complexity 1, 1 mutant, dot: float64)
     PEND 3:22 action-zero
 
 unchanged since HEAD, not mutated:
@@ -191,7 +191,7 @@ Error: --diff no-such-revision: exit status 128: fatal: Needed a single revision
 dry run: no tests were run
 
 template.go:20:9 ExecuteTemplate "page" (dot: server.Summary)
-  "name" templates.gohtml via {{template}} (complexity 1, dot: string)
+  "name" templates.gohtml via {{template}} (complexity 1, 1 mutant, dot: string)
     PEND 2:21 action-zero
 
 unchanged since HEAD, not mutated:

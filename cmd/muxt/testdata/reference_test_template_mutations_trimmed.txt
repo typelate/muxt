@@ -65,10 +65,10 @@ func TestHome(t *testing.T) {
 dry run: no tests were run
 
 template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
-  "page" templates.gohtml (complexity 1, dot: server.Page)
+  "page" templates.gohtml (complexity 1, 2 mutants, dot: server.Page)
     PEND 1:22 action-zero
     PEND 1:37 template-drop
-  "footer" templates.gohtml via {{template}} (complexity 1, dot: server.Page)
+  "footer" templates.gohtml via {{template}} (complexity 1, 1 mutant, dot: server.Page)
     PEND 2:23 action-zero
 
 trimmed 1 subtree already mutated with the same dot:

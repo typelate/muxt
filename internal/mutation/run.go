@@ -58,6 +58,11 @@ type Configuration struct {
 	// caught, and streams progress while the run is in flight.
 	Verbose bool
 
+	// Progress writes a line to status as each template finishes, even
+	// when Verbose is off. The command sets it when status is a terminal;
+	// Verbose turns it on regardless.
+	Progress bool
+
 	// IncludeTests also starts traversal from ExecuteTemplate calls in
 	// _test.go files. It is off by default: a template rendered only by
 	// a test is not rendered in production, and mutating it measures the
@@ -118,7 +123,8 @@ const DefaultMaxCases = 8
 // variations the tests catch.
 //
 // status receives the preamble once the baseline has run, and when the
-// configuration is verbose a line per mutant as it completes; it may be
+// configuration is verbose a line per mutant as it completes, and when it
+// is verbose or Progress a line per template as it completes; it may be
 // nil.
 //
 // When ctx is done the go test runs in flight are interrupted, the
@@ -147,6 +153,11 @@ func runPlan(ctx context.Context, p *plan, config Configuration, status io.Write
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
+	}
+
+	var templates io.Writer
+	if config.Verbose || config.Progress {
+		templates = status
 	}
 
 	report := p.report()
@@ -188,11 +199,12 @@ func runPlan(ctx context.Context, p *plan, config Configuration, status io.Write
 	defer func() { _ = os.RemoveAll(scratch) }()
 
 	runner := &mutantRunner{
-		plan:     p,
-		test:     verdict,
-		scratch:  scratch,
-		progress: progress,
-		clock:    clock,
+		plan:      p,
+		test:      verdict,
+		scratch:   scratch,
+		progress:  progress,
+		templates: templates,
+		clock:     clock,
 	}
 	if err := runner.runAll(ctx, report, workers); err != nil {
 		return nil, err
