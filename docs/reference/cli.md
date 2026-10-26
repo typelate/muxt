@@ -36,7 +36,7 @@ Template Functions:
 | `--use-receiver-type` | | Type whose method signatures give each call its parameter and result types ([type resolution](call-parameters.md#type-resolution)). Accepted by the root command and `generate`; `check` reads it from the generated file. |
 | `--use-receiver-type-package` | current package | Import path that holds `--use-receiver-type`. Accepted by the root command and `generate`. |
 | `--format` | `text` | `text` or `json`. Accepted by the root command, `explore-module`, the list commands, and `test-template-mutations`. |
-| `-v, --verbose` | `false` | More output; each command page says what. Accepted by the root command, `generate`, `check`, `version`, and `test-template-mutations`. |
+| `-v, --verbose` | `false` | More output; each command page says what. Accepted by every command; `list-template-calls`, `list-template-callers`, `explore-module` and `generate-fake-server` accept it and print no more. `muxt --version` prints what `muxt version` prints. |
 
 ```bash
 muxt -C ./web generate --use-receiver-type=Server
