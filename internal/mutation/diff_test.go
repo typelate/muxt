@@ -274,6 +274,55 @@ func TestNewPlanWithDiff(t *testing.T) {
 	}
 }
 
+// TestNewPlanWithDiffSeesThroughTypeAliases states that a template whose
+// dot is written as an alias is compared by the type behind it. Renaming
+// page.Data and retargeting the alias leaves the alias's own name alone, so
+// comparing by that name would select nothing.
+func TestNewPlanWithDiffSeesThroughTypeAliases(t *testing.T) {
+	t.Parallel()
+	const goFile = `package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+
+	"server/page"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page = page.%s
+
+func Render(w io.Writer, data Page) error {
+	return templates.ExecuteTemplate(w, "page", data)
+}
+`
+	const pageFile = "package page\n\ntype %s struct{ Name string }\n"
+
+	r := newRepo(t)
+	r.write(map[string]string{
+		"go.mod":           goMod,
+		"templates.gohtml": `{{define "page"}}<b>{{.Name}}</b>{{end}}`,
+		"template.go":      fmt.Sprintf(goFile, "Data"),
+		"page/page.go":     fmt.Sprintf(pageFile, "Data"),
+	})
+	r.commit("base")
+	r.write(map[string]string{
+		"template.go":  fmt.Sprintf(goFile, "Model"),
+		"page/page.go": fmt.Sprintf(pageFile, "Model"),
+	})
+
+	p, err := newPlan(t.Context(), diffConfig(), r.dir)
+	require.NoError(t, err)
+	require.Empty(t, p.diffError, "the templates at HEAD could not be read")
+	assert.Equal(t, []string{"page server.Page"}, mutatedTemplates(p), "mutated")
+	assert.Empty(t, unchangedTemplates(p), "unchanged")
+}
+
 // TestNewPlanWithDiffAtARevisionItCannotRead states that a revision with
 // no readable templates, such as one from before the package existed,
 // leaves nothing to compare with: every template counts as changed and the
