@@ -1,0 +1,40 @@
+With --allow-unused, a type error still fails the check.
+
+Command line: muxt check --allow-unused
+-- config.json --
+{
+	"Verbose": false,
+	"AllowUnused": true,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Heading}}</h1>{{end}}
+{{define "orphan"}}<p>rendered by a helper muxt does not see</p>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:10:9 ExecuteTemplate "index" Page
+index.gohtml:1:25: executing "index" at <.Heading>: field or method Heading not found on Page
+
+  type Page struct {
+    Title string
+  }
+
+Unused templates (allowed by --allow-unused):
+  - index.gohtml:2:20: "orphan"

@@ -6,6 +6,16 @@ muxt generate --use-receiver-type=T
 ! muxt check
 cmpenv stderr want-err.txt
 
+# --allow-unused lists them as a note and passes: some projects render
+# templates outside muxt, through a helper check cannot see.
+muxt check --allow-unused
+cmpenv stderr want-allowed.txt
+stdout '^ok: 2 templates$'
+
+-- want-allowed.txt --
+Unused templates (allowed by --allow-unused):
+  - $WORK/index.gohtml:5:28: "orphan-partial"
+  - $WORK/template.gohtml:36:28: "unused-partial"
 -- want-err.txt --
 Unused templates:
   - $WORK/index.gohtml:5:28: "orphan-partial"

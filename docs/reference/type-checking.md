@@ -63,7 +63,7 @@ Each error names the call site, the template position, then the type:
 
 Check also fails on:
 
-- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)); not reported while a call with a non-literal template name exists, since that call may render any template
+- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)); not reported while a call with a non-literal template name exists, since that call may render any template; `--allow-unused` lists these without failing, for templates rendered where check cannot see the call
 - content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
 - a field or method access on an `any` value: `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt))
 

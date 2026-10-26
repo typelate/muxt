@@ -22,4 +22,10 @@ Run `generate` first: `check` reads receiver types from the generated file and r
 
 What fails: [Type Checking](../type-checking.md#what-is-checked). A template shared between two templates variables is reported when either leaves it unused ([err_template_in_shared_file_unused_by_one_variable.txt](../../../cmd/muxt/testdata/err_template_in_shared_file_unused_by_one_variable.txt)).
 
+`--allow-unused` lists templates nothing renders under `Unused templates (allowed by --allow-unused):` and does not fail on them. Use it when some templates are rendered outside muxt, such as by a `render(w, name, data)` helper whose template name is not a literal, so check cannot see the call. Type errors, and route templates with no generated handler, still fail ([err_check_with_unused_template.txt](../../../cmd/muxt/testdata/err_check_with_unused_template.txt)).
+
+```bash
+muxt check --allow-unused
+```
+
 `-v` prints `checking endpoint NAME` for each call site. Flags: [cli.md](../cli.md#flags).

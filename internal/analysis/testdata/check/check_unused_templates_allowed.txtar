@@ -1,0 +1,39 @@
+With --allow-unused, templates nothing executes are listed as a note and
+do not fail the check: a project may render them outside muxt. A route
+template with no generated handler still fails.
+
+Command line: muxt check --allow-unused
+-- config.json --
+{
+	"Verbose": false,
+	"AllowUnused": true,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<h1>{{.Title}}</h1>{{end}}
+{{define "orphan"}}<p>never rendered</p>{{end}}
+{{define "GET /items Items()"}}{{template "row" .}}{{end}}
+{{define "row"}}<tr></tr>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+Route templates with no generated handler; run muxt generate to wire them up:
+  - index.gohtml:3:32: "GET /items Items()"
+Unused templates (allowed by --allow-unused):
+  - index.gohtml:2:20: "orphan"
