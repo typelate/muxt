@@ -28,7 +28,7 @@ Each file is replaced through a temporary file renamed into place, and a failed 
 
 ## Version header
 
-A generated file records the muxt version in a `// muxt version:` line and in the `MuxtVersion` method. A tagged build (`v0.21.0`, `v0.21.0-dev.2`) always records its own version. A build with no tag (`(devel)`, a pseudo-version such as `v0.20.2-0.20260912101010-0123456789ab`, or a `+dirty` build) keeps the version the existing output file already records, so a local `go generate` does not rewrite the line that CI wrote. When there is no existing file, it records its own version, such as `(devel)` ([reference_version_header_stable.txt](../../../cmd/muxt/testdata/reference_version_header_stable.txt)). `--output-muxt-version=false` omits both.
+A generated file records the muxt version in a `// muxt version:` line and in the `MuxtVersion` method. A tagged build (`v0.21.0`, `v0.21.0-dev.2`) always records its own version. A build with no tag (`(devel)`, a pseudo-version such as `v0.20.2-0.20260912101010-0123456789ab`, or a `+dirty` build) keeps the version the existing output file already records, so a local `go generate` does not rewrite the line that CI wrote. When there is no existing file, it records its own version, such as `(devel)` ([reference_version_header_stable.txt](../../../cmd/muxt/testdata/reference_version_header_stable.txt)). After an untagged build regenerates a file, `MuxtVersion()` and `explore-module` report the last tagged version that wrote it, not the muxt that actually ran. `--output-muxt-version=false` omits both.
 
 ## Routes function
 

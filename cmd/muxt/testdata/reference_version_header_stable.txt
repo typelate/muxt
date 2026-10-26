@@ -15,6 +15,12 @@ grep '^// muxt version: v0\.20\.0$' template_routes.go
 grep 'const muxtVersion = "v0\.20\.0"' template_routes.go
 ! grep '\(devel\)' template_routes.go
 
+# --output-muxt-version=false omits both, even over a tagged file.
+cp tagged.txt template_routes.go
+muxt generate --output-muxt-version=false
+! grep '// muxt version:' template_routes.go
+! grep 'MuxtVersion' template_routes.go
+
 -- go.mod --
 module example.com
 

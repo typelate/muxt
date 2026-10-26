@@ -51,7 +51,11 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 				return err
 			}
 			if v, ok := version(); ok && config.OutputMuxtVersion {
-				config.MuxtVersion = header.Stable(v, filepath.Join(*workingDirectory, config.OutputFileName))
+				stable, err := header.Stable(v, filepath.Join(*workingDirectory, config.OutputFileName))
+				if err != nil {
+					return err
+				}
+				config.MuxtVersion = stable
 			}
 			return run(cmd, *workingDirectory, config)
 		},
