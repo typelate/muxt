@@ -14,7 +14,6 @@ $WORK/template.gohtml:1:64: executing "GET / Endpoint()" at <.Result.Square>: ar
   arguments:
     [0] int32
 
-Error: fail: 1 error
 -- template.gohtml --
 {{define "GET / Endpoint()" }}Number {{.Result.Number | .Result.Square}}{{end}}
 

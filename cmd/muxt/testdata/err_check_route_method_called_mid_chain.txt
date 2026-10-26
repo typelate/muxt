@@ -35,4 +35,3 @@ $WORK/t.gohtml:1:48: executing "GET /user/{id} GetUser(id)" at <.Route.GetUser.M
 
   signature: GetUser(idPathParam int) TemplateRoute
 
-Error: fail: 1 error

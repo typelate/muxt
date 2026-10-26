@@ -72,4 +72,3 @@ Route templates with no generated handler; run muxt generate to wire them up:
   - $WORK/template.gohtml:6:2: "GET /status WithStatus(ctx, response)"
   - $WORK/template.gohtml:2:2: "GET /with-response WithResponse(ctx, response)"
   - $WORK/template.gohtml:12:2: "GET /without-response WithoutResponse(ctx)"
-Error: fail: 2 errors

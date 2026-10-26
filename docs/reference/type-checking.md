@@ -34,7 +34,6 @@ Each error names the call site, the template position, then the type:
     Email string
   }
 
-Error: fail: 1 error
 ```
 
 [reference_check_types.txt](../../cmd/muxt/testdata/reference_check_types.txt) · [err_check_with_wrong_field.txt](../../cmd/muxt/testdata/err_check_with_wrong_field.txt)

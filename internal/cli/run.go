@@ -60,7 +60,10 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	}
 	checked, err := analysis.Check(config, logger, pkg)
 	if err != nil {
-		return checkFailure(cmd, err)
+		// Check logged each diagnostic; its error is only their count, and
+		// cobra repeating it after them would bury the last diagnostic.
+		cmd.SilenceErrors = true
+		return err
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", plural(checked, "template"))
 	return nil

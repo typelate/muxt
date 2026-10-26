@@ -11,7 +11,6 @@ $WORK/template.gohtml:1:22: unknown argument reqest; did you mean request?
 
 Route templates with no generated handler; run muxt generate to wire them up:
   - $WORK/template.gohtml:1:32: "GET / Home(reqest)"
-Error: fail: 2 errors
 -- template.gohtml --
 {{define "GET / Home(reqest)"}}ok{{end}}
 -- go.mod --
