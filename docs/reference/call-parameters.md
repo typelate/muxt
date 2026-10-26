@@ -117,7 +117,7 @@ A call that reads the body twice, such as `(form, body)` or `(body, unmarshalJSO
 
 ## Routes that take `response`
 
-A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and copies the buffer to `response` with one `Write` call. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route.
+A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and writes the buffer to `response` with `WriteTo`. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route.
 
 The consequence is that every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id therefore renders its error page at 200 rather than 400.
 
