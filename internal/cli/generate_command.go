@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/header"
 )
 
 // envSilenceHTTPResponseWarning silences the per-route warning about
@@ -50,7 +51,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 				return err
 			}
 			if v, ok := version(); ok && config.OutputMuxtVersion {
-				config.MuxtVersion = v
+				config.MuxtVersion = header.Stable(v, filepath.Join(*workingDirectory, config.OutputFileName))
 			}
 			return run(cmd, *workingDirectory, config)
 		},
