@@ -187,8 +187,11 @@ func typeKey(t types.Type) string {
 	return unaliased(t).String()
 }
 
-// unaliased replaces the aliases in t with what they stand for, through the
-// types that wrap another: pointers, slices, arrays, maps and channels.
+// unaliased replaces the aliases in t with what they stand for, wherever
+// they sit in it: under pointers, slices, arrays, maps, channels, struct
+// fields, signatures, and the type arguments of a generic type, which is
+// where a route's dot keeps its data type. A type holding no alias comes
+// back as it was.
 func unaliased(t types.Type) types.Type {
 	switch t := types.Unalias(t).(type) {
 	case *types.Pointer:
@@ -201,9 +204,46 @@ func unaliased(t types.Type) types.Type {
 		return types.NewMap(unaliased(t.Key()), unaliased(t.Elem()))
 	case *types.Chan:
 		return types.NewChan(t.Dir(), unaliased(t.Elem()))
+	case *types.Named:
+		args := t.TypeArgs()
+		if args.Len() == 0 {
+			return t
+		}
+		unaliasedArgs := make([]types.Type, args.Len())
+		for i := range unaliasedArgs {
+			unaliasedArgs[i] = unaliased(args.At(i))
+		}
+		instance, err := types.Instantiate(nil, t.Origin(), unaliasedArgs, false)
+		if err != nil {
+			return t
+		}
+		return instance
+	case *types.Struct:
+		fields := make([]*types.Var, t.NumFields())
+		tags := make([]string, t.NumFields())
+		for i := range fields {
+			f := t.Field(i)
+			fields[i] = types.NewField(f.Pos(), f.Pkg(), f.Name(), unaliased(f.Type()), f.Embedded())
+			tags[i] = t.Tag(i)
+		}
+		return types.NewStruct(fields, tags)
+	case *types.Signature:
+		return types.NewSignatureType(t.Recv(), nil, nil, unaliasedTuple(t.Params()), unaliasedTuple(t.Results()), t.Variadic())
 	default:
 		return t
 	}
+}
+
+func unaliasedTuple(t *types.Tuple) *types.Tuple {
+	if t == nil {
+		return nil
+	}
+	vars := make([]*types.Var, t.Len())
+	for i := range vars {
+		v := t.At(i)
+		vars[i] = types.NewParam(v.Pos(), v.Pkg(), v.Name(), unaliased(v.Type()))
+	}
+	return types.NewTuple(vars...)
 }
 
 // typeDisplay renders a type for a report, qualified by package name

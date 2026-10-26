@@ -156,7 +156,7 @@ With `-v` each mutant prints its duration and the time left:
 muxt test-template-mutations --diff origin/main
 ```
 
-The unit is a template rendered with one type of dot. It is mutated when its text changed as parsed (reformatting inside an action or moving the file is not a change) or when it is reached with a dot type it was not reached with at the revision. Types are compared by name, looking through type aliases: retargeting `type Page = page.Data` to another type counts as a new type of dot.
+The unit is a template rendered with one type of dot. It is mutated when its text changed as parsed (reformatting inside an action or moving the file is not a change) or when it is reached with a dot type it was not reached with at the revision. Types are compared by name, looking through type aliases wherever they appear (including in the type arguments of a generic dot): retargeting `type Page = page.Data` to another type counts as a new type of dot.
 
 ```text
 3 mutants across 2 templates (complexity 2, seed 1)
