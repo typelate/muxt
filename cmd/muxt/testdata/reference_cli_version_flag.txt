@@ -1,0 +1,31 @@
+# muxt --version prints what muxt version prints.
+muxt --version
+stdout '^\(devel\)|v[0-9]+\.[0-9]+\.[0-9]+.*$'
+! stderr .
+
+# -v is accepted by every command that lists or explores, as it is by check.
+muxt list-template-calls -v
+! stderr 'unknown shorthand flag'
+muxt list-template-callers -v
+! stderr 'unknown shorthand flag'
+muxt explore-module -v
+! stderr 'unknown shorthand flag'
+! muxt generate-fake-server -v
+! stderr 'unknown shorthand flag'
+
+-- go.mod --
+module example.com/app
+
+go 1.24
+-- template.go --
+package main
+
+import "embed"
+import "html/template"
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+-- index.gohtml --
+{{define "GET / Index()"}}hi{{end}}

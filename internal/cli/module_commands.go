@@ -64,6 +64,7 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 		},
 	}
 
+	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
 	return cmd
@@ -127,6 +128,7 @@ This command is intended for exploratory use only.`,
 		},
 	}
 
+	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands
 	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "output directory (default: ./cmd/explore-goland)")
 
 	return cmd

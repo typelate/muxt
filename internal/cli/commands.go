@@ -102,6 +102,11 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
 	rootCmd.Flags().String("format", "text", "output format (text or json)")
 
+	if v, ok := version(); ok {
+		rootCmd.Version = v
+		rootCmd.SetVersionTemplate("{{.Version}}\n")
+	}
+
 	rootCmd.SetArgs(args)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)

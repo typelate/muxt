@@ -108,6 +108,7 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
+	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
@@ -143,6 +144,7 @@ func listTemplateCallsCommand(wd *string, run func(*cobra.Command, string, analy
 	}
 
 	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
+	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
 	cmd.Flags().String("format", "text", "output format (text or json)")
 
