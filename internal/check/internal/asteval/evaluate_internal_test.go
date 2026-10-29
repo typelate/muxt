@@ -10,12 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/template"
@@ -86,100 +84,6 @@ func evalTemplates(t *testing.T, dir, varName string, embedFiles ...string) (*te
 		}
 	}
 	return nil, fmt.Errorf("variable %s not found", varName)
-}
-
-// evalTemplatesWithPackagesLoad uses packages.Load to type-check a fixture,
-// allowing it to resolve external module dependencies. This is needed for
-// fixtures that import packages like github.com/typelate/htt/template.
-func evalTemplatesWithPackagesLoad(t *testing.T, dir, varName string, embedFiles ...string) (*template.Template[*types.Signature], error) {
-	t.Helper()
-	// Fix the replace directive in go.mod to use an absolute path
-	gomodPath := filepath.Join(dir, "go.mod")
-	gomod, err := os.ReadFile(gomodPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read go.mod: %w", err)
-	}
-
-	// Get the repo root by finding the main htt module
-	httRepoRoot, err := findHTTRepoRoot()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find htt repo root: %w", err)
-	}
-
-	// Replace relative paths with absolute path
-	gomodStr := string(gomod)
-	gomodStr = strings.ReplaceAll(gomodStr, "replace github.com/typelate/htt => ../../../..",
-		fmt.Sprintf("replace github.com/typelate/htt => %s", httRepoRoot))
-
-	if err := os.WriteFile(gomodPath, []byte(gomodStr), 0o644); err != nil {
-		return nil, fmt.Errorf("failed to write go.mod: %w", err)
-	}
-
-	// This fixture (which imports github.com/typelate/htt/template via a replace
-	// directive) resolves without a go.sum entry ONLY because the packages.Load Mode
-	// omits packages.NeedDeps, so the dependency graph and go.sum verification are
-	// skipped. Reusing this helper with a NeedDeps-inclusive Mode would fail with
-	// "missing go.sum entry".
-	cfg := &packages.Config{
-		Mode:  packages.NeedTypes | packages.NeedTypesInfo | packages.NeedFiles | packages.NeedSyntax,
-		Dir:   dir,
-		Tests: false,
-	}
-	pkgs, err := packages.Load(cfg, ".")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load package: %w", err)
-	}
-	if len(pkgs) == 0 {
-		return nil, fmt.Errorf("no packages loaded")
-	}
-
-	pkg := pkgs[0]
-	fileSet := pkg.Fset
-	files := pkg.Syntax
-
-	info := pkg.TypesInfo
-
-	for _, file := range files {
-		for _, decl := range file.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if !ok || gen.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gen.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for i, ident := range vs.Names {
-					if ident.Name != varName || i >= len(vs.Values) {
-						continue
-					}
-					meta := new(TemplateMetadata)
-					ts, _, _, err := EvaluateTemplateSelector(nil, pkg.Types, info, vs.Values[i], dir, varName, "", "", fileSet, files, embedFiles, DefaultFunctions(pkg.Types), make(map[string]any), meta)
-					return ts, err
-				}
-			}
-		}
-	}
-	return nil, fmt.Errorf("variable %s not found", varName)
-}
-
-// findHTTRepoRoot finds the absolute path to the htt repository root.
-func findHTTRepoRoot() (string, error) {
-	// Use the htt module to find its own location
-	// We can do this by getting the source of the htt package
-	httModule := "github.com/typelate/htt"
-	cfg := &packages.Config{
-		Mode: packages.NeedModule,
-	}
-	pkgs, err := packages.Load(cfg, httModule)
-	if err != nil {
-		return "", err
-	}
-	if len(pkgs) == 0 || pkgs[0].Module == nil {
-		return "", fmt.Errorf("failed to load htt module")
-	}
-	return pkgs[0].Module.Dir, nil
 }
 
 // templateNames lists the names of every template in the evaluated set,
@@ -496,12 +400,6 @@ func TestEvaluateTemplateSelector(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/parse.txtar"))
 		_, err := evalTemplates(t, dir, "wrongArg")
 		require.ErrorContains(t, err, "parse.go:14:40: expected string literal got 500")
-	})
-	t.Run("htt/template variable is discovered", func(t *testing.T) {
-		dir := createTestDir(t, filepath.FromSlash("testdata/template/htt_template.txtar"))
-		ts, err := evalTemplatesWithPackagesLoad(t, dir, "templates", "index.gohtml")
-		require.NoError(t, err)
-		assert.NotNil(t, lookup(t, ts, "home"))
 	})
 }
 

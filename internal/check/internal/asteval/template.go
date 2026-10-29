@@ -218,8 +218,8 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 	}
 }
 
-// IsTemplatePkgIdent reports whether ident refers to the "html/template",
-// "text/template", or "github.com/typelate/htt" package via the type checker.
+// IsTemplatePkgIdent reports whether ident refers to the "html/template"
+// or "text/template" package via the type checker.
 // isTemplateFuncMapLiteral reports whether lit is spelled as a
 // template.FuncMap composite literal (an html/template or text/template
 // FuncMap), used to validate the spelling when the literal's type does not
@@ -236,9 +236,7 @@ func isTemplateFuncMapLiteral(typesInfo *types.Info, lit *ast.CompositeLit) bool
 // isAcceptedTemplatePkg reports whether path is an accepted template package.
 func isAcceptedTemplatePkg(path string) bool {
 	return path == "html/template" ||
-		path == "text/template" ||
-		path == "github.com/typelate/htt" ||
-		path == "github.com/typelate/htt/template"
+		path == "text/template"
 }
 
 func IsTemplatePkgIdent(info *types.Info, ident *ast.Ident) bool {
@@ -254,7 +252,7 @@ func IsTemplatePkgIdent(info *types.Info, ident *ast.Ident) bool {
 }
 
 // IsTemplateMethod reports whether sel refers to a method on
-// *html/template.Template, *text/template.Template, *htt.Template, or *htt/template.Template.
+// *html/template.Template or *text/template.Template.
 func IsTemplateMethod(typesInfo *types.Info, sel *ast.SelectorExpr) bool {
 	if typesInfo == nil {
 		return false
