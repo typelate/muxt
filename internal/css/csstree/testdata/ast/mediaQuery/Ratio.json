@@ -1,0 +1,396 @@
+{
+    "basic ratio": {
+        "source": "(foo:1/2)",
+        "ast": {
+            "type": "Condition",
+            "kind": "media",
+            "children": [
+                {
+                    "type": "Feature",
+                    "kind": "media",
+                    "name": "foo",
+                    "value": {
+                        "type": "Ratio",
+                        "left": {
+                            "type": "Number",
+                            "value": "1"
+                        },
+                        "right": {
+                            "type": "Number",
+                            "value": "2"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "fractional": [
+        {
+            "source": "(foo:2.5/3)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "2.5"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "3"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:3/1.6)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "3"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1.6"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:2.5/1.6)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "2.5"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1.6"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "out of range": [
+        {
+            "source": "(foo:0/1)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "0"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:1e2/1)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "1e2"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:-1/5)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "-1"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "5"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:2/0)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "2"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "0"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:1/1e2)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1e2"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:1/-5)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "-5"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "usingn with functions": [
+        {
+            "source": "(foo:1/calc(2 + 3))",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            "right": {
+                                "type": "Function",
+                                "name": "calc",
+                                "children": [
+                                    {
+                                        "type": "Number",
+                                        "value": "2"
+                                    },
+                                    {
+                                        "type": "Operator",
+                                        "value": " + "
+                                    },
+                                    {
+                                        "type": "Number",
+                                        "value": "3"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:calc(2 + 3)/1)",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Function",
+                                "name": "calc",
+                                "children": [
+                                    {
+                                        "type": "Number",
+                                        "value": "2"
+                                    },
+                                    {
+                                        "type": "Operator",
+                                        "value": " + "
+                                    },
+                                    {
+                                        "type": "Number",
+                                        "value": "3"
+                                    }
+                                ]
+                            },
+                            "right": {
+                                "type": "Number",
+                                "value": "1"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "(foo:calc(2 + 3)/calc(2 + 3))",
+            "ast": {
+                "type": "Condition",
+                "kind": "media",
+                "children": [
+                    {
+                        "type": "Feature",
+                        "kind": "media",
+                        "name": "foo",
+                        "value": {
+                            "type": "Ratio",
+                            "left": {
+                                "type": "Function",
+                                "name": "calc",
+                                "children": [
+                                    {
+                                        "type": "Number",
+                                        "value": "2"
+                                    },
+                                    {
+                                        "type": "Operator",
+                                        "value": " + "
+                                    },
+                                    {
+                                        "type": "Number",
+                                        "value": "3"
+                                    }
+                                ]
+                            },
+                            "right": {
+                                "type": "Function",
+                                "name": "calc",
+                                "children": [
+                                    {
+                                        "type": "Number",
+                                        "value": "2"
+                                    },
+                                    {
+                                        "type": "Operator",
+                                        "value": " + "
+                                    },
+                                    {
+                                        "type": "Number",
+                                        "value": "3"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "error": [
+        {
+            "source": "(foo: 1/)",
+            "offset": "        ^",
+            "error": "Number of function is expected"
+        }
+    ]
+}

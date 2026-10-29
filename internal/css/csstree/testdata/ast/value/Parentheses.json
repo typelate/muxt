@@ -1,0 +1,189 @@
+{
+    "parentheses.0": {
+        "source": "()",
+        "ast": {
+            "type": "Parentheses",
+            "children": []
+        }
+    },
+    "parentheses.1": {
+        "source": "(1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "parentheses.2": {
+        "source": "(x)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                }
+            ]
+        }
+    },
+    "parentheses.3": {
+        "source": "(x+1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Number",
+                    "value": "+1"
+                }
+            ]
+        }
+    },
+    "parentheses.9": {
+        "source": "(#123456\"string\")",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Hash",
+                    "value": "123456"
+                },
+                {
+                    "type": "String",
+                    "value": "string"
+                }
+            ]
+        }
+    },
+    "parentheses.c.0": {
+        "source": "(/*test*/)",
+        "generate": "()",
+        "ast": {
+            "type": "Parentheses",
+            "children": []
+        }
+    },
+    "parentheses.c.1": {
+        "source": "(/*test*/1/*test*/)",
+        "generate": "(1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "parentheses.c.2": {
+        "source": "(/*test*/x/*test*/)",
+        "generate": "(x)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                }
+            ]
+        }
+    },
+    "parentheses.c.3": {
+        "skipRoundtrip": "broken round-trip since generator adds whitespace between + and 1 to prevent tokens merge into single token",
+        "source": "(/*test*/x/*test*/+/*test*/1/*test*/)",
+        "generate": "(x+ 1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": "+"
+                },
+                {
+                    "type": "Number",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "parentheses.s.0": {
+        "source": "(  )",
+        "generate": "()",
+        "ast": {
+            "type": "Parentheses",
+            "children": []
+        }
+    },
+    "parentheses.s.1": {
+        "source": "(  1  )",
+        "generate": "(1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "parentheses.s.2": {
+        "source": "(  x  )",
+        "generate": "(x)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                }
+            ]
+        }
+    },
+    "parentheses.s.3": {
+        "source": "(  x  +  1  )",
+        "generate": "(x + 1)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": " + "
+                },
+                {
+                    "type": "Number",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "unclosed parentheses is not an error": {
+        "source": "( 123",
+        "generate": "(123)",
+        "ast": {
+            "type": "Parentheses",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "123"
+                }
+            ]
+        }
+    }
+}

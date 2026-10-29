@@ -1,0 +1,706 @@
+{
+    "basic": {
+        "source": ".foo{ color: blue; &:hover { color: green; } @nest :not(&) { color: red; } }",
+        "generate": ".foo{color:blue;&:hover{color:green}@nest :not(&){color:red}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "ClassSelector",
+                                "name": "foo"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "color",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "blue"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "NestingSelector"
+                                        },
+                                        {
+                                            "type": "PseudoClassSelector",
+                                            "name": "hover",
+                                            "children": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "green"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Atrule",
+                        "name": "nest",
+                        "prelude": {
+                            "type": "AtrulePrelude",
+                            "children": [
+                                {
+                                    "type": "SelectorList",
+                                    "children": [
+                                        {
+                                            "type": "Selector",
+                                            "children": [
+                                                {
+                                                    "type": "PseudoClassSelector",
+                                                    "name": "not",
+                                                    "children": [
+                                                        {
+                                                            "type": "SelectorList",
+                                                            "children": [
+                                                                {
+                                                                    "type": "Selector",
+                                                                    "children": [
+                                                                        {
+                                                                            "type": "NestingSelector"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "nested @media": {
+        "source": ".foo{ color: blue; @media (orientation: landscape) { color: red; @media (min-width: 1024px) { color: green; } } }",
+        "generate": ".foo{color:blue;@media (orientation:landscape){color:red;@media (min-width:1024px){color:green}}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "ClassSelector",
+                                "name": "foo"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "color",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "blue"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Atrule",
+                        "name": "media",
+                        "prelude": {
+                            "type": "AtrulePrelude",
+                            "children": [
+                                {
+                                    "type": "MediaQueryList",
+                                    "children": [
+                                        {
+                                            "type": "MediaQuery",
+                                            "modifier": null,
+                                            "mediaType": null,
+                                            "condition": {
+                                                "type": "Condition",
+                                                "kind": "media",
+                                                "children": [
+                                                    {
+                                                        "type": "Feature",
+                                                        "kind": "media",
+                                                        "name": "orientation",
+                                                        "value": {
+                                                            "type": "Identifier",
+                                                            "name": "landscape"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "type": "Atrule",
+                                    "name": "media",
+                                    "prelude": {
+                                        "type": "AtrulePrelude",
+                                        "children": [
+                                            {
+                                                "type": "MediaQueryList",
+                                                "children": [
+                                                    {
+                                                        "type": "MediaQuery",
+                                                        "modifier": null,
+                                                        "mediaType": null,
+                                                        "condition": {
+                                                            "type": "Condition",
+                                                            "kind": "media",
+                                                            "children": [
+                                                                {
+                                                                    "type": "Feature",
+                                                                    "kind": "media",
+                                                                    "name": "min-width",
+                                                                    "value": {
+                                                                        "type": "Dimension",
+                                                                        "value": "1024",
+                                                                        "unit": "px"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": [
+                                            {
+                                                "type": "Declaration",
+                                                "important": false,
+                                                "property": "color",
+                                                "value": {
+                                                    "type": "Value",
+                                                    "children": [
+                                                        {
+                                                            "type": "Identifier",
+                                                            "name": "green"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "nested @supports": {
+        "source": ".foo{ color: blue; @supports (prop: value) { color: red; @supports (prop2: value2) { color: green; } } }",
+        "generate": ".foo{color:blue;@supports (prop:value){color:red;@supports (prop2:value2){color:green}}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "ClassSelector",
+                                "name": "foo"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "color",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "blue"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Atrule",
+                        "name": "supports",
+                        "prelude": {
+                            "type": "AtrulePrelude",
+                            "children": [
+                                {
+                                    "type": "Condition",
+                                    "kind": "supports",
+                                    "children": [
+                                        {
+                                            "type": "SupportsDeclaration",
+                                            "declaration": {
+                                                "type": "Declaration",
+                                                "important": false,
+                                                "property": "prop",
+                                                "value": {
+                                                    "type": "Value",
+                                                    "children": [
+                                                        {
+                                                            "type": "Identifier",
+                                                            "name": "value"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "type": "Atrule",
+                                    "name": "supports",
+                                    "prelude": {
+                                        "type": "AtrulePrelude",
+                                        "children": [
+                                            {
+                                                "type": "Condition",
+                                                "kind": "supports",
+                                                "children": [
+                                                    {
+                                                        "type": "SupportsDeclaration",
+                                                        "declaration": {
+                                                            "type": "Declaration",
+                                                            "important": false,
+                                                            "property": "prop2",
+                                                            "value": {
+                                                                "type": "Value",
+                                                                "children": [
+                                                                    {
+                                                                        "type": "Identifier",
+                                                                        "name": "value2"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": [
+                                            {
+                                                "type": "Declaration",
+                                                "important": false,
+                                                "property": "color",
+                                                "value": {
+                                                    "type": "Value",
+                                                    "children": [
+                                                        {
+                                                            "type": "Identifier",
+                                                            "name": "green"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "nested @container": {
+        "source": "selector { @container card (inline-size > 30em) { @container style(--responsive: true) { color: green; } } }",
+        "generate": "selector{@container card (inline-size>30em){@container style(--responsive: true){color:green}}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "TypeSelector",
+                                "name": "selector"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Atrule",
+                        "name": "container",
+                        "prelude": {
+                            "type": "AtrulePrelude",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "card"
+                                },
+                                {
+                                    "type": "Condition",
+                                    "kind": "container",
+                                    "children": [
+                                        {
+                                            "type": "FeatureRange",
+                                            "kind": "container",
+                                            "left": {
+                                                "type": "Identifier",
+                                                "name": "inline-size"
+                                            },
+                                            "leftComparison": ">",
+                                            "middle": {
+                                                "type": "Dimension",
+                                                "value": "30",
+                                                "unit": "em"
+                                            },
+                                            "rightComparison": null,
+                                            "right": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Atrule",
+                                    "name": "container",
+                                    "prelude": {
+                                        "type": "AtrulePrelude",
+                                        "children": [
+                                            {
+                                                "type": "Condition",
+                                                "kind": "container",
+                                                "children": [
+                                                    {
+                                                        "type": "FeatureFunction",
+                                                        "kind": "container",
+                                                        "feature": "style",
+                                                        "value": {
+                                                            "type": "Declaration",
+                                                            "important": false,
+                                                            "property": "--responsive",
+                                                            "value": {
+                                                                "type": "Raw",
+                                                                "value": " true"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": [
+                                            {
+                                                "type": "Declaration",
+                                                "important": false,
+                                                "property": "color",
+                                                "value": {
+                                                    "type": "Value",
+                                                    "children": [
+                                                        {
+                                                            "type": "Identifier",
+                                                            "name": "green"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "nested @starting-style": {
+        "source": "selector { @starting-style { color: red; } }",
+        "generate": "selector{@starting-style{color:red}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "TypeSelector",
+                                "name": "selector"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Atrule",
+                        "name": "starting-style",
+                        "prelude": null,
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "parse nested rule when it not started with &": {
+        "source": ".foo{ .bar & { color: green; }; div:hover { color: red; } }",
+        "generate": ".foo{.bar &{color:green};div:hover{color:red}}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "SelectorList",
+                "children": [
+                    {
+                        "type": "Selector",
+                        "children": [
+                            {
+                                "type": "ClassSelector",
+                                "name": "foo"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "ClassSelector",
+                                            "name": "bar"
+                                        },
+                                        {
+                                            "type": "Combinator",
+                                            "name": " "
+                                        },
+                                        {
+                                            "type": "NestingSelector"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "green"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Raw",
+                        "value": ";"
+                    },
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "TypeSelector",
+                                            "name": "div"
+                                        },
+                                        {
+                                            "type": "PseudoClassSelector",
+                                            "name": "hover",
+                                            "children": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

@@ -1,0 +1,433 @@
+{
+    "function.0": {
+        "source": "test()",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": []
+        }
+    },
+    "function.1": {
+        "source": "test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "shouldn't normalize function name": {
+        "source": "TesT(n)",
+        "ast": {
+            "type": "Function",
+            "name": "TesT",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "should allow to use vendor prefix in function name": {
+        "source": "-webkit-func(n)",
+        "ast": {
+            "type": "Function",
+            "name": "-webkit-func",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.2": {
+        "source": "test-test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test-test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.3": {
+        "source": "test(x+y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": "+"
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.4": {
+        "source": "test(x,y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.5": {
+        "source": "test(10px,'test' test(x),89%)",
+        "generate": "test(10px,\"test\"test(x),89%)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Dimension",
+                    "value": "10",
+                    "unit": "px"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "String",
+                    "value": "test"
+                },
+                {
+                    "type": "Function",
+                    "name": "test",
+                    "children": [
+                        {
+                            "type": "Identifier",
+                            "name": "x"
+                        }
+                    ]
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Percentage",
+                    "value": "89"
+                }
+            ]
+        }
+    },
+    "function.6": {
+        "source": "rgb(-10, -20%, +89%)",
+        "generate": "rgb(-10,-20%,+89%)",
+        "ast": {
+            "type": "Function",
+            "name": "rgb",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "-10"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Percentage",
+                    "value": "-20"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Percentage",
+                    "value": "+89"
+                }
+            ]
+        }
+    },
+    "function.c.0": {
+        "source": "test(/*test*/)",
+        "generate": "test()",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": []
+        }
+    },
+    "function.c.1": {
+        "source": "test(/*test*/n/*test*/)",
+        "generate": "test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.c.2": {
+        "source": "test-test(/*test*/n/*test*/)",
+        "generate": "test-test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test-test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.c.3": {
+        "source": "test(/*test*/x/*test*/+/*test*/y/*test*/)",
+        "generate": "test(x+y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": "+"
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.c.4": {
+        "source": "test(/*test*/x/*test*/,/*test*/y/*test*/)",
+        "generate": "test(x,y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.c.5": {
+        "source": "test(/*test*/10px/*test*/,/*test*/'test'/*test*/test(/*test*/x/*test*/)/*test*/,/*test*/89%/*test*/)",
+        "generate": "test(10px,\"test\"test(x),89%)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Dimension",
+                    "value": "10",
+                    "unit": "px"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "String",
+                    "value": "test"
+                },
+                {
+                    "type": "Function",
+                    "name": "test",
+                    "children": [
+                        {
+                            "type": "Identifier",
+                            "name": "x"
+                        }
+                    ]
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Percentage",
+                    "value": "89"
+                }
+            ]
+        }
+    },
+    "function.s.0": {
+        "source": "test(  )",
+        "generate": "test()",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": []
+        }
+    },
+    "function.s.1": {
+        "source": "test(  n  )",
+        "generate": "test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.s.2": {
+        "source": "test-test(  n  )",
+        "generate": "test-test(n)",
+        "ast": {
+            "type": "Function",
+            "name": "test-test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "n"
+                }
+            ]
+        }
+    },
+    "function.s.3": {
+        "source": "test(  x  +  y  )",
+        "generate": "test(x + y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": " + "
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.s.4": {
+        "source": "test(  x  ,  y  )",
+        "generate": "test(x,y)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "x"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Identifier",
+                    "name": "y"
+                }
+            ]
+        }
+    },
+    "function.s.5": {
+        "source": "test(  10px  ,  'test'  test(  x  )  ,  89%  )",
+        "generate": "test(10px,\"test\"test(x),89%)",
+        "ast": {
+            "type": "Function",
+            "name": "test",
+            "children": [
+                {
+                    "type": "Dimension",
+                    "value": "10",
+                    "unit": "px"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "String",
+                    "value": "test"
+                },
+                {
+                    "type": "Function",
+                    "name": "test",
+                    "children": [
+                        {
+                            "type": "Identifier",
+                            "name": "x"
+                        }
+                    ]
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Percentage",
+                    "value": "89"
+                }
+            ]
+        }
+    },
+    "unclosed parentheses is not an error": {
+        "source": "foo( 123",
+        "generate": "foo(123)",
+        "ast": {
+            "type": "Function",
+            "name": "foo",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "123"
+                }
+            ]
+        }
+    }
+}

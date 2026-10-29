@@ -1,0 +1,106 @@
+{
+    "expression #0": {
+        "source": "expression()",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": ""
+                }
+            ]
+        }
+    },
+    "expression #1": {
+        "source": "expression(())",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "()"
+                }
+            ]
+        }
+    },
+    "expression #2": {
+        "source": "expression(expression())",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "expression()"
+                }
+            ]
+        }
+    },
+    "expression #3": {
+        "source": "expression(/*)*/)",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "/*)*/"
+                }
+            ]
+        }
+    },
+    "expression #4": {
+        "source": "expression(\")\")",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "\")\""
+                }
+            ]
+        }
+    },
+    "expression #5": {
+        "source": "expression(')')",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "')'"
+                }
+            ]
+        }
+    },
+    "expression #6": {
+        "source": "expression(()())",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "()()"
+                }
+            ]
+        }
+    },
+    "expression #8": {
+        "source": "expression(a = 5)",
+        "ast": {
+            "type": "Function",
+            "name": "expression",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "a = 5"
+                }
+            ]
+        }
+    }
+}

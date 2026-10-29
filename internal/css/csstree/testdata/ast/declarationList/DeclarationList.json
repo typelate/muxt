@@ -1,0 +1,296 @@
+{
+    "block.0": {
+        "source": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.1": {
+        "source": ";",
+        "generate": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.2": {
+        "source": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.3": {
+        "source": "p:v;",
+        "generate": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.4": {
+        "source": "p0:v0;p1:v1",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p0",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v0"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p1",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v1"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.c.0": {
+        "source": "/*test*/",
+        "generate": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.c.1": {
+        "source": "/*test*/;/*test*/",
+        "generate": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.c.2": {
+        "source": "/*test*/p:v/*test*/",
+        "generate": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.c.3": {
+        "source": "/*test*/p:v/*test*/;/*test*/",
+        "generate": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.c.4": {
+        "source": "/*test*/p0:v0/*test*/;/*test*/p1:v1/*test*/",
+        "generate": "p0:v0;p1:v1",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p0",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v0"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p1",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v1"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.s.0": {
+        "source": "  ",
+        "generate": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.s.1": {
+        "source": "  ;  ",
+        "generate": "",
+        "ast": {
+            "type": "DeclarationList",
+            "children": []
+        }
+    },
+    "block.s.2": {
+        "source": "  p:v  ",
+        "generate": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.s.3": {
+        "source": "  p:v  ;  ",
+        "generate": "p:v",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "block.s.4": {
+        "source": "  p0:v0  ;  p1:v1  ",
+        "generate": "p0:v0;p1:v1",
+        "ast": {
+            "type": "DeclarationList",
+            "children": [
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p0",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v0"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "Declaration",
+                    "important": false,
+                    "property": "p1",
+                    "value": {
+                        "type": "Value",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "v1"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

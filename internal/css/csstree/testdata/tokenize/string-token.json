@@ -1,0 +1,34 @@
+{
+    "valid": [
+        "'string'",
+        "'str\\'ing'",
+        "'str\\\ning'",
+        "'str\\\fing'",
+        "'str\\\ring'",
+        "'str\\\r\ning'",
+        "'str\\?ing'",
+        "'str\\31 23ing'",
+        "'string",
+        "'string\\",
+        "\"string\"",
+        "\"str\\\"ing\"",
+        "\"str\\\ning\"",
+        "\"str\\\fing\"",
+        "\"str\\\ring\"",
+        "\"str\\\r\ning\"",
+        "\"str\\?ing\"",
+        "\"str\\31 23ing\"",
+        "\"string",
+        "\"string\\"
+    ],
+    "invalid": [
+        "'str\ning'",
+        "'str\fing'",
+        "'str\ring'",
+        "'str\r\ning'",
+        "\"str\ning\"",
+        "\"str\fing\"",
+        "\"str\ring\"",
+        "\"str\r\ning\""
+    ]
+}

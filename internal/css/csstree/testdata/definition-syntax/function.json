@@ -1,0 +1,65 @@
+{
+    "simple": {
+        "syntax": "foo( bar )",
+        "valid": [
+            "foo(bar)"
+        ],
+        "invalid": [
+            "",
+            "foo",
+            "foo()",
+            "foo(baz)"
+        ]
+    },
+    "should be case insensetive": {
+        "syntax": "fooBar( baz )",
+        "valid": [
+            "fooBar(baz)",
+            "foobar(baz)",
+            "FOOBAR(baz)"
+        ]
+    },
+    "two arguments": {
+        "syntax": "foo( bar, baz )",
+        "valid": [
+            "foo(bar, baz)"
+        ],
+        "invalid": [
+            "foo()",
+            "foo(bar)",
+            "foo(baz)",
+            "foo(bar baz)",
+            "foo(bar, qux)"
+        ]
+    },
+    "two arguments with optional": {
+        "syntax": "foo( bar, baz? )",
+        "valid": [
+            "foo(bar, baz)",
+            "foo(bar)"
+        ],
+        "invalid": [
+            "foo()",
+            "foo(baz)",
+            "foo(bar, qux)"
+        ]
+    },
+    "three optional arguments": {
+        "syntax": "foo( bar?, baz?, qux? )",
+        "valid": [
+            "foo(bar)",
+            "foo(baz)",
+            "foo(qux)",
+            "foo(bar, baz)",
+            "foo(bar, qux)",
+            "foo(baz, qux)",
+            "foo(bar, baz, qux)",
+            "foo()"
+        ],
+        "invalid": [
+            "foo(bar baz)",
+            "foo(baz, bar)",
+            "foo(something)"
+        ]
+    }
+}

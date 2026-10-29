@@ -1,0 +1,390 @@
+{
+    "basic": {
+        "source": "--var:value",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "value"
+            }
+        }
+    },
+    "double dash is a valid property name": {
+        "source": "--:value",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--",
+            "value": {
+                "type": "Raw",
+                "value": "value"
+            }
+        }
+    },
+    "with important": {
+        "source": "--var:value!important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "value"
+            }
+        }
+    },
+    "with parentheses and important": {
+        "source": "--var:calc(1)!important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "calc(1)"
+            }
+        }
+    },
+    "value is {}-block": {
+        "source": "--var:{foo:bar;baz:{}}",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "{foo:bar;baz:{}}"
+            }
+        }
+    },
+    "complex balanced": {
+        "source": "--var:{[({()})()()[({})]]}[{()}]([])",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "{[({()})()()[({})]]}[{()}]([])"
+            }
+        }
+    },
+    "should ignore everything inside block": {
+        "source": "--var:{!important}",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "{!important}"
+            }
+        }
+    },
+    "empty": {
+        "source": "--var:",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": ""
+            }
+        }
+    },
+    "empty (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": []
+            }
+        }
+    },
+    "empty with important": {
+        "source": "--var:!important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": ""
+            }
+        }
+    },
+    "empty with important (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:!important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": []
+            }
+        }
+    },
+    "should preserve single spaces": {
+        "source": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": " "
+            }
+        }
+    },
+    "should preserve single spaces (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "should preserve single spaces with important": {
+        "source": "--var: !important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": " "
+            }
+        }
+    },
+    "should preserve single spaces with important (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var: !important",
+        "ast": {
+            "type": "Declaration",
+            "important": true,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "spaces and comments": {
+        "source": "--var: /* 1 */ ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": " /* 1 */ "
+            }
+        }
+    },
+    "spaces and comments (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var: /* 1 */ ",
+        "generate": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "spaces and comments #2 (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var: /* 1 */",
+        "generate": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "spaces and comments #3 (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:/* 1 */ ",
+        "generate": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "only a comment": {
+        "source": "--var:/* 1 */",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": "/* 1 */"
+            }
+        }
+    },
+    "only a comment (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:/* 1 */",
+        "generate": "--var:",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": []
+            }
+        }
+    },
+    "whitespace beetween comments (parseCustomProperty:true)": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:/* 1 */ /* 2 */",
+        "generate": "--var: ",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "WhiteSpace",
+                        "value": " "
+                    }
+                ]
+            }
+        }
+    },
+    "should parse a custom property value when parseCustomProperty is true": {
+        "options": {
+            "parseCustomProperty": true
+        },
+        "source": "--var:1 foo",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "Number",
+                        "value": "1"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "foo"
+                    }
+                ]
+            }
+        }
+    },
+    "value should be parsed as balanced Raw": [
+        {
+            "source": "--var: ([)]",
+            "ast": {
+                "type": "Declaration",
+                "important": false,
+                "property": "--var",
+                "value": {
+                    "type": "Raw",
+                    "value": " ([)]"
+                }
+            }
+        },
+        {
+            "source": "--var: ()]",
+            "ast": {
+                "type": "Declaration",
+                "important": false,
+                "property": "--var",
+                "value": {
+                    "type": "Raw",
+                    "value": " ()]"
+                }
+            }
+        }
+    ],
+    "! not followed by important at the end is part of the value": {
+        "source": "--var: !important ()",
+        "ast": {
+            "type": "Declaration",
+            "important": false,
+            "property": "--var",
+            "value": {
+                "type": "Raw",
+                "value": " !important ()"
+            }
+        }
+    }
+}

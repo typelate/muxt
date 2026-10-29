@@ -1,0 +1,55 @@
+{
+    "base test": {
+        "source": "element(#foo)",
+        "ast": {
+            "type": "Function",
+            "name": "element",
+            "children": [
+                {
+                    "type": "Hash",
+                    "value": "foo"
+                }
+            ]
+        }
+    },
+    "should be case insensitive": {
+        "source": "ElemenT(#foo)",
+        "ast": {
+            "type": "Function",
+            "name": "ElemenT",
+            "children": [
+                {
+                    "type": "Hash",
+                    "value": "foo"
+                }
+            ]
+        }
+    },
+    "spaces and comment": {
+        "source": "element(  /*1*/  #foo  /*2*/  )",
+        "generate": "element(#foo)",
+        "ast": {
+            "type": "Function",
+            "name": "element",
+            "children": [
+                {
+                    "type": "Hash",
+                    "value": "foo"
+                }
+            ]
+        }
+    },
+    "-moz-element": {
+        "source": "-moz-element(#foo)",
+        "ast": {
+            "type": "Function",
+            "name": "-moz-element",
+            "children": [
+                {
+                    "type": "Hash",
+                    "value": "foo"
+                }
+            ]
+        }
+    }
+}

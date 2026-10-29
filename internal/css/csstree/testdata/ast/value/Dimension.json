@@ -1,0 +1,42 @@
+{
+    "dimension #0": {
+        "source": "10px",
+        "ast": {
+            "type": "Dimension",
+            "value": "10",
+            "unit": "px"
+        }
+    },
+    "dimension #1": {
+        "source": ".10px",
+        "ast": {
+            "type": "Dimension",
+            "value": ".10",
+            "unit": "px"
+        }
+    },
+    "dimension #2": {
+        "source": "12.34px",
+        "ast": {
+            "type": "Dimension",
+            "value": "12.34",
+            "unit": "px"
+        }
+    },
+    "dimension #3": {
+        "source": "0000.000px",
+        "ast": {
+            "type": "Dimension",
+            "value": "0000.000",
+            "unit": "px"
+        }
+    },
+    "IE hack": {
+        "source": "1px\\9",
+        "ast": {
+            "type": "Dimension",
+            "value": "1",
+            "unit": "px\\9"
+        }
+    }
+}

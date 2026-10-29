@@ -1,0 +1,485 @@
+{
+    "bad selector": [
+        {
+            "source": " ? {}",
+            "generate": "?{}",
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "Raw",
+                            "value": "?"
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": ".a! { } .a {}",
+            "generate": ".a!{}.a{}",
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "Raw",
+                            "value": ".a!"
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": []
+                        }
+                    },
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "ClassSelector",
+                                            "name": "a"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": ".a! { } .a {}",
+            "offset": "  ^",
+            "error": "Unexpected input"
+        }
+    ],
+    "unclosed block": {
+        "source": "foo {",
+        "generate": "foo{}",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Rule",
+                    "prelude": {
+                        "type": "SelectorList",
+                        "children": [
+                            {
+                                "type": "Selector",
+                                "children": [
+                                    {
+                                        "type": "TypeSelector",
+                                        "name": "foo"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "block": {
+                        "type": "Block",
+                        "children": []
+                    }
+                }
+            ]
+        }
+    },
+    "uncomplete pseudo in selector": {
+        "source": " foo: {}",
+        "generate": "foo:{}",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Rule",
+                    "prelude": {
+                        "type": "Raw",
+                        "value": "foo:"
+                    },
+                    "block": {
+                        "type": "Block",
+                        "children": []
+                    }
+                }
+            ]
+        }
+    },
+    "rule with unclosed pseudo selector": {
+        "source": "div:not(a,",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "div:not(a,"
+                }
+            ]
+        }
+    },
+    "unclosed unknown functional-pseudo in selector": {
+        "source": " foo:bar(x {}",
+        "generate": "foo:bar(x {}",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "foo:bar(x {}"
+                }
+            ]
+        }
+    },
+    "parser should respect bracket balance over stop token": {
+        "skipRoundtrip": "broken round-trip since generator adds } to the end, not critical and can be fixed in the future",
+        "source": ".a{--x:(;color:green;}.b{color:red;--y:);width:10px}",
+        "generate": ".a{--x:(;color:green;}.b{color:red;--y:);width:10px}}",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Rule",
+                    "loc": null,
+                    "prelude": {
+                        "type": "SelectorList",
+                        "loc": null,
+                        "children": [
+                            {
+                                "type": "Selector",
+                                "loc": null,
+                                "children": [
+                                    {
+                                        "type": "ClassSelector",
+                                        "loc": null,
+                                        "name": "a"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "block": {
+                        "type": "Block",
+                        "loc": null,
+                        "children": [
+                            {
+                                "type": "Declaration",
+                                "loc": null,
+                                "important": false,
+                                "property": "--x",
+                                "value": {
+                                    "type": "Raw",
+                                    "loc": null,
+                                    "value": "(;color:green;}.b{color:red;--y:);width:10px}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "parser should respect bracket balance over stop token #2": {
+        "source": ".a{--x:(;color:green;}.b{color:red;--y:});width:10px}",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Rule",
+                    "loc": null,
+                    "prelude": {
+                        "type": "SelectorList",
+                        "loc": null,
+                        "children": [
+                            {
+                                "type": "Selector",
+                                "loc": null,
+                                "children": [
+                                    {
+                                        "type": "ClassSelector",
+                                        "loc": null,
+                                        "name": "a"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "block": {
+                        "type": "Block",
+                        "loc": null,
+                        "children": [
+                            {
+                                "type": "Declaration",
+                                "loc": null,
+                                "important": false,
+                                "property": "--x",
+                                "value": {
+                                    "type": "Raw",
+                                    "loc": null,
+                                    "value": "(;color:green;}.b{color:red;--y:})"
+                                }
+                            },
+                            {
+                                "type": "Declaration",
+                                "loc": null,
+                                "important": false,
+                                "property": "width",
+                                "value": {
+                                    "type": "Value",
+                                    "children": [
+                                        {
+                                            "type": "Dimension",
+                                            "loc": null,
+                                            "value": "10",
+                                            "unit": "px"
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "no block": {
+        "source": " ? ",
+        "generate": "? ",
+        "ast": {
+            "type": "StyleSheet",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "? "
+                }
+            ]
+        }
+    },
+    "correct fallback on error in at-rule block": [
+        {
+            "source": "@media (max-width:1000px){top:0;left:0;width:100%;}*{color:red}",
+            "options": {
+                "parseAtrulePrelude": false
+            },
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Atrule",
+                        "name": "media",
+                        "prelude": {
+                            "type": "Raw",
+                            "value": "(max-width:1000px)"
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Raw",
+                                    "value": "top:0;left:0;width:100%;"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "TypeSelector",
+                                            "name": "*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "red"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "@media (max-width:1000px){a{};b{}}",
+            "options": {
+                "parseAtrulePrelude": false
+            },
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Atrule",
+                        "name": "media",
+                        "prelude": {
+                            "type": "Raw",
+                            "value": "(max-width:1000px)"
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Rule",
+                                    "prelude": {
+                                        "type": "SelectorList",
+                                        "children": [
+                                            {
+                                                "type": "Selector",
+                                                "children": [
+                                                    {
+                                                        "type": "TypeSelector",
+                                                        "name": "a"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": []
+                                    }
+                                },
+                                {
+                                    "type": "Rule",
+                                    "prelude": {
+                                        "type": "Raw",
+                                        "value": ";b"
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": []
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "@media (max-width:1000px){a{};@b{}}",
+            "options": {
+                "parseAtrulePrelude": false
+            },
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Atrule",
+                        "name": "media",
+                        "prelude": {
+                            "type": "Raw",
+                            "value": "(max-width:1000px)"
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Rule",
+                                    "prelude": {
+                                        "type": "SelectorList",
+                                        "children": [
+                                            {
+                                                "type": "Selector",
+                                                "children": [
+                                                    {
+                                                        "type": "TypeSelector",
+                                                        "name": "a"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": []
+                                    }
+                                },
+                                {
+                                    "type": "Rule",
+                                    "prelude": {
+                                        "type": "Raw",
+                                        "value": ";@b"
+                                    },
+                                    "block": {
+                                        "type": "Block",
+                                        "children": []
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "rule with unclosed attribute selector": [
+        {
+            "source": "div[attr",
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Raw",
+                        "value": "div[attr"
+                    }
+                ]
+            }
+        },
+        {
+            "source": "div[attr=",
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Raw",
+                        "value": "div[attr="
+                    }
+                ]
+            }
+        },
+        {
+            "source": "div[attr=123",
+            "ast": {
+                "type": "StyleSheet",
+                "children": [
+                    {
+                        "type": "Raw",
+                        "value": "div[attr=123"
+                    }
+                ]
+            }
+        }
+    ]
+}

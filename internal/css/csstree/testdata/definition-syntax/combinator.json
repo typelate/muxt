@@ -1,0 +1,99 @@
+{
+    "juxtaposing": {
+        "syntax": "foo bar",
+        "valid": [
+            "foo bar"
+        ],
+        "invalid": [
+            "foo",
+            "bar",
+            "baz",
+            "foo bar foo"
+        ]
+    },
+    "a bar": {
+        "syntax": "foo | bar",
+        "valid": [
+            "foo",
+            "bar"
+        ],
+        "invalid": [
+            "baz",
+            "foo bar"
+        ]
+    },
+    "a double ampersand": {
+        "syntax": "foo && bar",
+        "valid": [
+            "foo bar",
+            "bar foo"
+        ],
+        "invalid": [
+            "foo",
+            "bar",
+            "foo foo",
+            "foo foo bar",
+            "foo bar foo"
+        ]
+    },
+    "a double ampersand with optional": {
+        "syntax": "foo && bar?",
+        "valid": [
+            "foo bar",
+            "bar foo",
+            "foo"
+        ],
+        "invalid": [
+            "bar",
+            "foo foo",
+            "foo foo bar",
+            "foo bar foo"
+        ]
+    },
+    "a double ampersand with all optional": {
+        "syntax": "foo? && bar?",
+        "valid": [
+            "foo bar",
+            "bar foo",
+            "foo",
+            "bar"
+        ],
+        "invalid": [
+            "foo foo",
+            "foo foo bar",
+            "foo bar foo"
+        ]
+    },
+    "a double bar": {
+        "syntax": "foo || bar",
+        "valid": [
+            "foo",
+            "bar",
+            "foo bar",
+            "bar foo"
+        ],
+        "invalid": [
+            "",
+            "baz",
+            "foo foo",
+            "foo foo bar",
+            "foo bar foo"
+        ]
+    },
+    "a double bar with all optional": {
+        "syntax": "foo? || bar?",
+        "valid": [
+            "foo",
+            "bar",
+            "foo bar",
+            "bar foo",
+            ""
+        ],
+        "invalid": [
+            "baz",
+            "foo foo",
+            "foo foo bar",
+            "foo bar foo"
+        ]
+    }
+}

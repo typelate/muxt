@@ -1,0 +1,363 @@
+{
+    "descendant combinator": {
+        "source": "a b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "child combinator": {
+        "source": "a>b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": ">"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "next-sibling combinator": {
+        "source": "a+b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "+"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "following-sibling combinator": {
+        "source": "a~b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "~"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "legacy shadow-piercing descendant combinator": {
+        "source": "a/deep/b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "/deep/"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "all selectors": {
+        "source": "a b+c>d~e",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "+"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "c"
+                },
+                {
+                    "type": "Combinator",
+                    "name": ">"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "d"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "~"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "e"
+                }
+            ]
+        }
+    },
+    "combinator with comments around #0": {
+        "source": "a/*test*/ /*test*/b",
+        "generate": "a b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with comments around #1": {
+        "source": "a/*test*/+/*test*/b",
+        "generate": "a+b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "+"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with comments around #2": {
+        "source": "a/*test*/>/*test*/b",
+        "generate": "a>b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": ">"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with comments around #3": {
+        "source": "a/*test*/~/*test*/b",
+        "generate": "a~b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "~"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with comments around #4": {
+        "source": "a/*test*/ /deep/ /*test*/b",
+        "generate": "a/deep/b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "/deep/"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with spaces around #0": {
+        "source": "a    b",
+        "generate": "a b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with spaces around #1": {
+        "source": "a  +  b",
+        "generate": "a+b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "+"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with spaces around #2": {
+        "source": "a  >  b",
+        "generate": "a>b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": ">"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with spaces around #3": {
+        "source": "a  ~  b",
+        "generate": "a~b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "~"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "combinator with spaces around #4": {
+        "source": "a  /deep/  b",
+        "generate": "a/deep/b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "/deep/"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "errors": [
+        {
+            "source": "a /deep b",
+            "offset": "       ^",
+            "error": "Delim \"/\" is expected"
+        }
+    ]
+}

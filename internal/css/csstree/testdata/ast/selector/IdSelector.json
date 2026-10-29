@@ -1,0 +1,16 @@
+{
+    "shash.0": {
+        "source": "#id",
+        "ast": {
+            "type": "IdSelector",
+            "name": "id"
+        }
+    },
+    "shash.1": {
+        "source": "#-id",
+        "ast": {
+            "type": "IdSelector",
+            "name": "-id"
+        }
+    }
+}

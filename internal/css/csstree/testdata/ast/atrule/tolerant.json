@@ -1,0 +1,117 @@
+{
+    "at-rule (unknown) may have any content in prelude": {
+        "source": "@bada boom!;",
+        "ast": {
+            "type": "Atrule",
+            "name": "bada",
+            "prelude": {
+                "type": "Raw",
+                "value": "boom!"
+            },
+            "block": null
+        }
+    },
+    "at-rule (unknown) may have no a semicolon": {
+        "source": "@bada boom!",
+        "generate": "@bada boom!;",
+        "ast": {
+            "type": "Atrule",
+            "name": "bada",
+            "prelude": {
+                "type": "Raw",
+                "value": "boom!"
+            },
+            "block": null
+        }
+    },
+    "at-rule (known) may have any content in prelude": {
+        "source": "@import boom!;",
+        "ast": {
+            "type": "Atrule",
+            "name": "import",
+            "prelude": {
+                "type": "Raw",
+                "value": "boom!"
+            },
+            "block": null
+        }
+    },
+    "at-rule (known) may have no a semicolon": {
+        "source": "@import boom!",
+        "generate": "@import boom!;",
+        "ast": {
+            "type": "Atrule",
+            "name": "import",
+            "prelude": {
+                "type": "Raw",
+                "value": "boom!"
+            },
+            "block": null
+        }
+    },
+    "at-rule (known) with no block may be followed by block": {
+        "source": "@import {}",
+        "generate": "@import{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "import",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "at-rule (known) with custom prelude parser": {
+        "source": "@page {}",
+        "generate": "@page{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "page",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "unclosed block - unknown at-rule": {
+        "source": "@atrule {",
+        "generate": "@atrule{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "atrule",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "unclosed block - known declaration at-rule": {
+        "source": "@font-face {",
+        "generate": "@font-face{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "unclosed block - known rule at-rule": {
+        "source": "@media {",
+        "generate": "@media{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "media",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    }
+}

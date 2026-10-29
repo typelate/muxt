@@ -1,0 +1,52 @@
+{
+    "simple": {
+        "syntax": "foo",
+        "valid": [
+            "foo",
+            "FOO"
+        ],
+        "invalid": [
+            "",
+            "bar",
+            "-prefix-Foo"
+        ]
+    },
+    "with vendor prefix": {
+        "syntax": "-vendor-foo",
+        "valid": [
+            "-vendor-foo",
+            "-VENDOR-FOO"
+        ],
+        "invalid": [
+            "foo",
+            "Foo",
+            "-vendor-vendor-Foo",
+            "",
+            "bar"
+        ]
+    },
+    "with vendor prefix ignore": {
+        "syntax": "someExample",
+        "valid": [
+            "someExample",
+            "someexample"
+        ],
+        "invalid": [
+            "foo",
+            "-vendor-someExample",
+            ""
+        ]
+    },
+    "with multiplier": {
+        "syntax": "foo+",
+        "valid": [
+            "foo",
+            "foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo foo bar",
+            ""
+        ]
+    }
+}

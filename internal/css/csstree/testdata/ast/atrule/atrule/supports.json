@@ -1,0 +1,622 @@
+{
+    "base test": {
+        "source": "@supports (flex:1){selector{color:green}}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Rule",
+                        "prelude": {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "TypeSelector",
+                                            "name": "selector"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "block": {
+                            "type": "Block",
+                            "children": [
+                                {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "color",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "green"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "base test with spaces": {
+        "source": "@supports  (  flex  :  1  )  {}",
+        "generate": "@supports (flex:1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "base test with comments": {
+        "source": "@supports not /*0*/(/*1*/flex :/*3*/1/*4*/)/*5*/{}",
+        "generate": "@supports not (flex:1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "not"
+                            },        
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "should be case insensitive": {
+        "source": "@SuppOrts (flex:1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "SuppOrts",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "vendor property": {
+        "source": "@supports (-vendor-name:1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "-vendor-name",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "custom property": {
+        "source": "@supports (--custom: 1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "--custom",
+                                    "value": {
+                                        "type": "Raw",
+                                        "value": " 1"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "simple supports with negation": {
+        "source": "@supports not (flex: 1) {}",
+        "generate": "@supports not (flex:1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "Identifier",
+                                "name": "not"
+                            },        
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "complex prelude": {
+        "source": "@supports (not (flex: 1)) or (grid: support) {}",
+        "generate": "@supports (not (flex:1)) or (grid:support){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "Condition",
+                                "kind": "supports",
+                                "children": [
+                                    {
+                                        "type": "Identifier",
+                                        "name": "not"
+                                    },
+                                    {
+                                        "type": "SupportsDeclaration",
+                                        "declaration":  {
+                                            "type": "Declaration",
+                                            "important": false,
+                                            "property": "flex",
+                                            "value": {
+                                                "type": "Value",
+                                                "children": [
+                                                    {
+                                                        "type": "Number",
+                                                        "value": "1"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "Identifier",
+                                "name": "or"
+                            },
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "grid",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "support"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "using function": {
+        "source": "@supports func(flex: 1){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "GeneralEnclosed",
+                                "kind": "supports",
+                                "function": "func",
+                                "children": [
+                                    {
+                                        "type": "Raw",
+                                        "value": "flex: 1"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "using !important": {
+        "source": "@supports (box-shadow: something var(--complex) !important) {}",
+        "generate": "@supports (box-shadow:something var(--complex)!important){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": true,
+                                    "property": "box-shadow",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Identifier",
+                                                "name": "something"
+                                            },
+                                            {
+                                                "type": "Function",
+                                                "name": "var",
+                                                "children": [
+                                                    {
+                                                        "type": "Identifier",
+                                                        "name": "--complex"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "@supports with no block": {
+        "source": "@supports (flex: 1)",
+        "generate": "@supports (flex:1);",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "SupportsDeclaration",
+                                "declaration": {
+                                    "type": "Declaration",
+                                    "important": false,
+                                    "property": "flex",
+                                    "value": {
+                                        "type": "Value",
+                                        "children": [
+                                            {
+                                                "type": "Number",
+                                                "value": "1"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "@supports with selector()": {
+        "source": "@supports selector(.example) {}",
+        "generate": "@supports selector(.example){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "FeatureFunction",
+                                "kind": "supports",
+                                "feature": "selector",
+                                "value": {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "ClassSelector",
+                                            "name": "example"
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "@supports with selector() case-insensitive": {
+        "source": "@supports SELECTOR(.example) {}",
+        "generate": "@supports SELECTOR(.example){}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Condition",
+                        "kind": "supports",
+                        "children": [
+                            {
+                                "type": "FeatureFunction",
+                                "kind": "supports",
+                                "feature": "SELECTOR",
+                                "value": {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "ClassSelector",
+                                            "name": "example"
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "@supports with no block is not an error": {
+        "source": "@supports;",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "@supports with no prelude is not an error": {
+        "source": "@supports {}",
+        "generate": "@supports{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "supports",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "error": [
+        {
+            "source": "@supports '' {}",
+            "offset": "          ^",
+            "error": "Condition is expected"
+        },
+        {
+            "source": "@supports 1 {}",
+            "offset": "          ^",
+            "error": "Condition is expected"
+        },
+        {
+            "source": "@supports flex: 1 {}",
+            "offset": "          ^",
+            "error": "Parenthesis or function is expected"
+        }
+    ]
+}

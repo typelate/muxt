@@ -1,0 +1,308 @@
+{
+    "zero or one": {
+        "syntax": "foo?",
+        "valid": [
+            "",
+            "foo"
+        ],
+        "invalid": [
+            "foo foo",
+            "foo bar",
+            "bar"
+        ]
+    },
+    "zero or one at the end": {
+        "syntax": "foo bar?",
+        "valid": [
+            "foo",
+            "foo bar"
+        ],
+        "invalid": [
+            "foo foo bar",
+            "foo bar bar",
+            "",
+            "bar"
+        ]
+    },
+    "zero or one – all optional": {
+        "syntax": "foo? bar? baz?",
+        "valid": [
+            "",
+            "foo",
+            "bar",
+            "baz",
+            "foo bar",
+            "foo baz",
+            "bar baz",
+            "foo bar baz"
+        ],
+        "invalid": [
+            "foo foo bar",
+            "foo bar bar",
+            "foo bar qux",
+            "foo qux baz",
+            "qux"
+        ]
+    },
+    "zero or one – all optional in group": {
+        "syntax": "[ foo? bar? baz? ]",
+        "valid": [
+            "",
+            "foo",
+            "bar",
+            "baz",
+            "foo bar",
+            "foo baz",
+            "bar baz",
+            "foo bar baz"
+        ],
+        "invalid": [
+            "foo foo bar"
+        ]
+    },
+    "zero or one – all optional but not empty group": {
+        "syntax": "[ foo? bar? baz? ]!",
+        "valid": [
+            "foo",
+            "bar",
+            "baz",
+            "foo bar",
+            "foo baz",
+            "bar baz",
+            "foo bar baz"
+        ],
+        "invalid": [
+            "",
+            "qux",
+            "foo foo bar",
+            "foo bar bar",
+            "foo bar qux",
+            "foo qux baz"
+        ]
+    },
+    "zero or more": {
+        "syntax": "foo*",
+        "valid": [
+            "",
+            "foo",
+            "foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo bar",
+            "bar"
+        ]
+    },
+    "zero or more at the end": {
+        "syntax": "foo bar*",
+        "valid": [
+            "foo",
+            "foo bar",
+            "foo bar bar",
+            "foo bar bar bar"
+        ],
+        "invalid": [
+            "foo foo bar",
+            "bar bar",
+            "",
+            "bar"
+        ]
+    },
+    "one or more": {
+        "syntax": "foo+",
+        "valid": [
+            "foo",
+            "foo foo",
+            "foo foo foo foo foo"
+        ],
+        "invalid": [
+            "foo foo bar",
+            "foo bar foo",
+            "",
+            "bar"
+        ]
+    },
+    "one or more stacked with one or more comma separated": {
+        "syntax": "foo+#",
+        "valid": [
+            "foo",
+            "foo foo",
+            "foo foo foo foo foo",
+            "foo foo, foo",
+            "foo, foo, foo",
+            "foo , foo foo foo , foo",
+            "foo foo, foo foo foo, foo"
+        ],
+        "invalid": [
+            "foo,",
+            ", foo",
+            "foo , , foo",
+            "",
+            "bar"
+        ]
+    },
+    "exact": {
+        "syntax": "foo{2}",
+        "valid": [
+            "foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "",
+            "bar",
+            "foo foo foo",
+            "foo foo bar"
+        ]
+    },
+    "min": {
+        "syntax": "foo{2,}",
+        "valid": [
+            "foo foo",
+            "foo foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "",
+            "bar",
+            "foo foo bar"
+        ]
+    },
+    "min max": {
+        "syntax": "foo{2,4}",
+        "valid": [
+            "foo foo",
+            "foo foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "",
+            "bar",
+            "foo foo bar",
+            "foo foo foo foo bar"
+        ]
+    },
+    "should ignore whitespaces": {
+        "syntax": "foo{ 2 }",
+        "valid": [
+            "foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "foo foo foo",
+            "foo foo foo foo",
+            "",
+            "bar",
+            "foo foo bar",
+            "foo foo foo foo bar"
+        ]
+    },
+    "should ignore whitespaces #2": {
+        "syntax": "foo{ 2 , 4 }",
+        "valid": [
+            "foo foo",
+            "foo foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "",
+            "bar",
+            "foo foo bar",
+            "foo foo foo foo bar"
+        ]
+    },
+    "one or more comma separated": {
+        "syntax": "foo#",
+        "valid": [
+            "foo",
+            "foo, foo",
+            "foo,foo",
+            "foo , foo",
+            "foo, foo, foo, foo, foo"
+        ],
+        "invalid": [
+            "foo foo",
+            "foo, foo,",
+            "foo, foo, bar",
+            ",foo, foo",
+            "",
+            "bar"
+        ]
+    },
+    "one or more comma separated with following": {
+        "syntax": "foo# bar?",
+        "valid": [
+            "foo",
+            "foo, foo",
+            "foo, foo bar"
+        ],
+        "invalid": [
+            "foo, foo, bar",
+            "foo, foo,",
+            "bar"
+        ]
+    },
+    "one or more comma separated with min max": {
+        "syntax": "foo#{2,4}",
+        "valid": [
+            "foo, foo",
+            "foo,foo,foo",
+            "foo , foo , foo , foo"
+        ],
+        "invalid": [
+            "foo, foo, foo, foo, foo",
+            "foo, foo,",
+            "foo, foo, bar",
+            "foo foo",
+            "foo",
+            "",
+            "bar"
+        ]
+    },
+    "one or more comma separated stacked with zero or one": {
+        "syntax": "foo#?",
+        "valid": [
+            "foo",
+            "foo, foo",
+            "foo,foo,foo",
+            ""
+        ],
+        "invalid": [
+            "foo, foo, bar",
+            "foo foo",
+            "bar"
+        ]
+    },
+    "exact with zero or one": {
+        "syntax": "foo{2}?",
+        "valid": [
+            "",
+            "foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "foo foo foo",
+            "bar",
+            "foo foo bar",
+            "foo foo foo foo bar"
+        ]
+    },
+    "range with zero or one": {
+        "syntax": "foo{2,4}?",
+        "valid": [
+            "",
+            "foo foo",
+            "foo foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo",
+            "foo foo foo foo foo",
+            "bar",
+            "foo foo bar",
+            "foo foo foo foo bar"
+        ]
+    }
+}

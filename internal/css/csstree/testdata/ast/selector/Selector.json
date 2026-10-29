@@ -1,0 +1,279 @@
+{
+    "simpleselector.0": {
+        "source": "test",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "test"
+                }
+            ]
+        }
+    },
+    "simpleselector.1": {
+        "source": ".test",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "ClassSelector",
+                    "name": "test"
+                }
+            ]
+        }
+    },
+    "simpleselector.2": {
+        "source": "#test",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "IdSelector",
+                    "name": "test"
+                }
+            ]
+        }
+    },
+    "type & id": {
+        "source": "a#test",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "IdSelector",
+                    "name": "test"
+                }
+            ]
+        }
+    },
+    "simpleselector.3": {
+        "source": "[a=b]",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "AttributeSelector",
+                    "name": {
+                        "type": "Identifier",
+                        "name": "a"
+                    },
+                    "matcher": "=",
+                    "value": {
+                        "type": "Identifier",
+                        "name": "b"
+                    },
+                    "flags": null
+                }
+            ]
+        }
+    },
+    "simpleselector.4": {
+        "source": "[a=b][c=\"d\"]",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "AttributeSelector",
+                    "name": {
+                        "type": "Identifier",
+                        "name": "a"
+                    },
+                    "matcher": "=",
+                    "value": {
+                        "type": "Identifier",
+                        "name": "b"
+                    },
+                    "flags": null
+                },
+                {
+                    "type": "AttributeSelector",
+                    "name": {
+                        "type": "Identifier",
+                        "name": "c"
+                    },
+                    "matcher": "=",
+                    "value": {
+                        "type": "String",
+                        "value": "d"
+                    },
+                    "flags": null
+                }
+            ]
+        }
+    },
+    "simpleselector.16": {
+        "source": ".\\31  b",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "ClassSelector",
+                    "name": "\\31 "
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                }
+            ]
+        }
+    },
+    "negation with namespaced identifier": {
+        "source": "*|*:not(*)",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "*|*"
+                },
+                {
+                    "type": "PseudoClassSelector",
+                    "name": "not",
+                    "children": [
+                        {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "TypeSelector",
+                                            "name": "*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "negation with identifier and attribute selector": {
+        "source": "x:not([ABC])",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "x"
+                },
+                {
+                    "type": "PseudoClassSelector",
+                    "name": "not",
+                    "children": [
+                        {
+                            "type": "SelectorList",
+                            "children": [
+                                {
+                                    "type": "Selector",
+                                    "children": [
+                                        {
+                                            "type": "AttributeSelector",
+                                            "name": {
+                                                "type": "Identifier",
+                                                "name": "ABC"
+                                            },
+                                            "matcher": null,
+                                            "value": null,
+                                            "flags": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "simpleselector.18": {
+        "source": ":lang(nl-be)",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "PseudoClassSelector",
+                    "name": "lang",
+                    "children": [
+                        {
+                            "type": "Identifier",
+                            "name": "nl-be"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "spaces": {
+        "source": "a  +  b  c  ~  d  e",
+        "generate": "a+b c~d e",
+        "ast": {
+            "type": "Selector",
+            "children": [
+                {
+                    "type": "TypeSelector",
+                    "name": "a"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "+"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "b"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "c"
+                },
+                {
+                    "type": "Combinator",
+                    "name": "~"
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "d"
+                },
+                {
+                    "type": "Combinator",
+                    "name": " "
+                },
+                {
+                    "type": "TypeSelector",
+                    "name": "e"
+                }
+            ]
+        }
+    },
+    "error": [
+        {
+            "source": "foo,",
+            "offset": "   ^",
+            "error": "Unexpected input"
+        },
+        {
+            "source": "foo)",
+            "offset": "   ^",
+            "error": "Unexpected input"
+        },
+        {
+            "source": "foo{",
+            "offset": "   ^",
+            "error": "Unexpected input"
+        }
+    ]
+}

@@ -1,0 +1,187 @@
+{
+    "unicode range one hex": {
+        "source": "U+0F00",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+0F00"
+        }
+    },
+    "unicode range hex pair": {
+        "source": "U+0F00-0FFF",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+0F00-0FFF"
+        }
+    },
+    "unicode range hex pair #2": {
+        "source": "u+0025-00FF",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "u+0025-00FF"
+        }
+    },
+    "unicode range hex pair starts with letters": {
+        "source": "U+FF00-FF10",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+FF00-FF10"
+        }
+    },
+    "unicode range hex pair only numbers": {
+        "source": "U+1234-2345",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+1234-2345"
+        }
+    },
+    "unicode range hex pair number/letters": {
+        "source": "U+1234-abcd",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+1234-abcd"
+        }
+    },
+    "unicode range short hex pair": {
+        "source": "U+0-7F",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "U+0-7F"
+        }
+    },
+    "unicode range hex with ?": {
+        "source": "u+0f00??",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "u+0f00??"
+        }
+    },
+    "a number with a negative exponent": {
+        "source": "u+12e-130",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "u+12e-130"
+        }
+    },
+    "a single question mark": {
+        "source": "u+?",
+        "ast": {
+            "type": "UnicodeRange",
+            "value": "u+?"
+        }
+    },
+    "a number ends with a minus": {
+        "source": "u+12-",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "UnicodeRange",
+                    "value": "u+12"
+                },
+                {
+                    "type": "Operator",
+                    "value": "-"
+                }
+            ]
+        }
+    },
+    "not an unicode range": {
+        "source": "u",
+        "ast": {
+            "type": "Identifier",
+            "name": "u"
+        }
+    },
+    "errors": [
+        {
+            "source": "U+",
+            "offset": "  ^",
+            "error": "Hex digit or question mark is expected"
+        },
+        {
+            "source": "U+-123",
+            "offset": "  ^",
+            "error": "Hex digit or question mark is expected"
+        },
+        {
+            "source": "u+123????",
+            "offset": "        ^",
+            "error": "Too many question marks"
+        },
+        {
+            "source": "u+1234567",
+            "offset": "        ^",
+            "error": "Too many hex digits"
+        },
+        {
+            "source": "u+123456z",
+            "offset": "        ^",
+            "error": "Hyphen minus is expected"
+        },
+        {
+            "source": "u+123456z",
+            "offset": "        ^",
+            "error": "Hyphen minus is expected"
+        },
+        {
+            "source": "u+123456-x",
+            "offset": "         ^",
+            "error": "Hex digit is expected"
+        },
+        {
+            "source": "u+123456-1234567",
+            "offset": "               ^",
+            "error": "Too many hex digits"
+        },
+        {
+            "source": "u+123456-123456z",
+            "offset": "               ^",
+            "error": "Unexpected input"
+        },
+        {
+            "source": "u+123456-123???",
+            "offset": "            ^",
+            "error": "Unexpected input"
+        },
+        {
+            "source": "u+.200",
+            "offset": "  ^",
+            "error": "Hex digit is expected"
+        },
+        {
+            "source": "u+12-.34",
+            "offset": "     ^",
+            "error": "Hex digit is expected"
+        },
+        {
+            "source": "u+12-3e-4",
+            "offset": "       ^",
+            "error": "Hex digit is expected"
+        },
+        {
+            "source": "u+12-3e+4",
+            "offset": "       ^",
+            "error": "Hex digit is expected"
+        },
+        {
+            "source": "u+12e+12",
+            "offset": "     ^",
+            "error": "Hyphen minus or hex digit is expected"
+        },
+        {
+            "source": "u+12+22",
+            "offset": "    ^",
+            "error": "Hyphen minus is expected"
+        },
+        {
+            "source": "u+12+1e",
+            "offset": "    ^",
+            "error": "Hyphen minus is expected"
+        },
+        {
+            "source": "u+0.200",
+            "offset": "   ^",
+            "error": "Hyphen minus or hex digit is expected"
+        }
+    ]
+}

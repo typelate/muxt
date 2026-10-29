@@ -1,0 +1,23 @@
+{
+    "should pass through (values with `var()` is always valid for now)": {
+        "syntax": "<bar>",
+        "lexer": {
+            "types": {
+                "bar": "foo"
+            }
+        },
+        "valid": [
+            "foo",
+            "var(--name)",
+            "var(--name) qux",
+            "VAR(--name)",
+            "VAR(--name) qux"
+        ]
+    },
+    "custom properties should be ignored": {
+        "property": "--var",
+        "valid": [
+            "any value"
+        ]
+    }
+}

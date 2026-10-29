@@ -1,0 +1,682 @@
+{
+    "<angle>": {
+        "valid": [
+            "1deg",
+            "1DEG",
+            "1grad",
+            "1GRAD",
+            "1rad",
+            "1RAD",
+            "1turn",
+            "1TURN",
+            "calc(2 * 1deg)"
+        ],
+        "invalid": [
+            "",
+            "0",
+            "1px",
+            "1px 2deg"
+        ]
+    },
+    "<time>": {
+        "valid": [
+            "1s",
+            "1S",
+            "1ms",
+            "1MS",
+            "calc(2 * 1s)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2s"
+        ]
+    },
+    "<length>": {
+        "valid": [
+            "1px",
+            "1PX",
+            "1mm",
+            "1MM",
+            "1cm",
+            "1CM",
+            "1in",
+            "1IN",
+            "1pt",
+            "1PT",
+            "1pc",
+            "1PC",
+            "1em",
+            "1EM",
+            "1rem",
+            "1REM",
+            "1ex",
+            "1EX",
+            "1rex",
+            "1REX",
+            "1ch",
+            "1CH",
+            "1rch",
+            "1RCH",
+            "1cap",
+            "1CAP",
+            "1rcap",
+            "1RCAP",
+            "1ic",
+            "1IC",
+            "1ric",
+            "1RIC",
+            "1lh",
+            "1LH",
+            "1rlh",
+            "1RLH",
+            "1vw",
+            "1VW",
+            "1svw",
+            "1SVW",
+            "1lvw",
+            "1LVW",
+            "1dvw",
+            "1DVW",
+            "1vh",
+            "1VH",
+            "1svh",
+            "1SVH",
+            "1lvh",
+            "1LVH",
+            "1dvh",
+            "1DVH",
+            "1vi",
+            "1VI",
+            "1svi",
+            "1SVI",
+            "1lvi",
+            "1LVI",
+            "1dvi",
+            "1DVI",
+            "1vb",
+            "1VB",
+            "1svb",
+            "1SVB",
+            "1lvb",
+            "1LVB",
+            "1dvb",
+            "1DVB",
+            "1vmin",
+            "1VMIN",
+            "1svmin",
+            "1SVMIN",
+            "1lvmin",
+            "1LVMIN",
+            "1dvmin",
+            "1DVMIN",
+            "1vmax",
+            "1VMAX",
+            "1svmax",
+            "1SVMAX",
+            "1lvmax",
+            "1LVMAX",
+            "1dvmax",
+            "1DVMAX",
+            "1cqw",
+            "1CQW",
+            "1cqh",
+            "1CQH",
+            "1cqi",
+            "1CQI",
+            "1cqb",
+            "1CQB",
+            "1cqmin",
+            "1CQMIN",
+            "1cqmax",
+            "1CQMAX",
+            "0",
+            "-0",
+            "0.0",
+            "calc(2 * 1px)"
+        ],
+        "invalid": [
+            "",
+            "1s",
+            "1s 2px",
+            "calc(2 * 1px) 3px"
+        ]
+    },
+    "<frequency>": {
+        "valid": [
+            "1hz",
+            "1Hz",
+            "1khz",
+            "1kHz",
+            "calc(2 * 1hz)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2hz"
+        ]
+    },
+    "<resolution>": {
+        "valid": [
+            "1dpi",
+            "1DPI",
+            "1dpcm",
+            "1DPCM",
+            "1dppx",
+            "1DPPX",
+            "calc(2 * 1dpi)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2dpi"
+        ]
+    },
+    "<flex>": {
+        "valid": [
+            "1fr",
+            "1FR",
+            "calc(2 * 1fr)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2fr"
+        ]
+    },
+    "<decibel>": {
+        "valid": [
+            "1db",
+            "1dB",
+            "calc(2 * 1db)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2db"
+        ]
+    },
+    "<semitones>": {
+        "valid": [
+            "1st",
+            "1ST",
+            "calc(2 * 1st)"
+        ],
+        "invalid": [
+            "",
+            "1px",
+            "1px 2st"
+        ]
+    },
+    "<dimension>": {
+        "valid": [
+            "1px",
+            "1something"
+        ],
+        "invalid": [
+            "",
+            "1 2px"
+        ]
+    },
+    "<percentage>": {
+        "valid": [
+            "1%",
+            "12.34%",
+            "calc(2 * 1%)"
+        ],
+        "invalid": [
+            "",
+            "1 2%",
+            "1px"
+        ]
+    },
+    "<zero>": {
+        "valid": [
+            "0",
+            ".0",
+            "0.0",
+            "0.000"
+        ],
+        "invalid": [
+            "",
+            "123",
+            "0.123",
+            "123.123"
+        ]
+    },
+    "<number>": {
+        "valid": [
+            "123",
+            "123.456",
+            ".456",
+            "123e12",
+            "123e-12",
+            "123e+12",
+            "-123",
+            "+123",
+            "-.123",
+            "+.123",
+            "calc(2 * 1.5)"
+        ],
+        "invalid": [
+            "",
+            "foo 123"
+        ]
+    },
+    "<integer>": {
+        "valid": [
+            "123",
+            "-123",
+            "+123",
+            "calc(2 * 2)"
+        ],
+        "invalid": [
+            "",
+            "123.456",
+            "-123.456",
+            ".456",
+            "foo 123"
+        ]
+    },
+    "<hex-color>": {
+        "valid": [
+            "#abc",
+            "#abcd",
+            "#abcdef",
+            "#123456",
+            "#aBcDeF",
+            "#abcdef12"
+        ],
+        "invalid": [
+            "",
+            "#a",
+            "#ab",
+            "#abz",
+            "#abcde",
+            "#abcdez",
+            "#abcdef1",
+            "#abcdef1z",
+            "#abcdef123",
+            "123 #abc123"
+        ]
+    },
+    "<id-selector>": {
+        "valid": [
+            "#foo",
+            "#a123",
+            "#foo-123",
+            "#--foo"
+        ],
+        "invalid": [
+            "#123",
+            "#"
+        ]
+    },
+    "<ident>": {
+        "valid": [
+            "foo",
+            "-foo",
+            "--foo",
+            "--",
+            "---",
+            "foo-bar",
+            "-foo-bar",
+            "--foo-bar"
+        ],
+        "invalid": [
+            "",
+            "123 foo"
+        ]
+    },
+    "<string>": {
+        "valid": [
+            "\"string\"",
+            "'string'"
+        ],
+        "invalid": [
+            "",
+            "1 'string'"
+        ]
+    },
+    "<urange>": {
+        "valid": [
+            "U+26",
+            "U+A5",
+            "U+0-7F",
+            "u+0025-00FF",
+            "U+0025-00FF",
+            "U+4??",
+            "U+30??",
+            "U+0F00",
+            "U+0F00-0FFF",
+            "U+FF00-FF10",
+            "U+1234-2345",
+            "U+1234-abcd",
+            "U+0-7F",
+            "u+0f00??",
+            "u+12e-130",
+            "u+?"
+        ],
+        "invalid": [
+            "",
+            "U",
+            "u",
+            "u!",
+            "u234",
+            "foo",
+            "U+",
+            "u+12-",
+            "u++26",
+            "U+-123",
+            "u+123????",
+            "u+1234567",
+            "u+0025-+0026",
+            "u+123456-123???",
+            "u+123456-1234567",
+            "u+123456z",
+            "u+123456z",
+            "u+123456-123456z",
+            "u+.200",
+            "u+12-.34",
+            "u+12-3e-4",
+            "u+12-3e+4",
+            "u+12e+12",
+            "u+0.200"
+        ]
+    },
+    "<urange>#": {
+        "valid": [
+            "U+A5, U+4E00-9FFF, U+30??, U+FF00-FF9F"
+        ]
+    },
+    "<an-plus-b>": {
+        "valid": [
+            "2n+1",
+            "2n +1",
+            "2n + 1",
+            "2n+ 1",
+            "2n-1",
+            "2n -1",
+            "2n- 1",
+            "2n - 1",
+            "-2n+1",
+            "-2n +1",
+            "-2n + 1",
+            "-2n+ 1",
+            "-2n-1",
+            "-2n -1",
+            "-2n- 1",
+            "-2n - 1",
+            "+2n+1",
+            "+2n +1",
+            "+2n + 1",
+            "+2n+ 1",
+            "+2n-1",
+            "+2n -1",
+            "+2n- 1",
+            "+2n - 1",
+            "n+1",
+            "n +1",
+            "n + 1",
+            "n+ 1",
+            "n-1",
+            "n -1",
+            "n- 1",
+            "n - 1",
+            "-n+1",
+            "-n +1",
+            "-n + 1",
+            "-n+ 1",
+            "-n-1",
+            "-n -1",
+            "-n- 1",
+            "-n - 1",
+            "+n+1",
+            "+n +1",
+            "+n + 1",
+            "+n+ 1",
+            "+n-1",
+            "+n -1",
+            "+n- 1",
+            "+n - 1",
+            "n",
+            "-n",
+            "+n",
+            "2n",
+            "-2n",
+            "+2n",
+            "N",
+            "-N",
+            "+N",
+            "2N",
+            "-2N",
+            "+2N",
+            "1",
+            "-1",
+            "+1",
+            "123456n-12345678"
+        ],
+        "invalid": [
+            "",
+            "2n-+1",
+            "2n+2n",
+            "2 n + 1",
+            "2n + -1",
+            "2n + +1",
+            "2n + .1",
+            "2n++1",
+            "2n 1",
+            "2n +",
+            "2nn",
+            ".2n + 1",
+            "1.2n + 1",
+            "+m + 1",
+            "+nn+1",
+            "+nn-2",
+            "- 1",
+            "+ 1",
+            "- n",
+            "+ n",
+            "-n-",
+            "-nn+1",
+            "-nnn",
+            "--2n",
+            "+-2n",
+            "-+2n",
+            "--2",
+            "+-2",
+            "-+2"
+        ]
+    },
+    "<custom-ident>": {
+        "valid": [
+            "foo",
+            "bar12"
+        ],
+        "invalid": [
+            "",
+            "inherit",
+            "initial",
+            "revert",
+            "revert-layer",
+            "unset",
+            "default",
+            "0"
+        ]
+    },
+    "<custom-property-name>": {
+        "valid": [
+            "--foo"
+        ],
+        "invalid": [
+            "",
+            "foo",
+            "-foo",
+            "-foo--bar",
+            "--"
+        ]
+    },
+    "<dashed-ident>": {
+        "valid": [
+            "--",
+            "--foo"
+        ],
+        "invalid": [
+            "",
+            "foo",
+            "-foo",
+            "-foo--bar"
+        ]
+    },
+    "<declaration-value>": {
+        "valid": [
+            "foo",
+            "123px",
+            "foo()",
+            "foo(123)",
+            "foo(!)",
+            "foo(;)",
+            "([{}])"
+        ],
+        "invalid": [
+            "",
+            "foo 'asd\n",
+            "foo url((",
+            "foo!important",
+            "foo;123",
+            ")",
+            "]",
+            "}",
+            "(])",
+            "(})",
+            "[)]"
+        ]
+    },
+    "<any-value>": {
+        "valid": [
+            "foo",
+            "123px",
+            "foo!important",
+            "foo;123",
+            "foo()",
+            "foo(123)",
+            "foo(!)",
+            "foo(;)",
+            "([{}])"
+        ],
+        "invalid": [
+            "",
+            "'asd\n",
+            "foo 'asd\n",
+            "foo url((",
+            ")",
+            "]",
+            "}",
+            "(])",
+            "(})",
+            "[)]"
+        ]
+    },
+    "math-length": {
+        "syntax": "<length>",
+        "valid": [
+            "calc(1px + 1%)",
+            "CALC(1px + 1%)",
+            "-moz-calc(1px + 1%)",
+            "-MOZ-CALC(1px + 1%)",
+            "-webkit-calc(1px + 1%)",
+            "-WEBKIT-CALC(1px + 1%)",
+            "calc(1px + 1%)",
+            "min(1px, 2px)",
+            "max(1px, 2px)",
+            "clamp(1px, 2px, 3px)",
+            "round(nearest, 1px, 2px)",
+            "round(up, 1px, 2px)",
+            "round(down, 1px, 2px)",
+            "round(to-zero, 1px, 2px)",
+            "mod(1px, 2px)",
+            "rem(1px, 2px)",
+            "asin(0.5)",
+            "acos(0.5)",
+            "atan(1)",
+            "atan2(1px, 2px)",
+            "hypot(3px, 4px)",
+            "abs(-1px)"
+        ],
+        "invalid": [
+            "-ms-calc(1px + 1%)",
+            "-o-calc(1px + 1%)"
+        ]
+    },
+    "math-angle": {
+        "syntax": "<angle>",
+        "valid": [
+            "calc(1deg + 1grad)",
+            "CALC(1deg + 1grad)",
+            "-moz-calc(1deg + 1grad)",
+            "-MOZ-CALC(1deg + 1grad)",
+            "-webkit-calc(1deg + 1grad)",
+            "-WEBKIT-CALC(1deg + 1grad)",
+            "calc(1rad + 1turn)",
+            "min(1deg, 2rad)",
+            "max(1grad, 2turn)",
+            "clamp(1rad, 2deg, 3turn)"
+        ],
+        "invalid": [
+            "pow(1deg)",
+            "sqrt(1rad)",
+            "log(1grad)",
+            "exp(1turn)"
+        ]
+    },
+    "math-number": {
+        "syntax": "<number>",
+        "valid": [
+            "calc(1 + 1.5)",
+            "CALC(1 + 1.5)",
+            "-moz-calc(1 + 1.5)",
+            "-MOZ-CALC(1 + 1.5)",
+            "-webkit-calc(1 + 1.5)",
+            "-WEBKIT-CALC(1 + 1.5)",
+            "calc(2 * 3)",
+            "min(2, 3)",
+            "max(4, 5)",
+            "clamp(6, 7, 8)",
+            "round(down, 1px, 2px)",
+            "mod(1px, 2px)",
+            "rem(1px, 2px)",
+            "sin(45deg)",
+            "cos(45deg)",
+            "tan(45deg)",
+            "pow(2, 3)",
+            "sqrt(16)",
+            "log(100)",
+            "sign(-1px)"
+        ],
+        "invalid": [
+            "asin(1)",
+            "acos(2)"
+        ]
+    },
+    "math-percentage": {
+        "syntax": "<percentage>",
+        "valid": [
+            "calc(1% + 2%)",
+            "CALC(1% + 2%)",
+            "-moz-calc(1% + 2%)",
+            "-MOZ-CALC(1% + 2%)",
+            "-webkit-calc(1% + 2%)",
+            "-WEBKIT-CALC(1% + 2%)",
+            "calc(50% * 2)",
+            "min(10%, 20%)",
+            "max(30%, 40%)",
+            "clamp(50%, 60%, 70%)"
+        ],
+        "invalid": [
+            "pow(1%)",
+            "sqrt(1%)",
+            "log(1%)",
+            "asin(1)"
+        ]
+    }
+}

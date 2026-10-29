@@ -1,0 +1,95 @@
+{
+    "single selector": {
+        "source": "test",
+        "ast": {
+            "type": "SelectorList",
+            "children": [
+                {
+                    "type": "Selector",
+                    "children": [
+                        {
+                            "type": "TypeSelector",
+                            "name": "test"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "several selectors": {
+        "source": "a+b,c",
+        "ast": {
+            "type": "SelectorList",
+            "children": [
+                {
+                    "type": "Selector",
+                    "children": [
+                        {
+                            "type": "TypeSelector",
+                            "name": "a"
+                        },
+                        {
+                            "type": "Combinator",
+                            "name": "+"
+                        },
+                        {
+                            "type": "TypeSelector",
+                            "name": "b"
+                        }
+                    ]
+                },
+                {
+                    "type": "Selector",
+                    "children": [
+                        {
+                            "type": "TypeSelector",
+                            "name": "c"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "error": [
+        {
+            "source": "a, ",
+            "offset": "  ^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": "a,, ",
+            "offset": "  ^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": "a,,b",
+            "offset": "  ^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": ",b",
+            "offset": "^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": ",,b",
+            "offset": "^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": ",",
+            "offset": "^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": ",,",
+            "offset": "^",
+            "error": "Selector is expected"
+        },
+        {
+            "source": "a,{",
+            "offset": "  ^",
+            "error": "Selector is expected"
+        }
+    ]
+}

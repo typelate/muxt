@@ -1,0 +1,130 @@
+{
+    "single declaration": {
+        "source": "@font-face{font-family:\"name\"}",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "font-family",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "String",
+                                    "value": "name"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "several declarations": {
+        "source": "@font-face{font-family:name;src:url(test.woff)}",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "font-family",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "name"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "src",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Url",
+                                    "value": "test.woff"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "@font-face with no block is not an error": {
+        "source": "@font-face;",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "@font-face with prelude is not an error": {
+        "source": "@font-face foo {}",
+        "generate": "@font-face foo{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "foo"
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "@font-face with declaration looks like a rule in block": {
+        "source": "@font-face { a:b {} }",
+        "generate": "@font-face{a:b {}}",
+        "ast": {
+            "type": "Atrule",
+            "name": "font-face",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "a",
+                        "value": {
+                            "type": "Raw",
+                            "value": "b {}"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "error": [
+        {
+            "source": "@font-face { a {} }",
+            "offset": "               ^",
+            "error": "Colon is expected"
+        }
+    ]
+}

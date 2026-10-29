@@ -1,0 +1,40 @@
+{
+    "base test": {
+        "source": "foo bar",
+        "ast": {
+            "type": "AtrulePrelude",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "foo"
+                },
+                {
+                    "type": "Identifier",
+                    "name": "bar"
+                }
+            ]
+        }
+    },
+    "should use custom parser": {
+        "options": {
+            "atrule": "media"
+        },
+        "source": "screen",
+        "ast": {
+            "type": "AtrulePrelude",
+            "children": [
+                {
+                    "type": "MediaQueryList",
+                    "children": [
+                        {
+                            "type": "MediaQuery",
+                            "modifier": null,
+                            "mediaType": "screen",
+                            "condition": null
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,501 @@
+{
+    "empty block at-rule": {
+        "source": "@test{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "block at-rule #0": {
+        "source": "@test{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #1": {
+        "source": "@test x y {p:v}",
+        "generate": "@test x y{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #2": {
+        "source": "@test x, y x(1+2) {p:v}",
+        "generate": "@test x,y x(1+2){p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Operator",
+                        "value": ","
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    },
+                    {
+                        "type": "Function",
+                        "name": "x",
+                        "children": [
+                            {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            {
+                                "type": "Number",
+                                "value": "+2"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #c.0": {
+        "source": "@test/*test*/{/*test*/p/*test*/:/*test*/v/*test*/}",
+        "generate": "@test{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #c.1": {
+        "source": "@test/*test*/x/*test*/ y/*test*/{/*test*/p/*test*/:/*test*/v/*test*/}",
+        "generate": "@test x y{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #c.2": {
+        "source": "@test/*test*/x/*test*/,/*test*/y/*test*/ x(/*test*/1/*test*/+/*test*/2/*test*/)/*test*/{/*test*/p/*test*/:/*test*/v/*test*/}",
+        "generate": "@test x,y x(1+ 2){p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Operator",
+                        "value": ","
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    },
+                    {
+                        "type": "Function",
+                        "name": "x",
+                        "children": [
+                            {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            {
+                                "type": "Operator",
+                                "value": "+"
+                            },
+                            {
+                                "type": "Number",
+                                "value": "2"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #s.0": {
+        "source": "@test  {  p  :  v  }",
+        "generate": "@test{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #s.1": {
+        "source": "@test  x  y  {  p  :  v  }",
+        "generate": "@test x y{p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "block at-rule #s.2": {
+        "source": "@test  x  ,  y  x(  1  +  2  )  {  p  :  v  }",
+        "generate": "@test x,y x(1+ 2){p:v}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Operator",
+                        "value": ","
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    },
+                    {
+                        "type": "Function",
+                        "name": "x",
+                        "children": [
+                            {
+                                "type": "Number",
+                                "value": "1"
+                            },
+                            {
+                                "type": "Operator",
+                                "value": "+"
+                            },
+                            {
+                                "type": "Number",
+                                "value": "2"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "p",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "v"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "@page": {
+        "source": "@page :left { margin: 5cm; }",
+        "generate": "@page :left{margin:5cm}",
+        "ast": {
+            "type": "Atrule",
+            "name": "page",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "SelectorList",
+                        "children": [
+                            {
+                                "type": "Selector",
+                                "children": [
+                                    {
+                                        "type": "PseudoClassSelector",
+                                        "name": "left",
+                                        "children": null
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "margin",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Dimension",
+                                    "value": "5",
+                                    "unit": "cm"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "shouldn't parse a atrule prelude when parseAtrulePrelude is false": {
+        "options": {
+            "parseAtrulePrelude": false
+        },
+        "source": "@test a b {}",
+        "generate": "@test a b{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "Raw",
+                "value": "a b"
+            },
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "shouldn't create a raw node when no prelude and parseAtrulePrelude is false": {
+        "options": {
+            "parseAtrulePrelude": false
+        },
+        "source": "@test {}",
+        "generate": "@test{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "should turn empty prelude to null": {
+        "source": "@media{}",
+        "ast": {
+            "type": "Atrule",
+            "name": "media",
+            "prelude": null,
+            "block": {
+                "type": "Block",
+                "children": []
+            }
+        }
+    },
+    "error": [
+        {
+            "source": "@atrule { a: 1",
+            "offset": "            ^",
+            "error": "Identifier is expected"
+        }
+    ]
+}

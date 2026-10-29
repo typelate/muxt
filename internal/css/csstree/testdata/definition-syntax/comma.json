@@ -1,0 +1,116 @@
+{
+    "simple": {
+        "syntax": "foo, bar",
+        "valid": [
+            "foo, bar"
+        ],
+        "invalid": [
+            "",
+            "foo",
+            "foo bar",
+            "bar"
+        ]
+    },
+    "first is omissible": {
+        "syntax": "foo?, bar",
+        "valid": [
+            "foo, bar",
+            "bar"
+        ],
+        "invalid": [
+            "",
+            "foo",
+            "foo bar",
+            ", bar"
+        ]
+    },
+    "last is omissible": {
+        "syntax": "foo, bar?",
+        "valid": [
+            "foo, bar",
+            "foo"
+        ],
+        "invalid": [
+            "",
+            "bar",
+            "foo bar",
+            "foo,"
+        ]
+    },
+    "both is omissible": {
+        "syntax": "foo?, bar?",
+        "valid": [
+            "",
+            "foo, bar",
+            "foo",
+            "bar"
+        ],
+        "invalid": [
+            "foo ,",
+            "foo bar",
+            ", bar"
+        ]
+    },
+    "three omissible": {
+        "syntax": "foo?, bar?, baz?",
+        "valid": [
+            "",
+            "foo",
+            "bar",
+            "baz",
+            "foo, bar",
+            "foo, baz",
+            "bar, baz",
+            "foo, bar, baz"
+        ],
+        "invalid": [
+            "foo ,",
+            "foo ,,",
+            "foo ,, bar",
+            "foo ,, baz",
+            ", bar",
+            ", bar , baz"
+        ]
+    },
+    "four omissible": {
+        "syntax": "foo?, bar?, baz?, qux?",
+        "valid": [
+            "",
+            "foo",
+            "qux",
+            "foo, bar",
+            "foo, bar, qux",
+            "foo, qux"
+        ],
+        "invalid": [
+            "foo ,",
+            "foo ,,",
+            "foo ,, qux",
+            "foo ,,, qux"
+        ]
+    },
+    "leading comma in group": {
+        "syntax": "foo [ , foo ]*",
+        "valid": [
+            "foo",
+            "foo, foo",
+            "foo, foo, foo, foo"
+        ],
+        "invalid": [
+            "foo ,",
+            "foo foo"
+        ]
+    },
+    "trailig comma in group": {
+        "syntax": "[ foo , ]* foo",
+        "valid": [
+            "foo",
+            "foo, foo",
+            "foo, foo, foo, foo"
+        ],
+        "invalid": [
+            ", foo",
+            "foo ,"
+        ]
+    }
+}

@@ -1,0 +1,115 @@
+{
+    "ident": {
+        "source": ":lang(en)",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "lang",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "en"
+                }
+            ]
+        }
+    },
+    "string": {
+        "source": ":lang('en')",
+        "generate": ":lang(\"en\")",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "lang",
+            "children": [
+                {
+                    "type": "String",
+                    "value": "en"
+                }
+            ]
+        }
+    },
+    "list": {
+        "source": ":lang( 'en', de-DE ,  \"es\" )",
+        "generate": ":lang(\"en\",de-DE,\"es\")",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "lang",
+            "children": [
+                {
+                    "type": "String",
+                    "value": "en"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "Identifier",
+                    "name": "de-DE"
+                },
+                {
+                    "type": "Operator",
+                    "value": ","
+                },
+                {
+                    "type": "String",
+                    "value": "es"
+                }
+            ]
+        }
+    },
+    "with spaces and comments": {
+        "source": ":lang(  en /* test */ )",
+        "generate": ":lang(en)",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "lang",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "en"
+                }
+            ]
+        }
+    },
+    "should be case insensitive": {
+        "source": ":LanG(en-US)",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "LanG",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "en-US"
+                }
+            ]
+        }
+    },
+    "not an error": {
+        "source": ":lang(en en)",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "lang",
+            "children": [
+                {
+                    "type": "Identifier",
+                    "name": "en"
+                },
+                {
+                    "type": "Identifier",
+                    "name": "en"
+                }
+            ]
+        }
+    },
+    "error": [
+        {
+            "source": ":lang(1)",
+            "offset": "      ^",
+            "error": "Identifier, string or comma is expected"
+        },
+        {
+            "source": ":lang(var(--test)) {}",
+            "offset": "      ^",
+            "error": "Identifier, string or comma is expected"
+        }
+    ]
+}

@@ -1,8 +1,8 @@
 // Command copy-htt copies a package directory from the htt project into muxt,
 // rewriting import paths and the root package name. Throwaway; deleted later.
 //
-// Each invocation copies exactly one directory (its .go files, testdata, and
-// js_event_attrs.json), not subdirectories. Packages such as check/internal/*
+// Each invocation copies exactly one directory (its .go files, testdata and
+// data directories, js_event_attrs.json, and LICENSE), not subdirectories. Packages such as check/internal/*
 // need their own invocations.
 package main
 
@@ -77,7 +77,7 @@ func run(src, pkg, dstDir string) error {
 		to := filepath.Join(dstDir, e.Name())
 		switch {
 		case e.IsDir():
-			if e.Name() == "testdata" {
+			if copiedDir(e.Name()) {
 				if err := copyTree(from, to); err != nil {
 					return err
 				}
@@ -86,7 +86,7 @@ func run(src, pkg, dstDir string) error {
 			if err := rewriteGo(from, to, isFork); err != nil {
 				return fmt.Errorf("%s: %w", from, err)
 			}
-		case e.Name() == "js_event_attrs.json":
+		case copiedFile(e.Name()):
 			if err := copyFile(from, to); err != nil {
 				return err
 			}
@@ -94,6 +94,13 @@ func run(src, pkg, dstDir string) error {
 	}
 	return nil
 }
+
+// copiedDir reports whether a subdirectory is copied wholesale (testdata and
+// embedded data such as csstree's data/mdn).
+func copiedDir(name string) bool { return name == "testdata" || name == "data" }
+
+// copiedFile reports whether a non-Go file is copied.
+func copiedFile(name string) bool { return name == "js_event_attrs.json" || name == "LICENSE" }
 
 func copyFile(from, to string) error {
 	b, err := os.ReadFile(from)

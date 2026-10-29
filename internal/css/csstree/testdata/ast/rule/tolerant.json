@@ -1,0 +1,32 @@
+{
+    "bad selector": {
+        "source": "boom! {color:red}",
+        "generate": "boom!{color:red}",
+        "ast": {
+            "type": "Rule",
+            "prelude": {
+                "type": "Raw",
+                "value": "boom!"
+            },
+            "block": {
+                "type": "Block",
+                "children": [
+                    {
+                        "type": "Declaration",
+                        "important": false,
+                        "property": "color",
+                        "value": {
+                            "type": "Value",
+                            "children": [
+                                {
+                                    "type": "Identifier",
+                                    "name": "red"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

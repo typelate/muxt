@@ -1,0 +1,201 @@
+{
+    "atrules.0": {
+        "source": "@test;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "atrules.1": {
+        "source": "@test x y;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "atrules.2": {
+        "source": "@test \"blah\";",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "String",
+                        "value": "blah"
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "atrules.3": {
+        "source": "@import url(http://example.com);",
+        "ast": {
+            "type": "Atrule",
+            "name": "import",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Url",
+                        "value": "http://example.com"
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "atrules.c.0": {
+        "source": "@test/*test*/;",
+        "generate": "@test;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "atrules.c.1": {
+        "source": "@test/*test*/x/*test*/ y;",
+        "generate": "@test x y;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "atrules.s.0": {
+        "source": "@test  ;",
+        "generate": "@test;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "atrules.s.1": {
+        "source": "@test  x  y;",
+        "generate": "@test x y;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Identifier",
+                        "name": "x"
+                    },
+                    {
+                        "type": "Identifier",
+                        "name": "y"
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "atkeyword.1": {
+        "source": "@atrule;",
+        "ast": {
+            "type": "Atrule",
+            "name": "atrule",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "shouldn't parse a atrule prelude when parseAtrulePrelude is false": {
+        "options": {
+            "parseAtrulePrelude": false
+        },
+        "source": "@test a b;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": {
+                "type": "Raw",
+                "value": "a b"
+            },
+            "block": null
+        }
+    },
+    "shouldn't create a raw node when no prelude and parseAtrulePrelude is false": {
+        "options": {
+            "parseAtrulePrelude": false
+        },
+        "source": "@test ;",
+        "generate": "@test;",
+        "ast": {
+            "type": "Atrule",
+            "name": "test",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "no at-rule ending on eof is not an error": {
+        "source": "@atrule url('..')",
+        "generate": "@atrule url(..);",
+        "ast": {
+            "type": "Atrule",
+            "name": "atrule",
+            "prelude": {
+                "type": "AtrulePrelude",
+                "children": [
+                    {
+                        "type": "Url",
+                        "value": ".."
+                    }
+                ]
+            },
+            "block": null
+        }
+    },
+    "should turn empty prelude to null": {
+        "source": "@import;",
+        "ast": {
+            "type": "Atrule",
+            "name": "import",
+            "prelude": null,
+            "block": null
+        }
+    },
+    "error": [
+        {
+            "source": "@atrule!;",
+            "offset": "       ^",
+            "error": "Semicolon or block is expected"
+        }
+    ]
+}

@@ -1,0 +1,34 @@
+{
+    "simple": {
+        "syntax": "<bar>",
+        "lexer": {
+            "types": {
+                "bar": "foo"
+            }
+        },
+        "valid": [
+            "foo"
+        ],
+        "invalid": [
+            "",
+            "bar"
+        ]
+    },
+    "with multiplier": {
+        "syntax": "<bar>+",
+        "lexer": {
+            "types": {
+                "bar": "foo"
+            }
+        },
+        "valid": [
+            "foo",
+            "foo foo",
+            "foo foo foo foo"
+        ],
+        "invalid": [
+            "foo foo bar",
+            ""
+        ]
+    }
+}

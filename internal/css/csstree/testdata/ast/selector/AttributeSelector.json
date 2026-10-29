@@ -1,0 +1,582 @@
+{
+    "attrib.0": {
+        "source": "[a=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.1": {
+        "source": "[a=\"b\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.1 with flags": {
+        "source": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "attrib.2": {
+        "source": "[b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "starting with dash": {
+        "source": "[-b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "-b"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "namespaced starting with dash": {
+        "source": "[*|-b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "*|-b"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "attrib.s.0": {
+        "source": "[  a  =  b  ]",
+        "generate": "[a=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.s.1": {
+        "source": "[  a  =  'b'  ]",
+        "generate": "[a=\"b\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.1 with flags and spaces": {
+        "source": "[  a  =  'b'  i  ]",
+        "generate": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "attrib.c.0": {
+        "source": "[/*test*/a/*test*/=/*test*/b/*test*/]",
+        "generate": "[a=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.c.1": {
+        "source": "[/*test*/a/*test*/=/*test*/'b'/*test*/]",
+        "generate": "[a=\"b\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib.c.1 with flags and comments": {
+        "source": "[/*test*/a/*test*/=/*test*/'b'/*test*/i/*test*/]",
+        "generate": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "namespace": {
+        "source": "[xlink|href=\"#test\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "xlink|href"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "#test"
+            },
+            "flags": null
+        }
+    },
+    "namespace unversal": {
+        "source": "[*|href=\"#test\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "*|href"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "#test"
+            },
+            "flags": null
+        }
+    },
+    "no namespace": {
+        "source": "[|href=\"#test\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "|href"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "#test"
+            },
+            "flags": null
+        }
+    },
+    "namespace w/o attrselector": {
+        "source": "[xlink|href]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "xlink|href"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "namespace unversal w/o attrselector": {
+        "source": "[*|href]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "*|href"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "no namespace w/o attrselector": {
+        "source": "[|href]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "|href"
+            },
+            "matcher": null,
+            "value": null,
+            "flags": null
+        }
+    },
+    "attrib with dashmatch": {
+        "source": "[a|=\"b\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "|=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib with namespace and dashmatch": {
+        "source": "[a|b|=\"c\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a|b"
+            },
+            "matcher": "|=",
+            "value": {
+                "type": "String",
+                "value": "c"
+            },
+            "flags": null
+        }
+    },
+    "attrib with dashmatch and spaces": {
+        "source": "[  a  |=  'b'  ]",
+        "generate": "[a|=\"b\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "|=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib with namespace, dashmatch and spaces": {
+        "source": "[  a|b  |=  'c'  ]",
+        "generate": "[a|b|=\"c\"]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a|b"
+            },
+            "matcher": "|=",
+            "value": {
+                "type": "String",
+                "value": "c"
+            },
+            "flags": null
+        }
+    },
+    "attrselector =": {
+        "source": "[a=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrselector ~=": {
+        "source": "[a~=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "~=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrselector ^=": {
+        "source": "[a^=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "^=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrselector $=": {
+        "source": "[a$=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "$=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrselector *=": {
+        "source": "[a*=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "*=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrselector |=": {
+        "source": "[a|=b]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "|=",
+            "value": {
+                "type": "Identifier",
+                "name": "b"
+            },
+            "flags": null
+        }
+    },
+    "attrib with flags": {
+        "source": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "attrib with flags and spaces": {
+        "source": "[  a  =  'b'  i  ]",
+        "generate": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "attrib with flags and comments": {
+        "source": "[/*1*/a/*2*/=/*3*/'b'/*4*/i/*5*/]",
+        "generate": "[a=\"b\"i]",
+        "ast": {
+            "type": "AttributeSelector",
+            "name": {
+                "type": "Identifier",
+                "name": "a"
+            },
+            "matcher": "=",
+            "value": {
+                "type": "String",
+                "value": "b"
+            },
+            "flags": "i"
+        }
+    },
+    "error": [
+        {
+            "source": "[b i] {}",
+            "offset": "   ^",
+            "error": "Attribute selector (=, ~=, ^=, $=, *=, |=) is expected"
+        },
+        {
+            "source": "[a=b c] {}",
+            "offset": "     ^",
+            "error": "Attribute selector modifier (i or s) is expected"
+        },
+        {
+            "source": "[a='b' ii] {}",
+            "offset": "       ^",
+            "error": "Attribute selector modifier (i or s) is expected"
+        },
+        {
+            "source": "[a|] {}",
+            "offset": "   ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[a| = b] {}",
+            "offset": "   ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[a|~=b] {}",
+            "offset": "   ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[*] {}",
+            "offset": "  ^",
+            "error": "Vertical line is expected"
+        },
+        {
+            "source": "[*=b] {}",
+            "offset": "  ^",
+            "error": "Vertical line is expected"
+        },
+        {
+            "source": "[*|=b] {}",
+            "offset": "   ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[ns|*] {}",
+            "offset": "    ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[ns|*=b] {}",
+            "offset": "    ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[a+=foo]{}",
+            "offset": "  ^",
+            "error": "Attribute selector (=, ~=, ^=, $=, *=, |=) is expected"
+        },
+        {
+            "source": "[var(--test)=foo]{}",
+            "offset": "    ^",
+            "error": "Identifier is expected but function found"
+        },
+        {
+            "source": "[--test:=foo]{}",
+            "offset": "       ^",
+            "error": "Attribute selector (=, ~=, ^=, $=, *=, |=) is expected"
+        },
+        {
+            "source": "[:--test=foo]{}",
+            "offset": " ^",
+            "error": "Identifier is expected"
+        },
+        {
+            "source": "[foo*bar]{}",
+            "offset": "     ^",
+            "error": "Equal sign is expected"
+        },
+        {
+            "source": "[ng:cloak]{}",
+            "offset": "   ^",
+            "error": "Attribute selector (=, ~=, ^=, $=, *=, |=) is expected"
+        },
+        {
+            "source": "[ng:cloak=x]{}",
+            "offset": "   ^",
+            "error": "Attribute selector (=, ~=, ^=, $=, *=, |=) is expected"
+        }
+    ]
+}

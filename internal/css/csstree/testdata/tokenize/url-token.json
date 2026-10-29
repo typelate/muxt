@@ -1,0 +1,15 @@
+{
+    "valid": [
+        "url(123)",
+        "url(  123  )",
+        "url(http://example.com)",
+        "url(  http://example.com  )",
+        "url(#hash)",
+        "url()"
+    ],
+    "invalid": [
+        "url('abc')",
+        "url(\"abc\")",
+        "url(ab\\\nc)"
+    ]
+}

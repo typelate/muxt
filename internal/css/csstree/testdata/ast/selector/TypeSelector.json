@@ -1,0 +1,223 @@
+{
+    "base test": {
+        "source": "x",
+        "ast": {
+            "type": "TypeSelector",
+            "name": "x"
+        }
+    },
+    "starting with underscore": {
+        "source": "_0",
+        "ast": {
+            "type": "TypeSelector",
+            "name": "_0"
+        }
+    },
+    "starting with dash": {
+        "source": "-x",
+        "ast": {
+            "type": "TypeSelector",
+            "name": "-x"
+        }
+    },
+    "starting with dash #2": {
+        "source": "-x-test",
+        "ast": {
+            "type": "TypeSelector",
+            "name": "-x-test"
+        }
+    },
+    "escaping": [
+        {
+            "source": "x\\:y",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "x\\:y"
+            }
+        },
+        {
+            "source": "\\1 ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\1 "
+            }
+        },
+        {
+            "source": "\\a ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\a "
+            }
+        },
+        {
+            "source": "\\d ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\d "
+            }
+        },
+        {
+            "source": "\\7f ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\7f "
+            }
+        },
+        {
+            "source": "\\30 ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\30 "
+            }
+        },
+        {
+            "source": "\\35 ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\35 "
+            }
+        },
+        {
+            "source": "\\39 ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\39 "
+            }
+        },
+        {
+            "source": "\\-",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\-"
+            }
+        },
+        {
+            "source": "\\-\\30 ",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\-\\30 "
+            }
+        },
+        {
+            "source": "\\-\\30 -",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\-\\30 -"
+            }
+        },
+        {
+            "source": "\\30 123",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\30 123"
+            }
+        },
+        {
+            "source": "\\--\\+\\a \\d \\30 asd",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\--\\+\\a \\d \\30 asd"
+            }
+        },
+        {
+            "source": "\uFFFDasd",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\uFFFDasd"
+            }
+        },
+        {
+            "source": "asd\\30 \\a -asd",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "asd\\30 \\a -asd"
+            }
+        },
+        {
+            "source": "\\20 123",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\20 123"
+            }
+        },
+        {
+            "source": "\\123456 123",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\123456 123"
+            }
+        },
+        {
+            "source": "\\123456zzz",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "\\123456zzz"
+            }
+        }
+    ],
+    "type with namespace": [
+        {
+            "source": "ns|E",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "ns|E"
+            }
+        },
+        {
+            "source": "*|E",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "*|E"
+            }
+        },
+        {
+            "source": "|E",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "|E"
+            }
+        }
+    ],
+    "universal": {
+        "source": "*",
+        "ast": {
+            "type": "TypeSelector",
+            "name": "*"
+        }
+    },
+    "universal with namespace": [
+        {
+            "source": "ns|*",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "ns|*"
+            }
+        },
+        {
+            "source": "*|*",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "*|*"
+            }
+        },
+        {
+            "source": "|*",
+            "ast": {
+                "type": "TypeSelector",
+                "name": "|*"
+            }
+        }
+    ],
+    "error": [
+        {
+            "source": "a| {}",
+            "offset": "  ^",
+            "error": "Identifier or asterisk is expected"
+        },
+        {
+            "source": "*| {}",
+            "offset": "  ^",
+            "error": "Identifier or asterisk is expected"
+        }
+    ]
+}

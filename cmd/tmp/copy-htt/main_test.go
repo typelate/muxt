@@ -57,3 +57,16 @@ func TestTransform(t *testing.T) {
 		})
 	}
 }
+
+func TestCopied(t *testing.T) {
+	for name, want := range map[string]bool{"testdata": true, "data": true, "tokenizer": false} {
+		if got := copiedDir(name); got != want {
+			t.Errorf("copiedDir(%q) = %v, want %v", name, got, want)
+		}
+	}
+	for name, want := range map[string]bool{"LICENSE": true, "js_event_attrs.json": true, "README.md": false} {
+		if got := copiedFile(name); got != want {
+			t.Errorf("copiedFile(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

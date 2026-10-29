@@ -1,0 +1,65 @@
+{
+    "simple": {
+        "syntax": "( foo )",
+        "valid": [
+            "(foo)",
+            "( foo )"
+        ],
+        "invalid": [
+            "",
+            "()",
+            "(foo foo)",
+            "foo"
+        ]
+    },
+    "nested": {
+        "syntax": "( ( foo ) )",
+        "valid": [
+            "((foo))",
+            "( ( foo ) )"
+        ],
+        "invalid": [
+            "()",
+            "(())",
+            "((foo foo))",
+            "(foo)"
+        ]
+    },
+    "with multiplier": {
+        "syntax": "[ ( foo ) ]+",
+        "valid": [
+            "(foo)",
+            "( foo ) (foo)"
+        ],
+        "invalid": [
+            "",
+            "()",
+            "(foo foo)",
+            "foo"
+        ]
+    },
+    "complex": {
+        "syntax": "<foo()>",
+        "lexer": {
+            "types": {
+                "foo()": "foo( <bar> )",
+                "bar": "<baz>#",
+                "baz": "<qux> [ / <qux> ]?",
+                "qux": "abc | ( <bar> )"
+            }
+        },
+        "valid": [
+            "foo(abc)",
+            "foo(abc, abc)",
+            "foo(abc / abc)",
+            "foo(abc, abc / abc)",
+            "foo(abc, (abc / (abc / abc)))",
+            "foo(((((abc, abc)))))"
+        ],
+        "invalid": [
+            "foo()",
+            "foo(abc / abc / abc)",
+            "foo(((abc abc)))"
+        ]
+    }
+}

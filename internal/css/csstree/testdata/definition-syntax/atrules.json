@@ -1,0 +1,33 @@
+{
+    "keyframes": {
+        "prelude": {
+            "valid": [
+                "foo",
+                "'foo'",
+                "\"foo\""
+            ],
+            "invalid": [
+                "",
+                "123"
+            ]
+        }
+    },
+    "font-face": {
+        "descriptors": {
+            "font-display": {
+                "valid": [
+                    "auto"
+                ],
+                "invalid": [
+                    "",
+                    "xxx"
+                ]
+            },
+            "src": {
+                "valid": [
+                    "local(Example Font), url('examplefont.woff') format(\"woff\"), url('examplefont.woff') format(\"opentype\")"
+                ]
+            }
+        }
+    }
+}

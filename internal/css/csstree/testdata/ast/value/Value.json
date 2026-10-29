@@ -1,0 +1,203 @@
+{
+    "value.1": {
+        "source": "10",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "10"
+                }
+            ]
+        }
+    },
+    "value.2": {
+        "source": "test(x)",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Function",
+                    "name": "test",
+                    "children": [
+                        {
+                            "type": "Identifier",
+                            "name": "x"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "value.4": {
+        "source": "-100%",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Percentage",
+                    "value": "-100"
+                }
+            ]
+        }
+    },
+    "value.rgb.0": {
+        "source": "rgb(10, 10, 10)",
+        "generate": "rgb(10,10,10)",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Function",
+                    "name": "rgb",
+                    "children": [
+                        {
+                            "type": "Number",
+                            "value": "10"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Number",
+                            "value": "10"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Number",
+                            "value": "10"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "value.rgb.1": {
+        "source": "rgb(255,0,0)",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Function",
+                    "name": "rgb",
+                    "children": [
+                        {
+                            "type": "Number",
+                            "value": "255"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Number",
+                            "value": "0"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Number",
+                            "value": "0"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "value.rgb.2": {
+        "source": "rgb(10.0,00.00,10%)",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Function",
+                    "name": "rgb",
+                    "children": [
+                        {
+                            "type": "Number",
+                            "value": "10.0"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Number",
+                            "value": "00.00"
+                        },
+                        {
+                            "type": "Operator",
+                            "value": ","
+                        },
+                        {
+                            "type": "Percentage",
+                            "value": "10"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "should parse number with following \\0 or \\9 hack as Dimension": [
+        {
+            "source": "1\\0",
+            "ast": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "Dimension",
+                        "value": "1",
+                        "unit": "\\0"
+                    }
+                ]
+            }
+        },
+        {
+            "source": "1\\9",
+            "ast": {
+                "type": "Value",
+                "children": [
+                    {
+                        "type": "Dimension",
+                        "value": "1",
+                        "unit": "\\9"
+                    }
+                ]
+            }
+        }
+    ],
+    "should parse a custom property value when parseCustomProperty is true": {
+        "options": {
+            "property": "--var",
+            "parseCustomProperty": true
+        },
+        "source": "1 foo",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Number",
+                    "value": "1"
+                },
+                {
+                    "type": "Identifier",
+                    "name": "foo"
+                }
+            ]
+        }
+    },
+    "error": [
+        {
+            "comment": "closing parenthesis is not allowed",
+            "source": "foo)",
+            "offset": "   ^",
+            "error": "Unexpected input"
+        }
+    ]
+}

@@ -1,0 +1,239 @@
+{
+    "a range": {
+        "syntax": "<integer [1,10]>",
+        "valid": [
+            "1",
+            "5",
+            "10"
+        ],
+        "invalid": [
+            "",
+            "0",
+            "5.5",
+            "-0",
+            "11"
+        ]
+    },
+    "a range no min": {
+        "syntax": "<integer [-∞,10]>",
+        "valid": [
+            "-100",
+            "-0",
+            "0",
+            "1",
+            "5",
+            "10"
+        ],
+        "invalid": [
+            "",
+            "5.5",
+            "11"
+        ]
+    },
+    "a range no max": {
+        "syntax": "<integer [-5,∞]>",
+        "valid": [
+            "-5",
+            "0",
+            "5",
+            "1000"
+        ],
+        "invalid": [
+            "",
+            "-6",
+            "5.5"
+        ]
+    },
+    "a range no min and max": {
+        "syntax": "<integer [-∞,∞]>",
+        "valid": [
+            "-5",
+            "0",
+            "5"
+        ],
+        "invalid": [
+            "",
+            "5.5"
+        ]
+    },
+    "a range with both negative": {
+        "syntax": "<integer [-9,-5]>",
+        "valid": [
+            "-5",
+            "-7",
+            "-9"
+        ],
+        "invalid": [
+            "",
+            "0",
+            "1",
+            "-10"
+        ]
+    },
+    "a range with units": {
+        "comment": "the Go port validates ranges with units (upstream only parses and generates them)",
+        "syntax": "<angle [-90deg,90deg]>",
+        "valid": [
+            "-90deg",
+            "-45deg",
+            "0deg",
+            "45deg",
+            "90deg",
+            "-0.25turn",
+            "100grad"
+        ],
+        "invalid": [
+            "-180deg",
+            "180deg",
+            "0.26turn",
+            "-101grad"
+        ]
+    },
+    "should be independant": {
+        "syntax": "<integer [2,8]> <integer> <integer [-9,0]>",
+        "valid": [
+            "2 100 -9",
+            "8 -42 0"
+        ],
+        "invalid": [
+            "1 100 -5",
+            "2 100 5"
+        ]
+    },
+    "<number [0,∞]>": {
+        "valid": [
+            "42"
+        ],
+        "invalid": [
+            "-42"
+        ]
+    },
+    "<integer [0,∞]>": {
+        "valid": [
+            "42"
+        ],
+        "invalid": [
+            "-42"
+        ]
+    },
+    "<percentage [0,∞]>": {
+        "valid": [
+            "42%"
+        ],
+        "invalid": [
+            "-42%"
+        ]
+    },
+    "<dimension [0,∞]>": {
+        "valid": [
+            "42foo"
+        ],
+        "invalid": [
+            "-42foo"
+        ]
+    },
+    "<angle [0,∞]>": {
+        "valid": [
+            "42deg"
+        ],
+        "invalid": [
+            "-42deg"
+        ]
+    },
+    "<angle-percentage [0,∞]>": {
+        "valid": [
+            "42deg",
+            "42%"
+        ],
+        "invalid": [
+            "-42deg",
+            "-42%"
+        ]
+    },
+    "<decibel [0,∞]>": {
+        "valid": [
+            "42db"
+        ],
+        "invalid": [
+            "-42db"
+        ]
+    },
+    "<frequency [0,∞]>": {
+        "valid": [
+            "42hz"
+        ],
+        "invalid": [
+            "-42hz"
+        ]
+    },
+    "<frequency-percentage [0,∞]>": {
+        "valid": [
+            "42hz",
+            "42%"
+        ],
+        "invalid": [
+            "-42hz",
+            "-42%"
+        ]
+    },
+    "<flex [0,∞]>": {
+        "valid": [
+            "42fr"
+        ],
+        "invalid": [
+            "-42fr"
+        ]
+    },
+    "<length [0,∞]>": {
+        "valid": [
+            "42px"
+        ],
+        "invalid": [
+            "-42px"
+        ]
+    },
+    "<length-percentage [0,∞]>": {
+        "valid": [
+            "42px",
+            "42%"
+        ],
+        "invalid": [
+            "-42px",
+            "-42%"
+        ]
+    },
+    "<resolution [0,∞]>": {
+        "valid": [
+            "42dppx"
+        ],
+        "invalid": [
+            "-42dppx"
+        ]
+    },
+    "<semitones [0,∞]>": {
+        "valid": [
+            "42st"
+        ],
+        "invalid": [
+            "-42st"
+        ]
+    },
+    "<time [0,∞]>": {
+        "valid": [
+            "42ms"
+        ],
+        "invalid": [
+            "-42ms"
+        ]
+    },
+    "<time-percentage [0,∞]>": {
+        "valid": [
+            "42ms",
+            "42%"
+        ],
+        "invalid": [
+            "-42ms",
+            "-42%"
+        ]
+    }
+}

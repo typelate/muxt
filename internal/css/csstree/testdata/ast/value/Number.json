@@ -1,0 +1,185 @@
+{
+    "number.0": {
+        "source": "10",
+        "ast": {
+            "type": "Number",
+            "value": "10"
+        }
+    },
+    "number.1": {
+        "source": ".10",
+        "ast": {
+            "type": "Number",
+            "value": ".10"
+        }
+    },
+    "number.2": {
+        "source": "12.34",
+        "ast": {
+            "type": "Number",
+            "value": "12.34"
+        }
+    },
+    "number.3": {
+        "source": "0.1",
+        "ast": {
+            "type": "Number",
+            "value": "0.1"
+        }
+    },
+    "number.4": {
+        "source": "1.0",
+        "ast": {
+            "type": "Number",
+            "value": "1.0"
+        }
+    },
+    "number.5": {
+        "source": "0.0",
+        "ast": {
+            "type": "Number",
+            "value": "0.0"
+        }
+    },
+    "number.6": {
+        "source": ".0",
+        "ast": {
+            "type": "Number",
+            "value": ".0"
+        }
+    },
+    "number.7": {
+        "source": "1.200000",
+        "ast": {
+            "type": "Number",
+            "value": "1.200000"
+        }
+    },
+    "with exponent #1": {
+        "source": "1.2e2",
+        "ast": {
+            "type": "Number",
+            "value": "1.2e2"
+        }
+    },
+    "with exponent #2": {
+        "source": "1e2",
+        "ast": {
+            "type": "Number",
+            "value": "1e2"
+        }
+    },
+    "with exponent #3": {
+        "source": ".2e2",
+        "ast": {
+            "type": "Number",
+            "value": ".2e2"
+        }
+    },
+    "with exponent #4": {
+        "source": "1.2E2",
+        "ast": {
+            "type": "Number",
+            "value": "1.2E2"
+        }
+    },
+    "with exponent #5": {
+        "source": "1.2e+2",
+        "ast": {
+            "type": "Number",
+            "value": "1.2e+2"
+        }
+    },
+    "with exponent #6": {
+        "source": "1.2e-2",
+        "ast": {
+            "type": "Number",
+            "value": "1.2e-2"
+        }
+    },
+    "with sign #1": {
+        "source": "-1",
+        "ast": {
+            "type": "Number",
+            "value": "-1"
+        }
+    },
+    "with sign #2": {
+        "source": "-1.2",
+        "ast": {
+            "type": "Number",
+            "value": "-1.2"
+        }
+    },
+    "with sign #3": {
+        "source": "-.2",
+        "ast": {
+            "type": "Number",
+            "value": "-.2"
+        }
+    },
+    "with sign #4": {
+        "source": "+.2",
+        "ast": {
+            "type": "Number",
+            "value": "+.2"
+        }
+    },
+    "with sign #5": {
+        "source": "-1.2e3",
+        "ast": {
+            "type": "Number",
+            "value": "-1.2e3"
+        }
+    },
+    "error #1": {
+        "source": "20.",
+        "offset": "  ^",
+        "error": "Unexpected input"
+    },
+    "error #2": {
+        "source": "1.2.",
+        "offset": "   ^",
+        "error": "Unexpected input"
+    },
+    "error #3": {
+        "source": ".",
+        "offset": "^",
+        "error": "Unexpected input"
+    },
+    "error #4": {
+        "source": "-.",
+        "offset": " ^",
+        "error": "Unexpected input"
+    },
+    "error #5": {
+        "source": "+.",
+        "offset": " ^",
+        "error": "Unexpected input"
+    },
+    "not an error #1": {
+        "source": "1e",
+        "ast": {
+            "type": "Dimension",
+            "value": "1",
+            "unit": "e"
+        }
+    },
+    "not an error #2": {
+        "source": "1e+",
+        "ast": {
+            "type": "Value",
+            "children": [
+                {
+                    "type": "Dimension",
+                    "value": "1",
+                    "unit": "e"
+                },
+                {
+                    "type": "Operator",
+                    "value": "+"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,110 @@
+{
+    "pseudoc.0": {
+        "source": ":test",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "test",
+            "children": null
+        }
+    },
+    "pseudoc.1": {
+        "source": ":test-test",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "test-test",
+            "children": null
+        }
+    },
+    "unknown function pseudo class": {
+        "source": ":unknown(1 + 2)",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "unknown",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "1 + 2"
+                }
+            ]
+        }
+    },
+    "unknown function pseudo class with nested blocks": {
+        "source": ":unknown([{}()[{[()]}]])",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "unknown",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "[{}()[{[()]}]]"
+                }
+            ]
+        }
+    },
+    "unknown function pseudo class with nested blocks (unbalanced parenthesis)": {
+        "source": ":unknown([{}()[{[)]}]])",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "unknown",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": "[{}()[{[)]}]]"
+                }
+            ]
+        }
+    },
+    "unknown function pseudo class with spaces and comments": {
+        "source": ":unknown( 1 + 2 /* comment */ + 3 )",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "unknown",
+            "children": [
+                {
+                    "type": "Raw",
+                    "value": " 1 + 2 /* comment */ + 3 "
+                }
+            ]
+        }
+    },
+    "pseudo element :before": {
+        "source": ":before",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "before",
+            "children": null
+        }
+    },
+    "pseudo element :before case insesitive": {
+        "source": ":bEfOrE",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "bEfOrE",
+            "children": null
+        }
+    },
+    "pseudo element :after": {
+        "source": ":after",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "after",
+            "children": null
+        }
+    },
+    "pseudo element :first-letter": {
+        "source": ":first-letter",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "first-letter",
+            "children": null
+        }
+    },
+    "pseudo element :first-line": {
+        "source": ":first-line",
+        "ast": {
+            "type": "PseudoClassSelector",
+            "name": "first-line",
+            "children": null
+        }
+    }
+}
