@@ -1,0 +1,123 @@
+{{define "assets_report" -}}
+  <div id="assets-report">
+      {{if .Result.AssetsReport.Assets}}
+        <figure>
+          <table class="striped-table">
+            <thead>
+            <tr>
+              <th>Asset Name</th>
+              <th class="date-column">Inception</th>
+              <th class="date-column">Last Time</th>
+              <th>Type</th>
+            </tr>
+            </thead>
+            <tbody>
+            {{- range $asset := .Result.AssetsReport.Assets -}}
+              <tr data-asset-index="{{$asset.Index}}">
+                <td>{{template "component" $asset.Specification}}</td>
+                <td>{{if not $asset.FirstTime.IsZero}}{{$asset.FirstTime | dateOnly }}{{end}}</td>
+                <td>{{if not $asset.LastTime.IsZero}}{{$asset.LastTime | dateOnly }}{{end}}</td>
+                <td>{{$asset.Type}}</td>
+              </tr>
+            {{end -}}
+            </tbody>
+          </table>
+        </figure>
+        {{if gt (len .Result.AssetsReport.Assets) 1}}
+          <figure id="correlation-matrix">
+            <table class="striped-table">
+              <caption>Correlation Matrix</caption>
+              <thead>
+              <tr>
+                <th class="asset-name-column">Asset Name</th>
+                <th>#</th>
+                {{range $j, $asset := .Result.AssetsReport.Assets}}
+                  <th title="{{$asset.Specification.Label}}">{{nth $j}}</th>
+                {{end}}
+              </tr>
+              </thead>
+              <tbody>
+              {{range $i, $asset := .Result.AssetsReport.Assets}}
+                <tr>
+                  <td>{{template "component" $asset.Specification}}</td>
+                  <td>{{nth $i}}</td>
+                    {{range $j, $asset := $.Result.AssetsReport.Assets -}}
+                      <td {{if eq $i $j}}style="font-weight: bold;"{{end}}>{{index $.Result.AssetsReport.CorrelationMatrix $i $j | printf "%.2f" }}</td>
+                    {{end}}
+                </tr>
+              {{end}}
+              </tbody>
+            </table>
+          </figure>
+        {{end}}
+
+        <figure>
+          <table class="striped-table">
+            <caption>Return Metrics</caption>
+            <thead>
+            <tr>
+              <th class="asset-name-column">Asset Name</th>
+              <th>1 Day</th>
+              <th>1 Week</th>
+              <th>1 Month</th>
+              <th>1 Quarter</th>
+              <th>1 Year<br>{{template "annualized-note" ""}}</th>
+              <th>5 Years<br>{{template "annualized-note" ""}}</th>
+              <th>Since<br>Inception<br>{{template "annualized-note" ""}}</th>
+              <th>Inception</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {{range $asset := .Result.AssetsReport.Assets}}
+              <tr>
+                <td>{{template "component" $asset.Specification}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "1 Day"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "1 Week"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "1 Month"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "1 Quarter"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "1 Year"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "5 Years"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodReturnValue "Since Inception"}}</td>
+                <td class="date-cell">{{$asset.Metrics.Inception | dateOnly }}</td>
+              </tr>
+            {{end}}
+            </tbody>
+          </table>
+        </figure>
+
+        <figure>
+          <table class="striped-table">
+            <caption>Risk Metrics {{template "annualized-note" ""}}</caption>
+            <thead>
+            <tr>
+              <th class="asset-name-column">Asset Name</th>
+              <th>1 Week</th>
+              <th>1 Month</th>
+              <th>1 Quarter</th>
+              <th>1 Year<br></th>
+              <th>5 Years<br></th>
+              <th>Since<br>Inception</th>
+              <th>Inception</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {{range $asset := .Result.AssetsReport.Assets}}
+              <tr>
+                <td>{{template "component" $asset.Specification}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "1 Week"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "1 Month"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "1 Quarter"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "1 Year"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "5 Years"}}</td>
+                <td class="align-right">{{$asset.Metrics.PeriodRiskValue "Since Inception"}}</td>
+                <td class="date-cell">{{$asset.Metrics.Inception | dateOnly }}</td>
+              </tr>
+            {{end}}
+            </tbody>
+          </table>
+        </figure>
+      {{end}}
+  </div>
+{{- end}}

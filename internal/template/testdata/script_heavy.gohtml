@@ -1,0 +1,62 @@
+{{define "dashboard" -}}
+<div id="dashboard">
+    <script>
+        // Initialize dashboard with server data
+        var data = {{.Data}};
+        var endpoints = [
+            {{range .Endpoints}}"{{.URL}}",
+            {{end}}
+        ];
+
+        function render(items) {
+            for (var i = 0; i < items.length; i++) {
+                var el = document.createElement("div");
+                el.innerHTML = "<span>" + items[i].name + "</span>";
+                document.getElementById("list").appendChild(el);
+            }
+        }
+
+        if (data.items && data.items.length > 0) {
+            render(data.items);
+        }
+    </script>
+
+    <div id="list"></div>
+
+    {{if .HasChart}}
+    <script>
+        // Chart rendering - uses < and > operators heavily
+        function drawChart(canvas, points) {
+            var ctx = canvas.getContext("2d");
+            var max = -Infinity, min = Infinity;
+            for (var i = 0; i < points.length; i++) {
+                if (points[i] > max) max = points[i];
+                if (points[i] < min) min = points[i];
+            }
+            var range = max - min;
+            if (range <= 0) range = 1;
+            for (var i = 0; i < points.length; i++) {
+                var x = (i / points.length) * canvas.width;
+                var y = ((points[i] - min) / range) * canvas.height;
+                ctx.fillRect(x, canvas.height - y, 2, 2);
+            }
+        }
+        drawChart(
+            document.getElementById("chart"),
+            {{.ChartData}}
+        );
+    </script>
+    <canvas id="chart" width="600" height="400"></canvas>
+    {{end}}
+
+    <style>
+        #dashboard { padding: 20px; }
+        #list > div { border-bottom: 1px solid #ccc; }
+        #list > div:last-child { border-bottom: none; }
+        {{if .DarkMode}}
+        #dashboard { background: #1a1a1a; color: #eee; }
+        #list > div { border-color: #444; }
+        {{end}}
+    </style>
+</div>
+{{- end}}
