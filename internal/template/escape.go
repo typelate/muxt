@@ -438,7 +438,7 @@ var jsEventAttrs = loadJSEventAttrs()
 func loadJSEventAttrs() map[string]struct{} {
 	var names []string
 	if err := json.Unmarshal(jsEventAttrsJSON, &names); err != nil {
-		panic("htt: js_event_attrs.json is malformed: " + err.Error())
+		panic("template: js_event_attrs.json is malformed: " + err.Error())
 	}
 	out := make(map[string]struct{}, len(names))
 	for _, n := range names {

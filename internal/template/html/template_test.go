@@ -365,7 +365,7 @@ func TestMisnestedFormattingDiverges(t *testing.T) {
 	const wantShim = `<b><i>bold</i></b> tail</i>`
 
 	if want := executeStdlib(t, src, nil); want == wantShim {
-		t.Fatalf("stdlib output for %q = %q, expected it to differ from htt's normalized output (fixture is stale)", src, want)
+		t.Fatalf("stdlib output for %q = %q, expected it to differ from the normalized output (fixture is stale)", src, want)
 	}
 	if got := executeShim(t, src, nil); got != wantShim {
 		t.Errorf("shim output for %q = %q, want %q", src, got, wantShim)

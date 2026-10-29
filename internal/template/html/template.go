@@ -1,5 +1,8 @@
 // Package html provides muxt with an html/template-compatible, context-aware
 // escaping template engine built on the position-tracking template parser.
+//
+// Derived in part from the Go standard library; see NOTICE.txt at the
+// repository root.
 package html
 
 import (

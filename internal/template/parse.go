@@ -1,5 +1,8 @@
 // Package template provides muxt with a text/template parser that records source
 // positions and parses HTML structure, plus the execution engine for its trees.
+//
+// Derived in part from the Go standard library; see NOTICE.txt at the
+// repository root.
 package template
 
 import (

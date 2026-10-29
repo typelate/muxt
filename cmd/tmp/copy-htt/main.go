@@ -1,5 +1,9 @@
 // Command copy-htt copies a package directory from the htt project into muxt,
 // rewriting import paths and the root package name. Throwaway; deleted later.
+//
+// Each invocation copies exactly one directory (its .go files, testdata, and
+// js_event_attrs.json), not subdirectories. Packages such as check/internal/*
+// need their own invocations.
 package main
 
 import (
@@ -53,12 +57,14 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(filepath.Join(*src, *pkg), *dst); err != nil {
+	if err := run(*src, *pkg, *dst); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(srcDir, dstDir string) error {
+func run(src, pkg, dstDir string) error {
+	srcDir := filepath.Join(src, pkg)
+	isFork := filepath.Clean(pkg) == "template"
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		return err
@@ -77,7 +83,7 @@ func run(srcDir, dstDir string) error {
 				}
 			}
 		case strings.HasSuffix(e.Name(), ".go"):
-			if err := rewriteGo(from, to); err != nil {
+			if err := rewriteGo(from, to, isFork); err != nil {
 				return fmt.Errorf("%s: %w", from, err)
 			}
 		case e.Name() == "js_event_attrs.json":
@@ -113,39 +119,63 @@ func copyTree(from, to string) error {
 	})
 }
 
-func rewriteGo(from, to string) error {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, from, nil, parser.ParseComments)
+func rewriteGo(from, to string, isFork bool) error {
+	src, err := os.ReadFile(from)
 	if err != nil {
 		return err
 	}
-	rootLocal := ""
-	htmlLocal := ""
-	for _, imp := range f.Imports {
-		if imp.Path.Value == strconv.Quote(httRoot) {
-			rootLocal = "htt"
-		}
+	out, err := transform(from, src, isFork)
+	if err != nil {
+		return err
 	}
+	return os.WriteFile(to, out, 0o644)
+}
+
+// renameQualifier renames unresolved selector qualifiers from old to new.
+func renameQualifier(f *ast.File, old, new string) {
+	ast.Inspect(f, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if id, ok := sel.X.(*ast.Ident); ok && id.Name == old && id.Obj == nil {
+				id.Name = new
+			}
+		}
+		return true
+	})
+}
+
+// transform rewrites one htt source file. isFork is true for files from
+// htt/template, whose package becomes html.
+func transform(name string, src []byte, isFork bool) ([]byte, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, name, src, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	rootLocal, forkLocal := "", ""
 	for _, imp := range f.Imports {
 		p, err := strconv.Unquote(imp.Path.Value)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		np, ok := rewriteImport(p)
 		if !ok {
 			continue
 		}
-		if p == httRoot {
-			if imp.Name != nil {
-				rootLocal = imp.Name.Name
-			} else {
-				rootLocal = "htt"
-				imp.Name = nil
+		alias := ""
+		if imp.Name != nil {
+			alias = imp.Name.Name
+			if alias == "_" || alias == "." {
+				return nil, fmt.Errorf("%s: unsupported %q import of %s", name, alias, p)
 			}
 		}
-		if p == httRoot+"/template" && imp.Name == nil {
-			// the fork's package is now named html (the root is named template).
-			htmlLocal = "template"
+		switch p {
+		case httRoot:
+			rootLocal = cmpOr(alias, "htt")
+			imp.Name = nil // the new package name is template
+		case httRoot + "/template":
+			if alias == "" {
+				forkLocal = "template"
+			}
 		}
 		imp.Path.Value = strconv.Quote(np)
 	}
@@ -155,37 +185,26 @@ func rewriteGo(from, to string) error {
 	case "htt_test":
 		f.Name.Name = "template_test"
 	}
-	if strings.HasSuffix(filepath.Dir(from), "/htt/template") {
-		// htt/template becomes package html.
+	if isFork {
 		f.Name.Name = strings.Replace(f.Name.Name, "template", "html", 1)
 	}
-	if htmlLocal != "" {
-		ast.Inspect(f, func(n ast.Node) bool {
-			sel, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if id, ok := sel.X.(*ast.Ident); ok && id.Name == htmlLocal && id.Obj == nil {
-				id.Name = "html"
-			}
-			return true
-		})
+	// Rename the fork's qualifier first: the root's new qualifier is template.
+	if forkLocal != "" {
+		renameQualifier(f, forkLocal, "html")
 	}
-	if rootLocal == "htt" {
-		ast.Inspect(f, func(n ast.Node) bool {
-			sel, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if id, ok := sel.X.(*ast.Ident); ok && id.Name == "htt" && id.Obj == nil {
-				id.Name = "template"
-			}
-			return true
-		})
+	if rootLocal != "" {
+		renameQualifier(f, rootLocal, "template")
 	}
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, f); err != nil {
-		return err
+		return nil, err
 	}
-	return os.WriteFile(to, buf.Bytes(), 0o644)
+	return buf.Bytes(), nil
+}
+
+func cmpOr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
