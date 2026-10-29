@@ -1,0 +1,38 @@
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	templateSource embed.FS
+
+	templates = template.Must(template.ParseFS(templateSource, "*"))
+
+	// allHTML used by templatesHTML and templatesGoHTML to test pattern filtering
+	// this comment ensures the comment parser skips lines not preceded by go:embed
+	//go:embed *html
+	allHTML embed.FS
+
+	templatesHTML   = template.Must(template.ParseFS(allHTML, "*.*html"))
+	templatesGoHTML = template.Must(template.ParseFS(allHTML, "*.gohtml"))
+
+	templateEmbedVariableNotFound = template.Must(template.ParseFS(hiding, "*"))
+)
+-- index.gohtml --
+
+{{define "home"}}{{end}}
+
+-- form.gohtml --
+
+{{define "create"}}{{end}}
+
+{{define "update"}}{{end}}
+
+-- script.html --
+{{define "console_log"}}
+<script>console.log({{.Message}})</script>
+{{end}}

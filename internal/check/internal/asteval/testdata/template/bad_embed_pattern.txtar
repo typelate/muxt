@@ -1,0 +1,16 @@
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed "[fail"
+	assetsFS embed.FS
+
+	templates = template.Must(template.ParseFS(assetsFS, "*"))
+)
+-- greeting.gohtml --
+Hello, friend!

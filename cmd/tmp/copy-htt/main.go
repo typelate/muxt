@@ -159,6 +159,7 @@ func transform(name string, src []byte, isFork bool) ([]byte, error) {
 		return nil, err
 	}
 	rootLocal, forkLocal := "", ""
+	keepRootName := importsTemplateName(f)
 	for _, imp := range f.Imports {
 		p, err := strconv.Unquote(imp.Path.Value)
 		if err != nil {
@@ -178,7 +179,14 @@ func transform(name string, src []byte, isFork bool) ([]byte, error) {
 		switch p {
 		case httRoot:
 			rootLocal = cmpOr(alias, "htt")
-			imp.Name = nil // the new package name is template
+			if keepRootName {
+				// Another import already claims "template"; keep the
+				// root's local name so uses need no renaming.
+				imp.Name = ast.NewIdent(rootLocal)
+				rootLocal = ""
+			} else {
+				imp.Name = nil // the new package name is template
+			}
 		case httRoot + "/template":
 			if alias == "" {
 				forkLocal = "template"
@@ -207,6 +215,21 @@ func transform(name string, src []byte, isFork bool) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// importsTemplateName reports whether a non-htt import is bound to the local
+// name "template" (for example text/template).
+func importsTemplateName(f *ast.File) bool {
+	for _, imp := range f.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil || p == httRoot || strings.HasPrefix(p, httRoot+"/") {
+			continue
+		}
+		if imp.Name != nil && imp.Name.Name == "template" || imp.Name == nil && (p == "text/template" || p == "html/template") {
+			return true
+		}
+	}
+	return false
 }
 
 func cmpOr(a, b string) string {

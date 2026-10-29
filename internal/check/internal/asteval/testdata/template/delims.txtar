@@ -1,0 +1,27 @@
+-- templates.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	files embed.FS
+)
+
+var (
+	templates = template.Must(
+		template.Must(
+			template.Must(
+				template.New("").ParseFS(files, "default.gohtml")).
+				Delims("(((", ")))").ParseFS(files, "triple_parens.gohtml")).
+			Delims("[[", "]]").ParseFS(files, "double_square.gohtml"))
+)
+-- default.gohtml --
+{{- define "default" -}}{{- end -}}
+-- triple_parens.gohtml --
+(((- define "parens" -)))(((- end -)))
+-- double_square.gohtml --
+[[- define "square" -]][[end]]

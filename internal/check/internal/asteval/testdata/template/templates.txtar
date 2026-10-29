@@ -1,0 +1,84 @@
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	templateSource embed.FS
+
+	templateNew = template.New("some-name")
+
+	templateParseFSNew = template.Must(template.ParseFS(templateSource, "*")).New("greetings")
+
+	templateNewParseFS = template.Must(template.New("greetings").ParseFS(templateSource, "*"))
+
+	templateNewMissingArg = template.New()
+
+	templateWrongX = UNKNOWN.New()
+
+	templateWrongArgCount = template.New("one", "two")
+
+	templateNewOnIndexed = ts[0].New("one", "two")
+
+	templateNewArg42 = template.New(42)
+
+	templateNewArgIdent = template.New(TemplateName)
+
+	templateNewErrUpstream = template.New(fail).New("n")
+
+	templatesIdent = someIdent
+
+	unsupportedMethod = template.Unknown()
+
+	unexpectedFunExpression = x[3]()
+
+	templateMustNonIdentReceiver = f().Must(template.ParseFS(templateSource, "*"))
+
+	templateMustCalledWithTwoArgs = template.Must(nil, nil)
+
+	templateMustCalledWithNoArg s = template.Must()
+
+	templateMustWrongPackageIdent = wrong.Must()
+
+	templateParseFSWrongPackageIdent = wrong.ParseFS(templateSource, "*")
+
+	templateParseFSReceiverErr = template.New().ParseFS(templateSource, "*")
+
+	templateParseFSUnexpectedReceiver = x[0].ParseFS(templateSource, "*")
+
+	templateParseFSNoArgs = template.ParseFS()
+
+	templateParseFSFirstArgNonIdent = template.ParseFS(os.DirFS("."), "*")
+
+	templateParseFSNonStringLiteralGlob = template.ParseFS(templateSource, "w", 42, "x")
+
+	templateParseFSWithBadGlob = template.ParseFS(templateSource, "[fail")
+
+	templateNewHasWrongNumberOfArgs = template.Must(template.New("x").ParseFS(templateSource, "*")).New()
+
+	templateNewHasWrongTypeOfArgs = template.New("x").New(9000)
+
+	templateNewHasTooManyArgs = template.New("x").New("x", "y")
+
+	templateDelimsGetsNoArgs = template.New("x").Delims()
+
+	templateDelimsGetsTooMany = template.New("x").Delims("x", "y", "")
+
+	templateDelimsWrongExpressionArg = template.New("x").Delims("x", y)
+
+	templateParseFSMethodFails = template.New("x").ParseFS(templateSource, fail)
+
+	templateOptionsRequiresStringLiterals = template.New("x").Option(fail)
+
+	templateUnknownMethod = template.New("x").Unknown()
+
+	templateOptionCall = template.New("x").Option("missingkey=default").ParseFS(templateSource, "*")
+
+	templateOptionCallUnknownArg = template.New("x").Option("unknown").ParseFS(templateSource, "*")
+)
+-- index.gohtml --
+Hello, friend!

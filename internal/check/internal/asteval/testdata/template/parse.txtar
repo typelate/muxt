@@ -1,0 +1,15 @@
+-- parse.go --
+package main
+
+import "html/template"
+
+var templates = template.New("GET /").Parse(`<h1>Hello, world!</h1>`)
+
+var multiple = template.New("").Parse(`
+{{define "GET /"}}<h1>Hello, world!</h1>{{end}}
+{{define "GET /{name}"}}<h1>Hello, {{.PathValue "name"}}!</h1>{{end}}
+`)
+
+var noArg = template.New("").Parse()
+
+var wrongArg =  template.New("").Parse(500)

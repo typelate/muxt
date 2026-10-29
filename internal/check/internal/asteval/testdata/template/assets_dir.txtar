@@ -1,0 +1,23 @@
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed assets
+	assetsFS embed.FS
+
+	templates = template.Must(template.ParseFS(assetsFS, "assets/*"))
+)
+-- assets/index.gohtml --
+
+{{define "home"}}{{end}}
+
+-- assets/form.gohtml --
+
+{{define "create"}}{{end}}
+
+{{define "update"}}{{end}}

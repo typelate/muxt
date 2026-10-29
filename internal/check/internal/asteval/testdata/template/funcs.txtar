@@ -1,0 +1,41 @@
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+var (
+	//go:embed *.gohtml
+	src embed.FS
+
+	templates = template.New("x").Funcs(template.FuncMap{
+		"greet": func() string { return "Hello" },
+	}).ParseFS(src, "greet.gohtml")
+
+	templatesFuncNotDefined = template.New("x").Funcs(template.FuncMap{
+		"greet": func() string { return "Hello" },
+	}).ParseFS(src, "missing_func.gohtml")
+
+	templatesWrongArg = template.New("x").Funcs(wrong)
+
+	templatesTwoArgs = template.New("x").Funcs(wrong, fail)
+
+	templatesNoArgs = template.New("x").Funcs()
+
+	templatesWrongTypePackageName = template.New("x").Funcs(wrong.FuncMap{})
+
+  templatesWrongTypeName = template.New("x").Funcs(template.Wrong{})
+
+  templatesWrongTypeExpression = template.New("x").Funcs(wrong{})
+
+  templatesWrongTypeElem = template.New("x").Funcs(template.FuncMap{wrong})
+
+  templatesWrongElemKey = template.New("x").Funcs(template.FuncMap{wrong: func() string { return "" }})
+)
+-- greet.gohtml --
+{{greet}}, world!
+
+-- missing_func.gohtml --
+{{greet}}, {{enemy}}!

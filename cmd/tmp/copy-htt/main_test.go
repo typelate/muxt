@@ -27,6 +27,11 @@ func TestTransform(t *testing.T) {
 			want:   []string{"package html", "template.Tree", "html.Template", `internal/template/html"`},
 		},
 		{
+			name: "root import beside text/template keeps its name",
+			src:  "package x\nimport (\n\t\"text/template\"\n\t\"github.com/typelate/htt\"\n)\nvar _ htt.Tree\nvar _ template.Template\n",
+			want: []string{`htt "github.com/typelate/muxt/internal/template"`, "htt.Tree", "template.Template"},
+		},
+		{
 			name:    "root package name",
 			src:     "package htt_test\n",
 			want:    []string{"package template_test"},
