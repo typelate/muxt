@@ -167,6 +167,40 @@ func (t *Templates) Template() (*htttemplate.Template, bool) {
 	return out, true
 }
 
+// HTML returns the template set as an html/template-shaped value, as
+// Template does; ok is false when the variable holds a text/template
+// value, so a caller can tell which package built it.
+func (t *Templates) HTML() (*htttemplate.Template, bool) {
+	if t.templatePackagePath() == "text/template" {
+		return nil, false
+	}
+	return t.Template()
+}
+
+// Text returns the evaluated template set when the variable holds a
+// text/template value; ok is false when it holds an html/template value.
+// The fork parses both kinds into the same set type, so this is the set
+// Set returns, gated on the variable's type.
+func (t *Templates) Text() (*template.Template[*types.Signature], bool) {
+	if t.templates == nil || t.templatePackagePath() != "text/template" {
+		return nil, false
+	}
+	return t.templates, true
+}
+
+// templatePackagePath is the import path of the package declaring the
+// variable's template type: "html/template" or "text/template".
+func (t *Templates) templatePackagePath() string {
+	if t.variable == nil {
+		return ""
+	}
+	named, ok := dereference(t.variable.Type()).(*types.Named)
+	if !ok || named.Obj().Pkg() == nil {
+		return ""
+	}
+	return named.Obj().Pkg().Path()
+}
+
 // ExecuteTemplateCalls reports, in file order, each ExecuteTemplate call
 // in the loaded package whose receiver resolves to this variable's object
 // — resolution is by object, so a shadowed or renamed identifier does not
