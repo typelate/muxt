@@ -436,9 +436,10 @@ type listOptions struct {
 	outer int
 	// root marks the tree root: nothing closes it.
 	root bool
-	// trimEdges reports that the formatter writes trim markers next to
-	// both boundaries, so the boundary runs never render.
-	trimEdges bool
+	// trimStart and trimEnd report that the formatter writes a trim
+	// marker next to the start or the end boundary, so that boundary's
+	// run never renders.
+	trimStart, trimEnd bool
 }
 
 // children prints the items of the list key (its children are nodes)
@@ -477,18 +478,18 @@ func (f *formatter) children(key template.Node, nodes []template.Node, o listOpt
 // trimmed run is not left out, since inline layout writes it as one
 // space beside its marker. Block layout replaces these runs, and
 // trimmed ones, with a break.
-func droppedInline(g gap, o listOptions) bool {
-	return o.trimEdges || g.class == runReflowable
+func droppedInline(g gap, trimmed bool) bool {
+	return trimmed || g.class == runReflowable
 }
 
 func (f *formatter) openGap(g gap, o listOptions) {
 	switch {
-	case o.layout == blockLayout && (droppedInline(g, o) || g.class == runTrimmed):
+	case o.layout == blockLayout && (droppedInline(g, o.trimStart) || g.class == runTrimmed):
 		if !f.atLineStart {
 			f.newline()
 		}
 		f.writeIndent()
-	case o.layout == inlineLayout && droppedInline(g, o):
+	case o.layout == inlineLayout && droppedInline(g, o.trimStart):
 	default:
 		f.writeRun(g, o.layout)
 	}
@@ -496,7 +497,7 @@ func (f *formatter) openGap(g gap, o listOptions) {
 
 func (f *formatter) closeGap(g gap, o listOptions) {
 	switch {
-	case o.layout == blockLayout && (droppedInline(g, o) || g.class == runTrimmed):
+	case o.layout == blockLayout && (droppedInline(g, o.trimEnd) || g.class == runTrimmed):
 		if o.root {
 			return
 		}
@@ -504,7 +505,7 @@ func (f *formatter) closeGap(g gap, o listOptions) {
 			f.newline()
 		}
 		f.writeIndent()
-	case o.layout == inlineLayout && droppedInline(g, o):
+	case o.layout == inlineLayout && droppedInline(g, o.trimEnd):
 	default:
 		f.writeRun(g, o.layout)
 	}
@@ -853,56 +854,68 @@ func (f *formatter) formatElseList(parent *template.BranchNode, elseList *templa
 }
 
 func (f *formatter) defineNode(n *template.DefineNode) {
-	hasBody := n.Body != nil && len(n.Body.Nodes) > 0
-
-	// Empty body: emit on one line.
-	if !hasBody {
-		f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight)
-		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
-		return
-	}
-
-	outer := f.indent
-	// Inline body unless every gap between items takes a break and block
-	// layout is preferred. The edge gaps are trimmed below, so they need
-	// not take one; a preserved first gap keeps its bytes instead.
-	items, _ := splitChildren(n.Body.Nodes)
-	forceTrim := f.cls.gaps[gapKey{n.Body, 0}].class != runPreserved
-	block := f.blockLayoutPreferred(n.Body, items, f.itemsWidth(items))
-	for i := 0; i <= len(items); i++ {
-		edge := i == 0 || i == len(items)
-		if !(edge && forceTrim) && !takesBreak(f.cls.gaps[gapKey{n.Body, i}]) {
-			block = false
-		}
-	}
-	if !block {
-		f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight)
-		f.children(n.Body, n.Body.Nodes, listOptions{layout: inlineLayout, outer: outer})
-		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
-		return
-	}
-
-	// Multi-line body: force trim markers on the boundary actions so the
-	// formatter-introduced leading "\n\t" and trailing "\n" do not leak into
-	// the rendered template output. Without these markers, callers of the
-	// define would see surrounding whitespace that was not in their source.
-	// Preserved runs (text that is not a page) keep their bytes instead.
-	f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight || forceTrim)
-	f.indent++
-	f.children(n.Body, n.Body.Nodes, listOptions{layout: blockLayout, outer: outer, trimEdges: forceTrim})
-	f.indent = outer
-	f.writeActionWithTrim("end", n.EndTrimLeft || forceTrim, n.EndTrimRight)
+	f.templateBody("define "+strconv.Quote(n.Name), n.Body, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
 }
 
 func (f *formatter) blockNode(n *template.BlockNode) {
-	f.writeActionWithTrim("block "+strconv.Quote(n.Name)+" "+f.pipeText(n.Pipe), false, false)
-	outer := f.indent
-	if n.Body != nil && len(n.Body.Nodes) > 0 {
-		f.indent++
-		f.children(n.Body, n.Body.Nodes, listOptions{layout: blockLayout, outer: outer})
-		f.indent = outer
+	f.templateBody("block "+strconv.Quote(n.Name)+" "+f.pipeText(n.Pipe), n.Body, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
+}
+
+// templateBody prints a define or block: its start action, its body and
+// its end action, each action with the trim markers the source wrote
+// (spec §6.5). The body's caller is unknown, so an edge run is
+// reflowable only when the body's first or last item is block-level. The
+// body is laid out as a block when every gap takes a break, or is an
+// empty collapse-only edge gap, and block layout is preferred. Into an
+// empty collapse-only edge gap block layout inserts a break, and the
+// formatter adds a trim marker that removes exactly that break, so the
+// body renders as before. No trim marker is added that would remove
+// whitespace written in the source.
+func (f *formatter) templateBody(start string, body *template.ListNode, startTrimLeft, startTrimRight, endTrimLeft, endTrimRight bool) {
+	if body == nil || len(body.Nodes) == 0 {
+		f.writeActionWithTrim(start, startTrimLeft, startTrimRight)
+		f.writeActionWithTrim("end", endTrimLeft, endTrimRight)
+		return
 	}
-	f.writeActionWithTrim("end", false, false)
+	outer := f.indent
+	layout, trimStart, trimEnd := f.bodyLayout(body)
+	f.writeActionWithTrim(start, startTrimLeft, startTrimRight || trimStart)
+	if layout == blockLayout {
+		f.indent++
+	}
+	f.children(body, body.Nodes, listOptions{layout: layout, outer: outer, trimStart: trimStart, trimEnd: trimEnd})
+	f.indent = outer
+	f.writeActionWithTrim("end", endTrimLeft || trimEnd, endTrimRight)
+}
+
+// bodyLayout chooses the layout of a define or block body and reports
+// whether the formatter adds a trim marker at its start and its end to
+// remove the break block layout inserts into an empty collapse-only edge
+// gap. A line break in a collapse-only edge gap prefers block layout: it
+// keeps the author's line structure, and block layout writes it as one
+// line break, which renders as the same space.
+func (f *formatter) bodyLayout(body *template.ListNode) (layout layoutKind, trimStart, trimEnd bool) {
+	items, _ := splitChildren(body.Nodes)
+	emptyCollapseOnly := func(i int) bool {
+		g := f.cls.gaps[gapKey{body, i}]
+		return g.class == runCollapseOnly && g.bytes() == ""
+	}
+	preferred := f.blockLayoutPreferred(body, items, f.itemsWidth(items))
+	for i := 0; i <= len(items); i++ {
+		edge := i == 0 || i == len(items)
+		g := f.cls.gaps[gapKey{body, i}]
+		switch {
+		case edge && emptyCollapseOnly(i):
+		case !takesBreak(g):
+			return inlineLayout, false, false
+		case edge && lineBreaks(g.bytes()) > 0:
+			preferred = true
+		}
+	}
+	if !preferred {
+		return inlineLayout, false, false
+	}
+	return blockLayout, emptyCollapseOnly(0), emptyCollapseOnly(len(items))
 }
 
 func (f *formatter) commentNode(n *template.CommentNode) {

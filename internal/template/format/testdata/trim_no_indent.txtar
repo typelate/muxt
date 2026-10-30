@@ -19,7 +19,7 @@
 {{end}}
 {{define "trimdef" -}}
 	<p>content</p>
-{{- end}}
+{{end}}
 {{if .A}}
 	<p>a</p>
 {{else -}}

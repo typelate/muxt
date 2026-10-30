@@ -47,11 +47,14 @@ func TestCustomDelimiters(t *testing.T) {
 			want:  "<%if .Show%>\n\t<p>yes</p>\n<%end%>",
 		},
 		{
+			// The body's first and last items are block-level, so its
+			// edge gaps are reflowable and block layout needs no trim
+			// markers (spec §6.5). The formatter no longer forces them.
 			name:  "custom delimiters define",
 			input: `<% define "foo" %><p>hi</p><% end %>`,
 			left:  "<%",
 			right: "%>",
-			want:  "<%define \"foo\" -%>\n\t<p>hi</p>\n<%- end%>",
+			want:  "<%define \"foo\"%>\n\t<p>hi</p>\n<%end%>",
 		},
 		{
 			name:  "custom delimiters template call",
@@ -296,6 +299,20 @@ func TestDefineSemanticPreservation(t *testing.T) {
 		{
 			name: "nested block elements",
 			src:  `{{define "card"}}<header><h1>{{.Value}}</h1></header>{{end}}` + "\n" + `<div>{{template "card" .X}}</div>`,
+		},
+		{
+			// V4: the body's edges are collapse-only, so the source line
+			// breaks render as spaces next to the inline caller's text and
+			// no trim marker may remove them.
+			name: "inline body called inline",
+			src:  "{{define \"x\"}}\n<span>{{.Value}}</span>\n{{end}}<p>x{{template \"x\" .X}}y</p>",
+		},
+		{
+			// The edge spaces render next to the caller's text; block
+			// layout would need markers that remove them, so the body
+			// stays inline.
+			name: "spaced edges called inline",
+			src:  `{{define "x"}} <span>a</span><div>{{.Value}}</div><span>c</span> {{end}}<p>x{{template "x" .X}}y</p>`,
 		},
 	}
 

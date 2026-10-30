@@ -4,11 +4,11 @@
 {{define "empty"}}{{end}}
 <td>{{template "comp" .X}}</td>
 -- format.gohtml --
-{{define "header" -}}
+{{define "header"}}
 	<header>
 		<h1>{{.Title}}</h1>
 	</header>
-{{- end}}
+{{end}}
 
 {{define "comp"}}{{.Value}}{{end}}
 

@@ -1,0 +1,4 @@
+-- input.gohtml --
+<p>x {{- block "b" . -}} <b>a</b> {{- end -}} y</p>
+-- format.gohtml --
+<p>x {{- block "b" . -}} <b>a</b> {{- end -}} y</p>
