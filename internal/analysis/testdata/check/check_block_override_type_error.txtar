@@ -1,0 +1,34 @@
+A define parsed after a {{block}} of the same name replaces its default
+body, so the override is what is type checked, and its error is located in
+the override's file.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- a_layout.gohtml --
+{{define "page"}}<main>{{block "content" .}}<h1>{{.Title}}</h1>{{end}}</main>{{end}}
+-- b_page.gohtml --
+{{define "content"}}<h2>{{.Missing}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+server.go:8:9 ExecuteTemplate "page" Page
+b_page.gohtml:1:27: executing "content" at <.Missing>: field or method Missing not found on Page
+

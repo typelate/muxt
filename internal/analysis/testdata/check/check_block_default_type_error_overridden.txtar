@@ -1,0 +1,27 @@
+A {{block}} default body that does not type check is never rendered once a
+later define replaces it, so it is not reported.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- a_layout.gohtml --
+{{define "page"}}<main>{{block "content" .}}<h1>{{.Missing}}</h1>{{end}}</main>{{end}}
+-- b_page.gohtml --
+{{define "content"}}<h2>{{.Title}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/checked.txt --
+1

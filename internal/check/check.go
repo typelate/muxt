@@ -848,39 +848,17 @@ func (s *scope) walkNode(tree *template.Tree, dot, prev types.Type, node templat
 	case *template.DefineNode:
 		return nil, nil
 	case *template.BlockNode:
-		return nil, s.checkBlockNode(tree, dot, prev, n)
+		return nil, s.checkBlockNode(tree, dot, n)
 	default:
 		return nil, newError(ErrorTypeUnexpectedNode, tree, n, "missing node type check %T", n)
 	}
 }
 
-func (s *scope) checkBlockNode(tree *template.Tree, dot, _ types.Type, n *template.BlockNode) error {
-	x := dot
-	if n.Pipe != nil {
-		tp, err := s.walk(tree, x, nil, n.Pipe)
-		if err != nil {
-			// The body's dot is unknown when the pipe fails, so only the
-			// pipe is checked.
-			return err
-		}
-		x = tp
-		x = downgradeUntyped(x)
-	}
-	if n.Body != nil {
-		childScope := scope{
-			global: s.global,
-			variables: map[string]types.Type{
-				"$": x,
-			},
-			// The body is walked inline, so the templates enclosing the
-			// block are still being checked.
-			invocations: s.invocations,
-		}
-		if _, err := childScope.walk(tree, x, nil, n.Body); err != nil {
-			return err
-		}
-	}
-	return nil
+// checkBlockNode checks a block as text/template runs it: as a
+// {{template}} call of the template it names, which is the block's body
+// unless a later define of that name replaced it.
+func (s *scope) checkBlockNode(tree *template.Tree, dot types.Type, n *template.BlockNode) error {
+	return s.checkTemplateNode(tree, dot, n.Call())
 }
 
 func (s *scope) checkChainNode(tree *template.Tree, dot, prev types.Type, n *template.ChainNode, args []types.Type) (types.Type, error) {

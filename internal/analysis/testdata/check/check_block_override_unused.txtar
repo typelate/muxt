@@ -1,0 +1,33 @@
+A template called only from an overridden {{block}} default body is never
+rendered, so it is reported unused.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- a_layout.gohtml --
+{{define "page"}}<main>{{block "over" .}}{{template "deflt" .}}{{end}}</main>{{end}}
+{{define "deflt"}}<p>{{.Title}}</p>{{end}}
+-- b_page.gohtml --
+{{define "over"}}<h2>{{.Title}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+Unused templates:
+  - a_layout.gohtml:2:19: "deflt"

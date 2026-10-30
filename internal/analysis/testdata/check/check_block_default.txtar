@@ -1,0 +1,26 @@
+A {{block}} with no define of its name renders its default body, which is
+type checked and counts as the template the block calls, so it is not
+unused.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "page"}}<main>{{block "content" .}}<h1>{{.Title}}</h1>{{end}}</main>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/checked.txt --
+1

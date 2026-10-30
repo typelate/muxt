@@ -5,7 +5,6 @@ import (
 	"go/types"
 
 	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
 
 	"github.com/typelate/muxt/internal/check"
 )
@@ -150,81 +149,12 @@ type templateCall struct {
 // dot narrows through a range or a with on the way to the invocation.
 func templateCalls(lt *checked, tree *template.Tree, dot types.Type) []templateCall {
 	var found []templateCall
-	blocks := blockCalls(tree.Root, dot, lt.Functions)
 	// A template that does not check still yields the invocations found
 	// before the failure, which is better than none: muxt check is where
 	// a type error should be reported, not here.
-	_ = executeWith(lt, tree, dot, func(node *template.TemplateNode, in *template.Tree, tp types.Type, _ check.Definition) {
-		if in == tree {
-			for len(blocks) > 0 && blocks[0].start < node.Start() {
-				found = append(found, blocks[0].templateCall)
-				blocks = blocks[1:]
-			}
-		}
+	_ = executeWith(lt, tree, dot, func(node *template.TemplateNode, _ *template.Tree, tp types.Type, _ check.Definition) {
 		found = append(found, templateCall{name: node.Name, dot: tp})
 	})
-	for _, block := range blocks {
-		found = append(found, block.templateCall)
-	}
-	return found
-}
-
-// blockCall is a {{block}} clause written in a tree, as the call of the
-// template it defines.
-type blockCall struct {
-	templateCall
-	start lex.Pos
-}
-
-// blockCalls reports the {{block}} clauses in node, in source order, each
-// as a call of the template it defines with the type of dot its pipeline
-// passes.
-//
-// text/template turned a block into a {{template}} call, which the
-// checker reported with the rest; the copied parser keeps the clause
-// inline and the checker walks its body in place, reporting no call. The
-// dot each passes is resolved the way a with's is, and a block whose
-// dot cannot be resolved is left out rather than mutated with none.
-func blockCalls(node template.Node, dot types.Type, functions check.Functions) []blockCall {
-	var found []blockCall
-	var walk func(template.Node, types.Type)
-	walkNodes := func(nodes []template.Node, dot types.Type) {
-		for _, child := range nodes {
-			walk(child, dot)
-		}
-	}
-	walk = func(node template.Node, dot types.Type) {
-		switch n := node.(type) {
-		case *template.ListNode:
-			if n != nil {
-				walkNodes(n.Nodes, dot)
-			}
-		case *template.IfNode:
-			walk(n.List, dot)
-			walk(n.ElseList, dot)
-		case *template.WithNode:
-			walk(n.List, withDot(dot, n.Pipe, functions))
-			walk(n.ElseList, dot)
-		case *template.RangeNode:
-			walk(n.List, rangeDot(dot, n.Pipe, functions))
-			walk(n.ElseList, dot)
-		case *template.BlockNode:
-			if passed := withDot(dot, n.Pipe, functions); passed != nil {
-				found = append(found, blockCall{templateCall: templateCall{name: n.Name, dot: passed}, start: n.Start()})
-			}
-		case *template.HTMLDocumentFragmentNode:
-			walkNodes(n.Children, dot)
-		case *template.HTMLElementNode:
-			walkNodes(n.Attr, dot)
-			walkNodes(n.Children, dot)
-		case *template.HTMLAttributeNode:
-			walkNodes(n.Key, dot)
-			walkNodes(n.Value, dot)
-		case *template.HTMLCommentNode:
-			walkNodes(n.Children, dot)
-		}
-	}
-	walk(node, dot)
 	return found
 }
 

@@ -642,11 +642,24 @@ type BlockNode struct {
 	Name       string    // The name of the block template (unquoted).
 	Pipe       *PipeNode // The pipeline to evaluate as dot for the block.
 	Body       *ListNode // The body of the block.
+
+	call *TemplateNode
 }
 
 func (t *Tree) newBlock(start, end lex.Pos, line int, name string, pipe *PipeNode, body *ListNode) *BlockNode {
-	return &BlockNode{tr: t, start: start, end: end, Line: line, Name: name, Pipe: pipe, Body: body}
+	return &BlockNode{
+		tr: t, start: start, end: end, Line: line, Name: name, Pipe: pipe, Body: body,
+		call: &TemplateNode{tr: t, start: start, end: end, Line: line, Name: name, Pipe: pipe},
+	}
 }
+
+// Call returns the {{template}} invocation text/template makes of a
+// block: a call of the template named Name, with Pipe as its dot, written
+// where the block is. The body is that template's default definition,
+// which a later define of the same name replaces, so a checker or walker
+// following the invocation reaches whichever definition the set kept.
+// It spans the whole block clause and is the same node on every call.
+func (b *BlockNode) Call() *TemplateNode { return b.call }
 
 func (b *BlockNode) Start() lex.Pos { return b.start }
 func (b *BlockNode) End() lex.Pos   { return b.end }
