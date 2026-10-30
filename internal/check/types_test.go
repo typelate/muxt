@@ -584,3 +584,11 @@ var _ = []any{
 type StructWithStringField struct {
 	Field string
 }
+
+// MethodsInChain has methods text/template calls with no arguments when they
+// are not the last name of a chain.
+type MethodsInChain struct{}
+
+func (MethodsInChain) Get(int) StructWithField { return StructWithField{} }
+
+func (MethodsInChain) Variadic(...int) StructWithField { return StructWithField{} }

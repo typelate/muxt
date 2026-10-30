@@ -211,6 +211,33 @@ func TestTree(t *testing.T) {
 			},
 		},
 		{
+			Name:     "a method that takes an argument is called with none in the middle of a chain",
+			Template: `{{.Get.Field}}`,
+			Data:     MethodsInChain{},
+			Error: func(t *testing.T, checkErr error, tp types.Type) {
+				require.ErrorContains(t, checkErr, "wrong number of args expected 1 but got 0")
+			},
+		},
+		{
+			Name:     "a variadic method needs no argument in the middle of a chain",
+			Template: `{{.Variadic.Field}}`,
+			Data:     MethodsInChain{},
+		},
+		{
+			Name:     "not found shows available field",
+			Template: `{{.Missing}}`,
+			Data:     StructWithField{},
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.ErrorContains(t, err, "Missing not found on")
+				require.Contains(t, detailedError(t, err), "Field struct{}")
+			},
+		},
+		{
+			Name:     "when the struct has the field and the field has a method",
+			Template: `{{.Field.Method}}`,
+			Data:     StructWithFieldWithMethod{},
+		},
+		{
 			Name:     "when a method has a bool parameter",
 			Template: `{{.F true}}`,
 			Data:     MethodWithBoolParam{},
@@ -721,6 +748,55 @@ func TestTree(t *testing.T) {
 			Data: MethodWithKeyValForSlices{
 				Numbers: []float64{1, 2},
 			},
+		},
+		{
+			Name:     "range over an untyped constant",
+			Template: `{{range 1.2}}{{end}}`,
+			Data:     nil,
+			Error: func(t *testing.T, checkErr error, tp types.Type) {
+				// The "untyped " prefix go/types uses for constant types is
+				// trimmed: the template author wrote a float, not a Go
+				// "untyped float".
+				require.ErrorContains(t, checkErr, "range can't iterate over float")
+				require.NotContains(t, checkErr.Error(), "untyped")
+			},
+		},
+		{
+			Name:     "range over int data body has bad field",
+			Template: `{{range .}}{{.NoSuchField}}{{end}}`,
+			Data:     int(0),
+			Error: func(t *testing.T, checkErr error, _ types.Type) {
+				require.ErrorContains(t, checkErr, "NoSuchField")
+			},
+		},
+		{
+			Name:     "range over int data else has bad field",
+			Template: `{{range .}}body{{else}}{{.NoSuchField}}{{end}}`,
+			Data:     int(0),
+			Error: func(t *testing.T, checkErr error, _ types.Type) {
+				require.ErrorContains(t, checkErr, "NoSuchField")
+			},
+		},
+		{
+			Name:     "range over iter.Seq body has bad field",
+			Template: `{{range .Field}}{{.NoSuchField}}{{end}}`,
+			Data:     NewIterators(),
+			Error: func(t *testing.T, checkErr error, _ types.Type) {
+				require.ErrorContains(t, checkErr, "NoSuchField")
+			},
+		},
+		{
+			Name:     "range over iter.Seq2 body has bad field",
+			Template: `{{range .Field2}}{{.NoSuchField}}{{end}}`,
+			Data:     NewIterators(),
+			Error: func(t *testing.T, checkErr error, _ types.Type) {
+				require.ErrorContains(t, checkErr, "NoSuchField")
+			},
+		},
+		{
+			Name:     "range over iter.Seq2 with two vars: dot is value type",
+			Template: `{{range $k, $v := .Field2}}{{expectFloat64 .}}{{end}}`,
+			Data:     NewIterators(),
 		},
 		{
 			Name:     "template with bool argument downgrades untyped bool",
@@ -1412,4 +1488,13 @@ func TestIdentifierNodeBuiltins(t *testing.T) {
 			}
 		})
 	}
+}
+
+func detailedError(t *testing.T, err error) string {
+	t.Helper()
+	var checkErr *check.Error
+	require.ErrorAs(t, err, &checkErr)
+	var sb strings.Builder
+	require.NoError(t, checkErr.DetailedError(&sb, nil))
+	return sb.String()
 }
