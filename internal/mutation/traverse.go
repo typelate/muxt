@@ -3,9 +3,11 @@ package mutation
 import (
 	"go/token"
 	"go/types"
-	"text/template/parse"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/internal/template/lex"
+
+	"github.com/typelate/muxt/internal/check"
 )
 
 // callSite is one templates.ExecuteTemplate call, which is where a
@@ -41,7 +43,7 @@ type scope struct {
 // from, so a mutation found in the tree can be written back to a file.
 type treeLocation struct {
 	src  *templateSource
-	tree *parse.Tree
+	tree *template.Tree
 }
 
 // executionKey names a template rendered with one type of dot, which is
@@ -146,27 +148,96 @@ type templateCall struct {
 //
 // The types come from the checker, which is the only thing that knows how
 // dot narrows through a range or a with on the way to the invocation.
-func templateCalls(lt *checked, tree *parse.Tree, dot types.Type) []templateCall {
+func templateCalls(lt *checked, tree *template.Tree, dot types.Type) []templateCall {
 	var found []templateCall
+	blocks := blockCalls(tree.Root, dot, lt.Functions)
 	// A template that does not check still yields the invocations found
 	// before the failure, which is better than none: muxt check is where
 	// a type error should be reported, not here.
-	_ = executeWith(lt, tree, dot, func(node *parse.TemplateNode, _ *parse.Tree, tp types.Type, _ check.Definition) {
+	_ = executeWith(lt, tree, dot, func(node *template.TemplateNode, in *template.Tree, tp types.Type, _ check.Definition) {
+		if in == tree {
+			for len(blocks) > 0 && blocks[0].start < node.Start() {
+				found = append(found, blocks[0].templateCall)
+				blocks = blocks[1:]
+			}
+		}
 		found = append(found, templateCall{name: node.Name, dot: tp})
 	})
+	for _, block := range blocks {
+		found = append(found, block.templateCall)
+	}
+	return found
+}
+
+// blockCall is a {{block}} clause written in a tree, as the call of the
+// template it defines.
+type blockCall struct {
+	templateCall
+	start lex.Pos
+}
+
+// blockCalls reports the {{block}} clauses in node, in source order, each
+// as a call of the template it defines with the type of dot its pipeline
+// passes.
+//
+// text/template turned a block into a {{template}} call, which the
+// checker reported with the rest; the copied parser keeps the clause
+// inline and the checker walks its body in place, reporting no call. The
+// dot each passes is resolved the way a with's is, and a block whose
+// dot cannot be resolved is left out rather than mutated with none.
+func blockCalls(node template.Node, dot types.Type, functions check.Functions) []blockCall {
+	var found []blockCall
+	var walk func(template.Node, types.Type)
+	walkNodes := func(nodes []template.Node, dot types.Type) {
+		for _, child := range nodes {
+			walk(child, dot)
+		}
+	}
+	walk = func(node template.Node, dot types.Type) {
+		switch n := node.(type) {
+		case *template.ListNode:
+			if n != nil {
+				walkNodes(n.Nodes, dot)
+			}
+		case *template.IfNode:
+			walk(n.List, dot)
+			walk(n.ElseList, dot)
+		case *template.WithNode:
+			walk(n.List, withDot(dot, n.Pipe, functions))
+			walk(n.ElseList, dot)
+		case *template.RangeNode:
+			walk(n.List, rangeDot(dot, n.Pipe, functions))
+			walk(n.ElseList, dot)
+		case *template.BlockNode:
+			if passed := withDot(dot, n.Pipe, functions); passed != nil {
+				found = append(found, blockCall{templateCall: templateCall{name: n.Name, dot: passed}, start: n.Start()})
+			}
+		case *template.HTMLDocumentFragmentNode:
+			walkNodes(n.Children, dot)
+		case *template.HTMLElementNode:
+			walkNodes(n.Attr, dot)
+			walkNodes(n.Children, dot)
+		case *template.HTMLAttributeNode:
+			walkNodes(n.Key, dot)
+			walkNodes(n.Value, dot)
+		case *template.HTMLCommentNode:
+			walkNodes(n.Children, dot)
+		}
+	}
+	walk(node, dot)
 	return found
 }
 
 // checks reports whether tree type checks with dot, which is how a mutant
 // is told from a mutation that merely breaks the template.
-func checks(lt *checked, tree *parse.Tree, dot types.Type) bool {
+func checks(lt *checked, tree *template.Tree, dot types.Type) bool {
 	return executeWith(lt, tree, dot, nil) == nil
 }
 
 // executeWith type checks tree with dot, calling inspect on each
 // {{template}} node it passes, then puts back whatever inspector the
 // shared checker held before.
-func executeWith(lt *checked, tree *parse.Tree, dot types.Type, inspect func(*parse.TemplateNode, *parse.Tree, types.Type, check.Definition)) error {
+func executeWith(lt *checked, tree *template.Tree, dot types.Type, inspect func(*template.TemplateNode, *template.Tree, types.Type, check.Definition)) error {
 	saved := lt.global.InspectTemplateNode
 	lt.global.InspectTemplateNode = inspect
 	defer func() { lt.global.InspectTemplateNode = saved }()
@@ -264,13 +335,13 @@ func typeDisplay(t types.Type) string {
 // It is reported because it predicts the work ahead. Every branch is
 // somewhere a mutation applies, so a template set's total complexity and
 // the number of mutants to run move together.
-func complexity(node parse.Node) int {
+func complexity(node template.Node) int {
 	return 1 + branchPoints(node)
 }
 
-func branchPoints(node parse.Node) int {
+func branchPoints(node template.Node) int {
 	switch n := node.(type) {
-	case *parse.ListNode:
+	case *template.ListNode:
 		if n == nil {
 			return 0
 		}
@@ -279,27 +350,45 @@ func branchPoints(node parse.Node) int {
 			total += branchPoints(child)
 		}
 		return total
-	case *parse.IfNode:
+	case *template.IfNode:
 		return 1 + pipelineBranches(n.Pipe) + branchPoints(n.List) + branchPoints(n.ElseList)
-	case *parse.RangeNode:
+	case *template.RangeNode:
 		return 1 + pipelineBranches(n.Pipe) + branchPoints(n.List) + branchPoints(n.ElseList)
-	case *parse.WithNode:
+	case *template.WithNode:
 		return 1 + pipelineBranches(n.Pipe) + branchPoints(n.List) + branchPoints(n.ElseList)
+	case *template.HTMLDocumentFragmentNode:
+		return branchPointsIn(n.Children)
+	case *template.HTMLElementNode:
+		return branchPointsIn(n.Attr) + branchPointsIn(n.Children)
+	case *template.HTMLAttributeNode:
+		return branchPointsIn(n.Key) + branchPointsIn(n.Value)
+	case *template.HTMLCommentNode:
+		return branchPointsIn(n.Children)
 	default:
 		return 0
 	}
 }
 
+// branchPointsIn counts the branch points among the children of an HTML
+// node, which the copied parser builds where text/template kept flat text.
+func branchPointsIn(nodes []template.Node) int {
+	total := 0
+	for _, child := range nodes {
+		total += branchPoints(child)
+	}
+	return total
+}
+
 // pipelineBranches counts the short circuiting operators in a pipeline,
 // each of which is a path the rendering can take.
-func pipelineBranches(pipe *parse.PipeNode) int {
+func pipelineBranches(pipe *template.PipeNode) int {
 	if pipe == nil {
 		return 0
 	}
 	total := 0
-	for _, cmd := range pipe.Cmds {
+	for _, cmd := range pipe.Commands {
 		for _, arg := range cmd.Args {
-			ident, ok := arg.(*parse.IdentifierNode)
+			ident, ok := arg.(*template.IdentifierNode)
 			if !ok {
 				continue
 			}

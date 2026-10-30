@@ -3,7 +3,8 @@ package mutation
 import (
 	"slices"
 	"strings"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
 )
 
 // OperatorCondition forces one condition of a boolean decision, leaving
@@ -46,18 +47,18 @@ type boolNode struct {
 // call, a comparison, a pipeline of several commands -- because a
 // half-understood decision would produce mutants that claim more than
 // they test.
-func decision(text string, pipe *parse.PipeNode) (*boolNode, bool) {
-	if pipe == nil || len(pipe.Cmds) != 1 {
+func decision(text string, pipe *template.PipeNode) (*boolNode, bool) {
+	if pipe == nil || len(pipe.Commands) != 1 {
 		return nil, false
 	}
-	return decisionCommand(text, pipe.Cmds[0])
+	return decisionCommand(text, pipe.Commands[0])
 }
 
-func decisionCommand(text string, command *parse.CommandNode) (*boolNode, bool) {
+func decisionCommand(text string, command *template.CommandNode) (*boolNode, bool) {
 	if command == nil || len(command.Args) == 0 {
 		return nil, false
 	}
-	if ident, ok := command.Args[0].(*parse.IdentifierNode); ok {
+	if ident, ok := command.Args[0].(*template.IdentifierNode); ok {
 		kind, ok := logicalKind(ident.Ident)
 		if !ok {
 			return nil, false
@@ -83,7 +84,7 @@ func logicalKind(function string) (boolKind, bool) {
 	}
 }
 
-func decisionCall(kind boolKind, text string, args []parse.Node) (*boolNode, bool) {
+func decisionCall(kind boolKind, text string, args []template.Node) (*boolNode, bool) {
 	if len(args) == 0 || (kind == boolNot && len(args) != 1) {
 		return nil, false
 	}
@@ -98,13 +99,13 @@ func decisionCall(kind boolKind, text string, args []parse.Node) (*boolNode, boo
 	return &boolNode{kind: kind, kids: kids}, true
 }
 
-func decisionArg(text string, arg parse.Node) (*boolNode, bool) {
+func decisionArg(text string, arg template.Node) (*boolNode, bool) {
 	switch node := arg.(type) {
-	case *parse.PipeNode:
+	case *template.PipeNode:
 		return decision(text, node)
-	case *parse.BoolNode:
+	case *template.BoolNode:
 		return &boolNode{kind: boolConst, value: node.True}, true
-	case *parse.FieldNode, *parse.VariableNode, *parse.DotNode:
+	case *template.FieldNode, *template.VariableNode, *template.DotNode:
 		var found []operand
 		appendOperand(&found, text, arg, nil)
 		if len(found) != 1 {

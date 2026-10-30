@@ -8,9 +8,10 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"text/template/parse"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/template"
+
+	"github.com/typelate/muxt/internal/check"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/source"
@@ -467,7 +468,7 @@ func indexTrees(sources []*templateSource, defined map[string]*templateSource, f
 				}
 				continue
 			}
-			if existing, ok := index[name]; ok && parse.IsEmptyTree(tree.Root) && !parse.IsEmptyTree(existing.tree.Root) {
+			if existing, ok := index[name]; ok && template.IsEmptyTree(tree.Root) && !template.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
 			index[name] = treeLocation{src: src, tree: tree}
@@ -503,13 +504,13 @@ func verifyReadable(defs []source.Definition, index map[string]treeLocation, wor
 	return nil
 }
 
-func hasRoot(tree *parse.Tree) bool { return tree != nil && tree.Root != nil }
+func hasRoot(tree *template.Tree) bool { return tree != nil && tree.Root != nil }
 
 // countActions reports how many dynamic or control flow actions a tree
 // holds, which is what a template has to offer a mutation.
-func countActions(node parse.Node) int {
+func countActions(node template.Node) int {
 	switch n := node.(type) {
-	case *parse.ListNode:
+	case *template.ListNode:
 		if n == nil {
 			return 0
 		}
@@ -518,17 +519,37 @@ func countActions(node parse.Node) int {
 			total += countActions(child)
 		}
 		return total
-	case *parse.ActionNode, *parse.TemplateNode:
+	case *template.ActionNode, *template.TemplateNode, *template.BlockNode:
+		// A block counts as the {{template}} call text/template made of it;
+		// its body is a tree of its own.
 		return 1
-	case *parse.IfNode:
+	case *template.IfNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
-	case *parse.WithNode:
+	case *template.WithNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
-	case *parse.RangeNode:
+	case *template.RangeNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
+	case *template.HTMLDocumentFragmentNode:
+		return countActionsIn(n.Children)
+	case *template.HTMLElementNode:
+		return countActionsIn(n.Attr) + countActionsIn(n.Children)
+	case *template.HTMLAttributeNode:
+		return countActionsIn(n.Key) + countActionsIn(n.Value)
+	case *template.HTMLCommentNode:
+		return countActionsIn(n.Children)
 	default:
 		return 0
 	}
+}
+
+// countActionsIn counts the actions among the children of an HTML node,
+// which the copied parser builds where text/template kept flat text.
+func countActionsIn(nodes []template.Node) int {
+	total := 0
+	for _, child := range nodes {
+		total += countActions(child)
+	}
+	return total
 }
 
 func relativePosition(workingDirectory string, position token.Position) string {

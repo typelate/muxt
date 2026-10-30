@@ -3,10 +3,10 @@ package mutation
 import (
 	"go/types"
 	"testing"
-	"text/template/parse"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/typelate/muxt/internal/asteval"
 )
 
 // TestWalkActionsOrder states the order actions are reported in, which is
@@ -21,7 +21,7 @@ func TestWalkActionsOrder(t *testing.T) {
 		`{{template "p" .J}}` +
 		`{{end}}`
 
-	trees, err := parse.Parse("t", text+`{{define "p"}}x{{end}}`, "", "")
+	trees, err := asteval.ParseTrees("t", text+`{{define "p"}}x{{end}}`, "", "", nil)
 	require.NoError(t, err)
 
 	var got []string
@@ -34,6 +34,34 @@ func TestWalkActionsOrder(t *testing.T) {
 		"{{range .D}}", "{{.E}}", "{{.F}}",
 		"{{with .G}}", "{{.H}}", "{{.I}}",
 		`{{template "p" .J}}`,
+	}
+	assert.Equal(t, want, got, "walk order")
+}
+
+// TestWalkActionsInsideMarkup states that actions written inside elements,
+// attributes and comments are reported where they are written, as they
+// are when the markup is plain text.
+func TestWalkActionsInsideMarkup(t *testing.T) {
+	const text = `{{define "t"}}` +
+		`<a href="{{.A}}" {{if .B}}hidden{{end}}>{{.C}}</a>` +
+		`<div><p>{{range .D}}<b>{{.E}}</b>{{end}}</p>` +
+		`<!-- {{.F}} -->` +
+		`{{block "p" .G}}{{.H}}{{end}}` +
+		`{{end}}`
+
+	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	require.NoError(t, err)
+
+	var got []string
+	walkActions(regions(text, "", ""), nil, nil, trees["t"].Root, func(a action) {
+		got = append(got, text[a.region.start:a.region.end])
+	})
+
+	want := []string{
+		"{{.A}}", "{{if .B}}", "{{.C}}",
+		"{{range .D}}", "{{.E}}",
+		"{{.F}}",
+		`{{block "p" .G}}`,
 	}
 	assert.Equal(t, want, got, "walk order")
 }
@@ -51,7 +79,7 @@ func TestWalkActionsNarrowsDot(t *testing.T) {
 		`{{range .Count}}{{.}}{{end}}` +
 		`{{with .Owner}}{{.}}{{else}}{{.}}{{end}}` +
 		`{{end}}`
-	trees, err := parse.Parse("t", text, "", "")
+	trees, err := asteval.ParseTrees("t", text, "", "", nil)
 	require.NoError(t, err)
 
 	var got []string

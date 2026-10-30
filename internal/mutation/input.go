@@ -1,9 +1,9 @@
 package mutation
 
 import (
-	"text/template/parse"
+	"github.com/typelate/muxt/internal/template"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/check"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/load"
@@ -59,7 +59,7 @@ type checked struct {
 }
 
 func newChecked(pkg source.Package, variable source.Variable) *checked {
-	trees := check.FindTreeFunc(func(name string) (*parse.Tree, bool) {
+	trees := check.FindTreeFunc(func(name string) (*template.Tree, bool) {
 		t := variable.Set.Lookup(name)
 		if t == nil || t.Tree == nil {
 			return nil, false

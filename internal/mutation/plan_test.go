@@ -4,13 +4,14 @@ import (
 	"errors"
 	"go/token"
 	"go/types"
-	"html/template"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -264,7 +265,7 @@ func TestIndexTreesKeepsTheTreeTheSetKept(t *testing.T) {
 // name order however the set holds them, so a run that finds several
 // unreadable templates names the same one every time.
 func TestDefinitionsOfListsByName(t *testing.T) {
-	set := template.Must(template.New("c").Parse(`{{define "b"}}{{end}}{{define "e"}}{{end}}{{define "a"}}{{end}}{{define "d"}}{{end}}`))
+	set := html.Must(html.New("c").Parse(`{{define "b"}}{{end}}{{define "e"}}{{end}}{{define "a"}}{{end}}{{define "d"}}{{end}}`))
 	definitions := make(map[string]source.Definition)
 	for _, name := range []string{"a", "b", "c", "d", "e"} {
 		definitions[name] = source.Definition{Name: name}
@@ -287,7 +288,7 @@ func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
 }
 
 func TestVerifyReadable(t *testing.T) {
-	treeOf := func(text string) *parse.Tree {
+	treeOf := func(text string) *template.Tree {
 		trees, err := asteval.ParseTrees("page", text, "", "", nil)
 		require.NoError(t, err)
 		return trees["page"]
@@ -463,12 +464,12 @@ func TestTemplateFilter(t *testing.T) {
 func TestHasRoot(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		tree *parse.Tree
+		tree *template.Tree
 		want bool
 	}{
 		{name: "nil tree", tree: nil, want: false},
-		{name: "tree without root", tree: &parse.Tree{}, want: false},
-		{name: "tree with root", tree: &parse.Tree{Root: &parse.ListNode{}}, want: true},
+		{name: "tree without root", tree: &template.Tree{}, want: false},
+		{name: "tree with root", tree: &template.Tree{Root: &template.ListNode{}}, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, hasRoot(tt.tree), "hasRoot(%s)", tt.name)

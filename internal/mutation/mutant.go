@@ -4,9 +4,10 @@ import (
 	"cmp"
 	"slices"
 	"strings"
-	"text/template/parse"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/template"
+
+	"github.com/typelate/muxt/internal/check"
 )
 
 // Operator names the variation applied to one action.
@@ -174,7 +175,7 @@ type enumerator struct {
 // with; this decides only what to do with one.
 func (e *enumerator) variations(a action) {
 	switch a.node.(type) {
-	case *parse.ActionNode:
+	case *template.ActionNode:
 		if zero, typed := zeroLiteral(a.dot, a.pipe, e.functions); typed {
 			e.addPipeline(a, OperatorActionZero, zero)
 		} else {
@@ -183,7 +184,7 @@ func (e *enumerator) variations(a action) {
 		// Emptying the whole action says only that something about it is
 		// watched. Varying its operands says which ones.
 		e.addOperandCombinations(a)
-	case *parse.IfNode:
+	case *template.IfNode:
 		e.addPipeline(a, OperatorIfTrue, "true")
 		e.addPipeline(a, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
@@ -192,11 +193,11 @@ func (e *enumerator) variations(a action) {
 		if !e.addConditions(a) {
 			e.addOperandCombinations(a)
 		}
-	case *parse.WithNode:
+	case *template.WithNode:
 		e.addConstructDrop(a, OperatorWithEmpty)
-	case *parse.RangeNode:
+	case *template.RangeNode:
 		e.addConstructDrop(a, OperatorRangeNever)
-	case *parse.TemplateNode:
+	case *template.TemplateNode, *template.BlockNode:
 		e.addTemplateDrop(a.region)
 	}
 }
@@ -321,8 +322,8 @@ func (e *enumerator) appendEdits(r region, operator Operator, edits []edit, deta
 // The parser positions a command at its first token, so the first command
 // starts exactly where the value is written. A pipeline always has one: an
 // action with no command does not parse.
-func valueStart(pipe *parse.PipeNode) int {
-	return int(pipe.Cmds[0].Position())
+func valueStart(pipe *template.PipeNode) int {
+	return int(pipe.Commands[0].Start())
 }
 
 // lineIndex turns a byte offset into a one based line and column.

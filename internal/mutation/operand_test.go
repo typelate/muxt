@@ -2,7 +2,8 @@ package mutation
 
 import (
 	"testing"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,8 +34,8 @@ func TestOperandsAreFoundWhereTheyAreWritten(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
 			require.NoError(t, err)
 			var got []string
-			for _, node := range trees["t"].Root.Nodes {
-				a, ok := node.(*parse.ActionNode)
+			for _, node := range topLevelNodes(trees["t"]) {
+				a, ok := node.(*template.ActionNode)
 				if !ok {
 					continue
 				}

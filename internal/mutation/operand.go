@@ -6,7 +6,8 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
 )
 
 // OperatorOperands varies the leaf operands of one action together,
@@ -34,32 +35,32 @@ type operand struct {
 //
 // A nested pipeline is walked into, so {{if and .A (or .B .C)}} reports
 // three operands rather than two.
-func operands(text string, dot types.Type, pipe *parse.PipeNode) []operand {
+func operands(text string, dot types.Type, pipe *template.PipeNode) []operand {
 	var found []operand
 	collectOperands(&found, text, dot, pipe)
 	return found
 }
 
-func collectOperands(out *[]operand, text string, dot types.Type, pipe *parse.PipeNode) {
+func collectOperands(out *[]operand, text string, dot types.Type, pipe *template.PipeNode) {
 	if pipe == nil {
 		return
 	}
-	for _, command := range pipe.Cmds {
+	for _, command := range pipe.Commands {
 		for _, arg := range command.Args {
 			switch node := arg.(type) {
-			case *parse.PipeNode:
+			case *template.PipeNode:
 				collectOperands(out, text, dot, node)
-			case *parse.FieldNode:
+			case *template.FieldNode:
 				// An unresolved path leaves the type nil, which draws a
 				// string: the one literal valid wherever a value is read.
 				resolved, _ := fieldPath(dot, node.Ident)
 				appendOperand(out, text, node, resolved)
-			case *parse.VariableNode:
+			case *template.VariableNode:
 				// A variable's type would have to be tracked through the
 				// declaration that bound it, which the checker does and
 				// this does not. It is still an input worth varying.
 				appendOperand(out, text, node, nil)
-			case *parse.DotNode:
+			case *template.DotNode:
 				appendOperand(out, text, node, dot)
 			}
 		}
@@ -72,9 +73,9 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *parse.Pi
 // A node's String is a reconstruction, not a quotation, so requiring the
 // two to agree is what keeps a mutation from splicing over the wrong
 // bytes.
-func appendOperand(out *[]operand, text string, node parse.Node, dataType types.Type) {
+func appendOperand(out *[]operand, text string, node template.Node, dataType types.Type) {
 	written := node.String()
-	start, ok := operandStart(text, int(node.Position()), written)
+	start, ok := operandStart(text, int(node.Start()), written)
 	if !ok {
 		return
 	}

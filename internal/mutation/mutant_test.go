@@ -6,7 +6,8 @@ import (
 	"strings"
 	"testing"
 	texttemplate "text/template"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,19 +32,19 @@ func TestValueStart(t *testing.T) {
 		t.Run(tt.text, func(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
 			require.NoError(t, err)
-			nodes := trees["t"].Root.Nodes
-			var pipe *parse.PipeNode
+			nodes := topLevelNodes(trees["t"])
+			var pipe *template.PipeNode
 			switch node := nodes[len(nodes)-1].(type) {
-			case *parse.ActionNode:
+			case *template.ActionNode:
 				pipe = node.Pipe
-			case *parse.RangeNode:
+			case *template.RangeNode:
 				pipe = node.Pipe
-			case *parse.WithNode:
+			case *template.WithNode:
 				pipe = node.Pipe
 			}
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, "", "")
-			_, r, ok := regionAt(src.regions, int(pipe.Position()))
-			require.True(t, ok, "no region holds the pipeline at %d", pipe.Position())
+			_, r, ok := regionAt(src.regions, int(pipe.Start()))
+			require.True(t, ok, "no region holds the pipeline at %d", pipe.Start())
 			start := valueStart(pipe)
 			assert.Equal(t, tt.want, tt.text[start:r.innerEnd], "value")
 		})
@@ -339,7 +340,7 @@ func dropMutants(t *testing.T, text string) []mutant {
 	e := &enumerator{src: src, template: "t"}
 	walkActions(src.regions, nil, nil, trees["t"].Root, func(a action) {
 		switch a.node.(type) {
-		case *parse.WithNode, *parse.RangeNode, *parse.TemplateNode:
+		case *template.WithNode, *template.RangeNode, *template.TemplateNode:
 			e.variations(a)
 		}
 	})

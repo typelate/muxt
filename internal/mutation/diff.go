@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // revision is what the templates looked like at an earlier commit: the
@@ -37,8 +39,37 @@ func (r revision) changed(sc scope) bool {
 }
 
 // scopeText is what a revision compares a scope by: the template as the
-// parser reads it, so reformatting inside an action is not a change.
-func scopeText(sc scope) string { return sc.tree.Root.String() }
+// lexer reads it, so reformatting inside an action is not a change.
+//
+// text/template's String rendered a tree back in a canonical form, which
+// is what this used to compare. The copied parser's String quotes the
+// source instead, so the tokens stand in for it: the spaces separating
+// the words of an action are dropped, and everything else, the text
+// outside actions included, is kept as written.
+func scopeText(sc scope) string {
+	scanner := lex.New(sc.tree.Root.String(), lex.Options{
+		EmitComment: true,
+		BreakOK:     true,
+		ContinueOK:  true,
+		LeftDelim:   sc.src.leftDelim,
+		RightDelim:  sc.src.rightDelim,
+	})
+	var text strings.Builder
+	for {
+		token := scanner.Next()
+		switch token.Type {
+		case lex.TokenTypeEOF:
+			return text.String()
+		case lex.TokenTypeSpace:
+			continue
+		}
+		fmt.Fprintf(&text, "%d %t %t %q\n", token.Type, token.TrimLeft, token.TrimRight, token.Value)
+		if token.Type == lex.TokenTypeError {
+			// The lexer stops at an error; what follows it was never read.
+			return text.String() + sc.tree.Root.String()[token.End:]
+		}
+	}
+}
 
 // scopesOf records what each scope reads like, keyed by the template and
 // the type of dot it was reached with.
