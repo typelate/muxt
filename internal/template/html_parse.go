@@ -403,6 +403,7 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && t.htmlHasAncestor(nameToken.Value) {
 				tag := strings.ToLower(elem.TagName)
 				if FormattingElements[tag] {
+					elem.Misnested = true
 					t.diag(endTagOpen.Pos, nameToken.End, SeverityWarning, DiagMisnestedTag,
 						msgMisnestedClose, nameToken.Value, elem.TagName, elem.TagName)
 				}
