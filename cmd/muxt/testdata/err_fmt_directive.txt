@@ -1,0 +1,13 @@
+# A muxt:fmt comment muxt fmt does not know is an error: the file is not
+# formatted, and the error names where the comment is.
+
+! muxt fmt page.gohtml
+cmp stderr want-err.txt
+! stdout .
+
+-- page.gohtml --
+<div>
+{{/* muxt:fmt of */}}
+</div>
+-- want-err.txt --
+page.gohtml:2:1: unknown directive "muxt:fmt of": want muxt:fmt off, muxt:fmt on, or muxt:fmt preserve

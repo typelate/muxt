@@ -1,0 +1,15 @@
+# muxt fmt -l lists the files whose formatting differs and exits 1.
+
+! muxt fmt -l .
+cmp stdout want-list.txt
+
+-- ugly.gohtml --
+<ul>
+<li>one</li>
+</ul>
+-- pretty.gohtml --
+<ul>
+	<li>one</li>
+</ul>
+-- want-list.txt --
+ugly.gohtml

@@ -1,0 +1,7 @@
+# A path that does not exist is reported as the error opening it.
+
+! muxt fmt missing.gohtml
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+open $WORK/missing.gohtml: no such file or directory

@@ -26,13 +26,14 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		got = config
 		return nil
 	}
-	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
+	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 		routes:    func(_ *cobra.Command, _ string, c analysis.DefinitionsConfiguration) error { return record(c) },
 		check:     func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
 		generate:  func(_ *cobra.Command, _ string, c generate.RoutesFileConfiguration) error { return record(c) },
 		callers:   func(_ *cobra.Command, _ string, c analysis.TemplateCallersConfiguration) error { return record(c) },
 		calls:     func(_ *cobra.Command, _ string, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
+		format:    func(_ *cobra.Command, _ string, c formatConfiguration) error { return record(c) },
 	})
 	return got, err
 }
@@ -686,6 +687,21 @@ func TestCommandLineConfigurations(t *testing.T) {
 			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./internal/preview -- -count=1",
 			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
 		},
+		{
+			name: "fmt of standard input",
+			args: "fmt",
+			want: formatConfiguration{},
+		},
+		{
+			name: "fmt listing and diffing a file and a directory",
+			args: "fmt -l -d x.gohtml dir",
+			want: formatConfiguration{Paths: []string{"x.gohtml", "dir"}, List: true, Diff: true},
+		},
+		{
+			name: "fmt writing with long flags",
+			args: "fmt --write --list --diff x.gohtml",
+			want: formatConfiguration{Paths: []string{"x.gohtml"}, Write: true, List: true, Diff: true},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, tt.env)
@@ -723,7 +739,7 @@ func TestChangeDirectory(t *testing.T) {
 				got = wd
 				return nil
 			}
-			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
+			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 				check:     func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
 				generate:  func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
 				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
@@ -795,6 +811,7 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "an unknown calls format", args: "list-template-calls --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown mutation report format", args: "test-template-mutations --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown explore-module format", args: "explore-module --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "fmt writing standard input", args: "fmt -w", wantErr: "fmt: -w needs a file or directory; standard input has no file to write"},
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -812,7 +829,7 @@ func TestCommandLineRejections(t *testing.T) {
 func TestCheckIgnoresAReceiverType(t *testing.T) {
 	var stderr strings.Builder
 	var got any
-	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, &stderr, runners{
+	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, &stderr, runners{
 		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error {
 			got = c
 			return nil
@@ -831,7 +848,7 @@ func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
 	output := func(t *testing.T, commandLine string) string {
 		t.Helper()
 		var out strings.Builder
-		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, &out, &out, runners{})
+		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &out, runners{})
 		require.Error(t, err, "muxt %s", commandLine)
 		return out.String()
 	}
@@ -845,6 +862,7 @@ func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
 		"list-template-callers --use-templates-variable=a --use-templates-variable=a",
 		"list-template-calls --use-templates-variable=a --use-templates-variable=a",
 		"--templates-variable=a --use-templates-variable=b",
+		"fmt -w",
 	} {
 		t.Run(commandLine, func(t *testing.T) {
 			assert.NotContains(t, output(t, commandLine), "Usage:", "muxt %s printed the usage", commandLine)

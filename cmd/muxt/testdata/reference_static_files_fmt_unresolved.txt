@@ -1,0 +1,46 @@
+# muxt fmt cannot read a stylesheet linked from another host, so the
+# author CSS is unknown and every element of the partial is left as
+# written.
+
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
+muxt fmt -w partial.gohtml
+cmp partial.gohtml partial.orig
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "" }
+-- assets/style.css --
+.code{white-space:pre}
+-- layout.gohtml --
+{{define "GET / Index()"}}<link rel="stylesheet" href="https://cdn.example/site.css">{{template "partial"}}{{end}}
+-- partial.gohtml --
+{{define "partial"}}<section>
+<div class="code">
+  keep   me
+</div>
+<p>x</p>
+</section>{{end}}
+-- partial.orig --
+{{define "partial"}}<section>
+<div class="code">
+  keep   me
+</div>
+<p>x</p>
+</section>{{end}}
