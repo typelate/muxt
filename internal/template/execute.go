@@ -94,6 +94,23 @@ const maxExecDepth = 100000
 // For HTML trees (root contains HTMLDocumentFragmentNode), it builds an
 // html.Node intermediate representation and uses html.Render.
 // For plain text trees, it writes directly like text/template.
+//
+// ExecuteTemplate, ExecuteDocument and ExecuteElement are muxt's
+// static-analysis and coverage engine: they run templates so that tests
+// and tooling can observe what a template produces and which parts of it
+// ran. They are not safe for serving HTTP responses; serve with
+// html/template. Their contextual escaping is known to fall short of
+// html/template's in three places:
+//
+//   - An action in attribute-name position (<div {{.Name}}="x">,
+//     data-{{.Key}}="x") is in a tag the parser reads as text, so the
+//     tag, the action's output included, is written as escaped HTML text
+//     (&lt;div ...&gt;) rather than as a tag with a filtered attribute
+//     name.
+//   - A text (non-HTML) sub-template called from an HTML template is
+//     executed without the caller's escaping context.
+//   - A style or srcdoc attribute's value is not escaped for the CSS or
+//     HTML document it holds.
 func ExecuteTemplate(w io.Writer, tree *Tree, data any, opts ...Option) error {
 	cfg := config{}
 	for _, o := range opts {

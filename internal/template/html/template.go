@@ -267,12 +267,22 @@ func (t *Template) Clone() (*Template, error) {
 
 // Execute applies a parsed template to the specified data object,
 // writing the output to wr.
+//
+// Execute is a static-analysis and coverage engine, not a replacement for
+// html/template: it is not safe for serving HTTP responses. Its escaping
+// has the known gaps documented on template.ExecuteTemplate (actions in
+// attribute-name position, text sub-templates executed without the
+// caller's context, and style and srcdoc attribute values).
 func (t *Template) Execute(wr io.Writer, data any) error {
 	return t.execute(wr, t.name, data)
 }
 
 // ExecuteTemplate applies the template associated with t that has the given
 // name to the specified data object and writes the output to wr.
+//
+// Like Execute, it is a static-analysis and coverage engine, not safe for
+// serving HTTP responses; see template.ExecuteTemplate for the known
+// escaping gaps.
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error {
 	tmpl := t.Lookup(name)
 	if tmpl == nil || tmpl.Tree == nil {
