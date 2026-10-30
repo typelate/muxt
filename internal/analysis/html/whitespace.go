@@ -924,6 +924,9 @@ func (c *ruleCollector) declarations(list *csstree.List[csstree.Node], end int, 
 			continue
 		}
 		start, declEnd := decl.Loc.Start.Offset, declarationEnd(c.css.text, decl, item.Next, end)
+		if declEnd < start {
+			continue
+		}
 		maybe := c.inBranch(start)
 		colon := strings.IndexByte(c.css.text[start:declEnd], ':')
 		if colon < 0 {

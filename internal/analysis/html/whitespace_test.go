@@ -165,3 +165,24 @@ func queryElement(t *testing.T, trees []*template.Tree, selector string) *templa
 	t.Fatalf("no element matches %q", selector)
 	return nil
 }
+
+// A <style> element whose CSS does not parse cleanly (a declaration list
+// cut off after its colon, found by fuzzing) must not panic.
+func TestComputeWhitespaceMalformedStyle(t *testing.T) {
+	for _, source := range []string{
+		`<stYle>{A:`,
+		`<style>{A:`,
+		`<style>p{A:`,
+		`<style>p{display:`,
+		`<style>{display:block`,
+		`<style>p{a:b;c:</style><p>x</p>`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", source)}
+			got := ComputeWhitespace(trees, WhitespaceOptions{})
+			if len(got) == 0 {
+				t.Errorf("ComputeWhitespace(%q) classified no element", source)
+			}
+		})
+	}
+}

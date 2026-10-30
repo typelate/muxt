@@ -230,7 +230,8 @@ func checkDeclarationList(css cssText, list *csstree.List[csstree.Node], end int
 // next item (or the list's end) when there is no semicolon before it. A
 // declaration's location ends at its last value token, so a template action
 // blanked to a comment at the end of the value lies between the location's
-// end and this offset.
+// end and this offset. The offset is never before decl's start or past
+// the end of text.
 func declarationEnd(text string, decl *csstree.Declaration, next *csstree.ListItem[csstree.Node], listEnd int) int {
 	limit := listEnd
 	if next != nil {
@@ -239,6 +240,12 @@ func declarationEnd(text string, decl *csstree.Declaration, next *csstree.ListIt
 		}
 	}
 	end := decl.Loc.End.Offset
+	// A declaration cut off at the end of the text (p{a:) can end after
+	// the list that holds it; it then ends where it does.
+	end = min(end, len(text))
+	if limit < end || limit > len(text) {
+		return end
+	}
 	if i := strings.IndexByte(text[end:limit], ';'); i >= 0 {
 		return end + i
 	}
