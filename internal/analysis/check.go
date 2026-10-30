@@ -276,8 +276,33 @@ func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTempla
 func logTemplatePositions(logger *log.Logger, ts *html.Template, names []string) {
 	for _, name := range names {
 		t := ts.Lookup(name)
-		logger.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
+		logger.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, firstWritten(t.Tree.Root)), name)
 	}
+}
+
+// firstWritten returns the node a template is located at: its root list,
+// or for a file template the first thing written after any leading
+// template comments.
+//
+// text/template started a file's root list at its first token, which
+// skipped the comments the lexer dropped, so an unused file template was
+// located at the dead text in it. The copied parser starts the list at
+// the top of the file and wraps the file's content in a document
+// fragment, comments included.
+func firstWritten(root *template.ListNode) template.Node {
+	if len(root.Nodes) != 1 {
+		return root
+	}
+	fragment, ok := root.Nodes[0].(*template.HTMLDocumentFragmentNode)
+	if !ok {
+		return root
+	}
+	for _, child := range fragment.Children {
+		if _, comment := child.(*template.CommentNode); !comment {
+			return child
+		}
+	}
+	return root
 }
 
 // partitionUnusedTemplates splits the unused template names into route

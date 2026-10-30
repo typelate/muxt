@@ -189,6 +189,16 @@ func TestReportUnusedTemplates(t *testing.T) {
 	}
 }
 
+// TestLogTemplatePositions states where an unused template is located: at
+// the first thing written in it, which for a file template is the dead
+// text after any leading template comment, not the top of the file.
+func TestLogTemplatePositions(t *testing.T) {
+	ts := parseTemplates(t, "{{/* fine */}}\n\ndead text{{define \"partial\"}}\n<p>x</p>{{end}}")
+	var logs strings.Builder
+	logTemplatePositions(log.New(&logs, "", 0), ts, []string{"set", "partial"})
+	assert.Equal(t, "  - set:1:15: \"set\"\n  - set:3:30: \"partial\"\n", logs.String())
+}
+
 func TestCollectTemplateReferencesFollowsEveryBranch(t *testing.T) {
 	ts := parseTemplates(t, `{{define "root"}}{{range .}}{{template "in-range" .}}{{else}}{{template "in-range-else" .}}{{end}}{{with .}}{{template "in-with" .}}{{else}}{{template "in-with-else" .}}{{end}}{{template "loop"}}{{end}}{{define "loop"}}{{template "loop"}}{{template "leaf"}}{{end}}{{define "leaf"}}x{{end}}{{define "in-range"}}x{{end}}{{define "in-range-else"}}x{{end}}{{define "in-with"}}x{{end}}{{define "in-with-else"}}x{{end}}`)
 	seen := make(map[string]bool)
