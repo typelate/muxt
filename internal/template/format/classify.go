@@ -712,7 +712,13 @@ var keptInTable = map[string]bool{"script": true, "style": true, "template": tru
 //   - an element foster-parented out of a table context, and the table
 //     elements it is moved out of, since it renders next to the table;
 //     text with content, or an action, template call or block that may
-//     write text, marks the table elements the same way.
+//     write text, marks the table elements the same way;
+//   - an html, head or body element the parser does not build where it
+//     stands: once the document holds content (text, an action, an
+//     element that belongs in the body), and for a second one, the
+//     parser drops the tag and its children are built where it stood
+//     (HTML §13.2.6.4.7). A define or block body is taken to start a
+//     document.
 func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces) {
 	unsure := func(el *template.HTMLElementNode) {
 		if ws, ok := styles[el]; ok {
@@ -720,6 +726,8 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 			styles[el] = ws
 		}
 	}
+	// doc is what the walk has seen of the document so far.
+	var doc documentState
 	// chain is the table-context elements from the nearest table down to
 	// the current parent; it is empty outside a table context.
 	var walk func(nodes []template.Node, parent string, chain []*template.HTMLElementNode)
@@ -734,15 +742,24 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 			case *template.HTMLDocumentFragmentNode:
 				walk(n.Children, parent, chain)
 			case *template.TextNode:
-				if tableContexts[parent] && !isRunOnly(n.Text) {
-					fosterParented()
+				if !isRunOnly(n.Text) {
+					doc.content = doc.content || !headTags[parent]
+					if tableContexts[parent] {
+						fosterParented()
+					}
 				}
 			case *template.ActionNode, *template.TemplateNode:
+				doc.content = doc.content || !headTags[parent]
 				if tableContexts[parent] {
 					fosterParented()
 				}
 			case *template.HTMLElementNode:
 				tag := strings.ToLower(n.TagName)
+				if !doc.inPlace(tag, parent) {
+					unsure(n)
+					walk(n.Children, parent, chain) // the parser drops the tag
+					continue
+				}
 				allowed, isPart := tableParents[tag]
 				switch {
 				case isPart && !slices.Contains(allowed, parent):
@@ -771,19 +788,66 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 				}
 			case *template.DefineNode:
 				if n.Body != nil {
+					outer := doc
+					doc = documentState{}
 					walk(n.Body.Nodes, "", nil)
+					doc = outer
 				}
 			case *template.BlockNode:
+				doc.content = true
 				if tableContexts[parent] {
 					fosterParented()
 				}
 				if n.Body != nil {
+					outer := doc
+					doc = documentState{}
 					walk(n.Body.Nodes, "", nil)
+					doc = outer
 				}
 			}
 		}
 	}
 	walk(root.Nodes, "", nil)
+}
+
+// documentState is what a walk in source order has seen of a document:
+// whether body content started, and which of html, head and body the
+// parser built.
+type documentState struct {
+	content, html, head, body bool
+}
+
+// headTags are the elements the parser puts in the head before the body
+// starts (HTML §13.2.6.4.4): they do not start body content.
+var headTags = map[string]bool{
+	"base": true, "basefont": true, "bgsound": true, "link": true, "meta": true,
+	"title": true, "noscript": true, "noframes": true, "style": true, "script": true, "template": true,
+}
+
+// inPlace reports whether the parser builds an element tag found under
+// parent where it stands, and records it in d. Only html, head and body
+// can be dropped: an html after any of them or after content, a head
+// after a body or content, and a body after content or a second body.
+func (d *documentState) inPlace(tag, parent string) bool {
+	top := parent == "" || parent == "html"
+	switch tag {
+	case "html":
+		ok := parent == "" && !d.content && !d.html && !d.head && !d.body
+		d.html = true
+		return ok
+	case "head":
+		ok := top && !d.content && !d.head && !d.body
+		d.head = true
+		return ok
+	case "body":
+		ok := top && !d.content && !d.body
+		d.body = true
+		return ok
+	}
+	if !headTags[tag] {
+		d.content = true
+	}
+	return true
 }
 
 // repairedTags name the block elements that a start tag inside them can

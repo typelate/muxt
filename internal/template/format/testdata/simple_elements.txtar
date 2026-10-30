@@ -97,8 +97,4 @@
 <!-- hello -->
 {{/* a comment */}}
 <!DOCTYPE html>
-<!DOCTYPE html><html>
-	<body>
-		<p>hi</p>
-	</body>
-</html>
+<!DOCTYPE html><html><body><p>hi</p></body></html>
