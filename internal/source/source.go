@@ -14,10 +14,10 @@
 package source
 
 import (
+	"github.com/typelate/muxt/internal/template"
+	html "github.com/typelate/muxt/internal/template/html"
 	"go/token"
 	"go/types"
-	"html/template"
-	"text/template/parse"
 )
 
 // Package is a loaded Go package.
@@ -43,7 +43,7 @@ type Variable struct {
 	// Set is the template set the variable holds. A text/template
 	// variable is carried as an html/template value with the same trees:
 	// muxt reads names and trees and never executes the set.
-	Set *template.Template
+	Set *html.Template
 
 	// Functions are the functions a template in the set may call: the
 	// builtins and those registered with Funcs.
@@ -94,7 +94,7 @@ type Definition struct {
 	Define, End, TemplateName Span
 
 	// Tree is the template's parse tree.
-	Tree *parse.Tree
+	Tree *template.Tree
 }
 
 // Span is a run of bytes in a file.
