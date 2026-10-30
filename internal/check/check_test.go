@@ -909,7 +909,7 @@ func TestTree(t *testing.T) {
 				sourceFunctions[name] = sig
 			}
 
-			tmpl := template.New[*types.Signature]("template")
+			tmpl := template.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
 			tmpl = tmpl.Functions(sourceFunctions)
 			tmpl, parseErr := tmpl.Parse(tt.Template)
 			require.NoError(t, parseErr)
@@ -1513,7 +1513,7 @@ func TestIdentifierNodeBuiltins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl := template.New[*types.Signature]("template")
+			tmpl := template.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
 			tmpl = tmpl.Functions(sourceFunctions)
 			tmpl, parseErr := tmpl.Parse(tt.template)
 			require.NoError(t, parseErr)

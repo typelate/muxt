@@ -17,6 +17,7 @@ type Template[Signature any] struct {
 	functions             map[string]Signature
 	missingKey            string // "invalid", "zero", "error", or "" (default)
 	text                  bool   // a text/template set: parsed without HTML structure
+	skipFuncCheck         bool   // Parse does not check that called functions are defined
 }
 
 // New returns a template set that parses as html/template does: its
@@ -39,19 +40,37 @@ func NewText[Signature any](name string) *Template[Signature] {
 	return t
 }
 
+// SkipFuncCheck makes Parse accept a call of a function that is not
+// defined, as text/template/parse's SkipFuncCheck mode does, so that the
+// call reaches the type checker. It returns t.
+func (t *Template[S]) SkipFuncCheck() *Template[S] {
+	t.skipFuncCheck = true
+	return t
+}
+
 // IsText reports whether the set parses as text/template does (NewText).
 func (t *Template[S]) IsText() bool {
 	return t.text
 }
 
 // ParseOptions are the lexer options Parse parses text with: the set's
-// delimiters, HTML structure unless the set is a text/template set, and
+// delimiters, HTML structure unless the set is a text/template set,
 // break and continue as keywords unless the set registers functions of
-// those names, as in text/template.
+// those names, and, unless SkipFuncCheck was called, a call of a
+// function that is neither registered nor a builtin as a parse error, as
+// in text/template.
 func (t *Template[S]) ParseOptions() lex.Options {
 	_, hasBreak := t.functions["break"]
 	_, hasContinue := t.functions["continue"]
+	var functions map[string]bool
+	if !t.skipFuncCheck {
+		functions = make(map[string]bool, len(t.functions))
+		for name := range t.functions {
+			functions[name] = true
+		}
+	}
 	return lex.Options{
+		Functions:   functions,
 		EmitComment: true,
 		ParseHTML:   !t.text,
 		LeftDelim:   cmp.Or(t.leftDelim, "{{"),

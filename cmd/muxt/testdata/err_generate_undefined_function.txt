@@ -1,0 +1,61 @@
+# A call of a function the template set does not define stops muxt
+# generate and muxt check with html/template's parse error, before any
+# code is written. Builtins and functions registered with Funcs are
+# defined; html/template's internal escapers are not.
+
+! muxt generate --use-receiver-type=T
+cmp stderr want-generate.txt
+! exists template_routes.go
+
+! muxt check
+cmp stderr want-check.txt
+
+cp good-template.gohtml template.gohtml
+muxt generate --use-receiver-type=T
+muxt check
+stdout 'ok: 1 template'
+
+cp escaper-template.gohtml template.gohtml
+! muxt check
+stderr 'function "_html_template_htmlescaper" not defined'
+
+-- want-generate.txt --
+Error: template: template.gohtml:3: function "foo" not defined
+-- want-check.txt --
+Error: fail: template: template.gohtml:3: function "foo" not defined
+-- template.gohtml --
+{{define "GET / Index()"}}
+<p>{{shout .Result}}</p>
+<p title="{{.Result | foo}}">x</p>
+{{end}}
+-- good-template.gohtml --
+{{define "GET / Index()"}}
+<p>{{shout .Result}} {{len .Result}} {{printf "%s" .Result | html}} {{urlquery .Result}}</p>
+{{end}}
+-- escaper-template.gohtml --
+{{define "GET / Index()"}}
+<p>{{_html_template_htmlescaper .Result}}</p>
+{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"strings"
+)
+
+//go:embed template.gohtml
+var source embed.FS
+
+var templates = template.Must(template.New("").Funcs(template.FuncMap{
+	"shout": strings.ToUpper,
+}).ParseFS(source, "*"))
+
+type T struct{}
+
+func (T) Index() string { return "index" }

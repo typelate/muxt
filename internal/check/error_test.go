@@ -429,9 +429,9 @@ func TestExecute_error_classification(t *testing.T) {
 	}
 
 	t.Run("unknown function", func(t *testing.T) {
-		// The template parser does not resolve function names, so an
-		// unknown one reaches the checker.
-		tmpl, err := template.New[*types.Signature]("unknown-func.gohtml").Parse(`{{foo}}`)
+		// With the parser's function check skipped, as upstream's
+		// parse.SkipFuncCheck does, an unknown function reaches the checker.
+		tmpl, err := template.New[*types.Signature]("unknown-func.gohtml").SkipFuncCheck().Parse(`{{foo}}`)
 		require.NoError(t, err)
 		tree := tmpl.Tree()
 

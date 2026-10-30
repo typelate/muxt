@@ -87,7 +87,8 @@ func TestErrorLocationPrefixOfACommand(t *testing.T) {
 			want: "t:1:21: executing \"p\" at <undefined \"a  b\" `c  d` .Title>: unknown function: undefined",
 		},
 	} {
-		ts, err := template.New[*types.Signature]("t").Parse(tt.text)
+		// The undefined function must reach the checker.
+		ts, err := template.New[*types.Signature]("t").SkipFuncCheck().Parse(tt.text)
 		if err != nil {
 			t.Fatal(err)
 		}

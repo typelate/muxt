@@ -330,13 +330,11 @@ func TestEvaluateTemplateSelector(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("Func not defined", func(t *testing.T) {
-		// Unlike stdlib html/template, htt's parser does not reject a
-		// reference to an undefined function at parse time — that is the
-		// check type-checker's job (checkIdentifiers reports it), so
-		// resolving the construction chain here succeeds.
+		// As html/template's parser does, the parser rejects a call of
+		// a function the set does not define.
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		_, err := evalTemplates(t, dir, "templatesFuncNotDefined", "missing_func.gohtml", "greet.gohtml")
-		require.NoError(t, err)
+		require.ErrorContains(t, err, `missing_func.gohtml:1: function "enemy" not defined`)
 	})
 	t.Run("Func wrong parameter kind", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))

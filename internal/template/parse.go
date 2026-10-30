@@ -56,12 +56,13 @@ type Tree struct {
 	actionTrimLeft  bool    // left trim marker on current action's left delimiter
 	actionTrimRight bool    // right trim marker on current action's right delimiter
 	rangeDepth      int
-	stackDepth      int      // depth of nested parenthesized expressions
-	htmlAncestors   []string // stack of open HTML element tag names (lowercase)
-	htmlDegraded    []string // names of start tags read as text whose end tag is text too (see lex.Token.DegradedTag)
-	htmlDegradedMin int      // htmlDegraded entries below this index belong to elements enclosing the one being parsed
-	maxHTMLDepth    int      // maximum nesting depth for HTML elements
-	htmlDepth       int      // current HTML element nesting depth
+	stackDepth      int             // depth of nested parenthesized expressions
+	htmlAncestors   []string        // stack of open HTML element tag names (lowercase)
+	htmlDegraded    []string        // names of start tags read as text whose end tag is text too (see lex.Token.DegradedTag)
+	htmlDegradedMin int             // htmlDegraded entries below this index belong to elements enclosing the one being parsed
+	functions       map[string]bool // lex.Options.Functions: the registered function names, or nil for no check
+	maxHTMLDepth    int             // maximum nesting depth for HTML elements
+	htmlDepth       int             // current HTML element nesting depth
 }
 
 // maxStackDepth is the maximum depth permitted for nested
@@ -91,6 +92,7 @@ func ParseTree(fileName, templateName, text string, treeSet map[string]*Tree, op
 		Filepath:  fileName,
 	}
 	t.text = text
+	t.functions = options.Functions
 	t.maxHTMLDepth = options.MaxHTMLDepth
 	if t.maxHTMLDepth == 0 {
 		t.maxHTMLDepth = 1024
@@ -317,6 +319,17 @@ func (t *Tree) unexpected(token lex.Token, context string) error {
 	return t.errorf("unexpected %s in %s", token, context)
 }
 
+// hasFunction reports whether name is a function a template may call, as
+// text/template's parser checks it: a builtin or a registered function.
+// With no function names given (lex.Options.Functions), every name is.
+func (t *Tree) hasFunction(name string) bool {
+	if t.functions == nil || t.functions[name] {
+		return true
+	}
+	_, ok := builtins()[name]
+	return ok
+}
+
 func (t *Tree) startParse(scanner *lex.Scanner, treeSet map[string]*Tree) {
 	t.Root = nil
 	t.scanner = scanner
@@ -416,6 +429,7 @@ func (t *Tree) parse() error {
 					Name: "definition",
 				}
 				newT.text = t.text
+				newT.functions = t.functions
 				newT.ParseName = t.ParseName
 				newT.startParse(t.scanner, t.treeSet)
 				if err := newT.parseDefinition(); err != nil {
@@ -1098,6 +1112,9 @@ func (t *Tree) operand() (Node, error) {
 func (t *Tree) term() (Node, error) {
 	switch token := t.nextNonSpace(); token.Type {
 	case lex.TokenTypeIdentifier:
+		if !t.hasFunction(token.Value) {
+			return nil, t.errorf("function %q not defined", token.Value)
+		}
 		return NewIdentifier(t, token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeDot:
 		return t.newDot(token.Pos, token.End), nil

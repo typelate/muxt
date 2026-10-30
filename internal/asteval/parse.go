@@ -24,13 +24,21 @@ import (
 // in.
 //
 // functions supplies the names the template set registered beyond the
-// builtins; it may be nil. The parser does not check that a called
-// function exists. The names matter only because registering a function
-// named break or continue turns that keyword off, as it does in
-// Template.Parse.
+// builtins. As text/template's parser does, ParseTrees reports a call of
+// a function that is neither one of them nor a builtin as a parse error,
+// `function "name" not defined`; a nil functions turns that check off.
+// Registering a function named break or continue turns that keyword off,
+// as it does in Template.Parse.
 func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*types.Signature, html bool) (map[string]*template.Tree, error) {
 	_, hasBreak := functions["break"]
 	_, hasContinue := functions["continue"]
+	var names map[string]bool
+	if functions != nil {
+		names = make(map[string]bool, len(functions))
+		for name := range functions {
+			names[name] = true
+		}
+	}
 	treeSet := make(map[string]*template.Tree)
 	root, err := template.ParseTree(name, name, text, treeSet, lex.Options{
 		EmitComment: true,
@@ -39,6 +47,7 @@ func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*
 		RightDelim:  cmp.Or(rightDelim, "}}"),
 		BreakOK:     !hasBreak,
 		ContinueOK:  !hasContinue,
+		Functions:   names,
 	})
 	if err != nil {
 		return nil, err

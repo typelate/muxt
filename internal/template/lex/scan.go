@@ -54,6 +54,12 @@ type Options struct {
 	LeftDelim    string // start of action marker
 	RightDelim   string // end of action marker
 	MaxHTMLDepth int    // maximum nesting depth for HTML elements; 0 means use default (1024)
+	// Functions, when not nil, turns on text/template's parse-time check
+	// that a called function is defined: it holds the names of the
+	// functions the template set registered, and a call of a name that is
+	// neither one of them nor a text/template builtin is a parse error,
+	// `function "name" not defined`. Nil leaves function names unchecked.
+	Functions map[string]bool
 }
 
 func NewOptions(funcMaps ...map[string]any) Options {
