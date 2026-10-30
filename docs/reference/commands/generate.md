@@ -73,12 +73,12 @@ and `TemplateRoutes` serves it after the template routes:
 ```go
 staticAssets, err := fs.Sub(templateRoutesStaticAssets, "assets")
 if err != nil {
-	panic(err)
+	panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 }
 mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
 ```
 
-`go:embed` leaves out names starting with `.` or `_`, so those files are not served. The pattern is always `GET`, and the path gets a trailing `/`. With `pathsPrefix` the pattern and the stripped prefix are both joined onto it; with `middleware` the handler is wrapped by it ([reference_static_assets_path_prefix.txt](../../../cmd/muxt/testdata/reference_static_assets_path_prefix.txt)).
+`go:embed` leaves out names starting with `.` or `_`, so those files are not served. A request for the path itself, or for one of its subdirectories, gets a directory listing, because `http.FileServerFS` serves one for a directory with no `index.html`. The pattern is always `GET`, and the path gets a trailing `/`. With `pathsPrefix` the pattern and the stripped prefix are both joined onto it; with `middleware` the handler is wrapped by it ([reference_static_assets_path_prefix.txt](../../../cmd/muxt/testdata/reference_static_assets_path_prefix.txt)).
 
 `TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)).
 
@@ -91,7 +91,7 @@ The generated file's [header](#files) records both flags.
 - a directory that is absolute, contains `..` or `\`, or is not a slash-separated path inside the package;
 - a value containing whitespace;
 - a directory that does not exist ([err_static_assets_directory.txt](../../../cmd/muxt/testdata/err_static_assets_directory.txt)), is a symbolic link, is not a directory, or holds no file `go:embed` would include;
-- a template registering `GET <path>/` ([err_static_assets_collision.txt](../../../cmd/muxt/testdata/err_static_assets_collision.txt)), or one whose path method has the static assets path method's name.
+- a template registering `GET <path>/` ([err_static_assets_collision.txt](../../../cmd/muxt/testdata/err_static_assets_collision.txt)), one registering `GET <path>/{name...}`, which matches the same requests ([err_static_assets_wildcard_conflict.txt](../../../cmd/muxt/testdata/err_static_assets_wildcard_conflict.txt)), or one whose path method has the static assets path method's name.
 
 ## Warnings
 

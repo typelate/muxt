@@ -44,6 +44,8 @@ func TestValidateGenerateConfiguration(t *testing.T) {
 		{name: "a static assets directory with a space", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: "a b", StaticAssetsPath: "/static"}, wantErr: `--input-static-assets-directory must not contain whitespace: "a b"`},
 		{name: "a static assets path with a space", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: "assets", StaticAssetsPath: "/a b"}, wantErr: `--output-static-assets-path must not contain whitespace: "/a b"`},
 		{name: "a static assets directory with a trailing slash", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: "assets/", StaticAssetsPath: "/static/"}},
+		{name: "a static assets directory with dots inside an element", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: "assets..v2", StaticAssetsPath: "/static"}},
+		{name: "a static assets directory with a parent element", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: "a/../b", StaticAssetsPath: "/static"}, wantErr: `--input-static-assets-directory must be a slash-separated path inside the package directory: "a/../b"`},
 		{name: "a static assets directory naming the package", config: generate.RoutesFileConfiguration{StaticAssetsDirectory: ".", StaticAssetsPath: "/static"}, wantErr: `--input-static-assets-directory must be a slash-separated path inside the package directory: "."`},
 		{name: "two generated names alike", config: generate.RoutesFileConfiguration{RoutesFunction: "X", TemplateRouteBuilderTypeName: "X"}, wantErr: "--output-routes-func and --output-template-route-builder-type are both X; each generated type needs its own name"},
 	} {

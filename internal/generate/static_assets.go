@@ -83,6 +83,9 @@ func checkStaticAssetsDirectory(dir string, config RoutesFileConfiguration, defs
 		if def.Pattern() == pattern {
 			return fmt.Errorf("--%s %s: template %q registers the same pattern", staticAssetsPathFlag, prefix, def.Name())
 		}
+		if matchesStaticAssetsRequests(def, prefix) {
+			return fmt.Errorf("--%s %s: template %q registers a pattern that matches the same requests as the static assets route", staticAssetsPathFlag, prefix, def.Name())
+		}
 	}
 	for _, def := range defs {
 		ident, err := def.ExportedPathIdentifier()
@@ -94,6 +97,28 @@ func checkStaticAssetsDirectory(dir string, config RoutesFileConfiguration, defs
 		}
 	}
 	return nil
+}
+
+// matchesStaticAssetsRequests reports whether def's pattern is
+// "GET <prefix>{name...}": it matches exactly the requests "GET <prefix>"
+// does, so neither is more specific and http.ServeMux panics when the
+// second is registered. A pattern with a host, another method, no method,
+// or more literal segments is more or less specific and registers beside
+// it.
+func matchesStaticAssetsRequests(def muxt.Definition, prefix string) bool {
+	if def.HTTPMethod() != http.MethodGet || def.Host() != "" {
+		return false
+	}
+	rest, ok := strings.CutPrefix(def.Path(), prefix)
+	if !ok {
+		return false
+	}
+	name, ok := strings.CutPrefix(rest, "{")
+	if !ok {
+		return false
+	}
+	name, ok = strings.CutSuffix(name, "...}")
+	return ok && name != "" && !strings.ContainsAny(name, "/{}")
 }
 
 // errFoundEmbeddedFile stops the walk in embedsAFile at the first file.
@@ -147,7 +172,7 @@ func staticAssetsDecl(file *File, config RoutesFileConfiguration) *ast.GenDecl {
 //
 //	staticAssets, err := fs.Sub(templateRoutesStaticAssets, "assets")
 //	if err != nil {
-//		panic(err)
+//		panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 //	}
 //	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
 //
@@ -179,7 +204,9 @@ func staticAssetsStatements(file *File, config RoutesFileConfiguration) []ast.St
 		},
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: ast.NewIdent(errIdent), Op: token.NEQ, Y: astgen.Nil()},
-			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: astgen.CallBuiltin("panic", ast.NewIdent(errIdent))}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: astgen.CallBuiltin("panic",
+				astgen.Call(file, "fmt", "fmt", "Errorf", astgen.String("muxt: static assets directory %q: %w"), astgen.String(staticAssetsDirectory(config)), ast.NewIdent(errIdent)),
+			)}}},
 		},
 		&ast.ExprStmt{X: &ast.CallExpr{
 			Fun:  &ast.SelectorExpr{X: ast.NewIdent(muxVarIdent), Sel: ast.NewIdent(httpHandleIdent)},

@@ -158,7 +158,7 @@ func checkStaticAssets(config generate.RoutesFileConfiguration) error {
 		return fmt.Errorf("--%s must be a literal path without wildcards or empty segments: %q", outputStaticAssetsPath, urlPath)
 	}
 	trimmed := strings.TrimSuffix(dir, "/")
-	if path.IsAbs(dir) || strings.Contains(dir, "..") || strings.Contains(dir, `\`) || trimmed == "." || !fs.ValidPath(trimmed) {
+	if path.IsAbs(dir) || slices.Contains(strings.Split(trimmed, "/"), "..") || strings.Contains(dir, `\`) || trimmed == "." || !fs.ValidPath(trimmed) {
 		return fmt.Errorf("--%s must be a slash-separated path inside the package directory: %q", inputStaticAssetsDirectory, dir)
 	}
 	if err := checkRecordable(inputStaticAssetsDirectory, dir); err != nil {

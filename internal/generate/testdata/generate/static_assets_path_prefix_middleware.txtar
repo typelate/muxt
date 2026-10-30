@@ -96,7 +96,7 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver, pathsPrefix str
 	})))
 	staticAssets, err := fs.Sub(templateRoutesStaticAssets, "assets")
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 	}
 	mux.Handle("GET "+strings.TrimSuffix(path.Join(pathsPrefix, "/static/v1/"), "/")+"/", middleware(http.StripPrefix(strings.TrimSuffix(path.Join(pathsPrefix, "/static/v1/"), "/")+"/", http.FileServerFS(staticAssets))))
 	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
