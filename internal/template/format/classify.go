@@ -1,6 +1,7 @@
 package format
 
 import (
+	"slices"
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
@@ -670,4 +671,110 @@ func transparent(n template.Node) (side, bool) {
 		}
 	}
 	return opaqueSide, false
+}
+
+// tableParents names, for each table-part tag, the parent elements in
+// which the HTML parser keeps it. Elsewhere the parser drops the tag
+// (HTML §13.2.6.4.7, "in body": a start tag tr, td, … is a parse error;
+// ignore the token), so the element is no line edge.
+var tableParents = map[string][]string{
+	"caption":  {"table"},
+	"colgroup": {"table"},
+	"col":      {"table", "colgroup"},
+	"tbody":    {"table"},
+	"thead":    {"table"},
+	"tfoot":    {"table"},
+	"tr":       {"table", "tbody", "thead", "tfoot"},
+	"td":       {"table", "tbody", "thead", "tfoot", "tr"},
+	"th":       {"table", "tbody", "thead", "tfoot", "tr"},
+}
+
+// tableContexts are the elements whose content the parser reads "in
+// table": other elements and text there are foster-parented, moved to
+// just before the table (HTML §13.2.6.1). script, style and template are
+// kept in place.
+var tableContexts = map[string]bool{"table": true, "tbody": true, "thead": true, "tfoot": true, "tr": true}
+
+var keptInTable = map[string]bool{"script": true, "style": true, "template": true}
+
+// unsureParsedElsewhere sets the display of the elements whose box the
+// HTML parser does not build where the template tree puts it to unknown,
+// so the classifier treats them as unsure:
+//   - a table part whose parent the parser does not keep it in (a table
+//     part at the top of a define or block body has an unknown parent);
+//   - an element foster-parented out of a table context, and the table
+//     elements it is moved out of, since it renders next to the table;
+//     text with content, or an action, template call or block that may
+//     write text, marks the table elements the same way.
+func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces) {
+	unsure := func(el *template.HTMLElementNode) {
+		if ws, ok := styles[el]; ok {
+			ws.Display = analysis.DisplayUnknown
+			styles[el] = ws
+		}
+	}
+	// chain is the table-context elements from the nearest table down to
+	// the current parent; it is empty outside a table context.
+	var walk func(nodes []template.Node, parent string, chain []*template.HTMLElementNode)
+	walk = func(nodes []template.Node, parent string, chain []*template.HTMLElementNode) {
+		fosterParented := func() {
+			for _, el := range chain {
+				unsure(el)
+			}
+		}
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *template.HTMLDocumentFragmentNode:
+				walk(n.Children, parent, chain)
+			case *template.TextNode:
+				if tableContexts[parent] && !isRunOnly(n.Text) {
+					fosterParented()
+				}
+			case *template.ActionNode, *template.TemplateNode:
+				if tableContexts[parent] {
+					fosterParented()
+				}
+			case *template.HTMLElementNode:
+				tag := strings.ToLower(n.TagName)
+				allowed, isPart := tableParents[tag]
+				switch {
+				case isPart && !slices.Contains(allowed, parent):
+					unsure(n)
+					walk(n.Children, parent, chain) // the parser drops the tag
+					continue
+				case tableContexts[parent] && !isPart && tag != "table" && !keptInTable[tag]:
+					unsure(n)
+					fosterParented()
+				}
+				var inner []*template.HTMLElementNode
+				if tableContexts[tag] {
+					if tag != "table" {
+						inner = chain
+					}
+					inner = append(slices.Clip(inner), n)
+				}
+				walk(n.Children, tag, inner)
+			case *template.IfNode, *template.WithNode, *template.RangeNode:
+				b := branchOf(n)
+				if b.List != nil {
+					walk(b.List.Nodes, parent, chain)
+				}
+				if b.ElseList != nil {
+					walk(b.ElseList.Nodes, parent, chain)
+				}
+			case *template.DefineNode:
+				if n.Body != nil {
+					walk(n.Body.Nodes, "", nil)
+				}
+			case *template.BlockNode:
+				if tableContexts[parent] {
+					fosterParented()
+				}
+				if n.Body != nil {
+					walk(n.Body.Nodes, "", nil)
+				}
+			}
+		}
+	}
+	walk(root.Nodes, "", nil)
 }

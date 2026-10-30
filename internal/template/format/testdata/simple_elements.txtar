@@ -50,8 +50,15 @@
 </div>
 <div></div>
 <p>hello</p>
-<div><p>hello</p><p>world</p></div>
-<div><section><p>text</p></section></div>
+<div>
+	<p>hello</p>
+	<p>world</p>
+</div>
+<div>
+	<section>
+		<p>text</p>
+	</section>
+</div>
 <br>
 <br>
 <img src="test.png">
@@ -63,11 +70,22 @@
 <div class="foo">text</div>
 <div class="foo" id="bar">text</div>
 <div class="foo" id="bar" data-x="1">text</div>
-<section><div><p>nested</p></div></section>
-<ul><li>one</li><li>two</li></ul>
+<section>
+	<div>
+		<p>nested</p>
+	</div>
+</section>
+<ul>
+	<li>one</li>
+	<li>two</li>
+</ul>
 <p>text with <strong>bold</strong> and <em>italic</em></p>
 <div class="container" id="main"><p>inside</p></div>
-<header><h1>Title</h1></header><main><p>body</p></main>
+<header>
+	<h1>Title</h1>
+</header><main>
+	<p>body</p>
+</main>
 <div>
 	<p>a</p>
 	<p>b</p>
@@ -77,4 +95,8 @@
 <!-- hello -->
 {{/* a comment */}}
 <!DOCTYPE html>
-<!DOCTYPE html><html><body><p>hi</p></body></html>
+<!DOCTYPE html><html>
+	<body>
+		<p>hi</p>
+	</body>
+</html>

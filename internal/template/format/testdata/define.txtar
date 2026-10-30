@@ -5,7 +5,9 @@
 <td>{{template "comp" .X}}</td>
 -- format.gohtml --
 {{define "header" -}}
-	<header><h1>{{.Title}}</h1></header>
+	<header>
+		<h1>{{.Title}}</h1>
+	</header>
 {{- end}}
 
 {{define "comp"}}{{.Value}}{{end}}

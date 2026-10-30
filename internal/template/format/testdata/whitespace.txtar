@@ -32,7 +32,9 @@
 -- format.gohtml --
 <div>
 	<p>first</p>
+
 	<p>second</p>
+
 	<p>third</p>
 </div>
 <pre>  line one
@@ -48,6 +50,7 @@
   lines  </textarea>
 {{if .Show}}
 	<p>a</p>
+
 	<p>b</p>
 {{end}}
 <div>

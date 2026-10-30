@@ -1,0 +1,22 @@
+-- input.gohtml --
+<div>a<tr><td>x</td></tr>b</div>
+<table>{{range .Items}}<tr><td>{{.}}</td></tr>{{end}}</table>
+<div>x<table>
+<span> a</span></table></div>
+<div>a<table>{{.X}}</table>b</div>
+-- format.gohtml --
+<div>a<tr><td>x</td></tr>b</div>
+<table>
+	{{range .Items}}
+		<tr>
+			<td>{{.}}</td>
+		</tr>
+	{{end}}
+</table>
+<div>x<table>
+<span> a</span></table></div>
+<div>a<table>{{.X}}</table>b</div>
+-- data/empty.json --
+{}
+-- data/items.json --
+{"Items":["a","b"],"X":"x"}

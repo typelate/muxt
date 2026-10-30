@@ -1,0 +1,10 @@
+-- input.gohtml --
+<div>
+<b>Hi</b>{{.Name}}
+</div>
+-- format.gohtml --
+<div><b>Hi</b>{{.Name}}</div>
+-- data/empty.json --
+{}
+-- data/name.json --
+{"Name":"World","X":"x"}

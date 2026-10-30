@@ -10,6 +10,7 @@ import (
 
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format"
+	"github.com/typelate/muxt/internal/template/format/internal/rendering"
 	"github.com/typelate/muxt/internal/template/lex"
 )
 
@@ -36,11 +37,13 @@ func TestCustomDelimiters(t *testing.T) {
 			want:  "<p><%.Name%></p>",
 		},
 		{
+			// The body holds a block-level p and its boundary gaps are
+			// reflowable, so it takes block layout (spec §6.4).
 			name:  "custom delimiters branch",
 			input: "<% if .Show %><p>yes</p><% end %>",
 			left:  "<%",
 			right: "%>",
-			want:  "<%if .Show%><p>yes</p><%end%>",
+			want:  "<%if .Show%>\n\t<p>yes</p>\n<%end%>",
 		},
 		{
 			name:  "custom delimiters define",
@@ -255,9 +258,13 @@ func TestFormattingEdgeCases(t *testing.T) {
 				t.Logf("rendered fmt:    %s", fmtHTML)
 			}
 
-			// The rendered output should match (unless only whitespace normalization)
+			// The rendered page should match (unless only whitespace
+			// normalization). Block layout may add whitespace the browser
+			// drops, so the check is the oracle's, not byte equality.
 			if !tt.normalizes {
-				assert.Equal(t, inputHTML, fmtHTML, "rendered output changed!\nformatted template: %s", formatted)
+				diff, err := rendering.Diff(inputHTML, fmtHTML, rendering.Body, nil)
+				require.NoError(t, err)
+				assert.Empty(t, diff, "rendered output changed!\nformatted template: %s", formatted)
 			}
 		})
 	}
@@ -303,8 +310,10 @@ func TestDefineSemanticPreservation(t *testing.T) {
 			var fmtBuf bytes.Buffer
 			require.NoError(t, fmtTmpl.Execute(&fmtBuf, data), "formatted template execution failed")
 
-			assert.Equal(t, inputBuf.String(), fmtBuf.String(),
-				"rendered HTML changed after formatting\ninput template:     %s\nformatted template: %s",
+			diff, err := rendering.Diff(inputBuf.String(), fmtBuf.String(), rendering.Body, nil)
+			require.NoError(t, err)
+			assert.Empty(t, diff,
+				"rendered page changed after formatting\ninput template:     %s\nformatted template: %s",
 				tt.src, formatted)
 		})
 	}

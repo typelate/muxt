@@ -59,6 +59,8 @@ func Node(root template.Node, opts ...Option) string {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
 	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, analysis.WhitespaceOptions{})
+	f.root = list
+	unsureParsedElsewhere(list, f.styles)
 	f.cls = classify(list, f.styles)
 	f.opaque = make(map[template.Node]bool, len(f.cls.opaque))
 	for _, n := range f.cls.opaque {
@@ -70,7 +72,8 @@ func Node(root template.Node, opts ...Option) string {
 			f.gapRuns[runKey{g.text, g.start}] = true
 		}
 	}
-	f.children(list, list.Nodes, listOptions{layout: blockLayout, root: true})
+	items, _ := splitChildren(list.Nodes)
+	f.children(list, list.Nodes, listOptions{layout: f.layoutOf(list, items, itemsWidth(items)), root: true})
 	return f.cleanUnnecessaryTrim(f.sb.String())
 }
 
@@ -83,6 +86,7 @@ type formatter struct {
 	maxLineWidth   int
 	maxInlineAttrs int
 
+	root    *template.ListNode
 	styles  analysis.Whitespaces
 	cls     classes
 	opaque  map[template.Node]bool // subtrees emitted from source
@@ -155,21 +159,19 @@ func (f *formatter) writeActionWithTrim(content string, trimLeft, trimRight bool
 
 // writeRun writes the whitespace run g as its class allows (spec §6.3):
 // a preserved run byte for byte; a preserve-breaks run as its line
-// breaks alone, or as written when it has none; any other run as
-// collapse-only: empty stays empty, spaces and tabs become one space,
+// breaks alone, or as written when it has none. In block layout a run
+// that takes a break becomes one newline plus the current indentation,
+// or a blank line when it is reflowable and held a blank line. Any other
+// run is written as collapse-only: empty stays empty, a trimmed run
+// becomes one space beside its marker, spaces and tabs become one space,
 // and a run with a line break becomes one newline plus the current
-// indentation. The caller handles a reflowable or trimmed run at a list
-// boundary; in either layout such a run between items is written as
-// collapse-only until layout chooses it (Task 10).
+// indentation. The caller handles the runs at a list boundary.
 func (f *formatter) writeRun(g gap, layout layoutKind) {
 	run := g.bytes()
-	if run == "" {
-		return
-	}
-	switch g.class {
-	case runPreserved:
+	switch {
+	case g.class == runPreserved:
 		f.writeString(run)
-	case runPreserveBreaks:
+	case g.class == runPreserveBreaks:
 		n := lineBreaks(run)
 		if n == 0 {
 			f.writeString(run)
@@ -178,14 +180,121 @@ func (f *formatter) writeRun(g gap, layout layoutKind) {
 		for range n {
 			f.newline()
 		}
-	default:
-		if lineBreaks(run) == 0 {
-			f.writeString(" ")
-			return
+	case layout == blockLayout && takesBreak(g):
+		f.newline()
+		if g.class == runReflowable && lineBreaks(run) > 1 {
+			f.newline()
 		}
+		f.writeIndent()
+	case run == "":
+	case g.class == runTrimmed, lineBreaks(run) == 0:
+		f.writeString(" ")
+	default:
 		f.newline()
 		f.writeIndent()
 	}
+}
+
+// takesBreak reports whether a newline and indentation may replace the
+// run g: it is reflowable or trimmed, so it never renders, or it is a
+// collapse-only run that already holds a line break.
+func takesBreak(g gap) bool {
+	switch g.class {
+	case runReflowable, runTrimmed:
+		return true
+	case runCollapseOnly:
+		return lineBreaks(g.bytes()) > 0
+	}
+	return false
+}
+
+// blockLayoutAllowed reports whether the items of list may be laid out
+// one per line (spec §6.4): every gap, the two boundary gaps included,
+// takes a break. The tree root's boundary gaps are the start and end of
+// the file, where block layout writes no break, so they do not count.
+func (f *formatter) blockLayoutAllowed(list template.Node, items []template.Node) bool {
+	for i := 0; i <= len(items); i++ {
+		if list == f.root && (i == 0 || i == len(items)) {
+			continue
+		}
+		if !takesBreak(f.cls.gaps[gapKey{list, i}]) {
+			return false
+		}
+	}
+	return true
+}
+
+// blockLayoutPreferred reports whether block layout reads better for the
+// items of list: an item is block-level, a gap held a line break in the
+// source, or the one-line form, width columns at the current
+// indentation, is wider than the maximum line width.
+func (f *formatter) blockLayoutPreferred(list template.Node, items []template.Node, width int) bool {
+	for i := 0; i <= len(items); i++ {
+		if lineBreaks(f.cls.gaps[gapKey{list, i}].bytes()) > 0 {
+			return true
+		}
+	}
+	if slices.ContainsFunc(items, f.isBlockItem) {
+		return true
+	}
+	return f.indent*tabColumns+width > f.maxLineWidth
+}
+
+// layoutOf chooses the layout of list: block when it is allowed and
+// preferred, else inline.
+func (f *formatter) layoutOf(list template.Node, items []template.Node, width int) layoutKind {
+	if f.blockLayoutAllowed(list, items) && f.blockLayoutPreferred(list, items, width) {
+		return blockLayout
+	}
+	return inlineLayout
+}
+
+// isBlockItem reports whether n is a block-level or table-internal
+// element, or control flow whose arms hold one.
+func (f *formatter) isBlockItem(n template.Node) bool {
+	switch n := n.(type) {
+	case *template.HTMLElementNode:
+		ws, ok := f.styles[n]
+		return ok && (ws.Display == analysis.DisplayBlock || ws.Display == analysis.DisplayTableInternal)
+	case *template.IfNode, *template.WithNode, *template.RangeNode:
+		b := branchOf(n)
+		return f.listHasBlockItem(b.List) || f.listHasBlockItem(b.ElseList)
+	}
+	return false
+}
+
+func (f *formatter) listHasBlockItem(l *template.ListNode) bool {
+	if l == nil {
+		return false
+	}
+	items, _ := splitChildren(l.Nodes)
+	return slices.ContainsFunc(items, f.isBlockItem)
+}
+
+// tabColumns is the width of one indentation tab (spec §6.6).
+const tabColumns = 4
+
+// contentWidth is the width of s on one line, not counting whitespace
+// runs. Formatting only rewrites runs and drops bytes (spaces inside
+// actions, trim markers, merged else actions), so a list never measures
+// wider once formatted, and a list that fits stays inline.
+func contentWidth(s string) int {
+	n := 0
+	for _, seg := range splitRuns([]byte(s)) {
+		if !seg.space {
+			n += seg.end - seg.start
+		}
+	}
+	return n
+}
+
+// itemsWidth is the one-line width of items.
+func itemsWidth(items []template.Node) int {
+	n := 0
+	for _, item := range items {
+		n += contentWidth(item.String())
+	}
+	return n
 }
 
 // bytes returns the run's text; it is empty for an empty gap.
@@ -219,22 +328,17 @@ type listOptions struct {
 	// trimEdges reports that the formatter writes trim markers next to
 	// both boundaries, so the boundary runs never render.
 	trimEdges bool
-	// trimBoundaryActions adds trim markers to boundary actions next to
-	// a reflowable boundary run.
-	trimBoundaryActions bool
 }
 
 // children prints the items of the list key (its children are nodes)
 // with the gaps between them. The current indentation is the items'
-// level. In block layout a reflowable or trimmed boundary run is
-// replaced by a newline and indentation; in inline layout it is dropped.
-// Every other gap is written by writeRun. children leaves the cursor
-// where the closing tag or action goes.
+// level. In block layout every gap becomes a newline and indentation
+// (spec §6.4); in inline layout a reflowable boundary run is dropped and
+// every other gap is written as collapse-only. children leaves the
+// cursor where the closing tag or action goes.
 func (f *formatter) children(key template.Node, nodes []template.Node, o listOptions) {
 	items, _ := splitChildren(nodes)
 	inner := f.indent
-	first := f.cls.gaps[gapKey{key, 0}]
-	last := f.cls.gaps[gapKey{key, len(items)}]
 	for i := 0; i <= len(items); i++ {
 		g := f.cls.gaps[gapKey{key, i}]
 		switch {
@@ -248,41 +352,42 @@ func (f *formatter) children(key template.Node, nodes []template.Node, o listOpt
 		default:
 			f.betweenGap(items[i-1], items[i], g, o.layout)
 		}
-		trimLeft := o.trimBoundaryActions && i == 0 && first.class == runReflowable
-		trimRight := o.trimBoundaryActions && i == len(items)-1 && last.class == runReflowable
-		f.item(items[i], o.layout, trimLeft, trimRight)
+		f.item(items[i], o.layout)
 	}
 }
 
-// droppable reports whether a boundary run never renders, so the
-// printer may replace it.
+// droppable reports whether a boundary run never renders and may be
+// left out: it is reflowable, or the formatter trims it.
 func droppable(g gap, o listOptions) bool {
-	return o.trimEdges || g.class == runReflowable || g.class == runTrimmed
+	return o.trimEdges || g.class == runReflowable
 }
 
 func (f *formatter) openGap(g gap, o listOptions) {
-	if !droppable(g, o) {
-		f.writeRun(g, o.layout)
-		return
-	}
-	if o.layout == blockLayout {
+	switch {
+	case o.layout == blockLayout && (droppable(g, o) || g.class == runTrimmed):
 		if !f.atLineStart {
 			f.newline()
 		}
 		f.writeIndent()
+	case o.layout == inlineLayout && droppable(g, o):
+	default:
+		f.writeRun(g, o.layout)
 	}
 }
 
 func (f *formatter) closeGap(g gap, o listOptions) {
-	if !droppable(g, o) {
-		f.writeRun(g, o.layout)
-		return
-	}
-	if o.layout == blockLayout && !o.root {
+	switch {
+	case o.layout == blockLayout && (droppable(g, o) || g.class == runTrimmed):
+		if o.root {
+			return
+		}
 		if !f.atLineStart {
 			f.newline()
 		}
 		f.writeIndent()
+	case o.layout == inlineLayout && droppable(g, o):
+	default:
+		f.writeRun(g, o.layout)
 	}
 }
 
@@ -299,15 +404,12 @@ func (f *formatter) betweenGap(prev, next template.Node, g gap, layout layoutKin
 	f.writeRun(g, layout)
 }
 
-func (f *formatter) item(n template.Node, layout layoutKind, trimLeft, trimRight bool) {
-	switch {
-	case trimLeft || trimRight:
-		f.nodeWithBoundaryTrim(n, trimLeft, trimRight)
-	case layout == inlineLayout:
-		f.nodeInline(n)
-	default:
-		f.node(n)
+func (f *formatter) item(n template.Node, layout layoutKind) {
+	if text, ok := n.(*template.TextNode); ok {
+		f.text(text, layout)
+		return
 	}
+	f.node(n)
 }
 
 // text writes a text item: content bytes verbatim, each run of its own
@@ -389,13 +491,6 @@ func (f *formatter) documentFragment(n *template.HTMLDocumentFragmentNode) {
 	}
 }
 
-// isInline reports whether el is an inline box, which stays in text
-// flow. Every other element may take block layout.
-func (f *formatter) isInline(el *template.HTMLElementNode) bool {
-	ws, ok := f.styles[el]
-	return ok && (ws.Display == analysis.DisplayInline || ws.Display == analysis.DisplayNewline)
-}
-
 // writeSource writes el's children as written and its closing tag.
 func (f *formatter) writeSource(el *template.HTMLElementNode) {
 	for _, child := range el.Children {
@@ -429,27 +524,14 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 		return
 	}
 
-	allInline := f.allChildrenInline(n.Children)
-	hasLineBreaks := childrenHaveLineBreaks(n.Children)
-	tooLong := estimateElementInlineLength(n) > f.maxLineWidth
-
-	// Block layout when:
-	// - Source has line breaks (multi-line content the author intentionally structured), OR
-	// - Element is too long AND children include block-level elements.
-	// When all children are inline and the only trigger is length, keep inline
-	// layout — block layout would introduce newlines/indentation that change
-	// rendered TextContent (e.g. <p>long prose...</p> should not become
-	// <p>\n\tlong prose...\n</p>).
-	useBlock := !f.isInline(n) && (hasLineBreaks || (tooLong && !allInline))
-
+	items, _ := splitChildren(n.Children)
+	layout := f.layoutOf(n, items, estimateElementInlineLength(n))
 	outer := f.indent
-	if useBlock {
+	if layout == blockLayout {
 		f.indent++
-		f.children(n, n.Children, listOptions{layout: blockLayout, outer: outer, trimBoundaryActions: !hasLineBreaks})
-		f.indent = outer
-	} else {
-		f.children(n, n.Children, listOptions{layout: inlineLayout, outer: outer})
 	}
+	f.children(n, n.Children, listOptions{layout: layout, outer: outer})
+	f.indent = outer
 	f.writeString("</")
 	f.writeString(n.TagName)
 	f.writeString(">")
@@ -566,20 +648,22 @@ func trimPipeDelim(s, rightDelim string) string {
 func (f *formatter) branchNode(n *template.BranchNode, keyword string) {
 	f.writeActionWithTrim(keyword+" "+f.pipeText(n.Pipe), n.StartTrimLeft, n.StartTrimRight)
 	f.body(n.List, n.StartTrimRight)
-	if n.ElseList != nil && len(n.ElseList.Nodes) > 0 {
+	if n.ElseList != nil {
 		f.formatElseList(n, n.ElseList)
 	}
 	f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
 }
 
-// body prints a branch body or else list on one line when it fits, else
-// one level deeper (at the same level after a -}}).
+// body prints a branch body or else list in the layout its gaps choose:
+// inline on the branch's line, or as a block one level deeper (at the
+// same level after a -}}).
 func (f *formatter) body(list *template.ListNode, trimRight bool) {
 	if list == nil || len(list.Nodes) == 0 {
 		return
 	}
 	outer := f.indent
-	if f.canInlineBody(list.Nodes) {
+	items, _ := splitChildren(list.Nodes)
+	if f.layoutOf(list, items, itemsWidth(items)) == inlineLayout {
 		f.children(list, list.Nodes, listOptions{layout: inlineLayout, outer: outer})
 		return
 	}
@@ -592,12 +676,12 @@ func (f *formatter) body(list *template.ListNode, trimRight bool) {
 
 // formatElseList handles the else portion of a branch, recursing for else-if chains.
 func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode) {
-	if chain, chainKeyword := elseChain(elseList); chain != nil {
+	if chain, chainKeyword := f.elseChain(elseList); chain != nil {
 		// For else-if/else-with chains, the inner BranchNode carries the trim
 		// for the combined "{{else if ...}}" / "{{else with ...}}" action.
 		f.writeActionWithTrim("else "+chainKeyword+" "+f.pipeText(chain.Pipe), chain.StartTrimLeft, chain.StartTrimRight)
 		f.body(chain.List, chain.StartTrimRight)
-		if chain.ElseList != nil && len(chain.ElseList.Nodes) > 0 {
+		if chain.ElseList != nil {
 			f.formatElseList(chain, chain.ElseList)
 		}
 		return
@@ -617,8 +701,19 @@ func (f *formatter) defineNode(n *template.DefineNode) {
 	}
 
 	outer := f.indent
-	// Inline body: emit on one line. Preserves rendered output exactly.
-	if f.allChildrenInline(n.Body.Nodes) && f.canInlineBody(n.Body.Nodes) {
+	// Inline body unless every gap between items takes a break and block
+	// layout is preferred. The edge gaps are trimmed below, so they need
+	// not take one; a preserved first gap keeps its bytes instead.
+	items, _ := splitChildren(n.Body.Nodes)
+	forceTrim := f.cls.gaps[gapKey{n.Body, 0}].class != runPreserved
+	block := f.blockLayoutPreferred(n.Body, items, itemsWidth(items))
+	for i := 0; i <= len(items); i++ {
+		edge := i == 0 || i == len(items)
+		if !(edge && forceTrim) && !takesBreak(f.cls.gaps[gapKey{n.Body, i}]) {
+			block = false
+		}
+	}
+	if !block {
 		f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight)
 		f.children(n.Body, n.Body.Nodes, listOptions{layout: inlineLayout, outer: outer})
 		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
@@ -630,7 +725,6 @@ func (f *formatter) defineNode(n *template.DefineNode) {
 	// the rendered template output. Without these markers, callers of the
 	// define would see surrounding whitespace that was not in their source.
 	// Preserved runs (text that is not a page) keep their bytes instead.
-	forceTrim := f.cls.gaps[gapKey{n.Body, 0}].class != runPreserved
 	f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight || forceTrim)
 	f.indent++
 	f.children(n.Body, n.Body.Nodes, listOptions{layout: blockLayout, outer: outer, trimEdges: forceTrim})
@@ -670,103 +764,17 @@ func (f *formatter) pipeText(p *template.PipeNode) string {
 	return trimPipeDelim(p.String(), f.rightDelim)
 }
 
-// nodeWithBoundaryTrim writes a node with overridden trim markers.
-// For action and template nodes, it forces trim on the specified sides.
-// For other node types, it falls back to normal formatting.
-func (f *formatter) nodeWithBoundaryTrim(n template.Node, trimLeft, trimRight bool) {
-	switch n := n.(type) {
-	case *template.ActionNode:
-		f.writeLeftDelim(n.TrimLeft || trimLeft)
-		f.writePipe(n.Pipe)
-		f.writeRightDelim(n.TrimRight || trimRight)
-	case *template.TemplateNode:
-		f.templateCall(n, n.TrimLeft || trimLeft, n.TrimRight || trimRight)
-	case *template.TextNode:
-		f.text(n, blockLayout)
-	default:
-		f.node(n)
-	}
-}
-
-// nodeInline formats a node inline (no block-level indentation decisions).
-func (f *formatter) nodeInline(n template.Node) {
-	if n == nil {
-		return
-	}
-	switch n := n.(type) {
-	case *template.TextNode:
-		f.text(n, inlineLayout)
-	case *template.HTMLElementNode:
-		f.writeString("<")
-		f.writeString(n.TagName)
-		for _, attr := range n.Attr {
-			f.sb.WriteByte(' ')
-			f.writeString(attr.String())
-		}
-		f.writeString(">")
-		if n.Void {
-			return
-		}
-		if f.opaque[n] {
-			f.writeSource(n)
-			return
-		}
-		f.children(n, n.Children, listOptions{layout: inlineLayout, outer: f.indent})
-		f.writeString("</")
-		f.writeString(n.TagName)
-		f.writeString(">")
-	case *template.ActionNode:
-		f.actionNode(n)
-	case *template.TemplateNode:
-		f.templateNode(n)
-	case *template.IfNode:
-		// Inline branch in text — use original source
-		f.writeString(n.String())
-	case *template.RangeNode:
-		f.writeString(n.String())
-	case *template.WithNode:
-		f.writeString(n.String())
-	case *template.CommentNode:
-		f.commentNode(n)
-	default:
-		f.node(n)
-	}
-}
-
-// childrenHaveLineBreaks returns true if any child contains a newline,
-// indicating source-level line breaks. Checks text nodes directly and
-// other nodes via their String() representation.
-func childrenHaveLineBreaks(children []template.Node) bool {
-	for _, child := range children {
-		if strings.Contains(child.String(), "\n") {
-			return true
-		}
-	}
-	return false
-}
-
-// allChildrenInline returns true when every child is an inline-flow node
-// (text, inline HTML elements, actions, template calls).
-func (f *formatter) allChildrenInline(children []template.Node) bool {
-	for _, child := range children {
-		if !f.isInlineNode(child) {
-			return false
-		}
-	}
-	return true
-}
-
 // estimateElementInlineLength estimates the rendered length of an element
 // if it were formatted inline (open tag + children + close tag).
 func estimateElementInlineLength(n *template.HTMLElementNode) int {
 	// <tag attrs>children</tag>
 	length := 1 + len(n.TagName) // "<tag"
 	for _, attr := range n.Attr {
-		length += 1 + len(attr.String()) // " attr"
+		length += contentWidth(attr.String())
 	}
 	length++ // ">"
 	for _, child := range n.Children {
-		length += len(child.String())
+		length += contentWidth(child.String())
 	}
 	if !n.Void {
 		length += 3 + len(n.TagName) // "</tag>"
@@ -774,50 +782,24 @@ func estimateElementInlineLength(n *template.HTMLElementNode) int {
 	return length
 }
 
-// isInlineNode returns true for nodes that participate in inline text flow:
-// text nodes, inline HTML elements, actions, and template calls.
-func (f *formatter) isInlineNode(n template.Node) bool {
-	switch n := n.(type) {
-	case *template.TextNode:
-		return true
-	case *template.HTMLElementNode:
-		return f.isInline(n)
-	case *template.ActionNode, *template.TemplateNode:
-		return true
-	}
-	return false
-}
-
-// canInlineBody returns true when a list of nodes can be formatted inline:
-// no line breaks in the source and total content length within
-// maxLineWidth, not counting whitespace-only text or the leading and
-// trailing runs of text. A body written over several lines stays block
-// laid out, so formatting its block layout again keeps it.
-func (f *formatter) canInlineBody(nodes []template.Node) bool {
-	length := 0
-	for _, n := range nodes {
-		s := n.String()
-		if strings.ContainsAny(s, "\n\r") {
-			return false
-		}
-		if _, ok := n.(*template.TextNode); ok {
-			s = strings.Trim(s, runBytes)
-		}
-		length += len(s)
-	}
-	return length <= f.maxLineWidth
-}
-
-// runBytes are the bytes of a whitespace run.
-const runBytes = " \t\n\r"
-
-// elseChain detects when an ElseList has a single branch child (IfNode or WithNode)
-// and returns it for "else if" / "else with" chaining.
-func elseChain(elseList *template.ListNode) (*template.BranchNode, string) {
-	if elseList == nil || len(elseList.Nodes) != 1 {
+// elseChain detects when an else list holds a single branch (IfNode or
+// WithNode) and returns it for "else if" / "else with" chaining. Gaps
+// around the branch may be empty or reflowable, since the merged form
+// writes no whitespace there.
+func (f *formatter) elseChain(elseList *template.ListNode) (*template.BranchNode, string) {
+	if elseList == nil {
 		return nil, ""
 	}
-	switch n := elseList.Nodes[0].(type) {
+	items, _ := splitChildren(elseList.Nodes)
+	if len(items) != 1 {
+		return nil, ""
+	}
+	for i := range 2 {
+		if g := f.cls.gaps[gapKey{elseList, i}]; g.text != nil && g.class != runReflowable {
+			return nil, ""
+		}
+	}
+	switch n := items[0].(type) {
 	case *template.IfNode:
 		return &n.BranchNode, "if"
 	case *template.WithNode:
