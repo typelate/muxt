@@ -88,6 +88,20 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<p style="white-space:inherit"></p>`, selector: `p`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<img style="display:inline">`, selector: `img`, want: Whitespace{DisplayAtomic, WhiteSpaceCollapse}},
 		{source: `<span style="display:inline flow-root"></span>`, selector: `span`, want: Whitespace{DisplayAtomic, WhiteSpaceCollapse}},
+
+		// Out-of-flow boxes (spec amendment, 2026-10-30): floats and
+		// absolutely positioned boxes are not in the inline flow.
+		{source: `<span style="float:left"></span>`, selector: `span`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<span style="float:none"></span>`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
+		{source: `<div style="position:absolute"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div style="position:fixed"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div style="position:relative"></div>`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="f"></div>`, sheet: `.f{float:right}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div class="f"></div>`, sheet: `.f{position:fixed}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div class="f"></div>`, sheet: `.f{position:absolute}div{position:static!important}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<style>.f{float:left}</style><div class="f"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div class="f"></div>`, sheet: `@media print{.f{float:left}}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div style="float:{{.F}}"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
 	} {
 		t.Run(test.source, func(t *testing.T) {
 			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}

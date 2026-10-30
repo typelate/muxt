@@ -108,8 +108,11 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // selector depends on template data, it sits in @media, @supports,
 // @container or @layer, or in a template branch) makes a property unknown
 // when it could beat the rule that certainly applies with a different
-// value. An element whose class or style attribute is dynamic is unknown,
-// and so is one with a class or id when no author CSS is visible at all.
+// value. An element that floats or is absolutely positioned (float other
+// than none, position absolute or fixed) has unknown display, since it is
+// out of the inline flow. An element whose class or style attribute is
+// dynamic is unknown, and so is one with a class or id when no author CSS
+// is visible at all.
 // White-space inherits; preserve and unknown white-space inherit to every
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
@@ -397,6 +400,7 @@ func styleAttributeDeclarations(attr *template.HTMLAttributeNode) ([]cssDeclarat
 var trackedProperties = map[string]bool{
 	"display": true, "display-outside": true,
 	"white-space": true, "white-space-collapse": true, "text-wrap-mode": true,
+	"float": true, "position": true,
 	"all": true,
 }
 
@@ -413,7 +417,7 @@ func within(s span, spans []span) bool {
 // winner of the rules that certainly apply, then the values of the rules
 // that may apply and could beat it.
 func (c *cascade) candidates(el *template.HTMLElementNode, attribute []cssDeclaration) ([]Display, []WhiteSpace) {
-	var applied [2][]application
+	var applied [propertyCount][]application
 	add := func(d cssDeclaration, r rank, certain bool) {
 		applied[d.property] = append(applied[d.property], application{rank: r, certain: certain, value: d.value})
 	}
@@ -443,6 +447,16 @@ func (c *cascade) candidates(el *template.HTMLElementNode, attribute []cssDeclar
 	)
 	for _, v := range cascadeValues(applied[propertyDisplay], uint8(DisplayInline)) {
 		displays = append(displays, Display(v))
+	}
+	// A float or an absolutely positioned box is out of flow: it is
+	// blockified and taken out of the inline formatting context, which
+	// none of the display classes describes.
+	for _, property := range []int{propertyFloat, propertyPosition} {
+		for _, v := range cascadeValues(applied[property], flowIn) {
+			if v != flowIn {
+				displays = append(displays, DisplayUnknown)
+			}
+		}
 	}
 	for _, v := range cascadeValues(applied[propertyWhiteSpace], uint8(whiteSpaceInherit)) {
 		spaces = append(spaces, WhiteSpace(v))
@@ -546,13 +560,23 @@ func (r rank) mayBeat(o rank) bool {
 const (
 	propertyDisplay = iota
 	propertyWhiteSpace
+	propertyFloat
+	propertyPosition
+	propertyCount
+)
+
+// The values of float and position declarations.
+const (
+	flowIn      uint8 = iota // float: none; position: static, relative, sticky
+	flowOut                  // any other float; position: absolute, fixed
+	flowUnknown              // a value htt cannot read
 )
 
 // cssDeclaration is a declaration of display or white-space reduced to its
 // class.
 type cssDeclaration struct {
 	property  int
-	value     uint8 // a Display or a WhiteSpace
+	value     uint8 // a Display, a WhiteSpace, or a flow value (float, position)
 	important bool
 	maybe     bool // it is in a template branch
 	order     int
@@ -593,6 +617,8 @@ func unknownDeclarations() []cssDeclaration {
 	return []cssDeclaration{
 		{property: propertyDisplay, value: uint8(DisplayUnknown), important: true},
 		{property: propertyWhiteSpace, value: uint8(WhiteSpaceUnknown), important: true},
+		{property: propertyFloat, value: flowUnknown, important: true},
+		{property: propertyPosition, value: flowUnknown, important: true},
 	}
 }
 
@@ -953,6 +979,9 @@ func propertyDeclarations(prop string, words []string, important, author bool, o
 	whiteSpace := func(w WhiteSpace) cssDeclaration {
 		return cssDeclaration{property: propertyWhiteSpace, value: uint8(w), important: important, order: order}
 	}
+	flow := func(property int, v uint8) cssDeclaration {
+		return cssDeclaration{property: property, value: v, important: important, order: order}
+	}
 	switch prop {
 	case "display":
 		return []cssDeclaration{display(displayValue(words))}
@@ -963,19 +992,24 @@ func propertyDeclarations(prop string, words []string, important, author bool, o
 		return []cssDeclaration{display(displayOutsideValue(words))}
 	case "white-space", "white-space-collapse":
 		return []cssDeclaration{whiteSpace(whiteSpaceValue(words))}
+	case "float":
+		return []cssDeclaration{flow(propertyFloat, floatValue(words))}
+	case "position":
+		return []cssDeclaration{flow(propertyPosition, positionValue(words))}
 	case "all":
-		d, w := DisplayUnknown, WhiteSpaceUnknown
+		d, w, f := DisplayUnknown, WhiteSpaceUnknown, flowUnknown
 		if len(words) == 1 {
 			switch words[0] {
-			case "initial":
-				d, w = DisplayInline, WhiteSpaceCollapse
-			case "unset":
-				d, w = DisplayInline, whiteSpaceInherit
+			case "initial", "unset":
+				d, w, f = DisplayInline, WhiteSpaceCollapse, flowIn
+				if words[0] == "unset" {
+					w = whiteSpaceInherit
+				}
 			case "inherit":
 				w = whiteSpaceInherit
 			}
 		}
-		return []cssDeclaration{display(d), whiteSpace(w)}
+		return []cssDeclaration{display(d), whiteSpace(w), flow(propertyFloat, f), flow(propertyPosition, f)}
 	}
 	return nil // text-wrap-mode does not change the class
 }
@@ -1074,4 +1108,33 @@ func whiteSpaceValue(words []string) WhiteSpace {
 		}
 	}
 	return result
+}
+
+// floatValue classifies a float value. Inherit is unknown: float does not
+// inherit, and the parent's value is not tracked.
+func floatValue(words []string) uint8 {
+	if len(words) != 1 {
+		return flowUnknown
+	}
+	switch words[0] {
+	case "none", "initial", "unset":
+		return flowIn
+	case "inherit":
+		return flowUnknown
+	}
+	return flowOut // left, right, inline-start, …: every value but none floats
+}
+
+// positionValue classifies a position value.
+func positionValue(words []string) uint8 {
+	if len(words) != 1 {
+		return flowUnknown
+	}
+	switch words[0] {
+	case "static", "relative", "sticky", "initial", "unset":
+		return flowIn
+	case "absolute", "fixed":
+		return flowOut
+	}
+	return flowUnknown
 }

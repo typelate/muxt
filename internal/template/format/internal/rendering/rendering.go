@@ -39,7 +39,7 @@ const (
 	SP                  // a collapsible run of spaces and tabs
 	SB                  // a collapsible run containing a segment break
 	LF                  // a preserved line feed (white-space: pre-line)
-	Doctype             // a doctype; Data is its name
+	Doctype             // a doctype; Data is its name, Attr its public and system identifiers
 )
 
 func (k Kind) String() string {
@@ -68,16 +68,20 @@ func (k Kind) String() string {
 type Token struct {
 	Kind Kind
 	Data string           // tag name, comment text, or literal text
-	Attr []html.Attribute // Open only, in source order
+	Attr []html.Attribute // Open (in source order) and Doctype only
 }
 
 func (t Token) String() string {
 	switch t.Kind {
 	case SP, SB, LF:
 		return t.Kind.String()
-	case Open:
+	case Open, Doctype:
 		var sb strings.Builder
-		sb.WriteString("<" + t.Data)
+		if t.Kind == Doctype {
+			sb.WriteString("<!DOCTYPE " + t.Data)
+		} else {
+			sb.WriteString("<" + t.Data)
+		}
 		for _, a := range t.Attr {
 			sb.WriteByte(' ')
 			if a.Namespace != "" {
@@ -323,7 +327,8 @@ func (b *builder) flow(items []item, n *html.Node, mode analysis.WhiteSpace) []i
 	case html.CommentNode:
 		return append(items, item{class: transparent, tokens: []Token{{Kind: Comment, Data: n.Data}}})
 	case html.DoctypeNode:
-		return append(items, item{class: transparent, tokens: []Token{{Kind: Doctype, Data: n.Data}}})
+		doctype := Token{Kind: Doctype, Data: n.Data, Attr: append([]html.Attribute(nil), n.Attr...)}
+		return append(items, item{class: transparent, tokens: []Token{doctype}})
 	case html.ElementNode:
 	default:
 		return items
@@ -339,9 +344,9 @@ func (b *builder) flow(items []item, n *html.Node, mode analysis.WhiteSpace) []i
 		outer = edge
 	case analysis.DisplayNone:
 		outer = transparent
-	case analysis.DisplayAtomic:
+	case analysis.DisplayAtomic, analysis.DisplayUnknown:
 		outer = content
-	default: // inline, contents, and unknown (treated as inline)
+	default: // inline and contents
 		outer = boundary
 	}
 
@@ -361,6 +366,16 @@ func (b *builder) flow(items []item, n *html.Node, mode analysis.WhiteSpace) []i
 		return append(items, item{class: outer, tokens: tokens})
 	}
 
+	if ws.Display == analysis.DisplayUnknown {
+		// It may be an atomic inline, a block, out of flow, or an inline
+		// box: its children stay in the parent's context, but no collapsing
+		// or line-edge trimming crosses its open or close.
+		items = append(items, item{class: content, tokens: []Token{open}})
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			items = b.flow(items, c, ws.WhiteSpace)
+		}
+		return append(items, item{class: content, tokens: []Token{closing}})
+	}
 	if outer == boundary {
 		items = append(items, item{class: boundary, tokens: []Token{open}})
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -413,10 +428,12 @@ func appendText(items []item, text string, mode analysis.WhiteSpace) []item {
 	return items
 }
 
-// isDocumentWhiteSpace reports CSS Text 3 document white space. The parser
-// has already turned CR into LF; FF is content.
+// isDocumentWhiteSpace reports CSS Text 3 document white space: space,
+// tab, and segment breaks. The parser has already turned literal CR and
+// CRLF into LF, so a CR in the DOM came from a character reference
+// (&#13;) and is content, like FF.
 func isDocumentWhiteSpace(r rune) bool {
-	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	return r == ' ' || r == '\t' || r == '\n'
 }
 
 // resolve applies the collapsing rules of §8.3 rule 5 to one inline

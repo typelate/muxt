@@ -32,6 +32,18 @@ func TestDiff(t *testing.T) {
 		{a: `<script> x  </script>`, b: `<script> x </script>`, equivalent: false},
 		{a: `<style>.c{white-space:pre}</style><p class="c"> a</p>`, b: `<style>.c{white-space:pre}</style><p class="c">a</p>`, equivalent: false},
 		{a: `<p>a<div>b</div>c</p>`, b: `<p>a</p><div>b</div>c<p></p>`, equivalent: true},
+
+		// Review fixes (2026-10-30).
+		{a: `<p>a <span style="display:var(--d)"></span> b</p>`, b: `<p>a <span style="display:var(--d)"></span>b</p>`, equivalent: false},
+		{a: `<p>a <span style="display:block;float:left">f</span> b</p>`, b: `<p>a<span style="display:block;float:left">f</span>b</p>`, equivalent: false},
+		{a: `<p>a <span style="display:block;position:absolute">f</span> b</p>`, b: `<p>a<span style="display:block;position:absolute">f</span>b</p>`, equivalent: false},
+		{a: `<style>.f{float:left}</style><span>a <div class=f>f</div> b</span>`, b: `<style>.f{float:left}</style><span>a<div class=f>f</div>b</span>`, equivalent: false},
+		{a: `<!DOCTYPE html><html><body>a</body></html>`, b: `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html><body>a</body></html>`, equivalent: false},
+		{a: `<p>a&#13;b</p>`, b: `<p>a b</p>`, equivalent: false},
+		{a: "<p>中 <span>\n文</span></p>", b: `<p>中 <span>文</span></p>`, equivalent: false},
+		{a: `<xmp>a  b</xmp>`, b: `<xmp>a b</xmp>`, equivalent: false},
+		{a: `<noscript>a  b</noscript>`, b: `<noscript>a b</noscript>`, equivalent: false},
+		{a: "<!DOCTYPE html>\n<html>\n<head>\n  <title>t</title>\n</head>\n<body>\n  <p>a</p>\n</body>\n</html>\n", b: `<!DOCTYPE html><html><head><title>t</title></head><body><p>a</p></body></html>`, equivalent: true},
 	} {
 		t.Run(test.a, func(t *testing.T) {
 			got, err := Diff(test.a, test.b, Body, nil)
