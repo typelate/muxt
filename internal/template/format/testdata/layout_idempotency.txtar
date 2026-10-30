@@ -10,6 +10,7 @@
   {{/* c */}} {{else}}<img src=x>
   {{.X -}}{{end}} <br>{{else}}<h1>x</h1>{{end}}
 </div>
+<div><br><span>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<br></div>
 -- format.gohtml --
 {{.X}}
 {{.X -}}
@@ -30,6 +31,13 @@
 	{{end}} <br>{{else}}
 		<h1>x</h1>
 	{{end}}
+</div>
+<div>
+	<br>
+	<span>
+		aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+		<br>
+	</span>
 </div>
 -- data/empty.json --
 {}

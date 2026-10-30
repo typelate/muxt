@@ -3,6 +3,7 @@ package format_test
 import (
 	"bytes"
 	htmltemplate "html/template"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,6 +111,11 @@ func TestIdempotency(t *testing.T) {
 		`<p><strong>Notice:</strong> {{.Message}}</p>`,
 		// Inline define body stays on one line
 		`{{define "comp"}}{{.Value}}{{end}}`,
+		// Width is measured as printed: the forced trim markers of the
+		// define body must not push the root over the line width on the
+		// second pass. (A fixture cannot hold it: its trailing newline
+		// makes the root prefer block layout anyway.)
+		`<br>{{define "x"}}<p>` + strings.Repeat("a", 44) + `</p>{{end}}<br>`,
 	}
 	for _, input := range inputs {
 		t.Run(input, func(t *testing.T) {
