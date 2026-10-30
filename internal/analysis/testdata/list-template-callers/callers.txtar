@@ -41,13 +41,13 @@ template "alone" called by:
 
 template "header" called by:
 
-  - index.gohtml:4:30 template "alone" string
-  - index.gohtml:1:29 template "page" string
+  - index.gohtml:4:19 template "alone" string
+  - index.gohtml:1:18 template "page" string
 
 
 template "item" called by:
 
-  - index.gohtml:1:73 template "page" Item
+  - index.gohtml:1:62 template "page" Item
 
 
 template "page" called by:

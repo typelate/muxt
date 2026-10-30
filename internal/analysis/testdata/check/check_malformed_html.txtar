@@ -1,0 +1,35 @@
+Malformed HTML does not stop check: the templates parse as HTML, so an
+unclosed <div> and a <p> inside a <table> must still type check, with the
+same result as well-formed markup and nothing logged.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<div><h1>{{.Title}}</h1><table><p>{{len .Items}} items</p>{{range .Items}}{{template "item" .}}{{end}}</table>{{end}}
+{{define "item"}}<tr><td>{{.Name}}: {{printf "%d" .Price}}</td></tr>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct {
+	Title string
+	Items []Item
+}
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+func RenderIndex(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index", page)
+}
+-- want/checked.txt --
+1

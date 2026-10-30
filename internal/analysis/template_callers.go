@@ -5,9 +5,10 @@ import (
 	"go/types"
 	"io"
 	"regexp"
-	"text/template/parse"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/template"
+
+	"github.com/typelate/muxt/internal/check"
 
 	"github.com/typelate/muxt/internal/source"
 )
@@ -47,7 +48,7 @@ func templateCallers(config TemplateCallersConfiguration, pkg source.Package, lt
 	global := newGlobal(pkg, lt)
 	refs := make(map[string][]TemplateReference)
 
-	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, data types.Type, _ check.Definition) {
+	global.InspectTemplateNode = func(node *template.TemplateNode, tree *template.Tree, data types.Type, _ check.Definition) {
 		pos := check.ParseNodePosition(tree, node)
 		refs[node.Name] = append(refs[node.Name], TemplateReference{
 			Position: pos,

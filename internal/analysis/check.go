@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"html/template"
 	"log"
 	"slices"
 	"strconv"
 	"strings"
-	"text/template/parse"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/internal/template/html"
+
+	"github.com/typelate/muxt/internal/check"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -248,7 +249,7 @@ func callLine(qualifier types.Qualifier, call source.Call) string {
 // reportUnusedTemplates logs the templates no ExecuteTemplate call reaches
 // and returns one error per kind. With allowUnused, unused templates that
 // are not routes are listed without an error.
-func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTemplates map[string][]TemplateExecution, allowUnused bool) []error {
+func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTemplates map[string][]TemplateExecution, allowUnused bool) []error {
 	var errs []error
 	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates))
 	if len(unusedRoutes) > 0 {
@@ -272,7 +273,7 @@ func reportUnusedTemplates(logger *log.Logger, ts *template.Template, executedTe
 	return errs
 }
 
-func logTemplatePositions(logger *log.Logger, ts *template.Template, names []string) {
+func logTemplatePositions(logger *log.Logger, ts *html.Template, names []string) {
 	for _, name := range names {
 		t := ts.Lookup(name)
 		logger.Printf("  - %s: %q", check.ParseNodePosition(t.Tree, t.Tree.Root), name)
@@ -284,7 +285,7 @@ func logTemplatePositions(logger *log.Logger, ts *template.Template, names []str
 // A plain template referenced from a route template's tree is pending
 // that route's wiring rather than unused, so it is omitted entirely:
 // its route is already reported.
-func partitionUnusedTemplates(ts *template.Template, unused []string) (routes, partials []string) {
+func partitionUnusedTemplates(ts *html.Template, unused []string) (routes, partials []string) {
 	pending := make(map[string]bool)
 	for _, t := range ts.Templates() {
 		if muxt.IsRouteDefinitionName(t.Name()) && t.Tree != nil {
@@ -305,31 +306,53 @@ func partitionUnusedTemplates(ts *template.Template, unused []string) (routes, p
 
 // collectTemplateReferences records every template name reachable from
 // node through {{template}} actions, following references transitively.
-func collectTemplateReferences(ts *template.Template, node parse.Node, seen map[string]bool) {
+func collectTemplateReferences(ts *html.Template, node template.Node, seen map[string]bool) {
 	switch n := node.(type) {
 	case nil:
-	case *parse.ListNode:
+	case *template.ListNode:
 		if n == nil {
 			return
 		}
 		for _, child := range n.Nodes {
 			collectTemplateReferences(ts, child, seen)
 		}
-	case *parse.TemplateNode:
+	case *template.TemplateNode:
 		followTemplate(ts, n.Name, seen)
-	case *parse.IfNode:
+	case *template.IfNode:
 		collectTemplateReferences(ts, n.List, seen)
 		collectTemplateReferences(ts, n.ElseList, seen)
-	case *parse.RangeNode:
+	case *template.RangeNode:
 		collectTemplateReferences(ts, n.List, seen)
 		collectTemplateReferences(ts, n.ElseList, seen)
-	case *parse.WithNode:
+	case *template.WithNode:
 		collectTemplateReferences(ts, n.List, seen)
 		collectTemplateReferences(ts, n.ElseList, seen)
+	case *template.BlockNode:
+		// text/template turns a block into a {{template}} call of the
+		// tree it defines; the copied parser keeps the clause inline.
+		followTemplate(ts, n.Name, seen)
+	case *template.HTMLDocumentFragmentNode:
+		collectTemplateReferencesIn(ts, n.Children, seen)
+	case *template.HTMLElementNode:
+		collectTemplateReferencesIn(ts, n.Attr, seen)
+		collectTemplateReferencesIn(ts, n.Children, seen)
+	case *template.HTMLAttributeNode:
+		collectTemplateReferencesIn(ts, n.Key, seen)
+		collectTemplateReferencesIn(ts, n.Value, seen)
+	case *template.HTMLCommentNode:
+		collectTemplateReferencesIn(ts, n.Children, seen)
 	}
 }
 
-func followTemplate(ts *template.Template, name string, seen map[string]bool) {
+// collectTemplateReferencesIn collects from the children of an HTML node,
+// which the copied parser builds where text/template kept flat text.
+func collectTemplateReferencesIn(ts *html.Template, nodes []template.Node, seen map[string]bool) {
+	for _, child := range nodes {
+		collectTemplateReferences(ts, child, seen)
+	}
+}
+
+func followTemplate(ts *html.Template, name string, seen map[string]bool) {
 	if seen[name] {
 		return
 	}
@@ -343,7 +366,7 @@ func followTemplate(ts *template.Template, name string, seen map[string]bool) {
 // A template is considered "used" if it:
 // 1. Is executed via ExecuteTemplate calls in the code
 // 2. Is referenced via {{template "name"}} from a used template
-func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]TemplateExecution) []string {
+func findUnusedTemplates(ts *html.Template, executedTemplates map[string][]TemplateExecution) []string {
 	allTemplates := ts.Templates()
 	if len(allTemplates) == 0 {
 		return nil
@@ -374,15 +397,16 @@ func findUnusedTemplates(ts *template.Template, executedTemplates map[string][]T
 	return unused
 }
 
-// isEmptyTemplate returns true if the template tree contains only whitespace and comments
-// (e.g., a file template that only contains define blocks)
-func isEmptyTemplate(node parse.Node) bool {
+// isEmptyTemplate returns true if the template tree contains only whitespace,
+// comments and define clauses (e.g., a file template that only contains
+// define blocks)
+func isEmptyTemplate(node template.Node) bool {
 	if node == nil {
 		return true
 	}
 
 	switch n := node.(type) {
-	case *parse.ListNode:
+	case *template.ListNode:
 		if n == nil {
 			return true
 		}
@@ -393,10 +417,25 @@ func isEmptyTemplate(node parse.Node) bool {
 		}
 		return true
 
-	case *parse.TextNode:
+	case *template.TextNode:
 		return strings.TrimSpace(string(n.Text)) == ""
 
-	case *parse.CommentNode:
+	case *template.CommentNode:
+		return true
+
+	case *template.DefineNode:
+		// text/template removed define clauses from the tree they were
+		// written in; the copied parser keeps them inline.
+		return true
+
+	case *template.HTMLDocumentFragmentNode:
+		// The copied parser groups a run of markup under a fragment
+		// where text/template kept the run's nodes in the list.
+		for _, child := range n.Children {
+			if !isEmptyTemplate(child) {
+				return false
+			}
+		}
 		return true
 
 	default:
@@ -422,14 +461,14 @@ func newTemplateExecution(pos token.Position, n any, templateName string, dataTy
 	}
 }
 
-func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, qualifier types.Qualifier, ts *template.Template, position token.Position, templateName string, dataType types.Type) error {
+func findTemplateExecution(executedTemplates map[string][]TemplateExecution, global *check.Global, qualifier types.Qualifier, ts *html.Template, position token.Position, templateName string, dataType types.Type) error {
 	executedTemplates[templateName] = append(executedTemplates[templateName], newTemplateExecution(position, nil, templateName, dataType))
 	ts2 := ts.Lookup(templateName)
 	if ts2 == nil {
 		return fmt.Errorf("template %q not found", templateName)
 	}
 	tree := ts2.Tree
-	global.InspectTemplateNode = func(node *parse.TemplateNode, tree *parse.Tree, tp types.Type, _ check.Definition) {
+	global.InspectTemplateNode = func(node *template.TemplateNode, tree *template.Tree, tp types.Type, _ check.Definition) {
 		executedTemplates[node.Name] = append(executedTemplates[node.Name], newTemplateExecution(check.ParseNodePosition(tree, node), node, node.Name, dataType))
 	}
 	global.Qualifier = qualifier
@@ -443,7 +482,7 @@ func findTemplateExecution(executedTemplates map[string][]TemplateExecution, glo
 // global's InspectTemplateNode sees each {{template}} action. Type errors
 // are not reported: a listing shows what the walk reached. A call with no
 // data type, in code the type checker skipped, is not walked.
-func executeTemplateTree(global *check.Global, ts *template.Template, name string, data types.Type) {
+func executeTemplateTree(global *check.Global, ts *html.Template, name string, data types.Type) {
 	if data == nil {
 		return
 	}
@@ -460,7 +499,7 @@ func executeTemplateTree(global *check.Global, ts *template.Template, name strin
 // it. Where a definition was written comes from source.Variable, which
 // muxt.Definitions and the mutation planner read.
 func newGlobal(pkg source.Package, variable source.Variable) *check.Global {
-	return check.NewGlobal(pkg.Types, pkg.Fset, check.FindTreeFunc(func(name string) (*parse.Tree, bool) {
+	return check.NewGlobal(pkg.Types, pkg.Fset, check.FindTreeFunc(func(name string) (*template.Tree, bool) {
 		t := variable.Set.Lookup(name)
 		if t == nil || t.Tree == nil {
 			return nil, false

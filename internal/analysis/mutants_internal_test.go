@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/check"
 
 	"github.com/typelate/muxt/internal/source"
 )

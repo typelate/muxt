@@ -3,10 +3,11 @@ package analysis
 import (
 	"go/token"
 	"go/types"
-	"html/template"
 	"log"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,9 +19,9 @@ import (
 // parseTemplates parses text as one template set named "set". Text outside
 // the define clauses is left empty, so the set's own root template is
 // empty and never reported as unused.
-func parseTemplates(t *testing.T, text string) *template.Template {
+func parseTemplates(t *testing.T, text string) *html.Template {
 	t.Helper()
-	ts, err := template.New("set").Parse(text)
+	ts, err := html.New("set").Parse(text)
 	require.NoError(t, err)
 	return ts
 }
@@ -198,16 +199,26 @@ func TestCollectTemplateReferencesFollowsEveryBranch(t *testing.T) {
 	assert.False(t, seen["root"], "collectTemplateReferences reached the root template itself")
 }
 
+func TestCollectTemplateReferencesFollowsHTMLAndBlocks(t *testing.T) {
+	ts := parseTemplates(t, `{{define "root"}}<main><div class="{{template "in-attribute"}}">{{template "in-element" .}}</div><!-- {{template "in-comment"}} -->{{block "block" .}}{{template "in-block"}}{{end}}</main>{{end}}{{define "in-attribute"}}x{{end}}{{define "in-element"}}x{{end}}{{define "in-comment"}}x{{end}}{{define "in-block"}}x{{end}}`)
+	seen := make(map[string]bool)
+	collectTemplateReferences(ts, ts.Lookup("root").Tree.Root, seen)
+	for _, name := range []string{"in-attribute", "in-element", "in-comment", "block", "in-block"} {
+		assert.True(t, seen[name], "collectTemplateReferences did not reach %q; reached %v", name, seen)
+	}
+}
+
 // declaredTemplates has a template the set knows by name but that was never
 // parsed, so it has no tree, and one that is referenced but not defined.
-func declaredTemplates(t *testing.T) *template.Template {
+func declaredTemplates(t *testing.T) *html.Template {
 	t.Helper()
 	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
 	ts.New("declared")
 	ts.New("GET /bare Bare()")
-	declared := ts.Lookup("declared")
-	require.NotNil(t, declared, "the premise of this test is wrong: declared should exist without a tree")
-	require.Nil(t, declared.Tree, "the premise of this test is wrong: declared should exist without a tree")
+	// The html/template fork's Lookup hides a template the set knows
+	// by name but has no tree for, where html/template returned it with
+	// a nil Tree; both paths are a template there is nothing to walk.
+	require.Nil(t, ts.Lookup("declared"), "the premise of this test is wrong: declared should have no tree")
 	return ts
 }
 
