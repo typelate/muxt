@@ -41,6 +41,20 @@ func MaxInlineAttributes(n int) Option {
 	}
 }
 
+// Styles sets the author CSS the formatter classifies whitespace with:
+// stylesheet files the templates use, templates whose <style> elements
+// apply, and whether that is all the author CSS (see
+// analysis.WhitespaceOptions). An element's display and white-space then
+// come from that CSS: an element the CSS makes block-level may be laid
+// out as a block, and one it makes preserve whitespace is written as it
+// is in the source. Without Styles, or without AuthorCSSKnown, an element
+// with a class or id is unknown and keeps its whitespace as written.
+func Styles(options analysis.WhitespaceOptions) Option {
+	return func(f *formatter) {
+		f.whitespace = options
+	}
+}
+
 // Node formats the given AST node as pretty-printed HTML template source.
 func Node(root template.Node, opts ...Option) string {
 	f := &formatter{
@@ -58,7 +72,7 @@ func Node(root template.Node, opts ...Option) string {
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
-	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, analysis.WhitespaceOptions{})
+	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
 	f.root = list
 	unsureMisnested(list, f.styles)
 	unsureParsedElsewhere(list, f.styles)
@@ -86,6 +100,7 @@ type formatter struct {
 	rightDelim     string
 	maxLineWidth   int
 	maxInlineAttrs int
+	whitespace     analysis.WhitespaceOptions
 
 	root    *template.ListNode
 	styles  analysis.Whitespaces
@@ -369,8 +384,8 @@ func (f *formatter) actionWidth(content string) int {
 }
 
 // elementWidth is the one-line width of an element: its open tag, its
-// children (as written when it is opaque), and its closing tag, which the
-// formatter writes even when the source leaves the element unclosed.
+// children (as written when it is opaque), and its closing tag when the
+// source has one.
 func (f *formatter) elementWidth(n *template.HTMLElementNode) int {
 	width := f.contentWidth("<" + n.TagName + ">")
 	for _, attr := range n.Attr {
@@ -385,6 +400,9 @@ func (f *formatter) elementWidth(n *template.HTMLElementNode) int {
 			continue
 		}
 		width += f.nodeWidth(child)
+	}
+	if !n.Closed {
+		return width
 	}
 	return width + f.contentWidth("</"+n.TagName+">")
 }
@@ -594,7 +612,41 @@ func (f *formatter) documentFragment(n *template.HTMLDocumentFragmentNode) {
 // writeSource writes el's children as written and its closing tag.
 func (f *formatter) writeSource(el *template.HTMLElementNode) {
 	for _, child := range el.Children {
-		f.writeString(child.String())
+		f.writeString(sourceText(child))
+	}
+	f.closeTag(el)
+}
+
+// voidElements are the HTML elements with no content, whose start tag
+// the formatter writes without a slash (as the template parser's list).
+var voidElements = map[string]bool{
+	"area": true, "base": true, "br": true, "col": true, "embed": true,
+	"hr": true, "img": true, "input": true, "link": true, "meta": true, "param": true,
+	"source": true, "track": true, "wbr": true,
+}
+
+// sourceText is n as written. An unclosed element's String is its start
+// tag alone, so its children are added after it.
+func sourceText(n template.Node) string {
+	el, ok := n.(*template.HTMLElementNode)
+	if !ok || el.Closed || el.Void {
+		return n.String()
+	}
+	var b strings.Builder
+	b.WriteString(el.String())
+	for _, child := range el.Children {
+		b.WriteString(sourceText(child))
+	}
+	return b.String()
+}
+
+// closeTag writes el's closing tag when the source has one. An element
+// the source leaves unclosed stays unclosed: the browser may close it
+// earlier than the template tree does (a p before a div), and there an
+// added end tag is content of its own (a stray </p> is an empty p).
+func (f *formatter) closeTag(el *template.HTMLElementNode) {
+	if !el.Closed {
+		return
 	}
 	f.writeString("</")
 	f.writeString(el.TagName)
@@ -606,6 +658,13 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	f.writeString("<")
 	f.writeString(n.TagName)
 	f.formatAttributes(n)
+	if n.Void && !voidElements[strings.ToLower(n.TagName)] {
+		// <a/> as written: on an element that is not void the browser
+		// ignores the slash and the content that follows is the
+		// element's, so a plain > would read differently next pass.
+		f.writeString("/>")
+		return
+	}
 	f.writeString(">")
 	if n.Void {
 		return
@@ -618,9 +677,7 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 
 	if len(n.Children) == 0 {
 		// Empty element: closing tag on same line
-		f.writeString("</")
-		f.writeString(n.TagName)
-		f.writeString(">")
+		f.closeTag(n)
 		return
 	}
 
@@ -632,9 +689,7 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	}
 	f.children(n, n.Children, listOptions{layout: layout, outer: outer})
 	f.indent = outer
-	f.writeString("</")
-	f.writeString(n.TagName)
-	f.writeString(">")
+	f.closeTag(n)
 }
 
 func (f *formatter) formatAttributes(n *template.HTMLElementNode) {

@@ -1,0 +1,8 @@
+-- input.gohtml --
+<style>.c{white-space:pre}</style><div class="c">
+  a
+</div>
+-- format.gohtml --
+<style>.c{white-space:pre}</style><div class="c">
+  a
+</div>

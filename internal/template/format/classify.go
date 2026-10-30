@@ -806,17 +806,17 @@ var repairedTags = map[string]bool{
 // nearest clean block: a block
 // element that carries no diagnostic and that no start tag closes.
 // Whitespace there may land in a reopened formatting element or next to
-// a box the template tree does not have.
-//
-// An unclosed element is not flagged: the formatter writes its closing
-// tag, so the next pass would see a clean element and lay it out anew.
+// a box the template tree does not have. Every unclosed element is
+// flagged too, an implied end tag (p, li) included: the formatter does
+// not write the closing tag the source leaves out, the browser may end
+// the element before the template tree does, and the template tree runs
+// it to the end of its parent, so a run written after it would be its
+// content on the next pass.
 func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
 	for _, d := range analysis.CheckStructure(tree) {
-		if d.Code != template.DiagUnclosedElement {
-			flagged[d.Pos] = true
-		}
+		flagged[d.Pos] = true
 	}
 	// closes maps a list item to the ancestor its start tag closes; the
 	// browser pops every element up to that ancestor.
@@ -828,6 +828,9 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 		el, ok := n.(*template.HTMLElementNode)
 		if !ok {
 			return
+		}
+		if !el.Void && !el.Closed {
+			flagged[el.Start()] = true
 		}
 		if closed := closesListItem(el, path); closed != nil {
 			flagged[el.Start()] = true

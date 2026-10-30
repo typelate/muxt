@@ -80,7 +80,9 @@
 	<li>two</li>
 </ul>
 <p>text with <strong>bold</strong> and <em>italic</em></p>
-<div class="container" id="main"><p>inside</p></div>
+<div class="container" id="main">
+	<p>inside</p>
+</div>
 <header>
 	<h1>Title</h1>
 </header><main>

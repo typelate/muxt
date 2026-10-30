@@ -30,13 +30,7 @@
 		<h1>x</h1>
 	{{end}}
 </div>
-<div>
-	<br>
-	<span>
-		aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-		<br>
-	</span>
-</div>
+<div><br><span>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<br></div>
 -- data/empty.json --
 {}
 -- data/truthy.json --

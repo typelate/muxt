@@ -181,7 +181,8 @@ func TestFixtures(t *testing.T) {
 			}
 
 			// (a) golden
-			got, err := Source("input.gohtml", fx.input)
+			styles := Styles(analysis.WhitespaceOptions{Sheets: fx.sheets, AuthorCSSKnown: true})
+			got, err := Source("input.gohtml", fx.input, styles)
 			if err != nil {
 				t.Fatalf("%s: Source(input) error: %v", name, err)
 			}
@@ -192,7 +193,7 @@ func TestFixtures(t *testing.T) {
 			}
 
 			// (b) idempotency
-			again, err := Source("format.gohtml", got)
+			again, err := Source("format.gohtml", got, styles)
 			if err != nil {
 				t.Errorf("%s: Source(output) error: %v\noutput:\n%s", name, err, got)
 			} else if again != got {
@@ -218,6 +219,73 @@ func TestFixtures(t *testing.T) {
 			}
 			for _, p := range problems {
 				t.Errorf("%s: %s", name, p)
+			}
+		})
+	}
+}
+
+// TestWPTFormatting formats each vendored web-platform-tests white-space
+// file (see testdata/wpt/README.md) with no stylesheet files and author
+// CSS known, and checks that the output is idempotent, keeps the opaque
+// regions byte for byte, and renders like the original.
+func TestWPTFormatting(t *testing.T) {
+	files, err := filepath.Glob("testdata/wpt/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no WPT files found")
+	}
+	styles := Styles(analysis.WhitespaceOptions{AuthorCSSKnown: true})
+	for _, filename := range files {
+		name := filepath.Base(filename)
+		if name == "white-space-empty-text-sibling.html" {
+			continue // scripted; not a static page
+		}
+		t.Run(name, func(t *testing.T) {
+			b, err := os.ReadFile(filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			src := string(b)
+			got, err := Source(name, src, styles)
+			if err != nil {
+				t.Fatalf("Source(%s) error: %v", name, err)
+			}
+			again, err := Source(name, got, styles)
+			if err != nil {
+				t.Fatalf("Source(output) error: %v\noutput:\n%s", err, got)
+			}
+			if again != got {
+				t.Errorf("%s: not idempotent\nfirst:\n%s\nsecond:\n%s", name, got, again)
+			}
+			checkOpaqueRegions(t, name, src, got, nil)
+			want, err := render(src, "", map[string]any{})
+			if err != nil {
+				t.Fatalf("render input: %v", err)
+			}
+			rendered, err := render(got, "", map[string]any{})
+			if err != nil {
+				t.Fatalf("render output: %v\noutput:\n%s", err, got)
+			}
+			diff, err := rendering.Diff(want, rendered, rendering.Body, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff != "" {
+				t.Errorf("%s: rendering changed: %s\noutput:\n%s", name, diff, got)
+			}
+			if name == "white-space-normal-011.html" {
+				const open = `<div id="reference">`
+				start := strings.Index(src, open)
+				end := strings.Index(src[start:], "</div>")
+				if start < 0 || end < 0 {
+					t.Fatalf("no #reference div in %s", name)
+				}
+				reference := src[start : start+end+len("</div>")]
+				if !strings.Contains(got, reference) {
+					t.Errorf("%s: #reference content changed; want %q in output:\n%s", name, reference, got)
+				}
 			}
 		})
 	}
