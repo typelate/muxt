@@ -73,9 +73,11 @@ func parseHandlerCall(fileSet *token.FileSet, def *Definition) (*ast.Ident, *ast
 		// text/template's ErrorContext counted the column from zero;
 		// Tree.Position counts it from one. It named the file by the
 		// tree's ParseName, which the checker's loader set to the file's
-		// path; the copied parser keeps that path in Filepath.
+		// path; the copied parser keeps that path in Filepath. It located
+		// the root past the whitespace a {{define ... -}} trims, which
+		// Tree.RootStart reproduces.
 		tree := def.template.Tree
-		p := tree.Position(tree.Root)
+		p := tree.PositionAt(tree.RootStart())
 		loc := fmt.Sprintf("%s:%d:%d", cmp.Or(tree.Filepath, p.ParseName), p.Line, p.Column-1)
 		return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}

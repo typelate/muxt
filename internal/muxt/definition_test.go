@@ -252,3 +252,12 @@ func TestDefinitionsLocateAHandlerErrorInAFile(t *testing.T) {
 	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 	require.ErrorContains(t, err, "failed to parse handler expression "+filename+":1:")
 }
+
+// TestDefinitionsLocateAHandlerErrorPastTrimmedSpace states that a
+// malformed handler is located where text/template started the
+// template's body: past the whitespace its {{define ... -}} trims.
+func TestDefinitionsLocateAHandlerErrorPastTrimmedSpace(t *testing.T) {
+	ts := html.Must(html.New("t").Parse("{{- define \"GET /x F(\" -}}\n  x{{end}}"))
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression t:2:2: ")
+}

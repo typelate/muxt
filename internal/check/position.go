@@ -16,13 +16,19 @@ import (
 //
 // A {{template}} call, and the call a {{block}} stands for, is located at
 // its quoted name, where text/template's parser placed it, rather than at
-// its left delimiter.
+// its left delimiter. The tree's root is located where text/template's
+// parser started it, past the whitespace a {{define ... -}} trims (see
+// Tree.RootStart).
 func ParseNodePosition(tree *template.Tree, node template.Node) token.Position {
 	p := tree.Position(node)
 	offset := node.Start()
 	if name, ok := templateNameStart(node); ok {
 		at := tree.PositionAt(name)
 		p.Line, p.Column, offset = at.Line, at.Column, name
+	} else if root, ok := node.(*template.ListNode); ok && root == tree.Root {
+		offset = tree.RootStart()
+		at := tree.PositionAt(offset)
+		p.Line, p.Column = at.Line, at.Column
 	}
 	return token.Position{
 		Filename: cmp.Or(tree.Filepath, p.ParseName),

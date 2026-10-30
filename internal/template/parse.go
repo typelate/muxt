@@ -176,6 +176,33 @@ func (p Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", p.ParseName, p.Line, p.Column)
 }
 
+// RootStart returns the offset where text/template's parser started the
+// tree's root list. Its lexer dropped the whitespace a {{define ... -}} or
+// {{block ... -}} clause trims, so the list began at the first byte the
+// template writes, or at the action after the trimmed space. This parser
+// keeps that whitespace as text, trimmed at execution, and starts the
+// list right after the clause.
+func (t *Tree) RootStart() lex.Pos {
+	root := t.Root
+	if root == nil {
+		return 0
+	}
+	if !t.RootTrimFirst || len(root.Nodes) == 0 {
+		return root.Start()
+	}
+	text, ok := root.Nodes[0].(*TextNode)
+	if !ok {
+		return root.Start()
+	}
+	if rest := bytes.TrimLeft(text.Text, trimCutset); len(rest) > 0 {
+		return text.Start() + lex.Pos(len(text.Text)-len(rest))
+	}
+	if len(root.Nodes) > 1 {
+		return root.Nodes[1].Start()
+	}
+	return root.End()
+}
+
 // PositionAt computes the line and column (both 1-based) for a byte offset in the template text.
 func (t *Tree) PositionAt(pos lex.Pos) Position {
 	p := int(pos)

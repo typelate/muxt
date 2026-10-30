@@ -115,3 +115,24 @@ func TestErrorLocatesATemplateCallAtItsName(t *testing.T) {
 		t.Errorf("Execute() = %v, want %s", err, want)
 	}
 }
+
+// TestParseNodePositionOfATrimmedRoot states that a defined template's
+// root is located where text/template's parser started it: past the
+// whitespace its {{define ... -}} trims. Unused route templates are
+// reported there.
+func TestParseNodePositionOfATrimmedRoot(t *testing.T) {
+	const src = "{{- define \"a\" -}}\n\t{{- .X -}}\n{{- end -}}"
+	tmpl, err := template.New[*types.Signature]("").Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, ok := tmpl.FindTree("a")
+	if !ok {
+		t.Fatal("template a not found")
+	}
+	got := check.ParseNodePosition(tree, tree.Root)
+	want := token.Position{Line: 2, Column: 2, Offset: 20}
+	if got != want {
+		t.Errorf("ParseNodePosition(tree, tree.Root) = %+v, want %+v", got, want)
+	}
+}
