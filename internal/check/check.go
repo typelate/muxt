@@ -246,8 +246,30 @@ func (e *Error) locationPrefix() string {
 	}
 	pos := e.Tree.Position(e.Node)
 	loc := cmp.Or(e.Tree.Filepath, pos.ParseName)
+	line, column := pos.Line, pos.Column+chainColumnOffset(e.Node)
+	if name, ok := templateNameStart(e.Node); ok {
+		at := e.Tree.PositionAt(name)
+		line, column = at.Line, at.Column
+	}
 	return fmt.Sprintf("%s:%d:%d: executing %q at <%s>: ",
-		loc, pos.Line, pos.Column+chainColumnOffset(e.Node), e.Tree.Name, pos.Source)
+		loc, line, column, e.Tree.Name, pos.Source)
+}
+
+// templateNameStart is where text/template's parser places a {{template}}
+// call, or the call a {{block}} stands for: at the quoted name, not at the
+// left delimiter where the node starts. The name is the first string in
+// the clause, after the keyword, any trim marker and any spaces or
+// newlines.
+func templateNameStart(node template.Node) (lex.Pos, bool) {
+	n, ok := node.(*template.TemplateNode)
+	if !ok {
+		return 0, false
+	}
+	i := strings.IndexAny(n.String(), "\"`")
+	if i < 0 {
+		return 0, false
+	}
+	return n.Start() + lex.Pos(i), true
 }
 
 // chainColumnOffset is how far into node text/template's parser places a

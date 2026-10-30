@@ -1,0 +1,38 @@
+A {{block}} calls the template it names, so it is listed among that
+template's callers.
+
+Command line: muxt list-template-callers
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"FilterTemplates": null
+}
+-- a_layout.gohtml --
+{{define "page"}}<main>{{block "over" .}}{{template "deflt" .}}{{end}}</main>{{end}}
+{{define "deflt"}}<p>{{.Title}}</p>{{end}}
+-- b_page.gohtml --
+{{define "over"}}<h2>{{.Title}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/stdout.txt --
+
+template "over" called by:
+
+  - a_layout.gohtml:1:32 template "page" Page
+
+
+template "page" called by:
+
+  - server.go:8:9 execute_template "page" Page
+
+

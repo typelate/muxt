@@ -36,12 +36,12 @@ func RenderAlone(w io.Writer) error {
 
 template "alone" calls:
 
-  - index.gohtml:4:19 template "header" string
+  - index.gohtml:4:30 template "header" string
 
 
 template "page" calls:
 
-  - index.gohtml:1:18 template "header" string
-  - index.gohtml:1:62 template "item" Item
+  - index.gohtml:1:29 template "header" string
+  - index.gohtml:1:73 template "item" Item
 
 

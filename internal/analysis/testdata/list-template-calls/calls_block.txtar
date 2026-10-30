@@ -1,0 +1,34 @@
+A {{block}} is a call of the template it names, with the data type its
+pipeline passes, and a call in an overridden default body is not made.
+
+Command line: muxt list-template-calls
+-- config.json --
+{
+	"TemplatesVariables": [
+		"templates"
+	],
+	"FilterTemplates": null
+}
+-- a_layout.gohtml --
+{{define "page"}}<main>{{block "over" .}}{{template "deflt" .}}{{end}}{{block "kept" .Title}}{{.}}{{end}}</main>{{end}}
+{{define "deflt"}}<p>{{.Title}}</p>{{end}}
+-- b_page.gohtml --
+{{define "over"}}<h2>{{.Title}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/stdout.txt --
+
+template "page" calls:
+
+  - a_layout.gohtml:1:79 template "kept" string
+  - a_layout.gohtml:1:32 template "over" Page
+
+
