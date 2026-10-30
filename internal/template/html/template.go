@@ -78,23 +78,18 @@ func (t *Template) New(name string) *Template {
 }
 
 // Lookup returns the template with the given name that is associated with t.
-// It returns nil if there is no such template or the template has no
-// definition.
+// It returns nil if there is no such template. As in html/template, a
+// template declared with New and never parsed is returned with a nil Tree.
 func (t *Template) Lookup(name string) *Template {
-	tmpl := t.common.tmpl[name]
-	if tmpl != nil && tmpl.Tree == nil {
-		return nil
-	}
-	return tmpl
+	return t.common.tmpl[name]
 }
 
-// Templates returns a slice of defined templates associated with t.
+// Templates returns a slice of the templates associated with t, including
+// any declared with New and never parsed, as html/template does.
 func (t *Template) Templates() []*Template {
 	result := make([]*Template, 0, len(t.common.tmpl))
 	for _, tmpl := range t.common.tmpl {
-		if tmpl.Tree != nil {
-			result = append(result, tmpl)
-		}
+		result = append(result, tmpl)
 	}
 	return result
 }
@@ -290,7 +285,7 @@ func (t *Template) Execute(wr io.Writer, data any) error {
 // name to the specified data object and writes the output to wr.
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error {
 	tmpl := t.Lookup(name)
-	if tmpl == nil {
+	if tmpl == nil || tmpl.Tree == nil {
 		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
 	}
 	return tmpl.execute(wr, name, data)

@@ -88,15 +88,11 @@ func TestDefinitionCallExpressionWithoutAHandler(t *testing.T) {
 	assert.Nil(t, defs[0].CallExpression(), "CallExpression() of a route without a call")
 }
 
-func TestDefinitionsSkipsAnUnparsedTemplate(t *testing.T) {
-	// The html/template fork's Templates lists only templates with a
-	// tree, so a template declared and never parsed is not a route, even
-	// when its name would not parse as one.
+func TestDefinitionsMalformedHandlerOfAnUnparsedTemplate(t *testing.T) {
 	ts := html.New("")
 	ts.New("GET / F(") // declared, never parsed: no tree
-	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
-	require.NoError(t, err)
-	assert.Empty(t, defs)
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression")
 }
 
 func TestCheckPathMethodCollisions(t *testing.T) {

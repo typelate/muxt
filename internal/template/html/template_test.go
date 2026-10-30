@@ -3,8 +3,10 @@ package html
 import (
 	"bytes"
 	stdtemplate "html/template"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -369,5 +371,35 @@ func TestMisnestedFormattingDiverges(t *testing.T) {
 	}
 	if got := executeShim(t, src, nil); got != wantShim {
 		t.Errorf("shim output for %q = %q, want %q", src, got, wantShim)
+	}
+}
+
+// TestTemplatesWithoutATree states html/template's treatment of a template
+// declared with New and never parsed: Lookup and Templates still return
+// it, with a nil Tree, and DefinedTemplates leaves it out.
+func TestTemplatesWithoutATree(t *testing.T) {
+	ts := Must(New("root").Parse(`{{define "a"}}A{{end}}`))
+	ts.New("declared")
+
+	declared := ts.Lookup("declared")
+	if declared == nil {
+		t.Fatal(`Lookup("declared") = nil, want the declared template`)
+	}
+	if declared.Tree != nil {
+		t.Errorf(`Lookup("declared").Tree = %v, want nil`, declared.Tree)
+	}
+	var names []string
+	for _, tmpl := range ts.Templates() {
+		names = append(names, tmpl.Name())
+	}
+	slices.Sort(names)
+	if want := []string{"a", "declared", "root"}; !slices.Equal(names, want) {
+		t.Errorf("Templates() names = %v, want %v", names, want)
+	}
+	if got := ts.DefinedTemplates(); strings.Contains(got, "declared") {
+		t.Errorf("DefinedTemplates() = %q, want no declared", got)
+	}
+	if err := ts.ExecuteTemplate(io.Discard, "declared", nil); err == nil {
+		t.Error(`ExecuteTemplate("declared") = nil, want an incomplete or empty template error`)
 	}
 }

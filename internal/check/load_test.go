@@ -211,6 +211,31 @@ func main() { _ = ts.ExecuteTemplate(os.Stdout, "index", nil) }
 	assert.Contains(t, names, "row")
 }
 
+// TestTemplatesTemplateBridgeKeepsTheSetName states that the bridged set,
+// as html/template's would, still holds a template declared with New that
+// nothing was parsed under.
+func TestTemplatesTemplateBridgeKeepsTheSetName(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/app\n\ngo 1.26\n")
+	writeFile(t, dir, "main.go", `package main
+
+import ("html/template"; "os")
+
+var ts = template.Must(template.New("scratch").New("page").Parse(`+"`"+`{{define "a"}}x{{end}}`+"`"+`))
+
+func main() { _ = ts.ExecuteTemplate(os.Stdout, "a", nil) }
+`)
+	pkg := loadTestPackage(t, dir)
+	ts, err := check.LoadTemplates(pkg, "ts")
+	require.NoError(t, err)
+
+	tmpl, ok := ts.Template()
+	require.True(t, ok)
+	scratch := tmpl.Lookup("scratch")
+	require.NotNil(t, scratch, "the never parsed set name is still in the set")
+	assert.Nil(t, scratch.Tree, "the never parsed set name has no tree")
+}
+
 //go:embed testdata/load/*.gohtml
 var loadFS embed.FS
 

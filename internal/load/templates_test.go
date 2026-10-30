@@ -64,10 +64,7 @@ func TestTemplates(t *testing.T) {
 			names = append(names, tmpl.Name())
 		}
 		slices.Sort(names)
-		// scratch is the set's name and is never parsed, and the
-		// html/template fork's Templates lists only templates with a
-		// tree, where html/template listed it too.
-		assert.Equal(t, []string{"create", "form.gohtml", "home", "index.gohtml"}, names)
+		assert.Equal(t, []string{"create", "form.gohtml", "home", "index.gohtml", "scratch"}, names)
 	})
 
 	t.Run("unknown variable", func(t *testing.T) {

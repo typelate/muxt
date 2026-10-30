@@ -1,6 +1,7 @@
 package check
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/types"
@@ -154,10 +155,15 @@ func (t *Templates) Template() (*htttemplate.Template, bool) {
 	if len(names) == 0 {
 		return nil, false
 	}
-	out := htttemplate.New(names[0])
+	out := htttemplate.New(cmp.Or(t.templates.Name(), names[0]))
 	for _, name := range names {
 		tree, ok := t.templates.FindTree(name)
 		if !ok || tree == nil {
+			// html/template keeps a template declared with New and
+			// never parsed in the set, with a nil Tree.
+			if out.Lookup(name) == nil {
+				out.New(name)
+			}
 			continue
 		}
 		if _, err := out.AddParseTree(name, tree); err != nil {

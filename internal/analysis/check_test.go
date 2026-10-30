@@ -225,10 +225,9 @@ func declaredTemplates(t *testing.T) *html.Template {
 	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
 	ts.New("declared")
 	ts.New("GET /bare Bare()")
-	// The html/template fork's Lookup hides a template the set knows
-	// by name but has no tree for, where html/template returned it with
-	// a nil Tree; both paths are a template there is nothing to walk.
-	require.Nil(t, ts.Lookup("declared"), "the premise of this test is wrong: declared should have no tree")
+	declared := ts.Lookup("declared")
+	require.NotNil(t, declared, "the premise of this test is wrong: declared should exist without a tree")
+	require.Nil(t, declared.Tree, "the premise of this test is wrong: declared should exist without a tree")
 	return ts
 }
 

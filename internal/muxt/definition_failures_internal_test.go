@@ -87,8 +87,6 @@ func TestDefinitionsSourceFile(t *testing.T) {
 	for _, def := range defs {
 		got[def.Name()] = def.SourceFile()
 	}
-	// GET /b B() has no tree, and the html/template fork's Templates
-	// lists only templates with one, so it is not a definition.
-	want := map[string]string{"GET /a A()": "a.gohtml"}
+	want := map[string]string{"GET /a A()": "a.gohtml", "GET /b B()": ""}
 	assert.Equal(t, want, got, "Definitions() source files")
 }
