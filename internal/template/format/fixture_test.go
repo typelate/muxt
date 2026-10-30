@@ -33,9 +33,11 @@ var update = flag.Bool("update", false, "rewrite format.gohtml in testdata fixtu
 var knownViolations = map[string]string{}
 
 // opaqueRegions returns the byte spans of src that the formatter must
-// copy unchanged: the content of raw text, RCDATA and preformatted
-// elements. Spans are in source order and do not overlap.
-func opaqueRegions(src string) [][2]int {
+// copy unchanged: the content of the subtrees classify marks opaque (raw
+// text, RCDATA and preformatted elements, and elements whose white-space
+// is preserved or unknown under sheets). Spans are in source order and do
+// not overlap.
+func opaqueRegions(src string, sheets []analysis.Stylesheet) [][2]int {
 	tree, err := template.ParseTree("opaque", "opaque", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
@@ -45,11 +47,15 @@ func opaqueRegions(src string) [][2]int {
 	if err != nil {
 		return nil
 	}
+	styles := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{
+		Sheets:         sheets,
+		AuthorCSSKnown: true,
+	})
 	var regions [][2]int
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	for _, n := range classify(tree.Root, styles).opaque {
 		el, ok := n.(*template.HTMLElementNode)
-		if !ok || !opaqueElements[strings.ToLower(el.TagName)] {
-			return
+		if !ok {
+			continue
 		}
 		start, end := int(el.AttrEnd), int(el.EndTagStart)
 		if !el.Closed {
@@ -60,24 +66,15 @@ func opaqueRegions(src string) [][2]int {
 				end = int(el.Children[len(el.Children)-1].End())
 			}
 		}
-		if len(regions) > 0 && start < regions[len(regions)-1][1] {
-			return // inside an opaque element already listed
-		}
 		regions = append(regions, [2]int{start, end})
-	})
+	}
 	return regions
-}
-
-var opaqueElements = map[string]bool{
-	"pre": true, "listing": true, "xmp": true, "plaintext": true, "textarea": true,
-	"script": true, "style": true, "title": true, "iframe": true,
-	"noembed": true, "noframes": true, "noscript": true,
 }
 
 func TestOpaqueRegions(t *testing.T) {
 	for _, tt := range []struct {
-		src  string
-		want []string
+		src, css string
+		want     []string
 	}{
 		{src: `<p>a</p>`},
 		{src: `<pre>  a </pre>`, want: []string{"  a "}},
@@ -87,9 +84,16 @@ func TestOpaqueRegions(t *testing.T) {
 		{src: `<iframe>i</iframe><noembed>e</noembed><noframes>f</noframes><noscript>s</noscript>`, want: []string{"i", "e", "f", "s"}},
 		{src: `<listing>l</listing><xmp>x</xmp>`, want: []string{"l", "x"}},
 		{src: `<plaintext>p`, want: []string{"p"}},
+		{src: `<p class="k"> a </p><p> b </p>`, css: `.k{white-space:pre-wrap}`, want: []string{" a "}},
+		{src: `<p style="white-space:pre"> a <span> b </span></p>`, want: []string{" a <span> b </span>"}},
+		{src: `{{define "x"}}<pre> d </pre>{{end}}`, want: []string{" d "}},
 	} {
+		var sheets []analysis.Stylesheet
+		if tt.css != "" {
+			sheets = []analysis.Stylesheet{{Filename: "opaque.css", Text: tt.css}}
+		}
 		var got []string
-		for _, r := range opaqueRegions(tt.src) {
+		for _, r := range opaqueRegions(tt.src, sheets) {
 			got = append(got, tt.src[r[0]:r[1]])
 		}
 		if !slices.Equal(got, tt.want) {
@@ -196,7 +200,7 @@ func TestFixtures(t *testing.T) {
 			}
 
 			// (c) opaque regions byte for byte, in order
-			checkOpaqueRegions(t, name, fx.input, got)
+			checkOpaqueRegions(t, name, fx.input, got, fx.sheets)
 
 			// (d) and (e) rendering equivalence
 			problems, err := renderingProblems(fx, got)
@@ -266,10 +270,10 @@ func writeGolden(t *testing.T, filename string, ar *txtar.Archive, got string) {
 	}
 }
 
-func checkOpaqueRegions(t *testing.T, name, input, output string) {
+func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analysis.Stylesheet) {
 	t.Helper()
 	cursor := 0
-	for _, r := range opaqueRegions(input) {
+	for _, r := range opaqueRegions(input, sheets) {
 		region := input[r[0]:r[1]]
 		i := strings.Index(output[cursor:], region)
 		if i < 0 {
