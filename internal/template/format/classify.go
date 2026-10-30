@@ -6,6 +6,7 @@ import (
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // gap is the whitespace between two consecutive items of a child list
@@ -489,6 +490,8 @@ func (c *classifier) endSide(l *childList) side {
 			return edgeSide
 		case analysis.DisplayInline, analysis.DisplayContents:
 			return c.rightSide(c.after(n))
+		case analysis.DisplayUnknown:
+			return unsureSide
 		}
 	case *template.IfNode, *template.WithNode:
 		return c.rightSide(c.after(n))
@@ -502,7 +505,9 @@ func (c *classifier) endSide(l *childList) side {
 		return next.and(c.rightSide(c.after(n)))
 	}
 	// The tree root or a define or block body (the caller is unknown), or
-	// the inside of an element whose display is none or unknown.
+	// the inside of an element whose display is none. The inside of an
+	// element whose display is unknown is unsure: it may be inline next
+	// to anything, or the browser may build it elsewhere.
 	return opaqueSide
 }
 
@@ -515,6 +520,8 @@ func (c *classifier) startSide(l *childList) side {
 			return edgeSide
 		case analysis.DisplayInline, analysis.DisplayContents:
 			return c.leftSide(c.places[n])
+		case analysis.DisplayUnknown:
+			return unsureSide
 		}
 	case *template.IfNode, *template.WithNode:
 		return c.leftSide(c.places[n])
@@ -777,4 +784,128 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 		}
 	}
 	walk(root.Nodes, "", nil)
+}
+
+// repairedTags name the block elements that a start tag inside them can
+// close (HTML §13.2.6.4.7 implied end tags): the browser's tree differs
+// from the template tree there, so they are no stopping point when
+// marking a misnested element's ancestors.
+var repairedTags = map[string]bool{
+	"p": true, "li": true, "dd": true, "dt": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+}
+
+// unsureMisnested sets the display of the elements the browser builds
+// differently from the template tree to unknown, so the classifier
+// treats them as unsure and leaves the runs next to and inside them as
+// written (collapse-only at most). These are the elements carrying a
+// structural diagnostic from analysis.CheckStructure (auto-closed,
+// misnested, foster-parented, nested forms, links and buttons), the list
+// items closesListItem finds, and their ancestors up to the nearest
+// clean block: a block
+// element that carries no diagnostic and that no start tag closes.
+// Whitespace there may land in a reopened formatting element or next to
+// a box the template tree does not have.
+//
+// An unclosed element is not flagged: the formatter writes its closing
+// tag, so the next pass would see a clean element and lay it out anew.
+func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
+	tree := &template.Tree{Root: root}
+	flagged := make(map[lex.Pos]bool)
+	for _, d := range analysis.CheckStructure(tree) {
+		if d.Code != template.DiagUnclosedElement {
+			flagged[d.Pos] = true
+		}
+	}
+	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		if el, ok := n.(*template.HTMLElementNode); ok && closesListItem(el, path) {
+			flagged[el.Start()] = true
+		}
+	})
+	if len(flagged) == 0 {
+		return
+	}
+	var marked []*template.HTMLElementNode
+	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		el, ok := n.(*template.HTMLElementNode)
+		if !ok || !flagged[el.Start()] {
+			return
+		}
+		marked = append(marked, el)
+		for i := len(path) - 1; i >= 0; i-- {
+			switch p := path[i].(type) {
+			case *template.HTMLElementNode:
+				if cleanBlock(p, styles, flagged) {
+					return
+				}
+				marked = append(marked, p)
+			case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+				return
+			}
+		}
+	})
+	for _, el := range marked {
+		if ws, ok := styles[el]; ok {
+			ws.Display = analysis.DisplayUnknown
+			styles[el] = ws
+		}
+	}
+}
+
+func cleanBlock(el *template.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) bool {
+	ws, ok := styles[el]
+	if !ok || flagged[el.Start()] || repairedTags[strings.ToLower(el.TagName)] {
+		return false
+	}
+	return ws.Display == analysis.DisplayBlock || ws.Display == analysis.DisplayTableInternal
+}
+
+// closesListItem reports whether the start tag of el, an li, dd or dt,
+// closes an open ancestor of its kind through inline elements, as the
+// browser does (HTML §13.2.6.4.7: a start tag "li", "dd" or "dt" closes
+// the nearest such element unless a special element other than address,
+// div or p comes first). analysis.CheckStructure finds only the case
+// where that ancestor is the direct parent.
+func closesListItem(el *template.HTMLElementNode, path []template.Node) bool {
+	kinds := map[string][]string{"li": {"li"}, "dd": {"dd", "dt"}, "dt": {"dd", "dt"}}[strings.ToLower(el.TagName)]
+	if kinds == nil {
+		return false
+	}
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			tag := strings.ToLower(p.TagName)
+			if slices.Contains(kinds, tag) {
+				return true
+			}
+			if specialTags[tag] && tag != "address" && tag != "div" && tag != "p" {
+				return false
+			}
+		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+			return false
+		}
+	}
+	return false
+}
+
+// specialTags are the HTML elements of the special category (HTML
+// §13.2.4.2), which stop the list-item scan of closesListItem.
+var specialTags = map[string]bool{
+	"address": true, "applet": true, "area": true, "article": true, "aside": true,
+	"base": true, "basefont": true, "bgsound": true, "blockquote": true, "body": true,
+	"br": true, "button": true, "caption": true, "center": true, "col": true,
+	"colgroup": true, "dd": true, "details": true, "dir": true, "div": true,
+	"dl": true, "dt": true, "embed": true, "fieldset": true, "figcaption": true,
+	"figure": true, "footer": true, "form": true, "frame": true, "frameset": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"head": true, "header": true, "hgroup": true, "hr": true, "html": true,
+	"iframe": true, "img": true, "input": true, "keygen": true, "li": true,
+	"link": true, "listing": true, "main": true, "marquee": true, "menu": true,
+	"meta": true, "nav": true, "noembed": true, "noframes": true, "noscript": true,
+	"object": true, "ol": true, "p": true, "param": true, "plaintext": true,
+	"pre": true, "script": true, "search": true, "section": true, "select": true,
+	"source": true, "style": true, "summary": true, "table": true, "tbody": true,
+	"td": true, "template": true, "textarea": true, "tfoot": true, "th": true,
+	"thead": true, "title": true, "tr": true, "track": true, "ul": true,
+	"wbr": true, "xmp": true,
 }

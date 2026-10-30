@@ -3,17 +3,8 @@
 <ul><li>a<li>b</ul>
 <tr><td>x</td></tr>
 -- format.gohtml --
-<p>
-	a
-	<div>b</div>
-	c
-</p>
-<ul>
-	<li>
-		a
-		<li>b</li>
-	</li>
-</ul>
+<p>a<div>b</div>c</p>
+<ul><li>a<li>b</li></li></ul>
 <tr><td>x</td></tr>
 -- data/empty.json --
 {}

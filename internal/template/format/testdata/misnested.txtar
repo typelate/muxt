@@ -1,0 +1,83 @@
+-- input.gohtml --
+<p><b>x<div>y</div></b></p>
+<p>
+<b> <h1>a</h1>
+<section>b</section></b>	</p>
+<p>
+<a>
+<ul>x</ul></a>
+</p>
+<li><li>
+<ul> x</ul>
+</li>
+<a> a </a>
+</li>
+<p>
+<em>	<div>
+<img src=x>
+b</div></em>
+
+<br>
+</p>
+<p>
+<h1>
+<h1>x</h1>
+<span>
+ b</span>
+</h1>
+</p>
+<p>x <em>
+<ul></ul><ul>
+</ul>y</em>
+</p>
+<li>
+  <b> a<li> </li>	</b>
+</li>
+<li><b><li></li><div>a</div>
+  </b>x
+</li>
+<table><tr><td>t</td></tr></table>
+-- format.gohtml --
+<p><b>x<div>y</div></b></p>
+<p>
+	<b> <h1>a</h1>
+	<section>b</section></b> </p>
+<p>
+	<a>
+	<ul>x</ul></a>
+	</p>
+<li><li>
+	<ul>x</ul>
+</li>
+	<a> a </a>
+	</li>
+<p>
+	<em> <div>
+	<img src=x>
+	b</div></em>
+	<br>
+	</p>
+<p>
+	<h1>
+	<h1>x</h1>
+	<span>
+	b</span>
+	</h1>
+	</p>
+<p>x <em>
+	<ul></ul><ul>
+	</ul>y</em>
+	</p>
+<li>
+	<b> a<li> </li> </b>
+	</li>
+<li><b><li></li><div>a</div>
+	</b>x
+	</li>
+<table>
+	<tr>
+		<td>t</td>
+	</tr>
+</table>
+-- data/empty.json --
+{}
