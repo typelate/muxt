@@ -2,10 +2,11 @@ package muxt_test
 
 import (
 	"go/types"
-	"html/template"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/require"
 
@@ -528,7 +529,7 @@ func TestArgument(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(tc.Template))
+			ts := html.Must(html.New("").Parse(tc.Template))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
 

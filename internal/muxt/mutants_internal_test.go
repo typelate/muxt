@@ -6,9 +6,10 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"html/template"
 	"slices"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -152,7 +153,7 @@ func TestNewDefinitionStatusCodeAndResponse(t *testing.T) {
 		{name: "unknown named status", route: "GET / http.StatusNope Brew()", wantErr: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			def, err, matched := newDefinition(template.Must(template.New(tt.route).Parse(``)))
+			def, err, matched := newDefinition(html.Must(html.New(tt.route).Parse(``)))
 			require.True(t, matched, "newDefinition(%q) did not match", tt.route)
 			if tt.wantErr {
 				require.Error(t, err, "newDefinition(%q)", tt.route)
@@ -213,7 +214,7 @@ func TestTemplateNames(t *testing.T) {
 		assert.Nil(t, templateNames(nil), "templateNames(nil)")
 	})
 	t.Run("every template in the set", func(t *testing.T) {
-		ts := template.Must(template.New("root").Parse(`{{define "a"}}{{end}}{{define "b"}}{{end}}`))
+		ts := html.Must(html.New("root").Parse(`{{define "a"}}{{end}}{{define "b"}}{{end}}`))
 		got := templateNames(ts)
 		slices.Sort(got)
 		assert.Equal(t, []string{"a", "b", "root"}, got, "templateNames()")

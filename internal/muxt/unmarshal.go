@@ -3,9 +3,10 @@ package muxt
 import (
 	"fmt"
 	"go/types"
-	"html/template"
 	"reflect"
 	"strings"
+
+	htmltemplate "github.com/typelate/muxt/internal/template/html"
 
 	"github.com/typelate/dom"
 	"golang.org/x/net/html"
@@ -144,7 +145,7 @@ type FieldBinding struct {
 	InputName string
 	// Template is the field's validation template (template struct tag), or
 	// nil when the tag is absent or names an undefined template.
-	Template *template.Template
+	Template *htmltemplate.Template
 	elem     types.Type
 	// Slice binds every request value for InputName, not just the first.
 	Slice bool

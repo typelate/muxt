@@ -5,8 +5,9 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,7 +73,7 @@ func TestDefinitionsBodyArgumentErrors(t *testing.T) {
 		{name: "unmarshalForm conflicts with multipart like form does", template: `{{define "POST / Save(unmarshalForm(body), multipart)"}}{{end}}`, wantErr: `call Save has both "form" and "multipart" arguments; use only one (multipart parses url-encoded fields too)`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(tt.template))
+			ts := html.Must(html.New("").Parse(tt.template))
 			_, err := Definitions(source.Variable{Name: "templates", Set: ts})
 			require.Error(t, err, "Definitions(%q)", tt.template)
 			assert.Equal(t, tt.wantErr, err.Error(), "Definitions(%q) error", tt.template)
@@ -148,14 +149,14 @@ func TestRewriteSignalsArguments(t *testing.T) {
 
 func TestDefinitionsSignals(t *testing.T) {
 	t.Run("signals marks the definition", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "POST /search Save(ctx, signals)"}}{{end}}`))
 		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		require.NoError(t, err)
 		assert.True(t, defs[0].UsesSignals(), "UsesSignals()")
 		assert.Equal(t, "Save(ctx, unmarshalJSON(body))", astgen.Format(defs[0].CallExpression()), "call")
 	})
 	t.Run("a signals path wildcard keeps its path-value meaning", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET /s/{signals} Show(ctx, signals)"}}{{end}}`))
 		defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		require.NoError(t, err)
 		assert.False(t, defs[0].UsesSignals(), "UsesSignals()")
@@ -181,7 +182,7 @@ func TestIsSignalsCallbackArgument(t *testing.T) {
 }
 
 func TestDefinitionsSignalsCallback(t *testing.T) {
-	ts := template.Must(template.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
+	ts := html.Must(html.New("").Parse(`{{define "GET /board sse(Stream(ctx, execute, countsSignals))"}}{{end}}`))
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err)
 	name, ok := defs[0].SignalsCallback()

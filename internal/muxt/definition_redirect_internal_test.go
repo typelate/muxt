@@ -1,8 +1,9 @@
 package muxt
 
 import (
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,9 +11,9 @@ import (
 
 // pageIn parses text as a set holding "page", plus whatever else the text
 // defines, and returns the set with the root of "page".
-func pageIn(t *testing.T, text string) (*template.Template, *template.Template) {
+func pageIn(t *testing.T, text string) (*html.Template, *html.Template) {
 	t.Helper()
-	ts, err := template.New("set").Parse(`{{define "page"}}` + text + `{{end}}`)
+	ts, err := html.New("set").Parse(`{{define "page"}}` + text + `{{end}}`)
 	require.NoError(t, err)
 	page := ts.Lookup("page")
 	require.NotNil(t, page, "the set does not hold a page: %q", text)
@@ -104,7 +105,7 @@ func TestFindResponseStateCallThroughTemplateCalls(t *testing.T) {
 		{name: "no argument at all", call: `{{template "part"}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New("set").Parse(
+			ts, err := html.New("set").Parse(
 				`{{define "page"}}` + tt.call + `{{end}}{{define "part"}}{{.StatusCode 201}}{{end}}`)
 			require.NoError(t, err)
 			page := ts.Lookup("page")
@@ -172,7 +173,7 @@ func TestCanTemplateRedirectFollowsTemplateCalls(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New("set").Parse(tt.set)
+			ts, err := html.New("set").Parse(tt.set)
 			require.NoError(t, err)
 			page := ts.Lookup("page")
 			assert.Equal(t, tt.want, canTemplateRedirect(page.Tree.Root, ts, make(map[string]bool)), "canTemplateRedirect(%s)", tt.set)
@@ -181,7 +182,7 @@ func TestCanTemplateRedirectFollowsTemplateCalls(t *testing.T) {
 }
 
 func TestAnalyzeRedirectCalls(t *testing.T) {
-	ts := template.Must(template.New("set").Parse(`{{define "GET /a A()"}}{{.Redirect "/x" 302}}{{end}}{{define "GET /b B()"}}plain{{end}}`))
+	ts := html.Must(html.New("set").Parse(`{{define "GET /a A()"}}{{.Redirect "/x" 302}}{{end}}{{define "GET /b B()"}}plain{{end}}`))
 	ts.New("GET /c C()") // declared, never parsed: no tree
 	defs := []Definition{
 		{name: "GET /a A()"},

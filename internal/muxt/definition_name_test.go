@@ -1,8 +1,9 @@
 package muxt
 
 import (
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Out, func(t *testing.T) {
-			pat, err, match := newDefinition(template.Must(template.New(tt.In).Parse(``)))
+			pat, err, match := newDefinition(html.Must(html.New(tt.In).Parse(``)))
 			require.True(t, match)
 			require.NoError(t, err)
 			require.Equal(t, tt.Out, pat.generateEndpointPatternIdentifier(nil))

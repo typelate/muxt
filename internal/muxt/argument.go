@@ -2,7 +2,8 @@ package muxt
 
 import (
 	"go/types"
-	"html/template"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/typelate/muxt/internal/source"
 )
@@ -12,7 +13,7 @@ type Argument struct {
 	Type       ArgumentType
 	paramType  types.Type
 
-	template *template.Template
+	template *html.Template
 
 	// sig, args, and isMethod describe a nested call argument
 	// (Type == ArgumentTypeCall): the nested call's signature, its own
@@ -105,7 +106,7 @@ func (a Argument) ResultShape() ResultShape { return a.resultShape }
 // Template returns the template a render-callback argument (ArgumentTypeExecute)
 // renders: the route template for the base execute callback, or the same-named
 // template for an sse-prefixed callback (nil if that template does not exist).
-func (a Argument) Template() *template.Template { return a.template }
+func (a Argument) Template() *html.Template { return a.template }
 
 // callbackSignature returns a render-callback argument's function signature
 // (from its parameter type), or nil if the parameter type is not a function.

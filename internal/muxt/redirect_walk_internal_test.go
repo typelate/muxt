@@ -2,7 +2,8 @@ package muxt
 
 import (
 	"testing"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,7 +34,7 @@ func TestWalkTemplateCommands(t *testing.T) {
 			_, err := ts.Parse(`{{define "inner"}}{{.Inner}}{{end}}`)
 			require.NoError(t, err)
 			var got []string
-			walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *parse.CommandNode, dot bool) bool {
+			walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *template.CommandNode, dot bool) bool {
 				got = append(got, cmd.String()+" "+boolWord(dot))
 				return false
 			})
@@ -45,7 +46,7 @@ func TestWalkTemplateCommands(t *testing.T) {
 func TestWalkTemplateCommandsStopsAtTheFirstAccepted(t *testing.T) {
 	ts, page := pageIn(t, `{{.A}}{{if .B}}{{.C}}{{end}}{{.D}}`)
 	var visited []string
-	found := walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *parse.CommandNode, _ bool) bool {
+	found := walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *template.CommandNode, _ bool) bool {
 		visited = append(visited, cmd.String())
 		return cmd.String() == ".C"
 	})

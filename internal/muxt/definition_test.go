@@ -2,9 +2,10 @@ package muxt_test
 
 import (
 	"errors"
-	"html/template"
 	"testing"
 	"testing/fstest"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ import (
 
 func TestDefinitions(t *testing.T) {
 	t.Run("when one of the template names is a malformed pattern", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "HEAD /"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "HEAD /"}}{{end}}`))
 		_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.Error(t, err)
 	})
@@ -33,7 +34,7 @@ func TestDefinitionMayRedirect(t *testing.T) {
 		{name: "no redirect", body: `{{.Result}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(`{{define "GET / F()"}}` + tt.body + `{{end}}`))
+			ts := html.Must(html.New("").Parse(`{{define "GET / F()"}}` + tt.body + `{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
@@ -53,7 +54,7 @@ func TestDefinitionHasResponseWriterArg(t *testing.T) {
 		{name: "GET /"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(`{{define "` + tt.name + `"}}{{end}}`))
+			ts := html.Must(html.New("").Parse(`{{define "` + tt.name + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 			require.NoError(t, err)
 			require.Len(t, defs, 1)
@@ -63,7 +64,7 @@ func TestDefinitionHasResponseWriterArg(t *testing.T) {
 }
 
 func TestDefinitionsOrderRoutesThatDifferOnlyByHost(t *testing.T) {
-	ts := template.Must(template.New("").Parse(
+	ts := html.Must(html.New("").Parse(
 		`{{define "GET c.example/x F()"}}{{end}}` +
 			`{{define "GET a.example/x F()"}}{{end}}` +
 			`{{define "GET b.example/x F()"}}{{end}}` +
@@ -80,23 +81,27 @@ func TestDefinitionsOrderRoutesThatDifferOnlyByHost(t *testing.T) {
 }
 
 func TestDefinitionCallExpressionWithoutAHandler(t *testing.T) {
-	ts := template.Must(template.New("").Parse(`{{define "GET /about"}}{{end}}`))
+	ts := html.Must(html.New("").Parse(`{{define "GET /about"}}{{end}}`))
 	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 	require.NoError(t, err)
 	require.Len(t, defs, 1)
 	assert.Nil(t, defs[0].CallExpression(), "CallExpression() of a route without a call")
 }
 
-func TestDefinitionsMalformedHandlerOfAnUnparsedTemplate(t *testing.T) {
-	ts := template.New("")
+func TestDefinitionsSkipsAnUnparsedTemplate(t *testing.T) {
+	// The html/template fork's Templates lists only templates with a
+	// tree, so a template declared and never parsed is not a route, even
+	// when its name would not parse as one.
+	ts := html.New("")
 	ts.New("GET / F(") // declared, never parsed: no tree
-	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
-	require.ErrorContains(t, err, "failed to parse handler expression")
+	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.NoError(t, err)
+	assert.Empty(t, defs)
 }
 
 func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when two handlers differ only in the case of the first letter", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
 		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`)
@@ -104,13 +109,13 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 	t.Run("when a handler identifier cannot be exported", func(t *testing.T) {
 		// 一覧 (Japanese "list") has no uppercase form, so no exported
 		// TemplateRoutePaths method name can be derived from it.
-		ts := template.Must(template.New("").Parse(`{{define "GET /items 一覧(ctx)"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET /items 一覧(ctx)"}}{{end}}`))
 		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `cannot export identifier "一覧" for TemplateRoutePaths method: first character '一' has no uppercase form`)
 	})
 	t.Run("when handlers produce distinct method names", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "GET /items List(ctx)"}}{{end}}{{define "GET /items/{id} Show(ctx, id)"}}{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET /items List(ctx)"}}{{end}}{{define "GET /items/{id} Show(ctx, id)"}}{{end}}`))
 		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.NoError(t, muxt.CheckPathMethodCollisions(defs))
@@ -119,7 +124,7 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 
 func TestCheckForDuplicatePatterns(t *testing.T) {
 	t.Run("when the pattern is not unique", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "GET  / F1()"}}a{{end}} {{define "GET /  F2()"}}b{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET  / F1()"}}a{{end}} {{define "GET /  F2()"}}b{{end}}`))
 		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
@@ -130,7 +135,7 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 	})
 
 	t.Run("ensure hosts are normalized", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "GET  example.com/ F1()"}}a{{end}} {{define "GET Example.COM/  F2()"}}b{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "GET  example.com/ F1()"}}a{{end}} {{define "GET Example.COM/  F2()"}}b{{end}}`))
 		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
@@ -141,7 +146,7 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 	})
 
 	t.Run("ensure paths are normalized", func(t *testing.T) {
-		ts := template.Must(template.New("").Parse(`{{define "  /abc"}}a{{end}} {{define "/abc  "}}b{{end}}`))
+		ts := html.Must(html.New("").Parse(`{{define "  /abc"}}a{{end}} {{define "/abc  "}}b{{end}}`))
 		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
@@ -154,8 +159,8 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 	})
 
 	t.Run("a template parsed under its own name has no source file", func(t *testing.T) {
-		ts := template.Must(template.New("GET /a F()").Parse(`a`))
-		template.Must(ts.New("GET /a G()").Parse(`b`))
+		ts := html.Must(html.New("GET /a F()").Parse(`a`))
+		html.Must(ts.New("GET /a G()").Parse(`b`))
 		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.Len(t, definitions, 2)
@@ -189,7 +194,7 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 			"b.gohtml": &fstest.MapFile{Data: []byte(`{{define "GET /  F2()"}}b{{end}}{{define "GET / F3()"}}c{{end}}`)},
 			"a.gohtml": &fstest.MapFile{Data: []byte(`{{define "GET  / F1()"}}a{{end}}`)},
 		}
-		ts := template.Must(template.ParseFS(fsys, "*.gohtml"))
+		ts := html.Must(html.ParseFS(fsys, "*.gohtml"))
 		definitions, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
 		require.Len(t, definitions, 3)

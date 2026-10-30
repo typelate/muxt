@@ -3,9 +3,10 @@ package muxt_test
 import (
 	"errors"
 	"go/types"
-	"html/template"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,7 @@ func (T) Article(id int) any { return nil }
 func (T) Form(In) any        { return nil }
 `
 	variable := func(name, templates string) source.Variable {
-		return source.Variable{Name: name, Set: template.Must(template.New(name).Parse(templates))}
+		return source.Variable{Name: name, Set: html.Must(html.New(name).Parse(templates))}
 	}
 
 	t.Run("every variable's routes are resolved", func(t *testing.T) {

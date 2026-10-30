@@ -2,8 +2,9 @@ package muxt_test
 
 import (
 	"go/types"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,7 +66,7 @@ func TestReservedArgumentBindingErrors(t *testing.T) {
 		{name: "body unbound", template: `{{define "POST / Reader(body)"}}{{end}}`, wantErr: "the checker binds no type to body"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("templates").Parse(tt.template))})
+			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: html.Must(html.New("templates").Parse(tt.template))})
 			require.NoError(t, err)
 			err = muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, unbound)
 			assert.ErrorContains(t, err, tt.wantErr, "ResolveCall(%s)", tt.name)
@@ -75,7 +76,7 @@ func TestReservedArgumentBindingErrors(t *testing.T) {
 
 func resolveTemplate(t *testing.T, pkg *types.Package, receiver *types.Named, checker muxt.Checker, text string) []muxt.Definition {
 	t.Helper()
-	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("templates").Parse(text))})
+	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: html.Must(html.New("templates").Parse(text))})
 	require.NoError(t, err)
 	for i := range defs {
 		require.NoError(t, muxt.ResolveCall(&defs[i], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))

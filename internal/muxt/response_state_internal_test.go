@@ -2,8 +2,9 @@ package muxt
 
 import (
 	"go/ast"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func TestCheckResponseWriterConflicts(t *testing.T) {
 		{name: "a chain on a result method", body: `{{(.Result.Header "X" "y").StatusCode 201}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("root").Parse(`{{define "GET /a A(response)"}}` + tt.body + `{{end}}`))
+			ts := html.Must(html.New("root").Parse(`{{define "GET /a A(response)"}}` + tt.body + `{{end}}`))
 			def := Definition{name: "GET /a A(response)", handler: "A(response)", hasResponseWriterArg: true}
 			err := checkResponseWriterConflicts(ts, []Definition{def})
 			if tt.want == "" {
@@ -57,7 +58,7 @@ func TestCheckResponseWriterConflicts(t *testing.T) {
 
 func TestCheckResponseWriterConflictsSkips(t *testing.T) {
 	const body = `{{.StatusCode}}`
-	ts := template.Must(template.New("root").Parse(`{{define "GET /a A(response)"}}` + body + `{{end}}`))
+	ts := html.Must(html.New("root").Parse(`{{define "GET /a A(response)"}}` + body + `{{end}}`))
 	ts.New("GET /b B(response)") // declared, never parsed: no tree
 	for _, tt := range []struct {
 		name string
@@ -74,7 +75,7 @@ func TestCheckResponseWriterConflictsSkips(t *testing.T) {
 }
 
 func TestCheckResponseWriterConflictsNamesTheFunction(t *testing.T) {
-	ts := template.Must(template.New("root").Parse(`{{define "GET /a save(response)"}}{{.StatusCode}}{{end}}`))
+	ts := html.Must(html.New("root").Parse(`{{define "GET /a save(response)"}}{{.StatusCode}}{{end}}`))
 	for _, tt := range []struct {
 		name string
 		fun  *ast.Ident
@@ -112,14 +113,14 @@ func TestResponseWriterTemplateStateErrorMessage(t *testing.T) {
 }
 
 func TestDefinitionsAllowsReadingAResultStatusCode(t *testing.T) {
-	ts := template.Must(template.New("root").Parse(`{{define "GET /a WithResponse(response)"}}{{.Result.StatusCode}}{{end}}`))
+	ts := html.Must(html.New("root").Parse(`{{define "GET /a WithResponse(response)"}}{{.Result.StatusCode}}{{end}}`))
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err, "Definitions() of a template reading its result's StatusCode")
 	assert.Len(t, defs, 1, "Definitions() definitions")
 }
 
 func TestDefinitionsReportsResponseWriterConflicts(t *testing.T) {
-	ts := template.Must(template.New("root").Parse(`{{define "GET /a A(response)"}}{{.StatusCode}}{{end}}`))
+	ts := html.Must(html.New("root").Parse(`{{define "GET /a A(response)"}}{{.StatusCode}}{{end}}`))
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	_, ok := err.(*ResponseWriterTemplateStateError)
 	require.True(t, ok, "Definitions() error = %v, want a *ResponseWriterTemplateStateError", err)

@@ -3,8 +3,9 @@ package muxt
 import (
 	"errors"
 	"go/token"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,8 +78,8 @@ func TestCheckForDuplicatePatternsOrdersLocations(t *testing.T) {
 }
 
 func TestDefinitionsSourceFile(t *testing.T) {
-	ts := template.New("root")
-	template.Must(ts.New("a.gohtml").Parse(`{{define "GET /a A()"}}x{{end}}`))
+	ts := html.New("root")
+	html.Must(ts.New("a.gohtml").Parse(`{{define "GET /a A()"}}x{{end}}`))
 	ts.New("GET /b B()") // declared, never parsed: no tree
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err, "Definitions()")
@@ -86,6 +87,8 @@ func TestDefinitionsSourceFile(t *testing.T) {
 	for _, def := range defs {
 		got[def.Name()] = def.SourceFile()
 	}
-	want := map[string]string{"GET /a A()": "a.gohtml", "GET /b B()": ""}
+	// GET /b B() has no tree, and the html/template fork's Templates
+	// lists only templates with one, so it is not a definition.
+	want := map[string]string{"GET /a A()": "a.gohtml"}
 	assert.Equal(t, want, got, "Definitions() source files")
 }

@@ -5,12 +5,14 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"html/template"
 	"net/http"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
@@ -86,11 +88,12 @@ func (def Definition) bySourceThenName(other Definition) int {
 }
 
 // templateSourceFile returns the file t was parsed from, or "". ParseFS and
-// ParseFiles record the file name as the tree's ParseName; a template defined
-// directly with Parse carries its own name there instead, so a ParseName
-// matching the template name does not identify a file.
-func templateSourceFile(t *template.Template) string {
-	if t.Tree == nil || t.Tree.ParseName == t.Name() {
+// ParseFiles record the file name as the tree's ParseName. A template
+// defined directly with Parse records path.Base of the name it was parsed
+// under there instead: its own name, which then does not identify a file,
+// or "." for a set parsed under the empty name, which is never a file.
+func templateSourceFile(t *html.Template) string {
+	if t.Tree == nil || t.Tree.ParseName == "." || t.Tree.ParseName == path.Base(t.Name()) {
 		return ""
 	}
 	return t.Tree.ParseName
@@ -128,7 +131,7 @@ type Definition struct {
 
 	fileSet *token.FileSet
 
-	template *template.Template
+	template *html.Template
 
 	identifier string
 
@@ -146,7 +149,7 @@ type Definition struct {
 	// canRedirect is whether this template, or one it calls, may call a redirect method.
 	canRedirect bool
 
-	// templatesVariable is the name of the package-level *template.Template
+	// templatesVariable is the name of the package-level *html.Template
 	// variable that contains this template (e.g., "templates", "adminTemplates")
 	templatesVariable string
 
@@ -219,7 +222,7 @@ func (def Definition) HTTPMethod() string { return strings.ToUpper(strings.TrimS
 
 func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
 func (def Definition) MayRedirect() bool              { return def.canRedirect }
-func (def Definition) Template() *template.Template   { return def.template }
+func (def Definition) Template() *html.Template       { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return cloneCall(def.call) }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
@@ -289,7 +292,7 @@ func IsRouteDefinitionName(name string) bool {
 	return templateNameMux.MatchString(name)
 }
 
-func newDefinition(t *template.Template) (Definition, error, bool) {
+func newDefinition(t *html.Template) (Definition, error, bool) {
 	in := t.Name()
 	if !templateNameMux.MatchString(in) {
 		return Definition{}, nil, false

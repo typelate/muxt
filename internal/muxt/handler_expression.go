@@ -69,7 +69,10 @@ func parseHandlerCall(fileSet *token.FileSet, def *Definition) (*ast.Ident, *ast
 			// locate the error in.
 			return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression: %v", err)
 		}
-		loc, _ := def.template.Tree.ErrorContext(def.template.Tree.Root)
+		// text/template's ErrorContext counted the column from zero;
+		// Tree.Position counts it from one.
+		p := def.template.Tree.Position(def.template.Tree.Root)
+		loc := fmt.Sprintf("%s:%d:%d", p.ParseName, p.Line, p.Column-1)
 		return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}
 	call, ok := e.(*ast.CallExpr)

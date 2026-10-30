@@ -2,9 +2,10 @@ package muxt
 
 import (
 	"fmt"
-	"html/template"
 	"strings"
-	"text/template/parse"
+
+	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/internal/template/html"
 )
 
 // checkResponseWriterConflicts rejects a template that asks muxt to set the
@@ -17,7 +18,7 @@ import (
 // and at run time the redirect simply does not happen. Saying so here is the
 // whole point -- the alternative is a route that looks right and silently is
 // not.
-func checkResponseWriterConflicts(ts *template.Template, defs []Definition) error {
+func checkResponseWriterConflicts(ts *html.Template, defs []Definition) error {
 	var errs []error
 	for i := range defs {
 		if !defs[i].hasResponseWriterArg {
@@ -73,9 +74,9 @@ func (e *ResponseWriterTemplateStateError) Error() string {
 
 // findResponseStateCall reports the first TemplateData method a template calls
 // that only has an effect through the response muxt would write.
-func findResponseStateCall(node parse.Node, ts *template.Template) (string, bool) {
+func findResponseStateCall(node template.Node, ts *html.Template) (string, bool) {
 	var found string
-	walkTemplateCommands(node, ts, make(map[string]bool), true, func(cmd *parse.CommandNode, dotIsTemplateData bool) bool {
+	walkTemplateCommands(node, ts, make(map[string]bool), true, func(cmd *template.CommandNode, dotIsTemplateData bool) bool {
 		method, ok := responseStateCallInCommand(cmd, dotIsTemplateData)
 		if ok {
 			found = method
@@ -87,7 +88,7 @@ func findResponseStateCall(node parse.Node, ts *template.Template) (string, bool
 
 // responseStateCallInCommand names the method when a command calls one that
 // only takes effect through the response muxt writes.
-func responseStateCallInCommand(cmd *parse.CommandNode, dotIsTemplateData bool) (string, bool) {
+func responseStateCallInCommand(cmd *template.CommandNode, dotIsTemplateData bool) (string, bool) {
 	if cmd == nil {
 		return "", false
 	}
@@ -105,23 +106,23 @@ func responseStateCallInCommand(cmd *parse.CommandNode, dotIsTemplateData bool) 
 
 // templateDataNames lists the names an argument selects from TemplateData, and
 // none when it does not start there.
-func templateDataNames(arg parse.Node, dotIsTemplateData bool) []string {
+func templateDataNames(arg template.Node, dotIsTemplateData bool) []string {
 	switch a := arg.(type) {
-	case *parse.FieldNode:
+	case *template.FieldNode:
 		// .StatusCode is only TemplateData's when dot still is.
 		// Inside a with or a range it names a field of whatever was
 		// selected, and reporting that would reject a working route.
 		if dotIsTemplateData {
 			return a.Ident
 		}
-	case *parse.VariableNode:
+	case *template.VariableNode:
 		// $ is the dot the template started with, whatever the
 		// current one is, so $.StatusCode is TemplateData's wherever
 		// it is written.
 		if a.Ident[0] == "$" {
 			return a.Ident[1:]
 		}
-	case *parse.ChainNode:
+	case *template.ChainNode:
 		if chainStartsAtTemplateData(a, dotIsTemplateData) {
 			return a.Field
 		}
@@ -131,13 +132,13 @@ func templateDataNames(arg parse.Node, dotIsTemplateData bool) []string {
 
 // chainStartsAtTemplateData reports whether a chained expression is rooted
 // at the TemplateData the handler passed in.
-func chainStartsAtTemplateData(chain *parse.ChainNode, dotIsTemplateData bool) bool {
+func chainStartsAtTemplateData(chain *template.ChainNode, dotIsTemplateData bool) bool {
 	switch node := chain.Node.(type) {
-	case *parse.DotNode:
+	case *template.DotNode:
 		return dotIsTemplateData
-	case *parse.VariableNode:
+	case *template.VariableNode:
 		return len(node.Ident) > 0 && node.Ident[0] == "$"
-	case *parse.PipeNode:
+	case *template.PipeNode:
 		// (.Redirect "/x").Header and the like: the parenthesised
 		// pipeline is walked on its own, so the chain only has to say
 		// whether its own fields are TemplateData's. They are only when
@@ -152,16 +153,16 @@ func chainStartsAtTemplateData(chain *parse.ChainNode, dotIsTemplateData bool) b
 // pipeIsTemplateData reports whether a parenthesised pipeline evaluates to
 // the TemplateData the handler passed in: (.) while dot still is, or ($), or
 // a call of one of its methods that returns it, such as (.Header "X" "y").
-func pipeIsTemplateData(pipe *parse.PipeNode, dotIsTemplateData bool) bool {
-	if len(pipe.Decl) > 0 || len(pipe.Cmds) != 1 || len(pipe.Cmds[0].Args) == 0 {
+func pipeIsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
+	if len(pipe.Decl) > 0 || len(pipe.Commands) != 1 || len(pipe.Commands[0].Args) == 0 {
 		return false
 	}
-	args := pipe.Cmds[0].Args
+	args := pipe.Commands[0].Args
 	if len(args) == 1 {
 		switch arg := args[0].(type) {
-		case *parse.DotNode:
+		case *template.DotNode:
 			return dotIsTemplateData
-		case *parse.VariableNode:
+		case *template.VariableNode:
 			if len(arg.Ident) == 1 && arg.Ident[0] == "$" {
 				return true
 			}

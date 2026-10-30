@@ -3,8 +3,9 @@ package muxt
 import (
 	"errors"
 	"go/token"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 
 func TestDefinitionsErrorPosition(t *testing.T) {
 	const name = "OPTIONS / F()"
-	ts := template.Must(template.New("index.gohtml").Parse(`{{define "` + name + `"}}{{end}}`))
+	ts := html.Must(html.New("index.gohtml").Parse(`{{define "` + name + `"}}{{end}}`))
 	variable := source.Variable{Name: "templates", Set: ts, Definitions: map[string]source.Definition{
 		name: {
 			Name: name,
@@ -320,7 +321,7 @@ func TestDefinitionPathParamErrorfWholeNames(t *testing.T) {
 	}
 	t.Run("through Definitions", func(t *testing.T) {
 		const name = "GET /{formx}/{form} F(formx, form)"
-		_, err := Definitions(source.Variable{Name: "templates", Set: template.Must(template.New("").Parse(`{{define "` + name + `"}}{{end}}`))})
+		_, err := Definitions(source.Variable{Name: "templates", Set: html.Must(html.New("").Parse(`{{define "` + name + `"}}{{end}}`))})
 		nameErr, ok := errors.AsType[*NameError](err)
 		require.True(t, ok, "Definitions() = %v, want a *NameError", err)
 		assert.Equal(t, len("GET /{formx}/{"), nameErr.Offset, "offset")

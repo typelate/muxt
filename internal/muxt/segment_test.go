@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
-	"html/template"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -163,7 +164,7 @@ func TestPathValueTypes(t *testing.T) {
 			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
 
-			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			ts := html.Must(html.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
 
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
@@ -208,7 +209,7 @@ func TestPathValueParsing(t *testing.T) {
 		{name: "a text unmarshaler parses", template: "GET /{at} Time(at)", wantMethod: muxt.UnmarshalTextUnmarshaler},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
+			ts := html.Must(html.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
 			require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
@@ -238,7 +239,7 @@ func TestPathValueTextMarshaler(t *testing.T) {
 		{template: "GET /{id} String(id)", param: "id"},
 	} {
 		t.Run(tt.template, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
+			ts := html.Must(html.New("").Parse(`{{define "` + tt.template + `"}}{{end}}`))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
 			require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
@@ -258,7 +259,7 @@ func TestSegmentArgument(t *testing.T) {
 	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
 	checker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
 
-	ts := template.Must(template.New("").Parse(`{{define "GET /a/{id}/{unused} Int(id)"}}{{end}}`))
+	ts := html.Must(html.New("").Parse(`{{define "GET /a/{id}/{unused} Int(id)"}}{{end}}`))
 	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err)
 	require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
@@ -287,7 +288,7 @@ func TestArgumentDeclares(t *testing.T) {
 	receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
 	checker := fake.NewChecker().ParsesFromText(fake.Lookup(t, pkg, "Time")).Fake()
 
-	ts := template.Must(template.New("").Parse(`{{define "GET /{id} Sum(Double(id), id)"}}{{end}}`))
+	ts := html.Must(html.New("").Parse(`{{define "GET /{id} Sum(Double(id), id)"}}{{end}}`))
 	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err)
 	require.NoError(t, muxt.ResolveCall(&defs[0], source.Package{Fset: fake.FileSet, Types: pkg}, receiver, checker))
@@ -313,7 +314,7 @@ func TestSegmentsServeMuxRejectsMarkTheSegment(t *testing.T) {
 		{definition: "GET /x/{rest...}/{$}", segment: "{rest...}"},
 	} {
 		t.Run(tt.definition, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			ts := html.Must(html.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
 			_, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			nameErr, ok := errors.AsType[*muxt.NameError](err)
 			require.True(t, ok, "Definitions(%q) = %v, want a *NameError", tt.definition, err)
@@ -352,7 +353,7 @@ func TestSegments(t *testing.T) {
 		{name: "a closing brace in text", definition: "GET /a}b", want: []string{"literal a}b"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			ts := html.Must(html.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -403,7 +404,7 @@ func describeSegment(segment muxt.Segment) string {
 // TestPathParameterLookup states that a wildcard segment is found among
 // Segments by its Value, and a literal segment is not a path parameter.
 func TestPathParameterLookup(t *testing.T) {
-	ts := template.Must(template.New("").Parse(`{{define "GET /files/{id}/{path...} M(id, path)"}}{{end}}`))
+	ts := html.Must(html.New("").Parse(`{{define "GET /files/{id}/{path...} M(id, path)"}}{{end}}`))
 	defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err)
 	def := defs[0]
@@ -443,7 +444,7 @@ func TestRepeatedArgumentMarksEveryUse(t *testing.T) {
 		t.Run(tt.definition, func(t *testing.T) {
 			pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": pathValueReceiver})
 			receiver := pkg.Scope().Lookup("T").Type().(*types.Named)
-			ts := template.Must(template.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
+			ts := html.Must(html.New("").Parse(fmt.Sprintf(`{{define %q}}{{end}}`, tt.definition)))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
 

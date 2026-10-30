@@ -2,10 +2,11 @@ package muxt
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"slices"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,7 +109,7 @@ func stringList[T fmt.Stringer](in []T) []string {
 func mustNewTemplateName(in ...string) []Definition {
 	var result []Definition
 	for _, n := range in {
-		p, err, _ := newDefinition(template.New(n))
+		p, err, _ := newDefinition(html.New(n))
 		if err != nil {
 			panic(err)
 		}
@@ -223,14 +224,14 @@ func TestCalculateIdentifiers(t *testing.T) {
 func TestDefinitionsErrorIncludesSourceFile(t *testing.T) {
 	t.Run("template parsed from a file", func(t *testing.T) {
 		// ParseFS and ParseFiles record the file name as the tree's ParseName.
-		ts := template.Must(template.New("template.gohtml").Parse(`{{define "OPTIONS / F()"}}{{end}}`))
+		ts := html.Must(html.New("template.gohtml").Parse(`{{define "OPTIONS / F()"}}{{end}}`))
 		_, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		require.ErrorContains(t, err, "template.gohtml: OPTIONS method not allowed")
 	})
 	t.Run("template defined without a file", func(t *testing.T) {
 		// Parse-defined templates carry their own name as ParseName; the
 		// error must not be prefixed with the template name.
-		ts := template.Must(template.New("OPTIONS / F()").Parse(``))
+		ts := html.Must(html.New("OPTIONS / F()").Parse(``))
 		_, err := Definitions(source.Variable{Name: "templates", Set: ts})
 		require.EqualError(t, err, "OPTIONS method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE")
 	})
@@ -685,7 +686,7 @@ func TestNewTemplateName(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			def, err, match := newDefinition(template.Must(template.New("definition_internal_test.gohtml").Parse(fmt.Sprintf("{{define %q}}{{end}}", tt.In))).Lookup(tt.In))
+			def, err, match := newDefinition(html.Must(html.New("definition_internal_test.gohtml").Parse(fmt.Sprintf("{{define %q}}{{end}}", tt.In))).Lookup(tt.In))
 			require.Equal(t, tt.ExpMatch, match)
 			if tt.Error != nil {
 				tt.Error(t, err)
