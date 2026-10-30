@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{if.}}{{else}}{{with.}}{{end}}{{end}}{{range.}}<A>{{end}}")

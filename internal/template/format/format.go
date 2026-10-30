@@ -770,7 +770,7 @@ func (f *formatter) branchNode(n *template.BranchNode, keyword string) {
 	f.body(n.List, n.StartTrimRight)
 	endTrimLeft := n.EndTrimLeft
 	if n.ElseList != nil {
-		endTrimLeft = f.formatElseList(n, n.ElseList)
+		endTrimLeft = f.formatElseList(n, n.ElseList, keyword)
 	}
 	f.writeActionWithTrim("end", endTrimLeft, n.EndTrimRight)
 }
@@ -802,12 +802,12 @@ func (f *formatter) body(list *template.ListNode, trimRight bool) {
 // inner branch, which precedes the same body; the {{end}} takes its left
 // trim from the innermost branch, whose last body it follows. The trims
 // that only removed the gaps around the inner branch go with them.
-func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode) (endTrimLeft bool) {
-	if chain, chainKeyword := f.elseChain(elseList); chain != nil {
-		f.writeActionWithTrim("else "+chainKeyword+" "+f.pipeText(chain.Pipe), parent.ElseTrimLeft, chain.StartTrimRight)
+func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode, keyword string) (endTrimLeft bool) {
+	if chain := f.elseChain(elseList, keyword); chain != nil {
+		f.writeActionWithTrim("else "+keyword+" "+f.pipeText(chain.Pipe), parent.ElseTrimLeft, chain.StartTrimRight)
 		f.body(chain.List, chain.StartTrimRight)
 		if chain.ElseList != nil {
-			return f.formatElseList(chain, chain.ElseList)
+			return f.formatElseList(chain, chain.ElseList, keyword)
 		}
 		return chain.EndTrimLeft
 	}
@@ -913,30 +913,36 @@ func (f *formatter) pipeText(p *template.PipeNode) string {
 	return trimPipeDelim(p.String(), f.rightDelim)
 }
 
-// elseChain detects when an else list holds a single branch (IfNode or
-// WithNode) and returns it for "else if" / "else with" chaining. Gaps
-// around the branch may be empty or reflowable, since the merged form
-// writes no whitespace there.
-func (f *formatter) elseChain(elseList *template.ListNode) (*template.BranchNode, string) {
+// elseChain detects when the else list of a branch named keyword holds
+// a single branch of the same kind and returns it for "else if" /
+// "else with" chaining. The template parser reads {{else if}} only in an
+// if and {{else with}} only in a with, so a with in an if's else list (or
+// any branch in a range's) is not merged. Gaps around the branch may be
+// empty or reflowable, since the merged form writes no whitespace there.
+func (f *formatter) elseChain(elseList *template.ListNode, keyword string) *template.BranchNode {
 	if elseList == nil {
-		return nil, ""
+		return nil
 	}
 	items, _ := splitChildren(elseList.Nodes)
 	if len(items) != 1 {
-		return nil, ""
+		return nil
 	}
 	for i := range 2 {
 		if g := f.cls.gaps[gapKey{elseList, i}]; g.text != nil && g.class != runReflowable {
-			return nil, ""
+			return nil
 		}
 	}
 	switch n := items[0].(type) {
 	case *template.IfNode:
-		return &n.BranchNode, "if"
+		if keyword == "if" {
+			return &n.BranchNode
+		}
 	case *template.WithNode:
-		return &n.BranchNode, "with"
+		if keyword == "with" {
+			return &n.BranchNode
+		}
 	}
-	return nil, ""
+	return nil
 }
 
 // cleanUnnecessaryTrim removes the trim markers the printer wrote where

@@ -128,6 +128,9 @@ func TestIdempotency(t *testing.T) {
 		// A define body ending in an unclosed element stays inline: a
 		// break after it would be its content next pass.
 		"{{define \"0\"}}\n<A0>{{end}}0",
+		// {{else}}{{with}} is not merged into {{else with}}, which the
+		// template parser does not read in HTML input.
+		"{{if .}}{{else}}{{with .}}{{end}}{{end}}<A>",
 	}
 	for _, input := range inputs {
 		t.Run(input, func(t *testing.T) {
