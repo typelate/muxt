@@ -36,6 +36,10 @@ internal/template (including internal/template/html and
 internal/template/lex) is derived in part from the Go standard library's
 text/template and html/template packages under the notice above.
 
+internal/diff is copied from the Go standard library's src/internal/diff
+(go1.27.0) under the notice above; the test imports golang.org/x/tools/txtar
+instead of Go's internal/txtar.
+
 internal/css/csstree (with its tokenizer and definitionsyntax
 subpackages) is a translation into Go of csstree v3.2.1
 (https://github.com/csstree/csstree), a CSS tokenizer, parser, walker,
