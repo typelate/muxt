@@ -15,6 +15,7 @@ func TestComputeWhitespace(t *testing.T) {
 		context  string // a context template, when not empty
 		imported string // a second stylesheet file, site.css, when not empty
 		known    bool   // AuthorCSSKnown
+		missing  bool   // MissingSheets
 		selector string // picks the element to check
 		want     Whitespace
 	}{
@@ -83,6 +84,9 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<div class="code"></div>`, sheet: `@import url(site.css);`, imported: `p{color:red}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<div class="code"></div>`, sheet: `@import "site.css";`, imported: `p{color:red}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<style>@import url(other.css);</style><div class="code"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div class="code"></div>`, sheet: `@import "/site.css";`, imported: `p{color:red}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div></div>`, missing: true, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<style>p{color:red}</style><div class="code"></div>`, missing: true, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
 
 		{source: `<noscript></noscript>`, selector: `noscript`, want: Whitespace{DisplayUnknown, WhiteSpacePreserve}},
 		{source: `<p style="white-space:inherit"></p>`, selector: `p`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
@@ -123,7 +127,7 @@ func TestComputeWhitespace(t *testing.T) {
 				sheets = append(sheets, Stylesheet{Filename: "static/site.css", Text: test.imported})
 			}
 			el := queryElement(t, trees, test.selector)
-			got, ok := ComputeWhitespace(trees, WhitespaceOptions{Context: context, Sheets: sheets, AuthorCSSKnown: test.known})[el]
+			got, ok := ComputeWhitespace(trees, WhitespaceOptions{Context: context, Sheets: sheets, AuthorCSSKnown: test.known, MissingSheets: test.missing})[el]
 			if !ok || got != test.want {
 				t.Errorf("ComputeWhitespace(%q)[%s] = %+v, want %+v", test.source, test.selector, got, test.want)
 			}

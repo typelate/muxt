@@ -82,7 +82,7 @@ mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static
 
 `TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)).
 
-The generated file's [header](#files) records both flags.
+The generated file's [header](#files) records both flags. `muxt fmt` reads them back to find the CSS a template uses: a `<link rel="stylesheet">` whose `href` is under the path, written out or as `{{.Path.ReadStatic}}app.css`, is read from the directory, and so is each sheet it `@import`s from there. When a link or `@import` names anything else (another site, a path no static assets directory serves, a file that is not there), `muxt fmt` cannot see that CSS, so it treats every element as possibly restyled and leaves its whitespace as written.
 
 `generate` rejects:
 

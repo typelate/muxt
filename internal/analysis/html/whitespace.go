@@ -1,9 +1,8 @@
 package analysis
 
 import (
+	"cmp"
 	"go/token"
-	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -94,6 +93,9 @@ type WhitespaceOptions struct {
 	// when there is none. Without it, and with no <style> element or sheet,
 	// an element with a class or id is unknown.
 	AuthorCSSKnown bool
+	// MissingSheets reports a stylesheet the templates use that could not
+	// be loaded: author CSS may set anything on any element.
+	MissingSheets bool
 }
 
 // Whitespaces maps the elements of templates to their whitespace handling.
@@ -101,7 +103,8 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 
 // ComputeWhitespace classifies every element of trees. Author CSS is the
 // <style> elements and style attributes of trees and options.Context, plus
-// options.Sheets.
+// options.Sheets. With options.MissingSheets, author CSS may also set
+// anything on any element.
 //
 // The cascade has two origins: the HTML Standard's user-agent style sheet
 // (ua.css) and the author CSS. A rule that may or may not apply (its
@@ -126,6 +129,9 @@ func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whites
 	}
 	for i, sheet := range authors {
 		c.rules = append(c.rules, sheet.rules(true, i+1, filenames)...)
+	}
+	if options.MissingSheets {
+		c.rules = append(c.rules, cssRule{anyElement: true, maybe: true, author: true, sheet: len(authors) + 1, declarations: unknownDeclarations()})
 	}
 	out := make(Whitespaces)
 	for _, root := range templateRoots(trees) {
@@ -630,6 +636,9 @@ func unknownDeclarations() []cssDeclaration {
 // sheetCSS is the CSS of a <style> element, a stylesheet file or ua.css.
 type sheetCSS struct {
 	css cssText
+	// url is the URL path of a stylesheet file, which its @import rules
+	// resolve against; "" for a <style> element, whose resolve against "/".
+	url string
 	// conditional reports that the <style> element is in a template branch.
 	conditional bool
 	// outputs are the spans of template actions that print text; branches
@@ -666,7 +675,7 @@ func authorSheets(trees []*template.Tree, sheets []Stylesheet) []sheetCSS {
 		})
 	}
 	for _, s := range sheets {
-		out = append(out, sheetCSS{css: cssText{text: s.Text}})
+		out = append(out, sheetCSS{css: cssText{text: s.Text}, url: s.Filename})
 	}
 	return out
 }
@@ -713,7 +722,7 @@ func (s *sheetCSS) addActions(n template.Node) {
 // element.
 func (s sheetCSS) rules(author bool, sheet int, filenames []string) []cssRule {
 	unknown := cssRule{anyElement: true, maybe: true, author: author, sheet: sheet, declarations: unknownDeclarations()}
-	c := ruleCollector{css: s.css, author: author, sheet: sheet, branches: s.branches, filenames: filenames}
+	c := ruleCollector{css: s.css, url: cmp.Or(s.url, "/"), author: author, sheet: sheet, branches: s.branches, filenames: filenames}
 	if !c.collect(ruleContext{maybe: s.conditional}) || c.incomplete {
 		return append(c.rules, unknown)
 	}
@@ -729,6 +738,7 @@ func (s sheetCSS) rules(author bool, sheet int, filenames []string) []cssRule {
 // rules.
 type ruleCollector struct {
 	css      cssText
+	url      string // the URL path @import targets resolve against
 	author   bool
 	sheet    int
 	branches []span
@@ -854,25 +864,23 @@ func (c *ruleCollector) rule(rule *csstree.Rule, ctx ruleContext) {
 	c.statements(rule.Block.Children, blockEnd(c.css, rule.Block), inner)
 }
 
-// imports reports whether the sheet rule imports is among c.filenames. An
-// import URL is relative to a page or sheet whose URL is not known, so it
-// matches a file whose path ends with it.
+// imports reports whether the sheet rule imports is among c.filenames:
+// its target, resolved against the URL path of the importing sheet, is a
+// sheet's Filename read as a URL path.
 func (c *ruleCollector) imports(rule *csstree.Atrule) bool {
-	if rule.Prelude == nil {
+	ref := atImportTarget(rule)
+	if ref == "" {
 		return false
 	}
-	prelude, err := csstree.Generate(rule.Prelude, csstree.GenerateOptions{})
-	if err != nil {
+	target, ok := resolveStylesheetURL(ref, c.url)
+	if !ok {
 		return false
 	}
-	target := importTarget(prelude)
-	if target == "" || strings.Contains(target, ":") || strings.HasPrefix(target, "//") {
-		return false
-	}
-	target = strings.TrimPrefix(path.Clean("/"+target), "/")
 	for _, name := range c.filenames {
-		name = path.Clean("/" + filepath.ToSlash(name))
-		if strings.HasSuffix(name, "/"+target) {
+		if !strings.HasPrefix(name, "/") {
+			name = "/" + name
+		}
+		if name == target {
 			return true
 		}
 	}
