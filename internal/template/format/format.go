@@ -393,8 +393,9 @@ func (f *formatter) closeGap(g gap, o listOptions) {
 func (f *formatter) betweenGap(prev, next template.Node, g gap, layout layoutKind) {
 	_, prevDefine := prev.(*template.DefineNode)
 	_, nextDefine := next.(*template.DefineNode)
-	if prevDefine && nextDefine && g.class != runPreserved && lineBreaks(g.bytes()) > 0 {
-		// A blank line between adjacent defines.
+	if prevDefine && nextDefine && g.class != runPreserved && (lineBreaks(g.bytes()) > 0 || layout == blockLayout) {
+		// A blank line between adjacent defines. Block layout puts a
+		// break in every gap, so it adds the blank line at once.
 		f.newline()
 		f.newline()
 		f.writeIndent()

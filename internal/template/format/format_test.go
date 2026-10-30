@@ -121,6 +121,10 @@ func TestIdempotency(t *testing.T) {
 		`{{define "x"}}<b>a</b>{{end}}` + "\n\n" + `{{define "y"}}<b>b</b>{{end}}`,
 		`{{define "x"}}<b>` + strings.Repeat("a", 100) + `</b>{{end}}{{define "y"}}<b>b</b>{{end}}`,
 		`<br>{{define "x"}}<p>` + strings.Repeat("a", 44) + `</p>{{end}}<br>`,
+		// Adjacent defines in a block-layout list get the blank line
+		// between them on the first pass, not only once the break is
+		// in the source (found by fuzzing).
+		`{{define "a"}}{{end}}{{define "b"}}{{end}}<p></p>0`,
 	}
 	for _, input := range inputs {
 		t.Run(input, func(t *testing.T) {
