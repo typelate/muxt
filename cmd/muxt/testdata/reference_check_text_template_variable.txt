@@ -16,8 +16,13 @@ $WORK/prose.txt.tmpl:2:28: executing "prose.txt.tmpl" at <.Gone>: field or metho
 $WORK/main.go:24:6 ExecuteTemplate "literal" Data
 literal:2:28: executing "literal" at <.Lost>: field or method Lost not found on Data
 
+$WORK/main.go:25:6 ExecuteTemplate "def" Data
+$WORK/def.json.tmpl:1:36: executing "def" at <.Nope>: field or method Nope not found on Data
+
 -- data.json.tmpl --
 {"a": "<x", "n": {{.N}}, "tag": "<{{.Name}}>", "m": {{.Missing}}}
+-- def.json.tmpl --
+{{define "def"}}{"a": "<x", "b": {{.Nope}}}{{end}}
 -- prose.txt.tmpl --
 Remember a < b and <3 {{.Name}}.
 {{if .N}}<!-- {{end}} -->{{.Gone}}
@@ -51,4 +56,5 @@ func main() {
 	_ = templates.ExecuteTemplate(io.Discard, "data.json.tmpl", Data{})
 	_ = templates.ExecuteTemplate(io.Discard, "prose.txt.tmpl", Data{})
 	_ = templates.ExecuteTemplate(io.Discard, "literal", Data{})
+	_ = templates.ExecuteTemplate(io.Discard, "def", Data{})
 }

@@ -431,6 +431,7 @@ func (t *Tree) parse() error {
 				newT.text = t.text
 				newT.functions = t.functions
 				newT.ParseName = t.ParseName
+				newT.Filepath = t.Filepath
 				newT.startParse(t.scanner, t.treeSet)
 				if err := newT.parseDefinition(); err != nil {
 					return err
