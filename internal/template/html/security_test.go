@@ -22,17 +22,6 @@ func render(t *testing.T, tmpl string, data any) string {
 	return buf.String()
 }
 
-// renderErr parses tmpl and returns the execute error (or nil).
-func renderErr(t *testing.T, tmpl string, data any) error {
-	t.Helper()
-	tt, err := html.New("test").Parse(tmpl)
-	if err != nil {
-		return err
-	}
-	var buf bytes.Buffer
-	return tt.Execute(&buf, data)
-}
-
 // --- Trust-type honoring ---
 
 func TestTrustHTMLBypassesBodyEscape(t *testing.T) {
@@ -166,16 +155,17 @@ func TestCSSContextBlocksRuleBreakout(t *testing.T) {
 	assert.Contains(t, got, "\\7d ", "} must be CSS-hex-escaped")
 }
 
-// --- New behavior: dynamic attribute names rejected ---
+// --- Dynamic attribute names parse as text ---
 
-func TestDynamicAttributeNameRejected(t *testing.T) {
-	type d struct {
-		Name, Value string
-	}
-	err := renderErr(t, `<div {{.Name}}="{{.Value}}">x</div>`,
-		d{Name: "onclick", Value: "alert(1)"})
-	require.Error(t, err,
-		"a dynamic attribute name must not be silently accepted")
+// TestDynamicAttributeNameParses checks that a template with an action in
+// attribute-name position parses, as it does with html/template: the
+// parser reads the tag as text with actions. Execute does not escape such
+// an action for the attribute-name context; that is one of the escaping
+// gaps documented on Template.Execute, which is why Execute is not for
+// serving responses.
+func TestDynamicAttributeNameParses(t *testing.T) {
+	_, err := html.New("test").Parse(`<div {{.Name}}="{{.Value}}">x</div>`)
+	require.NoError(t, err)
 }
 
 // --- New behavior: HTMLMode forced for shim trees ---

@@ -55,6 +55,18 @@ var ImpliedEndTagElements = map[string]bool{
 
 // htmlParse is the top-level parser for HTML+template content.
 // It produces an HTMLDocumentFragmentNode containing the parsed content.
+//
+// It accepts every template text/template and html/template parse. Markup
+// that is not a tag it can build an element from is text: a '<' not
+// followed by an ASCII letter, '/', '!' or '?' (as in the WHATWG
+// tokenizer's data state: "1 < 2", "I <3", "back <-"), and a tag with a
+// template action in its tag name (<{{.Tag}}>, <h{{.N}}>) or an attribute
+// name (data-{{.Name}}="x"), a template comment in its attributes
+// (<div {{/* c */}} class="a">), or other markup the lexer does not lex
+// as a tag (see lex's lexHTMLText for the full rule). Such a tag becomes
+// TextNode, ActionNode and CommentNode children of the enclosing node,
+// with no HTMLElementNode and no diagnostic, and the end tag that closes
+// it is text as well. Well-formed tags parse into elements as before.
 func (t *Tree) htmlParse() error {
 	frag := t.newHTMLDocumentFragment(t.peek().Pos)
 	for t.peek().Type != lex.TokenTypeEOF {
@@ -86,6 +98,9 @@ func (t *Tree) htmlParse() error {
 func (t *Tree) htmlParseNode() (Node, error) {
 	switch token := t.next(); token.Type {
 	case lex.TokenTypeHTMLText, lex.TokenTypeHTMLAttrValue:
+		if token.DegradedTag != "" {
+			t.htmlDegraded = append(t.htmlDegraded, token.DegradedTag)
+		}
 		return t.newText(token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeHTMLComment:
 		// Comment content inside a template control structure body
@@ -313,12 +328,30 @@ func (t *Tree) htmlParseEndTag(openToken lex.Token) (Node, error) {
 	if closeToken.Type != lex.TokenTypeHTMLTagEnd {
 		return nil, t.unexpected(closeToken, "HTML end tag close")
 	}
+	text := t.newText(openToken.Pos, closeToken.End, "</"+nameToken.Value+">")
+	text.Verbatim = true
+	if t.htmlTakeDegraded(nameToken.Value) {
+		// The end tag of an element whose start tag is text.
+		return text, nil
+	}
 	// Browsers ignore this stray end tag; record a diagnostic and
 	// preserve it verbatim (byte-parity with stdlib html/template).
 	t.diag(openToken.Pos, closeToken.End, SeverityWarning, DiagOrphanEndTag, msgOrphanEndTag, nameToken.Value)
-	text := t.newText(openToken.Pos, closeToken.End, "</"+nameToken.Value+">")
-	text.Verbatim = true
 	return text, nil
+}
+
+// htmlTakeDegraded reports whether name closes a start tag the lexer read
+// as text (lex.Token.DegradedTag) inside the element being parsed, and if
+// so forgets that start tag. Such an end tag is text too: it closes no
+// element and is no stray end tag.
+func (t *Tree) htmlTakeDegraded(name string) bool {
+	for i := len(t.htmlDegraded) - 1; i >= t.htmlDegradedMin; i-- {
+		if strings.EqualFold(t.htmlDegraded[i], name) {
+			t.htmlDegraded = slices.Delete(t.htmlDegraded, i, i+1)
+			return true
+		}
+	}
+	return false
 }
 
 // htmlParseChildren parses child nodes of an element until the matching
@@ -329,6 +362,14 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 	if t.htmlDepth > t.maxHTMLDepth {
 		return t.errorf("maximum HTML element nesting depth exceeded (%d)", t.maxHTMLDepth)
 	}
+	// Start tags read as text inside this element are closed, if at all,
+	// inside it.
+	degradedMin := t.htmlDegradedMin
+	t.htmlDegradedMin = len(t.htmlDegraded)
+	defer func() {
+		t.htmlDegraded = t.htmlDegraded[:t.htmlDegradedMin]
+		t.htmlDegradedMin = degradedMin
+	}()
 	for {
 		token := t.peek()
 		switch token.Type {
@@ -336,6 +377,15 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 			// Check if this is our matching end tag.
 			endTagOpen := t.next() // consume </
 			nameToken := t.next()
+			if nameToken.Type == lex.TokenTypeHTMLEndTag && t.htmlTakeDegraded(nameToken.Value) {
+				// The end tag of an element inside this one whose start
+				// tag is text: it is text too.
+				closeToken := t.next() // consume >
+				text := t.newText(endTagOpen.Pos, closeToken.End, "</"+nameToken.Value+">")
+				text.Verbatim = true
+				elem.Children = append(elem.Children, text)
+				continue
+			}
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && strings.EqualFold(nameToken.Value, elem.TagName) {
 				// Matching end tag — consume '>' and return.
 				closeToken := t.next()
@@ -430,6 +480,12 @@ func (t *Tree) htmlParseRawTextContent(elem *HTMLElementNode) error {
 			elem.end = closeToken.End
 			return nil
 		case lex.TokenTypeLeftDelim:
+			// An {{end}} or {{else}} that ends the control structure the
+			// element began in leaves the element unclosed, as in
+			// htmlParseChildren.
+			if t.htmlPeekIsControlTerminator() {
+				return nil
+			}
 			t.next()
 			t.actionLine = token.Line
 			t.actionPos = token.Pos
@@ -442,6 +498,12 @@ func (t *Tree) htmlParseRawTextContent(elem *HTMLElementNode) error {
 			if action != nil {
 				elem.Children = append(elem.Children, action)
 			}
+		case lex.TokenTypeComment:
+			t.next()
+			c := t.newComment(token.Pos, token.End, token.Value)
+			c.TrimLeft = token.TrimLeft
+			c.TrimRight = token.TrimRight
+			elem.Children = append(elem.Children, c)
 		case lex.TokenTypeEOF:
 			return nil
 		default:

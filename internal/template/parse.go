@@ -58,6 +58,8 @@ type Tree struct {
 	rangeDepth      int
 	stackDepth      int      // depth of nested parenthesized expressions
 	htmlAncestors   []string // stack of open HTML element tag names (lowercase)
+	htmlDegraded    []string // names of start tags read as text whose end tag is text too (see lex.Token.DegradedTag)
+	htmlDegradedMin int      // htmlDegraded entries below this index belong to elements enclosing the one being parsed
 	maxHTMLDepth    int      // maximum nesting depth for HTML elements
 	htmlDepth       int      // current HTML element nesting depth
 }

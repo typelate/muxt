@@ -11,6 +11,11 @@ type Token struct {
 	Line      int
 	TrimLeft  bool // {{- was used
 	TrimRight bool // -}} was used
+	// DegradedTag is set on a TokenTypeHTMLText token that begins with the
+	// '<' of a start tag the lexer reads as text (see lexHTMLText): it is
+	// the tag name written before the construct that made the tag text.
+	// The parser uses it to read the element's end tag as text too.
+	DegradedTag string
 }
 
 func (i Token) String() string {

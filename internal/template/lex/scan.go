@@ -42,6 +42,7 @@ type Scanner struct {
 	htmlReturnState stateFn // HTML state to resume after a {{ ... }} action
 	htmlRawTag      string  // lowercased tag name when inside a raw text element; empty otherwise
 	commentTrimLeft bool    // left trim marker was present on comment's opening delimiter
+	htmlTextEnd     Pos     // no HTML tag starts before this position: it is inside markup read as text
 }
 
 // Options control behavior of the lexer. All default to false.

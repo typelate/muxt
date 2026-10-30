@@ -1,0 +1,70 @@
+# muxt parses every template html/template parses. A '<' that does not
+# start a tag is text, and a tag with an action or comment in its tag name
+# or attribute names is text with actions: muxt generates and checks the
+# template, and reports errors in those actions where html/template would.
+
+muxt generate --use-receiver-type=T
+stdout 'wrote template_routes.go: 1 route'
+muxt check
+stdout 'ok: 1 template'
+! stderr .
+
+cp bad-template.gohtml template.gohtml
+! muxt check
+cmpenv stderr want-err.txt
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<p>1 < 2</p>
+<p>I <3 templates</p>
+<p>back <- here</p>
+<{{.Result.Tag}}>tag</{{.Result.Tag}}>
+<h{{.Result.N}}>heading</h{{.Result.N}}>
+<div data-{{.Result.Name}}="x">attribute name</div>
+<div {{/* c */}} class="a">comment in tag</div>
+<div class="b" {{- /* why */ -}}>trimmed comment in tag</div>
+<p>unclosed end tag</p
+{{template "raw text" .Result}}
+{{end}}
+{{define "raw text"}}<script>{{/* c */}}var n = {{.N}};</script
+{{end}}
+-- bad-template.gohtml --
+{{define "GET / Index()"}}
+<p>{{.Result.N}} < 2</p>
+<{{.Result.Missing}}>tag</{{.Result.Tag}}>
+<h{{.Result.Nope}}>heading</h{{.Result.N}}>
+<div data-{{.Result.Gone}}="x" {{/* c */}} class="{{.Result.Lost}}">a < b</div>
+{{end}}
+-- want-err.txt --
+$WORK/template_routes.go:35:13 ExecuteTemplate "GET / Index()" *TemplateData[RoutesReceiver, Data]
+$WORK/template.gohtml:3:11: executing "GET / Index()" at <.Result.Missing>: field or method Missing not found on Data
+$WORK/template.gohtml:4:12: executing "GET / Index()" at <.Result.Nope>: field or method Nope not found on Data
+$WORK/template.gohtml:5:20: executing "GET / Index()" at <.Result.Gone>: field or method Gone not found on Data
+$WORK/template.gohtml:5:60: executing "GET / Index()" at <.Result.Lost>: field or method Lost not found on Data
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*"))
+
+type T struct{}
+
+type Data struct {
+	Tag  string
+	N    int
+	Name string
+}
+
+func (T) Index() Data { return Data{} }

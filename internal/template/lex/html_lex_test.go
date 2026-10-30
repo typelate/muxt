@@ -435,86 +435,88 @@ var htmlLexTests = []lexTest{
 	}},
 
 	// Non-standard / edge cases ported from internal/html/token_test.go.
-	// Our lexer produces errors for many malformed inputs that the HTML5
-	// tokenizer would recover from. These tests document our lexer's behavior.
+	// Where the HTML5 tokenizer recovers from malformed input, our lexer
+	// reads the markup it cannot lex as a tag as text, as text/template
+	// does. These tests document our lexer's behavior.
 
 	// Bare < (from "not a tag #0")
 	{name: "html port: bare <", input: "<", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeError, Value: "expected tag name"},
+		{Type: TokenTypeHTMLText, Value: "<"},
+		tEOF,
 	}},
 
 	// Bare </ (from "not a tag #1")
 	{name: "html port: bare </", input: "</", items: []Token{
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeError, Value: "expected tag name after </"},
+		{Type: TokenTypeHTMLText, Value: "</"},
+		tEOF,
 	}},
 
 	// < in text (from "not a tag #7")
 	{name: "html port: < in text", input: "a < b", items: []Token{
-		{Type: TokenTypeHTMLText, Value: "a "},
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeError, Value: "expected tag name"},
+		{Type: TokenTypeHTMLText, Value: "a < b"},
+		tEOF,
 	}},
 
 	// Multiple < (from "not a tag #9")
 	{name: "html port: multiple <", input: "a<<<b>>>c", items: []Token{
-		{Type: TokenTypeHTMLText, Value: "a"},
+		{Type: TokenTypeHTMLText, Value: "a<<"},
 		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeError, Value: "expected tag name"},
+		{Type: TokenTypeHTMLStartTag, Value: "b"},
+		{Type: TokenTypeHTMLTagEnd, Value: ">"},
+		{Type: TokenTypeHTMLText, Value: ">>c"},
+		tEOF,
 	}},
 
 	// </> (from "not a tag #2")
 	{name: "html port: </>", input: "</>", items: []Token{
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeError, Value: "expected tag name after </"},
+		{Type: TokenTypeHTMLText, Value: "</>"},
+		tEOF,
 	}},
 
 	// a</>b (from "not a tag #3")
 	{name: "html port: a</>b", input: "a</>b", items: []Token{
-		{Type: TokenTypeHTMLText, Value: "a"},
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeError, Value: "expected tag name after </"},
+		{Type: TokenTypeHTMLText, Value: "a</>b"},
+		tEOF,
 	}},
 
 	// </ > (from "not a tag #4")
 	{name: "html port: </ >", input: "</ >", items: []Token{
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeError, Value: "expected tag name after </"},
+		{Type: TokenTypeHTMLText, Value: "</ >"},
+		tEOF,
 	}},
 
 	// </.> (from "not a tag #6")
 	{name: "html port: </.>", input: "</.>", items: []Token{
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeError, Value: "expected tag name after </"},
+		{Type: TokenTypeHTMLText, Value: "</.>"},
+		tEOF,
 	}},
 
 	// <<p> (from "not a tag #11")
 	{name: "html port: <<p>", input: "<<p>", items: []Token{
+		{Type: TokenTypeHTMLText, Value: "<"},
 		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeError, Value: "expected tag name"},
+		{Type: TokenTypeHTMLStartTag, Value: "p"},
+		{Type: TokenTypeHTMLTagEnd, Value: ">"},
+		tEOF,
 	}},
 
 	// EOF in tag name (from "tag name eof #0")
 	{name: "html port: EOF in tag name", input: "<a", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "a"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<a"},
+		tEOF,
 	}},
 
 	// EOF in tag with trailing space (from "tag name eof #1")
 	{name: "html port: EOF in tag space", input: "<a ", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "a"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<a "},
+		tEOF,
 	}},
 
 	// Text then EOF in tag (from "tag name eof #2")
 	{name: "html port: text then EOF tag", input: "a<b", items: []Token{
 		{Type: TokenTypeHTMLText, Value: "a"},
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "b"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<b"},
+		tEOF,
 	}},
 
 	// Tag then EOF in tag (from "tag name eof #3")
@@ -522,51 +524,38 @@ var htmlLexTests = []lexTest{
 		{Type: TokenTypeHTMLTagOpen, Value: "<"},
 		{Type: TokenTypeHTMLStartTag, Value: "a"},
 		{Type: TokenTypeHTMLTagEnd, Value: ">"},
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "b"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<b"},
+		tEOF,
 	}},
 
 	// EOF in attribute (from "tag name eof #4")
 	{name: "html port: EOF in attr", input: "<a x", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "a"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<a x"},
+		tEOF,
 	}},
 
 	// EOF after attr name (from "malformed tag #2")
 	{name: "html port: EOF after attr name", input: "<p id", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "p"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<p id"},
+		tEOF,
 	}},
 
 	// EOF after attr equals (from "malformed tag #3")
 	{name: "html port: EOF after attr equals", input: "<p id=", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "p"},
-		{Type: TokenTypeHTMLAttrName, Value: "id"},
-		{Type: TokenTypeHTMLAttrEquals, Value: "="},
-		{Type: TokenTypeError, Value: "expected attribute value"},
+		{Type: TokenTypeHTMLText, Value: "<p id="},
+		tEOF,
 	}},
 
 	// Empty attr value (from "malformed tag #4")
 	{name: "html port: empty attr value", input: "<p id=>", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "p"},
-		{Type: TokenTypeHTMLAttrName, Value: "id"},
-		{Type: TokenTypeHTMLAttrEquals, Value: "="},
-		{Type: TokenTypeError, Value: "expected attribute value"},
+		{Type: TokenTypeHTMLText, Value: "<p id=>"},
+		tEOF,
 	}},
 
 	// EOF in unquoted attr value (from "malformed tag #5")
 	{name: "html port: EOF in unquoted attr", input: "<p id=0", items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "p"},
-		{Type: TokenTypeHTMLAttrName, Value: "id"},
-		{Type: TokenTypeHTMLAttrEquals, Value: "="},
-		{Type: TokenTypeHTMLAttrValue, Value: "0"},
-		{Type: TokenTypeError, Value: "unclosed HTML tag"},
+		{Type: TokenTypeHTMLText, Value: "<p id=0"},
+		tEOF,
 	}},
 
 	// Junk in end tag (from "malformed tag #9")
@@ -574,9 +563,8 @@ var htmlLexTests = []lexTest{
 		{Type: TokenTypeHTMLTagOpen, Value: "<"},
 		{Type: TokenTypeHTMLStartTag, Value: "p"},
 		{Type: TokenTypeHTMLTagEnd, Value: ">"},
-		{Type: TokenTypeHTMLEndTagOpen, Value: "</"},
-		{Type: TokenTypeHTMLEndTag, Value: "p"},
-		{Type: TokenTypeError, Value: "expected > to close end tag, got i"},
+		{Type: TokenTypeHTMLText, Value: "</p id"},
+		tEOF,
 	}},
 
 	// Bogus comment <!> treated as doctype (from "comment5")
@@ -597,9 +585,8 @@ var htmlLexTests = []lexTest{
 
 	// Unclosed comment (from "comment8")
 	{name: "html port: unclosed comment", input: "a<!--z", items: []Token{
-		{Type: TokenTypeHTMLText, Value: "a"},
-		{Type: TokenTypeHTMLCommentOpen, Value: "<!--"},
-		{Type: TokenTypeError, Value: "unclosed HTML comment"},
+		{Type: TokenTypeHTMLText, Value: "a<!--z"},
+		tEOF,
 	}},
 
 	// Comment with content (from "comment3")
@@ -866,29 +853,24 @@ var htmlLexTests = []lexTest{
 	// action tokens. It does not group them into a single attribute name;
 	// that grouping (if desired) would be done by the parser.
 	{name: "html dynamic attr name and value", input: `<p data-{{.Key}}_xy-z='foo {{.Foo}}{{if .Cond}}c{{end}} '>`, items: []Token{
-		{Type: TokenTypeHTMLTagOpen, Value: "<"},
-		{Type: TokenTypeHTMLStartTag, Value: "p"},
-		{Type: TokenTypeHTMLAttrName, Value: "data-"},
+		{Type: TokenTypeHTMLText, Value: "<p data-"},
 		tLeft,
 		{Type: TokenTypeField, Value: ".Key"},
 		tRight,
-		{Type: TokenTypeHTMLAttrName, Value: "_xy-z"},
-		{Type: TokenTypeHTMLAttrEquals, Value: "="},
-		{Type: TokenTypeHTMLAttrValue, Value: "'foo "},
+		{Type: TokenTypeHTMLText, Value: "_xy-z='foo "},
 		tLeft,
 		{Type: TokenTypeField, Value: ".Foo"},
 		tRight,
 		tLeft,
 		{Type: TokenTypeIf, Value: "if"},
-		{Type: TokenTypeSpace, Value: " "},
+		tSpace,
 		{Type: TokenTypeField, Value: ".Cond"},
 		tRight,
-		{Type: TokenTypeHTMLAttrValue, Value: "c"},
+		{Type: TokenTypeHTMLText, Value: "c"},
 		tLeft,
 		{Type: TokenTypeEnd, Value: "end"},
 		tRight,
-		{Type: TokenTypeHTMLAttrValue, Value: " '"},
-		{Type: TokenTypeHTMLTagEnd, Value: ">"},
+		{Type: TokenTypeHTMLText, Value: " '>"},
 		tEOF,
 	}},
 
@@ -963,34 +945,35 @@ func TestHTMLLexEquivalence(t *testing.T) {
 		{desc: "title with tag and entity", html: "<title><b>K&amp;R C</b></title>", expect: Match, reason: ""},
 		{desc: "'>' completes script end tag", html: "<SCRIPT>a</SCRipt>", expect: Match, reason: ""},
 
-		// Cases that produce errors in our lexer (expected — we don't do error recovery).
-		{desc: "not a tag #0", html: "<", expect: Error, reason: "bare < at EOF"},
-		{desc: "not a tag #1", html: "</", expect: Error, reason: "bare </ at EOF"},
-		{desc: "not a tag #2", html: "</>", expect: Error, reason: "empty end tag"},
-		{desc: "not a tag #3", html: "a</>b", expect: Error, reason: "empty end tag after text"},
-		{desc: "not a tag #4", html: "</ >", expect: Error, reason: "space after </"},
-		{desc: "not a tag #5", html: "</.", expect: Error, reason: "non-alpha after </"},
-		{desc: "not a tag #6", html: "</.>", expect: Error, reason: "non-alpha after </"},
-		{desc: "not a tag #7", html: "a < b", expect: Error, reason: "bare < in text"},
-		{desc: "not a tag #8", html: "<.>", expect: Error, reason: "non-alpha after <"},
-		{desc: "not a tag #9", html: "a<<<b>>>c", expect: Error, reason: "multiple < signs"},
-		{desc: "not a tag #10", html: "if x<0 and y < 0 then x*y>0", expect: Error, reason: "< in expression"},
-		{desc: "not a tag #11", html: "<<p>", expect: Error, reason: "doubled <"},
-		{desc: "tag name eof #0", html: "<a", expect: Error, reason: "EOF in tag"},
-		{desc: "tag name eof #1", html: "<a ", expect: Error, reason: "EOF after tag name"},
-		{desc: "tag name eof #2", html: "a<b", expect: Error, reason: "EOF in tag after text"},
-		{desc: "tag name eof #3", html: "<a><b", expect: Error, reason: "EOF in second tag"},
-		{desc: "tag name eof #4", html: "<a x", expect: Error, reason: "EOF in attribute"},
-		{desc: "malformed tag #0", html: "<p</p>", expect: Error, reason: "< in tag name"},
-		{desc: "malformed tag #1", html: "<p </p>", expect: Error, reason: "< in attributes"},
-		{desc: "malformed tag #2", html: "<p id", expect: Error, reason: "EOF after attr name"},
-		{desc: "malformed tag #3", html: "<p id=", expect: Error, reason: "EOF after ="},
-		{desc: "malformed tag #4", html: "<p id=>", expect: Error, reason: "empty value after ="},
-		{desc: "malformed tag #5", html: "<p id=0", expect: Error, reason: "EOF in unquoted value"},
+		// Malformed markup. text/template and html/template parse it, so our
+		// lexer reads what it cannot lex as a tag as text (see lexHTMLText).
+		{desc: "not a tag #0", html: "<", expect: Match, reason: "text: bare < at EOF"},
+		{desc: "not a tag #1", html: "</", expect: Match, reason: "text: bare </ at EOF"},
+		{desc: "not a tag #2", html: "</>", expect: Match, reason: "text: empty end tag"},
+		{desc: "not a tag #3", html: "a</>b", expect: Match, reason: "text: empty end tag after text"},
+		{desc: "not a tag #4", html: "</ >", expect: Match, reason: "text: space after </"},
+		{desc: "not a tag #5", html: "</.", expect: Match, reason: "text: non-alpha after </"},
+		{desc: "not a tag #6", html: "</.>", expect: Match, reason: "text: non-alpha after </"},
+		{desc: "not a tag #7", html: "a < b", expect: Match, reason: "text: bare < in text"},
+		{desc: "not a tag #8", html: "<.>", expect: Match, reason: "text: non-alpha after <"},
+		{desc: "not a tag #9", html: "a<<<b>>>c", expect: Match, reason: "text: multiple < signs"},
+		{desc: "not a tag #10", html: "if x<0 and y < 0 then x*y>0", expect: Match, reason: "text: < in expression"},
+		{desc: "not a tag #11", html: "<<p>", expect: Match, reason: "text: doubled <"},
+		{desc: "tag name eof #0", html: "<a", expect: Match, reason: "text: EOF in tag"},
+		{desc: "tag name eof #1", html: "<a ", expect: Match, reason: "text: EOF after tag name"},
+		{desc: "tag name eof #2", html: "a<b", expect: Match, reason: "text: EOF in tag after text"},
+		{desc: "tag name eof #3", html: "<a><b", expect: Match, reason: "text: EOF in second tag"},
+		{desc: "tag name eof #4", html: "<a x", expect: Match, reason: "text: EOF in attribute"},
+		{desc: "malformed tag #0", html: "<p</p>", expect: Match, reason: "text: < in tag name"},
+		{desc: "malformed tag #1", html: "<p </p>", expect: Match, reason: "text: < in attributes"},
+		{desc: "malformed tag #2", html: "<p id", expect: Match, reason: "text: EOF after attr name"},
+		{desc: "malformed tag #3", html: "<p id=", expect: Match, reason: "text: EOF after ="},
+		{desc: "malformed tag #4", html: "<p id=>", expect: Match, reason: "text: empty value after ="},
+		{desc: "malformed tag #5", html: "<p id=0", expect: Match, reason: "text: EOF in unquoted value"},
 		{desc: "malformed tag #6", html: "<p id=0</p>", expect: Match, reason: "lexer treats 0</p as unquoted value"},
-		{desc: "malformed tag #7", html: `<p id="0</p>`, expect: Error, reason: "EOF in quoted value"},
-		{desc: "malformed tag #8", html: `<p id="0"</p>`, expect: Error, reason: "< after quoted value"},
-		{desc: "malformed tag #9", html: "<p></p id", expect: Error, reason: "junk in end tag"},
+		{desc: "malformed tag #7", html: `<p id="0</p>`, expect: Match, reason: "text: EOF in quoted value"},
+		{desc: "malformed tag #8", html: `<p id="0"</p>`, expect: Match, reason: "text: < after quoted value"},
+		{desc: "malformed tag #9", html: "<p></p id", expect: Match, reason: "text: junk in end tag"},
 
 		// Cases that require features our lexer intentionally omits.
 
@@ -1038,11 +1021,11 @@ func TestHTMLLexEquivalence(t *testing.T) {
 		{desc: "comment3", html: "a<!--x>-->z", expect: Match, reason: ""},
 		{desc: "comment5", html: "a<!>z", expect: Match, reason: ""},
 		{desc: "comment6", html: "a<!->z", expect: Match, reason: ""},
-		{desc: "comment8", html: "a<!--z", expect: Error, reason: "unclosed comment"},
+		{desc: "comment8", html: "a<!--z", expect: Match, reason: "text: unclosed comment"},
 		{desc: "DOCTYPE with no space", html: "<!doctypehtml>", expect: Match, reason: ""},
 		{desc: "DOCTYPE with two spaces", html: "<!doctype  html>", expect: Match, reason: ""},
 		{desc: "looks like DOCTYPE but isn't", html: "<!DOCUMENT html>", expect: Match, reason: ""},
-		{desc: "DOCTYPE at EOF", html: "<!DOCtype", expect: Error, reason: "EOF in doctype"},
+		{desc: "DOCTYPE at EOF", html: "<!DOCtype", expect: Match, reason: "text: EOF in doctype"},
 		{desc: "XML processing instruction", html: "<?xml?>", expect: Match, reason: ""},
 
 		// golang.org/x/net/html token_test.go:625
@@ -1055,10 +1038,8 @@ func TestHTMLLexEquivalence(t *testing.T) {
 		// golang.org/x/net/html token_test.go:595
 		// The reference tokenizer applies WHATWG 13.2.5.32 error recovery,
 		// treating '=' as an attribute name. Our lexer requires attribute names
-		// to start with a non-delimiter character and rejects this as
-		// malformed — appropriate for a linter that should flag the issue
-		// rather than silently recover.
-		{desc: "equals sign before attribute name", html: "<p  =>", expect: Error, reason: "= as attr name"},
+		// to start with a non-delimiter character and reads the tag as text.
+		{desc: "equals sign before attribute name", html: "<p  =>", expect: Match, reason: "text: = as attr name"},
 	}
 
 	for _, test := range tests {
@@ -1185,26 +1166,23 @@ func TestIsHTMLTagNameCharRejectsNonASCIIDigit(t *testing.T) {
 	}
 }
 
-func TestLexHTMLEndTagCloseEOFMessage(t *testing.T) {
-	// When an end tag has no closing '>', the error message should mention EOF,
-	// not print a garbage character for rune(-1).
-	l := New("</div", Options{
-		ParseHTML:  true,
-		BreakOK:    true,
-		ContinueOK: true,
-	})
-	var errItem Token
-	for {
-		item := l.Next()
-		if item.Type == TokenTypeError {
-			errItem = item
-			break
+func TestLexHTMLUnclosedEndTagIsText(t *testing.T) {
+	// An end tag the input ends inside of is text, in raw text too, so the
+	// lexer reports no error for it.
+	for _, input := range []string{"</div", "<script></script", "<script></script x>"} {
+		l := New(input, Options{
+			ParseHTML:  true,
+			BreakOK:    true,
+			ContinueOK: true,
+		})
+		for {
+			item := l.Next()
+			if item.Type == TokenTypeError {
+				t.Errorf("New(%q) lexed error %q", input, item.Value)
+			}
+			if item.Type == TokenTypeEOF || item.Type == TokenTypeError {
+				break
+			}
 		}
-		if item.Type == TokenTypeEOF {
-			t.Fatal("expected error token, got EOF")
-		}
-	}
-	if !strings.Contains(errItem.Value, "EOF") {
-		t.Errorf("error message should mention EOF, got: %q", errItem.Value)
 	}
 }
