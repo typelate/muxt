@@ -1,12 +1,64 @@
-package format_test
+package format
 
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/format"
-	"github.com/typelate/muxt/internal/template/lex"
+	"golang.org/x/tools/txtar"
+
+	"github.com/typelate/muxt/internal/template/format/internal/rendering"
 )
+
+// FuzzFormatEquivalent checks that formatting is idempotent and keeps the
+// rendered page (spec §8.3) for every input that parses, executes with
+// empty data, and renders to a page the oracle can read. Its seeds are the
+// fixture inputs, less knownViolations.
+func FuzzFormatEquivalent(f *testing.F) {
+	for _, filename := range fixtureFiles(f) {
+		if _, known := knownViolations[fixtureName(filename)]; known {
+			continue
+		}
+		ar, err := txtar.ParseFile(filename)
+		if err != nil {
+			f.Fatal(err)
+		}
+		for _, file := range ar.Files {
+			if file.Name == "input.gohtml" {
+				f.Add(string(file.Data))
+			}
+		}
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		out, err := Source("fuzz.gohtml", input)
+		if err != nil {
+			return
+		}
+		want, err := render(input, "", map[string]any{})
+		if err != nil {
+			return
+		}
+		if _, err := rendering.Tokens(want, rendering.Body, nil); err != nil {
+			return // the oracle cannot read the input's page (e.g. parsers disagree on a tag)
+		}
+		again, err := Source("fuzz.gohtml", out)
+		if err != nil {
+			t.Fatalf("Source(output) error: %v\ninput:  %q\noutput: %q", err, input, out)
+		}
+		if again != out {
+			t.Errorf("not idempotent\ninput:      %q\nformat(1):  %q\nformat(2):  %q", input, out, again)
+		}
+		got, err := render(out, "", map[string]any{})
+		if err != nil {
+			t.Fatalf("output does not execute: %v\ninput:  %q\noutput: %q", err, input, out)
+		}
+		diff, err := rendering.Diff(want, got, rendering.Body, nil)
+		if err != nil {
+			t.Fatalf("rendering.Diff: %v\ninput:  %q\noutput: %q", err, input, out)
+		}
+		if diff != "" {
+			t.Errorf("rendering changed: %s\ninput:  %q\noutput: %q\ninput rendered:  %q\noutput rendered: %q", diff, input, out, want, got)
+		}
+	})
+}
 
 // FuzzFormatIdempotent fuzzes the formatter and checks that formatting is
 // idempotent: format(format(x)) == format(x) for all successfully parsed inputs.
@@ -39,26 +91,15 @@ func FuzzFormatIdempotent(f *testing.F) {
 	for _, s := range seeds {
 		f.Add(s)
 	}
-	opts := lex.Options{
-		LeftDelim:  "{{",
-		RightDelim: "}}",
-		ParseHTML:  true,
-		BreakOK:    true,
-		ContinueOK: true,
-	}
 	f.Fuzz(func(t *testing.T, input string) {
-		tree, err := template.ParseTree("fuzz", "fuzz", input, nil, opts)
+		formatted1, err := Source("fuzz.gohtml", input)
 		if err != nil {
 			return
 		}
-		formatted1 := format.Node(tree.Root)
-
-		tree2, err := template.ParseTree("fuzz", "fuzz", formatted1, nil, opts)
+		formatted2, err := Source("fuzz.gohtml", formatted1)
 		if err != nil {
 			t.Fatalf("re-parse of formatted output failed:\n  input:     %q\n  formatted: %q\n  error:     %v", input, formatted1, err)
 		}
-		formatted2 := format.Node(tree2.Root)
-
 		if formatted1 != formatted2 {
 			t.Errorf("format not idempotent:\n  input:      %q\n  format(1):  %q\n  format(2):  %q", input, formatted1, formatted2)
 		}

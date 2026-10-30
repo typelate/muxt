@@ -2,23 +2,16 @@ package format_test
 
 import (
 	"bytes"
-	"flag"
 	htmltemplate "html/template"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format"
 	"github.com/typelate/muxt/internal/template/lex"
 )
-
-var updateGoldenFiles = flag.Bool("update-golden-files", false, "overwrite format.gohtml in golden files with actual formatter output")
 
 func parse(t *testing.T, input string) template.Node {
 	t.Helper()
@@ -80,113 +73,6 @@ func TestCustomDelimiters(t *testing.T) {
 	}
 }
 
-type (
-	goldenInner struct{ Value string }
-	goldenItem  struct {
-		Name   string
-		Active bool
-		Done   bool
-	}
-)
-
-type goldenData struct {
-	Title   string
-	Show    bool
-	A, B    bool
-	X       *goldenInner
-	Items   []goldenItem
-	Name    string
-	Value   string
-	Active  bool
-	Done    bool
-	URL     string
-	Label   string
-	Class   string
-	ID      int
-	Year    int
-	Message string
-}
-
-func TestGolden(t *testing.T) {
-	entries, err := os.ReadDir("testdata")
-	if err != nil {
-		t.Fatalf("read testdata: %v", err)
-	}
-
-	data := goldenData{
-		Title: "Hello",
-		Show:  true,
-		A:     true,
-		B:     false,
-		X:     &goldenInner{Value: "inner"},
-		Items: []goldenItem{
-			{Name: "alpha", Active: true, Done: false},
-			{Name: "beta", Active: false, Done: false},
-			{Name: "gamma", Active: true, Done: true},
-		},
-		Name:   "World",
-		Value:  "42",
-		Active: true,
-		Done:   false,
-		URL:    "https://example.com",
-		Label:  "click",
-		Class:  "main",
-		ID:     7,
-	}
-
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".txtar") {
-			continue
-		}
-		t.Run(e.Name(), func(t *testing.T) {
-			filePath := filepath.Join("testdata", e.Name())
-			ar, err := txtar.ParseFile(filePath)
-			require.NoError(t, err, "parse txtar")
-
-			var inputSrc, wantSrc string
-			for _, f := range ar.Files {
-				switch f.Name {
-				case "input.gohtml":
-					inputSrc = strings.TrimSuffix(string(f.Data), "\n")
-				case "format.gohtml":
-					wantSrc = strings.TrimSuffix(string(f.Data), "\n")
-				}
-			}
-			require.NotEmpty(t, inputSrc, "missing input.gohtml section")
-
-			// Parse and format
-			root := parse(t, inputSrc)
-			got := format.Node(root)
-
-			if *updateGoldenFiles {
-				// Overwrite format.gohtml with actual output
-				for i, f := range ar.Files {
-					if f.Name == "format.gohtml" {
-						ar.Files[i].Data = []byte(got + "\n")
-						break
-					}
-				}
-			} else {
-				require.NotEmpty(t, wantSrc, "missing format.gohtml section")
-				assert.Equal(t, wantSrc, got, "format mismatch")
-			}
-
-			// Execute input template
-			inputTmpl, err := htmltemplate.New("golden").Parse(inputSrc)
-			require.NoError(t, err, "input is not valid html/template")
-			var inputBuf bytes.Buffer
-			require.NoError(t, inputTmpl.Execute(&inputBuf, data), "input template execution failed")
-
-			// Execute formatted template
-			formatTmpl, err := htmltemplate.New("golden").Parse(got)
-			require.NoError(t, err, "formatted output is not valid html/template")
-			var formatBuf bytes.Buffer
-			require.NoError(t, formatTmpl.Execute(&formatBuf, data), "formatted template execution failed")
-
-		})
-	}
-}
-
 func TestIdempotency(t *testing.T) {
 	inputs := []string{
 		"<div><p>hello</p></div>",
@@ -236,23 +122,23 @@ func TestIdempotency(t *testing.T) {
 }
 
 func TestFormattingEdgeCases(t *testing.T) {
-	data := goldenData{
-		Title:   "Hello",
-		Show:    true,
-		A:       true,
-		B:       false,
-		X:       &goldenInner{Value: "inner"},
-		Items:   []goldenItem{{Name: "alpha", Active: true}},
-		Name:    "World",
-		Value:   "42",
-		Active:  true,
-		Done:    false,
-		URL:     "https://example.com",
-		Label:   "click",
-		Class:   "main",
-		ID:      7,
-		Year:    2026,
-		Message: "hello",
+	data := map[string]any{
+		"Title":   "Hello",
+		"Show":    true,
+		"A":       true,
+		"B":       false,
+		"X":       map[string]any{"Value": "inner"},
+		"Items":   []map[string]any{{"Name": "alpha", "Active": true}},
+		"Name":    "World",
+		"Value":   "42",
+		"Active":  true,
+		"Done":    false,
+		"URL":     "https://example.com",
+		"Label":   "click",
+		"Class":   "main",
+		"ID":      7,
+		"Year":    2026,
+		"Message": "hello",
 	}
 
 	tests := []struct {
@@ -400,7 +286,7 @@ func TestDefineSemanticPreservation(t *testing.T) {
 		},
 	}
 
-	data := goldenData{X: &goldenInner{Value: "inner"}}
+	data := map[string]any{"X": map[string]any{"Value": "inner"}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
