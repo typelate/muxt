@@ -37,6 +37,9 @@ type CallError struct {
 	// Cause is the short, single-line message returned by Error.
 	Cause error
 
+	// render re-renders the Cause message with a caller-chosen qualifier.
+	render func(typeFormatFunc) string
+
 	qualifier types.Qualifier
 }
 
@@ -99,6 +102,9 @@ type BuiltinError struct {
 	// Cause is the short, single-line message returned by Error.
 	Cause error
 
+	// render re-renders the Cause message with a caller-chosen qualifier.
+	render func(typeFormatFunc) string
+
 	qualifier types.Qualifier
 }
 
@@ -151,11 +157,8 @@ type IdentifierError struct {
 	// Cause is the short, single-line message returned by Error.
 	Cause error
 
-	// bareCause, when non-empty, replaces Cause.Error() in the verbose
-	// rendering. It is used by the not-found path to omit the
-	// "; available: ..." clause from the verbose output, since the
-	// rendered source declaration already enumerates available members.
-	bareCause string
+	// render re-renders the Cause message with a caller-chosen qualifier.
+	render func(typeFormatFunc) string
 
 	qualifier types.Qualifier
 	fset      *token.FileSet
@@ -180,9 +183,6 @@ func (e *IdentifierError) VerboseError() string {
 		return ""
 	}
 	short := e.Error()
-	if e.bareCause != "" {
-		short = e.bareCause
-	}
 
 	var b strings.Builder
 	b.WriteString(short)
@@ -296,8 +296,7 @@ func FormatVerbose(err error) string {
 	parts := make([]string, len(leaves))
 	var anyVerbose bool
 	for i, leaf := range leaves {
-		var v VerboseErrorer
-		if errors.As(leaf, &v) {
+		if v, ok := errors.AsType[VerboseErrorer](leaf); ok {
 			parts[i] = v.VerboseError()
 			anyVerbose = true
 		} else {
@@ -314,6 +313,18 @@ func FormatVerbose(err error) string {
 // and returns each non-joined leaf in the order they appear. Errors that do
 // not multi-unwrap are returned as-is.
 func flattenJoined(err error) []error {
+	// A leaf *Error multi-unwraps to expose its cause, but renders as a
+	// single verbose block; only aggregates flatten into their children.
+	if e, ok := err.(*Error); ok {
+		if len(e.children) == 0 {
+			return []error{e}
+		}
+		var out []error
+		for _, child := range e.children {
+			out = append(out, flattenJoined(child)...)
+		}
+		return out
+	}
 	type multi interface{ Unwrap() []error }
 	if m, ok := err.(multi); ok {
 		var out []error

@@ -223,3 +223,45 @@ func loadTestPackage(t *testing.T, dir string) *packages.Package {
 	}
 	return pkgs[0]
 }
+
+// TestPackage_errorTree checks that Package reports every failing call in
+// one *check.Error tree, so callers can walk it with All as they do the
+// result of Execute.
+func TestPackage_errorTree(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/testpkg\n\ngo 1.25.0\n")
+	writeFile(t, dir, "main.go", `package main
+
+import (
+	"html/template"
+	"os"
+)
+
+type Data struct {
+	Name string
+}
+
+var ts = template.Must(template.New("a").Parse(`+"`"+`{{define "a"}}{{.Missing}}{{end}}{{define "b"}}{{.Absent}}{{end}}`+"`"+`))
+
+func main() {
+	ts.ExecuteTemplate(os.Stdout, "a", Data{})
+	ts.ExecuteTemplate(os.Stdout, "b", Data{})
+}
+`)
+	pkg := loadTestPackage(t, dir)
+
+	err := check.Package(pkg, nil, nil)
+
+	var root *check.Error
+	require.ErrorAs(t, err, &root)
+	assert.Equal(t, check.ErrorTypeAggregate, root.Type)
+	var leaves []string
+	for e := range root.All {
+		if e.Type != check.ErrorTypeAggregate {
+			leaves = append(leaves, e.Error())
+		}
+	}
+	require.Len(t, leaves, 2, "one leaf per failing call")
+	assert.Contains(t, leaves[0], "field or method Missing not found")
+	assert.Contains(t, leaves[1], "field or method Absent not found")
+}

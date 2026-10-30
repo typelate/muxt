@@ -1,7 +1,6 @@
 package check
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -68,11 +67,13 @@ type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *template.Tree,
 // and type-checks each call.
 //
 // ExecuteTemplate must be called with a string literal for the second parameter.
+//
+// A non-nil result is a *Error tree; see Execute for how to walk it.
 func Package(pkg *packages.Package, inspectCall ExecuteTemplateNodeInspectorFunc, inspectTemplate TemplateNodeInspectorFunc) error {
 	pending, receivers, _ := findExecuteCalls(pkg)
 	resolved, resolveErrs := resolveTemplates(pkg, receivers)
 	callErr := checkCalls(pkg, pending, resolved, inspectCall, inspectTemplate)
-	return errors.Join(append(resolveErrs, callErr)...)
+	return joinErrors(nil, nil, append(resolveErrs, callErr)...)
 }
 
 // Entry is one resolved ExecuteTemplate call site: the template the call
@@ -164,7 +165,7 @@ func AnalyzePackage(pkg *packages.Package, onEntry func(Entry) NodeInspectorFunc
 	}
 
 	warnings = append(warnings, inconsistentTemplateWarnings(invocations)...)
-	return warnings, errors.Join(append(resolveErrs, errs...)...)
+	return warnings, joinErrors(nil, nil, append(resolveErrs, errs...)...)
 }
 
 // tmplInvocation records one {{template "name" pipe}} call site and the dot
@@ -547,9 +548,11 @@ func checkCalls(pkg *packages.Package, pending []pendingCall, resolved map[types
 		}
 		tree := looked.Tree()
 		if tree == nil {
-			// Hardening over upstream typelate/check, which passes a nil
-			// tree straight to Execute and panics on tree.Root. TODO: port
-			// this guard upstream so the two stay parallel.
+			// A name can be given to a template that is never parsed into,
+			// which template.New does on its own, and the lookup finds that
+			// entry with its tree still nil. There is nothing to walk.
+			// Executing such a template fails at run time as an incomplete
+			// template, a mistake this does not report yet (upstream 04dbf17).
 			continue
 		}
 		global := NewGlobal(pkg.Types, pkg.Fset, rt.templates, mergedFunctions)
@@ -563,7 +566,7 @@ func checkCalls(pkg *packages.Package, pending []pendingCall, resolved map[types
 		}
 	}
 
-	return errors.Join(errs...)
+	return joinErrors(nil, nil, errs...)
 }
 
 func packageDirectory(pkg *packages.Package) string {

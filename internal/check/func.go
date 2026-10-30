@@ -1,7 +1,7 @@
 package check
 
 import (
-	"fmt"
+	"errors"
 	"go/types"
 	"maps"
 
@@ -62,9 +62,9 @@ func (functions Functions) CheckCall(global *Global, funcIdent string, argNodes 
 		return builtInCheck(global, funcIdent, argNodes, argTypes)
 	}
 	if resultLen := fn.Results().Len(); resultLen == 0 {
-		return nil, fmt.Errorf("function %s has no results", funcIdent)
+		return nil, errorf(ErrorTypeBadSignature, "function %s has no results", funcIdent).withX(fn)
 	} else if resultLen > 2 {
-		return nil, fmt.Errorf("function %s has too many results", funcIdent)
+		return nil, errorf(ErrorTypeBadSignature, "function %s has too many results", funcIdent).withX(fn)
 	}
 	// printf ({{printf "%d" .N}}) validates its literal format string against
 	// the argument types, catching e.g. %d applied to a string.
@@ -77,14 +77,16 @@ func (functions Functions) CheckCall(global *Global, funcIdent string, argNodes 
 }
 
 func checkCallArguments(global *Global, name string, fn *types.Signature, args []types.Type) (types.Type, error) {
-	callErr := func(format string, a ...any) *CallError {
-		return &CallError{
+	callErr := func(format string, a ...any) *Error {
+		render := renderer(format, a...)
+		return wrapError(ErrorTypeCallArguments, nil, nil, &CallError{
 			Name:      name,
 			Signature: fn,
 			ArgTypes:  args,
-			Cause:     fmt.Errorf(format, a...),
+			Cause:     errors.New(render(fullTypeFormat(nil))),
+			render:    render,
 			qualifier: global.Qualifier,
-		}
+		}).withX(fn)
 	}
 
 	expNum := fn.Params().Len()
@@ -102,14 +104,14 @@ func checkCallArguments(global *Global, name string, fn *types.Signature, args [
 	}
 
 	for i := 0; i < expFixed; i++ {
-		if err := checkArgAssignable(global, callErr, i, fn.Params().At(i).Type(), args[i]); err != nil {
+		if err := checkArgAssignable(callErr, i, fn.Params().At(i).Type(), args[i]); err != nil {
 			return nil, err
 		}
 	}
 	if isVar {
 		elem := fn.Params().At(expNum - 1).Type().(*types.Slice).Elem()
 		for i := expFixed; i < len(args); i++ {
-			if err := checkArgAssignable(global, callErr, i, elem, args[i]); err != nil {
+			if err := checkArgAssignable(callErr, i, elem, args[i]); err != nil {
 				return nil, err
 			}
 		}
@@ -119,8 +121,8 @@ func checkCallArguments(global *Global, name string, fn *types.Signature, args [
 
 // checkArgAssignable returns nil when at is assignable to pt, allowing one
 // level of pointer auto-deref or auto-address (matching template runtime
-// semantics). Returns a *CallError built via callErr on mismatch.
-func checkArgAssignable(global *Global, callErr func(format string, a ...any) *CallError, i int, pt, at types.Type) error {
+// semantics). Returns an *Error built via callErr on mismatch.
+func checkArgAssignable(callErr func(format string, a ...any) *Error, i int, pt, at types.Type) error {
 	if types.AssignableTo(at, pt) {
 		return nil
 	}
@@ -130,7 +132,7 @@ func checkArgAssignable(global *Global, callErr func(format string, a ...any) *C
 	if ptr, ok := pt.Underlying().(*types.Pointer); ok && types.AssignableTo(at, ptr.Elem()) {
 		return nil
 	}
-	return callErr("argument %d has type %s expected %s", i, global.TypeString(at), global.TypeString(pt))
+	return callErr("argument %d has type %s expected %s", i, at, pt)
 }
 
 func findPackage(pkg *types.Package, path string) (*types.Package, bool) {
@@ -160,10 +162,10 @@ func findPackageVisited(pkg *types.Package, path string, visited map[*types.Pack
 }
 
 func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTypes []types.Type) (types.Type, error) {
-	// builtinErr keeps the short Cause message identical to before while
-	// attaching the built-in's usage/note for the verbose render.
-	builtinErr := func(format string, a ...any) *BuiltinError {
-		return global.builtinErr(funcIdent, argTypes, fmt.Errorf(format, a...))
+	// builtinErr attaches the built-in's usage/note for the verbose
+	// render; the message itself matches a plain call-arguments error.
+	builtinErr := func(format string, a ...any) *Error {
+		return global.builtinErr(funcIdent, argTypes, format, a...)
 	}
 	switch funcIdent {
 	case "attrescaper":
@@ -174,10 +176,10 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 		}
 		switch x := argTypes[0].Underlying().(type) {
 		default:
-			return nil, builtinErr("built-in len expects the first argument to be an array, slice, map, or string got %s", global.TypeString(argTypes[0]))
+			return nil, builtinErr("built-in len expects the first argument to be an array, slice, map, or string got %s", argTypes[0]).withX(argTypes[0])
 		case *types.Basic:
 			if x.Kind() != types.String {
-				return nil, builtinErr("built-in len expects the first argument to be an array, slice, map, or string got %s", global.TypeString(argTypes[0]))
+				return nil, builtinErr("built-in len expects the first argument to be an array, slice, map, or string got %s", argTypes[0]).withX(argTypes[0])
 			}
 		case *types.Array:
 		case *types.Slice:
@@ -195,10 +197,10 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 		}
 		switch x := argTypes[0].Underlying().(type) {
 		default:
-			return nil, builtinErr("built-in slice expects the first argument to be an array, slice, or string got %s", global.TypeString(argTypes[0]))
+			return nil, builtinErr("built-in slice expects the first argument to be an array, slice, or string got %s", argTypes[0]).withX(argTypes[0])
 		case *types.Basic:
 			if x.Kind() != types.String {
-				return nil, builtinErr("built-in slice expects the first argument to be an array, slice, or string got %s", global.TypeString(argTypes[0]))
+				return nil, builtinErr("built-in slice expects the first argument to be an array, slice, or string got %s", argTypes[0]).withX(argTypes[0])
 			}
 			if len(nodes) == 4 {
 				return nil, builtinErr("can not 3 index slice a string")
@@ -227,8 +229,12 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 		}
 		return types.Universe.Lookup("bool").Type(), nil
 	case "ge", "gt", "le", "lt", "ne":
-		// The ordered comparisons take exactly two arguments.
-		if len(argTypes) != 2 {
+		// The ordered comparisons take exactly two arguments. Too few
+		// reads as it does for eq.
+		if len(argTypes) < 2 {
+			return nil, builtinErr("built-in %s expects at least two arguments got %d", funcIdent, len(argTypes))
+		}
+		if len(argTypes) > 2 {
 			return nil, builtinErr("built-in %s expects two arguments got %d", funcIdent, len(argTypes))
 		}
 		return types.Universe.Lookup("bool").Type(), nil
@@ -238,7 +244,7 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 		}
 		sig, ok := argTypes[0].(*types.Signature)
 		if !ok {
-			return nil, builtinErr("call expected a function signature")
+			return nil, builtinErr("call expected a function signature").withX(argTypes[0])
 		}
 		return checkCallArguments(global, "", sig, argTypes[1:])
 	case "not":
@@ -257,25 +263,25 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 			switch x := result.(type) {
 			case *types.Slice:
 				if !types.AssignableTo(at, types.Typ[types.Int]) {
-					return nil, builtinErr("slice index expects int got %s", global.TypeString(at))
+					return nil, builtinErr("slice index expects int got %s", at).withX(at)
 				}
 				result = x.Elem()
 			case *types.Array:
 				if !types.AssignableTo(at, types.Typ[types.Int]) {
-					return nil, builtinErr("slice index expects int got %s", global.TypeString(at))
+					return nil, builtinErr("slice index expects int got %s", at).withX(at)
 				}
 				result = x.Elem()
 			case *types.Map:
 				if !types.AssignableTo(at, x.Key()) {
-					return nil, builtinErr("slice index expects %s got %s", global.TypeString(x.Key()), global.TypeString(at))
+					return nil, builtinErr("slice index expects %s got %s", x.Key(), at).withX(at)
 				}
 				result = x.Elem()
 			default:
-				return nil, builtinErr("can not index over %s", global.TypeString(result))
+				return nil, builtinErr("can not index over %s", result).withX(result)
 			}
 		}
 		return result, nil
 	default:
-		return nil, fmt.Errorf("unknown function: %s", funcIdent)
+		return nil, errorf(ErrorTypeUnknownFunction, "unknown function: %s", funcIdent)
 	}
 }

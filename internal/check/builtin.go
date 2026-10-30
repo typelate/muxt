@@ -1,6 +1,9 @@
 package check
 
-import "go/types"
+import (
+	"errors"
+	"go/types"
+)
 
 // Builtin documents a template built-in function. The check package uses it
 // to render helpful errors when a built-in is misused, and tooling (an LSP
@@ -66,17 +69,21 @@ func BuiltinDoc(name string) (Builtin, bool) {
 	return b, ok
 }
 
-// builtinErr builds a *BuiltinError for the named built-in, filling its
-// usage and note from builtinDocs so every built-in error carries the same
-// helpful detail.
-func (g *Global) builtinErr(name string, argTypes []types.Type, cause error) *BuiltinError {
+// builtinErr builds a call-arguments *Error wrapping a *BuiltinError for
+// the named built-in, filling its usage and note from builtinDocs so every
+// built-in error carries the same helpful detail. types.Type args are
+// rendered with a nil qualifier in the message and re-rendered with the
+// caller's qualifier by DetailedError.
+func (g *Global) builtinErr(name string, argTypes []types.Type, format string, args ...any) *Error {
 	doc := builtinDocs[name]
-	return &BuiltinError{
+	render := renderer(format, args...)
+	return wrapError(ErrorTypeCallArguments, nil, nil, &BuiltinError{
 		Name:      name,
 		Usage:     doc.Usage,
 		Note:      doc.Note,
 		ArgTypes:  argTypes,
-		Cause:     cause,
+		Cause:     errors.New(render(fullTypeFormat(nil))),
+		render:    render,
 		qualifier: g.Qualifier,
-	}
+	})
 }

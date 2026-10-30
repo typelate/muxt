@@ -129,7 +129,12 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureNoResultMethod{},
 			Error: func(t *testing.T, err error, tp types.Type) {
-				require.ErrorContains(t, err, "function Method has 0 return values; should be 1 or 2")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
+				require.NotNil(t, method)
+				methodPos := testPkg.Fset.Position(method.Pos())
+
+				require.EqualError(t, err, `template:1:3: executing "template" at <.Method>: function Method has 0 return values; should be 1 or 2`)
+				require.Equal(t, methodPos, findLeafError(t, err).Decl)
 			},
 		},
 		{
@@ -147,7 +152,12 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureResultAndNonError{},
 			Error: func(t *testing.T, err error, tp types.Type) {
-				require.ErrorContains(t, err, "invalid function signature for Method: second return value should be error; is int")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
+				require.NotNil(t, method)
+				methodPos := testPkg.Fset.Position(method.Pos())
+
+				require.EqualError(t, err, `template:1:3: executing "template" at <.Method>: invalid function signature for Method: second return value should be error; is int`)
+				require.Equal(t, methodPos, findLeafError(t, err).Decl)
 			},
 		},
 		{
@@ -155,7 +165,12 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method}}`,
 			Data:     TypeWithMethodSignatureThreeResults{},
 			Error: func(t *testing.T, err error, tp types.Type) {
-				require.ErrorContains(t, err, "function Method has 3 return values; should be 1 or 2")
+				method, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
+				require.NotNil(t, method)
+				methodPos := testPkg.Fset.Position(method.Pos())
+
+				require.EqualError(t, err, `template:1:3: executing "template" at <.Method>: function Method has 3 return values; should be 1 or 2`)
+				require.Equal(t, methodPos, findLeafError(t, err).Decl)
 			},
 		},
 		{
@@ -168,7 +183,14 @@ func TestTree(t *testing.T) {
 			Template: `{{.Method.Method}}`,
 			Data:     TypeWithMethodSignatureResultHasMethodWithNoResults{},
 			Error: func(t *testing.T, err error, tp types.Type) {
-				require.ErrorContains(t, err, "function Method has 0 return values; should be 1 or 2")
+				m1, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Method")
+				require.NotNil(t, m1)
+				m2, _, _ := types.LookupFieldOrMethod(m1.Type().(*types.Signature).Results().At(0).Type(), true, testPkg.Types, "Method")
+				require.NotNil(t, m2)
+				methodPos := testPkg.Fset.Position(m2.Pos())
+
+				require.EqualError(t, err, `template:1:10: executing "template" at <.Method.Method>: function Method has 0 return values; should be 1 or 2`)
+				require.Equal(t, methodPos, findLeafError(t, err).Decl)
 			},
 		},
 		{
@@ -208,6 +230,7 @@ func TestTree(t *testing.T) {
 			Error: func(t *testing.T, checkErr error, tp types.Type) {
 				require.Error(t, checkErr)
 				require.ErrorContains(t, checkErr, "expected int")
+				require.Equal(t, check.ErrorTypeCallArguments, findLeafError(t, checkErr).Type)
 			},
 		},
 		{
@@ -216,6 +239,7 @@ func TestTree(t *testing.T) {
 			Data:     MethodsInChain{},
 			Error: func(t *testing.T, checkErr error, tp types.Type) {
 				require.ErrorContains(t, checkErr, "wrong number of args expected 1 but got 0")
+				require.Equal(t, check.ErrorTypeCallArguments, findLeafError(t, checkErr).Type)
 			},
 		},
 		{
@@ -230,6 +254,15 @@ func TestTree(t *testing.T) {
 			Error: func(t *testing.T, err error, tp types.Type) {
 				require.ErrorContains(t, err, "Missing not found on")
 				require.Contains(t, detailedError(t, err), "Field struct{}")
+			},
+		},
+		{
+			Name:     "not found shows available method",
+			Template: `{{.Missing}}`,
+			Data:     TypeWithMethodSignatureResult{},
+			Error: func(t *testing.T, err error, tp types.Type) {
+				require.ErrorContains(t, err, "Missing not found on")
+				require.Contains(t, detailedError(t, err), "Method() struct{}")
 			},
 		},
 		{
@@ -1241,8 +1274,9 @@ func TestErrorPositionAndUnwrap(t *testing.T) {
 
 	// The unwrapped error is the bare, position-free message — no
 	// "file:line:col: executing ... at <...>:" prefix.
-	require.NotNil(t, ce.Unwrap())
-	msg := ce.Unwrap().Error()
+	// A leaf unwraps to its one cause.
+	require.Len(t, ce.Unwrap(), 1)
+	msg := ce.Unwrap()[0].Error()
 	assert.NotContains(t, msg, "executing")
 	assert.NotContains(t, msg, "page.gohtml")
 	assert.Contains(t, ce.Error(), msg, "the full Error keeps the bare message as its tail")
@@ -1348,9 +1382,10 @@ func TestErrorUnwrap(t *testing.T) {
 	var checkError *check.Error
 	require.True(t, errors.As(checkErr, &checkError), "error should be a *check.Error")
 
-	unwrapped := errors.Unwrap(checkError)
-	require.NotNil(t, unwrapped, "Unwrap should return the inner error")
-	assert.Contains(t, unwrapped.Error(), "MissingField not found")
+	// A leaf multi-unwraps (as an aggregate does) to its one cause.
+	unwrapped := checkError.Unwrap()
+	require.Len(t, unwrapped, 1, "Unwrap should return the inner error")
+	assert.Contains(t, unwrapped[0].Error(), "MissingField not found")
 }
 
 func TestFindTreeFunc(t *testing.T) {

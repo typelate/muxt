@@ -1,7 +1,6 @@
 package check
 
 import (
-	"fmt"
 	"go/types"
 	"strings"
 
@@ -75,14 +74,14 @@ func checkPrintf(g *Global, argNodes []template.Node, argTypes []types.Type) err
 		verb := format[i]
 		t, ok := next()
 		if !ok {
-			return fmt.Errorf("printf: not enough arguments for format %q", format)
+			return errorf(ErrorTypeCallArguments, "printf: not enough arguments for format %q", format)
 		}
 		if want := verbMismatch(rune(verb), t); want != "" {
-			return fmt.Errorf("printf: %%%c needs %s but the argument is %s", verb, want, g.TypeString(t))
+			return errorf(ErrorTypeCallArguments, "printf: %%%c needs %s but the argument is %s", verb, want, t).withX(t)
 		}
 	}
 	if used < len(args) {
-		return fmt.Errorf("printf: too many arguments for format %q", format)
+		return errorf(ErrorTypeCallArguments, "printf: too many arguments for format %q", format)
 	}
 	return nil
 }
@@ -96,10 +95,10 @@ func scanStarWidth(g *Global, format string, i *int, next func() (types.Type, bo
 	}
 	t, ok := next()
 	if !ok {
-		return true, fmt.Errorf("printf: not enough arguments for format %q", format)
+		return true, errorf(ErrorTypeCallArguments, "printf: not enough arguments for format %q", format)
 	}
 	if verbMismatch('d', t) != "" {
-		return true, fmt.Errorf("printf: %s (*) needs an integer but the argument is %s", what, g.TypeString(t))
+		return true, errorf(ErrorTypeCallArguments, "printf: %s (*) needs an integer but the argument is %s", what, t).withX(t)
 	}
 	*i++
 	return true, nil
