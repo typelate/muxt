@@ -32,9 +32,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-internal/muxt/* is ported from github.com/typelate/muxt@v0.20.0, relicensed MIT by the copyright holder.
+internal/template (including internal/template/html and
+internal/template/lex) is derived in part from the Go standard library's
+text/template and html/template packages under the notice above.
 
-internal/csstree/* is a Go port of github.com/csstree/csstree (MIT,
+internal/css/csstree/* is a Go port of github.com/csstree/csstree (MIT,
 Copyright (C) 2016-2026 by Roman Dvornov), copied from
 github.com/typelate/stylate/internal/csstree. It bundles CSS syntax data
-from mdn/data (CC0). See internal/csstree/LICENSE.
+from mdn/data (CC0). See internal/css/csstree/LICENSE and
+internal/css/csstree/data/mdn/LICENSE.
