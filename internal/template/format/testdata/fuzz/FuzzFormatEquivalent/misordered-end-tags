@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<div><b> a <i> b </b> c </i> d</div>")
