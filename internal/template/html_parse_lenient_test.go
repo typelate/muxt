@@ -44,6 +44,10 @@ func TestHTMLParseLenientTags(t *testing.T) {
 		{name: "unclosed end tag", input: `<p>a</p`, elements: []string{"p"}},
 		{name: "unclosed comment", input: `a<!--z`},
 		{name: "unclosed doctype", input: `a<!DOCTYPE`},
+		{name: "comment ended by control flow", input: `{{if .X}}<!-- {{end}} -->{{.Y}}`},
+		{name: "control flow opened in comment", input: `<!-- {{if .X}} -->x{{end}}{{.Y}}`},
+		{name: "comment ended by else", input: `{{if .X}}<!--{{else}}-->{{end}}{{.Y}}`},
+		{name: "comment with control flow", input: `<!-- {{if .X}}a{{else}}b{{end}} -->`},
 		{name: "comment in raw text", input: `<script>{{/* c */}}a</script>`, elements: []string{"script"}},
 		{name: "trimmed comment in raw text", input: `<textarea> {{- /* c */ -}} </textarea>`, elements: []string{"textarea"}},
 		{name: "unclosed raw text end tag", input: `<script>a</script`, elements: []string{"script"}},
@@ -66,8 +70,11 @@ func TestHTMLParseLenientTags(t *testing.T) {
 			var elements []string
 			for _, tr := range trees {
 				Walk(tr, func(_ *Tree, n Node) {
-					if elem, ok := n.(*HTMLElementNode); ok {
-						elements = append(elements, elem.TagName)
+					switch n := n.(type) {
+					case *HTMLElementNode:
+						elements = append(elements, n.TagName)
+					case *elseNode, *endNode:
+						t.Errorf("tree holds %T at %d", n, n.Start())
 					}
 				})
 			}

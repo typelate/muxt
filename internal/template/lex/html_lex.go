@@ -440,7 +440,9 @@ func lexHTMLCommentClose(l *Scanner) stateFn {
 //     control structure or definition the tag began in; when it is an
 //     end tag with anything but space after its name; and when the input
 //     ends before the tag closes. A comment or doctype the input ends
-//     inside of is text too.
+//     inside of is text too, and so is the "<!--" of a comment that a
+//     control structure crosses: one an action in it opens that does
+//     not end in it, or one it began in that an action in it ends.
 //
 // The text token that begins a degraded start tag carries the tag's name
 // in DegradedTag.
@@ -544,11 +546,7 @@ func (l *Scanner) htmlTagAt(i int) (isTag bool, textEnd int, name string) {
 	}
 	switch c := s[j]; {
 	case strings.HasPrefix(s[j:], "!--"):
-		body := s[j+3:]
-		if strings.HasPrefix(body, ">") || strings.HasPrefix(body, "->") || strings.Contains(body, "-->") {
-			return true, 0, ""
-		}
-		return false, len(s), ""
+		return l.htmlCommentAt(j + 3)
 	case c == '!' || c == '?':
 		if strings.IndexByte(s[j:], '>') < 0 {
 			return false, len(s), ""
@@ -574,6 +572,50 @@ func (l *Scanner) htmlTagAt(i int) (isTag bool, textEnd int, name string) {
 		return l.htmlStartTagAt(i)
 	default:
 		return false, j, ""
+	}
+}
+
+// htmlCommentAt reports whether the HTML comment whose body begins at
+// l.input[j] is lexed as a comment: it must close, and the control
+// structures actions in it open must end in it, while an action in it
+// must not end one the comment began in. Otherwise the comment's "<!--"
+// is text.
+func (l *Scanner) htmlCommentAt(j int) (isTag bool, textEnd int, name string) {
+	s := l.input
+	ld := l.Options.LeftDelim
+	if strings.HasPrefix(s[j:], ">") || strings.HasPrefix(s[j:], "->") {
+		return true, 0, "" // abruptly closed: <!--> and <!--->
+	}
+	depth := 0
+	for {
+		idxEnd := strings.Index(s[j:], "-->")
+		idxDelim := strings.Index(s[j:], ld)
+		switch {
+		case idxEnd < 0:
+			return false, j, ""
+		case idxDelim < 0 || idxEnd < idxDelim:
+			return depth == 0, j + idxEnd + len("-->"), ""
+		}
+		kind, end := l.htmlActionAt(j + idxDelim)
+		if end < 0 {
+			return true, 0, "" // the action lexer reports the action
+		}
+		switch kind {
+		case htmlActionDefine:
+			return false, j + idxDelim, ""
+		case htmlActionOpen:
+			depth++
+		case htmlActionElse:
+			if depth == 0 {
+				return false, j + idxDelim, ""
+			}
+		case htmlActionEnd:
+			if depth == 0 {
+				return false, j + idxDelim, ""
+			}
+			depth--
+		}
+		j = end
 	}
 }
 

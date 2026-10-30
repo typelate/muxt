@@ -24,6 +24,9 @@ cmpenv stderr want-err.txt
 <div {{/* c */}} class="a">comment in tag</div>
 <div class="b" {{- /* why */ -}}>trimmed comment in tag</div>
 <p>unclosed end tag</p
+{{if .Result.N}}<!-- {{end}} -->
+<!-- {{if .Result.N}} -->x{{end}}
+{{if .Result.N}}<!--{{else}}-->{{end}}
 {{template "raw text" .Result}}
 {{end}}
 {{define "raw text"}}<script>{{/* c */}}var n = {{.N}};</script
