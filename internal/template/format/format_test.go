@@ -125,6 +125,9 @@ func TestIdempotency(t *testing.T) {
 		// between them on the first pass, not only once the break is
 		// in the source (found by fuzzing).
 		`{{define "a"}}{{end}}{{define "b"}}{{end}}<p></p>0`,
+		// A define body ending in an unclosed element stays inline: a
+		// break after it would be its content next pass.
+		"{{define \"0\"}}\n<A0>{{end}}0",
 	}
 	for _, input := range inputs {
 		t.Run(input, func(t *testing.T) {

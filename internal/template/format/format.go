@@ -859,6 +859,10 @@ func (f *formatter) bodyLayout(body *template.ListNode) (layout layoutKind, trim
 		edge := i == 0 || i == len(items)
 		g := f.cls.gaps[gapKey{body, i}]
 		switch {
+		case i == len(items) && i > 0 && g.text == nil && isUnclosed(items[i-1]):
+			// A break written after an unclosed element would be its
+			// content on the next pass.
+			return inlineLayout, false, false
 		case edge && emptyCollapseOnly(i):
 		case !takesBreak(g):
 			return inlineLayout, false, false
@@ -870,6 +874,13 @@ func (f *formatter) bodyLayout(body *template.ListNode) (layout layoutKind, trim
 		return inlineLayout, false, false
 	}
 	return blockLayout, emptyCollapseOnly(0), emptyCollapseOnly(len(items))
+}
+
+// isUnclosed reports whether n is an element the source leaves open: the
+// parser makes what follows it, up to its parent's end, its content.
+func isUnclosed(n template.Node) bool {
+	el, ok := n.(*template.HTMLElementNode)
+	return ok && !el.Closed && !el.Void
 }
 
 func (f *formatter) commentNode(n *template.CommentNode) {
