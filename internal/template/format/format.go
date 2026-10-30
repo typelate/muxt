@@ -520,6 +520,15 @@ var voidElements = map[string]bool{
 // String is its text alone, so its delimiters and trim markers are added
 // around it (text/template allows nothing else between them).
 func (f *formatter) sourceText(n template.Node) string {
+	if frag, ok := n.(*template.HTMLDocumentFragmentNode); ok {
+		// A fragment's String starts at its first child's Start, which
+		// for a comment action is after the delimiter.
+		var b strings.Builder
+		for _, child := range frag.Children {
+			b.WriteString(f.sourceText(child))
+		}
+		return b.String()
+	}
 	if c, ok := n.(*template.CommentNode); ok {
 		var b strings.Builder
 		b.WriteString(f.leftDelim)
@@ -1003,8 +1012,8 @@ func Source(filename, src string, opts ...Option) (string, error) {
 
 // hasUnparsedMarkup reports whether text in nodes, outside raw text and
 // RCDATA elements and comments, holds a < that the HTML tokenizer reads
-// as the start of a tag, end tag, comment or processing instruction (<
-// then a letter, /, ! or ?). The template parser keeps markup it cannot
+// as the start of a tag, comment or processing instruction (< then a
+// letter, !, ? or a / not followed by a letter). The template parser keeps markup it cannot
 // read as an element (<p <b>, </ b>, <?x?>) as text, so its tree and the
 // browser's disagree there, and the whitespace around it cannot be
 // classified.
@@ -1046,13 +1055,20 @@ func startsMarkup(text []byte) bool {
 		if text[i] != '<' {
 			continue
 		}
-		c := text[i+1]
-		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || c == '/' || c == '!' || c == '?' {
+		switch c := text[i+1]; {
+		case isASCIILetter(c), c == '!', c == '?':
+			return true
+		case c == '/' && (i+2 >= len(text) || !isASCIILetter(text[i+2])):
+			// </ then a non-letter is a bogus comment or dropped; </
+			// then a letter is an end tag the parser could not match,
+			// which the misnesting rules handle.
 			return true
 		}
 	}
 	return false
 }
+
+func isASCIILetter(c byte) bool { return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' }
 
 // rawTextTags name the elements whose content the HTML tokenizer reads
 // as text up to their end tag (raw text and RCDATA, HTML §13.1.2), with

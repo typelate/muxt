@@ -488,6 +488,8 @@ func TestUnparsedMarkup(t *testing.T) {
 	}{
 		{name: "start tag with < in its attributes", input: "<teXtAreA </teXtAreA><A  >0", want: "<teXtAreA </teXtAreA><A  >0"},
 		{name: "bogus end tag", input: "<div>a</ b>  <p>  c</p></div>", want: "<div>a</ b>  <p>  c</p></div>"},
+		{name: "comment action first", input: "{{/* c */}}<div>a</ b>  <p>  c</p></div>", want: "{{/* c */}}<div>a</ b>  <p>  c</p></div>"},
+		{name: "unmatched end tag is left to the misnesting rules", input: "<div><p>a</p></b></div>", want: "<div>\n\t<p>a</p>\n\t</b>\n</div>"},
 		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
 	} {
