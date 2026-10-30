@@ -1,7 +1,12 @@
 package rendering
 
 import (
+	"html"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -76,4 +81,131 @@ func TestTokensTableBody(t *testing.T) {
 
 func tokenEqual(a, b Token) bool {
 	return a.Kind == b.Kind && a.Data == b.Data && slices.Equal(a.Attr, b.Attr)
+}
+
+// TestWPTOracle checks the oracle against the web-platform-tests
+// css/css-text/white-space fixtures vendored in testdata/wpt. Each case names
+// the WPT file and the element IDs or rows its inputs came from.
+func TestWPTOracle(t *testing.T) {
+	read := func(t *testing.T, name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "wpt", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	diff := func(t *testing.T, a, b string, equivalent bool) {
+		t.Helper()
+		got, err := Diff(a, b, Body, nil)
+		if err != nil {
+			t.Fatalf("Diff(%q, %q) error: %v", a, b, err)
+		}
+		if (got == "") != equivalent {
+			t.Errorf("Diff(%q, %q) = %q, want equivalent=%v", a, b, got, equivalent)
+		}
+	}
+	// spans returns the decoded <span> contents of <div id=...> elements by ID.
+	spans := func(t *testing.T, name string) map[string]string {
+		t.Helper()
+		out := make(map[string]string)
+		for _, m := range regexp.MustCompile(`(?s)<div id=['"]([^'"]+)['"] class="(?:test|ref)"><span>(.*?)</span></div>`).FindAllStringSubmatch(read(t, name), -1) {
+			out[m[1]] = html.UnescapeString(m[2])
+		}
+		return out
+	}
+	rows := func(t *testing.T, name string, re string) []string {
+		t.Helper()
+		var out []string
+		for _, m := range regexp.MustCompile(re).FindAllStringSubmatch(read(t, name), -1) {
+			out = append(out, m[1])
+		}
+		if len(out) == 0 {
+			t.Fatalf("no rows matching %s in %s", re, name)
+		}
+		return out
+	}
+	spaceRuns := regexp.MustCompile(` +`)
+
+	t.Run("white-space-collapse-000", func(t *testing.T) {
+		s := spans(t, "white-space-collapse-000.html")
+		for _, id := range []string{"", "W", "F", "H"} {
+			test, ref := s["test"+id], s["ref"+id]
+			if test == "" || ref == "" {
+				t.Fatalf("missing test%[1]s or ref%[1]s", id)
+			}
+			diff(t, "<span>"+test+"</span>", "<span>"+ref+"</span>", true)
+		}
+	})
+
+	t.Run("white-space-collapse-001", func(t *testing.T) {
+		s := spans(t, "white-space-collapse-001.html")
+		for _, id := range []string{"NB", "EN", "EM", "TS", "ZW", "NNB", "IS", "IS2"} {
+			test, ref := s["test"+id], s["ref"+id]
+			if test == "" || ref == "" {
+				t.Fatalf("missing test%[1]s or ref%[1]s", id)
+			}
+			// Non-ASCII spaces are content: the test collapses to its ref.
+			diff(t, "<span>"+test+"</span>", "<span>"+ref+"</span>", true)
+			// Replacing the literal with U+0020 changes the rendering.
+			plain := strings.NewReplacer(" ", " ", " ", " ", " ", " ", " ", " ", "​", " ", " ", " ", "　", " ").Replace(test)
+			if plain == test {
+				t.Fatalf("test%s has no non-ASCII space to replace", id)
+			}
+			diff(t, "<span>"+plain+"</span>", "<span>"+ref+"</span>", false)
+		}
+	})
+
+	t.Run("seg-break-transformation-000.tentative", func(t *testing.T) {
+		// CSS Text 4 converts the segment break to U+0020 for these inputs;
+		// the oracle keeps U+000A distinct from U+0020, so they are not equal.
+		s := spans(t, "seg-break-transformation-000.tentative.html")
+		for _, id := range []string{"test1", "test2", "test3", "test4", "test5", "test6"} {
+			if s[id] == "" {
+				t.Fatalf("missing %s", id)
+			}
+			diff(t, "<span>"+s[id]+"</span>", "<span>"+s["ref"]+"</span>", false)
+		}
+	})
+
+	for _, name := range []string{"line-edge-white-space-collapse-001.html", "line-edge-white-space-collapse-002.html"} {
+		t.Run(name, func(t *testing.T) {
+			for _, row := range rows(t, name, `(?m)^<div>(.*)</div>$`) {
+				diff(t, "<div>"+row+"</div>", "<div>"+spaceRuns.ReplaceAllString(row, "")+"</div>", true)
+			}
+		})
+	}
+
+	t.Run("trailing-space-before-br-001", func(t *testing.T) {
+		got := rows(t, "trailing-space-before-br-001.html", `(?m)^  <div>(.*)</div>$`)
+		if len(got) != 8 {
+			t.Fatalf("got %d rows, want 8", len(got))
+		}
+		// Rows 1-4 are text only. Rows 5-8 end in a <br>, which the oracle
+		// treats as content, so they are compared with row 5 instead.
+		for _, i := range []int{1, 2, 3} {
+			diff(t, "<div>"+got[i]+"</div>", "<div>"+got[0]+"</div>", true)
+		}
+		for _, i := range []int{5, 6, 7} {
+			diff(t, "<div>"+got[i]+"</div>", "<div>"+got[4]+"</div>", true)
+		}
+		diff(t, "<div>"+got[4]+"</div>", "<div>"+got[0]+"</div>", false)
+	})
+
+	t.Run("pre-line-with-space-and-newline", func(t *testing.T) {
+		src := read(t, "pre-line-with-space-and-newline.html")
+		preLine := `<i style="white-space:pre-line">`
+		matches := regexp.MustCompile(`(?m)^  <span>(.*)</span>$`).FindAllStringSubmatch(src, -1)
+		if len(matches) != 4 {
+			t.Fatalf("got %d rows, want 4", len(matches))
+		}
+		for _, m := range matches {
+			row := strings.ReplaceAll(m[1], "<i>", preLine)
+			spaceless := strings.NewReplacer(` &#10;`, `&#10;`, `<i> </i>`, `<i></i>`).Replace(m[1])
+			spaceless = strings.ReplaceAll(spaceless, "<i>", preLine)
+			noNewline := strings.ReplaceAll(row, "&#10;", "")
+			diff(t, "<span>"+row+"</span>", "<span>"+spaceless+"</span>", true)
+			diff(t, "<span>"+row+"</span>", "<span>"+noNewline+"</span>", false)
+		}
+	})
 }
