@@ -481,10 +481,11 @@ func TestCSSEntryPoints(t *testing.T) {
 	})
 }
 
-// TestUnparsedMarkup checks that a file holding markup the template
-// parser reads as text but the browser reads as a tag (a start tag with
-// a < in an attribute name, a bogus comment) is left as written: the two
-// trees disagree, so no run in it can be classified.
+// TestUnparsedMarkup checks markup the template parser reads as text but
+// the browser reads as a tag. When it changes how the rest of the file
+// tokenizes (a raw text start tag with a < in an attribute name, a bogus
+// comment) the file is left as written; any other unread tag leaves only
+// its parent, and the ancestors up to a clean block, as written.
 func TestUnparsedMarkup(t *testing.T) {
 	for _, tt := range []struct {
 		name, input, want string
@@ -492,7 +493,8 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "start tag with < in its attributes", input: "<teXtAreA </teXtAreA><A  >0", want: "<teXtAreA </teXtAreA><A  >0"},
 		{name: "bogus end tag", input: "<div>a</ b>  <p>  c</p></div>", want: "<div>a</ b>  <p>  c</p></div>"},
 		{name: "comment action first", input: "{{/* c */}}<div>a</ b>  <p>  c</p></div>", want: "{{/* c */}}<div>a</ b>  <p>  c</p></div>"},
-		{name: "unmatched end tag is left to the misnesting rules", input: "<div><p>a</p></b></div>", want: "<div>\n\t<p>a</p>\n\t</b>\n</div>"},
+		{name: "unmatched end tag makes its parent unsure", input: "<div><p>a</p></b></div><div><p>b</p></div>", want: "<div><p>a</p></b></div><div>\n\t<p>b</p>\n</div>"},
+		{name: "unread start tag keeps its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div>\n\t<p>b</p>\n</div>"},
 		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
 	} {

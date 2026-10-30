@@ -1017,17 +1017,16 @@ func Source(filename, src string, opts ...Option) (string, error) {
 }
 
 // hasUnparsedMarkup reports whether text in nodes, outside raw text and
-// RCDATA elements and comments, holds a < that the HTML tokenizer reads
-// as the start of a tag, comment or processing instruction (< then a
-// letter, !, ? or a / not followed by a letter). The template parser keeps markup it cannot
-// read as an element (<p <b>, </ b>, <?x?>) as text, so its tree and the
-// browser's disagree there, and the whitespace around it cannot be
-// classified.
+// RCDATA elements and comments, holds markup the template parser read as
+// text that changes how a browser tokenizes the rest of the file (see
+// unreadMarkupIn). The two trees then disagree from there on, and the
+// whitespace after it cannot be classified. Other unread markup is
+// handled where it stands (unsureMisnested).
 func hasUnparsedMarkup(nodes []template.Node) bool {
 	for _, n := range nodes {
 		switch n := n.(type) {
 		case *template.TextNode:
-			if startsMarkup(n.Text) {
+			if unreadMarkupIn(n.Text) == unreadRetokenizes {
 				return true
 			}
 		case *template.HTMLDocumentFragmentNode:
@@ -1056,20 +1055,58 @@ func hasUnparsedMarkup(nodes []template.Node) bool {
 	return false
 }
 
-func startsMarkup(text []byte) bool {
+// unreadMarkup is what a < in text the template parser did not read as
+// markup means to a browser.
+type unreadMarkup uint8
+
+const (
+	unreadNone unreadMarkup = iota
+	// unreadEndTag is an end tag the parser could not match (</b>).
+	unreadEndTag
+	// unreadTag is a start tag the parser could not read, such as
+	// <li{{if .Done}} class="done"{{end}}>: an element the template tree
+	// does not have.
+	unreadTag
+	// unreadRetokenizes changes how the rest of the file tokenizes: a
+	// raw text or RCDATA start tag (<textarea </textarea>), a <! or <?
+	// (bogus comment, CDATA, doctype), or </ then a non-letter.
+	unreadRetokenizes
+)
+
+// unreadMarkupIn reports the strongest unread markup in text.
+func unreadMarkupIn(text []byte) unreadMarkup {
+	found := unreadNone
 	for i := 0; i+1 < len(text); i++ {
 		if text[i] != '<' {
 			continue
 		}
 		switch c := text[i+1]; {
-		case isASCIILetter(c), c == '!', c == '?':
-			return true
+		case c == '!', c == '?':
+			return unreadRetokenizes
 		case c == '/' && (i+2 >= len(text) || !isASCIILetter(text[i+2])):
-			// </ then a non-letter is a bogus comment or dropped; </
-			// then a letter is an end tag the parser could not match,
-			// which the misnesting rules handle.
-			return true
+			return unreadRetokenizes
+		case c == '/':
+			found = max(found, unreadEndTag)
+		case isASCIILetter(c):
+			end := i + 1
+			for end < len(text) && !isTagNameEnd(text[end]) {
+				end++
+			}
+			if rawTextTags[strings.ToLower(string(text[i+1:end]))] {
+				return unreadRetokenizes
+			}
+			found = unreadTag
 		}
+	}
+	return found
+}
+
+// isTagNameEnd reports whether c ends a tag name (HTML §13.2.5.8), or
+// starts a template action that the parser split the tag at.
+func isTagNameEnd(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\r', '\f', '/', '>', '{':
+		return true
 	}
 	return false
 }

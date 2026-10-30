@@ -889,6 +889,22 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	// drops the table parts that follow, so the whole table is opaque.
 	var asWritten []*template.HTMLElementNode
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		if text, ok := n.(*template.TextNode); ok {
+			// A tag the parser read as text is an element the
+			// template tree does not have: its parent is misnested,
+			// and, for a start tag, written as it is.
+			kind := unreadMarkupIn(text.Text)
+			if kind == unreadNone || kind == unreadRetokenizes || inRawText(path) {
+				return
+			}
+			if parent := nearestElement(path); parent != nil {
+				flagged[parent.Start()] = true
+				if kind == unreadTag {
+					asWritten = append(asWritten, parent)
+				}
+			}
+			return
+		}
 		el, ok := n.(*template.HTMLElementNode)
 		if !ok {
 			return
@@ -947,6 +963,32 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+}
+
+// nearestElement is the innermost element on path, or nil.
+func nearestElement(path []template.Node) *template.HTMLElementNode {
+	for i := len(path) - 1; i >= 0; i-- {
+		if el, ok := path[i].(*template.HTMLElementNode); ok {
+			return el
+		}
+	}
+	return nil
+}
+
+// inRawText reports whether path is inside a raw text or RCDATA element,
+// a comment or an attribute, where a < is not markup.
+func inRawText(path []template.Node) bool {
+	for _, n := range path {
+		switch n := n.(type) {
+		case *template.HTMLElementNode:
+			if rawTextTags[strings.ToLower(n.TagName)] {
+				return true
+			}
+		case *template.HTMLCommentNode, *template.HTMLAttributeNode:
+			return true
+		}
+	}
+	return false
 }
 
 // formattingMarkers are the elements that push a marker onto the list of

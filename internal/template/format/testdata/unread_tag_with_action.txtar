@@ -1,0 +1,16 @@
+-- input.gohtml --
+<section><ul>
+<li{{if .Done}} class="done"{{end}}>x</li>
+</ul></section>
+<div><p>y</p></div>
+-- format.gohtml --
+<section><ul>
+<li{{if .Done}} class="done"{{end}}>x</li>
+</ul></section>
+<div>
+	<p>y</p>
+</div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Done": true}

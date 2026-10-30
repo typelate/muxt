@@ -1,0 +1,10 @@
+-- input.gohtml --
+<teXtAreA </teXtAreA><A  >0
+<div><p>y</p></div>
+-- format.gohtml --
+<teXtAreA </teXtAreA><A  >0
+<div><p>y</p></div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Done": true}
