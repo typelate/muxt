@@ -38,8 +38,16 @@ dialog:not([open]) {
   display: none;
 }
 
+dialog {
+  position: absolute;
+}
+
 [popover]:not(dialog[open]) {
   display: none;
+}
+
+[popover] {
+  position: fixed;
 }
 
 slot {
@@ -122,6 +130,14 @@ td, th {
   display: table-cell;
 }
 
+table[align=left i] {
+  float: left;
+}
+
+table[align=right i] {
+  float: right;
+}
+
 td[nowrap], th[nowrap] {
   white-space: nowrap;
 }
@@ -140,6 +156,14 @@ textarea {
 
 fieldset {
   display: block;
+}
+
+embed[align=left i], iframe[align=left i], img[align=left i], input[type=image i][align=left i], object[align=left i] {
+  float: left;
+}
+
+embed[align=right i], iframe[align=right i], img[align=right i], input[type=image i][align=right i], object[align=right i] {
+  float: right;
 }
 
 details, summary {

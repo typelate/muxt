@@ -109,10 +109,10 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // @container or @layer, or in a template branch) makes a property unknown
 // when it could beat the rule that certainly applies with a different
 // value. An element that floats or is absolutely positioned (float other
-// than none, position absolute or fixed) has unknown display, since it is
-// out of the inline flow. An element whose class or style attribute is
-// dynamic is unknown, and so is one with a class or id when no author CSS
-// is visible at all.
+// than none, position absolute or fixed) and is not display: none has
+// unknown display, since it is out of the inline flow. An element whose
+// class or style attribute is dynamic is unknown, and so is one with a
+// class or id when no author CSS is visible at all.
 // White-space inherits; preserve and unknown white-space inherit to every
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
@@ -450,8 +450,13 @@ func (c *cascade) candidates(el *template.HTMLElementNode, attribute []cssDeclar
 	}
 	// A float or an absolutely positioned box is out of flow: it is
 	// blockified and taken out of the inline formatting context, which
-	// none of the display classes describes.
+	// none of the display classes describes. An element that is certainly
+	// display: none has no box to take out of flow.
+	hidden := !slices.ContainsFunc(displays, func(d Display) bool { return d != DisplayNone })
 	for _, property := range []int{propertyFloat, propertyPosition} {
+		if hidden {
+			break
+		}
 		for _, v := range cascadeValues(applied[property], flowIn) {
 			if v != flowIn {
 				displays = append(displays, DisplayUnknown)

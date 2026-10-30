@@ -3,8 +3,9 @@ package analysis
 import _ "embed"
 
 // uaCSS is the HTML Standard's user-agent style sheet, reduced to the
-// display and white-space declarations (see ua.css for its provenance). It
-// is the default origin of the whitespace classifier's cascade.
+// display, white-space, float and position declarations (see ua.css for
+// its provenance). It is the default origin of the whitespace
+// classifier's cascade.
 //
 // ua.css is generated from the Rendering section of the HTML Standard.
 // Generation needs the network, so there is no go:generate line; to

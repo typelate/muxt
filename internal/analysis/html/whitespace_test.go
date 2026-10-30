@@ -101,6 +101,12 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<div class="f"></div>`, sheet: `.f{position:absolute}div{position:static!important}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<style>.f{float:left}</style><div class="f"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 		{source: `<div class="f"></div>`, sheet: `@media print{.f{float:left}}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		// The UA sheet's floats and positioned boxes (Task 5 carry-forward).
+		{source: `<dialog open></dialog>`, selector: `dialog`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<dialog></dialog>`, selector: `dialog`, want: Whitespace{DisplayNone, WhiteSpaceCollapse}},
+		{source: `<div hidden style="float:left"></div>`, selector: `div`, want: Whitespace{DisplayNone, WhiteSpaceCollapse}},
+		{source: `<table align=left></table>`, selector: `table`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<table align=center></table>`, selector: `table`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<div style="float:{{.F}}"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
 	} {
 		t.Run(test.source, func(t *testing.T) {

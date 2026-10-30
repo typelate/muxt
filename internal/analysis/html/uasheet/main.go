@@ -1,6 +1,6 @@
 // Command uasheet extracts the user-agent style sheet from the Rendering
 // section of the HTML Standard and writes the parts the whitespace
-// classifier needs (display and white-space declarations).
+// classifier needs (display, white-space, float and position declarations).
 //
 // Usage:
 //
@@ -33,8 +33,8 @@ const (
 var fetched string
 
 // keptProperties are the declarations that decide how whitespace in an
-// element's content is rendered.
-var keptProperties = []string{"display", "display-outside", "white-space", "white-space-collapse", "text-wrap-mode"}
+// element's content is rendered, and whether it is in the inline flow.
+var keptProperties = []string{"display", "display-outside", "white-space", "white-space-collapse", "text-wrap-mode", "float", "position"}
 
 const headingList = "h1, h2, h3, h4, h5, h6"
 
@@ -274,12 +274,13 @@ func selectorList(prelude csstree.Node) ([]string, error) {
 }
 
 // staticSelector rewrites s for a document that is not running: a popover
-// is never open, so :not(:popover-open) always matches and is removed.
-// Selectors that can never match an element (a positive :popover-open) or
-// that style a pseudo-element rather than the element itself are dropped.
+// is never open and a dialog is never modal (both need script), so
+// :not(:popover-open) always matches and is removed. Selectors that can
+// never match an element (a positive :popover-open or :modal) or that
+// style a pseudo-element rather than the element itself are dropped.
 func staticSelector(s string) (string, bool) {
 	s = strings.ReplaceAll(s, ":not(:popover-open)", "")
-	if strings.Contains(s, ":popover-open") || strings.Contains(s, "::") {
+	if strings.Contains(s, ":popover-open") || strings.Contains(s, ":modal") || strings.Contains(s, "::") {
 		return "", false
 	}
 	return s, true
