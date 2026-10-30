@@ -28,6 +28,7 @@ func TestComplexity(t *testing.T) {
 		{text: `{{if .A}}{{else}}{{with .B}}{{end}}{{end}}`, want: 3},
 		{text: `<ul class="{{if .A}}a{{end}}">{{range .B}}<li>{{if .C}}c{{end}}</li>{{end}}</ul>`, want: 4},
 		{text: `<div>{{if .A}}a{{end}}`, want: 2},
+		{text: `<!-- {{if .A}}a{{end}} -->`, want: 2},
 	} {
 		t.Run(tt.text, func(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)

@@ -87,6 +87,11 @@ func (t *Tree) htmlParseNode() (Node, error) {
 	switch token := t.next(); token.Type {
 	case lex.TokenTypeHTMLText, lex.TokenTypeHTMLAttrValue:
 		return t.newText(token.Pos, token.End, token.Value), nil
+	case lex.TokenTypeHTMLComment:
+		// Comment content inside a template control structure body
+		// (e.g., <!-- {{if .A}}a{{end}} -->). A comment body has no HTML
+		// structure: html/template reads it as text with actions.
+		return t.newText(token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeHTMLTagOpen:
 		return t.htmlParseStartTag(token)
 	case lex.TokenTypeHTMLEndTagOpen:

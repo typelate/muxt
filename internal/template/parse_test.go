@@ -1590,6 +1590,8 @@ func TestReferenceRawTextElements(t *testing.T) {
 func TestReferenceHTMLCommentWithAction(t *testing.T) {
 	tests := []htmlParseTest{
 		{name: "comment with action", input: "<!-- {{.Note}} -->", result: "<!-- {{.Note}} -->"},
+		{name: "comment with if", input: "<!-- {{if .A}}a <b>{{.B}}</b>{{else}}c{{end}} -->", result: "<!-- {{if .A}}a <b>{{.B}}</b>{{else}}c{{end}} -->"},
+		{name: "comment with range and with", input: "<!-- {{range .A}}<i>{{with .B}}{{.}}{{end}}</i>{{end}} -->", result: "<!-- {{range .A}}<i>{{with .B}}{{.}}{{end}}</i>{{end}} -->"},
 	}
 
 	for _, tc := range tests {
