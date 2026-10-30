@@ -245,15 +245,80 @@ func (e *Error) locationPrefix() string {
 		return ""
 	}
 	pos := e.Tree.Position(e.Node)
-	loc := cmp.Or(e.Tree.Filepath, pos.ParseName)
 	line, column := pos.Line, pos.Column+chainColumnOffset(e.Node)
 	if name, ok := templateNameStart(e.Node); ok {
 		at := e.Tree.PositionAt(name)
 		line, column = at.Line, at.Column
 	}
-	return fmt.Sprintf("%s:%d:%d: executing %q at <%s>: ",
-		loc, line, column, e.Tree.Name, pos.Source)
+	// As go/token.Position's String does, an empty file name, which a set
+	// parsed under the empty name has, is left out.
+	location := fmt.Sprintf("%d:%d", line, column)
+	if file := cmp.Or(e.Tree.Filepath, pos.ParseName); file != "" {
+		location = file + ":" + location
+	}
+	return fmt.Sprintf("%s: executing %q at <%s>: ", location, e.Tree.Name, errorContext(pos.Source))
 }
+
+// errorContext renders a node's source as text/template's String rendered
+// the node, which is what upstream printed between the angle brackets:
+// the trim markers of an action's delimiters dropped, and each run of
+// space between the words of the action made a single space, with none
+// just inside the delimiters. Quoted strings are kept as written. The
+// copied parser's String quotes the source instead, so this stands in
+// for the reconstruction here only.
+func errorContext(source string) string {
+	inner, delimited := strings.CutPrefix(source, "{{")
+	if delimited {
+		var ok bool
+		if inner, ok = strings.CutSuffix(inner, "}}"); !ok {
+			return collapseSpace(source)
+		}
+		if rest, ok := strings.CutPrefix(inner, "-"); ok && rest != "" && isSpace(rest[0]) {
+			inner = rest
+		}
+		if rest, ok := strings.CutSuffix(inner, "-"); ok && rest != "" && isSpace(rest[len(rest)-1]) {
+			inner = rest
+		}
+		return "{{" + collapseSpace(inner) + "}}"
+	}
+	return collapseSpace(source)
+}
+
+// collapseSpace makes each run of space outside a quoted string a single
+// space and trims space at either end.
+func collapseSpace(text string) string {
+	var b strings.Builder
+	var quote byte
+	pendingSpace := false
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case quote != 0:
+			b.WriteByte(c)
+			if c == '\\' && quote != '`' && i+1 < len(text) {
+				i++
+				b.WriteByte(text[i])
+			} else if c == quote {
+				quote = 0
+			}
+			continue
+		case isSpace(c):
+			pendingSpace = b.Len() > 0
+			continue
+		}
+		if pendingSpace {
+			b.WriteByte(' ')
+			pendingSpace = false
+		}
+		if c == '"' || c == '`' || c == '\'' {
+			quote = c
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 
 // templateNameStart is where text/template's parser places a {{template}}
 // call, or the call a {{block}} stands for: at the quoted name, not at the
