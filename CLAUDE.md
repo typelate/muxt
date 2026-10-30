@@ -345,8 +345,9 @@ Lessons from the project's history. Read them before a change.
   their own PR.
 - `internal/asteval` stays its own small package; folding it into its
   consumers was tried and rejected.
-- Template type checking lives in `github.com/typelate/check`, a separate
-  module; a change there needs a release before muxt can use it.
+- Template parsing and type checking live in `internal/template` and
+  `internal/check`, derived from typelate/check and htt; muxt has no
+  dependency on `github.com/typelate/check`.
 - Docs: the fewest words that state the fact, every claim verified against a
   script or `--help`, links instead of repetition, and no `go tool` directive
   or versioned install lines for third-party tools. See

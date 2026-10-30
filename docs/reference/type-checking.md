@@ -1,6 +1,6 @@
 # Type Checking
 
-[`muxt check`](commands/check.md) uses [github.com/typelate/check](https://pkg.go.dev/github.com/typelate/check).
+[`muxt check`](commands/check.md) uses muxt's own checker (`internal/check`, derived from typelate/check and htt).
 
 ## Preconditions
 

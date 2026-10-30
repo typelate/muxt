@@ -24,4 +24,15 @@ A handler name whose first character has no uppercase form (`一覧`) fails with
 
 [err_route_paths_method_collision.txt](../../cmd/muxt/testdata/err_route_paths_method_collision.txt)
 
+## HTML comments cannot straddle control flow
+
+An HTML comment that starts in one branch of a control-flow action and ends outside it fails to parse with `unexpected … in HTML input`, although the standard library accepted it:
+
+```gotmpl
+{{if .A}}<!-- a {{end}} -->
+<!-- {{if .A}} -->x{{end}}
+```
+
+Keep the whole comment inside one branch.
+
 [Open an issue](https://github.com/typelate/muxt/issues/new) with a minimal reproduction, or send a PR that adds a `cmd/muxt/testdata/err_*.txt` script.
