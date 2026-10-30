@@ -2,8 +2,9 @@ package generate
 
 import (
 	"go/types"
-	"html/template"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/source"
@@ -42,7 +43,7 @@ func testSource(t *testing.T, goSource, receiverType, templates string) (source.
 		Types: pkg,
 		Variables: []source.Variable{{
 			Name: "templates",
-			Set:  template.Must(template.New("templates").Parse(templates)),
+			Set:  html.Must(html.New("templates").Parse(templates)),
 		}},
 	}
 	if receiverType == "" {

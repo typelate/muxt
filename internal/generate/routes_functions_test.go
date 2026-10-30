@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"go/ast"
 	"go/types"
-	"html/template"
 	"log"
 	"maps"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/html"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,9 +46,9 @@ func (T) Raw(ResponseWriter) string { return "" }
 func routesTestDefinitions(t *testing.T, files map[string]string) (source.Package, []muxt.Definition) {
 	t.Helper()
 	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": routesTestSource})
-	set := template.New("templates")
+	set := html.New("templates")
 	for _, name := range slices.Sorted(maps.Keys(files)) {
-		template.Must(set.New(name).Parse(files[name]))
+		html.Must(set.New(name).Parse(files[name]))
 	}
 	src := source.Package{
 		Fset:      fake.FileSet,
