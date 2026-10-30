@@ -92,6 +92,11 @@ type formatter struct {
 	opaque  map[template.Node]bool // subtrees emitted from source
 	gapRuns map[runKey]bool        // runs of text items emitted as gaps
 
+	// continuation is the extra indentation of a line break kept in
+	// inline layout: one inside an element or action, none at the root
+	// or in block layout, where the items already sit one level deeper.
+	continuation int
+
 	// Output offsets of the trim markers the printer wrote: where "- "
 	// follows a left delimiter and where " -" precedes a right one.
 	leftTrims, rightTrims []int
@@ -165,7 +170,9 @@ func (f *formatter) writeActionWithTrim(content string, trimLeft, trimRight bool
 // run is written as collapse-only: empty stays empty, a trimmed run
 // becomes one space beside its marker, spaces and tabs become one space,
 // and a run with a line break becomes one newline plus the current
-// indentation. The caller handles the runs at a list boundary.
+// indentation and the continuation indent. The run stays in the node it
+// was written in: no whitespace moves across a tag or an action. The
+// caller handles the runs at a list boundary.
 func (f *formatter) writeRun(g gap, layout layoutKind) {
 	run := g.bytes()
 	switch {
@@ -191,7 +198,9 @@ func (f *formatter) writeRun(g gap, layout layoutKind) {
 		f.writeString(" ")
 	default:
 		f.newline()
+		f.indent += f.continuation
 		f.writeIndent()
+		f.indent -= f.continuation
 	}
 }
 
@@ -225,12 +234,15 @@ func (f *formatter) blockLayoutAllowed(list template.Node, items []template.Node
 }
 
 // blockLayoutPreferred reports whether block layout reads better for the
-// items of list: an item is block-level, a gap held a line break in the
-// source, or the one-line form, width columns at the current
-// indentation, is wider than the maximum line width.
+// items of list: an item is block-level, a gap the browser drops held a
+// line break in the source, or the one-line form, width columns at the
+// current indentation, is wider than the maximum line width. A line
+// break in a collapse-only gap renders as a space, so it keeps its line
+// in inline layout instead of making the list a block.
 func (f *formatter) blockLayoutPreferred(list template.Node, items []template.Node, width int) bool {
 	for i := 0; i <= len(items); i++ {
-		if lineBreaks(f.cls.gaps[gapKey{list, i}].bytes()) > 0 {
+		g := f.cls.gaps[gapKey{list, i}]
+		if g.class != runCollapseOnly && lineBreaks(g.bytes()) > 0 {
 			return true
 		}
 	}
@@ -418,6 +430,11 @@ type listOptions struct {
 func (f *formatter) children(key template.Node, nodes []template.Node, o listOptions) {
 	items, _ := splitChildren(nodes)
 	inner := f.indent
+	defer func(c int) { f.continuation = c }(f.continuation)
+	f.continuation = 0
+	if o.layout == inlineLayout && !o.root {
+		f.continuation = 1
+	}
 	for i := 0; i <= len(items); i++ {
 		g := f.cls.gaps[gapKey{key, i}]
 		switch {

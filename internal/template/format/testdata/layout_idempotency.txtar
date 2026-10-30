@@ -25,10 +25,8 @@
 	{{if .Show}}{{if .Show}}
 		{{/* c */}}
 		{{/* c */}}
-	{{else}}
-		<img src=x>
-		{{.X -}}
-	{{end}} <br>{{else}}
+	{{else}}<img src=x>
+		{{.X}}{{end}} <br>{{else}}
 		<h1>x</h1>
 	{{end}}
 </div>

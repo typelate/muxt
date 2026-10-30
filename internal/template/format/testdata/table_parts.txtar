@@ -14,7 +14,7 @@
 	{{end}}
 </table>
 <div>x<table>
-<span> a</span></table></div>
+	<span> a</span></table></div>
 <div>a<table>{{.X}}</table>b</div>
 -- data/empty.json --
 {}
