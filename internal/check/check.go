@@ -250,6 +250,10 @@ func (e *Error) locationPrefix() string {
 		at := e.Tree.PositionAt(name)
 		line, column = at.Line, at.Column
 	}
+	if field, ok := chainFieldStart(e.Node); ok {
+		at := e.Tree.PositionAt(field)
+		line, column = at.Line, at.Column
+	}
 	// As go/token.Position's String does, an empty file name, which a set
 	// parsed under the empty name has, is left out.
 	location := fmt.Sprintf("%d:%d", line, column)
@@ -315,13 +319,15 @@ func collapseSpace(text string) string {
 			}
 			continue
 		case isSpace(c):
-			pendingSpace = b.Len() > 0
+			// As text/template rendered a parenthesized pipeline, no
+			// space is kept just inside its parentheses.
+			pendingSpace = b.Len() > 0 && !strings.HasSuffix(b.String(), "(")
 			continue
 		}
-		if pendingSpace {
+		if pendingSpace && c != ')' {
 			b.WriteByte(' ')
-			pendingSpace = false
 		}
+		pendingSpace = false
 		if c == '"' || c == '`' || c == '\'' {
 			quote = c
 		}
@@ -347,6 +353,23 @@ func templateNameStart(node template.Node) (lex.Pos, bool) {
 		return 0, false
 	}
 	return n.Start() + lex.Pos(i), true
+}
+
+// chainFieldStart is where text/template's parser places a chain of
+// fields on a term that is neither a field nor a variable, such as a
+// parenthesized pipeline: at the first chained field, (.X).Y at .Y, not
+// at the term where the node starts. The fields are written without space
+// between them and end the node.
+func chainFieldStart(node template.Node) (lex.Pos, bool) {
+	n, ok := node.(*template.ChainNode)
+	if !ok {
+		return 0, false
+	}
+	fields := 0
+	for _, field := range n.Field {
+		fields += len(".") + len(field) // Field holds each name without its '.'
+	}
+	return n.End() - lex.Pos(fields), true
 }
 
 // chainColumnOffset is how far into node text/template's parser places a

@@ -1065,6 +1065,9 @@ func (t *Tree) command() (*CommandNode, error) {
 // a term possibly followed by field accesses.
 // A nil return means the next item is not an operand.
 func (t *Tree) operand() (Node, error) {
+	// A chain starts where its term does, which for a parenthesized
+	// pipeline is at the '(' rather than at the pipeline inside it.
+	start := t.peekNonSpace().Pos
 	node, err := t.term()
 	if err != nil {
 		return nil, err
@@ -1073,7 +1076,7 @@ func (t *Tree) operand() (Node, error) {
 		return nil, nil
 	}
 	if t.peek().Type == lex.TokenTypeField {
-		chain := t.newChain(node.Start(), node)
+		chain := t.newChain(start, node)
 		for t.peek().Type == lex.TokenTypeField {
 			fieldToken := t.next()
 			chain.Add(fieldToken.Value)

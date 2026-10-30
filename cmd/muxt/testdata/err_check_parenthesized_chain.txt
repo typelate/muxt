@@ -1,0 +1,42 @@
+# An error on a field chained to a parenthesized pipeline is located at the
+# field and reported with the parenthesized pipeline as context, as
+# text/template renders the chain.
+
+muxt generate --use-receiver-type=T
+! muxt check
+stderr -count=1 'template.gohtml:2:15: executing "GET / Index\(\)" at <\(\.Result\)\.Missing>: field or method Missing not found on Data$'
+stderr -count=1 'template.gohtml:3:16: executing "GET / Index\(\)" at <\(\.Result\.Tag\)\.Len>: field or method Len not found on string$'
+stderr -count=1 'template.gohtml:4:15: executing "GET / Index\(\)" at <\(\.Result\)\.Missing\.X>: field or method Missing not found on Data$'
+stderr -count=1 'template.gohtml:5:24: executing "GET / Index\(\)" at <\(\$x\)\.Gone>: field or method Gone not found on Data$'
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<p>{{(.Result).Missing}}</p>
+{{(.Result.Tag).Len}}
+{{ ( .Result ).Missing.X }}
+{{$x := .Result}}{{($x).Gone}}
+{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*"))
+
+type T struct{}
+
+type Data struct {
+	Tag string
+}
+
+func (T) Index() Data { return Data{} }
