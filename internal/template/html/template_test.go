@@ -403,3 +403,20 @@ func TestTemplatesWithoutATree(t *testing.T) {
 		t.Error(`ExecuteTemplate("declared") = nil, want an incomplete or empty template error`)
 	}
 }
+
+// TestParseRecordsTheNameAsGiven states html/template's ParseName for a
+// template parsed directly: the name exactly as given, even when it is
+// empty or holds a slash, and no file path.
+func TestParseRecordsTheNameAsGiven(t *testing.T) {
+	for _, name := range []string{"", "page", "GET /x F()"} {
+		ts := Must(New(name).Parse(`{{define "inner"}}x{{end}}{{block "blk" .}}y{{end}}`))
+		for _, tmpl := range ts.Templates() {
+			if tmpl.Tree == nil {
+				continue
+			}
+			if tmpl.Tree.ParseName != name || tmpl.Tree.Filepath != "" {
+				t.Errorf("New(%q).Parse: %q has ParseName %q and Filepath %q, want %q and none", name, tmpl.Name(), tmpl.Tree.ParseName, tmpl.Tree.Filepath, name)
+			}
+		}
+	}
+}

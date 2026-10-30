@@ -112,6 +112,9 @@ func (t *Template[S]) Parse(text string) (*Template[S], error) {
 	if err != nil {
 		return nil, err
 	}
+	// text/template records the name as given, with no file behind it;
+	// ParseTree takes it for a file path.
+	tree.ParseName, tree.Filepath = t.name, ""
 	t.tree = tree
 	AnnotateHTMLContexts(tree.Root)
 

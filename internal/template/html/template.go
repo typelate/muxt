@@ -194,6 +194,13 @@ func (t *Template) Parse(text string) (*Template, error) {
 	if err != nil {
 		return nil, err
 	}
+	// html/template records the name as given, with no file behind it;
+	// ParseTree takes it for a file path. Blocks registered while parsing
+	// copied the root's names, and Extract copies them below.
+	tree.ParseName, tree.Filepath = t.name, ""
+	for _, tr := range treeSet {
+		tr.ParseName, tr.Filepath = t.name, ""
+	}
 	tree.HTMLMode = true
 	template.AnnotateHTMLContexts(tree.Root)
 	// Collect templates from both Extract (DefineNodes in HTML mode) and

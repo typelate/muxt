@@ -203,3 +203,22 @@ func TestCheckForDuplicatePatterns(t *testing.T) {
 		}
 	})
 }
+
+// TestDefinitionsLocateAHandlerErrorUnderTheTemplateName states that a
+// template parsed directly under a name holding a slash is located by that
+// whole name, which is what html/template records as its ParseName.
+func TestDefinitionsLocateAHandlerErrorUnderTheTemplateName(t *testing.T) {
+	ts := html.Must(html.New("GET /x F(").Parse(`x`))
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression GET /x F(:1:0: ")
+}
+
+// TestDefinitionsOfASetParsedUnderTheEmptyName states that a set parsed
+// under the empty name reports no source file for its definitions.
+func TestDefinitionsOfASetParsedUnderTheEmptyName(t *testing.T) {
+	ts := html.Must(html.New("").Parse(`{{define "GET /a A()"}}x{{end}}`))
+	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Empty(t, defs[0].SourceFile(), "SourceFile()")
+}

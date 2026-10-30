@@ -135,3 +135,24 @@ func TestAddParseTreeAnnotatesContext(t *testing.T) {
 	require.True(t, ok, `FindTree("link") should return true after AddParseTree`)
 	require.NotNil(t, tree, `FindTree("link") tree should not be nil`)
 }
+
+// TestTemplateParseRecordsTheNameAsGiven states that a set parsed from a
+// string records its name, as given, as each tree's ParseName and no file
+// path, as text/template does.
+func TestTemplateParseRecordsTheNameAsGiven(t *testing.T) {
+	for _, name := range []string{"", "page", "GET /x F()"} {
+		ts, err := template.New[any](name).Parse(`{{define "inner"}}x{{end}}{{block "blk" .}}y{{end}}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range ts.Names() {
+			tree, ok := ts.FindTree(n)
+			if !ok || tree == nil {
+				continue
+			}
+			if tree.ParseName != name || tree.Filepath != "" {
+				t.Errorf("New(%q).Parse: %q has ParseName %q and Filepath %q, want %q and none", name, n, tree.ParseName, tree.Filepath, name)
+			}
+		}
+	}
+}

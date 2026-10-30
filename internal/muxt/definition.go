@@ -6,7 +6,6 @@ import (
 	"go/token"
 	"go/types"
 	"net/http"
-	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -88,12 +87,11 @@ func (def Definition) bySourceThenName(other Definition) int {
 }
 
 // templateSourceFile returns the file t was parsed from, or "". ParseFS and
-// ParseFiles record the file name as the tree's ParseName. A template
-// defined directly with Parse records path.Base of the name it was parsed
-// under there instead: its own name, which then does not identify a file,
-// or "." for a set parsed under the empty name, which is never a file.
+// ParseFiles record the file name as the tree's ParseName; a template defined
+// directly with Parse carries its own name there instead, so a ParseName
+// matching the template name does not identify a file.
 func templateSourceFile(t *html.Template) string {
-	if t.Tree == nil || t.Tree.ParseName == "." || t.Tree.ParseName == path.Base(t.Name()) {
+	if t.Tree == nil || t.Tree.ParseName == t.Name() {
 		return ""
 	}
 	return t.Tree.ParseName
