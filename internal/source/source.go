@@ -14,10 +14,11 @@
 package source
 
 import (
-	"github.com/typelate/muxt/internal/template"
-	html "github.com/typelate/muxt/internal/template/html"
 	"go/token"
 	"go/types"
+
+	"github.com/typelate/muxt/internal/template"
+	html "github.com/typelate/muxt/internal/template/html"
 )
 
 // Package is a loaded Go package.

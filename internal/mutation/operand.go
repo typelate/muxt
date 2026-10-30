@@ -67,12 +67,13 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *template
 	}
 }
 
-// appendOperand records a leaf, but only where the node's own rendering
+// appendOperand records a leaf, but only where the node's own text
 // matches the source.
 //
-// A node's String is a reconstruction, not a quotation, so requiring the
-// two to agree is what keeps a mutation from splicing over the wrong
-// bytes.
+// The copied parser's String quotes the source the node was parsed from,
+// so for a tree parsed from text the two agree; requiring it is what keeps
+// a mutation from splicing over the wrong bytes if a tree and the text it
+// is paired with ever disagree.
 func appendOperand(out *[]operand, text string, node template.Node, dataType types.Type) {
 	written := node.String()
 	start, ok := operandStart(text, int(node.Start()), written)
@@ -82,19 +83,15 @@ func appendOperand(out *[]operand, text string, node template.Node, dataType typ
 	*out = append(*out, operand{start: start, end: start + len(written), text: written, dataType: dataType})
 }
 
-// operandStart locates where a node is written in text.
+// operandStart locates where a node is written in text: the nearest offset
+// at or before pos where the text equals written, searching back no
+// further than written's own length.
 //
-// A field path of more than one segment does not begin where the parser
-// says it does: the lexer emits one item per segment, and the node keeps
-// the position of the segment that extended it, so .A.B.C is reported at
-// .B and .Path.Link at .Link. Taking that position literally makes the
-// rendering disagree with the text, and the operand is dropped -- which
-// silently cost every dotted path its mutants.
-//
-// The rendering is exact, so the start is the nearest offset at or before
-// the reported one where the text equals it. The search is bounded by the
-// rendering's own length, which is longer than any prefix the position
-// can have skipped.
+// The copied parser starts a node where it is written, so the match is at
+// pos itself. text/template's parser did not for a field path of more than
+// one segment: it kept the position of the segment that extended the
+// path, reporting .A.B.C at .B, and the backward search is what found the
+// start then. It stays as a guard rather than trusting the position.
 func operandStart(text string, pos int, written string) (int, bool) {
 	lowest := max(pos-len(written), 0)
 	window := text[lowest:min(pos+len(written), len(text))]
