@@ -26,12 +26,33 @@ type pendingCall struct {
 }
 
 type resolvedTemplate struct {
-	templates *template.Template[*types.Signature]
-	functions asteval.TemplateFunctions
-	metadata  *asteval.TemplateMetadata
+	templates   *template.Template[*types.Signature]
+	functions   asteval.TemplateFunctions
+	metadata    *asteval.TemplateMetadata
+	definitions definitionSet
 }
 
-type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *template.Tree, tp types.Type)
+// definitionsFor locates every template definition in the sources that
+// were parsed while resolving a template variable, in parse order.
+func definitionsFor(fset *token.FileSet, sources []asteval.ParsedText) []Definition {
+	var ordered []Definition
+	for _, src := range sources {
+		if src.Literal != nil {
+			ordered = append(ordered, definitionsInLiteral(fset, src.Literal, src.RootName, src.LeftDelim, src.RightDelim)...)
+			continue
+		}
+		ordered = append(ordered, definitionsIn(src.RootName, src.Filename, src.Text, src.LeftDelim, src.RightDelim)...)
+	}
+	return ordered
+}
+
+// ExecuteTemplateNodeInspectorFunc is called for each ExecuteTemplate
+// call that resolves to a known template.
+//
+// The tree is the invoked template's own tree, the same one def.Tree
+// holds. The type is the data argument's type, and def locates where the
+// template was defined.
+type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *template.Tree, tp types.Type, def Definition)
 
 // Package discovers all .ExecuteTemplate calls in the given package,
 // resolves receiver variables to their template construction chains,
@@ -115,7 +136,7 @@ func AnalyzePackage(pkg *packages.Package, onEntry func(Entry) NodeInspectorFunc
 		}
 		global := NewGlobal(pkg.Types, pkg.Fset, rt.templates, mergedFunctions)
 		global.InspectWarning = func(w Warning) { warnings = append(warnings, w) }
-		global.InspectTemplateNode = func(n *template.TemplateNode, t *template.Tree, dot types.Type) {
+		global.InspectTemplateNode = func(n *template.TemplateNode, t *template.Tree, dot types.Type, _ Definition) {
 			invocations = append(invocations, tmplInvocation{name: n.Name, dot: dot, tree: t, node: n})
 		}
 		if onEntry != nil {
@@ -479,6 +500,7 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 			rt.templates = ts
 			rt.metadata.EmbedFilePaths = append(rt.metadata.EmbedFilePaths, meta.EmbedFilePaths...)
 			rt.metadata.ParseCalls = append(rt.metadata.ParseCalls, meta.ParseCalls...)
+			rt.metadata.Sources = append(rt.metadata.Sources, meta.Sources...)
 			return true
 		})
 	}
@@ -497,6 +519,8 @@ func checkCalls(pkg *packages.Package, pending []pendingCall, resolved map[types
 		for name, sig := range rt.functions {
 			mergedFunctions[name] = sig
 		}
+		rt.definitions = newDefinitionSet(definitionsFor(pkg.Fset, rt.metadata.Sources))
+		rt.definitions.adoptTrees(rt.templates)
 	}
 
 	var errs []error
@@ -518,8 +542,9 @@ func checkCalls(pkg *packages.Package, pending []pendingCall, resolved map[types
 		}
 		global := NewGlobal(pkg.Types, pkg.Fset, rt.templates, mergedFunctions)
 		global.InspectTemplateNode = inspectTemplate
+		global.Definitions = rt.definitions
 		if inspectCall != nil {
-			inspectCall(p.call, tree, p.dataType)
+			inspectCall(p.call, tree, p.dataType, global.definition(p.templateName))
 		}
 		if err := Execute(global, tree, p.dataType); err != nil {
 			errs = append(errs, err)

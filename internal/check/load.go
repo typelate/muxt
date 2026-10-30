@@ -82,24 +82,28 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string) (*Templates,
 		merged[name] = sig
 	}
 
-	return &Templates{
-		pkg:       pkg,
-		variable:  variable,
-		templates: ts,
-		functions: merged,
-		collected: collected,
-	}, nil
+	result := &Templates{
+		pkg:         pkg,
+		variable:    variable,
+		templates:   ts,
+		functions:   merged,
+		collected:   collected,
+		definitions: newDefinitionSet(definitionsFor(pkg.Fset, meta.Sources)),
+	}
+	result.definitions.adoptTrees(result)
+	return result, nil
 }
 
 // Templates is one template variable's evaluated construction chain,
 // together with the package it was loaded from so the ExecuteTemplate
 // calls made on that variable can be enumerated.
 type Templates struct {
-	pkg       *packages.Package
-	variable  types.Object
-	templates *template.Template[*types.Signature]
-	functions Functions
-	collected Functions
+	pkg         *packages.Package
+	variable    types.Object
+	templates   *template.Template[*types.Signature]
+	functions   Functions
+	collected   Functions
+	definitions definitionSet
 }
 
 // Set returns the evaluated template set; use its Names, Lookup, and
@@ -124,6 +128,12 @@ func (t *Templates) CollectedFunctions() Functions {
 // FindTree returns the parse tree for the named template in the set.
 func (t *Templates) FindTree(name string) (*template.Tree, bool) {
 	return t.templates.FindTree(name)
+}
+
+// FindDefinition implements DefinitionFinder: it reports where name was
+// defined, with Definition.Define spanning the define or block clause.
+func (t *Templates) FindDefinition(name string) (Definition, bool) {
+	return t.definitions.FindDefinition(name)
 }
 
 // Template reconstructs a runtime *github.com/typelate/htt/template.Template
