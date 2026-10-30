@@ -266,8 +266,20 @@ func (e *Error) locationPrefix() string {
 // just inside the delimiters. Quoted strings are kept as written. The
 // copied parser's String quotes the source instead, so this stands in
 // for the reconstruction here only.
+//
+// A node whose source ends with its action's right delimiter but does not
+// begin with the left one, as a range's pipeline does, renders without the
+// delimiter and its trim marker.
 func errorContext(source string) string {
 	inner, delimited := strings.CutPrefix(source, "{{")
+	if !delimited {
+		if rest, ok := strings.CutSuffix(source, "}}"); ok {
+			if trimmed, ok := strings.CutSuffix(rest, "-"); ok && trimmed != "" && isSpace(trimmed[len(trimmed)-1]) {
+				rest = trimmed
+			}
+			return collapseSpace(rest)
+		}
+	}
 	if delimited {
 		var ok bool
 		if inner, ok = strings.CutSuffix(inner, "}}"); !ok {

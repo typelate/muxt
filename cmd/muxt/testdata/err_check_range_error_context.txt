@@ -1,0 +1,40 @@
+# An error on a range's pipeline is reported with the pipeline as context,
+# without the right delimiter of the range action.
+
+muxt generate --use-receiver-type=T
+! muxt check
+stderr -count=1 'template.gohtml:2:13: executing "GET / Index\(\)" at <\.Result\.Name>: range can''t iterate over string$'
+stderr -count=1 'template.gohtml:3:13: executing "GET / Index\(\)" at <\$i, \$x := \.Result\.Name>: range can''t iterate over string$'
+stderr -count=1 'template.gohtml:4:13: executing "GET / Index\(\)" at <\.Result\.Name>: range can''t iterate over string$'
+! stderr '}}>'
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<ul>{{range .Result.Name}}<li>{{.}}</li>{{end}}</ul>
+<ul>{{range $i, $x := .Result.Name}}<li>{{$x}}</li>{{end}}</ul>
+<ul>{{range .Result.Name -}} <li>{{.}}</li>{{end}}</ul>
+{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*"))
+
+type T struct{}
+
+type Data struct {
+	Name string
+}
+
+func (T) Index() Data { return Data{} }
