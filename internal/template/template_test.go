@@ -191,3 +191,24 @@ func TestTemplateParseRedefinition(t *testing.T) {
 		})
 	}
 }
+
+func TestNewTextParsesAsText(t *testing.T) {
+	// A text/template set parses JSON and prose with '<' in them, and
+	// HTML-looking text a control structure crosses, as text/template does.
+	text := `{"a": "<x"} a < b {{if .X}}<!-- {{end}} --><p {{if .X}}>{{end}}`
+	ts, err := template.NewText[any]("t").Parse(text)
+	require.NoError(t, err)
+	assert.True(t, ts.IsText(), "IsText")
+	assert.False(t, ts.ParseOptions().ParseHTML, "ParseOptions().ParseHTML")
+	tree, ok := ts.FindTree("t")
+	require.True(t, ok)
+	assert.False(t, tree.HTMLMode, "HTMLMode")
+	assert.Equal(t, text, tree.Root.String())
+	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+		switch n.(type) {
+		case *template.HTMLElementNode, *template.HTMLCommentNode, *template.HTMLDocumentFragmentNode:
+			t.Errorf("NewText(...).Parse(%q) built %T", text, n)
+		}
+	})
+	assert.True(t, template.New[any]("t").ParseOptions().ParseHTML, "New(...).ParseOptions().ParseHTML")
+}

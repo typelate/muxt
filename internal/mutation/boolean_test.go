@@ -17,7 +17,7 @@ import (
 func ifPipe(t *testing.T, pipeline string) (string, *template.PipeNode) {
 	t.Helper()
 	text := `{{if ` + pipeline + `}}x{{end}}`
-	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	trees, err := asteval.ParseTrees("t", text, "", "", nil, true)
 	require.NoError(t, err)
 	nodes := topLevelNodes(trees["t"])
 	node, ok := nodes[0].(*template.IfNode)

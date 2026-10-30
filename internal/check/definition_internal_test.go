@@ -5,6 +5,8 @@ import (
 	"go/token"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // formatDefSpan renders every coordinate a Span carries as
@@ -164,7 +166,7 @@ func TestDefinitionsIn(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got := definitionsIn(tt.rootName, tt.filename, tt.text, "", "")
+			got := definitionsIn(tt.rootName, tt.filename, tt.text, lex.NewOptions())
 
 			var formatted []string
 			for _, d := range got {

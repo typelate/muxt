@@ -46,10 +46,10 @@ func definitionsFor(fset *token.FileSet, sources []asteval.ParsedText) []Definit
 	var ordered []Definition
 	for _, src := range sources {
 		if src.Literal != nil {
-			ordered = append(ordered, definitionsInLiteral(fset, src.Literal, src.RootName, src.LeftDelim, src.RightDelim)...)
+			ordered = append(ordered, definitionsInLiteral(fset, src.Literal, src.RootName, src.Options)...)
 			continue
 		}
-		ordered = append(ordered, definitionsIn(src.RootName, src.Filename, src.Text, src.LeftDelim, src.RightDelim)...)
+		ordered = append(ordered, definitionsIn(src.RootName, src.Filename, src.Text, src.Options)...)
 	}
 	return ordered
 }

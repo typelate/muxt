@@ -30,7 +30,7 @@ func TestValueStart(t *testing.T) {
 		{text: `{{with $x := .A}}{{end}}`, want: `.A`},
 	} {
 		t.Run(tt.text, func(t *testing.T) {
-			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
+			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil, true)
 			require.NoError(t, err)
 			nodes := topLevelNodes(trees["t"])
 			var pipe *template.PipeNode
@@ -334,7 +334,7 @@ func TestConstructDropReachesAChainedWith(t *testing.T) {
 // named t, in the order they are written.
 func dropMutants(t *testing.T, text string) []mutant {
 	t.Helper()
-	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	trees, err := asteval.ParseTrees("t", text, "", "", nil, true)
 	require.NoError(t, err)
 	src := newFileSource("t.gohtml", "t.gohtml", text, "", "")
 	e := &enumerator{src: src, template: "t"}

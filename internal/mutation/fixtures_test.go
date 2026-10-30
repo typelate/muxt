@@ -200,7 +200,7 @@ func exitStatusOne(t *testing.T) error {
 // so a test of either needs no module and no loader.
 func scopeOf(t *testing.T, name, text string, dot types.Type) scope {
 	t.Helper()
-	trees, err := asteval.ParseTrees(name, text, "", "", nil)
+	trees, err := asteval.ParseTrees(name, text, "", "", nil, true)
 	require.NoError(t, err)
 	tree, ok := trees[name]
 	require.True(t, ok, "the text does not hold %q", name)

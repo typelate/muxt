@@ -43,7 +43,7 @@ func variants(mutants []mutant) []variant {
 func enumerate(t *testing.T, body string, dot types.Type, maxCases int) ([]mutant, []budgetNote) {
 	t.Helper()
 	text := `{{define "t"}}` + body + `{{end}}`
-	trees, err := asteval.ParseTrees("t.gohtml", text, "", "", nil)
+	trees, err := asteval.ParseTrees("t.gohtml", text, "", "", nil, true)
 	require.NoError(t, err)
 	src := newFileSource("t.gohtml", "t.gohtml", text, "", "")
 	sc := scope{template: "t", dataType: dot, treeLocation: treeLocation{src: src, tree: trees["t"]}}

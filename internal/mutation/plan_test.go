@@ -254,9 +254,9 @@ func TestIndexTreesKeepsTheTreeTheSetKept(t *testing.T) {
 					defined["page"] = src
 				}
 			}
-			index, err := indexTrees(tt.sources, defined, nil)
+			index, err := indexTrees(tt.sources, defined, nil, true)
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, index["page"].src.path, "indexTrees(...)[page] source")
+			assert.Equal(t, tt.want, index["page"].src.path, "indexTrees(..., true)[page] source")
 		})
 	}
 }
@@ -282,14 +282,14 @@ func TestDefinitionsOfListsByName(t *testing.T) {
 
 func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
 	src := newFileSource("bad.gohtml", "bad.gohtml", "{{if}}", "", "")
-	_, err := indexTrees([]*templateSource{src}, nil, nil)
-	require.Error(t, err, "indexTrees(bad source)")
-	assert.True(t, strings.HasPrefix(err.Error(), "bad.gohtml: "), "indexTrees(bad source) error = %v, want one naming bad.gohtml", err)
+	_, err := indexTrees([]*templateSource{src}, nil, nil, true)
+	require.Error(t, err, "indexTrees(bad source, true)")
+	assert.True(t, strings.HasPrefix(err.Error(), "bad.gohtml: "), "indexTrees(bad source, true) error = %v, want one naming bad.gohtml", err)
 }
 
 func TestVerifyReadable(t *testing.T) {
 	treeOf := func(text string) *template.Tree {
-		trees, err := asteval.ParseTrees("page", text, "", "", nil)
+		trees, err := asteval.ParseTrees("page", text, "", "", nil, true)
 		require.NoError(t, err)
 		return trees["page"]
 	}

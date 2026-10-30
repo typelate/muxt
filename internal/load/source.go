@@ -48,6 +48,7 @@ func readVariable(pkg *packages.Package, name string) (source.Variable, error) {
 	variable := source.Variable{
 		Name:        name,
 		Set:         ts,
+		Text:        isText(lt),
 		Functions:   lt.Functions(),
 		Funcs:       lt.CollectedFunctions(),
 		Definitions: make(map[string]source.Definition),

@@ -31,7 +31,7 @@ func TestComplexity(t *testing.T) {
 		{text: `<!-- {{if .A}}a{{end}} -->`, want: 2},
 	} {
 		t.Run(tt.text, func(t *testing.T) {
-			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
+			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil, true)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, complexity(trees["t"].Root), "complexity(%s)", tt.text)
 		})

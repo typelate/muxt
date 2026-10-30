@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/muxt/internal/template/lex"
+
 	"github.com/typelate/muxt/internal/template"
 )
 
@@ -63,7 +65,7 @@ func TestDefinitionBlockPipeline(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, def := range definitionsIn("index.gohtml", "index.gohtml", tt.text, "", "") {
+			for _, def := range definitionsIn("index.gohtml", "index.gohtml", tt.text, lex.NewOptions()) {
 				want, isBlock := tt.blocks[def.Name]
 
 				if def.IsBlock() != isBlock {

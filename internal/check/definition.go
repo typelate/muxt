@@ -139,14 +139,16 @@ func displaces(prev, next Definition) bool {
 
 // definitionsIn returns a Definition for every template that a template
 // file defines, with positions resolved against filename.
-func definitionsIn(rootName, filename, text, leftDelim, rightDelim string) []Definition {
-	return definitions(source{file: textFile(filename, text)}, rootName, text, leftDelim, rightDelim)
+//
+// options are the lexer options the text was parsed with.
+func definitionsIn(rootName, filename, text string, options lex.Options) []Definition {
+	return definitions(source{file: textFile(filename, text)}, rootName, text, options)
 }
 
 // definitionsInLiteral returns a Definition for every template that a Go
 // string literal defines, with positions resolved to the Go file holding
 // the literal so that they address real bytes in that file.
-func definitionsInLiteral(fset *token.FileSet, lit *ast.BasicLit, rootName, leftDelim, rightDelim string) []Definition {
+func definitionsInLiteral(fset *token.FileSet, lit *ast.BasicLit, rootName string, options lex.Options) []Definition {
 	text, err := strconv.Unquote(lit.Value)
 	if err != nil {
 		return nil
@@ -164,7 +166,7 @@ func definitionsInLiteral(fset *token.FileSet, lit *ast.BasicLit, rootName, left
 		return nil
 	}
 	src := source{file: file, base: file.Offset(lit.Pos()), offsets: offsets}
-	return definitions(src, rootName, text, leftDelim, rightDelim)
+	return definitions(src, rootName, text, options)
 }
 
 // literalSource returns the literal as it is written in the file.
@@ -198,15 +200,15 @@ func literalSource(file *token.File, lit *ast.BasicLit) (string, bool) {
 // itself. It has no define clause, so it spans the whole of text: Define
 // is empty at the start and End is empty at the end. Definitions written
 // with a define or block clause follow in source order.
-func definitions(src source, rootName, text, leftDelim, rightDelim string) []Definition {
-	root, parsed := parseTrees(rootName, text, leftDelim, rightDelim)
+func definitions(src source, rootName, text string, options lex.Options) []Definition {
+	root, parsed := parseTrees(rootName, text, options)
 	defs := []Definition{{
 		Name:   rootName,
 		Define: src.span(textSpan{Off: 0}),
 		End:    src.span(textSpan{Off: len(text)}),
 		Tree:   root,
 	}}
-	for _, c := range defineClauses(text, leftDelim, rightDelim) {
+	for _, c := range defineClauses(text, options.LeftDelim, options.RightDelim) {
 		p := parsed[c.Define.Off]
 		defs = append(defs, Definition{
 			Name:          c.Name,
@@ -237,19 +239,14 @@ type parsedDefinition struct {
 // BlockNode, each starting at its clause's left delimiter, so the result
 // is keyed by that offset: the same offset defineClauses reports as the
 // start of Define. A text that does not parse yields no trees.
-func parseTrees(rootName, text, leftDelim, rightDelim string) (*template.Tree, map[int]parsedDefinition) {
+//
+// options are the ones the text was parsed with when the set was built
+// (Template.ParseOptions, with the call's delimiters), so the text parses
+// here as it did there: as text for a text/template set, and with break
+// and continue keywords only where the set allowed them.
+func parseTrees(rootName, text string, options lex.Options) (*template.Tree, map[int]parsedDefinition) {
 	treeSet := make(map[string]*template.Tree)
-	// These are Template.Parse's options. No function map is available
-	// here, so break and continue are allowed as keywords, as they are
-	// whenever the set does not register functions of those names.
-	root, err := template.ParseTree(rootName, rootName, text, treeSet, lex.Options{
-		EmitComment: true,
-		ParseHTML:   true,
-		LeftDelim:   cmp.Or(leftDelim, "{{"),
-		RightDelim:  cmp.Or(rightDelim, "}}"),
-		BreakOK:     true,
-		ContinueOK:  true,
-	})
+	root, err := template.ParseTree(rootName, rootName, text, treeSet, options)
 	if err != nil {
 		return nil, nil
 	}

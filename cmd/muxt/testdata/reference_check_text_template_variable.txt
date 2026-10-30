@@ -1,0 +1,54 @@
+# muxt check reads a text/template variable's templates as text/template
+# does: as text, not HTML. A '<' in JSON or prose, and an HTML comment
+# that a control structure crosses, parse, and break and continue are
+# keywords in template files.
+
+! muxt check
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+$WORK/main.go:22:6 ExecuteTemplate "data.json.tmpl" Data
+$WORK/data.json.tmpl:1:55: executing "data.json.tmpl" at <.Missing>: field or method Missing not found on Data
+
+$WORK/main.go:23:6 ExecuteTemplate "prose.txt.tmpl" Data
+$WORK/prose.txt.tmpl:2:28: executing "prose.txt.tmpl" at <.Gone>: field or method Gone not found on Data
+
+$WORK/main.go:24:6 ExecuteTemplate "literal" Data
+literal:2:28: executing "literal" at <.Lost>: field or method Lost not found on Data
+
+-- data.json.tmpl --
+{"a": "<x", "n": {{.N}}, "tag": "<{{.Name}}>", "m": {{.Missing}}}
+-- prose.txt.tmpl --
+Remember a < b and <3 {{.Name}}.
+{{if .N}}<!-- {{end}} -->{{.Gone}}
+{{range .Items}}{{if eq . "x"}}{{break}}{{end}}{{continue}}{{end}}
+-- go.mod --
+module example.com
+
+go 1.24
+-- main.go --
+package main
+
+import (
+	"embed"
+	"io"
+	"text/template"
+)
+
+//go:embed *.tmpl
+var source embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(source, "*")).New("literal").Parse(`{"a": "<x"}
+{{if .N}}<!-- {{end}} -->{{.Lost}}`))
+
+type Data struct {
+	N     int
+	Name  string
+	Items []string
+}
+
+func main() {
+	_ = templates.ExecuteTemplate(io.Discard, "data.json.tmpl", Data{})
+	_ = templates.ExecuteTemplate(io.Discard, "prose.txt.tmpl", Data{})
+	_ = templates.ExecuteTemplate(io.Discard, "literal", Data{})
+}

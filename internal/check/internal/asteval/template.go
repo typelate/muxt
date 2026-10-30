@@ -52,12 +52,15 @@ type ParsedText struct {
 	// call. Empty means the template defaults.
 	LeftDelim  string
 	RightDelim string
+
+	// Options are the lexer options the text was parsed with.
+	Options lex.Options
 }
 
 // recordParsedLiteral notes a Parse call whose argument is a string
 // literal. A call built any other way, such as from concatenation, has no
 // single literal to resolve positions against and is not recorded.
-func recordParsedLiteral(meta *TemplateMetadata, arg ast.Expr, rootName, leftDelim, rightDelim string) {
+func recordParsedLiteral(meta *TemplateMetadata, arg ast.Expr, rootName, leftDelim, rightDelim string, options lex.Options) {
 	if meta == nil {
 		return
 	}
@@ -71,6 +74,7 @@ func recordParsedLiteral(meta *TemplateMetadata, arg ast.Expr, rootName, leftDel
 		Literal:    lit,
 		LeftDelim:  leftDelim,
 		RightDelim: rightDelim,
+		Options:    withDelimiters(options, leftDelim, rightDelim),
 	})
 }
 
@@ -101,7 +105,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 				if meta != nil {
 					meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 				}
-				t, err := parseFiles(ts, fm, meta, lDelim, rDelim, filePaths...)
+				t, err := parseFiles(ts, false, fm, meta, lDelim, rDelim, filePaths...)
 				return t, lDelim, rDelim, err
 			case "Parse":
 				if len(call.Args) != 1 {
@@ -111,7 +115,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 				if err != nil {
 					return nil, lDelim, rDelim, err
 				}
-				recordParsedLiteral(meta, call.Args[0], ts.Name(), lDelim, rDelim)
+				recordParsedLiteral(meta, call.Args[0], ts.Name(), lDelim, rDelim, ts.ParseOptions())
 				t, err := ts.Parse(sl)
 				return t, lDelim, rDelim, err
 			case "Funcs", "Functions":
@@ -160,6 +164,9 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if err != nil {
 				return nil, lDelim, rDelim, err
 			}
+			if isTextTemplatePkgIdent(typesInfo, x) {
+				return template.NewText[*types.Signature](templateNames[0]), lDelim, rDelim, nil
+			}
 			return template.New[*types.Signature](templateNames[0]), lDelim, rDelim, nil
 		case "ParseFS":
 			filePaths, err := evaluateCallParseFilesArgs(workingDirectory, fileSet, call, files, embeddedPaths)
@@ -169,7 +176,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(nil, fm, meta, lDelim, rDelim, filePaths...)
+			t, err := parseFiles(nil, isTextTemplatePkgIdent(typesInfo, x), fm, meta, lDelim, rDelim, filePaths...)
 			return t, lDelim, rDelim, err
 		default:
 			return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported function %s", sel.Sel.Name))
@@ -197,7 +204,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if err != nil {
 				return nil, upLDelim, upRDelim, err
 			}
-			recordParsedLiteral(meta, call.Args[0], up.Name(), upLDelim, upRDelim)
+			recordParsedLiteral(meta, call.Args[0], up.Name(), upLDelim, upRDelim, up.ParseOptions())
 			t, err := up.Parse(sl)
 			return t, upLDelim, upRDelim, err
 		case "New":
@@ -211,12 +218,8 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			// Create a new associated template
 			// htt.Template doesn't have a New method on instances, so we use AddParseTree
 			// to add a named tree to the existing template set.
-			newTree, _ := template.ParseTree(templateNames[0], templateNames[0], "", nil, lex.Options{
-				EmitComment: true,
-				ParseHTML:   true,
-				LeftDelim:   cmp.Or(upLDelim, "{{"),
-				RightDelim:  cmp.Or(upRDelim, "}}"),
-			})
+			options := withDelimiters(up.ParseOptions(), upLDelim, upRDelim)
+			newTree, _ := template.ParseTree(templateNames[0], templateNames[0], "", nil, options)
 			t, err := up.AddParseTree(templateNames[0], newTree)
 			if err != nil {
 				return nil, upLDelim, upRDelim, err
@@ -230,7 +233,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(up, fm, meta, upLDelim, upRDelim, filePaths...)
+			t, err := parseFiles(up, false, fm, meta, upLDelim, upRDelim, filePaths...)
 			return t, upLDelim, upRDelim, err
 		case "Option":
 			list, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
@@ -276,6 +279,23 @@ func isTemplateFuncMapLiteral(typesInfo *types.Info, lit *ast.CompositeLit) bool
 func isAcceptedTemplatePkg(path string) bool {
 	return path == "html/template" ||
 		path == "text/template"
+}
+
+// withDelimiters returns options with the delimiters in effect for a
+// call; empty ones are the template defaults.
+func withDelimiters(options lex.Options, leftDelim, rightDelim string) lex.Options {
+	options.LeftDelim, options.RightDelim = cmp.Or(leftDelim, "{{"), cmp.Or(rightDelim, "}}")
+	return options
+}
+
+// isTextTemplatePkgIdent reports whether ident refers to the
+// "text/template" package, whose sets parse as text rather than HTML.
+func isTextTemplatePkgIdent(info *types.Info, ident *ast.Ident) bool {
+	if info == nil {
+		return false
+	}
+	pkgName, ok := info.Uses[ident].(*types.PkgName)
+	return ok && pkgName.Imported().Path() == "text/template"
 }
 
 func IsTemplatePkgIdent(info *types.Info, ident *ast.Ident) bool {
@@ -336,7 +356,10 @@ func FindModificationReceiver(expr *ast.CallExpr, typesInfo *types.Info) types.O
 	return nil
 }
 
-func parseFiles(t *template.Template[*types.Signature], fm map[string]any, meta *TemplateMetadata, leftDelim, rightDelim string, filenames ...string) (*template.Template[*types.Signature], error) {
+// parseFiles parses each file into t, as ParseFiles does. A nil t is
+// created from the first file's name, as a text/template set when text
+// is true.
+func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string]any, meta *TemplateMetadata, leftDelim, rightDelim string, filenames ...string) (*template.Template[*types.Signature], error) {
 	if len(filenames) == 0 {
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
 	}
@@ -347,6 +370,9 @@ func parseFiles(t *template.Template[*types.Signature], fm map[string]any, meta 
 			return nil, err
 		}
 		s := string(b)
+		if t == nil && text {
+			t = template.NewText[*types.Signature](templateName)
+		}
 		if t == nil {
 			t = template.New[*types.Signature](templateName)
 		}
@@ -365,20 +391,10 @@ func parseFiles(t *template.Template[*types.Signature], fm map[string]any, meta 
 		}
 		t = t.Functions(funcNames)
 
-		options := lex.Options{
-			EmitComment: true,
-			ParseHTML:   true,
-			LeftDelim:   cmp.Or(leftDelim, "{{"),
-			RightDelim:  cmp.Or(rightDelim, "}}"),
-		}
-		// Build a function name set for the parser.
-		funcSet := make(map[string]bool)
-		for name := range fm {
-			funcSet[name] = true
-		}
-		for name := range builtins() {
-			funcSet[name] = true
-		}
+		// The set's own options, as its Parse would use: HTML structure
+		// unless it is a text/template set, and break and continue as
+		// keywords unless it registers functions of those names.
+		options := withDelimiters(t.ParseOptions(), leftDelim, rightDelim)
 
 		// Parse with the absolute path as the file name so the tree — and,
 		// crucially, a *htt.ParseError on a syntax failure — carries the
@@ -415,6 +431,7 @@ func parseFiles(t *template.Template[*types.Signature], fm map[string]any, meta 
 				Text:       s,
 				LeftDelim:  leftDelim,
 				RightDelim: rightDelim,
+				Options:    options,
 			})
 		}
 		// The file's own tree, its defines and its blocks, with

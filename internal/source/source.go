@@ -46,6 +46,10 @@ type Variable struct {
 	// muxt reads names and trees and never executes the set.
 	Set *html.Template
 
+	// Text reports that the variable holds a text/template set, whose
+	// templates parse as text rather than HTML.
+	Text bool
+
 	// Functions are the functions a template in the set may call: the
 	// builtins and those registered with Funcs.
 	Functions map[string]*types.Signature

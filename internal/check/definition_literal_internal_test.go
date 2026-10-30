@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // findLiteral parses src and returns the first string literal in it,
@@ -85,7 +87,7 @@ func TestDefinitionsInLiteralLineEndings(t *testing.T) {
 			})
 
 			var got Definition
-			for _, def := range definitionsInLiteral(fset, lit, "app", "", "") {
+			for _, def := range definitionsInLiteral(fset, lit, "app", lex.NewOptions()) {
 				if def.Name == "a" {
 					got = def
 				}
@@ -161,7 +163,7 @@ func TestDefinitionsInLiteral(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fset, lit := findLiteral(t, tt.src)
 
-			got := definitionsInLiteral(fset, lit, "app", "", "")
+			got := definitionsInLiteral(fset, lit, "app", lex.NewOptions())
 
 			var formatted []string
 			for _, d := range got {

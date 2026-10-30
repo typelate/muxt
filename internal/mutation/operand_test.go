@@ -31,7 +31,7 @@ func TestOperandsAreFoundWhereTheyAreWritten(t *testing.T) {
 		{name: "a variable", text: `{{$x := .A}}{{$x}}`, want: []string{".A", "$x"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil)
+			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil, true)
 			require.NoError(t, err)
 			var got []string
 			for _, node := range topLevelNodes(trees["t"]) {

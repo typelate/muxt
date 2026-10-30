@@ -18,7 +18,7 @@ import (
 // what was ranged over, or the integer itself when ranging over one.
 func TestRangeDot(t *testing.T) {
 	item := dataType(t, pageSource, "Item")
-	trees, err := asteval.ParseTrees("t", `{{range .}}{{end}}`, "", "", nil)
+	trees, err := asteval.ParseTrees("t", `{{range .}}{{end}}`, "", "", nil, true)
 	require.NoError(t, err)
 	pipe := topLevelNodes(trees["t"])[0].(*template.RangeNode).Pipe
 	for _, tt := range []struct {
@@ -84,7 +84,7 @@ func TestZeroLiteral(t *testing.T) {
 			if dot == nil {
 				dot = page
 			}
-			trees, err := asteval.ParseTrees("t", tt.action, "", "", functions)
+			trees, err := asteval.ParseTrees("t", tt.action, "", "", functions, true)
 			require.NoError(t, err)
 			pipe := topLevelNodes(trees["t"])[0].(*template.ActionNode).Pipe
 			got, typed := zeroLiteral(dot, pipe, functions)

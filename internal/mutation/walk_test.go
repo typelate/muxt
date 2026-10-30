@@ -21,7 +21,7 @@ func TestWalkActionsOrder(t *testing.T) {
 		`{{template "p" .J}}` +
 		`{{end}}`
 
-	trees, err := asteval.ParseTrees("t", text+`{{define "p"}}x{{end}}`, "", "", nil)
+	trees, err := asteval.ParseTrees("t", text+`{{define "p"}}x{{end}}`, "", "", nil, true)
 	require.NoError(t, err)
 
 	var got []string
@@ -49,7 +49,7 @@ func TestWalkActionsInsideMarkup(t *testing.T) {
 		`{{block "p" .G}}{{.H}}{{end}}` +
 		`{{end}}`
 
-	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	trees, err := asteval.ParseTrees("t", text, "", "", nil, true)
 	require.NoError(t, err)
 
 	var got []string
@@ -79,7 +79,7 @@ func TestWalkActionsNarrowsDot(t *testing.T) {
 		`{{range .Count}}{{.}}{{end}}` +
 		`{{with .Owner}}{{.}}{{else}}{{.}}{{end}}` +
 		`{{end}}`
-	trees, err := asteval.ParseTrees("t", text, "", "", nil)
+	trees, err := asteval.ParseTrees("t", text, "", "", nil, true)
 	require.NoError(t, err)
 
 	var got []string

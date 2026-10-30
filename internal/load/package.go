@@ -172,6 +172,12 @@ func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Temp
 	return lt, ts, nil
 }
 
+// isText reports whether lt holds a text/template set.
+func isText(lt *check.Templates) bool {
+	_, ok := lt.Text()
+	return ok
+}
+
 func findType(pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
 	notFoundErr := fmt.Errorf("could not find receiver type %s in %s", ident, packagePath)
 	for _, pkg := range pl {

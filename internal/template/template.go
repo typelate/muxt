@@ -16,8 +16,11 @@ type Template[Signature any] struct {
 	leftDelim, rightDelim string
 	functions             map[string]Signature
 	missingKey            string // "invalid", "zero", "error", or "" (default)
+	text                  bool   // a text/template set: parsed without HTML structure
 }
 
+// New returns a template set that parses as html/template does: its
+// trees hold HTML structure and are executed in HTML mode.
 func New[Signature any](name string) *Template[Signature] {
 	t := &Template[Signature]{
 		name:      name,
@@ -25,6 +28,37 @@ func New[Signature any](name string) *Template[Signature] {
 	}
 	t.templates = map[string]*Template[Signature]{name: t}
 	return t
+}
+
+// NewText returns a template set that parses as text/template does: its
+// trees are text and actions, with no HTML structure, so text such as
+// JSON or prose with a '<' in it parses as it does with text/template.
+func NewText[Signature any](name string) *Template[Signature] {
+	t := New[Signature](name)
+	t.text = true
+	return t
+}
+
+// IsText reports whether the set parses as text/template does (NewText).
+func (t *Template[S]) IsText() bool {
+	return t.text
+}
+
+// ParseOptions are the lexer options Parse parses text with: the set's
+// delimiters, HTML structure unless the set is a text/template set, and
+// break and continue as keywords unless the set registers functions of
+// those names, as in text/template.
+func (t *Template[S]) ParseOptions() lex.Options {
+	_, hasBreak := t.functions["break"]
+	_, hasContinue := t.functions["continue"]
+	return lex.Options{
+		EmitComment: true,
+		ParseHTML:   !t.text,
+		LeftDelim:   cmp.Or(t.leftDelim, "{{"),
+		RightDelim:  cmp.Or(t.rightDelim, "}}"),
+		BreakOK:     !hasBreak,
+		ContinueOK:  !hasContinue,
+	}
 }
 
 // Names returns the names of every template in the associated set,
@@ -97,17 +131,7 @@ func (t *Template[S]) FindTree(name string) (*Tree, bool) {
 }
 
 func (t *Template[S]) Parse(text string) (*Template[S], error) {
-	_, hasBreak := t.functions["break"]
-	_, hasContinue := t.functions["continue"]
-	options := lex.Options{
-		EmitComment: true,
-		ParseHTML:   true,
-		LeftDelim:   cmp.Or(t.leftDelim, "{{"),
-		RightDelim:  cmp.Or(t.rightDelim, "}}"),
-		BreakOK:     !hasBreak,
-		ContinueOK:  !hasContinue,
-	}
-
+	options := t.ParseOptions()
 	treeSet := make(map[string]*Tree)
 	tree, err := ParseTree(t.name, t.name, text, treeSet, options)
 	if err != nil {
@@ -129,13 +153,16 @@ func (t *Template[S]) Parse(text string) (*Template[S], error) {
 }
 
 func (t *Template[S]) AddParseTree(name string, tree *Tree) (*Template[S], error) {
-	tree.HTMLMode = true
-	AnnotateHTMLContexts(tree.Root)
+	if !t.text {
+		tree.HTMLMode = true
+		AnnotateHTMLContexts(tree.Root)
+	}
 	tmpl := t.templates[name]
 	if tmpl == nil {
 		tmpl = &Template[S]{
 			name:      name,
 			templates: t.templates,
+			text:      t.text,
 		}
 		t.templates[name] = tmpl
 	}

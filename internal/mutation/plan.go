@@ -377,7 +377,7 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 // behaviour, the template just stopped working.
 func invalid(lt *checked, sc scope, m mutant) (string, bool) {
 	mutated := sc.src.mutatedText(m.edits)
-	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, lt.Functions)
+	trees, err := asteval.ParseTrees(sc.src.rootName, mutated, sc.src.leftDelim, sc.src.rightDelim, lt.Functions, !lt.Text)
 	if err != nil {
 		return "does not parse", true
 	}
@@ -411,7 +411,7 @@ func buildTreeIndex(lt *checked, workingDirectory string) (map[string]treeLocati
 		}
 	}
 
-	index, err := indexTrees(collector.sorted(), defined, lt.Functions)
+	index, err := indexTrees(collector.sorted(), defined, lt.Functions, !lt.Text)
 	if err != nil {
 		return nil, err
 	}
@@ -450,11 +450,12 @@ func definitionsOf(lt *checked) []source.Definition {
 // located.
 //
 // A name with no located definition keeps the last tree that is not
-// empty, the way the template set would have.
-func indexTrees(sources []*templateSource, defined map[string]*templateSource, functions check.Functions) (map[string]treeLocation, error) {
+// empty, the way the template set would have. html is false for a
+// text/template set, whose sources parse as text.
+func indexTrees(sources []*templateSource, defined map[string]*templateSource, functions check.Functions, html bool) (map[string]treeLocation, error) {
 	index := make(map[string]treeLocation)
 	for _, src := range sources {
-		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions)
+		trees, err := asteval.ParseTrees(src.rootName, src.text, src.leftDelim, src.rightDelim, functions, html)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", src.path, err)
 		}
