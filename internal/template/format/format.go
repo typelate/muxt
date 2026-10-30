@@ -46,7 +46,9 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // attributes only where the source breaks them; no line width is
 // measured. Node sees only the author CSS that Styles gives and the
 // tree's own <style> elements, so without Styles an element with a class
-// or id is unknown (decision 1) and keeps its whitespace as written.
+// or id is unknown (decision 1) and keeps its whitespace as written. A
+// tree holding markup the template parser read as text but a browser
+// reads as a tag is written as it is (see hasUnparsedMarkup).
 func Node(root template.Node, opts ...Option) string {
 	f := &formatter{
 		sb:          &strings.Builder{},
@@ -60,6 +62,12 @@ func Node(root template.Node, opts ...Option) string {
 	list, ok := root.(*template.ListNode)
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
+	}
+	if hasUnparsedMarkup(list.Nodes) {
+		for _, n := range list.Nodes {
+			f.writeString(f.sourceText(n))
+		}
+		return f.sb.String()
 	}
 	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
 	f.root = list
@@ -980,6 +988,67 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	}
 	out := Node(tree.Root, opts...)
 	return strings.TrimRight(out, whitespace) + trailingWhitespace(src), nil
+}
+
+// hasUnparsedMarkup reports whether text in nodes, outside raw text and
+// RCDATA elements and comments, holds a < that the HTML tokenizer reads
+// as the start of a tag, end tag, comment or processing instruction (<
+// then a letter, /, ! or ?). The template parser keeps markup it cannot
+// read as an element (<p <b>, </ b>, <?x?>) as text, so its tree and the
+// browser's disagree there, and the whitespace around it cannot be
+// classified.
+func hasUnparsedMarkup(nodes []template.Node) bool {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.TextNode:
+			if startsMarkup(n.Text) {
+				return true
+			}
+		case *template.HTMLDocumentFragmentNode:
+			if hasUnparsedMarkup(n.Children) {
+				return true
+			}
+		case *template.HTMLElementNode:
+			if !rawTextTags[strings.ToLower(n.TagName)] && hasUnparsedMarkup(n.Children) {
+				return true
+			}
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil && hasUnparsedMarkup(b.List.Nodes) || b.ElseList != nil && hasUnparsedMarkup(b.ElseList.Nodes) {
+				return true
+			}
+		case *template.DefineNode:
+			if n.Body != nil && hasUnparsedMarkup(n.Body.Nodes) {
+				return true
+			}
+		case *template.BlockNode:
+			if n.Body != nil && hasUnparsedMarkup(n.Body.Nodes) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func startsMarkup(text []byte) bool {
+	for i := 0; i+1 < len(text); i++ {
+		if text[i] != '<' {
+			continue
+		}
+		c := text[i+1]
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || c == '/' || c == '!' || c == '?' {
+			return true
+		}
+	}
+	return false
+}
+
+// rawTextTags name the elements whose content the HTML tokenizer reads
+// as text up to their end tag (raw text and RCDATA, HTML §13.1.2), with
+// scripting enabled.
+var rawTextTags = map[string]bool{
+	"script": true, "style": true, "textarea": true, "title": true, "xmp": true,
+	"iframe": true, "noembed": true, "noframes": true, "noscript": true, "plaintext": true,
 }
 
 func hasElement(tree *template.Tree) bool {

@@ -474,3 +474,24 @@ func TestCSSEntryPoints(t *testing.T) {
 		assert.Equal(t, "<style>.d{}</style><div class=\"c\">\n\t<p>a</p>\n</div>", got)
 	})
 }
+
+// TestUnparsedMarkup checks that a file holding markup the template
+// parser reads as text but the browser reads as a tag (a start tag with
+// a < in an attribute name, a bogus comment) is left as written: the two
+// trees disagree, so no run in it can be classified.
+func TestUnparsedMarkup(t *testing.T) {
+	for _, tt := range []struct {
+		name, input, want string
+	}{
+		{name: "start tag with < in its attributes", input: "<teXtAreA </teXtAreA><A  >0", want: "<teXtAreA </teXtAreA><A  >0"},
+		{name: "bogus end tag", input: "<div>a</ b>  <p>  c</p></div>", want: "<div>a</ b>  <p>  c</p></div>"},
+		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
+		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := format.Source("t.gohtml", tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got, "Source(%q)", tt.input)
+		})
+	}
+}
