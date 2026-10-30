@@ -1,0 +1,26 @@
+A {{block}} and a define of the same name in one file are two definitions
+of it, which html/template refuses to parse, so the package does not load.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "page"}}<main>{{block "content" .}}<h1>{{.Title}}</h1>{{end}}</main>{{end}}
+{{define "content"}}<h2>{{.Title}}</h2>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+type Page struct{ Title string }
+
+func RenderPage(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want/error.txt --
+template: index.gohtml:2: template: multiple definition of template "content"

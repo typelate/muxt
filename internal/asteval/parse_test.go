@@ -63,3 +63,11 @@ func TestParseTreesKeywordsGiveWayToFunctions(t *testing.T) {
 	assert.True(t, hasBreak(nil), "break is a keyword without a function of that name")
 	assert.False(t, hasBreak(map[string]*types.Signature{"break": nil}), "break is a function call once a function of that name is registered")
 }
+
+func TestParseTreesRedefinition(t *testing.T) {
+	_, err := ParseTrees("t", `{{block "a" .}}x{{end}}{{define "a"}}y{{end}}`, "", "", nil)
+	assert.EqualError(t, err, `template: t:1: template: multiple definition of template "a"`)
+	trees, err := ParseTrees("t", `{{define "a"}}x{{end}}{{define "a"}}{{end}}`, "", "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "x", trees["a"].Root.String(), "a later empty define gives way")
+}

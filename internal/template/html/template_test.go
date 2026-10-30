@@ -420,3 +420,45 @@ func TestParseRecordsTheNameAsGiven(t *testing.T) {
 		}
 	}
 }
+
+// TestParseRedefinition states html/template's rules for a name defined
+// twice: within one Parse, two definitions that are not empty are an
+// error, and an empty one gives way to the other; across Parse calls, a
+// later definition replaces an earlier one unless it is empty.
+func TestParseRedefinition(t *testing.T) {
+	for _, tt := range []struct {
+		name, text, wantErr, want string
+	}{
+		{name: "a block and a define", text: `{{block "a" .}}x{{end}}{{define "a"}}y{{end}}`, wantErr: `template: t:1: template: multiple definition of template "a"`},
+		{name: "two defines", text: `{{define "a"}}x{{end}}{{define "a"}}y{{end}}`, wantErr: `template: t:1: template: multiple definition of template "a"`},
+		{name: "a later empty define", text: `{{define "a"}}x{{end}}{{define "a"}}{{end}}`, want: "x"},
+		{name: "an earlier empty define", text: `{{define "a"}} {{end}}{{define "a"}}y{{end}}`, want: "y"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts, err := New("t").Parse(tt.text)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("Parse(%q) error = %v, want %q", tt.text, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.text, err)
+			}
+			if got := ts.Lookup("a").Tree.Root.String(); got != tt.want {
+				t.Errorf(`Parse(%q): "a" = %q, want %q`, tt.text, got, tt.want)
+			}
+		})
+	}
+	t.Run("across Parse calls", func(t *testing.T) {
+		ts := Must(New("t").Parse(`{{define "a"}}x{{end}}`))
+		Must(ts.New("u").Parse(`{{define "a"}}{{end}}`))
+		if got := ts.Lookup("a").Tree.Root.String(); got != "x" {
+			t.Errorf(`after a later empty define, "a" = %q, want "x"`, got)
+		}
+		Must(ts.New("v").Parse(`{{define "a"}}z{{end}}`))
+		if got := ts.Lookup("a").Tree.Root.String(); got != "z" {
+			t.Errorf(`after a later define, "a" = %q, want "z"`, got)
+		}
+	})
+}

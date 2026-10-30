@@ -1642,10 +1642,15 @@ func TestReferenceBlockDefine(t *testing.T) {
 
 	// ParseTree overlay that redefines "list" into a fresh tree set.
 	// In real usage, Clone() is used to copy the tree set before redefining.
+	// Parsing it into the same tree set is a second definition of "list",
+	// which text/template reports.
 	overlay := `{{define "list"}} {{join . ", "}}{{end}} `
-	_, err = ParseTree("test.gohtml", "overlay", overlay, treeSet, lex.NewOptions())
+	overlaySet := make(map[string]*Tree)
+	_, err = ParseTree("test.gohtml", "overlay", overlay, overlaySet, lex.NewOptions())
 	require.NoError(t, err, "overlay parse")
-	assert.Contains(t, treeSet, "list", "overlay did not create 'list' template")
+	assert.Contains(t, overlaySet, "list", "overlay did not create 'list' template")
+	_, err = ParseTree("test.gohtml", "overlay", overlay, treeSet, lex.NewOptions())
+	assert.EqualError(t, err, `template: test.gohtml:1: template: multiple definition of template "list"`, "overlay parsed into the master's tree set")
 }
 
 // TestReferenceMultiDefineFile verifies that inputs with multiple {{define}}

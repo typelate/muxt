@@ -417,20 +417,9 @@ func parseFiles(t *template.Template[*types.Signature], fm map[string]any, meta 
 				RightDelim: rightDelim,
 			})
 		}
-		if _, err = t.AddParseTree(tree.Name, tree); err != nil {
-			return nil, err
-		}
-		// Extract {{define}} blocks from the tree.
-		for name, dt := range template.Extract(tree) {
-			if _, err = t.AddParseTree(name, dt); err != nil {
-				return nil, err
-			}
-		}
-		// Register {{block}}-defined sub-templates collected above.
-		for name, dt := range treeSet {
-			if name == tree.Name {
-				continue
-			}
+		// The file's own tree, its defines and its blocks, with
+		// text/template's precedence between definitions of one name.
+		for name, dt := range template.DefinedTrees(tree, treeSet) {
 			if _, err = t.AddParseTree(name, dt); err != nil {
 				return nil, err
 			}

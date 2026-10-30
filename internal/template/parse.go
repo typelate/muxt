@@ -44,6 +44,7 @@ type Tree struct {
 	// {{template}}-node HTML walker).
 	RootTrimFirst, RootTrimLast bool
 	text                        string // text parsed to create the template (or its parent)
+	define                      bool   // registered by a define clause; DefinedTrees installs Extract's tree for it
 	// Parsing only; cleared after parse.
 	scanner         *lex.Scanner
 	token           [3]lex.Token // three-token lookahead for parser.
@@ -309,6 +310,22 @@ func (t *Tree) add() error {
 	}
 	if !IsEmptyTree(t.Root) {
 		return t.errorf("template: multiple definition of template %q", t.Name)
+	}
+	return nil
+}
+
+// addDefinition registers the tree a define or block clause defines in the
+// parser's tree set, as text/template's add does: it replaces a tree of the
+// same name only when that one is empty, and two that are not empty are an
+// error, located at the clause that defined the name again.
+func (t *Tree) addDefinition(tree *Tree) error {
+	existing := t.treeSet[tree.Name]
+	if existing == nil || IsEmptyTree(existing.Root) {
+		t.treeSet[tree.Name] = tree
+		return nil
+	}
+	if !IsEmptyTree(tree.Root) {
+		return t.errorf("template: multiple definition of template %q", tree.Name)
 	}
 	return nil
 }
@@ -903,10 +920,9 @@ func (t *Tree) blockControl() (Node, error) {
 	block.text = t.text
 	block.ParseName = t.ParseName
 	block.Filepath = t.Filepath
-	block.treeSet = t.treeSet
 	block.RootTrimFirst = startTrimRight
 	block.RootTrimLast = en.TrimLeft
-	if err := block.add(); err != nil {
+	if err := t.addDefinition(block); err != nil {
 		return nil, err
 	}
 

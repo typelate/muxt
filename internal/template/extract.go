@@ -21,6 +21,31 @@ func Extract(src *Tree) iter.Seq2[string, *Tree] {
 	}
 }
 
+// DefinedTrees returns the trees a parse defined, by name, as text/template's
+// set would hold them: root is the tree ParseTree returned and treeSet the
+// tree set it was given, which the parser filled with the top-level tree and
+// each define and block it kept, applying text/template's rule that a
+// definition replaces an empty one and never one that is not empty.
+//
+// A define's tree is the one Extract builds for it, which carries the
+// diagnostics recorded in its body; a block's and the top-level tree are
+// the parser's own.
+func DefinedTrees(root *Tree, treeSet map[string]*Tree) map[string]*Tree {
+	extracted := make(map[*ListNode]*Tree)
+	for _, tree := range Extract(root) {
+		extracted[tree.Root] = tree
+	}
+	trees := make(map[string]*Tree, len(treeSet))
+	for name, kept := range treeSet {
+		if tree, ok := extracted[kept.Root]; ok && kept.define {
+			trees[name] = tree
+			continue
+		}
+		trees[name] = kept
+	}
+	return trees
+}
+
 // extractDefines recursively walks the AST looking for DefineNode instances.
 // Each DefineNode is converted into a separate Tree and yielded.
 // Returns false if the yield function returned false (caller wants to stop).

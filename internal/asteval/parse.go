@@ -41,21 +41,12 @@ func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*
 	if err != nil {
 		return nil, err
 	}
-	// The parser registered the top-level tree and any blocks; the define
-	// clauses it kept inline are taken out here. As text/template does,
-	// a tree replaces one already registered under its name only when
-	// that one is empty, so a top-level template holding nothing but
-	// define clauses gives way to a define of its own name.
-	delete(treeSet, name)
-	add := func(name string, tree *template.Tree) {
-		if existing, ok := treeSet[name]; !ok || template.IsEmptyTree(existing.Root) {
-			treeSet[name] = tree
-		}
-	}
-	for definedName, tree := range template.Extract(root) {
-		add(definedName, tree)
-	}
-	add(name, root)
+	// The parser registered the top-level tree and each define and block,
+	// with text/template's precedence between definitions of one name:
+	// a second definition that is not empty is a parse error, and a top-level
+	// template holding nothing but define clauses gives way to a define of
+	// its own name.
+	treeSet = template.DefinedTrees(root, treeSet)
 	for _, tree := range treeSet {
 		tree.HTMLMode = true
 		template.AnnotateHTMLContexts(tree.Root)

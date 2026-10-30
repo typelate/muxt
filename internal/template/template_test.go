@@ -156,3 +156,38 @@ func TestTemplateParseRecordsTheNameAsGiven(t *testing.T) {
 		}
 	}
 }
+
+// TestTemplateParseRedefinition states text/template's rules for a name
+// defined twice in one Parse, and that a block nested in a define is a
+// template of the set.
+func TestTemplateParseRedefinition(t *testing.T) {
+	for _, tt := range []struct {
+		name, text, wantErr, want string
+	}{
+		{name: "a block and a define", text: `{{block "a" .}}x{{end}}{{define "a"}}y{{end}}`, wantErr: `template: t:1: template: multiple definition of template "a"`},
+		{name: "two defines", text: `{{define "a"}}x{{end}}{{define "a"}}y{{end}}`, wantErr: `template: t:1: template: multiple definition of template "a"`},
+		{name: "a later empty define", text: `{{define "a"}}x{{end}}{{define "a"}}{{end}}`, want: "x"},
+		{name: "an earlier empty define", text: `{{define "a"}} {{end}}{{define "a"}}y{{end}}`, want: "y"},
+		{name: "a block in a define", text: `{{define "d"}}{{block "a" .}}x{{end}}{{end}}`, want: "x"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts, err := template.New[any]("t").Parse(tt.text)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("Parse(%q) error = %v, want %q", tt.text, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.text, err)
+			}
+			tree, ok := ts.FindTree("a")
+			if !ok {
+				t.Fatalf(`Parse(%q): no "a"`, tt.text)
+			}
+			if got := tree.Root.String(); got != tt.want {
+				t.Errorf(`Parse(%q): "a" = %q, want %q`, tt.text, got, tt.want)
+			}
+		})
+	}
+}

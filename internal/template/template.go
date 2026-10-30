@@ -108,29 +108,23 @@ func (t *Template[S]) Parse(text string) (*Template[S], error) {
 		ContinueOK:  !hasContinue,
 	}
 
-	tree, err := ParseTree(t.name, t.name, text, nil, options)
+	treeSet := make(map[string]*Tree)
+	tree, err := ParseTree(t.name, t.name, text, treeSet, options)
 	if err != nil {
 		return nil, err
 	}
 	// text/template records the name as given, with no file behind it;
-	// ParseTree takes it for a file path.
+	// ParseTree takes it for a file path. The trees the parser registered
+	// copied the root's names, and Extract copies them from the root.
 	tree.ParseName, tree.Filepath = t.name, ""
-	t.tree = tree
-	AnnotateHTMLContexts(tree.Root)
-
-	for name, tr := range Extract(tree) {
-		AnnotateHTMLContexts(tr.Root)
-		tmpl := t.templates[name]
-		if tmpl == nil {
-			tmpl = &Template[S]{
-				name:      name,
-				templates: t.templates,
-			}
-			t.templates[name] = tmpl
-		}
-		tmpl.tree = tr
+	for _, tr := range treeSet {
+		tr.ParseName, tr.Filepath = t.name, ""
 	}
-
+	for name, tr := range DefinedTrees(tree, treeSet) {
+		if _, err := t.AddParseTree(name, tr); err != nil {
+			return nil, err
+		}
+	}
 	return t, nil
 }
 
@@ -145,6 +139,10 @@ func (t *Template[S]) AddParseTree(name string, tree *Tree) (*Template[S], error
 		}
 		t.templates[name] = tmpl
 	}
-	tmpl.tree = tree
+	// As text/template does, an empty tree does not replace one the
+	// template already has.
+	if tmpl.tree == nil || !IsEmptyTree(tree.Root) {
+		tmpl.tree = tree
+	}
 	return tmpl, nil
 }
