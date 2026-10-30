@@ -372,14 +372,22 @@ func Execute(global *Global, tree *template.Tree, data types.Type) error {
 	// AST-only warning passes run independently of type checking, so they
 	// still report even when the walk below fails.
 	reportUnusedVariables(global, tree)
-	s := &scope{
-		global: global,
-		variables: map[string]types.Type{
-			"$": data,
-		},
-	}
+	s := newTemplateScope(global, tree, data, nil)
 	_, err := s.walk(tree, data, nil, tree.Root)
 	return err
+}
+
+// newTemplateScope returns the scope for walking tree's body with dot,
+// invoked from within the templates in parent.
+func newTemplateScope(global *Global, tree *template.Tree, dot types.Type, parent []templateInvocation) *scope {
+	return &scope{
+		global: global,
+		variables: map[string]types.Type{
+			"$": dot,
+		},
+		// Clip so sibling invocations never share a backing array.
+		invocations: append(slices.Clip(parent), templateInvocation{tree: tree, dot: dot}),
+	}
 }
 
 type scope struct {
@@ -393,14 +401,36 @@ type scope struct {
 	// ("" is the dot itself, ".User" is dot.User), populated by enclosing
 	// {{if}}/{{with}} conditions; it suppresses the W003 nil-pointer warning.
 	guarded map[string]bool
+
+	// invocations are the template trees being checked, outermost first,
+	// each with the dot it was invoked with. A tree invoked again with an
+	// identical dot is already being checked further up, so walking it
+	// again would only repeat its errors, or never end when it recurses.
+	// Trees are compared by identity, not name, so a root tree whose name
+	// resolves to a different body does not hide that body.
+	invocations []templateInvocation
+}
+
+type templateInvocation struct {
+	tree *template.Tree
+	dot  types.Type
 }
 
 func (s *scope) child() *scope {
 	return &scope{
-		global:    s.global,
-		variables: maps.Clone(s.variables),
-		guarded:   maps.Clone(s.guarded),
+		global:      s.global,
+		variables:   maps.Clone(s.variables),
+		guarded:     maps.Clone(s.guarded),
+		invocations: s.invocations,
 	}
+}
+
+// invoking reports whether tree is already being checked with an
+// identical dot.
+func (s *scope) invoking(tree *template.Tree, dot types.Type) bool {
+	return slices.ContainsFunc(s.invocations, func(inv templateInvocation) bool {
+		return inv.tree == tree && types.Identical(inv.dot, dot)
+	})
 }
 
 func (s *scope) walk(tree *template.Tree, dot, prev types.Type, node template.Node) (types.Type, error) {
@@ -532,6 +562,9 @@ func (s *scope) checkBlockNode(tree *template.Tree, dot, _ types.Type, n *templa
 			variables: map[string]types.Type{
 				"$": x,
 			},
+			// The body is walked inline, so the templates enclosing the
+			// block are still being checked.
+			invocations: s.invocations,
 		}
 		if _, err := childScope.walk(tree, x, nil, n.Body); err != nil {
 			return err
@@ -696,12 +729,10 @@ func (s *scope) checkTemplateNode(tree *template.Tree, dot types.Type, n *templa
 	if !ok {
 		return newError(tree, n, "template %q not found", n.Name)
 	}
-	childScope := scope{
-		global: s.global,
-		variables: map[string]types.Type{
-			"$": x,
-		},
+	if s.invoking(childTree, x) {
+		return nil
 	}
+	childScope := newTemplateScope(s.global, childTree, x, s.invocations)
 	_, err := childScope.walk(childTree, x, nil, childTree.Root)
 	return err
 }
