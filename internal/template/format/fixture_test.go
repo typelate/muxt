@@ -172,6 +172,9 @@ func TestFixtures(t *testing.T) {
 		name := fixtureName(filename)
 		t.Run(name, func(t *testing.T) {
 			fx := readFixture(t, filename)
+			if hasBranch(fx.input) && len(fx.data) < 2 {
+				t.Errorf("%s: has {{if}}, {{with}} or {{range}} but %d data set(s); add data/truthy.json and data/empty.json so both arms render", name, len(fx.data))
+			}
 
 			// (a) golden
 			got, err := Source("input.gohtml", fx.input)
@@ -213,6 +216,40 @@ func TestFixtures(t *testing.T) {
 				t.Errorf("%s: %s", name, p)
 			}
 		})
+	}
+}
+
+// hasBranch reports whether src contains an {{if}}, {{with}} or {{range}},
+// whose arms render only under data that selects them.
+func hasBranch(src string) bool {
+	tree, err := template.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
+		EmitComment: true,
+		ParseHTML:   true,
+		BreakOK:     true,
+		ContinueOK:  true,
+	})
+	if err != nil {
+		return false
+	}
+	found := false
+	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+		switch n.(type) {
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			found = true
+		}
+	})
+	return found
+}
+
+func TestKnownViolationsNameFixtures(t *testing.T) {
+	names := make(map[string]bool)
+	for _, filename := range fixtureFiles(t) {
+		names[fixtureName(filename)] = true
+	}
+	for name, id := range knownViolations {
+		if !names[name] {
+			t.Errorf("knownViolations[%q] = %q names no fixture under testdata", name, id)
+		}
 	}
 }
 

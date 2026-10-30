@@ -18,3 +18,26 @@
 {{if .A}}<p>a</p>{{else if .B}}<p>b</p>{{else}}<p>c</p>{{end}}
 {{if .Show}}<p>indented</p>{{else}}<p>not indented</p>{{end}}
 {{range .Items}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{
+	"Title": "Hello",
+	"Show": true,
+	"A": true,
+	"B": false,
+	"X": {"Value": "inner"},
+	"Items": [
+		{"Name": "alpha", "Active": true, "Done": false},
+		{"Name": "beta", "Active": false, "Done": false},
+		{"Name": "gamma", "Active": true, "Done": true}
+	],
+	"Name": "World",
+	"Value": "42",
+	"Active": true,
+	"Done": false,
+	"URL": "https://example.com",
+	"Label": "click",
+	"Class": "main",
+	"ID": 7
+}
