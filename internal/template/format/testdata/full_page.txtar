@@ -1,0 +1,12 @@
+-- input.gohtml --
+<!DOCTYPE html><html><head><title>{{.Title}}</title></head><body><h1>{{.Title}}</h1>{{if .Show}}<p>{{.Name}}</p>{{end}}{{range .Items}}<div><span>{{.Name}}</span></div>{{end}}</body></html>
+-- format.gohtml --
+<!DOCTYPE html>
+<html>
+	<head><title>{{.Title}}</title></head>
+	<body>
+		<h1>{{.Title}}</h1>
+		{{if .Show}}<p>{{.Name}}</p>{{end}}
+		{{range .Items}}<div><span>{{.Name}}</span></div>{{end}}
+	</body>
+</html>

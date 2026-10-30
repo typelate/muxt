@@ -1,0 +1,22 @@
+-- input.gohtml --
+<pre>  line one
+  line two  </pre>
+<script>
+  var x = 1;
+  if (x > 0) { console.log(x); }
+</script>
+<style>
+  body { color: red; }
+  p { margin: 0; }
+</style>
+-- format.gohtml --
+<pre>  line one
+  line two  </pre>
+<script>
+  var x = 1;
+  if (x > 0) { console.log(x); }
+</script>
+<style>
+  body { color: red; }
+  p { margin: 0; }
+</style>

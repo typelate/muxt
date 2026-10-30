@@ -1,0 +1,20 @@
+-- input.gohtml --
+{{if .Show -}}<p>yes</p>{{end}}
+{{with .X -}}<p>{{.Value}}</p>{{end}}
+{{range .Items -}}<li>{{.Name}}</li>{{end}}
+{{define "trimdef" -}}<p>content</p>{{end}}
+{{if .A}}<p>a</p>{{else -}}<p>b</p>{{end}}
+{{if .A -}}<p>a</p>{{else if .B -}}<p>b</p>{{else -}}<p>c</p>{{end}}
+{{if .Show}}<p>indented</p>{{else -}}<p>not indented</p>{{end}}
+{{range .Items -}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}
+-- format.gohtml --
+{{if .Show}}<p>yes</p>{{end}}
+{{with .X}}<p>{{.Value}}</p>{{end}}
+{{range .Items}}<li>{{.Name}}</li>{{end}}
+{{define "trimdef" -}}
+	<p>content</p>
+{{- end}}
+{{if .A}}<p>a</p>{{else}}<p>b</p>{{end}}
+{{if .A}}<p>a</p>{{else if .B}}<p>b</p>{{else}}<p>c</p>{{end}}
+{{if .Show}}<p>indented</p>{{else}}<p>not indented</p>{{end}}
+{{range .Items}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}

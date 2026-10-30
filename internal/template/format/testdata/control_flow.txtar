@@ -1,0 +1,33 @@
+-- input.gohtml --
+<div>{{if .Show}}<p>yes</p>{{end}}</div>
+{{if .Show}}<p>visible</p>{{end}}
+{{if .A}}<p>a</p>{{else}}<p>b</p>{{end}}
+{{if .A}}<p>a</p>{{else}}{{if .B}}<p>b</p>{{else}}<p>c</p>{{end}}{{end}}
+{{if .Show}}<p>{{.Value}}</p>{{end}}
+{{with .X}}<p>{{.Value}}</p>{{end}}
+{{with .X}}<p>{{.Value}}</p>{{else}}<p>fallback</p>{{end}}
+{{with .A}}<p>a</p>{{else}}{{with .B}}<p>b</p>{{end}}{{end}}
+<ul>{{range .Items}}<li>{{.Name}}</li>{{end}}{{range .Items}}<li>{{.Name}}</li>{{else}}<p>no items</p>{{end}}</ul>
+{{range $i, $v := .Items}}<li>{{$i}}: {{$v}}</li>{{end}}
+{{range .Items}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}
+{{range .Items}}{{if .Done}}{{break}}{{end}}<p>{{.Name}}</p>{{end}}
+{{range .Items}}{{if .Done}}{{continue}}{{end}}<p>{{.Name}}</p>{{end}}
+<div {{if .Show}}class="a"{{end}}>text</div>
+-- format.gohtml --
+<div>{{if .Show}}<p>yes</p>{{end}}</div>
+{{if .Show}}<p>visible</p>{{end}}
+{{if .A}}<p>a</p>{{else}}<p>b</p>{{end}}
+{{if .A}}<p>a</p>{{else if .B}}<p>b</p>{{else}}<p>c</p>{{end}}
+{{if .Show}}<p>{{.Value}}</p>{{end}}
+{{with .X}}<p>{{.Value}}</p>{{end}}
+{{with .X}}<p>{{.Value}}</p>{{else}}<p>fallback</p>{{end}}
+{{with .A}}<p>a</p>{{else with .B}}<p>b</p>{{end}}
+<ul>
+	{{range .Items}}<li>{{.Name}}</li>{{end}}
+	{{range .Items}}<li>{{.Name}}</li>{{else}}<p>no items</p>{{end}}
+</ul>
+{{range $i, $v := .Items}}<li>{{$i}}: {{$v}}</li>{{end}}
+{{range .Items}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}
+{{range .Items}}{{if .Done}}{{break}}{{end}}<p>{{.Name}}</p>{{end}}
+{{range .Items}}{{if .Done}}{{continue}}{{end}}<p>{{.Name}}</p>{{end}}
+<div {{if .Show}}class="a"{{end}}>text</div>
