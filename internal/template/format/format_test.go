@@ -181,11 +181,11 @@ func TestFormattingEdgeCases(t *testing.T) {
 		{name: "td with mixed content", input: `<td>{{.Name}} ({{.Value}})</td>`},
 
 		// --- Whitespace normalization (browser-equivalent, standard formatter behavior) ---
-		{name: "multiple spaces between words", input: `<p>Hello     world</p>`},
+		{name: "multiple spaces between words", input: `<p>Hello     world</p>`, normalizes: true},
 		{name: "newline between inline elements", input: "<p><span>a</span>\n<span>b</span></p>", normalizes: true},
 		{name: "tab between inline elements", input: "<p><span>a</span>\t<span>b</span></p>", normalizes: true},
-		{name: "space before closing tag", input: `<p>text </p>`},
-		{name: "space after opening tag", input: `<p> text</p>`},
+		{name: "space before closing tag", input: `<p>text </p>`, normalizes: true},
+		{name: "space after opening tag", input: `<p> text</p>`, normalizes: true},
 
 		// --- Long inline content (should NOT wrap prose) ---
 		{name: "long paragraph with link", input: `<p>This is a sentence with <a href="#">a link</a> embedded in it that might be long enough to matter.</p>`},

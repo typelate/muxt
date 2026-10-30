@@ -4,39 +4,14 @@
 package format
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
+	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/lex"
 )
-
-// inlineElements is the set of HTML elements that stay in text flow.
-var inlineElements = map[string]bool{
-	"a": true, "abbr": true, "b": true, "bdi": true, "bdo": true,
-	"br": true, "cite": true, "code": true, "data": true, "dfn": true,
-	"em": true, "i": true, "kbd": true, "mark": true, "q": true,
-	"rp": true, "rt": true, "ruby": true, "s": true, "samp": true,
-	"small": true, "span": true, "strong": true, "sub": true, "sup": true,
-	"time": true, "u": true, "var": true, "wbr": true,
-}
-
-// whitespaceSensitiveElements preserve their content exactly as written.
-var whitespaceSensitiveElements = map[string]bool{
-	"pre":       true,
-	"listing":   true,
-	"xmp":       true,
-	"plaintext": true,
-	"textarea":  true,
-}
-
-// rawTextElements have content that should not be reformatted.
-var rawTextElements = map[string]bool{
-	"script":   true,
-	"style":    true,
-	"textarea": true,
-	"title":    true,
-}
 
 // Option configures the formatter.
 type Option func(*formatter)
@@ -79,21 +54,60 @@ func Node(root template.Node, opts ...Option) string {
 	for _, opt := range opts {
 		opt(f)
 	}
-	f.node(root)
-	result := cleanUnnecessaryTrim(f.sb.String(), f.leftDelim, f.rightDelim)
-	return cleanWhitespace(result)
+	list, ok := root.(*template.ListNode)
+	if !ok {
+		list = &template.ListNode{Nodes: []template.Node{root}}
+	}
+	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, analysis.WhitespaceOptions{})
+	f.cls = classify(list, f.styles)
+	f.opaque = make(map[template.Node]bool, len(f.cls.opaque))
+	for _, n := range f.cls.opaque {
+		f.opaque[n] = true
+	}
+	f.gapRuns = make(map[runKey]bool, len(f.cls.gaps))
+	for _, g := range f.cls.gaps {
+		if g.text != nil {
+			f.gapRuns[runKey{g.text, g.start}] = true
+		}
+	}
+	f.children(list, list.Nodes, listOptions{layout: blockLayout, root: true})
+	return f.cleanUnnecessaryTrim(f.sb.String())
 }
 
 type formatter struct {
-	sb              *strings.Builder
-	indent          int
-	preserveContent bool
-	atLineStart     bool
-	leftDelim       string
-	rightDelim      string
-	maxLineWidth    int
-	maxInlineAttrs  int
+	sb             *strings.Builder
+	indent         int
+	atLineStart    bool
+	leftDelim      string
+	rightDelim     string
+	maxLineWidth   int
+	maxInlineAttrs int
+
+	styles  analysis.Whitespaces
+	cls     classes
+	opaque  map[template.Node]bool // subtrees emitted from source
+	gapRuns map[runKey]bool        // runs of text items emitted as gaps
+
+	// Output offsets of the trim markers the printer wrote: where "- "
+	// follows a left delimiter and where " -" precedes a right one.
+	leftTrims, rightTrims []int
 }
+
+// runKey names the run starting at byte start of text.
+type runKey struct {
+	text  *template.TextNode
+	start int
+}
+
+// layoutKind is how a child list is printed: on the lines of its parent
+// (inline) or one level deeper with the closing tag on its own line
+// (block).
+type layoutKind uint8
+
+const (
+	inlineLayout layoutKind = iota
+	blockLayout
+)
 
 func (f *formatter) writeIndent() {
 	for range f.indent {
@@ -112,17 +126,208 @@ func (f *formatter) writeString(s string) {
 	f.atLineStart = false
 }
 
-// writeActionWithTrim writes a template action with optional trim markers.
-func (f *formatter) writeActionWithTrim(content string, trimLeft, trimRight bool) {
+// writeLeftDelim writes the left delimiter and, with trim, the "- "
+// marker after it.
+func (f *formatter) writeLeftDelim(trim bool) {
 	f.writeString(f.leftDelim)
-	if trimLeft {
+	if trim {
+		f.leftTrims = append(f.leftTrims, f.sb.Len())
 		f.writeString("- ")
 	}
-	f.writeString(content)
-	if trimRight {
+}
+
+// writeRightDelim writes, with trim, the " -" marker and then the right
+// delimiter.
+func (f *formatter) writeRightDelim(trim bool) {
+	if trim {
+		f.rightTrims = append(f.rightTrims, f.sb.Len())
 		f.writeString(" -")
 	}
 	f.writeString(f.rightDelim)
+}
+
+// writeActionWithTrim writes a template action with optional trim markers.
+func (f *formatter) writeActionWithTrim(content string, trimLeft, trimRight bool) {
+	f.writeLeftDelim(trimLeft)
+	f.writeString(content)
+	f.writeRightDelim(trimRight)
+}
+
+// writeRun writes the whitespace run g as its class allows (spec §6.3):
+// a preserved run byte for byte; a preserve-breaks run as its line
+// breaks alone, or as written when it has none; any other run as
+// collapse-only: empty stays empty, spaces and tabs become one space,
+// and a run with a line break becomes one newline plus the current
+// indentation. The caller handles a reflowable or trimmed run at a list
+// boundary; in either layout such a run between items is written as
+// collapse-only until layout chooses it (Task 10).
+func (f *formatter) writeRun(g gap, layout layoutKind) {
+	run := g.bytes()
+	if run == "" {
+		return
+	}
+	switch g.class {
+	case runPreserved:
+		f.writeString(run)
+	case runPreserveBreaks:
+		n := lineBreaks(run)
+		if n == 0 {
+			f.writeString(run)
+			return
+		}
+		for range n {
+			f.newline()
+		}
+	default:
+		if lineBreaks(run) == 0 {
+			f.writeString(" ")
+			return
+		}
+		f.newline()
+		f.writeIndent()
+	}
+}
+
+// bytes returns the run's text; it is empty for an empty gap.
+func (g gap) bytes() string {
+	if g.text == nil {
+		return ""
+	}
+	return string(g.text.Text[g.start:g.end])
+}
+
+// lineBreaks counts the line breaks in a run: LF, CR, and CR LF each
+// count once, as the HTML parser normalizes them.
+func lineBreaks(run string) int {
+	n := 0
+	for i := 0; i < len(run); i++ {
+		crlf := run[i] == '\r' && i+1 < len(run) && run[i+1] == '\n'
+		if (run[i] == '\n' || run[i] == '\r') && !crlf {
+			n++
+		}
+	}
+	return n
+}
+
+// listOptions say how children prints one child list.
+type listOptions struct {
+	layout layoutKind
+	// outer is the indentation of the line the list closes on.
+	outer int
+	// root marks the tree root: nothing closes it.
+	root bool
+	// trimEdges reports that the formatter writes trim markers next to
+	// both boundaries, so the boundary runs never render.
+	trimEdges bool
+	// trimBoundaryActions adds trim markers to boundary actions next to
+	// a reflowable boundary run.
+	trimBoundaryActions bool
+}
+
+// children prints the items of the list key (its children are nodes)
+// with the gaps between them. The current indentation is the items'
+// level. In block layout a reflowable or trimmed boundary run is
+// replaced by a newline and indentation; in inline layout it is dropped.
+// Every other gap is written by writeRun. children leaves the cursor
+// where the closing tag or action goes.
+func (f *formatter) children(key template.Node, nodes []template.Node, o listOptions) {
+	items, _ := splitChildren(nodes)
+	inner := f.indent
+	first := f.cls.gaps[gapKey{key, 0}]
+	last := f.cls.gaps[gapKey{key, len(items)}]
+	for i := 0; i <= len(items); i++ {
+		g := f.cls.gaps[gapKey{key, i}]
+		switch {
+		case i == len(items):
+			f.indent = o.outer
+			f.closeGap(g, o)
+			f.indent = inner
+			continue
+		case i == 0:
+			f.openGap(g, o)
+		default:
+			f.betweenGap(items[i-1], items[i], g, o.layout)
+		}
+		trimLeft := o.trimBoundaryActions && i == 0 && first.class == runReflowable
+		trimRight := o.trimBoundaryActions && i == len(items)-1 && last.class == runReflowable
+		f.item(items[i], o.layout, trimLeft, trimRight)
+	}
+}
+
+// droppable reports whether a boundary run never renders, so the
+// printer may replace it.
+func droppable(g gap, o listOptions) bool {
+	return o.trimEdges || g.class == runReflowable || g.class == runTrimmed
+}
+
+func (f *formatter) openGap(g gap, o listOptions) {
+	if !droppable(g, o) {
+		f.writeRun(g, o.layout)
+		return
+	}
+	if o.layout == blockLayout {
+		if !f.atLineStart {
+			f.newline()
+		}
+		f.writeIndent()
+	}
+}
+
+func (f *formatter) closeGap(g gap, o listOptions) {
+	if !droppable(g, o) {
+		f.writeRun(g, o.layout)
+		return
+	}
+	if o.layout == blockLayout && !o.root {
+		if !f.atLineStart {
+			f.newline()
+		}
+		f.writeIndent()
+	}
+}
+
+func (f *formatter) betweenGap(prev, next template.Node, g gap, layout layoutKind) {
+	_, prevDefine := prev.(*template.DefineNode)
+	_, nextDefine := next.(*template.DefineNode)
+	if prevDefine && nextDefine && g.class != runPreserved && lineBreaks(g.bytes()) > 0 {
+		// A blank line between adjacent defines.
+		f.newline()
+		f.newline()
+		f.writeIndent()
+		return
+	}
+	f.writeRun(g, layout)
+}
+
+func (f *formatter) item(n template.Node, layout layoutKind, trimLeft, trimRight bool) {
+	switch {
+	case trimLeft || trimRight:
+		f.nodeWithBoundaryTrim(n, trimLeft, trimRight)
+	case layout == inlineLayout:
+		f.nodeInline(n)
+	default:
+		f.node(n)
+	}
+}
+
+// text writes a text item: content bytes verbatim, each run of its own
+// by its class. Its leading and trailing runs, when they are the gaps
+// next to it, are written by children.
+func (f *formatter) text(n *template.TextNode, layout layoutKind) {
+	runs := f.cls.runs[n]
+	for _, s := range splitRuns(n.Text) {
+		raw := string(n.Text[s.start:s.end])
+		switch {
+		case !s.space:
+			f.writeString(raw)
+		case f.gapRuns[runKey{n, s.start}]:
+		case len(runs) > 0 && runs[0].start == s.start:
+			f.writeRun(runs[0], layout)
+			runs = runs[1:]
+		default:
+			f.writeString(raw) // not classified: as written
+		}
+	}
 }
 
 func (f *formatter) node(n template.Node) {
@@ -135,7 +340,7 @@ func (f *formatter) node(n template.Node) {
 	case *template.HTMLDocumentFragmentNode:
 		f.documentFragment(n)
 	case *template.TextNode:
-		f.textNode(n)
+		f.text(n, blockLayout)
 	case *template.HTMLElementNode:
 		f.htmlElement(n)
 	case *template.HTMLAttributeNode:
@@ -167,6 +372,8 @@ func (f *formatter) node(n template.Node) {
 	}
 }
 
+// listNode and documentFragment print lists that children does not
+// reach, which a parsed tree does not have; they write each node in turn.
 func (f *formatter) listNode(n *template.ListNode) {
 	if n == nil {
 		return
@@ -177,51 +384,40 @@ func (f *formatter) listNode(n *template.ListNode) {
 }
 
 func (f *formatter) documentFragment(n *template.HTMLDocumentFragmentNode) {
-	f.formatChildren(n.Children)
+	for _, child := range n.Children {
+		f.node(child)
+	}
 }
 
-func (f *formatter) textNode(n *template.TextNode) {
-	if f.preserveContent {
-		f.writeString(string(n.Text))
-		return
+// isInline reports whether el is an inline box, which stays in text
+// flow. Every other element may take block layout.
+func (f *formatter) isInline(el *template.HTMLElementNode) bool {
+	ws, ok := f.styles[el]
+	return ok && (ws.Display == analysis.DisplayInline || ws.Display == analysis.DisplayNewline)
+}
+
+// writeSource writes el's children as written and its closing tag.
+func (f *formatter) writeSource(el *template.HTMLElementNode) {
+	for _, child := range el.Children {
+		f.writeString(child.String())
 	}
-	// Whitespace-only text nodes between block siblings are dropped
-	// (formatter controls structural whitespace).
-	text := string(n.Text)
-	if strings.TrimSpace(text) == "" {
-		return
-	}
-	f.writeString(text)
+	f.writeString("</")
+	f.writeString(el.TagName)
+	f.writeString(">")
 }
 
 func (f *formatter) htmlElement(n *template.HTMLElementNode) {
-	if f.preserveContent {
-		f.writeString(n.String())
-		return
-	}
-	tag := strings.ToLower(n.TagName)
-	isInline := inlineElements[tag]
-	isPreserve := whitespaceSensitiveElements[tag] || rawTextElements[tag]
-	isBlock := !isInline
-
-	// Open tag (positioning handled by formatChildren)
+	// Open tag (positioning handled by children)
 	f.writeString("<")
 	f.writeString(n.TagName)
 	f.formatAttributes(n)
+	f.writeString(">")
 	if n.Void {
-		f.writeString(">")
 		return
 	}
-	f.writeString(">")
 
-	if isPreserve {
-		// Pass through children unchanged
-		for _, child := range n.Children {
-			f.writeString(child.String())
-		}
-		f.writeString("</")
-		f.writeString(n.TagName)
-		f.writeString(">")
+	if f.opaque[n] {
+		f.writeSource(n)
 		return
 	}
 
@@ -233,7 +429,7 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 		return
 	}
 
-	allInline := allChildrenInline(n.Children)
+	allInline := f.allChildrenInline(n.Children)
 	hasLineBreaks := childrenHaveLineBreaks(n.Children)
 	tooLong := estimateElementInlineLength(n) > f.maxLineWidth
 
@@ -244,30 +440,19 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	// layout — block layout would introduce newlines/indentation that change
 	// rendered TextContent (e.g. <p>long prose...</p> should not become
 	// <p>\n\tlong prose...\n</p>).
-	useBlock := isBlock && (hasLineBreaks || (tooLong && !allInline))
+	useBlock := !f.isInline(n) && (hasLineBreaks || (tooLong && !allInline))
 
+	outer := f.indent
 	if useBlock {
 		f.indent++
-		if !hasLineBreaks {
-			f.formatChildrenBoundaryTrim(n.Children)
-		} else {
-			f.formatChildren(n.Children)
-		}
-		f.indent--
-		if !f.atLineStart {
-			f.newline()
-		}
-		f.writeIndent()
-		f.writeString("</")
-		f.writeString(n.TagName)
-		f.writeString(">")
+		f.children(n, n.Children, listOptions{layout: blockLayout, outer: outer, trimBoundaryActions: !hasLineBreaks})
+		f.indent = outer
 	} else {
-		// All inline: keep on same line
-		f.formatChildrenInline(n.Children)
-		f.writeString("</")
-		f.writeString(n.TagName)
-		f.writeString(">")
+		f.children(n, n.Children, listOptions{layout: inlineLayout, outer: outer})
 	}
+	f.writeString("</")
+	f.writeString(n.TagName)
+	f.writeString(">")
 }
 
 func (f *formatter) formatAttributes(n *template.HTMLElementNode) {
@@ -347,32 +532,24 @@ func (f *formatter) htmlDoctype(n *template.HTMLDoctypeNode) {
 }
 
 func (f *formatter) actionNode(n *template.ActionNode) {
-	f.writeString(f.leftDelim)
-	if n.TrimLeft {
-		f.writeString("- ")
-	}
+	f.writeLeftDelim(n.TrimLeft)
 	f.writePipe(n.Pipe)
-	if n.TrimRight {
-		f.writeString(" -")
-	}
-	f.writeString(f.rightDelim)
+	f.writeRightDelim(n.TrimRight)
 }
 
 func (f *formatter) templateNode(n *template.TemplateNode) {
-	f.writeString(f.leftDelim)
-	if n.TrimLeft {
-		f.writeString("- ")
-	}
+	f.templateCall(n, n.TrimLeft, n.TrimRight)
+}
+
+func (f *formatter) templateCall(n *template.TemplateNode, trimLeft, trimRight bool) {
+	f.writeLeftDelim(trimLeft)
 	f.writeString("template ")
 	f.writeString(strconv.Quote(n.Name))
 	if n.Pipe != nil {
 		f.sb.WriteByte(' ')
 		f.writePipe(n.Pipe)
 	}
-	if n.TrimRight {
-		f.writeString(" -")
-	}
-	f.writeString(f.rightDelim)
+	f.writeRightDelim(trimRight)
 }
 
 // trimPipeDelim strips a trailing right delimiter (and optional trim marker)
@@ -387,101 +564,49 @@ func trimPipeDelim(s, rightDelim string) string {
 }
 
 func (f *formatter) branchNode(n *template.BranchNode, keyword string) {
-	// Positioning handled by formatChildren.
 	f.writeActionWithTrim(keyword+" "+f.pipeText(n.Pipe), n.StartTrimLeft, n.StartTrimRight)
-
-	bodyInline := false
-	if n.List != nil && len(n.List.Nodes) > 0 {
-		if f.canInlineBody(n.List.Nodes) {
-			f.formatChildrenInline(n.List.Nodes)
-			bodyInline = true
-		} else {
-			if !n.StartTrimRight {
-				f.indent++
-			}
-			f.formatChildren(n.List.Nodes)
-			if !n.StartTrimRight {
-				f.indent--
-			}
-		}
+	f.body(n.List, n.StartTrimRight)
+	if n.ElseList != nil && len(n.ElseList.Nodes) > 0 {
+		f.formatElseList(n, n.ElseList)
 	}
+	f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
+}
 
-	hasElse := n.ElseList != nil && len(n.ElseList.Nodes) > 0
-	if hasElse {
-		bodyInline = f.formatElseList(n, n.ElseList, bodyInline)
+// body prints a branch body or else list on one line when it fits, else
+// one level deeper (at the same level after a -}}).
+func (f *formatter) body(list *template.ListNode, trimRight bool) {
+	if list == nil || len(list.Nodes) == 0 {
+		return
 	}
-
-	if bodyInline {
-		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
-	} else {
-		if !f.atLineStart {
-			f.newline()
-		}
-		f.writeIndent()
-		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
+	outer := f.indent
+	if f.canInlineBody(list.Nodes) {
+		f.children(list, list.Nodes, listOptions{layout: inlineLayout, outer: outer})
+		return
 	}
+	if !trimRight {
+		f.indent++
+	}
+	f.children(list, list.Nodes, listOptions{layout: blockLayout, outer: outer})
+	f.indent = outer
 }
 
 // formatElseList handles the else portion of a branch, recursing for else-if chains.
-// prevBodyInline indicates whether the preceding body was formatted inline.
-// It returns true when the last body was formatted inline.
-func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode, prevBodyInline bool) bool {
+func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode) {
 	if chain, chainKeyword := elseChain(elseList); chain != nil {
-		if !prevBodyInline {
-			if !f.atLineStart {
-				f.newline()
-			}
-			f.writeIndent()
-		}
 		// For else-if/else-with chains, the inner BranchNode carries the trim
 		// for the combined "{{else if ...}}" / "{{else with ...}}" action.
 		f.writeActionWithTrim("else "+chainKeyword+" "+f.pipeText(chain.Pipe), chain.StartTrimLeft, chain.StartTrimRight)
-		bodyInline := false
-		if chain.List != nil && len(chain.List.Nodes) > 0 {
-			if f.canInlineBody(chain.List.Nodes) {
-				f.formatChildrenInline(chain.List.Nodes)
-				bodyInline = true
-			} else {
-				if !chain.StartTrimRight {
-					f.indent++
-				}
-				f.formatChildren(chain.List.Nodes)
-				if !chain.StartTrimRight {
-					f.indent--
-				}
-			}
-		}
+		f.body(chain.List, chain.StartTrimRight)
 		if chain.ElseList != nil && len(chain.ElseList.Nodes) > 0 {
-			return f.formatElseList(chain, chain.ElseList, bodyInline)
+			f.formatElseList(chain, chain.ElseList)
 		}
-		return bodyInline
-	}
-
-	if !prevBodyInline {
-		if !f.atLineStart {
-			f.newline()
-		}
-		f.writeIndent()
+		return
 	}
 	f.writeActionWithTrim("else", parent.ElseTrimLeft, parent.ElseTrimRight)
-
-	if f.canInlineBody(elseList.Nodes) {
-		f.formatChildrenInline(elseList.Nodes)
-		return true
-	}
-
-	if !parent.ElseTrimRight {
-		f.indent++
-	}
-	f.formatChildren(elseList.Nodes)
-	if !parent.ElseTrimRight {
-		f.indent--
-	}
-	return false
+	f.body(elseList, parent.ElseTrimRight)
 }
 
 func (f *formatter) defineNode(n *template.DefineNode) {
-	// Positioning handled by formatChildren.
 	hasBody := n.Body != nil && len(n.Body.Nodes) > 0
 
 	// Empty body: emit on one line.
@@ -491,10 +616,11 @@ func (f *formatter) defineNode(n *template.DefineNode) {
 		return
 	}
 
+	outer := f.indent
 	// Inline body: emit on one line. Preserves rendered output exactly.
-	if allChildrenInline(n.Body.Nodes) && f.canInlineBody(n.Body.Nodes) {
+	if f.allChildrenInline(n.Body.Nodes) && f.canInlineBody(n.Body.Nodes) {
 		f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight)
-		f.formatChildrenInline(n.Body.Nodes)
+		f.children(n.Body, n.Body.Nodes, listOptions{layout: inlineLayout, outer: outer})
 		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
 		return
 	}
@@ -503,44 +629,30 @@ func (f *formatter) defineNode(n *template.DefineNode) {
 	// formatter-introduced leading "\n\t" and trailing "\n" do not leak into
 	// the rendered template output. Without these markers, callers of the
 	// define would see surrounding whitespace that was not in their source.
-	f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, true)
+	// Preserved runs (text that is not a page) keep their bytes instead.
+	forceTrim := f.cls.gaps[gapKey{n.Body, 0}].class != runPreserved
+	f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight || forceTrim)
 	f.indent++
-	f.formatChildren(n.Body.Nodes)
-	f.indent--
-
-	if !f.atLineStart {
-		f.newline()
-	}
-	f.writeIndent()
-	f.writeActionWithTrim("end", true, n.EndTrimRight)
+	f.children(n.Body, n.Body.Nodes, listOptions{layout: blockLayout, outer: outer, trimEdges: forceTrim})
+	f.indent = outer
+	f.writeActionWithTrim("end", n.EndTrimLeft || forceTrim, n.EndTrimRight)
 }
 
 func (f *formatter) blockNode(n *template.BlockNode) {
 	f.writeActionWithTrim("block "+strconv.Quote(n.Name)+" "+f.pipeText(n.Pipe), false, false)
-
+	outer := f.indent
 	if n.Body != nil && len(n.Body.Nodes) > 0 {
 		f.indent++
-		f.formatChildren(n.Body.Nodes)
-		f.indent--
+		f.children(n.Body, n.Body.Nodes, listOptions{layout: blockLayout, outer: outer})
+		f.indent = outer
 	}
-
-	if !f.atLineStart {
-		f.newline()
-	}
-	f.writeIndent()
 	f.writeActionWithTrim("end", false, false)
 }
 
 func (f *formatter) commentNode(n *template.CommentNode) {
-	f.writeString(f.leftDelim)
-	if n.TrimLeft {
-		f.writeString("- ")
-	}
+	f.writeLeftDelim(n.TrimLeft)
 	f.writeString(n.Text)
-	if n.TrimRight {
-		f.writeString(" -")
-	}
-	f.writeString(f.rightDelim)
+	f.writeRightDelim(n.TrimRight)
 }
 
 func (f *formatter) writePipe(p *template.PipeNode) {
@@ -558,185 +670,21 @@ func (f *formatter) pipeText(p *template.PipeNode) string {
 	return trimPipeDelim(p.String(), f.rightDelim)
 }
 
-// formatChildren formats a list of child nodes with block-level structure.
-// It handles newline and indentation for every child so that individual
-// node methods only emit their own content.
-func (f *formatter) formatChildren(children []template.Node) {
-	f.formatChildrenImpl(children, nil, nil)
-}
-
-// formatChildrenBoundaryTrim is like formatChildren but adds trim markers to
-// action/template nodes at the boundaries. This preserves the rendered output
-// when the formatter breaks originally-inline content into block layout.
-func (f *formatter) formatChildrenBoundaryTrim(children []template.Node) {
-	first, last := significantBoundaries(children)
-	f.formatChildrenImpl(children, first, last)
-}
-
-func (f *formatter) formatChildrenImpl(children []template.Node, trimFirst, trimLast template.Node) {
-	var lastSignificant template.Node
-	var continueInline bool
-	for _, child := range children {
-		// Extra blank line between adjacent defines.
-		_, isDefine := child.(*template.DefineNode)
-		_, lastWasDefine := lastSignificant.(*template.DefineNode)
-		if isDefine && lastWasDefine {
-			if !f.atLineStart {
-				f.newline()
-			}
-			f.newline()
-		}
-
-		// Text nodes: trim whitespace and write on own line.
-		if tn, ok := child.(*template.TextNode); ok {
-			text := strings.TrimSpace(string(tn.Text))
-			if text == "" {
-				// Preserve single space between inline siblings
-				if lastSignificant != nil && isInlineNode(lastSignificant) {
-					if nextSibling := nextNonWhitespace(children, child); nextSibling != nil && isInlineNode(nextSibling) {
-						if !isVoidHTMLElement(lastSignificant) || !isVoidHTMLElement(nextSibling) {
-							continueInline = true
-						}
-						continue
-					}
-				}
-				// Whitespace-only text with blank lines: emit one blank line
-				if hasBlankLine(string(tn.Text)) && lastSignificant != nil {
-					if !f.atLineStart {
-						f.newline()
-					}
-					f.newline()
-				}
-				continue
-			}
-			lines := strings.Split(text, "\n")
-			for i, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if trimmed == "" {
-					// Blank line between content lines: emit one blank line
-					if !f.atLineStart {
-						f.newline()
-					}
-					f.newline()
-					continue
-				}
-				if continueInline || (i == 0 && lastSignificant != nil && isInlineNode(lastSignificant)) {
-					f.writeString(" ")
-					f.writeString(trimmed)
-					continueInline = false
-				} else {
-					if !f.atLineStart {
-						f.newline()
-					}
-					f.writeIndent()
-					f.writeString(trimmed)
-				}
-			}
-			// Signal continuation if last line has content and next sibling is inline
-			lastTrimmed := strings.TrimSpace(lines[len(lines)-1])
-			if lastTrimmed != "" {
-				if next := nextNonWhitespace(children, child); next != nil && isInlineNode(next) {
-					continueInline = true
-				}
-			}
-			lastSignificant = child
-			continue
-		}
-
-		// All other children: ensure new line with indent.
-		if continueInline && isInlineNode(child) {
-			f.writeString(" ")
-			continueInline = false
-		} else {
-			continueInline = false
-			if !f.atLineStart {
-				f.newline()
-			}
-			f.writeIndent()
-		}
-		addLeft := trimFirst != nil && child == trimFirst
-		addRight := trimLast != nil && child == trimLast
-		if addLeft || addRight {
-			f.nodeWithBoundaryTrim(child, addLeft, addRight)
-		} else {
-			f.node(child)
-		}
-
-		lastSignificant = child
-	}
-}
-
 // nodeWithBoundaryTrim writes a node with overridden trim markers.
 // For action and template nodes, it forces trim on the specified sides.
 // For other node types, it falls back to normal formatting.
 func (f *formatter) nodeWithBoundaryTrim(n template.Node, trimLeft, trimRight bool) {
 	switch n := n.(type) {
 	case *template.ActionNode:
-		f.writeString(f.leftDelim)
-		if n.TrimLeft || trimLeft {
-			f.writeString("- ")
-		}
+		f.writeLeftDelim(n.TrimLeft || trimLeft)
 		f.writePipe(n.Pipe)
-		if n.TrimRight || trimRight {
-			f.writeString(" -")
-		}
-		f.writeString(f.rightDelim)
+		f.writeRightDelim(n.TrimRight || trimRight)
 	case *template.TemplateNode:
-		f.writeString(f.leftDelim)
-		if n.TrimLeft || trimLeft {
-			f.writeString("- ")
-		}
-		f.writeString("template ")
-		f.writeString(strconv.Quote(n.Name))
-		if n.Pipe != nil {
-			f.sb.WriteByte(' ')
-			f.writePipe(n.Pipe)
-		}
-		if n.TrimRight || trimRight {
-			f.writeString(" -")
-		}
-		f.writeString(f.rightDelim)
+		f.templateCall(n, n.TrimLeft || trimLeft, n.TrimRight || trimRight)
+	case *template.TextNode:
+		f.text(n, blockLayout)
 	default:
 		f.node(n)
-	}
-}
-
-// significantBoundaries returns the first and last non-whitespace children.
-func significantBoundaries(children []template.Node) (first, last template.Node) {
-	for _, child := range children {
-		if tn, ok := child.(*template.TextNode); ok && strings.TrimSpace(string(tn.Text)) == "" {
-			continue
-		}
-		if first == nil {
-			first = child
-		}
-		last = child
-	}
-	return
-}
-
-// formatChildrenInline formats children without adding block-level whitespace.
-// Leading and trailing whitespace-only text nodes are stripped — they are
-// formatting artifacts from block layout, not meaningful content.
-func (f *formatter) formatChildrenInline(children []template.Node) {
-	start := 0
-	for start < len(children) {
-		if tn, ok := children[start].(*template.TextNode); ok && strings.TrimSpace(string(tn.Text)) == "" {
-			start++
-		} else {
-			break
-		}
-	}
-	end := len(children)
-	for end > start {
-		if tn, ok := children[end-1].(*template.TextNode); ok && strings.TrimSpace(string(tn.Text)) == "" {
-			end--
-		} else {
-			break
-		}
-	}
-	for _, child := range children[start:end] {
-		f.nodeInline(child)
 	}
 }
 
@@ -747,29 +695,7 @@ func (f *formatter) nodeInline(n template.Node) {
 	}
 	switch n := n.(type) {
 	case *template.TextNode:
-		text := string(n.Text)
-		if strings.TrimSpace(text) == "" {
-			if text != "" {
-				f.writeString(" ")
-			}
-			return
-		}
-		if strings.Contains(text, "\n") {
-			// Collapse newlines but preserve meaningful leading/trailing spaces.
-			// A leading space separates from a preceding inline sibling;
-			// a trailing space separates from a following sibling.
-			// Newlines and tabs at boundaries are formatting artifacts.
-			hasLeadingSpace := text[0] == ' '
-			hasTrailingSpace := text[len(text)-1] == ' '
-			text = strings.TrimSpace(text)
-			if hasLeadingSpace {
-				text = " " + text
-			}
-			if hasTrailingSpace {
-				text = text + " "
-			}
-		}
-		f.writeString(text)
+		f.text(n, inlineLayout)
 	case *template.HTMLElementNode:
 		f.writeString("<")
 		f.writeString(n.TagName)
@@ -777,12 +703,15 @@ func (f *formatter) nodeInline(n template.Node) {
 			f.sb.WriteByte(' ')
 			f.writeString(attr.String())
 		}
+		f.writeString(">")
 		if n.Void {
-			f.writeString(">")
 			return
 		}
-		f.writeString(">")
-		f.formatChildrenInline(n.Children)
+		if f.opaque[n] {
+			f.writeSource(n)
+			return
+		}
+		f.children(n, n.Children, listOptions{layout: inlineLayout, outer: f.indent})
 		f.writeString("</")
 		f.writeString(n.TagName)
 		f.writeString(">")
@@ -818,9 +747,9 @@ func childrenHaveLineBreaks(children []template.Node) bool {
 
 // allChildrenInline returns true when every child is an inline-flow node
 // (text, inline HTML elements, actions, template calls).
-func allChildrenInline(children []template.Node) bool {
+func (f *formatter) allChildrenInline(children []template.Node) bool {
 	for _, child := range children {
-		if !isInlineNode(child) {
+		if !f.isInlineNode(child) {
 			return false
 		}
 	}
@@ -845,77 +774,42 @@ func estimateElementInlineLength(n *template.HTMLElementNode) int {
 	return length
 }
 
-// nextNonWhitespace returns the next non-whitespace-only sibling after current
-// in children, or nil if none exists.
-func nextNonWhitespace(children []template.Node, current template.Node) template.Node {
-	found := false
-	for _, child := range children {
-		if child == current {
-			found = true
-			continue
-		}
-		if !found {
-			continue
-		}
-		if tn, ok := child.(*template.TextNode); ok {
-			if strings.TrimSpace(string(tn.Text)) == "" {
-				continue
-			}
-		}
-		return child
-	}
-	return nil
-}
-
 // isInlineNode returns true for nodes that participate in inline text flow:
 // text nodes, inline HTML elements, actions, and template calls.
-func isInlineNode(n template.Node) bool {
+func (f *formatter) isInlineNode(n template.Node) bool {
 	switch n := n.(type) {
 	case *template.TextNode:
 		return true
 	case *template.HTMLElementNode:
-		return inlineElements[strings.ToLower(n.TagName)]
+		return f.isInline(n)
 	case *template.ActionNode, *template.TemplateNode:
 		return true
 	}
 	return false
 }
 
-func isVoidHTMLElement(n template.Node) bool {
-	e, ok := n.(*template.HTMLElementNode)
-	return ok && e.Void
-}
-
 // canInlineBody returns true when a list of nodes can be formatted inline:
-// no meaningful line breaks and total content length within maxLineWidth.
-// Whitespace-only text nodes are ignored (they represent source formatting).
-// Text nodes with content are checked after trimming leading/trailing whitespace.
+// no line breaks in the source and total content length within
+// maxLineWidth, not counting whitespace-only text or the leading and
+// trailing runs of text. A body written over several lines stays block
+// laid out, so formatting its block layout again keeps it.
 func (f *formatter) canInlineBody(nodes []template.Node) bool {
 	length := 0
 	for _, n := range nodes {
-		switch n := n.(type) {
-		case *template.TextNode:
-			text := strings.TrimSpace(string(n.Text))
-			if text == "" {
-				if hasBlankLine(string(n.Text)) {
-					return false
-				}
-				continue
-			}
-			if strings.Contains(text, "\n") {
-				return false
-			}
-			length += len(text)
-		default:
-			s := n.String()
-			if strings.Contains(s, "\n") {
-				return false
-			}
-			length += len(s)
+		s := n.String()
+		if strings.ContainsAny(s, "\n\r") {
+			return false
 		}
+		if _, ok := n.(*template.TextNode); ok {
+			s = strings.Trim(s, runBytes)
+		}
+		length += len(s)
 	}
 	return length <= f.maxLineWidth
 }
+
+// runBytes are the bytes of a whitespace run.
+const runBytes = " \t\n\r"
 
 // elseChain detects when an ElseList has a single branch child (IfNode or WithNode)
 // and returns it for "else if" / "else with" chaining.
@@ -932,188 +826,50 @@ func elseChain(elseList *template.ListNode) (*template.BranchNode, string) {
 	return nil, ""
 }
 
-// cleanUnnecessaryTrim removes trim markers from the formatted output when
-// there is no whitespace to trim. A left trim marker ({{- ) is unnecessary
-// when preceded by non-whitespace or at the start of the string. A right trim
-// marker ( -}}) is unnecessary when followed by non-whitespace or at the end
-// of the string.
-func cleanUnnecessaryTrim(s, leftDelim, rightDelim string) string {
-	leftTrim := leftDelim + "- "
-	rightTrim := " -" + rightDelim
-
-	// First pass: remove unnecessary left trims.
+// cleanUnnecessaryTrim removes the trim markers the printer wrote where
+// the run they would trim is empty in the output: a left marker that
+// follows content or starts the output, and a right marker that precedes
+// content. A right marker at the end of the output stays, because Source
+// appends the file's final run after it. Markers inside text emitted
+// from source are not touched.
+func (f *formatter) cleanUnnecessaryTrim(s string) string {
+	drop := make(map[int]int) // output offset → bytes to drop
+	for _, at := range f.leftTrims {
+		before := at - len(f.leftDelim) - 1
+		if before < 0 || !isRunByte(s[before]) {
+			drop[at] = len("- ")
+		}
+	}
+	for _, at := range f.rightTrims {
+		after := at + len(" -") + len(f.rightDelim)
+		if after < len(s) && !isRunByte(s[after]) {
+			drop[at] = len(" -")
+		}
+	}
+	if len(drop) == 0 {
+		return s
+	}
+	offsets := make([]int, 0, len(drop))
+	for at := range drop {
+		offsets = append(offsets, at)
+	}
+	slices.Sort(offsets)
 	var b strings.Builder
 	b.Grow(len(s))
-	for i := 0; i < len(s); {
-		if i+len(leftTrim) <= len(s) && s[i:i+len(leftTrim)] == leftTrim {
-			if i == 0 || !isWhitespace(s[i-1]) {
-				b.WriteString(leftDelim)
-				i += len(leftTrim)
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-		i++
+	prev := 0
+	for _, at := range offsets {
+		b.WriteString(s[prev:at])
+		prev = at + drop[at]
 	}
-
-	// Second pass: remove unnecessary right trims.
-	s = b.String()
-	b.Reset()
-	b.Grow(len(s))
-	for i := 0; i < len(s); {
-		if i+len(rightTrim) <= len(s) && s[i:i+len(rightTrim)] == rightTrim {
-			after := i + len(rightTrim)
-			if after >= len(s) || !isWhitespace(s[after]) {
-				b.WriteString(rightDelim)
-				i += len(rightTrim)
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-		i++
-	}
-
+	b.WriteString(s[prev:])
 	return b.String()
-}
-
-// hasBlankLine reports whether s contains at least one blank line
-// (two consecutive newlines, possibly with whitespace between them).
-func hasBlankLine(s string) bool {
-	lines := strings.Split(s, "\n")
-	if len(lines) < 3 {
-		return false
-	}
-	for _, line := range lines[1 : len(lines)-1] {
-		if strings.TrimSpace(line) == "" {
-			return true
-		}
-	}
-	return false
-}
-
-func isWhitespace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
-}
-
-// cleanWhitespace performs gofmt-style whitespace normalization:
-//  1. Trim trailing whitespace (spaces/tabs) from every line
-//  2. Collapse runs of blank lines to at most one
-//  3. Skip both above inside whitespace-sensitive elements (pre, textarea, etc.)
-//  4. Trim trailing blank lines at the end of output
-func cleanWhitespace(s string) string {
-	lines := strings.Split(s, "\n")
-	var out []string
-	preserveDepth := 0
-	prevBlank := false
-
-	for _, line := range lines {
-		if preserveDepth > 0 {
-			// Inside whitespace-sensitive element: pass through unchanged
-			preserveDepth += countSensitiveOpens(line) - countSensitiveCloses(line)
-			out = append(out, line)
-			prevBlank = false
-			continue
-		}
-
-		opens := countSensitiveOpens(line)
-		closes := countSensitiveCloses(line)
-		if opens > closes {
-			// Line opens a sensitive element — pass through, enter preserve mode
-			preserveDepth = opens - closes
-			out = append(out, strings.TrimRight(line, " \t"))
-			prevBlank = false
-			continue
-		}
-
-		line = strings.TrimRight(line, " \t")
-		blank := line == ""
-
-		if blank && prevBlank {
-			continue
-		}
-
-		out = append(out, line)
-		prevBlank = blank
-	}
-
-	// Trim trailing blank lines
-	for len(out) > 0 && out[len(out)-1] == "" {
-		out = out[:len(out)-1]
-	}
-
-	return strings.Join(out, "\n")
-}
-
-// stripQuotedValues removes content inside quoted attribute values from the
-// line so that tag-like text inside attribute values (e.g., <div title="<pre>">)
-// is not mistakenly matched as actual HTML tags.
-func stripQuotedValues(line string) string {
-	var b strings.Builder
-	b.Grow(len(line))
-	inQuote := byte(0)
-	for i := 0; i < len(line); i++ {
-		c := line[i]
-		if inQuote != 0 {
-			if c == inQuote {
-				inQuote = 0
-				b.WriteByte(c)
-			}
-			// Skip content inside quotes.
-			continue
-		}
-		if c == '"' || c == '\'' {
-			inQuote = c
-		}
-		b.WriteByte(c)
-	}
-	return b.String()
-}
-
-func countSensitiveOpens(line string) int {
-	count := 0
-	lower := strings.ToLower(stripQuotedValues(line))
-	for tag := range whitespaceSensitiveElements {
-		// Match opening tags: <pre, <textarea, etc.
-		search := "<" + tag
-		i := 0
-		for i < len(lower) {
-			idx := strings.Index(lower[i:], search)
-			if idx < 0 {
-				break
-			}
-			pos := i + idx + len(search)
-			if pos >= len(lower) || lower[pos] == ' ' || lower[pos] == '>' || lower[pos] == '\t' || lower[pos] == '\n' || lower[pos] == '/' {
-				count++
-			}
-			i = pos
-		}
-	}
-	return count
-}
-
-func countSensitiveCloses(line string) int {
-	count := 0
-	lower := strings.ToLower(stripQuotedValues(line))
-	for tag := range whitespaceSensitiveElements {
-		search := "</" + tag
-		i := 0
-		for i < len(lower) {
-			idx := strings.Index(lower[i:], search)
-			if idx < 0 {
-				break
-			}
-			pos := i + idx + len(search)
-			if pos >= len(lower) || lower[pos] == '>' || lower[pos] == ' ' || lower[pos] == '\t' {
-				count++
-			}
-			i = pos
-		}
-	}
-	return count
 }
 
 // Source formats a Go HTML template file. The file's final whitespace run is
 // left exactly as written: Source never adds or removes a trailing newline.
+// A file with no HTML element is not a page (a plain-text email, a
+// text-only partial), so its whitespace is all preserved and Source
+// returns it unchanged.
 func Source(filename, src string, opts ...Option) (string, error) {
 	f := &formatter{leftDelim: "{{", rightDelim: "}}"}
 	for _, o := range opts {
@@ -1130,8 +886,21 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !hasElement(tree) {
+		return src, nil
+	}
 	out := Node(tree.Root, opts...)
 	return strings.TrimRight(out, whitespace) + trailingWhitespace(src), nil
+}
+
+func hasElement(tree *template.Tree) bool {
+	found := false
+	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+		if _, ok := n.(*template.HTMLElementNode); ok {
+			found = true
+		}
+	})
+	return found
 }
 
 const whitespace = " \t\r\n"

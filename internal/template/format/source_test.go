@@ -15,6 +15,9 @@ func TestSource(t *testing.T) {
 		{"two trailing newlines", "<p>hi</p>\n\n", "<p>hi</p>\n\n"},
 		{"extra trailing spaces", "<p>hi</p>  \n", "<p>hi</p>  \n"},
 		{"empty", "", ""},
+		{"trim marker inside pre kept", "<pre>a{{- .X}}</pre>", "<pre>a{{- .X}}</pre>"},
+		{"unneeded trim marker dropped", "<p>a{{- .X}}</p>", "<p>a{{.X}}</p>"},
+		{"no element: unchanged", "Hi {{ .Name }},\n\n  bye {{- .X}}", "Hi {{ .Name }},\n\n  bye {{- .X}}"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := format.Source("a.gohtml", tt.src)

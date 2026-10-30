@@ -55,8 +55,7 @@
 <br>
 <br>
 <img src="test.png">
-<img src="photo.jpg">
-<br>
+<img src="photo.jpg"><br>
 <p><strong>bold</strong> text</p>
 <p>hello <span>world</span></p>
 <p><a href="#">link</a></p>
@@ -68,8 +67,7 @@
 <ul><li>one</li><li>two</li></ul>
 <p>text with <strong>bold</strong> and <em>italic</em></p>
 <div class="container" id="main"><p>inside</p></div>
-<header><h1>Title</h1></header>
-<main><p>body</p></main>
+<header><h1>Title</h1></header><main><p>body</p></main>
 <div>
 	<p>a</p>
 	<p>b</p>
@@ -79,5 +77,4 @@
 <!-- hello -->
 {{/* a comment */}}
 <!DOCTYPE html>
-<!DOCTYPE html>
-<html><body><p>hi</p></body></html>
+<!DOCTYPE html><html><body><p>hi</p></body></html>

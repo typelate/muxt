@@ -23,8 +23,7 @@
 {{with .X}}<p>{{.Value}}</p>{{else}}<p>fallback</p>{{end}}
 {{with .A}}<p>a</p>{{else with .B}}<p>b</p>{{end}}
 <ul>
-	{{range .Items}}<li>{{.Name}}</li>{{end}}
-	{{range .Items}}<li>{{.Name}}</li>{{else}}<p>no items</p>{{end}}
+	{{range .Items}}<li>{{.Name}}</li>{{end}}{{range .Items}}<li>{{.Name}}</li>{{else}}<p>no items</p>{{end}}
 </ul>
 {{range $i, $v := .Items}}<li>{{$i}}: {{$v}}</li>{{end}}
 {{range .Items}}{{if .Active}}<p>{{.Name}}</p>{{end}}{{end}}

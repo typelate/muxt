@@ -1,0 +1,14 @@
+-- input.gohtml --
+<div>
+ a　
+</div>
+<p>
+a 
+</p>
+-- format.gohtml --
+<div>
+	a　
+</div>
+<p>
+	a 
+</p>
