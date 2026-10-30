@@ -1,0 +1,18 @@
+-- input.gohtml --
+<div>{{if .Show}}a{{else}}{{if .Show}}b {{- end}} {{end}}</div>
+<div>{{if .Show}}a {{else}}{{- if .Show}}b{{end}}{{end}}</div>
+<div>{{if .Show}}a {{- else}}{{if .Show}}b{{end}}{{end}}</div>
+<div>{{if .Show}}a{{else}}{{if .Show}}b{{end}} {{- end}}x</div>
+<p>a{{if .Show}}b {{- else if .X}}c {{- end}} d</p>
+-- format.gohtml --
+<div>{{if .Show}}a{{else if .Show}}b {{- end}}</div>
+<div>{{if .Show}}a{{else if .Show}}b{{end}}</div>
+<div>{{if .Show}}a {{- else if .Show}}b{{end}}</div>
+<div>{{if .Show}}a{{else}}{{if .Show}}b{{end}} {{- end}}x</div>
+<p>a{{if .Show}}b {{- else if .X}}c {{- end}} d</p>
+-- data/empty.json --
+{}
+-- data/show.json --
+{"Show": true}
+-- data/x.json --
+{"X": true}

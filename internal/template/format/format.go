@@ -747,10 +747,11 @@ func trimPipeDelim(s, rightDelim string) string {
 func (f *formatter) branchNode(n *template.BranchNode, keyword string) {
 	f.writeActionWithTrim(keyword+" "+f.pipeText(n.Pipe), n.StartTrimLeft, n.StartTrimRight)
 	f.body(n.List, n.StartTrimRight)
+	endTrimLeft := n.EndTrimLeft
 	if n.ElseList != nil {
-		f.formatElseList(n, n.ElseList)
+		endTrimLeft = f.formatElseList(n, n.ElseList)
 	}
-	f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
+	f.writeActionWithTrim("end", endTrimLeft, n.EndTrimRight)
 }
 
 // body prints a branch body or else list in the layout its gaps choose:
@@ -773,20 +774,25 @@ func (f *formatter) body(list *template.ListNode, trimRight bool) {
 	f.indent = outer
 }
 
-// formatElseList handles the else portion of a branch, recursing for else-if chains.
-func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode) {
+// formatElseList handles the else portion of a branch, recursing for
+// else-if chains. It returns the left trim of the {{end}} that closes
+// the chain. A merged "{{else if ...}}" takes its left trim from the
+// {{else}}, which follows the same body, and its right trim from the
+// inner branch, which precedes the same body; the {{end}} takes its left
+// trim from the innermost branch, whose last body it follows. The trims
+// that only removed the gaps around the inner branch go with them.
+func (f *formatter) formatElseList(parent *template.BranchNode, elseList *template.ListNode) (endTrimLeft bool) {
 	if chain, chainKeyword := f.elseChain(elseList); chain != nil {
-		// For else-if/else-with chains, the inner BranchNode carries the trim
-		// for the combined "{{else if ...}}" / "{{else with ...}}" action.
-		f.writeActionWithTrim("else "+chainKeyword+" "+f.pipeText(chain.Pipe), chain.StartTrimLeft, chain.StartTrimRight)
+		f.writeActionWithTrim("else "+chainKeyword+" "+f.pipeText(chain.Pipe), parent.ElseTrimLeft, chain.StartTrimRight)
 		f.body(chain.List, chain.StartTrimRight)
 		if chain.ElseList != nil {
-			f.formatElseList(chain, chain.ElseList)
+			return f.formatElseList(chain, chain.ElseList)
 		}
-		return
+		return chain.EndTrimLeft
 	}
 	f.writeActionWithTrim("else", parent.ElseTrimLeft, parent.ElseTrimRight)
 	f.body(elseList, parent.ElseTrimRight)
+	return parent.EndTrimLeft
 }
 
 func (f *formatter) defineNode(n *template.DefineNode) {
