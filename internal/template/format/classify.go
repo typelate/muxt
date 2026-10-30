@@ -801,8 +801,9 @@ var repairedTags = map[string]bool{
 // written (collapse-only at most). These are the elements carrying a
 // structural diagnostic from analysis.CheckStructure (auto-closed,
 // misnested, foster-parented, nested forms, links and buttons), the list
-// items closesListItem finds, and their ancestors up to the nearest
-// clean block: a block
+// items closesListItem and the tables closesTable finds, and their
+// ancestors up to the element their start tag closes, then on up to the
+// nearest clean block: a block
 // element that carries no diagnostic and that no start tag closes.
 // Whitespace there may land in a reopened formatting element or next to
 // a box the template tree does not have.
@@ -817,9 +818,25 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			flagged[d.Pos] = true
 		}
 	}
+	// closes maps a list item to the ancestor its start tag closes; the
+	// browser pops every element up to that ancestor.
+	closes := make(map[*template.HTMLElementNode]*template.HTMLElementNode)
+	// asWritten are the tables a nested table closes early: the parser
+	// drops the table parts that follow, so the whole table is opaque.
+	var asWritten []*template.HTMLElementNode
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		if el, ok := n.(*template.HTMLElementNode); ok && closesListItem(el, path) {
+		el, ok := n.(*template.HTMLElementNode)
+		if !ok {
+			return
+		}
+		if closed := closesListItem(el, path); closed != nil {
 			flagged[el.Start()] = true
+			closes[el] = closed
+		}
+		if closed := closesTable(el, path); closed != nil {
+			flagged[el.Start()] = true
+			closes[el] = closed
+			asWritten = append(asWritten, closed)
 		}
 	})
 	if len(flagged) == 0 {
@@ -832,10 +849,17 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			return
 		}
 		marked = append(marked, el)
+		closed := closes[el] // nil once reached, or when el closes nothing
 		for i := len(path) - 1; i >= 0; i-- {
 			switch p := path[i].(type) {
 			case *template.HTMLElementNode:
-				if cleanBlock(p, styles, flagged) {
+				switch {
+				case closed != nil:
+					// Popped by el's start tag, clean or not.
+					if p == closed {
+						closed = nil
+					}
+				case cleanBlock(p, styles, flagged):
 					return
 				}
 				marked = append(marked, p)
@@ -850,6 +874,38 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+	for _, el := range asWritten {
+		if ws, ok := styles[el]; ok {
+			ws.WhiteSpace = analysis.WhiteSpaceUnknown
+			styles[el] = ws
+		}
+	}
+}
+
+// closesTable returns the table that el, a table start tag, closes, or
+// nil. Until a cell, caption or template opens, the content of a table
+// is read "in table" even inside an element foster-parented out of it,
+// and there a start tag table pops the open table and starts the new one
+// after it (HTML §13.2.6.4.9), so what follows the nested table is no
+// longer in a table.
+func closesTable(el *template.HTMLElementNode, path []template.Node) *template.HTMLElementNode {
+	if !strings.EqualFold(el.TagName, "table") {
+		return nil
+	}
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			switch strings.ToLower(p.TagName) {
+			case "table":
+				return p
+			case "td", "th", "caption", "template":
+				return nil
+			}
+		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+			return nil
+		}
+	}
+	return nil
 }
 
 func cleanBlock(el *template.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) bool {
@@ -860,37 +916,43 @@ func cleanBlock(el *template.HTMLElementNode, styles analysis.Whitespaces, flagg
 	return ws.Display == analysis.DisplayBlock || ws.Display == analysis.DisplayTableInternal
 }
 
-// closesListItem reports whether the start tag of el, an li, dd or dt,
-// closes an open ancestor of its kind through inline elements, as the
-// browser does (HTML §13.2.6.4.7: a start tag "li", "dd" or "dt" closes
-// the nearest such element unless a special element other than address,
-// div or p comes first). analysis.CheckStructure finds only the case
-// where that ancestor is the direct parent.
-func closesListItem(el *template.HTMLElementNode, path []template.Node) bool {
-	kinds := map[string][]string{"li": {"li"}, "dd": {"dd", "dt"}, "dt": {"dd", "dt"}}[strings.ToLower(el.TagName)]
-	if kinds == nil {
-		return false
+// closesListItem returns the open ancestor that the start tag of el, an
+// li, dd or dt, closes, or nil. As in the browser (HTML §13.2.6.4.7), a
+// start tag li closes the nearest li, and dd or dt the nearest dd or dt,
+// unless a special element other than address, div or p comes first.
+// analysis.CheckStructure finds only the case where that ancestor is the
+// direct parent.
+func closesListItem(el *template.HTMLElementNode, path []template.Node) *template.HTMLElementNode {
+	tag := strings.ToLower(el.TagName)
+	if tag != "li" && tag != "dd" && tag != "dt" {
+		return nil
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
 		case *template.HTMLElementNode:
-			tag := strings.ToLower(p.TagName)
-			if slices.Contains(kinds, tag) {
-				return true
-			}
-			if specialTags[tag] && tag != "address" && tag != "div" && tag != "p" {
-				return false
+			ancestor := strings.ToLower(p.TagName)
+			switch {
+			case tag == "li" && ancestor == "li",
+				tag != "li" && (ancestor == "dd" || ancestor == "dt"):
+				return p
+			case specialTags[ancestor] && ancestor != "address" && ancestor != "div" && ancestor != "p":
+				return nil
 			}
 		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
-			return false
+			return nil
 		}
 	}
-	return false
+	return nil
 }
 
-// specialTags are the HTML elements of the special category (HTML
-// §13.2.4.2), which stop the list-item scan of closesListItem.
+// specialTags are the elements of the special category (HTML §13.2.4.2),
+// which stop the list-item scan of closesListItem, including the MathML
+// and SVG ones (mi, mo, mn, ms, mtext, annotation-xml, foreignObject,
+// desc, title). Those are matched by local name only: an HTML title has
+// no li inside it to scan from, so the namespace never matters here.
 var specialTags = map[string]bool{
+	"mi": true, "mo": true, "mn": true, "ms": true, "mtext": true,
+	"annotation-xml": true, "foreignobject": true, "desc": true,
 	"address": true, "applet": true, "area": true, "article": true, "aside": true,
 	"base": true, "basefont": true, "bgsound": true, "blockquote": true, "body": true,
 	"br": true, "button": true, "caption": true, "center": true, "col": true,
