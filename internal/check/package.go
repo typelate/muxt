@@ -30,6 +30,15 @@ type resolvedTemplate struct {
 	functions   asteval.TemplateFunctions
 	metadata    *asteval.TemplateMetadata
 	definitions definitionSet
+
+	// leftDelim and rightDelim are the delimiters the construction
+	// expression left in effect. A later call on the same variable
+	// continues from them, and nothing else records them: the template
+	// keeps its delimiters to itself, so evaluating that later call
+	// without these would parse it as though Delims had never been
+	// called.
+	leftDelim  string
+	rightDelim string
 }
 
 // definitionsFor locates every template definition in the sources that
@@ -403,15 +412,17 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 		}
 		funcTypeMap := asteval.DefaultFunctions(pkg.Types)
 		meta := &asteval.TemplateMetadata{}
-		ts, _, _, err := asteval.EvaluateTemplateSelector(nil, pkg.Types, pkg.TypesInfo, expr, workingDirectory, name, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, funcTypeMap, make(map[string]any), meta)
+		ts, left, right, err := asteval.EvaluateTemplateSelector(nil, pkg.Types, pkg.TypesInfo, expr, workingDirectory, name, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, funcTypeMap, make(map[string]any), meta)
 		if err != nil {
 			resolveErrs = append(resolveErrs, err)
 			return
 		}
 		resolved[obj] = &resolvedTemplate{
-			templates: ts,
-			functions: funcTypeMap,
-			metadata:  meta,
+			templates:  ts,
+			functions:  funcTypeMap,
+			metadata:   meta,
+			leftDelim:  left,
+			rightDelim: right,
 		}
 	}
 
@@ -493,11 +504,12 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 				return true
 			}
 			meta := &asteval.TemplateMetadata{}
-			ts, _, _, err := asteval.EvaluateTemplateSelector(rt.templates, pkg.Types, pkg.TypesInfo, call, workingDirectory, "", "", "", pkg.Fset, pkg.Syntax, embeddedPaths, rt.functions, make(map[string]any), meta)
+			ts, left, right, err := asteval.EvaluateTemplateSelector(rt.templates, pkg.Types, pkg.TypesInfo, call, workingDirectory, "", rt.leftDelim, rt.rightDelim, pkg.Fset, pkg.Syntax, embeddedPaths, rt.functions, make(map[string]any), meta)
 			if err != nil {
 				return true
 			}
 			rt.templates = ts
+			rt.leftDelim, rt.rightDelim = left, right
 			rt.metadata.EmbedFilePaths = append(rt.metadata.EmbedFilePaths, meta.EmbedFilePaths...)
 			rt.metadata.ParseCalls = append(rt.metadata.ParseCalls, meta.ParseCalls...)
 			rt.metadata.Sources = append(rt.metadata.Sources, meta.Sources...)

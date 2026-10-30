@@ -239,10 +239,16 @@ type parsedDefinition struct {
 // start of Define. A text that does not parse yields no trees.
 func parseTrees(rootName, text, leftDelim, rightDelim string) (*template.Tree, map[int]parsedDefinition) {
 	treeSet := make(map[string]*template.Tree)
+	// These are Template.Parse's options. No function map is available
+	// here, so break and continue are allowed as keywords, as they are
+	// whenever the set does not register functions of those names.
 	root, err := template.ParseTree(rootName, rootName, text, treeSet, lex.Options{
-		ParseHTML:  true,
-		LeftDelim:  cmp.Or(leftDelim, "{{"),
-		RightDelim: cmp.Or(rightDelim, "}}"),
+		EmitComment: true,
+		ParseHTML:   true,
+		LeftDelim:   cmp.Or(leftDelim, "{{"),
+		RightDelim:  cmp.Or(rightDelim, "}}"),
+		BreakOK:     true,
+		ContinueOK:  true,
 	})
 	if err != nil {
 		return nil, nil
