@@ -84,6 +84,8 @@ Check also fails on:
 - content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
 - a field or method access on an `any` value: `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt))
 
+`printf`-family format verbs are verified against the argument types. With a string `Name`, `{{printf "%d" .Name}}` is an error.
+
 ## What is not checked
 
 | Case | Effect |
