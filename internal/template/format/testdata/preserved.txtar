@@ -9,6 +9,7 @@
   body { color: red; }
   p { margin: 0; }
 </style>
+<pre>{{/* c */}} a {{- /* d */ -}} b {{/* e */ -}} c</pre>
 -- format.gohtml --
 <pre>  line one
   line two  </pre>
@@ -20,3 +21,4 @@
   body { color: red; }
   p { margin: 0; }
 </style>
+<pre>{{/* c */}} a {{- /* d */ -}} b {{/* e */ -}} c</pre>

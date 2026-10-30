@@ -614,7 +614,7 @@ func (f *formatter) documentFragment(n *template.HTMLDocumentFragmentNode) {
 // writeSource writes el's children as written and its closing tag.
 func (f *formatter) writeSource(el *template.HTMLElementNode) {
 	for _, child := range el.Children {
-		f.writeString(sourceText(child))
+		f.writeString(f.sourceText(child))
 	}
 	f.closeTag(el)
 }
@@ -628,8 +628,23 @@ var voidElements = map[string]bool{
 }
 
 // sourceText is n as written. An unclosed element's String is its start
-// tag alone, so its children are added after it.
-func sourceText(n template.Node) string {
+// tag alone, so its children are added after it. A comment action's
+// String is its text alone, so its delimiters and trim markers are added
+// around it (text/template allows nothing else between them).
+func (f *formatter) sourceText(n template.Node) string {
+	if c, ok := n.(*template.CommentNode); ok {
+		var b strings.Builder
+		b.WriteString(f.leftDelim)
+		if c.TrimLeft {
+			b.WriteString("- ")
+		}
+		b.WriteString(c.Text)
+		if c.TrimRight {
+			b.WriteString(" -")
+		}
+		b.WriteString(f.rightDelim)
+		return b.String()
+	}
 	el, ok := n.(*template.HTMLElementNode)
 	if !ok || el.Closed || el.Void {
 		return n.String()
@@ -637,7 +652,7 @@ func sourceText(n template.Node) string {
 	var b strings.Builder
 	b.WriteString(el.String())
 	for _, child := range el.Children {
-		b.WriteString(sourceText(child))
+		b.WriteString(f.sourceText(child))
 	}
 	return b.String()
 }
