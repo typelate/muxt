@@ -46,7 +46,13 @@ func (r revision) changed(sc scope) bool {
 // source instead, so the tokens stand in for it: the spaces separating
 // the words of an action are dropped, and everything else, the text
 // outside actions included, is kept as written.
+//
+// The trim markers on a definition's own {{define ... -}} and {{- end}}
+// are not in its body, which keeps its whitespace as written; they live
+// on the tree, so they lead the text.
 func scopeText(sc scope) string {
+	var text strings.Builder
+	fmt.Fprintf(&text, "%t %t\n", sc.tree.RootTrimFirst, sc.tree.RootTrimLast)
 	scanner := lex.New(sc.tree.Root.String(), lex.Options{
 		EmitComment: true,
 		BreakOK:     true,
@@ -54,7 +60,6 @@ func scopeText(sc scope) string {
 		LeftDelim:   sc.src.leftDelim,
 		RightDelim:  sc.src.rightDelim,
 	})
-	var text strings.Builder
 	for {
 		token := scanner.Next()
 		switch token.Type {
