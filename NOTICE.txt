@@ -73,3 +73,7 @@ THE SOFTWARE.
 internal/css/csstree/data/mdn/*.json is CSS syntax data from mdn/data
 (https://github.com/mdn/data), released under CC0 1.0 Universal; see
 internal/css/csstree/data/mdn/LICENSE.
+
+internal/analysis/html/ua.css is derived from the HTML Living Standard
+(https://html.spec.whatwg.org/), © WHATWG (Apple, Google, Mozilla, Microsoft),
+licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
