@@ -50,6 +50,10 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // tree holding markup the template parser read as text but a browser
 // reads as a tag is written as it is (see hasUnparsedMarkup).
 func Node(root template.Node, opts ...Option) string {
+	return newFormatter(opts).format(root)
+}
+
+func newFormatter(opts []Option) *formatter {
 	f := &formatter{
 		sb:          &strings.Builder{},
 		atLineStart: true,
@@ -59,6 +63,10 @@ func Node(root template.Node, opts ...Option) string {
 	for _, opt := range opts {
 		opt(f)
 	}
+	return f
+}
+
+func (f *formatter) format(root template.Node) string {
 	list, ok := root.(*template.ListNode)
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
@@ -100,6 +108,7 @@ type formatter struct {
 	whitespace  analysis.WhitespaceOptions
 
 	root    *template.ListNode
+	dir     directives // the muxt:fmt regions of the file; empty for Node
 	styles  analysis.Whitespaces
 	cls     classes
 	opaque  map[template.Node]bool // subtrees emitted from source
@@ -237,7 +246,7 @@ func takesBreak(g gap) bool {
 // the file, where block layout writes no break, so they do not count.
 func (f *formatter) blockLayoutAllowed(list template.Node, items []template.Node) bool {
 	for i := 0; i <= len(items); i++ {
-		if list == f.root && (i == 0 || i == len(items)) {
+		if list == f.root && (i == 0 || i == len(items)) || f.dir.skipGaps[gapKey{list, i}] {
 			continue
 		}
 		if !takesBreak(f.cls.gaps[gapKey{list, i}]) {
@@ -257,6 +266,9 @@ func (f *formatter) blockLayoutAllowed(list template.Node, items []template.Node
 func (f *formatter) blockLayoutPreferred(list template.Node, items []template.Node) bool {
 	for i := 0; i <= len(items); i++ {
 		g := f.cls.gaps[gapKey{list, i}]
+		if f.dir.skipGaps[gapKey{list, i}] {
+			continue
+		}
 		if g.class != runCollapseOnly && lineBreaks(g.bytes()) > 0 {
 			return true
 		}
@@ -343,20 +355,30 @@ func (f *formatter) children(key template.Node, nodes []template.Node, o listOpt
 	if o.layout == inlineLayout && !o.root {
 		f.continuation = 1
 	}
+	skipTo := -1 // items up to this index are in a verbatim region
 	for i := 0; i <= len(items); i++ {
 		g := f.cls.gaps[gapKey{key, i}]
 		switch {
+		case f.dir.skipGaps[gapKey{key, i}]:
 		case i == len(items):
 			f.indent = o.outer
 			f.closeGap(g, o)
 			f.indent = inner
-			continue
 		case i == 0:
 			f.openGap(g, o)
 		default:
 			f.betweenGap(items[i-1], items[i], g, o.layout)
 		}
+		if i == len(items) || i <= skipTo {
+			continue
+		}
 		f.item(items[i], o.layout)
+		if c, ok := items[i].(*template.CommentNode); ok {
+			if r, ok := f.dir.regions[c]; ok {
+				f.writeString(f.dir.src[f.dir.commentEnd(c):r.end])
+				skipTo = r.last
+			}
+		}
 	}
 }
 
@@ -861,13 +883,14 @@ func (f *formatter) bodyLayout(body *template.ListNode) (layout layoutKind, trim
 	items, _ := splitChildren(body.Nodes)
 	emptyCollapseOnly := func(i int) bool {
 		g := f.cls.gaps[gapKey{body, i}]
-		return g.class == runCollapseOnly && g.bytes() == ""
+		return g.class == runCollapseOnly && g.bytes() == "" && !f.dir.skipGaps[gapKey{body, i}]
 	}
 	preferred := f.blockLayoutPreferred(body, items)
 	for i := 0; i <= len(items); i++ {
 		edge := i == 0 || i == len(items)
 		g := f.cls.gaps[gapKey{body, i}]
 		switch {
+		case f.dir.skipGaps[gapKey{body, i}]:
 		case i == len(items) && i > 0 && g.text == nil && isUnclosed(items[i-1]):
 			// A break written after an unclosed element would be its
 			// content on the next pass.
@@ -994,10 +1017,7 @@ func (f *formatter) cleanUnnecessaryTrim(s string) string {
 // text-only partial), so its whitespace is all preserved and Source
 // returns it unchanged.
 func Source(filename, src string, opts ...Option) (string, error) {
-	f := &formatter{leftDelim: "{{", rightDelim: "}}"}
-	for _, o := range opts {
-		o(f)
-	}
+	f := newFormatter(opts)
 	tree, err := template.ParseTree(filename, filename, src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
@@ -1009,10 +1029,15 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !hasElement(tree) {
+	dir, err := scanDirectives(filename, src, tree.Root, f.leftDelim, f.rightDelim)
+	if err != nil {
+		return "", err
+	}
+	if !hasElement(tree) || dir.startsWithWholeFile(tree.Root) {
 		return src, nil
 	}
-	out := Node(tree.Root, opts...)
+	f.dir = *dir
+	out := f.format(tree.Root)
 	return strings.TrimRight(out, whitespace) + trailingWhitespace(src), nil
 }
 

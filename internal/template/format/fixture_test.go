@@ -202,6 +202,7 @@ func TestFixtures(t *testing.T) {
 
 			// (c) opaque regions byte for byte, in order
 			checkOpaqueRegions(t, name, fx.input, got, fx.sheets)
+			checkDirectiveRegions(t, name, fx.input, got)
 
 			// (d) and (e) rendering equivalence
 			problems, err := renderingProblems(fx, got)
@@ -464,4 +465,49 @@ func render(src, callerSrc string, data map[string]any) (string, error) {
 		return "", fmt.Errorf("execute: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// directiveRegions returns the byte spans of src that muxt:fmt off and
+// preserve ask the formatter to copy unchanged, in source order, without
+// those inside another.
+func directiveRegions(src string) [][2]int {
+	tree, err := template.ParseTree("directives", "directives", src, nil, lex.Options{
+		EmitComment: true,
+		ParseHTML:   true,
+		BreakOK:     true,
+		ContinueOK:  true,
+	})
+	if err != nil {
+		return nil
+	}
+	d, err := scanDirectives("directives", src, tree.Root, "{{", "}}")
+	if err != nil {
+		return nil
+	}
+	var regions [][2]int
+	for c, r := range d.regions {
+		regions = append(regions, [2]int{d.commentEnd(c), r.end})
+	}
+	slices.SortFunc(regions, func(a, b [2]int) int { return a[0] - b[0] })
+	var outer [][2]int
+	for _, r := range regions {
+		if len(outer) == 0 || r[0] >= outer[len(outer)-1][1] {
+			outer = append(outer, r)
+		}
+	}
+	return outer
+}
+
+func checkDirectiveRegions(t *testing.T, name, input, output string) {
+	t.Helper()
+	cursor := 0
+	for _, r := range directiveRegions(input) {
+		region := input[r[0]:r[1]]
+		i := strings.Index(output[cursor:], region)
+		if i < 0 {
+			t.Errorf("%s: directive region at input bytes %d:%d not found in output after byte %d: %q", name, r[0], r[1], cursor, region)
+			continue
+		}
+		cursor += i + len(region)
+	}
 }
