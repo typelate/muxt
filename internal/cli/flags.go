@@ -58,6 +58,8 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.BoolVar(&g.OutputMuxtVersion, outputMuxtVersion, true, outputMuxtVersionHelp)
 	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
+	flagSet.StringVar(&g.StaticAssetsDirectory, inputStaticAssetsDirectory, "", inputStaticAssetsDirectoryHelp)
+	flagSet.StringVar(&g.StaticAssetsPath, outputStaticAssetsPath, "", outputStaticAssetsPathHelp)
 }
 
 // multipartMaxMemoryFlag implements pflag.Value to parse human-readable byte

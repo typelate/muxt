@@ -108,6 +108,8 @@ For a shorter name, give each route its own receiver method, even if the new met
 
 A route without a call is named from its pattern: a verb for the HTTP method (`GET` is `Read`, `POST` `Create`, `PUT` `Replace`, `PATCH` `Update`, `DELETE` `Delete`, and none for a pattern without a method), the host and literal segments in PascalCase (`/` alone is `Index`, `{$}` is `Exact`), then `By` and the wildcards joined with `And`: `GET /hello/{name}` is `ReadHelloByName`. Two routes may not produce the same name ([known issues](known-issues.md)).
 
+The [static assets](commands/generate.md#static-assets) path method is named the same way, as a call-less `GET` route with `--output-static-assets-path`: `Read` and the path's segments in PascalCase, so `/static` is `ReadStatic`, `/static/v1/` is `ReadStaticV1`, and `/assets/img` is `ReadAssetsImg` ([reference_static_assets.txt](../../cmd/muxt/testdata/reference_static_assets.txt)).
+
 `TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`. An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
 
 ## Status Code Control

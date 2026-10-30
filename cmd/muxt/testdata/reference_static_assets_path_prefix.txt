@@ -1,0 +1,73 @@
+# The static assets route is registered under the routes function's path
+# prefix and wrapped by its middleware, like the template routes.
+
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server --output-routes-func-with-path-prefix-param --output-routes-func-with-middleware-param
+muxt check
+exec go test -count=1
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+
+type Server struct{}
+-- assets/app.css --
+p{color:red}
+-- index.gohtml --
+{{define "GET / Index()"}}<link rel="stylesheet" href="{{.Path.ReadStatic}}app.css">{{end}}
+-- server.go --
+package server
+
+func (Server) Index() string { return "" }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestStaticAssetsUnderPrefix(t *testing.T) {
+	mux := http.NewServeMux()
+	paths := TemplateRoutes(mux, Server{}, "/app", func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			res.Header().Set("X-Wrapped", "yes")
+			next.ServeHTTP(res, req)
+		})
+	})
+
+	if got, want := paths.ReadStatic(), "/app/static/"; got != want {
+		t.Errorf("ReadStatic() = %q, want %q", got, want)
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/app/static/app.css", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /app/static/app.css status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("X-Wrapped"); got != "yes" {
+		t.Errorf("GET /app/static/app.css X-Wrapped = %q, want %q", got, "yes")
+	}
+	if got, want := rec.Body.String(), "p{color:red}\n"; got != want {
+		t.Errorf("GET /app/static/app.css body = %q, want %q", got, want)
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/app.css", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /static/app.css status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}

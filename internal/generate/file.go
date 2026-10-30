@@ -130,6 +130,7 @@ var generatedLocalIdentifiers = []string{
 	formFieldValueIdent,
 	fileHeadersIdent,
 	contentTypeIdent,
+	staticAssetsIdent,
 	muxt.TemplateNameScopeIdentifierHTTPRequest,
 	muxt.TemplateNameScopeIdentifierHTTPResponse,
 	muxt.TemplateNameScopeIdentifierContext,

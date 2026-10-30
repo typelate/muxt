@@ -62,6 +62,8 @@ muxt -C ./web generate --use-receiver-type=Server
 | `--output-routes-func-with-middleware-param` | `false` | Add a `middleware func(http.Handler) http.Handler` parameter. |
 | `--output-multiple-files` | `false` | Write one generated file per template source file. |
 | `--output-multipart-max-memory` | `32 MiB` | Memory limit passed to `ParseMultipartForm` for `multipart` arguments. Accepts `32MB`, `64MiB`, `1GB`. |
+| `--input-static-assets-directory` | | Directory inside the templates package, relative to it, to embed and serve under `--output-static-assets-path`. Requires `--output-static-assets-path` ([static assets](commands/generate.md#static-assets)). |
+| `--output-static-assets-path` | | URL path the files of `--input-static-assets-directory` are served under with `GET`; a trailing `/` is added. Adds a `TemplateRoutePaths` method returning it. Requires `--input-static-assets-directory` ([static assets](commands/generate.md#static-assets)). |
 | `--output-htmx` | `false` | Add HTMX request and response header helpers to the template data type ([reference_output_htmx.txt](../../cmd/muxt/testdata/reference_output_htmx.txt)). |
 | `--output-datastar` | `false` | Frame Server-Sent Events as Datastar `datastar-patch-elements` events and enable `signals` ([Server-Sent Events](call-parameters.md#server-sent-events)). Excludes `--output-htmx`. |
 | `--output-exported-default-identifiers` | `true` | `false` makes the default names above unexported. Explicit `--output-*` names are used as given. |

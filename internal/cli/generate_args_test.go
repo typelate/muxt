@@ -86,6 +86,8 @@ func TestGeneratedHeaderRoundTrip(t *testing.T) {
 		OutputExportedDefaultIdentifiers: false,
 		OutputMuxtVersion:                false,
 		MultipartMaxMemory:               64 << 20,
+		StaticAssetsDirectory:            "assets",
+		StaticAssetsPath:                 "/static",
 	}
 
 	// A configuration nobody filled in reads back as itself. Its empty
@@ -179,6 +181,8 @@ func TestConfigToArgsOrder(t *testing.T) {
 		OutputHTMX:                   true,
 		OutputDatastar:               true,
 		MultipartMaxMemory:           1024,
+		StaticAssetsDirectory:        "assets",
+		StaticAssetsPath:             "/static",
 	}
 	want := []string{
 		"--use-templates-variable=a", "--use-templates-variable=b",
@@ -200,6 +204,8 @@ func TestConfigToArgsOrder(t *testing.T) {
 		"--output-exported-default-identifiers=false",
 		"--output-muxt-version=false",
 		"--output-multipart-max-memory=1024",
+		"--input-static-assets-directory=assets",
+		"--output-static-assets-path=/static",
 	}
 	assert.Equal(t, want, configToArgs(config), "configToArgs")
 }
@@ -255,6 +261,13 @@ func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 			name:   "a multipart limit",
 			change: func(c *generate.RoutesFileConfiguration) { c.MultipartMaxMemory = 64 << 20 },
 			want:   []string{"--output-multipart-max-memory=67108864"},
+		},
+		{
+			name: "a static assets directory",
+			change: func(c *generate.RoutesFileConfiguration) {
+				c.StaticAssetsDirectory, c.StaticAssetsPath = "assets", "/static"
+			},
+			want: []string{"--input-static-assets-directory=assets", "--output-static-assets-path=/static"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

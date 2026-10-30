@@ -104,3 +104,33 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		require.Equal(t, "ConnectIndex", def.generateEndpointPatternIdentifier(nil))
 	})
 }
+
+// TestStaticAssetsPathIdentifier states the TemplateRoutePaths method name of
+// the static assets route: the name a call-less GET route with that path
+// gets.
+func TestStaticAssetsPathIdentifier(t *testing.T) {
+	callLess := func(prefix string) string {
+		def, err, match := newDefinition(html.Must(html.New("GET " + prefix).Parse(``)))
+		require.True(t, match)
+		require.NoError(t, err)
+		defs := []Definition{def}
+		calculateIdentifiers(defs)
+		ident, err := defs[0].ExportedPathIdentifier()
+		require.NoError(t, err)
+		return ident
+	}
+	for _, tt := range []struct {
+		prefix string
+		want   string
+	}{
+		{prefix: "/static/", want: "ReadStatic"},
+		{prefix: "/public/files/", want: "ReadPublicFiles"},
+		{prefix: "/static/v1/", want: "ReadStaticV1"},
+		{prefix: "/assets/img/", want: "ReadAssetsImg"},
+		{prefix: "/my-assets/", want: callLess("/my-assets/")},
+	} {
+		if got := StaticAssetsPathIdentifier(tt.prefix); got != tt.want {
+			t.Errorf("StaticAssetsPathIdentifier(%q) = %q, want %q", tt.prefix, got, tt.want)
+		}
+	}
+}
