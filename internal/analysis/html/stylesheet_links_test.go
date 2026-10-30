@@ -119,6 +119,7 @@ func TestResolvedStylesheetsWhitespace(t *testing.T) {
 		{source: blk + `{{if .X}}` + blk + `{{end}}<span class="x"></span>`, want: block},
 		{source: `{{if .X}}` + imp + `{{end}}` + blk + `<span class="x"></span>`, want: block},
 		{source: `{{if .X}}` + blk + `{{end}}` + imp + `<span class="x"></span>`, want: block},
+		{source: `{{if .X}}` + imp + `{{end}}` + imp + `<span class="x"></span>`, want: block},
 		{source: `<link rel="stylesheet" media="print" href="/static/blk.css"><span class="x"></span>`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 		{source: `<link rel="stylesheet" media="{{.M}}" href="/static/blk.css"><span class="x"></span>`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 		{source: `<link rel="stylesheet" media="all" href="/static/blk.css"><span class="x"></span>`, want: block},
