@@ -2,6 +2,8 @@ package muxt_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 
@@ -221,4 +223,32 @@ func TestDefinitionsOfASetParsedUnderTheEmptyName(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, defs, 1)
 	assert.Empty(t, defs[0].SourceFile(), "SourceFile()")
+}
+
+// TestDefinitionsFromParsedFilesNameTheFilePath states that a definition
+// read from a file names the file by its path, as text/template's
+// ParseName did when the checker loaded the file. Two variables that
+// each parse an index.gohtml must not report the same source file.
+func TestDefinitionsFromParsedFilesNameTheFilePath(t *testing.T) {
+	dir := t.TempDir()
+	filename := filepath.Join(dir, "index.gohtml")
+	require.NoError(t, os.WriteFile(filename, []byte(`Public
+
+{{define "GET /a A()"}}x{{end}}`), 0o644))
+	ts := html.Must(html.ParseFiles(filename))
+	defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Equal(t, filename, defs[0].SourceFile(), "SourceFile()")
+}
+
+// TestDefinitionsLocateAHandlerErrorInAFile states that a malformed
+// handler in a parsed file is located by the file's path.
+func TestDefinitionsLocateAHandlerErrorInAFile(t *testing.T) {
+	dir := t.TempDir()
+	filename := filepath.Join(dir, "index.gohtml")
+	require.NoError(t, os.WriteFile(filename, []byte(`{{define "GET /x F("}}x{{end}}`), 0o644))
+	ts := html.Must(html.ParseFiles(filename))
+	_, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+	require.ErrorContains(t, err, "failed to parse handler expression "+filename+":1:")
 }

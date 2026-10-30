@@ -86,12 +86,20 @@ func (def Definition) bySourceThenName(other Definition) int {
 	return cmp.Compare(def.name, other.name)
 }
 
-// templateSourceFile returns the file t was parsed from, or "". ParseFS and
-// ParseFiles record the file name as the tree's ParseName; a template defined
+// templateSourceFile returns the file t was parsed from, or "". A tree
+// read from a file carries the file's path as its Filepath; the checker's
+// loader and ParseFiles set it. Without a path, ParseFS and ParseFiles
+// record the file name as the tree's ParseName; a template defined
 // directly with Parse carries its own name there instead, so a ParseName
 // matching the template name does not identify a file.
 func templateSourceFile(t *html.Template) string {
-	if t.Tree == nil || t.Tree.ParseName == t.Name() {
+	if t.Tree == nil {
+		return ""
+	}
+	if t.Tree.Filepath != "" {
+		return t.Tree.Filepath
+	}
+	if t.Tree.ParseName == t.Name() {
 		return ""
 	}
 	return t.Tree.ParseName

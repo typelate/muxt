@@ -1,6 +1,7 @@
 package muxt
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -70,9 +71,12 @@ func parseHandlerCall(fileSet *token.FileSet, def *Definition) (*ast.Ident, *ast
 			return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression: %v", err)
 		}
 		// text/template's ErrorContext counted the column from zero;
-		// Tree.Position counts it from one.
-		p := def.template.Tree.Position(def.template.Tree.Root)
-		loc := fmt.Sprintf("%s:%d:%d", p.ParseName, p.Line, p.Column-1)
+		// Tree.Position counts it from one. It named the file by the
+		// tree's ParseName, which the checker's loader set to the file's
+		// path; the copied parser keeps that path in Filepath.
+		tree := def.template.Tree
+		p := tree.Position(tree.Root)
+		loc := fmt.Sprintf("%s:%d:%d", cmp.Or(tree.Filepath, p.ParseName), p.Line, p.Column-1)
 		return nil, nil, def.spanErrorf(def.spans.call, "failed to parse handler expression %s: %v", loc, err)
 	}
 	call, ok := e.(*ast.CallExpr)
