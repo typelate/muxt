@@ -2,6 +2,8 @@ package analysis
 
 import (
 	"go/token"
+	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -79,11 +81,27 @@ type Whitespace struct {
 	WhiteSpace WhiteSpace
 }
 
+// WhitespaceOptions is the author CSS ComputeWhitespace sees besides the
+// <style> elements and style attributes of the trees it classifies.
+type WhitespaceOptions struct {
+	// Context holds templates whose <style> elements apply but whose
+	// elements are not classified.
+	Context []*template.Tree
+	// Sheets are stylesheet files the templates use.
+	Sheets []Stylesheet
+	// AuthorCSSKnown reports that Sheets and the <style> elements are all
+	// the author CSS (a package was loaded, or CSS files were named), even
+	// when there is none. Without it, and with no <style> element or sheet,
+	// an element with a class or id is unknown.
+	AuthorCSSKnown bool
+}
+
 // Whitespaces maps the elements of templates to their whitespace handling.
 type Whitespaces map[*template.HTMLElementNode]Whitespace
 
 // ComputeWhitespace classifies every element of trees. Author CSS is the
-// <style> elements and style attributes of trees and context, plus sheets.
+// <style> elements and style attributes of trees and options.Context, plus
+// options.Sheets.
 //
 // The cascade has two origins: the HTML Standard's user-agent style sheet
 // (ua.css) and the author CSS. A rule that may or may not apply (its
@@ -95,12 +113,16 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // White-space inherits; preserve and unknown white-space inherit to every
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
-func ComputeWhitespace(trees, context []*template.Tree, sheets []Stylesheet) Whitespaces {
-	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0)}
-	authors := authorSheets(slices.Concat(trees, context), sheets)
-	c.authorVisible = len(authors) > 0
+func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whitespaces {
+	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0, nil)}
+	authors := authorSheets(slices.Concat(trees, options.Context), options.Sheets)
+	c.authorVisible = options.AuthorCSSKnown || len(authors) > 0
+	var filenames []string
+	for _, sheet := range options.Sheets {
+		filenames = append(filenames, sheet.Filename)
+	}
 	for i, sheet := range authors {
-		c.rules = append(c.rules, sheet.rules(true, i+1)...)
+		c.rules = append(c.rules, sheet.rules(true, i+1, filenames)...)
 	}
 	out := make(Whitespaces)
 	for _, root := range templateRoots(trees) {
@@ -326,6 +348,9 @@ func styleAttributeDeclarations(attr *template.HTMLAttributeNode) ([]cssDeclarat
 	if len(attr.Value) == 0 {
 		return nil, true
 	}
+	if slices.ContainsFunc(attr.Value, isBranch) {
+		return nil, false // its declarations may or may not be there
+	}
 	css := templateCSS(attr.Value)
 	css.unquote()
 	ast, err := csstree.Parse(css.text, csstree.ParseOptions{Context: "declarationList", Positions: true})
@@ -356,7 +381,7 @@ func styleAttributeDeclarations(attr *template.HTMLAttributeNode) ([]cssDeclarat
 			exempt = append(exempt, span{colon + 1, end})
 			continue
 		}
-		decls = append(decls, propertyDeclarations(prop, valueWords(decl), decl.Important != "", len(decls))...)
+		decls = append(decls, propertyDeclarations(prop, valueWords(decl), decl.Important != "", true, len(decls))...)
 	}
 	for _, gap := range css.gaps {
 		if !within(gap, exempt) {
@@ -652,13 +677,14 @@ func (s *sheetCSS) addActions(n template.Node) {
 }
 
 // rules returns the display and white-space rules of s. CSS that does not
-// parse, and a printing action whose output may be any CSS, become a rule
-// that may set anything on any element.
-func (s sheetCSS) rules(author bool, sheet int) []cssRule {
+// parse, an @import of a sheet not among filenames, and a printing action
+// whose output may be any CSS become a rule that may set anything on any
+// element.
+func (s sheetCSS) rules(author bool, sheet int, filenames []string) []cssRule {
 	unknown := cssRule{anyElement: true, maybe: true, author: author, sheet: sheet, declarations: unknownDeclarations()}
-	c := ruleCollector{css: s.css, author: author, sheet: sheet, branches: s.branches}
-	if !c.collect(ruleContext{maybe: s.conditional}) {
-		return []cssRule{unknown}
+	c := ruleCollector{css: s.css, author: author, sheet: sheet, branches: s.branches, filenames: filenames}
+	if !c.collect(ruleContext{maybe: s.conditional}) || c.incomplete {
+		return append(c.rules, unknown)
 	}
 	for _, out := range s.outputs {
 		if !within(out, c.covered) {
@@ -680,6 +706,10 @@ type ruleCollector struct {
 	// covered are the spans where a printing action's effect is known:
 	// selector lists, which become unknown, and declaration values.
 	covered []span
+	// filenames are the stylesheet files an @import may name.
+	filenames []string
+	// incomplete reports an @import of a sheet not among filenames.
+	incomplete bool
 }
 
 // ruleContext is what the statements of a block are inside.
@@ -723,6 +753,10 @@ func (c *ruleCollector) statements(list *csstree.List[csstree.Node], end int, ct
 		switch n := item.Data.(type) {
 		case *csstree.Atrule:
 			name := strings.ToLower(n.Name)
+			if name == "import" && !c.imports(n) {
+				c.incomplete = true
+				continue
+			}
 			if n.Block == nil || !(groupingAtRules[name] || name == "scope") {
 				continue
 			}
@@ -789,6 +823,51 @@ func (c *ruleCollector) rule(rule *csstree.Rule, ctx ruleContext) {
 	c.statements(rule.Block.Children, blockEnd(c.css, rule.Block), inner)
 }
 
+// imports reports whether the sheet rule imports is among c.filenames. An
+// import URL is relative to a page or sheet whose URL is not known, so it
+// matches a file whose path ends with it.
+func (c *ruleCollector) imports(rule *csstree.Atrule) bool {
+	if rule.Prelude == nil {
+		return false
+	}
+	prelude, err := csstree.Generate(rule.Prelude, csstree.GenerateOptions{})
+	if err != nil {
+		return false
+	}
+	target := importTarget(prelude)
+	if target == "" || strings.Contains(target, ":") || strings.HasPrefix(target, "//") {
+		return false
+	}
+	target = strings.TrimPrefix(path.Clean("/"+target), "/")
+	for _, name := range c.filenames {
+		name = path.Clean("/" + filepath.ToSlash(name))
+		if strings.HasSuffix(name, "/"+target) {
+			return true
+		}
+	}
+	return false
+}
+
+// importTarget returns the URL an @import prelude names, or "".
+func importTarget(prelude string) string {
+	prelude = strings.TrimSpace(prelude)
+	if rest, ok := strings.CutPrefix(strings.ToLower(prelude), "url("); ok {
+		end := strings.IndexByte(rest, ')')
+		if end < 0 {
+			return ""
+		}
+		return strings.Trim(strings.TrimSpace(prelude[len("url("):len("url(")+end]), `"'`)
+	}
+	if prelude == "" || (prelude[0] != '"' && prelude[0] != '\'') {
+		return ""
+	}
+	end := strings.IndexByte(prelude[1:], prelude[0])
+	if end < 0 {
+		return ""
+	}
+	return prelude[1 : 1+end]
+}
+
 // hasPseudoElement reports whether sel selects a pseudo-element.
 func hasPseudoElement(sel *csstree.Selector) bool {
 	for item := sel.Children.Head(); item != nil; item = item.Next {
@@ -829,9 +908,9 @@ func (c *ruleCollector) declarations(list *csstree.List[csstree.Node], end int, 
 		case !trackedProperties[prop]:
 			continue
 		case c.css.dynamic(colon+1, declEnd):
-			decls = propertyDeclarations(prop, nil, true, 0)
+			decls = propertyDeclarations(prop, nil, true, c.author, 0)
 		default:
-			decls = propertyDeclarations(prop, valueWords(decl), decl.Important != "", 0)
+			decls = propertyDeclarations(prop, valueWords(decl), decl.Important != "", c.author, 0)
 		}
 		for _, d := range decls {
 			d.maybe = maybe
@@ -865,8 +944,9 @@ func valueWords(decl *csstree.Declaration) []string {
 }
 
 // propertyDeclarations reduces a declaration of prop to the classes it
-// sets. words nil means the value is unknown.
-func propertyDeclarations(prop string, words []string, important bool, order int) []cssDeclaration {
+// sets. words nil means the value is unknown. Browsers do not implement
+// display-outside, so only the UA sheet's (br, wbr) counts.
+func propertyDeclarations(prop string, words []string, important, author bool, order int) []cssDeclaration {
 	display := func(d Display) cssDeclaration {
 		return cssDeclaration{property: propertyDisplay, value: uint8(d), important: important, order: order}
 	}
@@ -877,6 +957,9 @@ func propertyDeclarations(prop string, words []string, important bool, order int
 	case "display":
 		return []cssDeclaration{display(displayValue(words))}
 	case "display-outside":
+		if author {
+			return nil
+		}
 		return []cssDeclaration{display(displayOutsideValue(words))}
 	case "white-space", "white-space-collapse":
 		return []cssDeclaration{whiteSpace(whiteSpaceValue(words))}

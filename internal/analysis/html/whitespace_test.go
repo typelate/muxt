@@ -13,6 +13,8 @@ func TestComputeWhitespace(t *testing.T) {
 		source   string
 		sheet    string // a stylesheet file, when not empty
 		context  string // a context template, when not empty
+		imported string // a second stylesheet file, site.css, when not empty
+		known    bool   // AuthorCSSKnown
 		selector string // picks the element to check
 		want     Whitespace
 	}{
@@ -70,6 +72,18 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<span class="c"></span>`, sheet: `.c{@media print{display:block}}`, selector: `span`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 		{source: `<span class="c"></span>`, sheet: `.c:hover{white-space:pre}`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceUnknown}},
 		{source: `<span {{if .X}}id="a"{{end}}></span>`, selector: `span`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+
+		// Review fixes (2026-10-30).
+		{source: `<div class="c"></div>`, known: true, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="c"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div style="color:red {{if .X}}; display:none; color:blue{{end}}"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<span class="c"></span>`, sheet: `.c{display-outside:block}`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
+		{source: `<span style="display-outside:block"></span>`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
+		{source: `<div class="code"></div>`, sheet: `@import url(site.css);`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div class="code"></div>`, sheet: `@import url(site.css);`, imported: `p{color:red}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="code"></div>`, sheet: `@import "site.css";`, imported: `p{color:red}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<style>@import url(other.css);</style><div class="code"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+
 		{source: `<noscript></noscript>`, selector: `noscript`, want: Whitespace{DisplayUnknown, WhiteSpacePreserve}},
 		{source: `<p style="white-space:inherit"></p>`, selector: `p`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
 		{source: `<img style="display:inline">`, selector: `img`, want: Whitespace{DisplayAtomic, WhiteSpaceCollapse}},
@@ -83,10 +97,13 @@ func TestComputeWhitespace(t *testing.T) {
 			}
 			var sheets []Stylesheet
 			if test.sheet != "" {
-				sheets = append(sheets, Stylesheet{Filename: "sheet.css", Text: test.sheet})
+				sheets = append(sheets, Stylesheet{Filename: "static/sheet.css", Text: test.sheet})
+			}
+			if test.imported != "" {
+				sheets = append(sheets, Stylesheet{Filename: "static/site.css", Text: test.imported})
 			}
 			el := queryElement(t, trees, test.selector)
-			got, ok := ComputeWhitespace(trees, context, sheets)[el]
+			got, ok := ComputeWhitespace(trees, WhitespaceOptions{Context: context, Sheets: sheets, AuthorCSSKnown: test.known})[el]
 			if !ok || got != test.want {
 				t.Errorf("ComputeWhitespace(%q)[%s] = %+v, want %+v", test.source, test.selector, got, test.want)
 			}
@@ -96,7 +113,7 @@ func TestComputeWhitespace(t *testing.T) {
 
 func TestComputeWhitespaceClassifiesEveryElement(t *testing.T) {
 	trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", `<div><p>{{if .X}}<b>x</b>{{else}}<i>y</i>{{end}}</p>{{range .}}<li></li>{{end}}</div>{{define "d"}}<em></em>{{end}}`)}
-	got := ComputeWhitespace(trees, nil, nil)
+	got := ComputeWhitespace(trees, WhitespaceOptions{})
 	for _, name := range []string{"div", "p", "b", "i", "li", "em"} {
 		el := queryElement(t, trees, name)
 		if _, ok := got[el]; !ok {
