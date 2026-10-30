@@ -885,6 +885,74 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	}
 }
 
+// formattingMarkers are the elements that push a marker onto the list of
+// active formatting elements (HTML §13.2.4.3): an unclosed formatting
+// element inside one is not reconstructed past its end.
+var formattingMarkers = map[string]bool{"td": true, "th": true, "caption": true, "template": true}
+
+// unsureReopened sets the display of the elements that whitespace may
+// reach after an unclosed formatting element (a, b, em, strong, …) to
+// unknown: the element's ancestors and every element after it in
+// document order, up to the end of the nearest formatting marker, define
+// or block body, or the tree root. The browser keeps such an element in
+// its list of active formatting elements past the block that closes it in
+// the template tree, and any text there, a run the formatter writes
+// included, reopens it (HTML §13.2.6.4.7, reconstruct the active
+// formatting elements), so no gap there may take a break it did not have.
+func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
+	tree := &template.Tree{Root: root}
+	var (
+		reaches []template.Node // per unclosed formatting element: where its reach ends; nil is the root
+		marked  []*template.HTMLElementNode
+	)
+	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		el, ok := n.(*template.HTMLElementNode)
+		if !ok {
+			return
+		}
+		for _, r := range reaches {
+			if r == nil || slices.Contains(path, r) {
+				marked = append(marked, el)
+				break
+			}
+		}
+		if el.Closed || el.Void || !template.FormattingElements[strings.ToLower(el.TagName)] {
+			return
+		}
+		reach := reachOf(path)
+		reaches = append(reaches, reach)
+		for i := len(path) - 1; i >= 0 && path[i] != reach; i-- {
+			if p, ok := path[i].(*template.HTMLElementNode); ok {
+				marked = append(marked, p)
+			}
+		}
+	})
+	for _, el := range marked {
+		if ws, ok := styles[el]; ok {
+			ws.Display = analysis.DisplayUnknown
+			styles[el] = ws
+		}
+	}
+}
+
+// reachOf returns the nearest node in path that ends the reach of an
+// unclosed formatting element: a formatting marker, or a define or block
+// (whose callers are unknown). It returns nil when the reach is the tree
+// root.
+func reachOf(path []template.Node) template.Node {
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			if formattingMarkers[strings.ToLower(p.TagName)] {
+				return p
+			}
+		case *template.DefineNode, *template.BlockNode:
+			return p
+		}
+	}
+	return nil
+}
+
 // closesTable returns the table that el, a table start tag, closes, or
 // nil. Until a cell, caption or template opens, the content of a table
 // is read "in table" even inside an element foster-parented out of it,

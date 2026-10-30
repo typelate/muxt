@@ -75,6 +75,7 @@ func Node(root template.Node, opts ...Option) string {
 	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
 	f.root = list
 	unsureMisnested(list, f.styles)
+	unsureReopened(list, f.styles)
 	unsureParsedElsewhere(list, f.styles)
 	f.cls = classify(list, f.styles)
 	f.opaque = make(map[template.Node]bool, len(f.cls.opaque))

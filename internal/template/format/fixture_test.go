@@ -278,9 +278,12 @@ func TestWPTFormatting(t *testing.T) {
 			if name == "white-space-normal-011.html" {
 				const open = `<div id="reference">`
 				start := strings.Index(src, open)
-				end := strings.Index(src[start:], "</div>")
-				if start < 0 || end < 0 {
+				if start < 0 {
 					t.Fatalf("no #reference div in %s", name)
+				}
+				end := strings.Index(src[start:], "</div>")
+				if end < 0 {
+					t.Fatalf("#reference div in %s is not closed", name)
 				}
 				reference := src[start : start+end+len("</div>")]
 				if !strings.Contains(got, reference) {

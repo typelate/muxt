@@ -1,0 +1,15 @@
+-- input.gohtml --
+<table><tr><td><b>x</td></tr></table>
+<div><p>a</p>
+</div>
+-- format.gohtml --
+<table>
+	<tr>
+		<td><b>x</td>
+	</tr>
+</table>
+<div>
+	<p>a</p>
+</div>
+-- data/empty.json --
+{}
