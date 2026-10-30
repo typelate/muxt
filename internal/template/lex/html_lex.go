@@ -439,8 +439,9 @@ func lexHTMLCommentClose(l *Scanner) stateFn {
 //     not close it; when an {{end}}, {{else}} or {{define}} ends the
 //     control structure or definition the tag began in; when it is an
 //     end tag with anything but space after its name; and when the input
-//     ends before the tag closes. A comment or doctype the input ends
-//     inside of is text too, and so is the "<!--" of a comment that a
+//     ends before the tag closes. A comment the input ends inside of is
+//     text too, as is the "<!" or "<?" of a doctype or bogus comment
+//     whose '>' does not come before the next template action, and so is the "<!--" of a comment that a
 //     control structure crosses: one an action in it opens that does
 //     not end in it, or one it began in that an action in it ends.
 //
@@ -548,8 +549,16 @@ func (l *Scanner) htmlTagAt(i int) (isTag bool, textEnd int, name string) {
 	case strings.HasPrefix(s[j:], "!--"):
 		return l.htmlCommentAt(j + 3)
 	case c == '!' || c == '?':
-		if strings.IndexByte(s[j:], '>') < 0 {
-			return false, len(s), ""
+		// A doctype, processing instruction or bogus comment is lexed
+		// whole only when its '>' comes before any template action;
+		// otherwise its "<!" or "<?" is text, as in html/template's text
+		// state, and the actions after it stay actions.
+		end := strings.IndexByte(s[j:], '>')
+		if end < 0 {
+			return false, j + 1, ""
+		}
+		if delim := strings.Index(s[j:], l.Options.LeftDelim); delim >= 0 && delim < end {
+			return false, j + 1, ""
 		}
 		return true, 0, ""
 	case c == '/':

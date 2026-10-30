@@ -44,6 +44,10 @@ func TestHTMLParseLenientTags(t *testing.T) {
 		{name: "unclosed end tag", input: `<p>a</p`, elements: []string{"p"}},
 		{name: "unclosed comment", input: `a<!--z`},
 		{name: "unclosed doctype", input: `a<!DOCTYPE`},
+		{name: "bogus markup ended by control flow", input: "{{if .X}}<!{{end}}>"},
+		{name: "bogus markup with action", input: "<p>a <! b {{.Y}}</p>", elements: []string{"p"}},
+		{name: "processing instruction with action", input: "<p>a <? b {{.Y}}</p>", elements: []string{"p"}},
+		{name: "bogus markup closed after action", input: "<p>a <!x {{.Y}}> b</p>", elements: []string{"p"}},
 		{name: "comment ended by control flow", input: `{{if .X}}<!-- {{end}} -->{{.Y}}`},
 		{name: "control flow opened in comment", input: `<!-- {{if .X}} -->x{{end}}{{.Y}}`},
 		{name: "comment ended by else", input: `{{if .X}}<!--{{else}}-->{{end}}{{.Y}}`},
@@ -100,4 +104,25 @@ func TestHTMLParseLenientTagsText(t *testing.T) {
 		&CommentNode{Text: "/* c */"},
 		&TextNode{Text: []byte(">a")},
 	}}}})
+}
+
+// TestHTMLParseBogusMarkupKeepsActions checks that an action after "<!"
+// or "<?" stays an action, as html/template reads such markup as text.
+func TestHTMLParseBogusMarkupKeepsActions(t *testing.T) {
+	for _, input := range []string{
+		"<p>a <! b {{.Y}}</p>",
+		"<p>a <? b {{.Y}}</p>",
+		"<p>a <!x {{.Y}}> b</p>",
+		"<!DOCTYPE {{.Y}}>",
+	} {
+		tree, err := ParseTree("test.gohtml", "t", input, nil, lex.NewOptions())
+		require.NoError(t, err, input)
+		actions := 0
+		Walk(tree, func(_ *Tree, n Node) {
+			if _, ok := n.(*ActionNode); ok {
+				actions++
+			}
+		})
+		assert.Equal(t, 1, actions, "actions in %q", input)
+	}
 }

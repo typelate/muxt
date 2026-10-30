@@ -27,6 +27,7 @@ cmpenv stderr want-err.txt
 {{if .Result.N}}<!-- {{end}} -->
 <!-- {{if .Result.N}} -->x{{end}}
 {{if .Result.N}}<!--{{else}}-->{{end}}
+{{if .Result.N}}<!{{end}}>
 {{template "raw text" .Result}}
 {{end}}
 {{define "raw text"}}<script>{{/* c */}}var n = {{.N}};</script
@@ -37,6 +38,9 @@ cmpenv stderr want-err.txt
 <{{.Result.Missing}}>tag</{{.Result.Tag}}>
 <h{{.Result.Nope}}>heading</h{{.Result.N}}>
 <div data-{{.Result.Gone}}="x" {{/* c */}} class="{{.Result.Lost}}">a < b</div>
+<p>a <! b {{.Result.Bang}}</p>
+<p>a <? b {{.Result.Query}}</p>
+<p>a <!x {{.Result.Bogus}}> b</p>
 {{end}}
 -- want-err.txt --
 $WORK/template_routes.go:35:13 ExecuteTemplate "GET / Index()" *TemplateData[RoutesReceiver, Data]
@@ -44,6 +48,9 @@ $WORK/template.gohtml:3:11: executing "GET / Index()" at <.Result.Missing>: fiel
 $WORK/template.gohtml:4:12: executing "GET / Index()" at <.Result.Nope>: field or method Nope not found on Data
 $WORK/template.gohtml:5:20: executing "GET / Index()" at <.Result.Gone>: field or method Gone not found on Data
 $WORK/template.gohtml:5:60: executing "GET / Index()" at <.Result.Lost>: field or method Lost not found on Data
+$WORK/template.gohtml:6:20: executing "GET / Index()" at <.Result.Bang>: field or method Bang not found on Data
+$WORK/template.gohtml:7:20: executing "GET / Index()" at <.Result.Query>: field or method Query not found on Data
+$WORK/template.gohtml:8:19: executing "GET / Index()" at <.Result.Bogus>: field or method Bogus not found on Data
 
 -- go.mod --
 module server
