@@ -64,9 +64,27 @@ func (w *commandWalker) node(node template.Node, dot bool) bool {
 		// Inside the body dot is one element of what was ranged over.
 		return w.branch(&n.BranchNode, false, dot)
 	case *template.TemplateNode:
-		return w.template(n, dot)
+		return w.template(n.Name, n.Pipe, dot)
+	case *template.BlockNode:
+		// text/template turns a block into a {{template}} call of the
+		// tree it defines; the copied parser keeps the clause inline.
+		return w.template(n.Name, n.Pipe, dot)
+	case *template.HTMLDocumentFragmentNode:
+		return w.nodes(n.Children, dot)
+	case *template.HTMLElementNode:
+		return w.nodes(n.Attr, dot) || w.nodes(n.Children, dot)
+	case *template.HTMLAttributeNode:
+		return w.nodes(n.Key, dot) || w.nodes(n.Value, dot)
+	case *template.HTMLCommentNode:
+		return w.nodes(n.Children, dot)
 	}
 	return false
+}
+
+// nodes walks the children of an HTML node, which the copied parser
+// builds where text/template kept flat text, in source order.
+func (w *commandWalker) nodes(children []template.Node, dot bool) bool {
+	return slices.ContainsFunc(children, func(child template.Node) bool { return w.node(child, dot) })
 }
 
 func (w *commandWalker) pipe(pipe *template.PipeNode, dot bool) bool {
@@ -105,35 +123,36 @@ func (w *commandWalker) branch(branch *template.BranchNode, bodyDot, elseDot boo
 		w.node(branch.ElseList, elseDot)
 }
 
-func (w *commandWalker) template(n *template.TemplateNode, dot bool) bool {
+func (w *commandWalker) template(name string, pipe *template.PipeNode, dot bool) bool {
 	// The argument is evaluated where the invocation is written.
-	if w.pipe(n.Pipe, dot) {
+	if w.pipe(pipe, dot) {
 		return true
 	}
-	if w.visited[n.Name] {
+	if w.visited[name] {
 		return false
 	}
-	w.visited[n.Name] = true
-	defer delete(w.visited, n.Name)
+	w.visited[name] = true
+	defer delete(w.visited, name)
 
-	called := w.ts.Lookup(n.Name)
+	called := w.ts.Lookup(name)
 	if called == nil || called.Tree == nil {
 		return false
 	}
-	return w.node(called.Tree.Root, passesDotAlong(n, dot))
+	return w.node(called.Tree.Root, passesDotAlong(pipe, dot))
 }
 
-// passesDotAlong reports whether the template a {{template}} node invokes
-// runs with the same dot the invocation was written under.
+// passesDotAlong reports whether the template a {{template}} or {{block}}
+// clause, with argument pipe, invokes runs with the same dot the
+// invocation was written under.
 //
 // Only {{template "x" .}} does. Written without an argument the called
 // template runs with no dot at all, and any other argument is a value
 // selected out of the current one.
-func passesDotAlong(n *template.TemplateNode, dotIsTemplateData bool) bool {
-	if !dotIsTemplateData || n.Pipe == nil || len(n.Pipe.Commands) != 1 {
+func passesDotAlong(pipe *template.PipeNode, dotIsTemplateData bool) bool {
+	if !dotIsTemplateData || pipe == nil || len(pipe.Commands) != 1 {
 		return false
 	}
-	cmd := n.Pipe.Commands[0]
+	cmd := pipe.Commands[0]
 	if len(cmd.Args) != 1 {
 		return false
 	}

@@ -28,6 +28,14 @@ func TestWalkTemplateCommands(t *testing.T) {
 		{name: "template argument is walked where it is written", template: `{{with .A}}{{template "inner" .}}{{end}}`, want: []string{".A true", ". false", ".Inner false"}},
 		{name: "a template calling itself is walked once", template: `{{template "page" .}}`, want: []string{". true", ". true"}},
 		{name: "unknown template", template: `{{template "missing" .}}{{.A}}`, want: []string{". true", ".A true"}},
+		{name: "inside an element", template: `<div>{{.A}}<p>{{.B}}</p></div>`, want: []string{".A true", ".B true"}},
+		{name: "in an attribute value", template: `<a href="{{.A}}" {{.B}}>x</a>`, want: []string{".A true", ".B true"}},
+		{name: "in an unclosed element", template: `<div>{{.A}}`, want: []string{".A true"}},
+		{name: "in an html comment", template: `<!-- {{.A}} -->`, want: []string{".A true"}},
+		{name: "template inside an element", template: `<main>{{template "inner" .}}</main>`, want: []string{". true", ".Inner true"}},
+		{name: "with body inside an element", template: `<ul>{{with .A}}<li>{{.B}}</li>{{end}}</ul>`, want: []string{".A true", ".B false"}},
+		{name: "block runs its body as the named template", template: `<div>{{block "blk" .}}{{.B}}{{end}}</div>`, want: []string{". true", ".B true"}},
+		{name: "block with another argument", template: `{{block "blk" .A}}{{.B}}{{end}}`, want: []string{".A true", ".B false"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, page := pageIn(t, tt.template)
