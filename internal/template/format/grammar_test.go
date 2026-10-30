@@ -30,11 +30,17 @@ func TestGrammar(t *testing.T) {
 		r:        rand.New(rand.NewPCG(uint64(seed), 1)),
 		misorder: os.Getenv("GRAMMAR_MISORDER") != "",
 	}
-	idem, rend, shown := 0, 0, 0
+	idem, rend, parseErrs, shown := 0, 0, 0, 0
 	for range n {
 		input := g.list(3)
 		out, err := Source("g.gohtml", input)
 		if err != nil {
+			// The generator writes only templates that parse, so an
+			// error here is a generator or parser bug worth seeing.
+			parseErrs++
+			if parseErrs <= 5 {
+				t.Logf("Source(input) error: %v\n  input: %q", err, input)
+			}
 			continue
 		}
 		again, err := Source("g.gohtml", out)
@@ -74,7 +80,7 @@ func TestGrammar(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("grammar: seed %d, misorder %v: %d inputs, %d idempotency, %d rendering", seed, g.misorder, n, idem, rend)
+	t.Logf("grammar: seed %d, misorder %v: %d inputs, %d parse errors, %d idempotency, %d rendering", seed, g.misorder, n, parseErrs, idem, rend)
 }
 
 func grammarEnvInt(t *testing.T, name string, fallback int) int {
