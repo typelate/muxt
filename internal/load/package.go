@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"html/template"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/typelate/check"
+	"github.com/typelate/muxt/internal/check"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/astgen"
+	html "github.com/typelate/muxt/internal/template/html"
 )
 
 func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
@@ -154,7 +154,7 @@ func packageInDirectory(list []*packages.Package, dir string) (*packages.Package
 // html/template value; muxt introspects template names and trees without
 // executing, so a text/template set works through an html/template value
 // carrying the same trees.
-func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *template.Template, error) {
+func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *html.Template, error) {
 	lt, err := check.LoadTemplates(pkg, templatesVariable)
 	if err != nil {
 		return nil, nil, err
@@ -162,18 +162,12 @@ func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Temp
 	if ts, ok := lt.HTML(); ok {
 		return lt, ts, nil
 	}
-	textTemplates, ok := lt.Text()
-	if !ok {
+	if _, ok := lt.Text(); !ok {
 		return nil, nil, fmt.Errorf("variable %s is not a template", templatesVariable)
 	}
-	ts := template.New(textTemplates.Name())
-	for _, t := range textTemplates.Templates() {
-		if t.Tree == nil {
-			continue
-		}
-		if _, err := ts.AddParseTree(t.Name(), t.Tree); err != nil {
-			return nil, nil, fmt.Errorf("adopting text/template %q: %w", t.Name(), err)
-		}
+	ts, ok := lt.Template()
+	if !ok {
+		return nil, nil, fmt.Errorf("variable %s holds no templates", templatesVariable)
 	}
 	return lt, ts, nil
 }
