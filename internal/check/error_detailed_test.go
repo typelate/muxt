@@ -49,36 +49,3 @@ func TestErrorDetailedError(t *testing.T) {
 		"    [1] int",
 	}, "\n"), buf.String(), "DetailedError renders the compact line, then the callee signature and the argument types")
 }
-
-// TestErrorDetailedError_interface checks that an interface receiver renders
-// as an interface declaration. Upstream reaches this through {{.Missing}}
-// on an interface; here a field access on an interface value is a warning
-// (WarnInterfaceFieldAccess), not an error, so the error is built directly.
-func TestErrorDetailedError_interface(t *testing.T) {
-	pkg := types.NewPackage("example.com/web", "web")
-	greetSig := types.NewSignatureType(nil, nil, nil, nil,
-		types.NewTuple(types.NewVar(token.NoPos, pkg, "", types.Typ[types.String])), false)
-	iface := types.NewInterfaceType([]*types.Func{
-		types.NewFunc(token.NoPos, pkg, "Greet", greetSig),
-	}, nil)
-	iface.Complete()
-	greeter := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Greeter", nil), iface, nil)
-
-	render := notFoundMessage("Missing", greeter)
-	e := wrapError(ErrorTypeFieldOrMethodNotFound, nil, nil, &IdentifierError{
-		Identifier: "Missing",
-		Type:       greeter,
-		Cause:      fmt.Errorf("%s", render(fullTypeFormat(nil))),
-		render:     render,
-	}).withX(greeter)
-
-	var sb strings.Builder
-	require.NoError(t, e.DetailedError(&sb, func(p *types.Package) string { return p.Name() }))
-	assert.Equal(t, strings.Join([]string{
-		"field or method Missing not found on web.Greeter",
-		"",
-		"  type Greeter interface {",
-		"    Greet() string",
-		"  }",
-	}, "\n"), sb.String())
-}

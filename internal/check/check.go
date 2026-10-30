@@ -460,6 +460,13 @@ type Global struct {
 	// checking; a nil sink means warnings are not computed at all.
 	InspectWarning func(Warning)
 
+	// WarnInterfaceFieldAccess, when true, turns a field or method looked
+	// up on an interface value from an error into a W004 warning: the
+	// lookup cannot be checked until runtime, so the checker continues
+	// with an unknown value. When false, the default, such a lookup is
+	// a "field or method ... not found" error, as upstream reports it.
+	WarnInterfaceFieldAccess bool
+
 	// Definitions locates where each template was defined, for the
 	// inspector callbacks. It may be nil, in which case inspectors
 	// receive a zero Definition.
@@ -1295,10 +1302,11 @@ func (s *scope) checkIdentifiers(tree *template.Tree, dot types.Type, n template
 			obj, _, _ := types.LookupFieldOrMethod(x, true, s.global.pkg, ident)
 			if obj == nil {
 				// Accessing a field on an interface value cannot be verified
-				// statically: warn (once per chain) and continue as an
-				// unknown value, matching how the template resolves it at
-				// runtime — rather than reporting a not-found error.
-				if types.IsInterface(x) {
+				// statically. With Global.WarnInterfaceFieldAccess, warn (once
+				// per chain) and continue as an unknown value, matching how the
+				// template resolves it at runtime; otherwise report it as not
+				// found, as upstream does.
+				if types.IsInterface(x) && s.global.WarnInterfaceFieldAccess {
 					if !warnedInterface {
 						s.warn(tree, n, WarnInterfaceFieldAccess, "%s is accessed on interface value %s and cannot be checked until runtime", ident, s.global.TypeString(x))
 						warnedInterface = true

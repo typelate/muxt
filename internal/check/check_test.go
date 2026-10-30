@@ -117,6 +117,8 @@ func TestTree(t *testing.T) {
 			Data:     Void{},
 			Error: func(t *testing.T, err error, tp types.Type) {
 				require.ErrorContains(t, err, "Field not found on")
+				require.NotContains(t, err.Error(), "no exported fields or methods")
+				require.Contains(t, detailedError(t, err), "no exported fields or methods")
 			},
 		},
 		{
@@ -215,7 +217,9 @@ func TestTree(t *testing.T) {
 				Func: func() (_ TypeWithMethodSignatureResult) { return },
 			},
 			Error: func(t *testing.T, err error, tp types.Type) {
-				require.ErrorContains(t, err, "identifier chain not supported for type")
+				fn, _, _ := types.LookupFieldOrMethod(tp, true, testPkg.Types, "Func")
+				require.NotNil(t, fn)
+				require.ErrorContains(t, err, fmt.Sprintf(`template:1:8: executing "template" at <.Func.Method>: identifier chain not supported for type %s`, fn.Type()))
 			},
 		},
 		{
@@ -717,7 +721,8 @@ func TestTree(t *testing.T) {
 			Template: "{{and 1 .Unknown}}",
 			Data:     nil,
 			Error: func(t *testing.T, checkErr error, tp types.Type) {
-				require.ErrorContains(t, checkErr, "Unknown not found on untyped nil")
+				require.ErrorContains(t, checkErr, `template:1:9: executing "template" at <.Unknown>: field or method Unknown not found on untyped nil`)
+				require.Contains(t, detailedError(t, checkErr), "no exported fields or methods")
 			},
 		},
 		{
@@ -725,7 +730,8 @@ func TestTree(t *testing.T) {
 			Template: "{{or 0 .Unknown}}",
 			Data:     nil,
 			Error: func(t *testing.T, checkErr error, tp types.Type) {
-				require.ErrorContains(t, checkErr, "Unknown not found on untyped nil")
+				require.ErrorContains(t, checkErr, `template:1:8: executing "template" at <.Unknown>: field or method Unknown not found on untyped nil`)
+				require.Contains(t, detailedError(t, checkErr), "no exported fields or methods")
 			},
 		},
 		{

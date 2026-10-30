@@ -168,10 +168,11 @@ func (t *Templates) Template() (*htttemplate.Template, bool) {
 }
 
 // HTML returns the template set as an html/template-shaped value, as
-// Template does; ok is false when the variable holds a text/template
-// value, so a caller can tell which package built it.
+// Template does; ok is true only when the variable holds an html/template
+// value, so a caller can tell which package built it. It calls Template,
+// which annotates the trees it shares with Set in place.
 func (t *Templates) HTML() (*htttemplate.Template, bool) {
-	if t.templatePackagePath() == "text/template" {
+	if t.templatePackagePath() != "html/template" {
 		return nil, false
 	}
 	return t.Template()

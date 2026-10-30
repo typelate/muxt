@@ -55,6 +55,12 @@ func hasWarning(ws []check.Warning, code string) bool {
 // checker emitted (asserting the check itself did not error).
 func warningsOf(t *testing.T, src string, data types.Type) []check.Warning {
 	t.Helper()
+	return warningsWith(t, src, data, func(*check.Global) {})
+}
+
+// warningsWith is warningsOf with configure applied to the Global first.
+func warningsWith(t *testing.T, src string, data types.Type, configure func(*check.Global)) []check.Warning {
+	t.Helper()
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
@@ -63,6 +69,7 @@ func warningsOf(t *testing.T, src string, data types.Type) []check.Warning {
 	global := check.NewGlobal(testPkg.Types, testPkg.Fset, tp, check.DefaultFunctions(testPkg.Types))
 	var ws []check.Warning
 	global.InspectWarning = func(w check.Warning) { ws = append(ws, w) }
+	configure(global)
 	tree, ok := tp.FindTree("main")
 	require.True(t, ok)
 	require.NoError(t, check.Execute(global, tree, data))
@@ -95,15 +102,17 @@ func TestWarnDeadBranch(t *testing.T) {
 
 func TestWarnInterfaceFieldAccess(t *testing.T) {
 	anyType := types.NewInterfaceType(nil, nil).Complete()
+	optIn := func(g *check.Global) { g.WarnInterfaceFieldAccess = true }
 
-	// A field access on an interface dot warns (and does not error).
-	ws := warningsOf(t, `{{.Title}}`, anyType)
+	// With the opt-in, a field access on an interface dot warns (and
+	// does not error).
+	ws := warningsWith(t, `{{.Title}}`, anyType, optIn)
 	require.Len(t, ws, 1)
 	assert.Equal(t, check.WarnInterfaceFieldAccess, ws[0].Code)
 	assert.Contains(t, ws[0].Message, "Title")
 
 	// A chain on an interface warns once, not once per segment.
-	assert.Len(t, warningsOf(t, `{{.A.B.C}}`, anyType), 1)
+	assert.Len(t, warningsWith(t, `{{.A.B.C}}`, anyType, optIn), 1)
 
 	// A concrete struct is verified, not warned.
 	data := types.NewStruct([]*types.Var{

@@ -97,6 +97,26 @@ func TestError_DetailedError(t *testing.T) {
 			"a pointer receiver changes how a template executes, so the declaration keeps it")
 	})
 
+	t.Run("interfaces render as interface declarations", func(t *testing.T) {
+		greetSig := types.NewSignatureType(nil, nil, nil, nil,
+			types.NewTuple(types.NewVar(token.NoPos, pkg, "", types.Typ[types.String])), false)
+		iface := types.NewInterfaceType([]*types.Func{
+			types.NewFunc(token.NoPos, pkg, "Greet", greetSig),
+		}, nil)
+		iface.Complete()
+		greeter := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Greeter", nil), iface, nil)
+
+		e := execute(t, `{{.Missing}}`, greeter)
+
+		var sb strings.Builder
+		require.NoError(t, e.DetailedError(&sb, webQualifier))
+		require.Contains(t, sb.String(), strings.Join([]string{
+			"  type Greeter interface {",
+			"    Greet() string",
+			"  }",
+		}, "\n"))
+	})
+
 	t.Run("named non-struct types render their underlying type", func(t *testing.T) {
 		flags := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Flags", nil), types.Typ[types.Int], nil)
 		hasSig := types.NewSignatureType(types.NewVar(token.NoPos, pkg, "", flags), nil, nil, nil,
@@ -644,4 +664,33 @@ func TestError_locationMatchesTextTemplate(t *testing.T) {
 			require.EqualError(t, checkErr, tt.Want)
 		})
 	}
+}
+
+// TestExecute_interfaceFieldAccess checks that, by default, a field looked
+// up on an interface value is an error, as upstream reports it; the
+// warning is opt-in through Global.WarnInterfaceFieldAccess.
+func TestExecute_interfaceFieldAccess(t *testing.T) {
+	pkg := types.NewPackage("example.com/app", "app")
+	data := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, pkg, "Result", types.Universe.Lookup("any").Type(), false),
+	}, nil)
+	tmpl, err := template.New[*types.Signature]("iface.gohtml").Parse(`{{.Result.Name}}`)
+	require.NoError(t, err)
+
+	t.Run("an error by default", func(t *testing.T) {
+		global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
+		checkErr := check.Execute(global, tmpl.Tree(), data)
+		require.EqualError(t, checkErr, `iface.gohtml:1:10: executing "iface.gohtml" at <.Result.Name>: field or method Name not found on any`)
+		require.Equal(t, check.ErrorTypeFieldOrMethodNotFound, findLeafError(t, checkErr).Type)
+	})
+
+	t.Run("a warning when opted in", func(t *testing.T) {
+		global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
+		global.WarnInterfaceFieldAccess = true
+		var ws []check.Warning
+		global.InspectWarning = func(w check.Warning) { ws = append(ws, w) }
+		require.NoError(t, check.Execute(global, tmpl.Tree(), data))
+		require.Len(t, ws, 1)
+		require.Equal(t, check.WarnInterfaceFieldAccess, ws[0].Code)
+	})
 }
