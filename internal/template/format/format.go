@@ -25,22 +25,6 @@ func Delimiters(left, right string) Option {
 	}
 }
 
-// MaxLineWidth sets the maximum line width before the formatter prefers
-// block layout. Defaults to 80.
-func MaxLineWidth(n int) Option {
-	return func(f *formatter) {
-		f.maxLineWidth = n
-	}
-}
-
-// MaxInlineAttributes sets the maximum number of attributes that can be
-// kept on one line. Defaults to 3.
-func MaxInlineAttributes(n int) Option {
-	return func(f *formatter) {
-		f.maxInlineAttrs = n
-	}
-}
-
 // Styles sets the author CSS the formatter classifies whitespace with:
 // stylesheet files the templates use, templates whose <style> elements
 // apply, and whether that is all the author CSS (see
@@ -56,14 +40,19 @@ func Styles(options analysis.WhitespaceOptions) Option {
 }
 
 // Node formats the given AST node as pretty-printed HTML template source.
+// Indentation is one tab per level. Like gofmt, Node keeps the author's
+// line structure: children are laid out one per line only where the
+// source already breaks a gap the browser drops, and an open tag's
+// attributes only where the source breaks them; no line width is
+// measured. Node sees only the author CSS that Styles gives and the
+// tree's own <style> elements, so without Styles an element with a class
+// or id is unknown (decision 1) and keeps its whitespace as written.
 func Node(root template.Node, opts ...Option) string {
 	f := &formatter{
-		sb:             &strings.Builder{},
-		atLineStart:    true,
-		leftDelim:      "{{",
-		rightDelim:     "}}",
-		maxLineWidth:   80,
-		maxInlineAttrs: 3,
+		sb:          &strings.Builder{},
+		atLineStart: true,
+		leftDelim:   "{{",
+		rightDelim:  "}}",
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -89,19 +78,18 @@ func Node(root template.Node, opts ...Option) string {
 		}
 	}
 	items, _ := splitChildren(list.Nodes)
-	f.children(list, list.Nodes, listOptions{layout: f.layoutOf(list, items, f.itemsWidth(items)), root: true})
+	f.children(list, list.Nodes, listOptions{layout: f.layoutOf(list, items), root: true})
 	return f.cleanUnnecessaryTrim(f.sb.String())
 }
 
 type formatter struct {
-	sb             *strings.Builder
-	indent         int
-	atLineStart    bool
-	leftDelim      string
-	rightDelim     string
-	maxLineWidth   int
-	maxInlineAttrs int
-	whitespace     analysis.WhitespaceOptions
+	sb          *strings.Builder
+	indent      int // tabs writeIndent writes
+	lineIndent  int // tabs at the start of the current line
+	atLineStart bool
+	leftDelim   string
+	rightDelim  string
+	whitespace  analysis.WhitespaceOptions
 
 	root    *template.ListNode
 	styles  analysis.Whitespaces
@@ -139,6 +127,7 @@ func (f *formatter) writeIndent() {
 	for range f.indent {
 		f.sb.WriteByte('\t')
 	}
+	f.lineIndent = f.indent
 	f.atLineStart = false
 }
 
@@ -250,29 +239,27 @@ func (f *formatter) blockLayoutAllowed(list template.Node, items []template.Node
 	return true
 }
 
-// blockLayoutPreferred reports whether block layout reads better for the
-// items of list: an item is block-level, a gap the browser drops held a
-// line break in the source, or the one-line form, width columns at the
-// current indentation, is wider than the maximum line width. A line
-// break in a collapse-only gap renders as a space, so it keeps its line
-// in inline layout instead of making the list a block.
-func (f *formatter) blockLayoutPreferred(list template.Node, items []template.Node, width int) bool {
+// blockLayoutPreferred reports whether the source already lays the
+// items of list out as a block: an item is block-level, or a gap the
+// browser drops held a line break in the source. The formatter keeps the
+// author's line structure (spec amendment, gofmt model): no width is
+// measured, so a long line stays long. A line break in a collapse-only
+// gap renders as a space, so it keeps its line in inline layout instead
+// of making the list a block.
+func (f *formatter) blockLayoutPreferred(list template.Node, items []template.Node) bool {
 	for i := 0; i <= len(items); i++ {
 		g := f.cls.gaps[gapKey{list, i}]
 		if g.class != runCollapseOnly && lineBreaks(g.bytes()) > 0 {
 			return true
 		}
 	}
-	if slices.ContainsFunc(items, f.isBlockItem) {
-		return true
-	}
-	return f.indent*tabColumns+width > f.maxLineWidth
+	return slices.ContainsFunc(items, f.isBlockItem)
 }
 
 // layoutOf chooses the layout of list: block when it is allowed and
 // preferred, else inline.
-func (f *formatter) layoutOf(list template.Node, items []template.Node, width int) layoutKind {
-	if f.blockLayoutAllowed(list, items) && f.blockLayoutPreferred(list, items, width) {
+func (f *formatter) layoutOf(list template.Node, items []template.Node) layoutKind {
+	if f.blockLayoutAllowed(list, items) && f.blockLayoutPreferred(list, items) {
 		return blockLayout
 	}
 	return inlineLayout
@@ -298,114 +285,6 @@ func (f *formatter) listHasBlockItem(l *template.ListNode) bool {
 	}
 	items, _ := splitChildren(l.Nodes)
 	return slices.ContainsFunc(items, f.isBlockItem)
-}
-
-// tabColumns is the width of one indentation tab (spec §6.6).
-const tabColumns = 4
-
-// The width functions measure a list as the formatter prints it on one
-// line, not counting whitespace runs or trim markers. Formatting a list
-// only rewrites its runs, adds or drops trim markers, and drops other
-// bytes (spaces inside actions, merged else actions), so a list measures
-// the same or narrower once formatted, and a list that fits stays inline.
-
-// contentWidth is the width of source text s: its bytes other than
-// whitespace runs and trim markers.
-func (f *formatter) contentWidth(s string) int {
-	n := 0
-	for i := 0; i < len(s); i++ {
-		switch {
-		case isRunByte(s[i]):
-		case f.isTrimMarker(s, i):
-		default:
-			n++
-		}
-	}
-	return n
-}
-
-// isTrimMarker reports whether the '-' at s[i] is a trim marker: it
-// follows a left delimiter and precedes a run byte, or follows a run byte
-// and precedes a right delimiter.
-func (f *formatter) isTrimMarker(s string, i int) bool {
-	if s[i] != '-' {
-		return false
-	}
-	afterLeft := strings.HasSuffix(s[:i], f.leftDelim) && i+1 < len(s) && isRunByte(s[i+1])
-	beforeRight := i > 0 && isRunByte(s[i-1]) && strings.HasPrefix(s[i+1:], f.rightDelim)
-	return afterLeft || beforeRight
-}
-
-// itemsWidth is the one-line width of items.
-func (f *formatter) itemsWidth(items []template.Node) int {
-	n := 0
-	for _, item := range items {
-		n += f.nodeWidth(item)
-	}
-	return n
-}
-
-func (f *formatter) nodeWidth(n template.Node) int {
-	switch n := n.(type) {
-	case *template.HTMLElementNode:
-		return f.elementWidth(n)
-	case *template.HTMLDocumentFragmentNode:
-		return f.itemsWidth(n.Children)
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
-		b := branchOf(n)
-		keyword := "if"
-		switch n.(type) {
-		case *template.WithNode:
-			keyword = "with"
-		case *template.RangeNode:
-			keyword = "range"
-		}
-		width := f.actionWidth(keyword+" "+f.pipeText(b.Pipe)) + f.listWidth(b.List) + f.actionWidth("end")
-		if b.ElseList != nil {
-			width += f.actionWidth("else") + f.listWidth(b.ElseList)
-		}
-		return width
-	case *template.DefineNode:
-		return f.actionWidth("define "+strconv.Quote(n.Name)) + f.listWidth(n.Body) + f.actionWidth("end")
-	case *template.BlockNode:
-		return f.actionWidth("block "+strconv.Quote(n.Name)+" "+f.pipeText(n.Pipe)) + f.listWidth(n.Body) + f.actionWidth("end")
-	}
-	return f.contentWidth(n.String())
-}
-
-func (f *formatter) listWidth(l *template.ListNode) int {
-	if l == nil {
-		return 0
-	}
-	return f.itemsWidth(l.Nodes)
-}
-
-func (f *formatter) actionWidth(content string) int {
-	return f.contentWidth(f.leftDelim + content + f.rightDelim)
-}
-
-// elementWidth is the one-line width of an element: its open tag, its
-// children (as written when it is opaque), and its closing tag when the
-// source has one.
-func (f *formatter) elementWidth(n *template.HTMLElementNode) int {
-	width := f.contentWidth("<" + n.TagName + ">")
-	for _, attr := range n.Attr {
-		width += f.contentWidth(attr.String())
-	}
-	if n.Void {
-		return width
-	}
-	for _, child := range n.Children {
-		if f.opaque[n] {
-			width += f.contentWidth(child.String())
-			continue
-		}
-		width += f.nodeWidth(child)
-	}
-	if !n.Closed {
-		return width
-	}
-	return width + f.contentWidth("</"+n.TagName+">")
 }
 
 // bytes returns the run's text; it is empty for an empty gap.
@@ -674,15 +553,7 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	// Open tag (positioning handled by children)
 	f.writeString("<")
 	f.writeString(n.TagName)
-	f.formatAttributes(n)
-	if n.Void && !voidElements[strings.ToLower(n.TagName)] {
-		// <a/> as written: on an element that is not void the browser
-		// ignores the slash and the content that follows is the
-		// element's, so a plain > would read differently next pass.
-		f.writeString("/>")
-		return
-	}
-	f.writeString(">")
+	f.openTagRest(n)
 	if n.Void {
 		return
 	}
@@ -699,7 +570,7 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	}
 
 	items, _ := splitChildren(n.Children)
-	layout := f.layoutOf(n, items, f.elementWidth(n))
+	layout := f.layoutOf(n, items)
 	outer := f.indent
 	if layout == blockLayout {
 		f.indent++
@@ -709,53 +580,112 @@ func (f *formatter) htmlElement(n *template.HTMLElementNode) {
 	f.closeTag(n)
 }
 
-func (f *formatter) formatAttributes(n *template.HTMLElementNode) {
-	if len(n.Attr) == 0 {
+// openTagRest writes the open tag of n after its name: its attributes
+// and the closing >. Attribute wrapping follows the source (spec
+// amendment, gofmt model): each run of whitespace between attributes
+// becomes one space, or, when it holds a line break, a line break and
+// the tag's indentation plus one tab; no width is measured. Each
+// attribute is written as in the source, its quoting and any line
+// breaks in its value kept. A > the source puts on a line of its own
+// stays there, at the tag's indentation. An open tag the template
+// parser does not split into whitespace-separated attributes and
+// actions (control flow, comments, an end action, text between them) is
+// written from source.
+func (f *formatter) openTagRest(n *template.HTMLElementNode) {
+	region, attrs, tail, ok := splitOpenTag(n)
+	if !ok {
+		f.writeString(region)
 		return
 	}
-
-	// Check for branch nodes in attribute position — emit original source
-	hasBranchAttr := false
-	for _, attr := range n.Attr {
-		switch attr.(type) {
-		case *template.IfNode, *template.RangeNode, *template.WithNode:
-			hasBranchAttr = true
-		}
+	tagIndent := f.lineIndent
+	for _, attr := range attrs {
+		f.tagSpace(attr.before, tagIndent+1)
+		f.writeString(attr.text)
 	}
-
-	if hasBranchAttr {
-		for _, attr := range n.Attr {
-			f.sb.WriteByte(' ')
-			f.writeString(attr.String())
-		}
+	before, after, slash := strings.Cut(tail, "/")
+	if slash && !voidElements[strings.ToLower(n.TagName)] {
+		// <a/> as written: on an element that is not void the browser
+		// ignores the slash and the content that follows is the
+		// element's, so a plain > would read differently next pass.
+		f.tagSpace(before, tagIndent)
+		f.writeString("/")
+		f.tagSpace(after, tagIndent)
+		f.writeString(">")
 		return
 	}
-
-	// Count attributes and measure total length
-	totalLen := 0
-	attrCount := 0
-	for _, attr := range n.Attr {
-		attrCount++
-		totalLen += len(attr.String())
+	// A void element's slash means nothing and is dropped.
+	if lineBreaks(tail) > 0 {
+		f.tagSpace("\n", tagIndent)
 	}
+	f.writeString(">")
+}
 
-	multiLine := attrCount > f.maxInlineAttrs || totalLen > f.maxLineWidth
-
-	if multiLine {
-		f.indent++
-		for _, attr := range n.Attr {
-			f.newline()
-			f.writeIndent()
-			f.node(attr)
-		}
-		f.indent--
-	} else {
-		for _, attr := range n.Attr {
-			f.sb.WriteByte(' ')
-			f.node(attr)
-		}
+// tagSpace writes a run of whitespace inside an open tag: nothing for an
+// empty run, one space for a run without a line break, else a line break
+// and indent tabs.
+func (f *formatter) tagSpace(ws string, indent int) {
+	switch {
+	case ws == "":
+	case lineBreaks(ws) == 0:
+		f.writeString(" ")
+	default:
+		f.newline()
+		outer := f.indent
+		f.indent = indent
+		f.writeIndent()
+		f.indent = outer
 	}
 }
+
+// openTagAttr is one attribute or action of an open tag as written, and
+// the whitespace before it.
+type openTagAttr struct{ before, text string }
+
+// splitOpenTag splits the open tag of n, after its name, into its
+// attributes, each with the whitespace before it, and the tail between
+// the last one and the closing >. region is the source of that part of
+// the tag, > included. ok is false when the tag is not a list of
+// attributes and actions with only whitespace between them and a tail
+// of whitespace and at most one slash: the caller then writes region as
+// it is.
+func splitOpenTag(n *template.HTMLElementNode) (region string, attrs []openTagAttr, tail string, ok bool) {
+	src := n.String()
+	start, attrStart, attrEnd := int(n.Start()), int(n.AttrStart), int(n.AttrEnd)
+	if attrStart < start || attrEnd > start+len(src) || attrEnd <= attrStart {
+		return "", nil, "", false
+	}
+	region = src[attrStart-start : attrEnd-start]
+	if !strings.HasSuffix(region, ">") {
+		return region, nil, "", false
+	}
+	prev := attrStart
+	for _, attr := range n.Attr {
+		switch attr.(type) {
+		case *template.HTMLAttributeNode, *template.ActionNode, *template.TemplateNode:
+		default:
+			return region, nil, "", false
+		}
+		at, end := int(attr.Start()), int(attr.End())
+		if at < prev || end < at || end > attrEnd-1 {
+			return region, nil, "", false
+		}
+		before := src[prev-start : at-start]
+		if strings.Trim(before, tagWhitespace) != "" || before == "" && prev == attrStart {
+			return region, nil, "", false
+		}
+		attrs = append(attrs, openTagAttr{before: before, text: src[at-start : end-start]})
+		prev = end
+	}
+	tail = src[prev-start : attrEnd-start-1]
+	if strings.Count(tail, "/") > 1 || strings.Trim(tail, tagWhitespace+"/") != "" {
+		return region, nil, "", false
+	}
+	return region, attrs, tail, true
+}
+
+// tagWhitespace is the whitespace the HTML tokenizer skips between
+// attributes.
+const tagWhitespace = " \t\n\r\f"
 
 func (f *formatter) htmlAttribute(n *template.HTMLAttributeNode) {
 	if n.Namespace != "" {
@@ -836,7 +766,7 @@ func (f *formatter) body(list *template.ListNode, trimRight bool) {
 	}
 	outer := f.indent
 	items, _ := splitChildren(list.Nodes)
-	if f.layoutOf(list, items, f.itemsWidth(items)) == inlineLayout {
+	if f.layoutOf(list, items) == inlineLayout {
 		f.children(list, list.Nodes, listOptions{layout: inlineLayout, outer: outer})
 		return
 	}
@@ -915,7 +845,7 @@ func (f *formatter) bodyLayout(body *template.ListNode) (layout layoutKind, trim
 		g := f.cls.gaps[gapKey{body, i}]
 		return g.class == runCollapseOnly && g.bytes() == ""
 	}
-	preferred := f.blockLayoutPreferred(body, items, f.itemsWidth(items))
+	preferred := f.blockLayoutPreferred(body, items)
 	for i := 0; i <= len(items); i++ {
 		edge := i == 0 || i == len(items)
 		g := f.cls.gaps[gapKey{body, i}]
@@ -1019,8 +949,12 @@ func (f *formatter) cleanUnnecessaryTrim(s string) string {
 	return b.String()
 }
 
-// Source formats a Go HTML template file. The file's final whitespace run is
-// left exactly as written: Source never adds or removes a trailing newline.
+// Source formats a Go HTML template file as Node does, with the same
+// options: it reads the author CSS Styles gives and the file's <style>
+// elements. The file's final whitespace run is left exactly as written:
+// Source never adds or removes a trailing newline. A CR LF outside an
+// opaque region is written as LF, as the HTML parser reads it; inside
+// one (pre, textarea, script, style, ...) the bytes are kept.
 // A file with no HTML element is not a page (a plain-text email, a
 // text-only partial), so its whitespace is all preserved and Source
 // returns it unchanged.

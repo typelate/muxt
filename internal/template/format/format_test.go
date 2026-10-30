@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
@@ -114,10 +115,11 @@ func TestIdempotency(t *testing.T) {
 		`<p><strong>Notice:</strong> {{.Message}}</p>`,
 		// Inline define body stays on one line
 		`{{define "comp"}}{{.Value}}{{end}}`,
-		// Width is measured as printed: the forced trim markers of the
-		// define body must not push the root over the line width on the
-		// second pass. (A fixture cannot hold it: its trailing newline
-		// makes the root prefer block layout anyway.)
+		// Block layout follows the source (gofmt model): a line break
+		// in a gap the browser drops keeps the list a block, and the
+		// same list without it stays inline, however long its line.
+		`{{define "x"}}<b>a</b>{{end}}` + "\n\n" + `{{define "y"}}<b>b</b>{{end}}`,
+		`{{define "x"}}<b>` + strings.Repeat("a", 100) + `</b>{{end}}{{define "y"}}<b>b</b>{{end}}`,
 		`<br>{{define "x"}}<p>` + strings.Repeat("a", 44) + `</p>{{end}}<br>`,
 	}
 	for _, input := range inputs {
@@ -340,4 +342,131 @@ func TestDefineSemanticPreservation(t *testing.T) {
 				tt.src, formatted)
 		})
 	}
+}
+
+func TestAttributesAndCRLF(t *testing.T) {
+	for _, tt := range []struct {
+		name, input, want string
+	}{
+		{
+			name:  "attributes on one line stay on one line",
+			input: `<div class="a" id="b" data-x="1" data-y="2">x</div>`,
+			want:  `<div class="a" id="b" data-x="1" data-y="2">x</div>`,
+		},
+		{
+			name:  "one long attribute is not wrapped",
+			input: `<a href="https://example.com/` + strings.Repeat("a", 92) + `">x</a>`,
+			want:  `<a href="https://example.com/` + strings.Repeat("a", 92) + `">x</a>`,
+		},
+		{
+			name:  "attributes the source breaks go one per line",
+			input: "<input type=\"text\"\n    name=\"x\"\nrequired>",
+			want:  "<input type=\"text\"\n\tname=\"x\"\n\trequired>",
+		},
+		{
+			name:  "attribute list re-indented one tab deeper than its tag",
+			input: "<div>\n<p>\n<input type=\"text\"\n      name=\"x\"\n  required>\n</p>\n</div>",
+			want:  "<div>\n\t<p>\n\t\t<input type=\"text\"\n\t\t\tname=\"x\"\n\t\t\trequired>\n\t</p>\n</div>",
+		},
+		{
+			name:  "closing bracket on its own line stays there",
+			input: "<input\n  type=\"text\"\n  name=\"x\"\n>",
+			want:  "<input\n\ttype=\"text\"\n\tname=\"x\"\n>",
+		},
+		{
+			name:  "spaces between attributes become one",
+			input: `<div  class="a"   id="b"  >x</div>`,
+			want:  `<div class="a" id="b">x</div>`,
+		},
+		{
+			name:  "attribute value with a line break keeps its lines",
+			input: "<div title=\"one\n  two\n\tthree\" id=\"x\">y</div>",
+			want:  "<div title=\"one\n  two\n\tthree\" id=\"x\">y</div>",
+		},
+		{
+			name:  "attribute values keep their source quoting",
+			input: `<div a='x' b=y c="z" d={{.X}} e='{{.Y}}'>w</div>`,
+			want:  `<div a='x' b=y c="z" d={{.X}} e='{{.Y}}'>w</div>`,
+		},
+		{
+			name:  "attributes joined without a space stay joined",
+			input: `<div a="x"b="y" {{.X}}{{.Y}}=1>w</div>`,
+			want:  `<div a="x"b="y" {{.X}}{{.Y}}=1>w</div>`,
+		},
+		{
+			name:  "unquoted value that runs into an action",
+			input: `<A 0={ {{0}}0>`,
+			want:  `<A 0={ {{0}}0>`,
+		},
+		{
+			name:  "control flow in an open tag is written from source",
+			input: `<A {{if0}}{{end}}0><A>`,
+			want:  `<A {{if0}}{{end}}0><A>`,
+		},
+		{
+			name:  "branch attributes are written from source",
+			input: `<div  {{if .A}}class="a"{{else}}  id="b"{{end}}   data-x>w</div>`,
+			want:  `<div  {{if .A}}class="a"{{else}}  id="b"{{end}}   data-x>w</div>`,
+		},
+		{
+			name:  "comment action in an open tag",
+			input: `<a {{/* c */}} b>x</a>`,
+			want:  `<a {{/* c */}} b>x</a>`,
+		},
+		{
+			name:  "self-closing slash kept on a non-void element",
+			input: `<A0 x />`,
+			want:  `<A0 x />`,
+		},
+		{
+			name:  "CRLF is written as LF outside opaque regions",
+			input: "<div>\r\n<p>a</p>\r\n</div>\r\n<pre>\r\nx\r\n</pre>\r\n",
+			want:  "<div>\n\t<p>a</p>\n</div>\n<pre>\r\nx\r\n</pre>\r\n",
+		},
+		{
+			name:  "CRLF in a broken attribute list",
+			input: "<input type=\"text\"\r\n  name=\"x\">\r\n",
+			want:  "<input type=\"text\"\n\tname=\"x\">\r\n",
+		},
+		{
+			name:  "final run kept: three line feeds",
+			input: "<p>a</p>\n\n\n",
+			want:  "<p>a</p>\n\n\n",
+		},
+		{
+			name:  "final run kept: none",
+			input: "<p>a</p>",
+			want:  "<p>a</p>",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := format.Source("t.gohtml", tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got, "Source(%q)", tt.input)
+			again, err := format.Source("t.gohtml", got)
+			require.NoError(t, err)
+			assert.Equal(t, got, again, "not idempotent")
+		})
+	}
+}
+
+// TestCSSEntryPoints documents where author CSS comes from: Node and
+// Source read only the CSS that Styles names and the template's own
+// <style> elements. Without either, an element with a class or id is
+// unknown (decision 1) and its content is left as written.
+func TestCSSEntryPoints(t *testing.T) {
+	const input = `<div class="c"><p>a</p></div>`
+	t.Run("Node without CSS", func(t *testing.T) {
+		assert.Equal(t, input, format.Node(parse(t, input)))
+	})
+	t.Run("Source with author CSS known", func(t *testing.T) {
+		got, err := format.Source("t.gohtml", input, format.Styles(analysis.WhitespaceOptions{AuthorCSSKnown: true}))
+		require.NoError(t, err)
+		assert.Equal(t, "<div class=\"c\">\n\t<p>a</p>\n</div>", got)
+	})
+	t.Run("Source with a style element", func(t *testing.T) {
+		got, err := format.Source("t.gohtml", "<style>.d{}</style>"+input)
+		require.NoError(t, err)
+		assert.Equal(t, "<style>.d{}</style><div class=\"c\">\n\t<p>a</p>\n</div>", got)
+	})
 }
