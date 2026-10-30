@@ -16,6 +16,11 @@ import (
 type Stylesheet struct {
 	Filename string
 	Text     string
+	// Conditional reports that the sheet may not apply: every way the
+	// templates reach it is in a template branch, under a media or
+	// supports condition, or otherwise optional. Its rules may or may not
+	// apply, like those of a <style> element in a template branch.
+	Conditional bool
 }
 
 // StyleDiagnostic is a finding located in a template or a stylesheet file.

@@ -33,23 +33,34 @@ type StaticAssets struct {
 // serves the URL. A URL with a scheme or host, one no route serves, and
 // one whose file is missing, a directory, or has a name element starting
 // with "." or "_" (go:embed leaves those out) are missing.
+//
+// A sheet is Conditional unless some way to it is unconditional. A link is
+// conditional in a template branch, in <template> or <noscript>, with a
+// media attribute other than "" or "all", with rel alternate, or with
+// disabled; an @import is conditional with a media query, supports() or
+// layer after its URL, or in a conditional sheet or <style> element.
+//
+// Sheets are in first-reference order, a sheet before those it imports,
+// which is not cascade order: ComputeWhitespace makes a tie between rules
+// of different sheets uncertain (rank.mayBeat), so the order of sheets
+// never decides a property.
 func ResolveStylesheets(trees []*template.Tree, assets []StaticAssets) (sheets []Stylesheet, missing bool, err error) {
-	r := stylesheetResolver{assets: assets, loaded: make(map[string]bool)}
+	r := stylesheetResolver{assets: assets, loaded: make(map[string]int)}
 	for _, t := range trees {
 		if t == nil || t.Root == nil {
 			continue
 		}
-		template.WalkPath(t, func(_ *template.Tree, _ []template.Node, n template.Node) {
+		template.WalkPath(t, func(_ *template.Tree, path []template.Node, n template.Node) {
 			el, ok := n.(*template.HTMLElementNode)
 			if !ok || r.err != nil {
 				return
 			}
 			switch strings.ToLower(el.TagName) {
 			case "link":
-				r.link(el)
+				r.link(el, optionalPlace(path))
 			case "style":
 				if len(el.Children) > 0 {
-					r.imports(templateCSS(el.Children), "/")
+					r.imports(templateCSS(el.Children), "/", optionalPlace(path) || conditionalMedia(el))
 				}
 			}
 		})
@@ -61,15 +72,18 @@ func ResolveStylesheets(trees []*template.Tree, assets []StaticAssets) (sheets [
 }
 
 type stylesheetResolver struct {
-	assets  []StaticAssets
-	loaded  map[string]bool
+	assets []StaticAssets
+	// loaded maps each URL path read to its index in sheets, or -1 when
+	// no file is there.
+	loaded  map[string]int
 	sheets  []Stylesheet
 	missing bool
 	err     error
 }
 
-// link loads the stylesheet el links to.
-func (r *stylesheetResolver) link(el *template.HTMLElementNode) {
+// link loads the stylesheet el links to; conditional reports that el is
+// somewhere the link may not apply.
+func (r *stylesheetResolver) link(el *template.HTMLElementNode, conditional bool) {
 	var rel, href *template.HTMLAttributeNode
 	for _, n := range el.Attr {
 		switch n := n.(type) {
@@ -86,6 +100,8 @@ func (r *stylesheetResolver) link(el *template.HTMLElementNode) {
 				rel = n
 			case strings.EqualFold(name, "href") && href == nil:
 				href = n
+			case strings.EqualFold(name, "disabled"):
+				conditional = true
 			}
 		case *template.CommentNode:
 		default:
@@ -112,7 +128,8 @@ func (r *stylesheetResolver) link(el *template.HTMLElementNode) {
 	if ref == "" {
 		return
 	}
-	r.load(ref, "/")
+	conditional = conditional || hasToken(relText, "alternate") || conditionalMedia(el)
+	r.load(ref, "/", conditional)
 }
 
 // href returns the URL reference an href value names.
@@ -162,17 +179,22 @@ func (r *stylesheetResolver) pathMethod(action *template.ActionNode) (StaticAsse
 }
 
 // load reads the sheet ref names, relative to base, and the sheets it
-// imports.
-func (r *stylesheetResolver) load(ref, base string) {
+// imports. A sheet loaded before as conditional becomes unconditional
+// when this way to it is, and so do the sheets it imports unconditionally.
+func (r *stylesheetResolver) load(ref, base string, conditional bool) {
 	urlPath, ok := resolveStylesheetURL(ref, base)
 	if !ok {
 		r.missing = true
 		return
 	}
-	if r.loaded[urlPath] {
+	if i, ok := r.loaded[urlPath]; ok {
+		if i >= 0 && r.sheets[i].Conditional && !conditional {
+			r.sheets[i].Conditional = false
+			r.imports(cssText{text: r.sheets[i].Text}, urlPath, false)
+		}
 		return
 	}
-	r.loaded[urlPath] = true
+	r.loaded[urlPath] = -1
 	text, ok, err := r.read(urlPath)
 	if err != nil {
 		r.err = err
@@ -182,8 +204,9 @@ func (r *stylesheetResolver) load(ref, base string) {
 		r.missing = true
 		return
 	}
-	r.sheets = append(r.sheets, Stylesheet{Filename: urlPath, Text: text})
-	r.imports(cssText{text: text}, urlPath)
+	r.loaded[urlPath] = len(r.sheets)
+	r.sheets = append(r.sheets, Stylesheet{Filename: urlPath, Text: text, Conditional: conditional})
+	r.imports(cssText{text: text}, urlPath, conditional)
 }
 
 // read returns the file the route with the longest matching prefix serves
@@ -224,8 +247,9 @@ func (r *stylesheetResolver) read(urlPath string) (text string, ok bool, err err
 	return string(data), true, nil
 }
 
-// imports loads the sheets css imports; base is the URL of its sheet.
-func (r *stylesheetResolver) imports(css cssText, base string) {
+// imports loads the sheets css imports; base is the URL of its sheet, and
+// conditional reports that the sheet may not apply.
+func (r *stylesheetResolver) imports(css cssText, base string, conditional bool) {
 	sheet, ok := parseStylesheet(css)
 	if !ok {
 		return // ComputeWhitespace makes a sheet that does not parse unknown
@@ -235,25 +259,76 @@ func (r *stylesheetResolver) imports(css cssText, base string) {
 		if !ok || !strings.EqualFold(rule.Name, "import") {
 			continue
 		}
-		target := atImportTarget(rule)
+		target, condition := atImport(rule)
 		if target == "" || (rule.Loc != nil && css.dynamic(rule.Loc.Start.Offset, rule.Loc.End.Offset)) {
 			r.missing = true
 			continue
 		}
-		r.load(target, base)
+		r.load(target, base, conditional || isCondition(condition))
 	}
 }
 
 // atImportTarget returns the URL an @import rule names, or "".
 func atImportTarget(rule *csstree.Atrule) string {
+	target, _ := atImport(rule)
+	return target
+}
+
+// atImport returns the URL an @import rule names, or "", and the rest of
+// its prelude: the layer, supports() and media query conditions.
+func atImport(rule *csstree.Atrule) (target, condition string) {
 	if rule.Prelude == nil {
-		return ""
+		return "", ""
 	}
 	prelude, err := csstree.Generate(rule.Prelude, csstree.GenerateOptions{})
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return importTarget(prelude)
+	target = importTarget(prelude)
+	if target == "" {
+		return "", ""
+	}
+	prelude = strings.TrimSpace(prelude)
+	if strings.HasPrefix(strings.ToLower(prelude), "url(") {
+		return target, prelude[strings.IndexByte(prelude, ')')+1:]
+	}
+	return target, prelude[1+len(target)+1:]
+}
+
+// isCondition reports whether condition, a media query list or the rest of
+// an @import prelude, may not hold.
+func isCondition(condition string) bool {
+	condition = strings.TrimSpace(condition)
+	return condition != "" && !strings.EqualFold(condition, "all")
+}
+
+// optionalPlace reports whether an element at path may not be in the
+// document: it is in a template branch, or in <template> or <noscript>,
+// whose content does not apply when scripting is on.
+func optionalPlace(path []template.Node) bool {
+	for _, n := range path {
+		if isBranch(n) {
+			return true
+		}
+		if el, ok := n.(*template.HTMLElementNode); ok && (strings.EqualFold(el.TagName, "template") || strings.EqualFold(el.TagName, "noscript")) {
+			return true
+		}
+	}
+	return false
+}
+
+// conditionalMedia reports whether el has a media attribute that may not
+// match: one that is dynamic, or other than "" and "all".
+func conditionalMedia(el *template.HTMLElementNode) bool {
+	for _, n := range el.Attr {
+		attr, ok := n.(*template.HTMLAttributeNode)
+		if !ok || attr.Namespace != "" || !strings.EqualFold(staticAttrName(attr), "media") {
+			continue
+		}
+		text, action, ok := attrValue(attr.Value)
+		return !ok || action != nil || isCondition(text)
+	}
+	return false
 }
 
 // resolveStylesheetURL returns the URL path ref names relative to the URL

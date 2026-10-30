@@ -675,7 +675,7 @@ func authorSheets(trees []*template.Tree, sheets []Stylesheet) []sheetCSS {
 		})
 	}
 	for _, s := range sheets {
-		out = append(out, sheetCSS{css: cssText{text: s.Text}, url: s.Filename})
+		out = append(out, sheetCSS{css: cssText{text: s.Text}, url: s.Filename, conditional: s.Conditional})
 	}
 	return out
 }
