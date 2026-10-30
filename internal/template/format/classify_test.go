@@ -89,10 +89,25 @@ func TestClassify(t *testing.T) {
 			src:  "<div>a<br>b<span style=\"display:inline-block\">c</span><slot>d</slot></div>",
 			want: "⟨r⟩<div>⟨r⟩a⟨r⟩<br>⟨r⟩b⟨c⟩<span style=\"display:inline-block\">⟨r⟩c⟨r⟩</span>⟨c⟩<slot>⟨c⟩d⟨r⟩</slot>⟨r⟩</div>⟨r⟩",
 		},
-		// The inside of a display: none element has no certain edges.
+		// A display: none element may be shown by a script, so it is
+		// opaque from outside and no run next to it is reflowable; its
+		// inside has no certain edges.
 		{
 			src:  "<div><div hidden> x </div></div>",
-			want: "⟨r⟩<div>⟨r⟩<div hidden>⟨C⟩x⟨C⟩</div>⟨r⟩</div>⟨r⟩",
+			want: "⟨r⟩<div>⟨c⟩<div hidden>⟨C⟩x⟨C⟩</div>⟨c⟩</div>⟨r⟩",
+		},
+		{
+			src:  "<div>x <span hidden>y</span></div>",
+			want: "⟨r⟩<div>⟨r⟩x⟨C⟩<span hidden>⟨c⟩y⟨c⟩</span>⟨c⟩</div>⟨r⟩",
+		},
+		{
+			src:  "<div>\n<div hidden>y</div>\n</div>",
+			want: "⟨r⟩<div>⟨C⟩<div hidden>⟨c⟩y⟨c⟩</div>⟨C⟩</div>⟨r⟩",
+		},
+		// An element whose display is unknown is treated the same way.
+		{
+			src:  "<div>\n<div {{if .X}}hidden{{end}}>y</div>\n</div>",
+			want: "⟨r⟩<div>⟨C⟩<div {{if .X}}hidden{{end}}>y</div>⟨C⟩</div>⟨r⟩",
 		},
 		{
 			src:  "<p>{{if .X -}} a {{- end}}</p>",

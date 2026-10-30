@@ -125,8 +125,28 @@ type place struct {
 	i int
 }
 
+// side is what may render on one side of a point: edge when every item
+// is a certain line edge, unsure when some item is an element whose
+// display is none or unknown, which forbids reflowing a run next to it
+// whatever the other side is.
+type side struct {
+	edge, unsure bool
+}
+
+func (a side) and(b side) side {
+	return side{edge: a.edge && b.edge, unsure: a.unsure || b.unsure}
+}
+
+var (
+	edgeSide   = side{edge: true}
+	opaqueSide = side{}
+	unsureSide = side{unsure: true}
+)
+
 type memo struct {
-	done, edge, nullable bool
+	done     bool
+	side     side
+	nullable bool
 }
 
 type classifier struct {
@@ -277,7 +297,15 @@ func (c *classifier) runClassOf(l *childList, before, after int, nonEmpty, leftT
 		return runPreserveBreaks
 	case l.mode != analysis.WhiteSpaceCollapse:
 		return runPreserved
-	case leftTouch && c.leftEdge(place{l, before}) || rightTouch && c.rightEdge(place{l, after}):
+	}
+	left, right := opaqueSide, opaqueSide
+	if leftTouch {
+		left = c.leftSide(place{l, before})
+	}
+	if rightTouch {
+		right = c.rightSide(place{l, after})
+	}
+	if !left.unsure && !right.unsure && (left.edge || right.edge) {
 		return runReflowable
 	}
 	return runCollapseOnly
@@ -379,14 +407,13 @@ func trimsRight(n template.Node) bool {
 	return false
 }
 
-// The adjacency functions below answer "is every item that may render
-// next to this point a certain line edge?" Items that render nothing are
-// looked through. Each is memoized; a cycle through control flow (a
-// continue reaching its own range) answers false, which only makes runs
-// less reflowable.
+// The adjacency functions below answer "what may render next to this
+// point?" Items that render nothing are looked through. Each is memoized;
+// a cycle through control flow (a continue reaching its own range)
+// answers opaque, which only makes runs less reflowable.
 
-// enter returns the memo for key, or nil with ok false when it is being
-// computed already (a cycle).
+// enter returns the memo for key, with ok false when it is being computed
+// already (a cycle).
 func enter[K comparable](m map[K]*memo, key K) (result *memo, ok bool) {
 	if r, seen := m[key]; seen {
 		return r, r.done
@@ -396,58 +423,54 @@ func enter[K comparable](m map[K]*memo, key K) (result *memo, ok bool) {
 	return r, true
 }
 
-// rightEdge reports whether everything that may render after position p
-// is a certain line edge.
-func (c *classifier) rightEdge(p place) bool {
+// rightSide is what may render after position p.
+func (c *classifier) rightSide(p place) side {
 	r, ok := enter(c.right, p)
 	if !ok {
-		return false
+		return opaqueSide
 	}
 	if r.done {
-		return r.edge
+		return r.side
 	}
-	edge := true
-	nullable := true
+	result, nullable := edgeSide, true
 	for _, item := range p.l.items[p.i:] {
-		e, n := c.firstOf(item)
-		edge = edge && e
+		s, n := c.firstOf(item)
+		result = result.and(s)
 		if !n {
 			nullable = false
 			break
 		}
 	}
 	if nullable {
-		edge = edge && c.endEdge(p.l)
+		result = result.and(c.endSide(p.l))
 	}
-	*r = memo{done: true, edge: edge}
-	return edge
+	*r = memo{done: true, side: result}
+	return result
 }
 
-// leftEdge reports whether everything that may render before position p
-// is a certain line edge.
-func (c *classifier) leftEdge(p place) bool {
+// leftSide is what may render before position p.
+func (c *classifier) leftSide(p place) side {
 	r, ok := enter(c.left, p)
 	if !ok {
-		return false
+		return opaqueSide
 	}
 	if r.done {
-		return r.edge
+		return r.side
 	}
-	edge := true
-	nullable := true
+	result, nullable := edgeSide, true
 	for i := p.i - 1; i >= 0; i-- {
-		e, n := c.lastOf(p.l.items[i])
-		edge = edge && e
+		s, n := c.lastOf(p.l.items[i])
+		result = result.and(s)
 		if !n {
 			nullable = false
 			break
 		}
 	}
 	if nullable {
-		edge = edge && c.startEdge(p.l)
+		result = result.and(c.startSide(p.l))
 	}
-	*r = memo{done: true, edge: edge}
-	return edge
+	*r = memo{done: true, side: result}
+	return result
 }
 
 // after is the position following item n in its list.
@@ -456,187 +479,195 @@ func (c *classifier) after(n template.Node) place {
 	return place{p.l, p.i + 1}
 }
 
-// endEdge reports whether what follows the end of l is a certain line edge.
-func (c *classifier) endEdge(l *childList) bool {
+// endSide is what may render after the end of l.
+func (c *classifier) endSide(l *childList) side {
 	switch n := l.owner.(type) {
 	case *template.HTMLElementNode:
 		switch c.display(n) {
 		case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayAtomic:
-			return true
+			return edgeSide
 		case analysis.DisplayInline, analysis.DisplayContents:
-			return c.rightEdge(c.after(n))
+			return c.rightSide(c.after(n))
 		}
 	case *template.IfNode, *template.WithNode:
-		return c.rightEdge(c.after(n))
+		return c.rightSide(c.after(n))
 	case *template.RangeNode:
 		if l.isElse {
-			return c.rightEdge(c.after(n))
+			return c.rightSide(c.after(n))
 		}
 		// The body's end meets the next iteration's start or what
 		// follows the range.
 		next, _ := c.listFirst(l)
-		return next && c.rightEdge(c.after(n))
+		return next.and(c.rightSide(c.after(n)))
 	}
-	return false // tree root, define or block body: the caller is unknown
+	// The tree root or a define or block body (the caller is unknown), or
+	// the inside of an element whose display is none or unknown.
+	return opaqueSide
 }
 
-// startEdge reports whether what precedes the start of l is a certain
-// line edge.
-func (c *classifier) startEdge(l *childList) bool {
+// startSide is what may render before the start of l.
+func (c *classifier) startSide(l *childList) side {
 	switch n := l.owner.(type) {
 	case *template.HTMLElementNode:
 		switch c.display(n) {
 		case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayAtomic:
-			return true
+			return edgeSide
 		case analysis.DisplayInline, analysis.DisplayContents:
-			return c.leftEdge(c.places[n])
+			return c.leftSide(c.places[n])
 		}
 	case *template.IfNode, *template.WithNode:
-		return c.leftEdge(c.places[n])
+		return c.leftSide(c.places[n])
 	case *template.RangeNode:
 		if l.isElse {
-			return c.leftEdge(c.places[n])
+			return c.leftSide(c.places[n])
 		}
 		// The body's start meets what precedes the range, the previous
 		// iteration's end, or a continue.
-		prev, _ := c.listLast(l)
-		if !prev || !c.leftEdge(c.places[n]) {
-			return false
-		}
+		result, _ := c.listLast(l)
+		result = result.and(c.leftSide(c.places[n]))
 		for _, exit := range c.exits[n] {
-			if _, ok := exit.l.items[exit.i].(*template.ContinueNode); ok && !c.leftEdge(exit) {
-				return false
+			if _, ok := exit.l.items[exit.i].(*template.ContinueNode); ok {
+				result = result.and(c.leftSide(exit))
 			}
 		}
-		return true
+		return result
 	}
-	return false
+	return opaqueSide
 }
 
-func (c *classifier) listFirst(l *childList) (edge, nullable bool) {
-	edge = true
+func (c *classifier) listFirst(l *childList) (side, bool) {
+	result := edgeSide
 	for _, item := range l.items {
-		e, n := c.firstOf(item)
-		edge = edge && e
+		s, n := c.firstOf(item)
+		result = result.and(s)
 		if !n {
-			return edge, false
+			return result, false
 		}
 	}
-	return edge, true
+	return result, true
 }
 
-func (c *classifier) listLast(l *childList) (edge, nullable bool) {
-	edge = true
+func (c *classifier) listLast(l *childList) (side, bool) {
+	result := edgeSide
 	for i := len(l.items) - 1; i >= 0; i-- {
-		e, n := c.lastOf(l.items[i])
-		edge = edge && e
+		s, n := c.lastOf(l.items[i])
+		result = result.and(s)
 		if !n {
-			return edge, false
+			return result, false
 		}
 	}
-	return edge, true
+	return result, true
 }
 
-// firstOf reports whether every first rendered item of n is a certain
-// line edge, and whether n may render nothing.
-func (c *classifier) firstOf(n template.Node) (edge, nullable bool) {
+// firstOf is what may render first in n, and whether n may render
+// nothing.
+func (c *classifier) firstOf(n template.Node) (result side, nullable bool) {
 	r, ok := enter(c.first, n)
 	if !ok {
-		return false, false
+		return opaqueSide, false
 	}
 	if r.done {
-		return r.edge, r.nullable
+		return r.side, r.nullable
 	}
 	switch n := n.(type) {
 	case *template.HTMLElementNode:
-		edge, nullable = c.elementOutside(n, c.listFirst)
+		result, nullable = c.elementOutside(n, c.listFirst)
 	case *template.IfNode, *template.WithNode, *template.RangeNode:
-		edge, nullable = c.branchEnds(branchOf(n), c.listFirst)
+		result, nullable = c.branchEnds(branchOf(n), c.listFirst)
 	case *template.BreakNode:
-		edge = c.target[n] != nil && c.rightEdge(c.after(c.target[n]))
+		result = opaqueSide
+		if loop := c.target[n]; loop != nil {
+			result = c.rightSide(c.after(loop))
+		}
 	case *template.ContinueNode:
-		edge = c.target[n] != nil && c.endEdge(c.lists[c.target[n].List])
+		result = opaqueSide
+		if loop := c.target[n]; loop != nil {
+			result = c.endSide(c.lists[loop.List])
+		}
 	default:
-		edge, nullable = transparent(n)
+		result, nullable = transparent(n)
 	}
-	*r = memo{done: true, edge: edge, nullable: nullable}
-	return edge, nullable
+	*r = memo{done: true, side: result, nullable: nullable}
+	return result, nullable
 }
 
-// lastOf reports whether every last rendered item of n is a certain line
-// edge, and whether n may render nothing.
-func (c *classifier) lastOf(n template.Node) (edge, nullable bool) {
+// lastOf is what may render last in n, and whether n may render nothing.
+func (c *classifier) lastOf(n template.Node) (result side, nullable bool) {
 	r, ok := enter(c.last, n)
 	if !ok {
-		return false, false
+		return opaqueSide, false
 	}
 	if r.done {
-		return r.edge, r.nullable
+		return r.side, r.nullable
 	}
 	switch n := n.(type) {
 	case *template.HTMLElementNode:
-		edge, nullable = c.elementOutside(n, c.listLast)
+		result, nullable = c.elementOutside(n, c.listLast)
 	case *template.IfNode, *template.WithNode:
-		edge, nullable = c.branchEnds(branchOf(n), c.listLast)
+		result, nullable = c.branchEnds(branchOf(n), c.listLast)
 	case *template.RangeNode:
-		edge, nullable = c.branchEnds(&n.BranchNode, c.listLast)
+		result, nullable = c.branchEnds(&n.BranchNode, c.listLast)
 		// A break or continue ends the range next to what precedes it.
 		for _, exit := range c.exits[n] {
-			edge = edge && c.leftEdge(exit)
+			result = result.and(c.leftSide(exit))
 		}
 	case *template.BreakNode, *template.ContinueNode:
 		// Nothing after it in its list renders; the range accounts for
 		// what precedes it.
-		edge, nullable = true, false
+		result, nullable = edgeSide, false
 	default:
-		edge, nullable = transparent(n)
+		result, nullable = transparent(n)
 	}
-	*r = memo{done: true, edge: edge, nullable: nullable}
-	return edge, nullable
+	*r = memo{done: true, side: result, nullable: nullable}
+	return result, nullable
 }
 
-// elementOutside is how el looks from outside: a certain line edge,
-// transparent, its children (display: contents), or opaque.
-func (c *classifier) elementOutside(el *template.HTMLElementNode, ends func(*childList) (bool, bool)) (edge, nullable bool) {
+// elementOutside is how el looks from outside: a certain line edge, its
+// children (display: contents), opaque (inline and atomic boxes), or
+// unsure. An element whose display is none or unknown is unsure: a
+// script may show a hidden element, and then it lays out by its own
+// display, so no run next to it may be reflowed.
+func (c *classifier) elementOutside(el *template.HTMLElementNode, ends func(*childList) (side, bool)) (side, bool) {
 	switch c.display(el) {
 	case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayNewline:
-		return true, false
-	case analysis.DisplayNone:
-		return true, true
+		return edgeSide, false
+	case analysis.DisplayInline, analysis.DisplayAtomic:
+		return opaqueSide, false
 	case analysis.DisplayContents:
 		if l, ok := c.lists[el]; ok {
 			return ends(l)
 		}
+		return opaqueSide, false
 	}
-	return false, false
+	return unsureSide, false
 }
 
-func (c *classifier) branchEnds(b *template.BranchNode, ends func(*childList) (bool, bool)) (edge, nullable bool) {
-	edge, nullable = true, true
+func (c *classifier) branchEnds(b *template.BranchNode, ends func(*childList) (side, bool)) (side, bool) {
+	result, nullable := edgeSide, true
 	if l, ok := c.lists[b.List]; ok {
-		edge, nullable = ends(l)
+		result, nullable = ends(l)
 	}
 	if b.ElseList == nil {
-		return edge, true
+		return result, true
 	}
 	if l, ok := c.lists[b.ElseList]; ok {
-		e, n := ends(l)
-		return edge && e, nullable || n
+		s, n := ends(l)
+		return result.and(s), nullable || n
 	}
-	return edge, nullable
+	return result, nullable
 }
 
 // transparent classifies the remaining items: those that render nothing
 // are looked through; text with content, actions, template calls and
 // blocks are opaque.
-func transparent(n template.Node) (edge, nullable bool) {
+func transparent(n template.Node) (side, bool) {
 	switch n := n.(type) {
 	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode, *template.HTMLDoctypeNode:
-		return true, true
+		return edgeSide, true
 	case *template.TextNode:
 		if isRunOnly(n.Text) {
-			return true, true
+			return edgeSide, true
 		}
 	}
-	return false, false
+	return opaqueSide, false
 }
