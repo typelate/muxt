@@ -923,6 +923,7 @@ func (t *Tree) elseControl() (Node, error) {
 func (t *Tree) blockControl() (Node, error) {
 	const context = "block clause"
 	actionPos := t.actionPos
+	startTrimLeft := t.actionTrimLeft
 
 	token := t.nextNonSpace()
 	name, err := t.parseTemplateName(token, context)
@@ -970,7 +971,12 @@ func (t *Tree) blockControl() (Node, error) {
 		return nil, err
 	}
 
-	return t.newBlock(actionPos, end.End(), token.Line, name, pipe, body), nil
+	b := t.newBlock(actionPos, end.End(), token.Line, name, pipe, body)
+	b.StartTrimLeft = startTrimLeft
+	b.StartTrimRight = startTrimRight
+	b.EndTrimLeft = en.TrimLeft
+	b.EndTrimRight = en.TrimRight
+	return b, nil
 }
 
 // Template:

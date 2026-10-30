@@ -1834,3 +1834,37 @@ func TestParseErrorType(t *testing.T) {
 	assert.Greater(t, end.Offset, start.Offset)
 	assert.Positive(t, start.Line)
 }
+
+func TestBlockNodeTrimMarkers(t *testing.T) {
+	type trims struct{ startLeft, startRight, endLeft, endRight bool }
+	for _, tt := range []struct {
+		name string
+		src  string
+		html bool
+		want trims
+	}{
+		{name: "none", src: `{{block "b" .}}x{{end}}`},
+		{name: "all", src: `{{- block "b" . -}}x{{- end -}}`, want: trims{true, true, true, true}},
+		{name: "inner only", src: `{{block "b" . -}}x{{- end}}`, want: trims{startRight: true, endLeft: true}},
+		{name: "html all", src: `<p>{{- block "b" . -}}x{{- end -}}</p>`, html: true, want: trims{true, true, true, true}},
+		{name: "html none", src: `<p>{{block "b" .}}x{{end}}</p>`, html: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := lex.NewOptions()
+			opt.ParseHTML = tt.html
+			tree, err := ParseTree("t", "t", tt.src, nil, opt)
+			require.NoError(t, err)
+			var block *BlockNode
+			Walk(tree, func(_ *Tree, n Node) {
+				if b, ok := n.(*BlockNode); ok && block == nil {
+					block = b
+				}
+			})
+			require.NotNil(t, block, "no BlockNode in %q", tt.src)
+			got := trims{block.StartTrimLeft, block.StartTrimRight, block.EndTrimLeft, block.EndTrimRight}
+			if got != tt.want {
+				t.Errorf("BlockNode(%q) trims = %v, want %v", tt.src, got, tt.want)
+			}
+		})
+	}
+}
