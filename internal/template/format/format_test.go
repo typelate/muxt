@@ -209,6 +209,8 @@ func TestFormattingEdgeCases(t *testing.T) {
 		{name: "li held open under a span", input: `<b><span><li>0</b><b><li></li> </b>`},
 		{name: "li held open after its span closes", input: `<b><span><li>0</span></b><b><li></li> </b>`},
 		{name: "ul held open under a span", input: `<em><span><ul><li>0</em><em><li></li> </em>`},
+		{name: "unread li closed by a later li", input: `<li/x><b>0<li></li> </b>`},
+		{name: "unread li in a ul keeps what follows the ul", input: `<ul><li/x><b>0</b></ul><div><p>b</p></div>`},
 
 		// --- Markup html/template writes as text ---
 		{name: "bogus comment after block", input: `<div></div><!x>0`},

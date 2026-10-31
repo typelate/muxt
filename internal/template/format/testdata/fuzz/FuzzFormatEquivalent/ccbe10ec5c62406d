@@ -1,0 +1,2 @@
+go test fuzz v1
+string("0000000000000000000<li/0>0<B>0<li>0</li> </B>0")

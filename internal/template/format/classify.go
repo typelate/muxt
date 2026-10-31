@@ -882,8 +882,10 @@ var repairedTags = map[string]bool{
 // the element before the template tree does, and the template tree runs
 // it to the end of its parent, so a run written after it would be its
 // content on the next pass. What follows an element the browser holds
-// open past its template end (heldOpen), up to the nearest clean block,
-// is flagged as well.
+// open past its template end (heldOpen), or a start tag the parser read
+// as text (an element only the browser has, which a later start tag such
+// as <li> may close along with what the template tree nests in it), up
+// to the nearest clean block, is flagged as well.
 func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
@@ -896,6 +898,9 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	// asWritten are the tables a nested table closes early: the parser
 	// drops the table parts that follow, so the whole table is opaque.
 	var asWritten []*template.HTMLElementNode
+	// unreadStarts hold a start tag the parser read as text: the
+	// browser holds open an element the template tree does not have.
+	unreadStarts := make(map[*template.TextNode]bool)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
 		if text, ok := n.(*template.TextNode); ok {
 			// A tag the parser read as text is an element the
@@ -904,6 +909,9 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			kind := unreadMarkupIn(text.Text)
 			if kind == unreadNone || kind == unreadRetokenizes || inRawText(path) {
 				return
+			}
+			if kind == unreadTag {
+				unreadStarts[text] = true
 			}
 			if parent := nearestElement(path); parent != nil {
 				flagged[parent.Start()] = true
@@ -930,7 +938,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			asWritten = append(asWritten, closed)
 		}
 	})
-	if len(flagged) == 0 {
+	if len(flagged) == 0 && len(unreadStarts) == 0 {
 		return
 	}
 	var (
@@ -941,6 +949,13 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 		held []template.Node
 	)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		if text, ok := n.(*template.TextNode); ok && unreadStarts[text] {
+			if parent := nearestElement(path); parent != nil && parent.Closed && endTagPops[strings.ToLower(parent.TagName)] {
+				return // the parent's end tag closes it; the parent is as written
+			}
+			held = append(held, markMisnestedAncestors(&marked, path, nil, styles, flagged))
+			return
+		}
 		el, ok := n.(*template.HTMLElementNode)
 		if !ok {
 			return
@@ -972,6 +987,22 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+}
+
+// endTagPops name the elements whose end tag pops every element opened
+// inside them, an element only the browser has included (HTML §13.2.6.4.7
+// "in body": the block end tags, </p>, </li>, </dd>, </dt> and the
+// headings; and the table end tags).
+var endTagPops = map[string]bool{
+	"address": true, "article": true, "aside": true, "blockquote": true, "button": true,
+	"center": true, "details": true, "dialog": true, "dir": true, "div": true,
+	"dl": true, "fieldset": true, "figcaption": true, "figure": true, "footer": true,
+	"header": true, "hgroup": true, "listing": true, "main": true, "menu": true,
+	"nav": true, "ol": true, "pre": true, "search": true, "section": true,
+	"summary": true, "ul": true, "p": true, "li": true, "dd": true, "dt": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"table": true, "caption": true, "tbody": true, "thead": true, "tfoot": true,
+	"tr": true, "td": true, "th": true,
 }
 
 // markMisnestedAncestors appends to marked the ancestors on path of a
