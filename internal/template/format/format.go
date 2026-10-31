@@ -48,7 +48,8 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // tree's own <style> elements, so without Styles an element with a class
 // or id is unknown (decision 1) and keeps its whitespace as written. A
 // tree holding markup the template parser read as text but a browser
-// reads as a tag is written as it is (see hasUnparsedMarkup).
+// reads as a tag, or a self-closed HTML element that is not void, is
+// written as it is (see hasUnparsedMarkup and hasIgnoredSelfClose).
 func Node(root template.Node, opts ...Option) string {
 	return newFormatter(opts).format(root)
 }
@@ -71,7 +72,7 @@ func (f *formatter) format(root template.Node) string {
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
-	if hasUnparsedMarkup(list.Nodes) {
+	if hasUnparsedMarkup(list.Nodes) || hasIgnoredSelfClose(list.Nodes, false) {
 		for _, n := range list.Nodes {
 			f.writeString(f.sourceText(n))
 		}
@@ -1039,6 +1040,58 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	f.dir = *dir
 	out := f.format(tree.Root)
 	return strings.TrimRight(out, whitespace) + trailingWhitespace(src), nil
+}
+
+// hasIgnoredSelfClose reports whether nodes hold an HTML element that is
+// not void written with a self-closing slash (<pre/>, <div/>). The
+// browser ignores the slash outside SVG and MathML content, so the
+// content after the tag is the element's in the browser's tree and its
+// sibling in the template tree: the two disagree from there on, as with
+// hasUnparsedMarkup. foreign reports whether nodes are SVG or
+// MathML content outside an integration point, where the slash closes
+// the element. A define or block body is HTML content: its callers are
+// unknown.
+func hasIgnoredSelfClose(nodes []template.Node, foreign bool) bool {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.HTMLDocumentFragmentNode:
+			if hasIgnoredSelfClose(n.Children, foreign) {
+				return true
+			}
+		case *template.HTMLElementNode:
+			tag := strings.ToLower(n.TagName)
+			inForeign := foreign || tag == "svg" || tag == "math"
+			if n.Void && !voidElements[tag] && !inForeign {
+				return true
+			}
+			if hasIgnoredSelfClose(n.Children, inForeign && !integrationPoints[tag]) {
+				return true
+			}
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil && hasIgnoredSelfClose(b.List.Nodes, foreign) || b.ElseList != nil && hasIgnoredSelfClose(b.ElseList.Nodes, foreign) {
+				return true
+			}
+		case *template.DefineNode:
+			if n.Body != nil && hasIgnoredSelfClose(n.Body.Nodes, false) {
+				return true
+			}
+		case *template.BlockNode:
+			if n.Body != nil && hasIgnoredSelfClose(n.Body.Nodes, false) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// integrationPoints are the SVG and MathML elements whose content is
+// HTML again (HTML §13.2.6.5): SVG foreignObject, desc and title, and
+// MathML annotation-xml and text integration points. Matching them by
+// local name only errs toward HTML, which is the cautious side.
+var integrationPoints = map[string]bool{
+	"foreignobject": true, "desc": true, "title": true,
+	"mi": true, "mo": true, "mn": true, "ms": true, "mtext": true, "annotation-xml": true,
 }
 
 // hasUnparsedMarkup reports whether text in nodes, outside raw text and

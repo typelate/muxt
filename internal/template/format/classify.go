@@ -667,11 +667,17 @@ func (c *classifier) branchEnds(b *template.BranchNode, ends func(*childList) (s
 
 // transparent classifies the remaining items: those that render nothing
 // are looked through; text with content, actions, template calls and
-// blocks are opaque.
+// blocks are opaque. Of the nodes the parser reads as a doctype, only a
+// doctype renders nothing: html/template writes the < of a bogus comment
+// or processing instruction (<!x>, <?x>) as &lt;, so it is text.
 func transparent(n template.Node) (side, bool) {
 	switch n := n.(type) {
-	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode, *template.HTMLDoctypeNode:
+	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode:
 		return edgeSide, true
+	case *template.HTMLDoctypeNode:
+		if strings.HasPrefix(strings.ToUpper(n.Text), "<!DOCTYPE") {
+			return edgeSide, true
+		}
 	case *template.TextNode:
 		if isRunOnly(n.Text) {
 			return edgeSide, true
@@ -875,7 +881,9 @@ var repairedTags = map[string]bool{
 // not write the closing tag the source leaves out, the browser may end
 // the element before the template tree does, and the template tree runs
 // it to the end of its parent, so a run written after it would be its
-// content on the next pass.
+// content on the next pass. What follows an element the browser holds
+// open past its template end (heldOpen), up to the nearest clean block,
+// is flagged as well.
 func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
@@ -925,30 +933,31 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	if len(flagged) == 0 {
 		return
 	}
-	var marked []*template.HTMLElementNode
+	var (
+		marked []*template.HTMLElementNode
+		// held are, per element the browser keeps open past its end
+		// in the template tree, the node its reach ends at; nil is the
+		// tree root.
+		held []template.Node
+	)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
 		el, ok := n.(*template.HTMLElementNode)
-		if !ok || !flagged[el.Start()] {
+		if !ok {
+			return
+		}
+		for _, r := range held {
+			if r == nil || slices.Contains(path, r) {
+				marked = append(marked, el)
+				break
+			}
+		}
+		if !flagged[el.Start()] {
 			return
 		}
 		marked = append(marked, el)
-		closed := closes[el] // nil once reached, or when el closes nothing
-		for i := len(path) - 1; i >= 0; i-- {
-			switch p := path[i].(type) {
-			case *template.HTMLElementNode:
-				switch {
-				case closed != nil:
-					// Popped by el's start tag, clean or not.
-					if p == closed {
-						closed = nil
-					}
-				case cleanBlock(p, styles, flagged):
-					return
-				}
-				marked = append(marked, p)
-			case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
-				return
-			}
+		stop := markMisnestedAncestors(&marked, path, closes[el], styles, flagged)
+		if heldOpen(el, path) {
+			held = append(held, stop)
 		}
 	})
 	for _, el := range marked {
@@ -963,6 +972,47 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+}
+
+// markMisnestedAncestors appends to marked the ancestors on path of a
+// flagged element: those up to closed, the ancestor its start tag closes
+// (nil when it closes none), then on up to the nearest clean block. It
+// returns the node the marking stopped at: that clean block, a define,
+// block, attribute or comment, or nil at the tree root.
+func markMisnestedAncestors(marked *[]*template.HTMLElementNode, path []template.Node, closed *template.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) template.Node {
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			switch {
+			case closed != nil:
+				// Popped by el's start tag, clean or not.
+				if p == closed {
+					closed = nil
+				}
+			case cleanBlock(p, styles, flagged):
+				return p
+			}
+			*marked = append(*marked, p)
+		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+			return p
+		}
+	}
+	return nil
+}
+
+// heldOpen reports whether the browser keeps el open past the end the
+// template tree gives it: el is an unclosed special element whose parent
+// is a formatting element, so the parent's end tag runs the adoption
+// agency algorithm with el as the furthest block, which stays on the
+// stack of open elements (HTML §13.2.6.4.7). What follows, up to the
+// nearest clean block, may be el's content or be split by a start tag
+// that closes it (<b><li>0</b><b><li></li> </b>).
+func heldOpen(el *template.HTMLElementNode, path []template.Node) bool {
+	if el.Closed || el.Void || !specialTags[strings.ToLower(el.TagName)] {
+		return false
+	}
+	parent := nearestElement(path)
+	return parent != nil && template.FormattingElements[strings.ToLower(parent.TagName)]
 }
 
 // nearestElement is the innermost element on path, or nil.
@@ -1005,6 +1055,7 @@ var formattingMarkers = map[string]bool{"td": true, "th": true, "caption": true,
 // the template tree, and any text there, a run the formatter writes
 // included, reopens it (HTML §13.2.6.4.7, reconstruct the active
 // formatting elements), so no gap there may take a break it did not have.
+// A formatting start tag the template parser read as text counts too.
 func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
 	tree := &template.Tree{Root: root}
 	var (
@@ -1012,17 +1063,24 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
 		marked  []*template.HTMLElementNode
 	)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		el, ok := n.(*template.HTMLElementNode)
-		if !ok {
-			return
-		}
-		for _, r := range reaches {
-			if r == nil || slices.Contains(path, r) {
-				marked = append(marked, el)
-				break
+		switch n := n.(type) {
+		case *template.TextNode:
+			// A formatting start tag the parser read as text (<a/x>)
+			// is an unclosed formatting element to the browser.
+			if inRawText(path) || !hasUnreadFormattingTag(n.Text) {
+				return
 			}
-		}
-		if el.Closed || el.Void || !template.FormattingElements[strings.ToLower(el.TagName)] {
+		case *template.HTMLElementNode:
+			for _, r := range reaches {
+				if r == nil || slices.Contains(path, r) {
+					marked = append(marked, n)
+					break
+				}
+			}
+			if n.Closed || n.Void || !template.FormattingElements[strings.ToLower(n.TagName)] {
+				return
+			}
+		default:
 			return
 		}
 		reach := reachOf(path)
@@ -1039,6 +1097,25 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+}
+
+// hasUnreadFormattingTag reports whether text, which the template parser
+// read as text, holds the start tag of a formatting element (a, b, em,
+// strong, …), as unreadMarkupIn finds start tags.
+func hasUnreadFormattingTag(text []byte) bool {
+	for i := 0; i+1 < len(text); i++ {
+		if text[i] != '<' || !isASCIILetter(text[i+1]) {
+			continue
+		}
+		end := i + 1
+		for end < len(text) && !isTagNameEnd(text[end]) {
+			end++
+		}
+		if template.FormattingElements[strings.ToLower(string(text[i+1:end]))] {
+			return true
+		}
+	}
+	return false
 }
 
 // reachOf returns the nearest node in path that ends the reach of an

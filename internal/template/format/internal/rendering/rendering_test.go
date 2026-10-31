@@ -148,7 +148,7 @@ func TestWPTOracle(t *testing.T) {
 			// Non-ASCII spaces are content: the test collapses to its ref.
 			diff(t, "<span>"+test+"</span>", "<span>"+ref+"</span>", true)
 			// Replacing the literal with U+0020 changes the rendering.
-			plain := strings.NewReplacer(" ", " ", " ", " ", " ", " ", " ", " ", "​", " ", " ", " ", "　", " ").Replace(test)
+			plain := strings.NewReplacer("\u00a0", " ", "\u2002", " ", "\u2003", " ", "\u2009", " ", "\u200b", " ", "\u202f", " ", "\u3000", " ").Replace(test)
 			if plain == test {
 				t.Fatalf("test%s has no non-ASCII space to replace", id)
 			}

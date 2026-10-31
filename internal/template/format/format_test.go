@@ -166,9 +166,8 @@ func TestFormattingEdgeCases(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		input      string
-		normalizes bool // true when formatter normalizes whitespace (tab→space, strip-only-ws)
+		name  string
+		input string
 	}{
 		// --- Inline text flow around elements ---
 		{name: "text before inline element", input: `<p>Hello <em>world</em></p>`},
@@ -204,20 +203,29 @@ func TestFormattingEdgeCases(t *testing.T) {
 		{name: "li with inline content", input: `<li><a href="#">{{.Name}}</a></li>`},
 		{name: "td with mixed content", input: `<td>{{.Name}} ({{.Value}})</td>`},
 
+		// --- Misnested formatting elements ---
+		{name: "li held open past formatting end tag", input: `<b><li>0</b><b><li></li> </b>`},
+		{name: "li held open inside a block", input: `<div><b><li>0</b><b><li></li> </b></div>`},
+
+		// --- Markup html/template writes as text ---
+		{name: "bogus comment after block", input: `<div></div><!x>0`},
+		{name: "processing instruction after block", input: `<div></div><?x>0`},
+		{name: "bogus comment before if", input: `<div></div><!x>{{if .Show}}0{{end}}`},
+
 		// --- Whitespace normalization (browser-equivalent, standard formatter behavior) ---
-		{name: "multiple spaces between words", input: `<p>Hello     world</p>`, normalizes: true},
-		{name: "newline between inline elements", input: "<p><span>a</span>\n<span>b</span></p>", normalizes: true},
-		{name: "tab between inline elements", input: "<p><span>a</span>\t<span>b</span></p>", normalizes: true},
-		{name: "space before closing tag", input: `<p>text </p>`, normalizes: true},
-		{name: "space after opening tag", input: `<p> text</p>`, normalizes: true},
+		{name: "multiple spaces between words", input: `<p>Hello     world</p>`},
+		{name: "newline between inline elements", input: "<p><span>a</span>\n<span>b</span></p>"},
+		{name: "tab between inline elements", input: "<p><span>a</span>\t<span>b</span></p>"},
+		{name: "space before closing tag", input: `<p>text </p>`},
+		{name: "space after opening tag", input: `<p> text</p>`},
 
 		// --- Long inline content (should NOT wrap prose) ---
 		{name: "long paragraph with link", input: `<p>This is a sentence with <a href="#">a link</a> embedded in it that might be long enough to matter.</p>`},
 
 		// --- Empty and minimal ---
 		{name: "empty paragraph", input: `<p></p>`},
-		{name: "whitespace only paragraph", input: `<p>   </p>`, normalizes: true},
-		{name: "single space paragraph", input: `<p> </p>`, normalizes: true},
+		{name: "whitespace only paragraph", input: `<p>   </p>`},
+		{name: "single space paragraph", input: `<p> </p>`},
 		{name: "empty inline element", input: `<p><span></span></p>`},
 
 		// --- Control flow with inline content ---
@@ -237,12 +245,12 @@ func TestFormattingEdgeCases(t *testing.T) {
 		{name: "dd with prose", input: `<dd>A description of the term that is relatively short.</dd>`},
 
 		// --- Source formatting variations (whitespace normalization expected) ---
-		{name: "already indented paragraph", input: "<p>\n\tSome text\n</p>", normalizes: true},
-		{name: "already indented with inline", input: "<p>\n\t<strong>Bold</strong> text\n</p>", normalizes: true},
+		{name: "already indented paragraph", input: "<p>\n\tSome text\n</p>"},
+		{name: "already indented with inline", input: "<p>\n\t<strong>Bold</strong> text\n</p>"},
 
 		// --- Define semantic preservation ---
-		{name: "inline define stays inline", input: `{{define "comp"}}{{.Value}}{{end}}`, normalizes: false},
-		{name: "block define stays block", input: `{{define "header"}}<header><h1>{{.Title}}</h1></header>{{end}}`, normalizes: false},
+		{name: "inline define stays inline", input: `{{define "comp"}}{{.Value}}{{end}}`},
+		{name: "block define stays block", input: `{{define "header"}}<header><h1>{{.Title}}</h1></header>{{end}}`},
 	}
 
 	for _, tt := range tests {
@@ -279,14 +287,12 @@ func TestFormattingEdgeCases(t *testing.T) {
 				t.Logf("rendered fmt:    %s", fmtHTML)
 			}
 
-			// The rendered page should match (unless only whitespace
-			// normalization). Block layout may add whitespace the browser
-			// drops, so the check is the oracle's, not byte equality.
-			if !tt.normalizes {
-				diff, err := rendering.Diff(inputHTML, fmtHTML, rendering.Body, nil)
-				require.NoError(t, err)
-				assert.Empty(t, diff, "rendered output changed!\nformatted template: %s", formatted)
-			}
+			// The rendered page must match. Formatting may add or normalize
+			// whitespace the browser collapses, so the check is the oracle's,
+			// not byte equality.
+			diff, err := rendering.Diff(inputHTML, fmtHTML, rendering.Body, nil)
+			require.NoError(t, err)
+			assert.Empty(t, diff, "rendered output changed!\nformatted template: %s", formatted)
 		})
 	}
 }
@@ -484,8 +490,9 @@ func TestCSSEntryPoints(t *testing.T) {
 // TestUnparsedMarkup checks markup the template parser reads as text but
 // the browser reads as a tag. When it changes how the rest of the file
 // tokenizes (a raw text start tag with a < in an attribute name, a bogus
-// comment) the file is left as written; any other unread tag leaves only
-// its parent, and the ancestors up to a clean block, as written.
+// comment), or a self-closed element that is not void stands outside SVG
+// and MathML, the file is left as written; any other unread tag leaves
+// only its parent, and the ancestors up to a clean block, as written.
 func TestUnparsedMarkup(t *testing.T) {
 	for _, tt := range []struct {
 		name, input, want string
@@ -496,7 +503,13 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "unmatched end tag makes its parent unsure", input: "<div><p>a</p></b></div><div><p>b</p></div>", want: "<div><p>a</p></b></div><div>\n\t<p>b</p>\n</div>"},
 		{name: "unread start tag keeps its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div>\n\t<p>b</p>\n</div>"},
 		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
+		{name: "unread a start tag is reopened", input: "<div><a/x></div><div><p>0</p>0</div>", want: "<div><a/x></div><div><p>0</p>0</div>"},
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
+		{name: "self-closed pre holds what follows", input: "<pre/> 00", want: "<pre/> 00"},
+		{name: "self-closed span holds what follows", input: "<div><span/>  a</div><div><p>b</p></div>", want: "<div><span/>  a</div><div><p>b</p></div>"},
+		{name: "self-closed in a define body", input: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>", want: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>"},
+		{name: "self-closed in foreignObject", input: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>", want: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>"},
+		{name: "self-closed in svg closes", input: "<svg><path/></svg><div><p>b</p></div>", want: "<svg><path/></svg>\n<div>\n\t<p>b</p>\n</div>"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := format.Source("t.gohtml", tt.input)

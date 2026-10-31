@@ -25,13 +25,6 @@ import (
 
 var update = flag.Bool("update", false, "rewrite format.gohtml in testdata fixtures with the formatter's output")
 
-// knownViolations maps a fixture (its path under testdata without .txtar)
-// to the spec §4 violation that makes its rendering check fail today.
-// TestFixtures skips only the rendering-equivalence checks (d) and (e) for
-// these; golden, idempotency and byte-exact checks still run. Each task
-// that fixes a violation removes its entries; Task 20 deletes the map.
-var knownViolations = map[string]string{}
-
 // opaqueRegions returns the byte spans of src that the formatter must
 // copy unchanged: the content of the subtrees classify marks opaque (raw
 // text, RCDATA and preformatted elements, and elements whose white-space
@@ -209,15 +202,6 @@ func TestFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
-			if id, known := knownViolations[name]; known {
-				if len(problems) == 0 {
-					t.Errorf("%s: listed in knownViolations as %s but renders equivalently; remove the entry", name, id)
-				}
-				for _, p := range problems {
-					t.Logf("known violation %s: %s", id, p)
-				}
-				return
-			}
 			for _, p := range problems {
 				t.Errorf("%s: %s", name, p)
 			}
@@ -315,18 +299,6 @@ func hasBranch(src string) bool {
 		}
 	})
 	return found
-}
-
-func TestKnownViolationsNameFixtures(t *testing.T) {
-	names := make(map[string]bool)
-	for _, filename := range fixtureFiles(t) {
-		names[fixtureName(filename)] = true
-	}
-	for name, id := range knownViolations {
-		if !names[name] {
-			t.Errorf("knownViolations[%q] = %q names no fixture under testdata", name, id)
-		}
-	}
 }
 
 func writeGolden(t *testing.T, filename string, ar *txtar.Archive, got string) {

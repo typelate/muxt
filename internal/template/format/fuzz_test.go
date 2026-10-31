@@ -11,13 +11,9 @@ import (
 // FuzzFormatEquivalent checks that formatting is idempotent and keeps the
 // rendered page (spec §8.3) for every input that parses, under each dot
 // from fuzzDots that the input executes with and renders to a page the
-// oracle can read. Its seeds are the
-// fixture inputs, less knownViolations.
+// oracle can read. Its seeds are the fixture inputs.
 func FuzzFormatEquivalent(f *testing.F) {
 	for _, filename := range fixtureFiles(f) {
-		if _, known := knownViolations[fixtureName(filename)]; known {
-			continue
-		}
 		ar, err := txtar.ParseFile(filename)
 		if err != nil {
 			f.Fatal(err)
