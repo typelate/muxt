@@ -920,6 +920,15 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs
 			}
 			if kind == unreadTag {
 				unreadStarts[text] = true
+				if hasUnreadStartTag(text.Text) {
+					// What follows is its content to an ancestor
+					// whose end tag pops it.
+					if whole, parent := unreadPreformattedReach(path); whole {
+						asIs = true
+					} else {
+						asWritten = append(asWritten, parent)
+					}
+				}
 			}
 			if parent := nearestElement(path); parent != nil {
 				flagged[parent.Start()] = true
@@ -1338,6 +1347,40 @@ func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLE
 		}
 	}
 	return closedSeen, nil
+}
+
+// unreadPreformattedReach is preformattedReach for a start tag the
+// parser read as text (white-space unknown, so treated as preserved), whose ancestors are path: the element
+// opens inside the text's parent, so what follows the tag there is its
+// content too. It returns the nearest closed ancestor whose end tag pops
+// the element, to be written as it is, or whole when there is none
+// before the tree root or a define or block body. A p does not count: the
+// start tag may have closed it. Branches end nothing.
+func unreadPreformattedReach(path []template.Node) (whole bool, parent *template.HTMLElementNode) {
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			if p.Closed && !strings.EqualFold(p.TagName, "p") && endTagPopsAt(p, path[i+1:]) {
+				return false, p
+			}
+		case *template.DefineNode, *template.BlockNode:
+			return true, nil
+		}
+	}
+	return true, nil
+}
+
+// hasUnreadStartTag reports whether text, which the template parser read
+// as text, holds a start tag. The element has no computed style, so its
+// white-space is unknown: a pre, or any element author CSS may preserve
+// whitespace in (span{white-space:pre}), keeps what follows as written.
+func hasUnreadStartTag(text []byte) bool {
+	for i := 0; i+1 < len(text); i++ {
+		if text[i] == '<' && isASCIILetter(text[i+1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // endTagPopsAt reports whether the end tag of el pops every element

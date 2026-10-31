@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<pre/x>  0</pre>  <p> y </p>")
