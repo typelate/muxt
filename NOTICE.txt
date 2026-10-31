@@ -36,6 +36,10 @@ internal/template (including internal/template/html and
 internal/template/lex) is derived in part from the Go standard library's
 text/template and html/template packages under the notice above.
 
+internal/diff is copied from the Go standard library's src/internal/diff
+(go1.27.0) under the notice above; the test imports golang.org/x/tools/txtar
+instead of Go's internal/txtar.
+
 internal/css/csstree (with its tokenizer and definitionsyntax
 subpackages) is a translation into Go of csstree v3.2.1
 (https://github.com/csstree/csstree), a CSS tokenizer, parser, walker,
@@ -73,3 +77,13 @@ THE SOFTWARE.
 internal/css/csstree/data/mdn/*.json is CSS syntax data from mdn/data
 (https://github.com/mdn/data), released under CC0 1.0 Universal; see
 internal/css/csstree/data/mdn/LICENSE.
+
+internal/analysis/html/ua.css is derived from the HTML Living Standard
+(https://html.spec.whatwg.org/), © WHATWG (Apple, Google, Mozilla, Microsoft),
+licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+internal/template/format/testdata/wpt/ is copied from web-platform-tests
+(https://github.com/web-platform-tests/wpt) at commit
+8548e92382323b94b16a0ce524b5675d1b464a74, copyright web-platform-tests
+contributors, licensed under the 3-Clause BSD License; see LICENSE.md in that
+directory.

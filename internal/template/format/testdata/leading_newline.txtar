@@ -1,0 +1,20 @@
+-- input.gohtml --
+<pre>
+x</pre>
+<pre>x</pre>
+<textarea>
+{{.X}}</textarea>
+<pre>
+{{- .X}}</pre>
+-- format.gohtml --
+<pre>
+x</pre>
+<pre>x</pre>
+<textarea>
+{{.X}}</textarea>
+<pre>
+{{- .X}}</pre>
+-- data/empty.json --
+{}
+-- data/x.json --
+{"X":"v"}

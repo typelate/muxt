@@ -1,0 +1,18 @@
+# muxt fmt -w rewrites a template in place; once it is formatted, -l has
+# nothing to list.
+
+muxt fmt -w page.gohtml
+cmp page.gohtml want.gohtml
+muxt fmt -l page.gohtml
+! stdout .
+
+-- page.gohtml --
+<ul>
+<li>one</li>
+<li>two</li>
+</ul>
+-- want.gohtml --
+<ul>
+	<li>one</li>
+	<li>two</li>
+</ul>

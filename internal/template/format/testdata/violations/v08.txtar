@@ -1,0 +1,6 @@
+-- input.gohtml --
+<p>
+	a<span> b </span>c
+</p>
+-- format.gohtml --
+<p>a<span> b </span>c</p>

@@ -1,0 +1,8 @@
+-- input.gohtml --
+<main><div><strong>x</div></main>
+<div><div><em>x</div><div>y</div></div>
+-- format.gohtml --
+<main><div><strong>x</div></main>
+<div><div><em>x</div><div>y</div></div>
+-- data/empty.json --
+{}

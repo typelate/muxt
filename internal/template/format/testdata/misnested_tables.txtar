@@ -1,0 +1,24 @@
+-- input.gohtml --
+<table><tr><table><tr><td>
+</td></tr></table><td>t</td>  </tr></table>  x y 
+<table><tbody><table>	<tr>	<td>  </td>
+
+</tr> </table><tr><td>t</td></tr></tbody></table>a  
+<div><table><tbody><span>  a<table>
+<tr>
+  <td>	</td></tr>  </table><a> b</a>
+</span><tr><td>t</td></tr></tbody></table>
+x</div>
+-- format.gohtml --
+<table><tr><table><tr><td>
+</td></tr></table><td>t</td>  </tr></table> x y
+<table><tbody><table>	<tr>	<td>  </td>
+
+</tr> </table><tr><td>t</td></tr></tbody></table>a
+<div><table><tbody><span>  a<table>
+<tr>
+  <td>	</td></tr>  </table><a> b</a>
+</span><tr><td>t</td></tr></tbody></table>
+	x</div>
+-- data/empty.json --
+{}

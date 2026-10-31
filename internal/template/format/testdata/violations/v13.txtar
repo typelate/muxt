@@ -1,0 +1,8 @@
+-- input.gohtml --
+<div><p>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</p>{{.X}}<span>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</span></div>
+-- format.gohtml --
+<div><p>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</p>{{.X}}<span>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</span></div>
+-- data/empty.json --
+{}
+-- data/x.json --
+{"Name":"World","X":"x"}

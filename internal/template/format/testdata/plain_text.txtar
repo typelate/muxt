@@ -1,0 +1,10 @@
+-- input.gohtml --
+Dear {{.Name}},
+
+Thanks  for	your order.
+-- format.gohtml --
+Dear {{.Name}},
+
+Thanks  for	your order.
+-- data/name.json --
+{"Name":"Ada"}

@@ -1,0 +1,10 @@
+-- input.gohtml --
+<div>
+<p>a</p>{{if .Show}}<span>x</span>{{end}}<span>z</span>
+</div>
+-- format.gohtml --
+<div><p>a</p>{{if .Show}}<span>x</span>{{end}}<span>z</span></div>
+-- data/empty.json --
+{}
+-- data/show.json --
+{"Show": true}

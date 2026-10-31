@@ -1,0 +1,55 @@
+-- input.gohtml --
+<div>
+{{/* muxt:fmt off */}}
+<p>  a  </p>
+   <p>b</p>
+{{/* muxt:fmt on */}}
+<ul>
+<li>x</li>   <li>y</li>
+{{/* muxt:fmt preserve */}}
+<table><tr><td>1</td>   <td>2</td></tr></table>
+<li>z</li>
+</ul>
+<section>
+{{if .Done}}
+{{- /* muxt:fmt preserve */ -}}
+{{if   .Done}}<b>  x</b>{{end}}
+<p>after</p>
+{{end}}
+</section>
+<footer>
+      <p>  tail  </p>
+{{/* muxt:fmt off */}}
+<span>  kept   </span>
+</footer>
+</div>
+-- format.gohtml --
+<div>
+	{{/* muxt:fmt off */}}
+<p>  a  </p>
+   <p>b</p>
+{{/* muxt:fmt on */}}
+	<ul>
+		<li>x</li>
+		<li>y</li>
+		{{/* muxt:fmt preserve */}}
+<table><tr><td>1</td>   <td>2</td></tr></table>
+		<li>z</li>
+	</ul>
+	<section>
+		{{if .Done}}
+			{{- /* muxt:fmt preserve */ -}}
+{{if   .Done}}<b>  x</b>{{end}}
+			<p>after</p>
+		{{end}}
+	</section>
+	<footer>
+		<p>tail</p>
+		{{/* muxt:fmt off */}}
+<span>  kept   </span>
+</footer>
+</div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Done": true}

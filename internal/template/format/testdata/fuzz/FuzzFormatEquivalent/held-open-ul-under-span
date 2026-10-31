@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<em><span><ul><li>0</em><em><li></li> </em>")

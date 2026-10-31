@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<svg><pre/>\n\n  a  b\n</svg>")

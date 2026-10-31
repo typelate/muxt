@@ -1,0 +1,36 @@
+-- input.gohtml --
+{{define "row"}}<tr><td>a</td></tr>{{end}}
+{{define "h"}}<header><h1>{{.Title}}</h1></header>{{end}}
+{{define "x"}} <span>a</span>
+<span>b</span> {{end}}
+{{define "spaced"}} <span>a</span><div>b</div><span>c</span> {{end}}
+{{define "mixed"}}<span>a</span><div>b</div><span>c</span>{{end}}
+<div>{{block "c" .}}
+<p>a</p>
+{{end}}</div>
+<p>x{{block "m" .}}<span>a</span><div>b</div><span>c</span>{{end}}y</p>
+-- format.gohtml --
+{{define "row"}}<tr><td>a</td></tr>{{end}}
+
+{{define "h"}}
+	<header>
+		<h1>{{.Title}}</h1>
+	</header>
+{{end}}
+
+{{define "x"}} <span>a</span>
+	<span>b</span> {{end}}
+
+{{define "spaced"}} <span>a</span><div>b</div><span>c</span> {{end}}
+
+{{define "mixed" -}}
+	<span>a</span>
+	<div>b</div>
+	<span>c</span>
+{{- end}}
+<div>{{block "c" .}}
+	<p>a</p>
+{{end}}</div>
+<p>x{{block "m" .}}<span>a</span><div>b</div><span>c</span>{{end}}y</p>
+-- data/title.json --
+{"Title":"Hello"}

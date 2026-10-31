@@ -1,0 +1,16 @@
+-- input.gohtml --
+<script>
+var s = `a  
+b
+
+
+c`;
+</script>
+-- format.gohtml --
+<script>
+var s = `a  
+b
+
+
+c`;
+</script>

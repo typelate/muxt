@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -64,6 +65,50 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 		}
 	}
 	return owned, nil
+}
+
+// recordedStaticAssets returns the static assets mappings recorded in the
+// headers of the muxt-generated files in dir, sorted by prefix. A file
+// whose header does not parse is skipped, as ownedGeneratedFiles skips it.
+// A prefix two route sets serve from different directories is dropped:
+// which directory serves it depends on the order the routes register.
+func recordedStaticAssets(dir string) ([]generate.RoutesFileConfiguration, error) {
+	generated, err := header.Scan(dir)
+	if err != nil {
+		return nil, err
+	}
+	byPrefix := make(map[string]generate.RoutesFileConfiguration)
+	conflicting := make(map[string]bool)
+	for _, h := range generated {
+		var (
+			config     generate.RoutesFileConfiguration
+			deprecated string
+		)
+		set := pflag.NewFlagSet("parse-old", pflag.ContinueOnError)
+		addGenerateFlags(set, &config, &deprecated)
+		set.SetOutput(io.Discard)
+		if err := set.Parse(h.Args()); err != nil {
+			continue
+		}
+		if config.StaticAssetsDirectory == "" || config.StaticAssetsPath == "" {
+			continue
+		}
+		prefix := generate.StaticAssetsPrefix(config.StaticAssetsPath)
+		if previous, ok := byPrefix[prefix]; ok && path.Clean(previous.StaticAssetsDirectory) != path.Clean(config.StaticAssetsDirectory) {
+			conflicting[prefix] = true
+		}
+		byPrefix[prefix] = config
+	}
+	var configs []generate.RoutesFileConfiguration
+	for prefix, config := range byPrefix {
+		if !conflicting[prefix] {
+			configs = append(configs, config)
+		}
+	}
+	slices.SortFunc(configs, func(a, b generate.RoutesFileConfiguration) int {
+		return strings.Compare(generate.StaticAssetsPrefix(a.StaticAssetsPath), generate.StaticAssetsPrefix(b.StaticAssetsPath))
+	})
+	return configs, nil
 }
 
 // writeGeneratedFiles writes files, each after the header that records

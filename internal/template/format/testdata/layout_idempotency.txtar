@@ -1,0 +1,37 @@
+-- input.gohtml --
+  {{- .X}}
+  {{.X -}}
+  <div></div>
+<div>{{if .Show}} {{else}}	{{end}}</div>
+<div>{{if .Show}}<p>a</p>{{else}} {{if .Show}}{{/* c */}}{{else}}x{{end}}	{{end}}</div>
+<div>
+{{if .Show}}	{{if .Show}}
+  {{/* c */}}
+  {{/* c */}} {{else}}<img src=x>
+  {{.X -}}{{end}} <br>{{else}}<h1>x</h1>{{end}}
+</div>
+<div><br><span>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<br></div>
+-- format.gohtml --
+{{.X}}
+{{.X -}}
+<div></div>
+<div>{{if .Show}}{{else}}{{end}}</div>
+<div>
+	{{if .Show}}
+		<p>a</p>
+	{{else if .Show}}{{/* c */}}{{else}}x{{end}}
+</div>
+<div>
+	{{if .Show}}{{if .Show}}
+		{{/* c */}}
+		{{/* c */}}
+	{{else}}<img src=x>
+		{{.X}}{{end}} <br>{{else}}
+		<h1>x</h1>
+	{{end}}
+</div>
+<div><br><span>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<br></div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Show":true,"X":"x"}

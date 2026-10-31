@@ -1,0 +1,47 @@
+# The static assets route serves the files under the static assets
+# directory as they are: they are not templates of the package, even when
+# the package embeds them. muxt fmt reads them only as stylesheets. The
+# <style> element in assets/index.html does not make .x block, so the span
+# is left inline, and a file there that does not parse as a template does
+# not break the package.
+
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
+muxt fmt page.gohtml
+cmp stdout page.gohtml
+! stderr .
+
+cp mustache.txt assets/list.html
+muxt fmt page.gohtml
+cmp stdout page.gohtml
+! stderr .
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml assets
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "" }
+-- assets/site.css --
+p{color:red}
+-- assets/index.html --
+<style>.x{display:block}</style>
+-- mustache.txt --
+<ul>{{#each items}}<li>{{this}}</li>{{/each}}</ul>
+-- layout.gohtml --
+{{define "GET / Index()"}}<link rel="stylesheet" href="/static/site.css">{{end}}
+-- page.gohtml --
+<p>a<span class="x">b</span> c</p>

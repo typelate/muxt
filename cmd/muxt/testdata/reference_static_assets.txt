@@ -1,0 +1,83 @@
+# --input-static-assets-directory embeds a directory of the templates
+# package and --output-static-assets-path serves it with GET under a path;
+# TemplateRoutePaths gains a method returning that path.
+
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
+muxt check
+grep '^//go:embed assets$' template_routes.go
+grep ' --output-static-assets-path=/static' template_routes.go
+exec go test -count=1
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+
+type Server struct{}
+-- assets/app.css --
+p{color:red}
+-- assets/.hidden.css --
+p{color:blue}
+-- index.gohtml --
+{{define "GET / Index()"}}<link rel="stylesheet" href="{{.Path.ReadStatic}}app.css">{{end}}
+-- server.go --
+package server
+
+func (Server) Index() string { return "" }
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestStaticAssets(t *testing.T) {
+	mux := http.NewServeMux()
+	paths := TemplateRoutes(mux, Server{})
+
+	if got, want := paths.ReadStatic(), "/static/"; got != want {
+		t.Errorf("ReadStatic() = %q, want %q", got, want)
+	}
+
+	for _, tt := range []struct {
+		path   string
+		status int
+		body   string
+	}{
+		{path: "/static/app.css", status: http.StatusOK, body: "p{color:red}\n"},
+		{path: "/static/.hidden.css", status: http.StatusNotFound},
+		{path: "/static/missing.css", status: http.StatusNotFound},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
+		if rec.Code != tt.status {
+			t.Errorf("GET %s status = %d, want %d", tt.path, rec.Code, tt.status)
+		}
+		if tt.body != "" && rec.Body.String() != tt.body {
+			t.Errorf("GET %s body = %q, want %q", tt.path, rec.Body.String(), tt.body)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body, _ := io.ReadAll(rec.Result().Body)
+	if !strings.Contains(string(body), `href="/static/app.css"`) {
+		t.Errorf("GET / body = %q, want it to link /static/app.css", body)
+	}
+}

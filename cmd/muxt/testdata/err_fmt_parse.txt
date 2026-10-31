@@ -1,0 +1,26 @@
+# A template that does not parse is reported, one line, and the other
+# files are still formatted.
+
+! muxt fmt -w page.gohtml good.gohtml
+cmp stderr want-err.txt
+cmp good.gohtml want-good.gohtml
+cmp page.gohtml page.orig
+
+-- page.gohtml --
+<div>
+{{if .X}}
+</div>
+-- page.orig --
+<div>
+{{if .X}}
+</div>
+-- good.gohtml --
+<ul>
+<li>one</li>
+</ul>
+-- want-good.gohtml --
+<ul>
+	<li>one</li>
+</ul>
+-- want-err.txt --
+page.gohtml:4:1: unexpected EOF

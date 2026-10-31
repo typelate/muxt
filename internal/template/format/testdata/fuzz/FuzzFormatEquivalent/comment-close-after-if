@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<div><p></p>{{if .}} -->a{{end}}</div>")

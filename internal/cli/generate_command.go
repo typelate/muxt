@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"io/fs"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -126,7 +128,43 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 	if err := checkOutputFileName(config.OutputFileName); err != nil {
 		return err
 	}
+	if err := checkStaticAssets(config); err != nil {
+		return err
+	}
 	return checkRecordable(useReceiverTypePackage, config.ReceiverPackage)
+}
+
+// checkStaticAssets rejects a static assets mapping generate cannot embed
+// or serve. Whether the directory exists is for generate to say, since
+// the directory is relative to the package it writes into.
+func checkStaticAssets(config generate.RoutesFileConfiguration) error {
+	dir, urlPath := config.StaticAssetsDirectory, config.StaticAssetsPath
+	if dir == "" && urlPath == "" {
+		return nil
+	}
+	if dir == "" || urlPath == "" {
+		return fmt.Errorf("--%s and --%s must be given together", inputStaticAssetsDirectory, outputStaticAssetsPath)
+	}
+	if !strings.HasPrefix(urlPath, "/") {
+		return fmt.Errorf("--%s must start with %q: %q", outputStaticAssetsPath, "/", urlPath)
+	}
+	if urlPath == "/" {
+		// A file server at the root would take the 404s of the index
+		// route and of every path no template registers.
+		return fmt.Errorf("--%s must name a path below %q: %q", outputStaticAssetsPath, "/", urlPath)
+	}
+	segments := strings.Split(strings.TrimSuffix(urlPath[1:], "/"), "/")
+	if strings.ContainsAny(urlPath, "{}") || slices.Contains(segments, "") {
+		return fmt.Errorf("--%s must be a literal path without wildcards or empty segments: %q", outputStaticAssetsPath, urlPath)
+	}
+	trimmed := strings.TrimSuffix(dir, "/")
+	if path.IsAbs(dir) || slices.Contains(strings.Split(trimmed, "/"), "..") || strings.Contains(dir, `\`) || trimmed == "." || !fs.ValidPath(trimmed) {
+		return fmt.Errorf("--%s must be a slash-separated path inside the package directory: %q", inputStaticAssetsDirectory, dir)
+	}
+	if err := checkRecordable(inputStaticAssetsDirectory, dir); err != nil {
+		return err
+	}
+	return checkRecordable(outputStaticAssetsPath, urlPath)
 }
 
 // checkGeneratedNamesDiffer rejects two generated identifiers with one name:
@@ -216,6 +254,8 @@ func configToArgs(config generate.RoutesFileConfiguration) []string {
 	if config.MultipartMaxMemory > 0 {
 		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
 	}
+	args = appendValueArg(args, inputStaticAssetsDirectory, config.StaticAssetsDirectory, "")
+	args = appendValueArg(args, outputStaticAssetsPath, config.StaticAssetsPath, "")
 	return args
 }
 

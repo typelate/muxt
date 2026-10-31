@@ -358,3 +358,24 @@ func TestRemoveOrphansReportsFailure(t *testing.T) {
 	require.Error(t, err, "removeOrphans() want a failed to remove orphaned file error")
 	require.True(t, strings.HasPrefix(err.Error(), "failed to remove orphaned file "+stuck+": "), "removeOrphans() = %v, want a failed to remove orphaned file error", err)
 }
+
+func TestRecordedStaticAssets(t *testing.T) {
+	dir := t.TempDir()
+	generated := func(name string, args ...string) {
+		writeTestFile(t, dir, name, header.Format(args, "v1")+"package main\n")
+	}
+	generated("a.go", "--input-static-assets-directory=assets", "--output-static-assets-path=/static", "--output-routes-func=A")
+	generated("b.go", "--input-static-assets-directory=img", "--output-static-assets-path=/img", "--output-routes-func=B")
+	generated("c.go", "--input-static-assets-directory=other", "--output-static-assets-path=/static/", "--output-routes-func=C")
+	generated("d.go", "--no-such-flag", "--input-static-assets-directory=d", "--output-static-assets-path=/d")
+	generated("e.go", "--output-routes-func=E")
+
+	configs, err := recordedStaticAssets(dir)
+	require.NoError(t, err, "recordedStaticAssets()")
+	type mapping struct{ directory, path, routesFunction string }
+	var got []mapping
+	for _, c := range configs {
+		got = append(got, mapping{c.StaticAssetsDirectory, c.StaticAssetsPath, c.RoutesFunction})
+	}
+	assert.Equal(t, []mapping{{"img", "/img", "B"}}, got, "recordedStaticAssets(%q)", dir)
+}

@@ -36,7 +36,7 @@ A generated file records the muxt version in a `// muxt version:` line and in th
 func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths
 ```
 
-`TemplateRoutes` only adds handlers to `mux`. Register what a template should not render (CSS, files, hand-written JSON, health checks) on the same mux:
+`TemplateRoutes` only adds handlers to `mux`. Register what a template should not render (files, hand-written JSON, health checks) on the same mux; for a directory of CSS and other files, see [Static assets](#static-assets):
 
 ```go
 mux.Handle("GET /styles.css", http.FileServerFS(staticFS))
@@ -52,6 +52,46 @@ Each `--output-routes-func-with-*-param` flag appends a parameter. With all thre
 | `logger *slog.Logger` | HTML and `marshalJSON` routes log `handling request` at `DEBUG` with `pattern`, `path`, `method`, and a failed render at `ERROR` (`failed to render page`) with `pattern`, `path`, `error`. SSE routes log only errors: a failed render and a method error (`sse handler returned an error`). Without the flag, those errors go to `slog.ErrorContext` on the default logger. Tutorial: [Add Logging](../../tutorials/add-logging.md). |
 | `pathsPrefix string` | Joined onto every pattern registered on the mux and every path `TemplateRoutePaths` builds. |
 | `middleware func(next http.Handler) http.Handler` | Each handler is registered as `middleware(http.HandlerFunc(handler))`. `nil` registers handlers unwrapped. |
+
+## Static assets
+
+`--input-static-assets-directory=<dir>` and `--output-static-assets-path=<path>` serve one directory of the templates package under one URL path. Both are required together, and a run takes one mapping.
+
+```bash
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static
+```
+
+The routes file embeds the directory, in a variable named after the routes function:
+
+```go
+//go:embed assets
+var templateRoutesStaticAssets embed.FS
+```
+
+and `TemplateRoutes` serves it after the template routes:
+
+```go
+staticAssets, err := fs.Sub(templateRoutesStaticAssets, "assets")
+if err != nil {
+	panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
+}
+mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
+```
+
+`go:embed` leaves out names starting with `.` or `_`, so those files are not served. A request for the path itself, or for one of its subdirectories, gets a directory listing, because `http.FileServerFS` serves one for a directory with no `index.html`. The pattern is always `GET`, and the path gets a trailing `/`. With `pathsPrefix` the pattern and the stripped prefix are both joined onto it; with `middleware` the handler is wrapped by it ([reference_static_assets_path_prefix.txt](../../../cmd/muxt/testdata/reference_static_assets_path_prefix.txt)).
+
+`TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)).
+
+The generated file's [header](#files) records both flags. `muxt fmt` reads them back to find the CSS a template uses: a `<link rel="stylesheet">` whose `href` is under the path, written out or as `{{.Path.ReadStatic}}app.css`, is read from the directory, and so is each sheet it `@import`s from there. When a link or `@import` names anything else (another site, a path no static assets directory serves, a file that is not there), `muxt fmt` cannot see that CSS, so it treats every element as possibly restyled and leaves its whitespace as written.
+
+`generate` rejects:
+
+- one flag without the other ([err_static_assets_one_flag.txt](../../../cmd/muxt/testdata/err_static_assets_one_flag.txt));
+- a path not starting with `/`, the path `/` ([err_static_assets_path.txt](../../../cmd/muxt/testdata/err_static_assets_path.txt)), or a path with a wildcard or an empty segment;
+- a directory that is absolute, contains `..` or `\`, or is not a slash-separated path inside the package;
+- a value containing whitespace;
+- a directory that does not exist ([err_static_assets_directory.txt](../../../cmd/muxt/testdata/err_static_assets_directory.txt)), is a symbolic link, is not a directory, or holds no file `go:embed` would include;
+- a template registering `GET <path>/` ([err_static_assets_collision.txt](../../../cmd/muxt/testdata/err_static_assets_collision.txt)), one registering `GET <path>/{name...}`, which matches the same requests ([err_static_assets_wildcard_conflict.txt](../../../cmd/muxt/testdata/err_static_assets_wildcard_conflict.txt)), or one whose path method has the static assets path method's name.
 
 ## Warnings
 

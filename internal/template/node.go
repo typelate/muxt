@@ -643,6 +643,11 @@ type BlockNode struct {
 	Pipe       *PipeNode // The pipeline to evaluate as dot for the block.
 	Body       *ListNode // The body of the block.
 
+	StartTrimLeft  bool // {{- on block opener
+	StartTrimRight bool // -}} on block opener
+	EndTrimLeft    bool // {{- on end
+	EndTrimRight   bool // -}} on end
+
 	call *TemplateNode
 }
 

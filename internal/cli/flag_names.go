@@ -26,6 +26,8 @@ const (
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 	outputMuxtVersion                   = "output-muxt-version"
+	inputStaticAssetsDirectory          = "input-static-assets-directory"
+	outputStaticAssetsPath              = "output-static-assets-path"
 
 	deprecatedPathPrefix = "path-prefix"
 	deprecatedLogger     = "logger"
@@ -64,6 +66,9 @@ This function also receives an argument with a type matching the name given by o
 	outputExportedDefaultIdentifiersHelp    = `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`
 	outputMultipartMaxMemoryHelp            = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
 	outputMuxtVersionHelp                   = `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`
+
+	inputStaticAssetsDirectoryHelp = `A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.`
+	outputStaticAssetsPathHelp     = `The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )

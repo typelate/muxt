@@ -1,0 +1,58 @@
+# A template the package embeds that muxt fmt cannot read may link a
+# stylesheet, so the author CSS is unknown: the partial is left as
+# written, and the unreadable template is reported.
+
+[GOOS:windows] skip 'chmod does not make a file unreadable'
+[root] skip 'root reads a mode-0000 file'
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
+chmod 0000 layout.gohtml
+! muxt fmt -w partial.gohtml
+cmp partial.gohtml partial.orig
+cmpenv stderr want-err.txt
+
+# Walking the package reads the layout as a run file too; it is reported
+# once.
+! muxt fmt -l .
+! stdout .
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "" }
+-- assets/style.css --
+.code{white-space:pre}
+-- layout.gohtml --
+{{define "GET / Index()"}}<link rel="stylesheet" href="/static/style.css">{{template "partial"}}{{end}}
+-- partial.gohtml --
+{{define "partial"}}<section>
+<div class="code">
+  keep   me
+</div>
+<p>x</p>
+</section>{{end}}
+-- partial.orig --
+{{define "partial"}}<section>
+<div class="code">
+  keep   me
+</div>
+<p>x</p>
+</section>{{end}}
+-- want-err.txt --
+open $WORK/layout.gohtml: permission denied

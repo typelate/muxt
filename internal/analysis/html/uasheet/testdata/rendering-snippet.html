@@ -1,0 +1,38 @@
+<!doctype html>
+<h3 id=non-replaced-elements><span class=secno>15.3</span> Non-replaced elements</h3>
+<h4 id=flow-content-3><span class=secno>15.3.3</span> Flow content</h4>
+<p>The following elements are expected to be block-level boxes:</p>
+<pre><code class='css'><c- n>@namespace</c-> <c- s>&quot;http://www.w3.org/1999/xhtml&quot;</c-><c- p>;</c->
+
+<c- f>div </c-><c- p>{</c-> <c- k>display</c-><c- p>:</c-> block<c- p>;</c-> <c- p>}</c->
+
+<c- f>pre </c-><c- p>{</c->
+  <c- k>display</c-><c- p>:</c-> block<c- p>;</c->
+  <c- k>white-space</c-><c- p>:</c-> pre<c- p>;</c->
+  <c- k>margin</c-><c- p>:</c-> <c- m>1</c-><c- l>em</c-> <c- m>0</c-><c- p>;</c->
+<c- p>}</c-></code></pre>
+<p>The following rules are also expected to apply, as presentational hints:</p>
+<pre><code class='css'>@namespace "http://www.w3.org/1999/xhtml";
+
+pre[wrap] { white-space: pre-wrap; }
+table[align=left i] { float: left; }</code></pre>
+<pre><code class='css'>@namespace "http://www.w3.org/1999/xhtml";
+
+dialog { position: absolute; color: black; }
+dialog:modal { position: fixed; }</code></pre>
+<p>In <a href=#q>quirks mode</a>, the following rules are also expected to apply:</p>
+<pre><code class='css'>@namespace "http://www.w3.org/1999/xhtml";
+
+form { display: block; }</code></pre>
+<h4 id=sections><span class=secno>15.3.6</span> Sections and headings</h4>
+<p>Headings are blocks.</p>
+<pre><code class='css'>@namespace "http://www.w3.org/1999/xhtml";
+
+:heading { display: block; }</code></pre>
+<h4 id=shadow><span class=secno>15.3.11</span> The details element</h4>
+<p>Shadow tree rules.</p>
+<pre><code class='css'>:host summary { display: list-item; }</code></pre>
+<h3 id=other><span class=secno>15.7</span> Interactive media</h3>
+<pre><code class='css'>@namespace "http://www.w3.org/1999/xhtml";
+
+span { display: inline; }</code></pre>

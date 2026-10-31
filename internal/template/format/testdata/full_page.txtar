@@ -1,0 +1,36 @@
+-- input.gohtml --
+<!DOCTYPE html><html><head><title>{{.Title}}</title></head><body><h1>{{.Title}}</h1>{{if .Show}}<p>{{.Name}}</p>{{end}}{{range .Items}}<div><span>{{.Name}}</span></div>{{end}}</body></html>
+-- format.gohtml --
+<!DOCTYPE html>
+<html><head><title>{{.Title}}</title></head><body>
+	<h1>{{.Title}}</h1>
+	{{if .Show}}
+		<p>{{.Name}}</p>
+	{{end}}
+	{{range .Items}}
+		<div><span>{{.Name}}</span></div>
+	{{end}}
+</body></html>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{
+	"Title": "Hello",
+	"Show": true,
+	"A": true,
+	"B": false,
+	"X": {"Value": "inner"},
+	"Items": [
+		{"Name": "alpha", "Active": true, "Done": false},
+		{"Name": "beta", "Active": false, "Done": false},
+		{"Name": "gamma", "Active": true, "Done": true}
+	],
+	"Name": "World",
+	"Value": "42",
+	"Active": true,
+	"Done": false,
+	"URL": "https://example.com",
+	"Label": "click",
+	"Class": "main",
+	"ID": 7
+}

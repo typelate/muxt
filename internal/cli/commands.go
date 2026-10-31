@@ -23,16 +23,18 @@ const (
 	exploreModuleCommandName       = "explore-module"
 	generateFakeServerCommandName  = "generate-fake-server"
 	testTemplateMutationsName      = "test-template-mutations"
+	fmtCommandName                 = "fmt"
 )
 
-func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
-	return commands(wd, args, getEnv, cliVersion, stdout, stderr, runners{
+func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
 		routes:    runRoutes,
 		check:     runCheck,
 		generate:  runGenerate,
 		callers:   runTemplateCallers,
 		calls:     runTemplateCalls,
 		mutations: runTemplateMutations,
+		format:    runFormatCommand,
 	})
 }
 
@@ -40,7 +42,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdout, stde
 // configuration.
 //
 // Parsing the flags, applying their defaults and rejecting what cannot
-// work is the command line's job, and for these six commands it is decided
+// work is the command line's job, and for these seven commands it is decided
 // before a package is loaded; --format is checked then too, and read again
 // when a result is written. Commands runs the real runners; a test runs ones that record the
 // configuration, which is how what a command line means is stated without
@@ -53,9 +55,10 @@ type runners struct {
 	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
 	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
+	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
 }
 
-func commands(wd string, args []string, getEnv func(string) string, version func() (string, bool), stdout, stderr io.Writer, run runners) error {
+func commands(wd string, args []string, getEnv func(string) string, version func() (string, bool), stdin io.Reader, stdout, stderr io.Writer, run runners) error {
 	var changeDir string
 	workingDirectory := &wd
 
@@ -105,6 +108,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	rootCmd.Flags().Bool("version", false, "print the version, as the version command does")
 
 	rootCmd.SetArgs(versionArgs(args))
+	rootCmd.SetIn(stdin)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
 
@@ -112,6 +116,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 		generateCommand(workingDirectory, getEnv, version, run.generate),
 		versionCommand(version),
 		checkCommand(workingDirectory, run.check),
+		formatCommand(workingDirectory, run.format),
 		listTemplateCallersCommand(workingDirectory, run.callers),
 		listTemplateCallsCommand(workingDirectory, run.calls),
 		exploreModuleCommand(workingDirectory),

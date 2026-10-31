@@ -1,0 +1,82 @@
+-- input.gohtml --
+<div>
+  <p>first</p>
+
+
+  <p>second</p>
+
+
+
+  <p>third</p>
+</div>
+<pre>  line one
+
+  line two
+
+  line three  </pre>
+<textarea>  keep
+  all
+
+  blank
+
+  lines  </textarea>
+{{if .Show}}
+  <p>a</p>
+
+  <p>b</p>
+{{end}}
+<div>
+  <p>trailing spaces above</p>
+  <p>trailing tab above</p>
+</div>
+-- format.gohtml --
+<div>
+	<p>first</p>
+
+	<p>second</p>
+
+	<p>third</p>
+</div>
+<pre>  line one
+
+  line two
+
+  line three  </pre>
+<textarea>  keep
+  all
+
+  blank
+
+  lines  </textarea>
+{{if .Show}}
+	<p>a</p>
+
+	<p>b</p>
+{{end}}
+<div>
+	<p>trailing spaces above</p>
+	<p>trailing tab above</p>
+</div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{
+	"Title": "Hello",
+	"Show": true,
+	"A": true,
+	"B": false,
+	"X": {"Value": "inner"},
+	"Items": [
+		{"Name": "alpha", "Active": true, "Done": false},
+		{"Name": "beta", "Active": false, "Done": false},
+		{"Name": "gamma", "Active": true, "Done": true}
+	],
+	"Name": "World",
+	"Value": "42",
+	"Active": true,
+	"Done": false,
+	"URL": "https://example.com",
+	"Label": "click",
+	"Class": "main",
+	"ID": 7
+}

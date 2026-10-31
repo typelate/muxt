@@ -1,0 +1,8 @@
+-- input.gohtml --
+<div>
+a{{/* c */}}b
+</div>
+-- format.gohtml --
+<div>a{{/* c */}}b</div>
+-- data/empty.json --
+{}

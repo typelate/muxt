@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<span/x class=\"c\">  0<div>{{if .}}<a>\n{{end}}</div>")

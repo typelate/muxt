@@ -1,0 +1,14 @@
+-- input.gohtml --
+<section>
+<p>intro
+<div>block</div>
+<div>next</div>
+</section>
+-- format.gohtml --
+<section>
+	<p>intro
+	<div>block</div>
+	<div>next</div>
+	</section>
+-- data/empty.json --
+{}

@@ -1,0 +1,24 @@
+# muxt fmt -d prints a unified diff of what formatting would change and
+# exits 1; the file is not written.
+
+! muxt fmt -d ugly.gohtml
+cmp stdout want.diff
+cmp ugly.gohtml ugly.orig
+
+-- ugly.gohtml --
+<ul>
+<li>one</li>
+</ul>
+-- ugly.orig --
+<ul>
+<li>one</li>
+</ul>
+-- want.diff --
+diff ugly.gohtml.orig ugly.gohtml
+--- ugly.gohtml.orig
++++ ugly.gohtml
+@@ -1,3 +1,3 @@
+ <ul>
+-<li>one</li>
++	<li>one</li>
+ </ul>

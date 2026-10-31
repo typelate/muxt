@@ -88,6 +88,13 @@ type RoutesFileConfiguration struct {
 	// MultipartMaxMemory is the maxMemory value passed to request.ParseMultipartForm.
 	// Defaults to 32 MiB when zero.
 	MultipartMaxMemory int64
+	// StaticAssetsDirectory is --input-static-assets-directory: a
+	// slash-separated directory, relative to the package directory, the
+	// routes file embeds and serves under StaticAssetsPath.
+	StaticAssetsDirectory string
+	// StaticAssetsPath is --output-static-assets-path, as given; see
+	// StaticAssetsPrefix for the URL prefix it names.
+	StaticAssetsPath string
 
 	// SilenceHTTPResponseWarning suppresses the warning printed for
 	// routes that take the response argument. Set from the
@@ -112,7 +119,7 @@ type generatedName struct{ flag, name string }
 // generatedNames are the names the routes file declares at package scope,
 // after defaults.
 func generatedNames(config RoutesFileConfiguration) []generatedName {
-	return []generatedName{
+	names := []generatedName{
 		{"output-routes-func", config.RoutesFunction},
 		{"output-receiver-interface", config.ReceiverInterface},
 		{"output-template-data-type", config.TemplateDataType},
@@ -121,6 +128,10 @@ func generatedNames(config RoutesFileConfiguration) []generatedName {
 		{"output-template-route-type", routeTypeName(config)},
 		{"output-template-route-builder-type", routeBuilderTypeName(config)},
 	}
+	if config.StaticAssetsDirectory != "" {
+		names = append(names, generatedName{staticAssetsDirectoryFlag, StaticAssetsVariable(config)})
+	}
+	return names
 }
 
 // checkGeneratedNames reports two generated declarations with the same
@@ -161,6 +172,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		return nil, err
 	}
 	logResolutionNotes(groups.all, config, logger)
+	if config.StaticAssetsDirectory != "" {
+		if err := checkStaticAssetsDirectory(config.OutputDirectory(wd), config, groups.all); err != nil {
+			return nil, err
+		}
+	}
 
 	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 	routesFunc := routesFuncDecl(file, config, config.RoutesFunction, config.ReceiverInterface, config.PathPrefix)
@@ -189,9 +205,17 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	if err != nil {
 		return nil, err
 	}
+	if config.StaticAssetsDirectory != "" {
+		routesFunc.Body.List = append(routesFunc.Body.List, staticAssetsStatements(file, config)...)
+		routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config)...)
+	}
 	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(config))
 
-	decls := []ast.Decl{receiverInterfaceDecl(config.ReceiverInterface, receiverInterface), routesFunc}
+	var decls []ast.Decl
+	if config.StaticAssetsDirectory != "" {
+		decls = append(decls, staticAssetsDecl(file, config))
+	}
+	decls = append(decls, receiverInterfaceDecl(config.ReceiverInterface, receiverInterface), routesFunc)
 	decls = append(decls, templateDataDecls(file, config)...)
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.

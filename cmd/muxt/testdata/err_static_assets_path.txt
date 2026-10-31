@@ -1,0 +1,25 @@
+! muxt generate --input-static-assets-directory=assets --output-static-assets-path=/
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+Error: --output-static-assets-path must name a path below "/": "/"
+-- index.gohtml --
+{{define "GET /"}}x{{end}}
+-- assets/app.css --
+p{color:red}
+-- go.mod --
+module example.com
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*.gohtml"))

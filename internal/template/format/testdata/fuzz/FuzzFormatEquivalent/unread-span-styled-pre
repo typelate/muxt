@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<style>span{white-space:pre}</style><span/x>{{if .}}<a>\n{{end}}")

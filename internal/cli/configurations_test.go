@@ -26,13 +26,14 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		got = config
 		return nil
 	}
-	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
+	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 		routes:    func(_ *cobra.Command, _ string, c analysis.DefinitionsConfiguration) error { return record(c) },
 		check:     func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
 		generate:  func(_ *cobra.Command, _ string, c generate.RoutesFileConfiguration) error { return record(c) },
 		callers:   func(_ *cobra.Command, _ string, c analysis.TemplateCallersConfiguration) error { return record(c) },
 		calls:     func(_ *cobra.Command, _ string, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
+		format:    func(_ *cobra.Command, _ string, c formatConfiguration) error { return record(c) },
 	})
 	return got, err
 }
@@ -426,6 +427,27 @@ func TestCommandLineConfigurations(t *testing.T) {
 			},
 		},
 		{
+			name: "a static assets directory",
+			args: "generate --input-static-assets-directory=assets --output-static-assets-path=/static",
+			want: generate.RoutesFileConfiguration{
+				MuxtVersion:                      "v1.2.3",
+				PackageName:                      "main",
+				RoutesFunction:                   "TemplateRoutes",
+				ReceiverInterface:                "RoutesReceiver",
+				TemplateDataType:                 "TemplateData",
+				SSETemplateDataType:              "SSETemplateData",
+				TemplateRoutePathsTypeName:       "TemplateRoutePaths",
+				TemplateRouteTypeName:            "TemplateRoute",
+				TemplateRouteBuilderTypeName:     "TemplateRouteBuilder",
+				TemplatesVariables:               []string{"templates"},
+				OutputFileName:                   "template_routes.go",
+				OutputExportedDefaultIdentifiers: true,
+				OutputMuxtVersion:                true,
+				StaticAssetsDirectory:            "assets",
+				StaticAssetsPath:                 "/static",
+			},
+		},
+		{
 			name: "datastar",
 			args: "generate --use-receiver-type=T --output-datastar",
 			want: generate.RoutesFileConfiguration{
@@ -665,6 +687,21 @@ func TestCommandLineConfigurations(t *testing.T) {
 			args: "test-template-mutations --template-pattern=^page --run=TestPage --include-test-callers --max-cases=2 --workers=4 --diff=main ./internal/preview -- -count=1",
 			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, TemplatePattern: regexp.MustCompile("^page"), Run: regexp.MustCompile("TestPage"), Packages: []string{}, GoTestArgs: []string{"-count=1"}, IncludeTests: true, MaxCases: 2, Workers: 4, Diff: "main"},
 		},
+		{
+			name: "fmt of standard input",
+			args: "fmt",
+			want: formatConfiguration{},
+		},
+		{
+			name: "fmt listing and diffing a file and a directory",
+			args: "fmt -l -d x.gohtml dir",
+			want: formatConfiguration{Paths: []string{"x.gohtml", "dir"}, List: true, Diff: true},
+		},
+		{
+			name: "fmt writing with long flags",
+			args: "fmt --write --list --diff x.gohtml",
+			want: formatConfiguration{Paths: []string{"x.gohtml"}, Write: true, List: true, Diff: true},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, tt.env)
@@ -702,7 +739,7 @@ func TestChangeDirectory(t *testing.T) {
 				got = wd
 				return nil
 			}
-			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, io.Discard, runners{
+			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 				check:     func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
 				generate:  func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
 				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
@@ -750,6 +787,15 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a generated type named like a derived route type", args: "generate --output-template-route-paths-type=P1 --output-template-data-type=P1Route", wantErr: "--output-template-data-type and --output-template-route-type are both P1Route; each generated type needs its own name"},
 		{name: "unexported defaults and a name that collides with one", args: "generate --output-exported-default-identifiers=false --output-template-data-type=templateRoutes", wantErr: "--output-routes-func and --output-template-data-type are both templateRoutes; each generated type needs its own name"},
 		{name: "a multipart limit of zero", args: "generate --output-multipart-max-memory=0", wantErr: `invalid argument "0" for "--output-multipart-max-memory" flag: multipart max memory must be positive, got "0"`},
+		{name: "a static assets directory without a path", args: "generate --input-static-assets-directory=assets", wantErr: "--input-static-assets-directory and --output-static-assets-path must be given together"},
+		{name: "a static assets path without a directory", args: "generate --output-static-assets-path=/static", wantErr: "--input-static-assets-directory and --output-static-assets-path must be given together"},
+		{name: "a relative static assets path", args: "generate --input-static-assets-directory=assets --output-static-assets-path=static", wantErr: `--output-static-assets-path must start with "/": "static"`},
+		{name: "the root as static assets path", args: "generate --input-static-assets-directory=assets --output-static-assets-path=/", wantErr: `--output-static-assets-path must name a path below "/": "/"`},
+		{name: "a static assets path with an empty segment", args: "generate --input-static-assets-directory=assets --output-static-assets-path=/a//b", wantErr: `--output-static-assets-path must be a literal path without wildcards or empty segments: "/a//b"`},
+		{name: "a static assets path with a wildcard", args: "generate --input-static-assets-directory=assets --output-static-assets-path=/{x}", wantErr: `--output-static-assets-path must be a literal path without wildcards or empty segments: "/{x}"`},
+		{name: "a static assets directory outside the package", args: "generate --input-static-assets-directory=../x --output-static-assets-path=/static", wantErr: `--input-static-assets-directory must be a slash-separated path inside the package directory: "../x"`},
+		{name: "an absolute static assets directory", args: "generate --input-static-assets-directory=/abs --output-static-assets-path=/static", wantErr: `--input-static-assets-directory must be a slash-separated path inside the package directory: "/abs"`},
+		{name: "a backslash in the static assets directory", args: `generate --input-static-assets-directory=a\b --output-static-assets-path=/static`, wantErr: `--input-static-assets-directory must be a slash-separated path inside the package directory: "a\\b"`},
 		{name: "a repeated templates variable", args: "generate --use-templates-variable=pages --use-templates-variable=pages", wantErr: "duplicate template variable: pages"},
 		{name: "the deprecated and new templates variable flags together", args: "check --templates-variable=a --use-templates-variable=b", wantErr: "deprecated flag templates-variable not permitted along with use-templates-variable"},
 		{name: "a check templates variable that is not an identifier", args: "check --use-templates-variable=not-ok", wantErr: "variable not-ok value must be a well-formed Go identifier"},
@@ -765,6 +811,7 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "an unknown calls format", args: "list-template-calls --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown mutation report format", args: "test-template-mutations --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "an unknown explore-module format", args: "explore-module --format=yaml", wantErr: "unknown format: yaml"},
+		{name: "fmt writing standard input", args: "fmt -w", wantErr: "fmt: -w needs a file or directory; standard input has no file to write"},
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -782,7 +829,7 @@ func TestCommandLineRejections(t *testing.T) {
 func TestCheckIgnoresAReceiverType(t *testing.T) {
 	var stderr strings.Builder
 	var got any
-	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, io.Discard, &stderr, runners{
+	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, &stderr, runners{
 		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error {
 			got = c
 			return nil
@@ -801,7 +848,7 @@ func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
 	output := func(t *testing.T, commandLine string) string {
 		t.Helper()
 		var out strings.Builder
-		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, &out, &out, runners{})
+		err := commands("/work", strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &out, runners{})
 		require.Error(t, err, "muxt %s", commandLine)
 		return out.String()
 	}
@@ -815,6 +862,7 @@ func TestCommandLineRejectionsDoNotPrintUsage(t *testing.T) {
 		"list-template-callers --use-templates-variable=a --use-templates-variable=a",
 		"list-template-calls --use-templates-variable=a --use-templates-variable=a",
 		"--templates-variable=a --use-templates-variable=b",
+		"fmt -w",
 	} {
 		t.Run(commandLine, func(t *testing.T) {
 			assert.NotContains(t, output(t, commandLine), "Usage:", "muxt %s printed the usage", commandLine)

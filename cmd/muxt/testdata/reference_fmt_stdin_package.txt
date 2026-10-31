@@ -1,0 +1,25 @@
+# Standard input is formatted with no package, even in a package
+# directory: an editor pipes a buffer from wherever it runs, often the
+# module root, so the package there is not the buffer's. The layout's
+# <style> element, which would make .x block, does not apply, and the
+# span is left as written.
+
+stdin page.gohtml
+muxt fmt
+cmp stdout page.gohtml
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- m.go --
+package m
+
+import "embed"
+
+//go:embed *.gohtml
+var templates embed.FS
+-- layout.gohtml --
+<style>.x{display:block}</style>
+-- page.gohtml --
+<p>a<span class="x">b</span> c</p>

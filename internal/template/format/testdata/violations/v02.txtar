@@ -1,0 +1,7 @@
+-- input.gohtml --
+<div><img src=a.png><img src=b.png>
+</div>
+-- format.gohtml --
+<div><img src=a.png><img src=b.png></div>
+-- data/empty.json --
+{}

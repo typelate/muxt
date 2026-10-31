@@ -1,0 +1,21 @@
+-- input.gohtml --
+<div>
+	a<div {{if .H}}hidden{{end}}></div>b
+	<span class="{{.C}}">
+ x </span>
+	<p style="{{.S}}">
+ y
+</p>
+</div>
+-- format.gohtml --
+<div>a<div {{if .H}}hidden{{end}}></div>b
+	<span class="{{.C}}">
+ x </span>
+	<p style="{{.S}}">
+ y
+</p>
+	</div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"H":true,"C":"k","S":"white-space:pre"}

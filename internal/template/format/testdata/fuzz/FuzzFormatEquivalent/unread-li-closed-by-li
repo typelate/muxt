@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<li/x><b>0<li></li> </b>")

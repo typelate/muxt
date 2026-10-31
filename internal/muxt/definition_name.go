@@ -38,6 +38,17 @@ func (def Definition) generateEndpointPatternIdentifier(sb *strings.Builder) str
 	return sb.String()
 }
 
+// StaticAssetsPathIdentifier is the TemplateRoutePaths method name for the
+// static assets route: the name a call-less "GET <prefix>" template gets,
+// Read and the prefix's segments in PascalCase ("/static/v1/" is
+// ReadStaticV1). prefix is a literal path.
+func StaticAssetsPathIdentifier(prefix string) string {
+	var sb strings.Builder
+	sb.WriteString(methodVerb(http.MethodGet))
+	writePathSegments(&sb, strings.Split(prefix, "/"))
+	return sb.String()
+}
+
 func methodVerb(method string) string {
 	switch method {
 	case http.MethodPost:

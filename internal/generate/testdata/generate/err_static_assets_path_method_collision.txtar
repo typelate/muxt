@@ -1,0 +1,41 @@
+The static assets path method may not be the path method of a template.
+
+Command line: muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "TemplateRoutes",
+	"ReceiverType": "",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "RoutesReceiver",
+	"TemplateDataType": "TemplateData",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"StaticAssetsDirectory": "assets",
+	"StaticAssetsPath": "/static",
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /static"}}x{{end}}
+-- assets/app.css --
+p{color:red}
+-- server.go --
+package server
+-- want/error.txt --
+--output-static-assets-path /static/: path method ReadStatic is also the path method of template "GET /static"
