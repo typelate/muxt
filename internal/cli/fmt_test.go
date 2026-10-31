@@ -178,7 +178,7 @@ func TestFormatRun(t *testing.T) {
 		stdout, stderr, err := runFormat(t, wd, "", "a.gohtml", "b.gohtml")
 		require.Error(t, err, "muxt fmt a.gohtml b.gohtml")
 		assert.Equal(t, input+input, stdout, "muxt fmt a.gohtml b.gohtml")
-		assert.Equal(t, filepath.Join(wd, "t.go")+":5:21: pattern *.css: no matching files found\n", stderr, "muxt fmt a.gohtml b.gohtml")
+		assert.Equal(t, "t.go:5:21: pattern *.css: no matching files found\n", stderr, "muxt fmt a.gohtml b.gohtml")
 	})
 
 	// A file in another directory is in another package: its <style>

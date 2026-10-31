@@ -30,4 +30,4 @@ var templatesFS embed.FS
 </div>
 </section>
 -- want-err.txt --
-$WORK/templates.go:5:21: pattern *.css: no matching files found
+templates.go:5:21: pattern *.css: no matching files found

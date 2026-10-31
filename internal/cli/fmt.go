@@ -248,14 +248,20 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 		pkg = formatPackage{loaded: true, keys: make(map[string]bool)}
 		if err != nil {
 			pkg.broken = true
-			r.report(err.Error())
+			r.reportLoadError(err)
+		}
+		assetDirs, err := staticAssetsDirectories(dir)
+		if err != nil {
+			// formatStyles reports it for each file of the package, which
+			// it leaves unformatted.
+			pkg.broken = true
 		}
 		runFiles := maps.Clone(r.unread)
 		for _, f := range all {
 			runFiles[f.key] = true
 		}
 		for _, path := range embedded {
-			if !templateExtensions[filepath.Ext(path)] {
+			if !templateExtensions[filepath.Ext(path)] || inAnyDirectory(path, assetDirs) {
 				continue
 			}
 			key := resolvedPath(path)
@@ -282,6 +288,51 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	}
 	r.packages[dir] = pkg
 	return pkg
+}
+
+// reportLoadError reports each error of a package load on its own line,
+// its file relative to the working directory as a parse error's is.
+func (r *formatRun) reportLoadError(err error) {
+	errs := []error{err}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs = joined.Unwrap()
+	}
+	for _, e := range errs {
+		var pkgErr *load.PackageError
+		if errors.As(e, &pkgErr) && pkgErr.File != "" {
+			r.report(fmt.Sprintf("%s%s: %s", r.displayName(pkgErr.File), pkgErr.Position, pkgErr.Msg))
+			continue
+		}
+		r.report(e.Error())
+	}
+}
+
+// staticAssetsDirectories are the static assets directories the generated
+// files in dir record, with symbolic links resolved. The static route
+// serves the files under them as they are: they are not templates.
+func staticAssetsDirectories(dir string) ([]string, error) {
+	configs, err := recordedStaticAssets(dir)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, config := range configs {
+		dirs = append(dirs, resolvedPath(filepath.Join(dir, filepath.FromSlash(config.StaticAssetsDirectory))))
+	}
+	return dirs, nil
+}
+
+// inAnyDirectory reports whether path, with symbolic links resolved, is
+// under one of dirs.
+func inAnyDirectory(path string, dirs []string) bool {
+	path = resolvedPath(path)
+	for _, d := range dirs {
+		rel, err := filepath.Rel(d, path)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // templateExtensions are the extensions of the embedded files read as
