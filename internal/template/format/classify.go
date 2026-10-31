@@ -957,6 +957,15 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs
 				}
 			}
 		}
+		if !el.Closed && !el.Void && specialTags[strings.ToLower(el.TagName)] && preformats(el, styles) {
+			// An end tag that does not pop el leaves its
+			// preformatted content running past it.
+			if whole, parent := preformattedReach(path); whole {
+				asIs = true
+			} else if parent != nil {
+				asWritten = append(asWritten, parent)
+			}
+		}
 		if closed := closesTable(el, path); closed != nil {
 			flagged[el.Start()] = true
 			closes[el] = closed
@@ -1290,6 +1299,59 @@ func preformats(el *template.HTMLElementNode, styles analysis.Whitespaces) bool 
 	}
 	ws, ok := styles[el]
 	return !ok || ws.WhiteSpace != analysis.WhiteSpaceCollapse
+}
+
+// preformattedReach finds how far the browser runs an unclosed special
+// preformatted element whose ancestors are path. The template tree ends
+// it at the end tag of its nearest closed ancestor; when that end tag
+// does not pop it (a formatting or ordinary end tag, which the adoption
+// agency algorithm or the "any other end tag" rule leaves it open past,
+// or </p> behind a scope barrier), what follows is its content up to an
+// ancestor whose end tag does. preformattedReach returns that ancestor to
+// be written as it is, or whole when there is none before the tree root
+// or a define or block body. It returns nil and false when the nearest
+// closed ancestor's end tag pops the element, or there is none.
+func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLElementNode) {
+	closedSeen := false
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			if !p.Closed {
+				continue
+			}
+			if endTagPopsAt(p, path[i+1:]) {
+				if !closedSeen {
+					return false, nil
+				}
+				return false, p
+			}
+			closedSeen = true
+		case *template.DefineNode, *template.BlockNode:
+			return closedSeen, nil
+		}
+	}
+	return closedSeen, nil
+}
+
+// endTagPopsAt reports whether the end tag of el pops every element
+// below it, between (the elements from el's child down) included: el is
+// one of endTagPops and no element between is a barrier of the scope its
+// end tag looks it up in (HTML §13.2.4.2). The barriers are those of the
+// default scope with the ones of button and list item scope added, which
+// errs toward not popping.
+func endTagPopsAt(el *template.HTMLElementNode, between []template.Node) bool {
+	if !endTagPops[strings.ToLower(el.TagName)] {
+		return false
+	}
+	for _, n := range between {
+		if e, ok := n.(*template.HTMLElementNode); ok {
+			tag := strings.ToLower(e.TagName)
+			if buttonScopeBarriers[tag] || tag == "ol" || tag == "ul" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // elementAbove is the innermost element on path before any define or
