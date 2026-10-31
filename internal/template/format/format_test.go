@@ -484,8 +484,9 @@ func TestAttributesAndCRLF(t *testing.T) {
 
 // TestCSSEntryPoints documents where author CSS comes from: Node and
 // Source read only the CSS that Styles names and the template's own
-// <style> elements. Without either, an element with a class or id is
-// unknown (decision 1) and its content is left as written.
+// <style> elements. Without AuthorCSSKnown, an element with a class or id
+// is unknown (decision 1) and its content is left as written, even next
+// to a <style> element: that may not be all the CSS (Task 21).
 func TestCSSEntryPoints(t *testing.T) {
 	const input = `<div class="c"><p>a</p></div>`
 	t.Run("Node without CSS", func(t *testing.T) {
@@ -499,7 +500,7 @@ func TestCSSEntryPoints(t *testing.T) {
 	t.Run("Source with a style element", func(t *testing.T) {
 		got, err := format.Source("t.gohtml", "<style>.d{}</style>"+input)
 		require.NoError(t, err)
-		assert.Equal(t, "<style>.d{}</style><div class=\"c\">\n\t<p>a</p>\n</div>", got)
+		assert.Equal(t, "<style>.d{}</style>"+input, got)
 	})
 }
 

@@ -89,9 +89,9 @@ type WhitespaceOptions struct {
 	// Sheets are stylesheet files the templates use.
 	Sheets []Stylesheet
 	// AuthorCSSKnown reports that Sheets and the <style> elements are all
-	// the author CSS (a package was loaded, or CSS files were named), even
-	// when there is none. Without it, and with no <style> element or sheet,
-	// an element with a class or id is unknown.
+	// the author CSS (the templates' package was loaded), even when there
+	// is none. Without it an element with a class or id is unknown, whatever
+	// <style> elements or sheets are visible: they may not be all the CSS.
 	AuthorCSSKnown bool
 	// MissingSheets reports a stylesheet the templates use that could not
 	// be loaded: author CSS may set anything on any element.
@@ -115,14 +115,14 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // than none, position absolute or fixed) and is not display: none has
 // unknown display, since it is out of the inline flow. An element whose
 // class or style attribute is dynamic is unknown, and so is one with a
-// class or id when no author CSS is visible at all.
+// class or id unless options.AuthorCSSKnown.
 // White-space inherits; preserve and unknown white-space inherit to every
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
 func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whitespaces {
 	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0, nil)}
 	authors := authorSheets(slices.Concat(trees, options.Context), options.Sheets)
-	c.authorVisible = options.AuthorCSSKnown || len(authors) > 0
+	c.authorVisible = options.AuthorCSSKnown
 	var filenames []string
 	for _, sheet := range options.Sheets {
 		filenames = append(filenames, sheet.Filename)
