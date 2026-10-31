@@ -41,6 +41,29 @@ func TestRevisionChanged(t *testing.T) {
 	}
 }
 
+// TestRevisionChangedByDefinitionTrimMarkers states that a trim marker on
+// the define or end of a definition is a change: the body keeps its
+// whitespace as written, and the marker alone decides whether it renders.
+func TestRevisionChangedByDefinitionTrimMarkers(t *testing.T) {
+	str := types.Typ[types.String]
+	const untrimmed = `{{define "t"}} <b>{{.}}</b> {{end}}`
+	before := scopesOf([]scope{scopeOf(t, "t", untrimmed, str)})
+
+	for _, tt := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{name: "no trim markers", text: untrimmed, want: false},
+		{name: "a trim marker on define", text: `{{define "t" -}} <b>{{.}}</b> {{end}}`, want: true},
+		{name: "a trim marker on end", text: `{{define "t"}} <b>{{.}}</b> {{- end}}`, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, before.changed(scopeOf(t, "t", tt.text, str)), "changed")
+		})
+	}
+}
+
 // tarOf builds an archive of the given entries, in order.
 func tarOf(t *testing.T, entries ...tarEntry) *bytes.Buffer {
 	t.Helper()

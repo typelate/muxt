@@ -51,6 +51,7 @@ type HTMLElementNode struct {
 	Children    []Node       // Child nodes in lexical order.
 	Void        bool         // True for void elements (br, hr, img, etc.).
 	Closed      bool         // True if the parser found a matching end tag.
+	Misnested   bool         // True if an ancestor's end tag closed it first; a misnested-tag diagnostic reports it.
 	AttrStart   lex.Pos      // Position after tag name (start of attribute region).
 	AttrEnd     lex.Pos      // Position after '>' closing the opening tag.
 	EndTagStart lex.Pos      // Position of '<' in '</tag>'.

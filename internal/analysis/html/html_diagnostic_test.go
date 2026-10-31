@@ -45,6 +45,7 @@ func TestCheckStructure(t *testing.T) {
 		{name: "implied end tag p is not unclosed", input: `<div><p>a</div>`, nDiags: 0, contains: ""},
 		{name: "span is still unclosed", input: `<div><span></div>`, nDiags: 1, contains: "element <span> is not closed"},
 		{name: "misnested formatting not double reported", input: `<b><i>x</b>y`, nDiags: 1, contains: "browsers reopen a copy of <i>"},
+		{name: "misnested formatting does not hide an unrelated unclosed one", input: `<b><i>x</b>y<u>z`, nDiags: 2, contains: "element <u> is not closed"},
 	}
 
 	for _, test := range tests {

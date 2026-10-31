@@ -30,7 +30,7 @@ func CheckStructure(t *template.Tree) Diagnostics {
 		elem, ok := n.(*template.HTMLElementNode)
 		if !ok || elem == nil || elem.Void || elem.Closed ||
 			template.ImpliedEndTagElements[strings.ToLower(elem.TagName)] ||
-			(template.FormattingElements[strings.ToLower(elem.TagName)] && hasCode(t.Diagnostics, template.DiagMisnestedTag)) {
+			elem.Misnested {
 			return
 		}
 		diags = append(diags, Diagnostic{
@@ -45,14 +45,4 @@ func CheckStructure(t *template.Tree) Diagnostics {
 	checkAutoClose(t, &diags)
 	diags.SortByPos()
 	return diags
-}
-
-// hasCode reports whether ds contains a diagnostic with the given code.
-func hasCode(ds Diagnostics, c template.DiagnosticCode) bool {
-	for _, d := range ds {
-		if d.Code == c {
-			return true
-		}
-	}
-	return false
 }
