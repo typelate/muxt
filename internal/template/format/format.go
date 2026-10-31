@@ -1188,9 +1188,17 @@ var integrationPoints = map[string]bool{
 // unreadMarkupIn). The two trees then disagree from there on, and the
 // whitespace after it cannot be classified. Other unread markup is
 // handled where it stands (unsureMisnested).
+// A bogus comment or processing instruction the parser read as one node
+// (<!x>, <?x>) is unparsed markup too: html/template writes its < as
+// &lt;, so the browser reads what follows as text and markup, a raw text
+// start tag (<!<style>) included.
 func hasUnparsedMarkup(nodes []template.Node) bool {
 	for _, n := range nodes {
 		switch n := n.(type) {
+		case *template.HTMLDoctypeNode:
+			if !isDoctype(n) {
+				return true
+			}
 		case *template.TextNode:
 			if unreadMarkupIn(n.Text) == unreadRetokenizes {
 				return true
@@ -1219,6 +1227,12 @@ func hasUnparsedMarkup(nodes []template.Node) bool {
 		}
 	}
 	return false
+}
+
+// isDoctype reports whether n is a doctype, the only node the parser
+// reads as a doctype that html/template writes unchanged.
+func isDoctype(n *template.HTMLDoctypeNode) bool {
+	return strings.HasPrefix(strings.ToUpper(n.Text), "<!DOCTYPE")
 }
 
 // unreadMarkup is what a < in text the template parser did not read as

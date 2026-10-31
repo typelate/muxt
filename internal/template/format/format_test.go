@@ -512,6 +512,8 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "unread special start tag keeps what follows its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>"},
 		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
 		{name: "unread a start tag is reopened", input: "<div><a/x></div><div><p>0</p>0</div>", want: "<div><a/x></div><div><p>0</p>0</div>"},
+		{name: "bogus comment body is live markup", input: "<!<style>  </style><a>", want: "<!<style>  </style><a>"},
+		{name: "processing instruction body is live markup", input: "<?<pre>  a</pre>?><div><p>b</p></div>", want: "<?<pre>  a</pre>?><div><p>b</p></div>"},
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
 		{name: "self-closed pre holds what follows", input: "<pre/> 00", want: "<pre/> 00"},
 		{name: "self-closed span holds what follows", input: "<div><span/>  a</div><div><p>b</p></div>", want: "<div><span/>  a</div><div><p>b</p></div>"},

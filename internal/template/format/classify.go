@@ -675,7 +675,7 @@ func transparent(n template.Node) (side, bool) {
 	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode:
 		return edgeSide, true
 	case *template.HTMLDoctypeNode:
-		if strings.HasPrefix(strings.ToUpper(n.Text), "<!DOCTYPE") {
+		if isDoctype(n) {
 			return edgeSide, true
 		}
 	case *template.TextNode:
