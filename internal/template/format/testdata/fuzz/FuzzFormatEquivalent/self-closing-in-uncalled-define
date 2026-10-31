@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"icon\"}}<path d=\"M0\"/>  a{{end}}\n{{define \"page\"}}<div><p>b</p></div>{{end}}")

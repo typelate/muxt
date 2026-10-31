@@ -1001,18 +1001,33 @@ func markMisnestedAncestors(marked *[]*template.HTMLElementNode, path []template
 }
 
 // heldOpen reports whether the browser keeps el open past the end the
-// template tree gives it: el is an unclosed special element whose parent
-// is a formatting element, so the parent's end tag runs the adoption
-// agency algorithm with el as the furthest block, which stays on the
-// stack of open elements (HTML §13.2.6.4.7). What follows, up to the
-// nearest clean block, may be el's content or be split by a start tag
-// that closes it (<b><li>0</b><b><li></li> </b>).
+// template tree gives it: el is an unclosed special element below a
+// formatting element with no other special element between them (others,
+// such as span, may be), so the formatting element's end tag runs the
+// adoption agency algorithm with el as the furthest block, the topmost
+// special element below it, which stays on the stack of open elements
+// (HTML §13.2.6.4.7). What follows, up to the nearest clean block, may be
+// el's content or be split by a start tag that closes it
+// (<b><li>0</b><b><li></li> </b>).
 func heldOpen(el *template.HTMLElementNode, path []template.Node) bool {
 	if el.Closed || el.Void || !specialTags[strings.ToLower(el.TagName)] {
 		return false
 	}
-	parent := nearestElement(path)
-	return parent != nil && template.FormattingElements[strings.ToLower(parent.TagName)]
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			tag := strings.ToLower(p.TagName)
+			if template.FormattingElements[tag] {
+				return true
+			}
+			if specialTags[tag] {
+				return false
+			}
+		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+			return false
+		}
+	}
+	return false
 }
 
 // nearestElement is the innermost element on path, or nil.

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"icon\"}}<path/>{{end}}<div>{{template \"icon\"}}  a  b</div>")

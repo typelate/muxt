@@ -49,7 +49,9 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // or id is unknown (decision 1) and keeps its whitespace as written. A
 // tree holding markup the template parser read as text but a browser
 // reads as a tag, or a self-closed HTML element that is not void, is
-// written as it is (see hasUnparsedMarkup and hasIgnoredSelfClose).
+// written as it is, or only the define body holding the element when no
+// {{template}} in the tree calls it (see hasUnparsedMarkup and
+// ignoredSelfCloses).
 func Node(root template.Node, opts ...Option) string {
 	return newFormatter(opts).format(root)
 }
@@ -72,7 +74,8 @@ func (f *formatter) format(root template.Node) string {
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
-	if hasUnparsedMarkup(list.Nodes) || hasIgnoredSelfClose(list.Nodes, false) {
+	whole, bodies := ignoredSelfCloses(list)
+	if whole || hasUnparsedMarkup(list.Nodes) {
 		for _, n := range list.Nodes {
 			f.writeString(f.sourceText(n))
 		}
@@ -80,6 +83,7 @@ func (f *formatter) format(root template.Node) string {
 	}
 	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
 	f.root = list
+	f.asWritten = bodies
 	unsureMisnested(list, f.styles)
 	unsureReopened(list, f.styles)
 	unsureParsedElsewhere(list, f.styles)
@@ -101,8 +105,9 @@ func (f *formatter) format(root template.Node) string {
 
 type formatter struct {
 	sb          *strings.Builder
-	indent      int // tabs writeIndent writes
-	lineIndent  int // tabs at the start of the current line
+	asWritten   map[*template.DefineNode]bool // define bodies written as they are (ignoredSelfCloses)
+	indent      int                           // tabs writeIndent writes
+	lineIndent  int                           // tabs at the start of the current line
 	atLineStart bool
 	leftDelim   string
 	rightDelim  string
@@ -840,6 +845,14 @@ func (f *formatter) formatElseList(parent *template.BranchNode, elseList *templa
 }
 
 func (f *formatter) defineNode(n *template.DefineNode) {
+	if f.asWritten[n] {
+		f.writeActionWithTrim("define "+strconv.Quote(n.Name), n.StartTrimLeft, n.StartTrimRight)
+		for _, child := range n.Body.Nodes {
+			f.writeString(f.sourceText(child))
+		}
+		f.writeActionWithTrim("end", n.EndTrimLeft, n.EndTrimRight)
+		return
+	}
 	f.templateBody("define "+strconv.Quote(n.Name), n.Body, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
 }
 
@@ -1042,47 +1055,122 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	return strings.TrimRight(out, whitespace) + trailingWhitespace(src), nil
 }
 
-// hasIgnoredSelfClose reports whether nodes hold an HTML element that is
-// not void written with a self-closing slash (<pre/>, <div/>). The
-// browser ignores the slash outside SVG and MathML content, so the
-// content after the tag is the element's in the browser's tree and its
-// sibling in the template tree: the two disagree from there on, as with
-// hasUnparsedMarkup. foreign reports whether nodes are SVG or
-// MathML content outside an integration point, where the slash closes
-// the element. A define or block body is HTML content: its callers are
-// unknown.
-func hasIgnoredSelfClose(nodes []template.Node, foreign bool) bool {
+// ignoredSelfCloses finds the HTML elements that are not void written
+// with a self-closing slash (<pre/>, <div/>). The browser ignores the
+// slash outside SVG and MathML content, so the content after the tag is
+// the element's in the browser's tree and its sibling in the template
+// tree: the two disagree from there on, as with hasUnparsedMarkup. One
+// inside a define body leaves that body as written (bodies); its other
+// defines are independent templates. One outside any define, or in a
+// define or block the file calls with {{template}} or that is a block
+// (rendered in place), leaves the whole file as written (whole).
+func ignoredSelfCloses(root *template.ListNode) (whole bool, bodies map[*template.DefineNode]bool) {
+	s := selfCloseScan{bodies: make(map[*template.DefineNode]bool), names: make(map[string]bool)}
+	s.scan(root.Nodes, false, new(bool), nil)
+	if s.whole {
+		return true, nil
+	}
+	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+		if call, ok := n.(*template.TemplateNode); ok && s.names[call.Name] {
+			s.whole = true
+		}
+	})
+	if s.whole {
+		return true, nil
+	}
+	return false, s.bodies
+}
+
+type selfCloseScan struct {
+	whole  bool
+	bodies map[*template.DefineNode]bool
+	names  map[string]bool // defines and blocks holding one
+}
+
+// scan walks nodes, which are SVG or MathML content when foreign. broke
+// is shared by the content of one foreign root: once an HTML breakout
+// start tag (HTML §13.2.6.5) pops the browser out of foreign content,
+// what follows is HTML too. enclosing are the defines and blocks nodes
+// are in, outermost first.
+func (s *selfCloseScan) scan(nodes []template.Node, foreign bool, broke *bool, enclosing []template.Node) {
 	for _, n := range nodes {
 		switch n := n.(type) {
 		case *template.HTMLDocumentFragmentNode:
-			if hasIgnoredSelfClose(n.Children, foreign) {
-				return true
-			}
+			s.scan(n.Children, foreign, broke, enclosing)
 		case *template.HTMLElementNode:
 			tag := strings.ToLower(n.TagName)
-			inForeign := foreign || tag == "svg" || tag == "math"
-			if n.Void && !voidElements[tag] && !inForeign {
-				return true
+			if foreign && breakoutTags[tag] {
+				*broke = true
 			}
-			if hasIgnoredSelfClose(n.Children, inForeign && !integrationPoints[tag]) {
-				return true
+			inForeign := foreign && !*broke
+			childBroke := broke
+			if !inForeign && (tag == "svg" || tag == "math") {
+				inForeign = true
+				childBroke = new(bool)
+			}
+			if n.Void && !voidElements[tag] && !inForeign {
+				s.found(enclosing)
+			}
+			if inForeign && integrationPoints[tag] {
+				s.scan(n.Children, false, new(bool), enclosing)
+			} else {
+				s.scan(n.Children, inForeign, childBroke, enclosing)
 			}
 		case *template.IfNode, *template.WithNode, *template.RangeNode:
 			b := branchOf(n)
-			if b.List != nil && hasIgnoredSelfClose(b.List.Nodes, foreign) || b.ElseList != nil && hasIgnoredSelfClose(b.ElseList.Nodes, foreign) {
-				return true
+			if b.List != nil {
+				s.scan(b.List.Nodes, foreign, broke, enclosing)
+			}
+			if b.ElseList != nil {
+				s.scan(b.ElseList.Nodes, foreign, broke, enclosing)
 			}
 		case *template.DefineNode:
-			if n.Body != nil && hasIgnoredSelfClose(n.Body.Nodes, false) {
-				return true
+			// A body is HTML content: its callers are unknown.
+			if n.Body != nil {
+				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
 			}
 		case *template.BlockNode:
-			if n.Body != nil && hasIgnoredSelfClose(n.Body.Nodes, false) {
-				return true
+			if n.Body != nil {
+				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
 			}
 		}
 	}
-	return false
+}
+
+// found records an ignored self-close inside enclosing.
+func (s *selfCloseScan) found(enclosing []template.Node) {
+	var define *template.DefineNode
+	for _, e := range enclosing {
+		switch e := e.(type) {
+		case *template.DefineNode:
+			s.names[e.Name] = true
+			define = e
+		case *template.BlockNode:
+			s.names[e.Name] = true
+			s.whole = true // a block renders in place
+		}
+	}
+	if define == nil {
+		s.whole = true
+		return
+	}
+	s.bodies[define] = true
+}
+
+// breakoutTags are the start tags that end SVG and MathML content (HTML
+// §13.2.6.5, "any other start tag" in foreign content). font breaks out
+// only with a color, face or size attribute; it is listed whatever its
+// attributes, which errs toward HTML, the cautious side.
+var breakoutTags = map[string]bool{
+	"b": true, "big": true, "blockquote": true, "body": true, "br": true,
+	"center": true, "code": true, "dd": true, "div": true, "dl": true,
+	"dt": true, "em": true, "embed": true, "font": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"head": true, "hr": true, "i": true, "img": true, "li": true,
+	"listing": true, "menu": true, "meta": true, "nobr": true, "ol": true,
+	"p": true, "pre": true, "ruby": true, "s": true, "small": true,
+	"span": true, "strong": true, "strike": true, "sub": true, "sup": true,
+	"table": true, "tt": true, "u": true, "ul": true, "var": true,
 }
 
 // integrationPoints are the SVG and MathML elements whose content is

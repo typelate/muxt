@@ -7,6 +7,6 @@
 // which code outside the standard library cannot import.
 //
 // To resync, copy the three from $(go env GOROOT)/src/internal/diff,
-// change the txtar import in diff_test.go back to golang.org/x/tools/txtar,
+// change the txtar import in diff_test.go to golang.org/x/tools/txtar,
 // and run go test ./internal/diff.
 package diff

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<div><svg><pre/>  a  b</svg></div>")

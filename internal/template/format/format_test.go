@@ -206,6 +206,9 @@ func TestFormattingEdgeCases(t *testing.T) {
 		// --- Misnested formatting elements ---
 		{name: "li held open past formatting end tag", input: `<b><li>0</b><b><li></li> </b>`},
 		{name: "li held open inside a block", input: `<div><b><li>0</b><b><li></li> </b></div>`},
+		{name: "li held open under a span", input: `<b><span><li>0</b><b><li></li> </b>`},
+		{name: "li held open after its span closes", input: `<b><span><li>0</span></b><b><li></li> </b>`},
+		{name: "ul held open under a span", input: `<em><span><ul><li>0</em><em><li></li> </em>`},
 
 		// --- Markup html/template writes as text ---
 		{name: "bogus comment after block", input: `<div></div><!x>0`},
@@ -507,7 +510,13 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
 		{name: "self-closed pre holds what follows", input: "<pre/> 00", want: "<pre/> 00"},
 		{name: "self-closed span holds what follows", input: "<div><span/>  a</div><div><p>b</p></div>", want: "<div><span/>  a</div><div><p>b</p></div>"},
-		{name: "self-closed in a define body", input: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>", want: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>"},
+		{name: "self-closed in a define body", input: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>", want: "{{define \"x\"}}<path/>  a{{end}}\n<div>\n\t<p>b</p>\n</div>"},
+		{name: "self-closed in a define keeps only that define", input: "{{define \"icon\"}}<path d=\"M0\"/>  a{{end}}\n{{define \"page\"}}<div><p>b</p></div>{{end}}", want: "{{define \"icon\"}}<path d=\"M0\"/>  a{{end}}\n\n{{define \"page\"}}\n\t<div>\n\t\t<p>b</p>\n\t</div>\n{{end}}"},
+		{name: "self-closed in a define called in the file", input: "{{define \"icon\"}}<path/>{{end}}<div>{{template \"icon\"}}  a  b</div>", want: "{{define \"icon\"}}<path/>{{end}}<div>{{template \"icon\"}}  a  b</div>"},
+		{name: "self-closed pre breaks out of svg", input: "<svg><pre/>  a  b</svg>", want: "<svg><pre/>  a  b</svg>"},
+		{name: "self-closed pre breaks out of svg in a div", input: "<div><svg><pre/>  a  b</svg></div>", want: "<div><svg><pre/>  a  b</svg></div>"},
+		{name: "self-closed path after a breakout tag in svg", input: "<svg><b></b><path/>  a  b</svg>", want: "<svg><b></b><path/>  a  b</svg>"},
+		{name: "self-closed pre breaks out of svg across lines", input: "<svg><pre/>\n\n  a  b\n</svg>", want: "<svg><pre/>\n\n  a  b\n</svg>"},
 		{name: "self-closed in foreignObject", input: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>", want: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>"},
 		{name: "self-closed in svg closes", input: "<svg><path/></svg><div><p>b</p></div>", want: "<svg><path/></svg>\n<div>\n\t<p>b</p>\n</div>"},
 	} {
