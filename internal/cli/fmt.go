@@ -30,6 +30,7 @@ var errFormatFailed = errors.New("fmt failed")
 type formatFile struct {
 	name   string // as given or as walked; how the file is reported
 	path   string // where it is read and written; "" for standard input
+	key    string // path with symbolic links resolved, to match the files a package embeds
 	dir    string // the directory whose package the file belongs to
 	source []byte
 	tree   *template.Tree // nil when the file does not parse
@@ -39,7 +40,7 @@ type formatFile struct {
 // gofmt does. Problems with a file are reported on stderr, one line each,
 // and the other files are still formatted.
 func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration) error {
-	r := formatRun{config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage)}
+	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage)}
 	var files []*formatFile
 	if len(config.Paths) == 0 {
 		source, err := io.ReadAll(cmd.InOrStdin())
@@ -51,7 +52,7 @@ func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration)
 		files = r.readFiles(wd, config.Paths)
 	}
 	for _, f := range files {
-		f.tree = parseFormatTree(f.name, f.source)
+		f.tree, _ = parseFormatTree(f.name, f.source) // format.Source reports the error
 	}
 	for _, f := range files {
 		r.format(f, files)
@@ -64,6 +65,7 @@ func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration)
 }
 
 type formatRun struct {
+	wd             string
 	config         formatConfiguration
 	stdout, stderr io.Writer
 	packages       map[string]formatPackage
@@ -71,11 +73,18 @@ type formatRun struct {
 }
 
 // formatPackage is the Go package in a directory, as muxt fmt sees it:
-// whether there is one and the templates it embeds.
+// whether there is one, the templates it embeds, and whether one of them
+// could not be read or parsed.
 type formatPackage struct {
 	loaded   bool
-	embedded []*template.Tree
-	paths    map[string]bool
+	broken   bool
+	embedded []embeddedTemplate
+	keys     map[string]bool
+}
+
+type embeddedTemplate struct {
+	key  string
+	tree *template.Tree
 }
 
 func (r *formatRun) report(message string) {
@@ -94,7 +103,7 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 			r.report(err.Error())
 			return
 		}
-		files = append(files, &formatFile{name: name, path: path, dir: filepath.Dir(path), source: source})
+		files = append(files, &formatFile{name: name, path: path, key: resolvedPath(path), dir: filepath.Dir(path), source: source})
 	}
 	for _, name := range paths {
 		info, err := os.Stat(absoluteDir(wd, name))
@@ -117,7 +126,7 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 				}
 				return nil
 			}
-			if filepath.Ext(path) == ".gohtml" {
+			if filepath.Ext(path) == ".gohtml" && !strings.HasPrefix(d.Name(), ".") {
 				add(filepath.Join(name, rel))
 			}
 			return nil
@@ -137,18 +146,28 @@ func skipFormatDirectory(name string) bool {
 
 // format formats f, with every file of the run and the templates f's
 // package embeds as context for its author CSS, and writes the result
-// where config says.
+// where config says. When a template of the package cannot be read or
+// parsed, it may link or hold any stylesheet, so f is formatted as with a
+// link that does not resolve: every element may have unknown CSS.
 func (r *formatRun) format(f *formatFile, all []*formatFile) {
-	pkg := r.packageIn(f.dir)
+	pkg := r.packageIn(f.dir, all)
+	contextBroken := pkg.broken
 	var context []*template.Tree
 	for _, other := range all {
-		if other != f && other.tree != nil && !pkg.paths[other.path] {
-			context = append(context, other.tree)
+		if other == f || pkg.keys[other.key] {
+			continue
 		}
+		if other.tree == nil {
+			if pkg.loaded && other.dir == f.dir {
+				contextBroken = true
+			}
+			continue
+		}
+		context = append(context, other.tree)
 	}
-	for _, tree := range pkg.embedded {
-		if tree.ParseName != f.path {
-			context = append(context, tree)
+	for _, e := range pkg.embedded {
+		if e.key != f.key {
+			context = append(context, e.tree)
 		}
 	}
 	var files []*template.Tree
@@ -160,6 +179,7 @@ func (r *formatRun) format(f *formatFile, all []*formatFile) {
 		r.report(fmt.Sprintf("%s: %v", f.name, err))
 		return
 	}
+	styles.MissingSheets = styles.MissingSheets || contextBroken
 	out, err := format.Source(f.name, string(f.source), format.Styles(styles))
 	if err != nil {
 		r.report(formatErrorLine(f.name, err))
@@ -199,38 +219,76 @@ func (r *formatRun) write(f *formatFile, out []byte) {
 }
 
 // packageIn loads the Go package in dir once per run. A directory outside
-// any module, or holding no Go files, has no package.
-func (r *formatRun) packageIn(dir string) formatPackage {
+// any module, or holding no Go files, has no package. An embedded
+// template that cannot be read or parsed breaks the package, and is
+// reported here unless it is one of the run's files, which report their
+// own errors.
+func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	if pkg, ok := r.packages[dir]; ok {
 		return pkg
 	}
 	var pkg formatPackage
 	embedded, ok, err := load.EmbeddedFiles(dir)
 	if err == nil && ok {
-		pkg = formatPackage{loaded: true, paths: make(map[string]bool)}
+		pkg = formatPackage{loaded: true, keys: make(map[string]bool)}
+		runFiles := make(map[string]bool)
+		for _, f := range all {
+			runFiles[f.key] = true
+		}
 		for _, path := range embedded {
 			if filepath.Ext(path) != ".gohtml" {
 				continue
 			}
-			pkg.paths[path] = true
+			key := resolvedPath(path)
+			pkg.keys[key] = true
 			source, err := os.ReadFile(path)
 			if err != nil {
-				continue // an embedded file fmt cannot read is no context; go build reports it
+				pkg.broken = true
+				if !runFiles[key] {
+					r.report(err.Error())
+				}
+				continue
 			}
-			if tree := parseFormatTree(path, source); tree != nil {
-				pkg.embedded = append(pkg.embedded, tree)
+			name := r.displayName(path)
+			tree, err := parseFormatTree(name, source)
+			if err != nil {
+				pkg.broken = true
+				if !runFiles[key] {
+					r.report(formatErrorLine(name, err))
+				}
+				continue
 			}
+			pkg.embedded = append(pkg.embedded, embeddedTemplate{key: key, tree: tree})
 		}
 	}
 	r.packages[dir] = pkg
 	return pkg
 }
 
+// displayName is path relative to the working directory when it is
+// inside it, as a walked file is reported, and path otherwise.
+func (r *formatRun) displayName(path string) string {
+	rel, err := filepath.Rel(resolvedPath(r.wd), resolvedPath(path))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return path
+	}
+	return rel
+}
+
+// resolvedPath is path with its symbolic links resolved, or path when
+// they cannot be.
+func resolvedPath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
+}
+
 // parseFormatTree parses source as format.Source does, for its links and
-// <style> elements. It returns nil when source does not parse; format
-// reports that for a file being formatted.
-func parseFormatTree(name string, source []byte) *template.Tree {
-	tree, err := template.ParseTree(name, name, string(source), nil, lex.Options{
+// <style> elements.
+func parseFormatTree(name string, source []byte) (*template.Tree, error) {
+	return template.ParseTree(name, name, string(source), nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -238,16 +296,17 @@ func parseFormatTree(name string, source []byte) *template.Tree {
 		LeftDelim:   "{{",
 		RightDelim:  "}}",
 	})
-	if err != nil {
-		return nil
-	}
-	return tree
 }
 
 // writeFileAtomic replaces the file at path with data, keeping its
 // permissions: data goes to a temporary file in the same directory, which
-// is then renamed over path.
+// is then renamed over path. A symbolic link is written through: its
+// target is replaced and the link kept.
 func writeFileAtomic(path string, data []byte) error {
+	path, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return err

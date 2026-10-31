@@ -21,22 +21,8 @@ func formatCommand(workingDirectory *string, run func(*cobra.Command, string, fo
 	cmd := &cobra.Command{
 		Use:   fmtCommandName + " [flags] [path ...]",
 		Short: "Format Go HTML templates",
-		Long: `Format Go HTML templates, as gofmt formats Go.
-
-With no paths, fmt formats standard input to standard output. A path is a
-file, formatted whatever its extension, or a directory, walked for
-*.gohtml files (skipping testdata, vendor, and directories starting with
-. or _). Without -w, -l, or -d, the formatted source is printed.
-
-Whitespace a browser could render is kept as written. Inside a Go
-package, fmt reads the stylesheets its templates link through the static
-assets route (see muxt generate --input-static-assets-directory) and
-their <style> elements; outside one, an element with a class or id is
-left as written. A {{/* muxt:fmt off */}}, {{/* muxt:fmt on */}}, or
-{{/* muxt:fmt preserve */}} comment opts a region out.
-
-fmt exits 1 when a file cannot be read, parsed, or written, and with -l
-or -d when any file's formatting differs.`,
+		Long: `Format Go HTML templates, as gofmt formats Go. With no paths, format
+standard input; directories are walked for *.gohtml files.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

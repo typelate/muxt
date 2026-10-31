@@ -48,7 +48,7 @@ func TestFormatRun(t *testing.T) {
 
 	t.Run("walk", func(t *testing.T) {
 		wd := t.TempDir()
-		for _, name := range []string{"a.gohtml", "b.html", "sub/c.gohtml", ".git/d.gohtml", "_old/e.gohtml", "testdata/f.gohtml", "vendor/g.gohtml"} {
+		for _, name := range []string{"a.gohtml", "b.html", "sub/c.gohtml", ".git/d.gohtml", "_old/e.gohtml", "testdata/f.gohtml", "vendor/g.gohtml", ".h.gohtml", "sub/.i.gohtml"} {
 			path := filepath.Join(wd, filepath.FromSlash(name))
 			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 			require.NoError(t, os.WriteFile(path, []byte(unformatted), 0o644))
@@ -107,5 +107,29 @@ func TestFormatRun(t *testing.T) {
 		got, err := os.ReadFile(good)
 		require.NoError(t, err)
 		assert.Equal(t, formatted, string(got), "muxt fmt -w bad.gohtml good.gohtml wrote good.gohtml")
+	})
+
+	t.Run("an explicit hidden file is formatted", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, ".h.gohtml", unformatted)
+		stdout, _, err := runFormat(t, wd, "", "-l", ".h.gohtml")
+		require.Error(t, err, "muxt fmt -l .h.gohtml")
+		assert.Equal(t, ".h.gohtml\n", stdout, "muxt fmt -l .h.gohtml")
+	})
+
+	t.Run("write through a symbolic link", func(t *testing.T) {
+		wd := t.TempDir()
+		real := writeTestFile(t, wd, "real.gohtml", unformatted)
+		link := filepath.Join(wd, "link.gohtml")
+		require.NoError(t, os.Symlink("real.gohtml", link))
+
+		_, _, err := runFormat(t, wd, "", "-w", "link.gohtml")
+		require.NoError(t, err, "muxt fmt -w link.gohtml")
+		info, err := os.Lstat(link)
+		require.NoError(t, err)
+		assert.Equal(t, os.ModeSymlink, info.Mode().Type(), "muxt fmt -w link.gohtml replaced the link")
+		got, err := os.ReadFile(real)
+		require.NoError(t, err)
+		assert.Equal(t, formatted, string(got), "muxt fmt -w link.gohtml wrote the link's target")
 	})
 }
