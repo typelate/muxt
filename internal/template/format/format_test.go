@@ -210,7 +210,9 @@ func TestFormattingEdgeCases(t *testing.T) {
 		{name: "li held open after its span closes", input: `<b><span><li>0</span></b><b><li></li> </b>`},
 		{name: "ul held open under a span", input: `<em><span><ul><li>0</em><em><li></li> </em>`},
 		{name: "unread li closed by a later li", input: `<li/x><b>0<li></li> </b>`},
-		{name: "unread li in a ul keeps what follows the ul", input: `<ul><li/x><b>0</b></ul><div><p>b</p></div>`},
+		{name: "unread li in a ul", input: `<ul><li/x><b>0</b></ul><div><p>b</p></div>`},
+		{name: "unread li closes its p", input: `<p><li/x>0</p><b>0<li></li> </b>`},
+		{name: "unread dt closes its dd", input: `<dd><dt/x>0</dd><b>0<dt></dt> </b>`},
 
 		// --- Markup html/template writes as text ---
 		{name: "bogus comment after block", input: `<div></div><!x>0`},
@@ -506,7 +508,8 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "bogus end tag", input: "<div>a</ b>  <p>  c</p></div>", want: "<div>a</ b>  <p>  c</p></div>"},
 		{name: "comment action first", input: "{{/* c */}}<div>a</ b>  <p>  c</p></div>", want: "{{/* c */}}<div>a</ b>  <p>  c</p></div>"},
 		{name: "unmatched end tag makes its parent unsure", input: "<div><p>a</p></b></div><div><p>b</p></div>", want: "<div><p>a</p></b></div><div>\n\t<p>b</p>\n</div>"},
-		{name: "unread start tag keeps its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div>\n\t<p>b</p>\n</div>"},
+		{name: "unread start tag keeps its parent as written", input: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div><p>b</p></div>", want: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div>\n\t<p>b</p>\n</div>"},
+		{name: "unread special start tag keeps what follows its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>"},
 		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
 		{name: "unread a start tag is reopened", input: "<div><a/x></div><div><p>0</p>0</div>", want: "<div><a/x></div><div><p>0</p>0</div>"},
 		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},

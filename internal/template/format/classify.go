@@ -950,7 +950,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
 		if text, ok := n.(*template.TextNode); ok && unreadStarts[text] {
-			if parent := nearestElement(path); parent != nil && parent.Closed && endTagPops[strings.ToLower(parent.TagName)] {
+			if parent := nearestElement(path); parent != nil && parent.Closed && endTagPops[strings.ToLower(parent.TagName)] && !hasUnreadSpecialTag(text.Text) {
 				return // the parent's end tag closes it; the parent is as written
 			}
 			held = append(held, markMisnestedAncestors(&marked, path, nil, styles, flagged))
@@ -992,7 +992,11 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 // endTagPops name the elements whose end tag pops every element opened
 // inside them, an element only the browser has included (HTML §13.2.6.4.7
 // "in body": the block end tags, </p>, </li>, </dd>, </dt> and the
-// headings; and the table end tags).
+// headings; and the table end tags). That holds only for an element that
+// is not special: a special one may close the parent itself (<p><li/x>)
+// or be a scope barrier that makes the parent's end tag ignored
+// (<li><ul/x>, <p><button/x>, <table/x>), so hasUnreadSpecialTag rules
+// the exception out.
 var endTagPops = map[string]bool{
 	"address": true, "article": true, "aside": true, "blockquote": true, "button": true,
 	"center": true, "details": true, "dialog": true, "dir": true, "div": true,
@@ -1003,6 +1007,24 @@ var endTagPops = map[string]bool{
 	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
 	"table": true, "caption": true, "tbody": true, "thead": true, "tfoot": true,
 	"tr": true, "td": true, "th": true,
+}
+
+// hasUnreadSpecialTag reports whether text, which the template parser
+// read as text, holds the start tag of a special element (specialTags).
+func hasUnreadSpecialTag(text []byte) bool {
+	for i := 0; i+1 < len(text); i++ {
+		if text[i] != '<' || !isASCIILetter(text[i+1]) {
+			continue
+		}
+		end := i + 1
+		for end < len(text) && !isTagNameEnd(text[end]) {
+			end++
+		}
+		if specialTags[strings.ToLower(string(text[i+1:end]))] {
+			return true
+		}
+	}
+	return false
 }
 
 // markMisnestedAncestors appends to marked the ancestors on path of a
