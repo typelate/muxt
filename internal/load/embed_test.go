@@ -45,6 +45,23 @@ func TestEmbeddedFiles(t *testing.T) {
 			t.Errorf("EmbeddedFiles() = %v; want %v", got, want)
 		}
 	})
+	t.Run("embed pattern matching nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "go.mod", "module example.com/m\n\ngo 1.22\n")
+		write(t, dir, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar f embed.FS\n")
+		got, ok, err := load.EmbeddedFiles(dir)
+		want := filepath.Join(dir, "t.go") + ":5:12: pattern *.gohtml: no matching files found"
+		if !ok || err == nil || err.Error() != want {
+			t.Errorf("EmbeddedFiles(bad embed) = %v, %v, %v; want ok and error %q", got, ok, err, want)
+		}
+	})
+	t.Run("outside any module", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "a.gohtml", "a")
+		if _, ok, _ := load.EmbeddedFiles(dir); ok {
+			t.Errorf("EmbeddedFiles(outside a module) is ok; want no package")
+		}
+	})
 	t.Run("empty directory", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "go.mod", "module example.com/m\n\ngo 1.22\n")
