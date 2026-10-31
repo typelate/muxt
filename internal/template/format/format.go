@@ -170,13 +170,28 @@ func (f *formatter) writeString(s string) {
 }
 
 // writeLeftDelim writes the left delimiter and, with trim, the "- "
-// marker after it.
+// marker after it. When the output so far ends in text that would join
+// the delimiter into an earlier one (a { before {{), it writes a space
+// first: the formatter only leaves a gap there empty when the run was
+// reflowable or trimmed, so a space renders the same, and the delimiter
+// stays where the parser read it.
 func (f *formatter) writeLeftDelim(trim bool) {
+	if gluesDelim(f.sb.String(), f.leftDelim) {
+		f.writeString(" ")
+	}
 	f.writeString(f.leftDelim)
 	if trim {
 		f.leftTrims = append(f.leftTrims, f.sb.Len())
 		f.writeString("- ")
 	}
+}
+
+// gluesDelim reports whether writing delim after out would make the
+// delimiter start inside out: out ends with a proper prefix of delim's
+// own overlap ({ before {{).
+func gluesDelim(out, delim string) bool {
+	tail := out[max(0, len(out)-(len(delim)-1)):]
+	return strings.Index(tail+delim, delim) < len(tail)
 }
 
 // writeRightDelim writes, with trim, the " -" marker and then the right
