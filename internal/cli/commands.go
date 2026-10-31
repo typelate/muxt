@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"runtime/debug"
 
@@ -27,8 +26,8 @@ const (
 	fmtCommandName                 = "fmt"
 )
 
-func Commands(wd string, args []string, getEnv func(string) string, stdout, stderr io.Writer) error {
-	return commands(wd, args, getEnv, cliVersion, os.Stdin, stdout, stderr, runners{
+func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
 		routes:    runRoutes,
 		check:     runCheck,
 		generate:  runGenerate,

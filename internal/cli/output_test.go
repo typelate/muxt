@@ -149,7 +149,7 @@ func TestCommandsAreWired(t *testing.T) {
 	help := func(t *testing.T, arg string) string {
 		t.Helper()
 		var stdout bytes.Buffer
-		err := Commands(t.TempDir(), []string{arg, "--help"}, func(string) string { return "" }, &stdout, io.Discard)
+		err := Commands(t.TempDir(), []string{arg, "--help"}, func(string) string { return "" }, strings.NewReader(""), &stdout, io.Discard)
 		assert.NoError(t, err, "muxt %s --help", arg)
 		return stdout.String()
 	}

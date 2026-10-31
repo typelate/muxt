@@ -149,4 +149,69 @@ func TestFormatRun(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, formatted, string(got), "muxt fmt -w link.gohtml wrote the link's target")
 	})
+
+	// The package in the working directory is not the package of what an
+	// editor pipes in: standard input is formatted with no package, so a
+	// class is unknown and left as written.
+	t.Run("standard input has no package context", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, "go.mod", "module example.com/m\n\ngo 1.22\n")
+		writeTestFile(t, wd, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar f embed.FS\n")
+		writeTestFile(t, wd, "layout.gohtml", "<style>.x{display:block}</style>\n")
+		const input = `<p>a<span class="x">b</span> c</p>` + "\n"
+		stdout, stderr, err := runFormat(t, wd, input)
+		require.NoError(t, err, "muxt fmt < %q", input)
+		assert.Equal(t, input, stdout, "muxt fmt < %q in a package whose layout makes .x block", input)
+		assert.Empty(t, stderr, "muxt fmt < %q", input)
+	})
+
+	// A package that loads with errors may embed a template that links any
+	// stylesheet: its templates are left as written, and the error is
+	// reported once.
+	t.Run("a package that loads with errors", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, "go.mod", "module example.com/m\n\ngo 1.22\n")
+		writeTestFile(t, wd, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml *.css\nvar f embed.FS\n")
+		const input = "<section>\n<div class=\"code\">\n  keep   me\n</div>\n</section>\n"
+		writeTestFile(t, wd, "a.gohtml", input)
+		writeTestFile(t, wd, "b.gohtml", input)
+		stdout, stderr, err := runFormat(t, wd, "", "a.gohtml", "b.gohtml")
+		require.Error(t, err, "muxt fmt a.gohtml b.gohtml")
+		assert.Equal(t, input+input, stdout, "muxt fmt a.gohtml b.gohtml")
+		assert.Equal(t, filepath.Join(wd, "t.go")+":5:21: pattern *.css: no matching files found\n", stderr, "muxt fmt a.gohtml b.gohtml")
+	})
+
+	// A file in another directory is in another package: its <style>
+	// elements do not apply.
+	t.Run("a walk keeps context per directory", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, "go.mod", "module example.com/m\n\ngo 1.22\n")
+		writeTestFile(t, wd, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar f embed.FS\n")
+		const page = `<p>a<span class="x">b</span> c</p>` + "\n"
+		writeTestFile(t, wd, "page.gohtml", page)
+		require.NoError(t, os.Mkdir(filepath.Join(wd, "b"), 0o755))
+		writeTestFile(t, wd, filepath.Join("b", "t.go"), "package b\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar f embed.FS\n")
+		writeTestFile(t, wd, filepath.Join("b", "style.gohtml"), "<style>.x{display:block}</style>\n")
+		stdout, stderr, err := runFormat(t, wd, "", "-l", ".")
+		require.NoError(t, err, "muxt fmt -l .")
+		assert.Empty(t, stdout, "muxt fmt -l . listed a file")
+		assert.Empty(t, stderr, "muxt fmt -l .")
+	})
+
+	// An embedded .html template is context like a .gohtml one: the layout
+	// that links the sheet may be either.
+	t.Run("embedded html templates are context", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, "go.mod", "module example.com/m\n\ngo 1.22\n")
+		writeTestFile(t, wd, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml *.html *.txt\nvar f embed.FS\n")
+		writeTestFile(t, wd, "layout.html", "<style>.x{display:block}</style>\n")
+		writeTestFile(t, wd, "notes.txt", "{{if}}<style>.y{display:block}</style>\n")
+		const page = "<p>a<span class=\"x\">b</span> c</p>\n<p>a<span class=\"y\">b</span> c</p>\n"
+		const want = "<p>\n\ta\n\t<span class=\"x\">b</span>\n\tc\n</p>\n<p>a<span class=\"y\">b</span> c</p>\n"
+		writeTestFile(t, wd, "page.gohtml", page)
+		stdout, stderr, err := runFormat(t, wd, "", "page.gohtml")
+		require.NoError(t, err, "muxt fmt page.gohtml")
+		assert.Equal(t, want, stdout, "muxt fmt page.gohtml")
+		assert.Empty(t, stderr, "muxt fmt page.gohtml")
+	})
 }

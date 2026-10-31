@@ -1,0 +1,33 @@
+# A package that loads with errors may miss a template that links any
+# stylesheet, so its author CSS is unknown: the partial is left as
+# written, and the load error is reported.
+
+! muxt fmt -w partial.gohtml
+cmp partial.gohtml partial.orig
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- templates.go --
+package server
+
+import "embed"
+
+//go:embed *.gohtml *.css
+var templatesFS embed.FS
+-- partial.gohtml --
+<section>
+<div class="code">
+  keep   me
+</div>
+</section>
+-- partial.orig --
+<section>
+<div class="code">
+  keep   me
+</div>
+</section>
+-- want-err.txt --
+$WORK/templates.go:5:21: pattern *.css: no matching files found

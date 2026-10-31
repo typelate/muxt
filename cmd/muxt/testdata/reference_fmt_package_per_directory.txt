@@ -1,0 +1,34 @@
+# muxt fmt reads CSS from the templates of a file's own package. A file in
+# another directory is in another package: walking both does not let the
+# <style> element in b reach page.gohtml, so the span stays inline and its
+# line is left as written.
+
+muxt fmt page.gohtml
+cmp stdout page.orig
+muxt fmt -w .
+cmp page.gohtml page.orig
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- m.go --
+package m
+
+import "embed"
+
+//go:embed *.gohtml
+var templates embed.FS
+-- page.gohtml --
+<p>a<span class="x">b</span> c</p>
+-- page.orig --
+<p>a<span class="x">b</span> c</p>
+-- b/b.go --
+package b
+
+import "embed"
+
+//go:embed *.gohtml
+var templates embed.FS
+-- b/style.gohtml --
+<style>.x{display:block}</style>

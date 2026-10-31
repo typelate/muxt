@@ -49,7 +49,7 @@ func main() {}
 func execute(t *testing.T, wd string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	err = Commands(wd, args, func(string) string { return "" }, &out, &errOut)
+	err = Commands(wd, args, func(string) string { return "" }, strings.NewReader(""), &out, &errOut)
 	return out.String(), errOut.String(), err
 }
 

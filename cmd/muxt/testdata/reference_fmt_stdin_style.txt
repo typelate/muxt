@@ -1,0 +1,23 @@
+# Standard input has no package, so its author CSS is not known to be
+# complete: a <style> element is not all the CSS a page may load. The
+# interior of an element with a class is left as written; the section
+# around it, which no author rule can reach, is indented.
+
+stdin page.gohtml
+muxt fmt
+cmp stdout want.gohtml
+
+-- page.gohtml --
+<style>p{color:red}</style>
+<section>
+<div class="code">
+  keep   me
+</div>
+</section>
+-- want.gohtml --
+<style>p{color:red}</style>
+<section>
+	<div class="code">
+  keep   me
+</div>
+	</section>

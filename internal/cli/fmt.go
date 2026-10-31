@@ -32,7 +32,7 @@ type formatFile struct {
 	name   string // as given or as walked; how the file is reported
 	path   string // where it is read and written; "" for standard input
 	key    string // path with symbolic links resolved, to match the files a package embeds
-	dir    string // the directory whose package the file belongs to
+	dir    string // the directory whose package the file belongs to; "" for standard input, which has none
 	source []byte
 	tree   *template.Tree // nil when the file does not parse
 }
@@ -48,7 +48,10 @@ func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration)
 		if err != nil {
 			return fmt.Errorf("reading standard input: %w", err)
 		}
-		files = append(files, &formatFile{name: standardInputName, dir: wd, source: source})
+		// An editor pipes a buffer from wherever it runs, often the module
+		// root: the package there is not the buffer's, and its CSS would be
+		// worse than none.
+		files = append(files, &formatFile{name: standardInputName, source: source})
 	} else {
 		files = r.readFiles(wd, config.Paths)
 	}
@@ -149,21 +152,23 @@ func skipFormatDirectory(name string) bool {
 	return name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
 
-// format formats f, with every file of the run and the templates f's
-// package embeds as context for its author CSS, and writes the result
-// where config says. When a template of the package cannot be read or
-// parsed, it may link or hold any stylesheet, so f is formatted as with a
-// link that does not resolve: every element may have unknown CSS.
+// format formats f, with the run's other files in f's directory and the
+// templates f's package embeds as context for its author CSS, and writes
+// the result where config says. A file in another directory is in another
+// package, whose CSS does not reach f's. When a template of the package
+// cannot be read or parsed, or the package loads with errors, it may link
+// or hold any stylesheet, so f is formatted as with a link that does not
+// resolve: every element may have unknown CSS.
 func (r *formatRun) format(f *formatFile, all []*formatFile) {
 	pkg := r.packageIn(f.dir, all)
 	contextBroken := pkg.broken
 	var context []*template.Tree
 	for _, other := range all {
-		if other == f || pkg.keys[other.key] {
+		if other == f || other.dir != f.dir || pkg.keys[other.key] {
 			continue
 		}
 		if other.tree == nil {
-			if pkg.loaded && other.dir == f.dir {
+			if pkg.loaded {
 				contextBroken = true
 			}
 			continue
@@ -223,25 +228,34 @@ func (r *formatRun) write(f *formatFile, out []byte) {
 	}
 }
 
-// packageIn loads the Go package in dir once per run. A directory outside
-// any module, or holding no Go files, has no package. An embedded
-// template that cannot be read or parsed breaks the package, and is
-// reported here unless it is one of the run's files, which report their
-// own errors.
+// packageIn loads the Go package in dir once per run. Standard input
+// (dir ""), a directory outside any module, and one holding no Go files
+// have no package. A package that loads with errors is broken, and its
+// errors are reported here. So is an embedded template that cannot be
+// read or parsed, reported here unless it is one of the run's files,
+// which report their own errors.
 func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	if pkg, ok := r.packages[dir]; ok {
 		return pkg
 	}
 	var pkg formatPackage
+	if dir == "" {
+		r.packages[dir] = pkg
+		return pkg
+	}
 	embedded, ok, err := load.EmbeddedFiles(dir)
-	if err == nil && ok {
+	if ok {
 		pkg = formatPackage{loaded: true, keys: make(map[string]bool)}
+		if err != nil {
+			pkg.broken = true
+			r.report(err.Error())
+		}
 		runFiles := maps.Clone(r.unread)
 		for _, f := range all {
 			runFiles[f.key] = true
 		}
 		for _, path := range embedded {
-			if filepath.Ext(path) != ".gohtml" {
+			if !templateExtensions[filepath.Ext(path)] {
 				continue
 			}
 			key := resolvedPath(path)
@@ -269,6 +283,11 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	r.packages[dir] = pkg
 	return pkg
 }
+
+// templateExtensions are the extensions of the embedded files read as
+// templates for their links and <style> elements. Any other embedded file
+// is not a template.
+var templateExtensions = map[string]bool{".gohtml": true, ".html": true, ".htm": true, ".tmpl": true, ".gotmpl": true}
 
 // displayName is path relative to the working directory when it is
 // inside it, as a walked file is reported, and path otherwise.

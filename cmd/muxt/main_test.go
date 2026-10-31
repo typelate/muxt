@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,23 +80,50 @@ func Test(t *testing.T) {
 	// starved of CPU, as it is when CI runs many scripts at once under -race:
 	// a script whose go test has already passed then fails.
 	e.Cmds["exec"] = script.Exec(func(cmd *exec.Cmd) error { return cmd.Process.Signal(os.Interrupt) }, scriptWaitDelay)
-	e.Cmds["muxt"] = scriptCommand()
+	var inputs sync.Map // *script.State to the standard input of its next muxt command
+	e.Cmds["stdin"] = stdinCommand(&inputs)
+	e.Cmds["muxt"] = scriptCommand(&inputs)
 	e.Cmds["count-matches"] = countRedirectBlocksCommand()
 	ctx := t.Context()
 	scripttest.Test(t, ctx, e, nil, filepath.FromSlash("testdata/*.txt"))
 }
 
-func scriptCommand() script.Cmd {
+// stdinCommand sets the standard input of the script's next muxt command
+// to a file's contents, as the go command's script engine does for exec.
+func stdinCommand(inputs *sync.Map) script.Cmd {
+	return script.Command(script.CmdUsage{
+		Summary: "set the standard input of the next muxt command to the file's contents",
+		Args:    "file",
+	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
+		if len(args) != 1 {
+			return nil, script.ErrUsage
+		}
+		data, err := os.ReadFile(state.Path(args[0]))
+		if err != nil {
+			return nil, err
+		}
+		inputs.Store(state, string(data))
+		return nil, nil
+	})
+}
+
+// scriptCommand runs muxt in the script's working directory. Its standard
+// input is the file the last stdin command named, or empty.
+func scriptCommand(inputs *sync.Map) script.Cmd {
 	return script.Command(script.CmdUsage{
 		Summary: "muxt",
 		Args:    "",
 	}, func(state *script.State, args ...string) (script.WaitFunc, error) {
+		var stdin string
+		if v, ok := inputs.LoadAndDelete(state); ok {
+			stdin = v.(string)
+		}
 		return func(state *script.State) (string, string, error) {
 			var stdout, stderr bytes.Buffer
 			err := cli.Commands(state.Getwd(), args, func(s string) string {
 				e, _ := state.LookupEnv(s)
 				return e
-			}, &stdout, &stderr)
+			}, strings.NewReader(stdin), &stdout, &stderr)
 			return stdout.String(), stderr.String(), err
 		}, nil
 	})
