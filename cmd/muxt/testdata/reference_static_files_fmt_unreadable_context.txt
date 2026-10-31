@@ -3,10 +3,17 @@
 # written, and the unreadable template is reported.
 
 [GOOS:windows] skip 'chmod does not make a file unreadable'
+[root] skip 'root reads a mode-0000 file'
 muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
 chmod 0000 layout.gohtml
 ! muxt fmt -w partial.gohtml
 cmp partial.gohtml partial.orig
+cmpenv stderr want-err.txt
+
+# Walking the package reads the layout as a run file too; it is reported
+# once.
+! muxt fmt -l .
+! stdout .
 cmpenv stderr want-err.txt
 
 -- go.mod --

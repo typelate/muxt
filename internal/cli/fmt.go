@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,7 +41,7 @@ type formatFile struct {
 // gofmt does. Problems with a file are reported on stderr, one line each,
 // and the other files are still formatted.
 func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration) error {
-	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage)}
+	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage), unread: make(map[string]bool)}
 	var files []*formatFile
 	if len(config.Paths) == 0 {
 		source, err := io.ReadAll(cmd.InOrStdin())
@@ -69,6 +70,7 @@ type formatRun struct {
 	config         formatConfiguration
 	stdout, stderr io.Writer
 	packages       map[string]formatPackage
+	unread         map[string]bool // keys of run files that could not be read, already reported
 	failed         bool
 }
 
@@ -100,6 +102,7 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 		path := absoluteDir(wd, name)
 		source, err := os.ReadFile(path)
 		if err != nil {
+			r.unread[resolvedPath(path)] = true
 			r.report(err.Error())
 			return
 		}
@@ -126,7 +129,9 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 				}
 				return nil
 			}
-			if filepath.Ext(path) == ".gohtml" && !strings.HasPrefix(d.Name(), ".") {
+			// As gofmt, a walk formats regular files only: a symbolic link is
+			// formatted, and written through, only when it is named.
+			if d.Type().IsRegular() && filepath.Ext(path) == ".gohtml" && !strings.HasPrefix(d.Name(), ".") {
 				add(filepath.Join(name, rel))
 			}
 			return nil
@@ -231,7 +236,7 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	embedded, ok, err := load.EmbeddedFiles(dir)
 	if err == nil && ok {
 		pkg = formatPackage{loaded: true, keys: make(map[string]bool)}
-		runFiles := make(map[string]bool)
+		runFiles := maps.Clone(r.unread)
 		for _, f := range all {
 			runFiles[f.key] = true
 		}

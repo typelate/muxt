@@ -117,6 +117,23 @@ func TestFormatRun(t *testing.T) {
 		assert.Equal(t, ".h.gohtml\n", stdout, "muxt fmt -l .h.gohtml")
 	})
 
+	t.Run("a walk does not follow a symbolic link", func(t *testing.T) {
+		wd := t.TempDir()
+		outside := t.TempDir()
+		writeTestFile(t, outside, "real.gohtml", unformatted)
+		require.NoError(t, os.Mkdir(filepath.Join(wd, "root"), 0o755))
+		link := filepath.Join("root", "link.gohtml")
+		require.NoError(t, os.Symlink(filepath.Join(outside, "real.gohtml"), filepath.Join(wd, link)))
+
+		stdout, _, err := runFormat(t, wd, "", "-l", "root")
+		require.NoError(t, err, "muxt fmt -l root")
+		assert.Empty(t, stdout, "muxt fmt -l root visited a symbolic link")
+
+		stdout, _, err = runFormat(t, wd, "", "-l", link)
+		require.Error(t, err, "muxt fmt -l %s", link)
+		assert.Equal(t, link+"\n", stdout, "muxt fmt -l %s", link)
+	})
+
 	t.Run("write through a symbolic link", func(t *testing.T) {
 		wd := t.TempDir()
 		real := writeTestFile(t, wd, "real.gohtml", unformatted)
