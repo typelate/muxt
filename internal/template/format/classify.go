@@ -885,8 +885,14 @@ var repairedTags = map[string]bool{
 // open past its template end (heldOpen), or a start tag the parser read
 // as text (an element only the browser has, which a later start tag such
 // as <li> may close along with what the template tree nests in it), up
-// to the nearest clean block, is flagged as well.
-func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
+// to the nearest clean block, is flagged as well, as is what follows a p
+// that the start tag of an unclosed element closes (closesParagraph): the
+// element stays open past the p's end tag. When that start tag opens an
+// unclosed preformatted element, what follows the p to the end of its
+// parent is the element's content: that parent is written as it is, and
+// at the tree root or in a define or block body unsureMisnested returns
+// true, and the whole tree is written as it is.
+func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs bool) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
 	for _, d := range analysis.CheckStructure(tree) {
@@ -901,6 +907,8 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 	// unreadStarts hold a start tag the parser read as text: the
 	// browser holds open an element the template tree does not have.
 	unreadStarts := make(map[*template.TextNode]bool)
+	// closesP are the start tags that close a p ancestor (closesParagraph).
+	closesP := make(map[*template.HTMLElementNode]bool)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
 		if text, ok := n.(*template.TextNode); ok {
 			// A tag the parser read as text is an element the
@@ -932,14 +940,34 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			flagged[el.Start()] = true
 			closes[el] = closed
 		}
+		if closed, k := closesParagraph(el, path); closed != nil {
+			flagged[el.Start()] = true
+			closesP[el] = true
+			if prev, ok := closes[el]; !ok || slices.Index(path, template.Node(prev)) > k {
+				closes[el] = closed
+			}
+			if !el.Closed && preformats(el, styles) {
+				// What follows the p to the end of its parent is
+				// el's preformatted content.
+				parent := elementAbove(path[:k])
+				if parent == nil {
+					asIs = true
+				} else {
+					asWritten = append(asWritten, parent)
+				}
+			}
+		}
 		if closed := closesTable(el, path); closed != nil {
 			flagged[el.Start()] = true
 			closes[el] = closed
 			asWritten = append(asWritten, closed)
 		}
 	})
+	if asIs {
+		return true
+	}
 	if len(flagged) == 0 && len(unreadStarts) == 0 {
-		return
+		return false
 	}
 	var (
 		marked []*template.HTMLElementNode
@@ -971,7 +999,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 		}
 		marked = append(marked, el)
 		stop := markMisnestedAncestors(&marked, path, closes[el], styles, flagged)
-		if heldOpen(el, path) {
+		if heldOpen(el, path) || closesP[el] && !el.Closed {
 			held = append(held, stop)
 		}
 	})
@@ -987,6 +1015,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) {
 			styles[el] = ws
 		}
 	}
+	return false
 }
 
 // endTagPops name the elements whose end tag pops every element opened
@@ -1199,6 +1228,79 @@ func reachOf(path []template.Node) template.Node {
 			}
 		case *template.DefineNode, *template.BlockNode:
 			return p
+		}
+	}
+	return nil
+}
+
+// closesParagraph returns the p ancestor that the start tag of el
+// closes and its index in path, or nil. A start tag that closes a p
+// element (HTML §13.2.6.4.7: the block start tags, hr, the headings,
+// li, dd, dt, table, ...) pops the nearest p in button scope, so what
+// follows el in the p, and what follows the p's end tag (</p> then
+// inserts an empty p), is not where the template tree puts it.
+func closesParagraph(el *template.HTMLElementNode, path []template.Node) (*template.HTMLElementNode, int) {
+	if !closesPTags[strings.ToLower(el.TagName)] {
+		return nil, -1
+	}
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			tag := strings.ToLower(p.TagName)
+			if tag == "p" {
+				return p, i
+			}
+			if buttonScopeBarriers[tag] {
+				return nil, -1
+			}
+		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+			return nil, -1
+		}
+	}
+	return nil, -1
+}
+
+// closesPTags are the start tags that close a p element in button scope.
+var closesPTags = map[string]bool{
+	"address": true, "article": true, "aside": true, "blockquote": true, "center": true,
+	"details": true, "dialog": true, "dir": true, "div": true, "dl": true,
+	"fieldset": true, "figcaption": true, "figure": true, "footer": true, "form": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"header": true, "hgroup": true, "hr": true, "main": true, "menu": true,
+	"nav": true, "ol": true, "p": true, "pre": true, "listing": true,
+	"search": true, "section": true, "summary": true, "table": true, "ul": true,
+	"xmp": true, "plaintext": true, "li": true, "dd": true, "dt": true,
+}
+
+// buttonScopeBarriers end the button scope a p is looked up in (HTML
+// §13.2.4.2), the MathML and SVG ones matched by local name.
+var buttonScopeBarriers = map[string]bool{
+	"applet": true, "caption": true, "html": true, "table": true, "td": true,
+	"th": true, "marquee": true, "object": true, "template": true, "button": true,
+	"mi": true, "mo": true, "mn": true, "ms": true, "mtext": true,
+	"annotation-xml": true, "foreignobject": true, "desc": true, "title": true,
+}
+
+// preformats reports whether el's content keeps its whitespace: a
+// preformatted or raw text element, or white-space other than collapse
+// or unknown.
+func preformats(el *template.HTMLElementNode, styles analysis.Whitespaces) bool {
+	if opaqueTagNames[strings.ToLower(el.TagName)] {
+		return true
+	}
+	ws, ok := styles[el]
+	return !ok || ws.WhiteSpace != analysis.WhiteSpaceCollapse
+}
+
+// elementAbove is the innermost element on path before any define or
+// block, or nil.
+func elementAbove(path []template.Node) *template.HTMLElementNode {
+	for i := len(path) - 1; i >= 0; i-- {
+		switch p := path[i].(type) {
+		case *template.HTMLElementNode:
+			return p
+		case *template.DefineNode, *template.BlockNode:
+			return nil
 		}
 	}
 	return nil

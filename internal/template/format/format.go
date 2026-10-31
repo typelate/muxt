@@ -84,7 +84,12 @@ func (f *formatter) format(root template.Node) string {
 	f.styles = analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
 	f.root = list
 	f.asWritten = bodies
-	unsureMisnested(list, f.styles)
+	if unsureMisnested(list, f.styles) {
+		for _, n := range list.Nodes {
+			f.writeString(f.sourceText(n))
+		}
+		return f.sb.String()
+	}
 	unsureReopened(list, f.styles)
 	unsureParsedElsewhere(list, f.styles)
 	f.cls = classify(list, f.styles)
