@@ -8,6 +8,7 @@
 |---|---|---|
 | [`generate`](commands/generate.md) | `gen`, `g` | Write the routes file. |
 | [`check`](commands/check.md) | `c` | Type-check each template against the data it receives. |
+| [`fmt`](commands/fmt.md) | | Format `.gohtml` files without changing the rendered page. |
 | [`list-template-callers`](commands/list-template-callers.md) | `callers` | List what renders each template. |
 | [`list-template-calls`](commands/list-template-calls.md) | `calls` | List the `{{template}}` calls each template makes. |
 | [`explore-module`](commands/explore-module.md) | `explore` | List every muxt package in the module. |

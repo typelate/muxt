@@ -24,12 +24,14 @@ The [README](../README.md) introduces muxt.
 - [Map domain errors to status codes](how-to/domain-error-status-codes.md)
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
 - [Add custom template functions](how-to/template-functions.md)
+- [Keep part of a template as written](how-to/keep-template-formatting.md): `muxt:fmt` directives
 
 ## Reference
 
 - [CLI](reference/cli.md): commands and shared flags
   - [`muxt generate`](reference/commands/generate.md)
   - [`muxt check`](reference/commands/check.md)
+  - [`muxt fmt`](reference/commands/fmt.md)
   - [`muxt test-template-mutations`](reference/commands/test-template-mutations.md)
   - [`muxt list-template-callers`](reference/commands/list-template-callers.md)
   - [`muxt list-template-calls`](reference/commands/list-template-calls.md)
