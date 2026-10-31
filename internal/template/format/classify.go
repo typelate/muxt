@@ -1309,8 +1309,11 @@ func preformats(el *template.HTMLElementNode, styles analysis.Whitespaces) bool 
 // or </p> behind a scope barrier), what follows is its content up to an
 // ancestor whose end tag does. preformattedReach returns that ancestor to
 // be written as it is, or whole when there is none before the tree root
-// or a define or block body. It returns nil and false when the nearest
-// closed ancestor's end tag pops the element, or there is none.
+// or a define or block body. An {{if}}, {{with}} or {{range}} the element
+// is in ends it as such an end tag does: the action is no end tag, so
+// what follows the branch is its content. It returns nil and false when
+// the nearest closed ancestor's end tag pops the element, or there is
+// none.
 func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLElementNode) {
 	closedSeen := false
 	for i := len(path) - 1; i >= 0; i-- {
@@ -1325,6 +1328,10 @@ func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLE
 				}
 				return false, p
 			}
+			closedSeen = true
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			// The template tree ends it at the branch's end; the
+			// browser, when the branch renders, does not.
 			closedSeen = true
 		case *template.DefineNode, *template.BlockNode:
 			return closedSeen, nil

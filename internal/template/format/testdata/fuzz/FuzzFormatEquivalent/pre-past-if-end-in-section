@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<section><div>{{if .Show}}<pre>{{end}}  0</div></section>")
