@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -102,10 +103,11 @@ func (r *formatRun) report(message string) {
 }
 
 // readFiles reads the files paths name, walking directories for
-// *.gohtml.
+// *.gohtml. A walk leaves out generated files (isGeneratedTemplate); one
+// named is formatted.
 func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 	var files []*formatFile
-	add := func(name string) {
+	add := func(name string, walked bool) {
 		path := absoluteDir(wd, name)
 		source, err := os.ReadFile(path)
 		if err != nil {
@@ -113,12 +115,15 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 			r.report(err.Error())
 			return
 		}
+		if walked && isGeneratedTemplate(source) {
+			return
+		}
 		files = append(files, &formatFile{name: name, path: path, key: resolvedPath(path), source: source})
 	}
 	for _, name := range paths {
 		info, err := os.Stat(absoluteDir(wd, name))
 		if err != nil || !info.IsDir() {
-			add(name)
+			add(name, false)
 			continue
 		}
 		err = filepath.WalkDir(absoluteDir(wd, name), func(path string, d fs.DirEntry, err error) error {
@@ -139,7 +144,7 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 			// As gofmt, a walk formats regular files only: a symbolic link is
 			// formatted, and written through, only when it is named.
 			if d.Type().IsRegular() && filepath.Ext(path) == ".gohtml" && !strings.HasPrefix(d.Name(), ".") {
-				add(filepath.Join(name, rel))
+				add(filepath.Join(name, rel), true)
 			}
 			return nil
 		})
@@ -148,6 +153,23 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 		}
 	}
 	return files
+}
+
+// generatedTemplateLine matches the line that marks a generated
+// template: Go's convention (^// Code generated .* DO NOT EDIT\.$) in a
+// template comment, trim markers allowed, or in an HTML comment.
+var generatedTemplateLine = regexp.MustCompile(`^(?:\{\{-? ?/\* Code generated .* DO NOT EDIT\. \*/ ?-?\}\}|<!-- Code generated .* DO NOT EDIT\. -->)$`)
+
+// isGeneratedTemplate reports whether the first line of source that is
+// not blank marks it generated (generatedTemplateLine).
+func isGeneratedTemplate(source []byte) bool {
+	for line := range bytes.Lines(source) {
+		line = bytes.Trim(line, " \t\r\n")
+		if len(line) > 0 {
+			return generatedTemplateLine.Match(line)
+		}
+	}
+	return false
 }
 
 // skipFormatDirectory reports whether a directory walked for templates is

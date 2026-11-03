@@ -114,30 +114,130 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // value. An element that floats or is absolutely positioned (float other
 // than none, position absolute or fixed) and is not display: none has
 // unknown display, since it is out of the inline flow. An element whose
-// class or style attribute is dynamic is unknown, and so is one with a
-// class or id unless options.AuthorCSSKnown.
+// style attribute holds an action is unknown, and so is one with a class
+// or id unless options.AuthorCSSKnown. A class or id whose value is an
+// action, or that a template branch may add, is left to the selector
+// matcher, which answers Maybe for the selectors it could match: it makes
+// white-space unknown only through a rule that declares white-space,
+// white-space-collapse or all, so a class no such rule can match is
+// harmless (its display may still be unknown).
 // White-space inherits; preserve and unknown white-space inherit to every
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
 func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whitespaces {
 	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0, nil)}
-	authors := authorSheets(slices.Concat(trees, options.Context), options.Sheets)
+	c.rules = append(c.rules, authorRules(trees, options)...)
 	c.authorVisible = options.AuthorCSSKnown
-	var filenames []string
-	for _, sheet := range options.Sheets {
-		filenames = append(filenames, sheet.Filename)
-	}
-	for i, sheet := range authors {
-		c.rules = append(c.rules, sheet.rules(true, i+1, filenames)...)
-	}
-	if options.MissingSheets {
-		c.rules = append(c.rules, cssRule{anyElement: true, maybe: true, author: true, sheet: len(authors) + 1, declarations: unknownDeclarations()})
-	}
 	out := make(Whitespaces)
 	for _, root := range templateRoots(trees) {
 		c.walk(root, WhiteSpaceCollapse, out)
 	}
 	return out
+}
+
+// authorRules returns the display and white-space rules of the author
+// CSS ComputeWhitespace sees for trees and options.
+func authorRules(trees []*template.Tree, options WhitespaceOptions) []cssRule {
+	authors := authorSheets(slices.Concat(trees, options.Context), options.Sheets)
+	var filenames []string
+	for _, sheet := range options.Sheets {
+		filenames = append(filenames, sheet.Filename)
+	}
+	var rules []cssRule
+	for i, sheet := range authors {
+		rules = append(rules, sheet.rules(true, i+1, filenames)...)
+	}
+	if options.MissingSheets {
+		rules = append(rules, cssRule{anyElement: true, maybe: true, author: true, sheet: len(authors) + 1, declarations: unknownDeclarations()})
+	}
+	return rules
+}
+
+// WhiteSpaceDependsOnTree reports whether a rule of the author CSS that
+// ComputeWhitespace sees for trees and options declares white-space,
+// white-space-collapse or all with a selector whose match depends on
+// where the element sits in the document: one with a combinator
+// (descendant, >, + or ~) or a structural, relational or negation
+// pseudo-class (:not, :has, :is or :where holding either, :nth-*,
+// :first-child, :last-child, :only-child, the -of-type ones, :empty,
+// :root, :scope), or a rule whose selectors are unknown. ComputeWhitespace
+// matches selectors in the template tree; where the browser builds an
+// element elsewhere (misnesting, foster parenting, a dropped tag, a
+// reopened formatting element), such a rule may match it differently
+// there. The user-agent sheet's such rules (nobr wbr, select option) only
+// set collapsing values and do not count.
+func WhiteSpaceDependsOnTree(trees []*template.Tree, options WhitespaceOptions) bool {
+	for _, rule := range authorRules(trees, options) {
+		if !slices.ContainsFunc(rule.declarations, func(d cssDeclaration) bool { return d.property == propertyWhiteSpace }) {
+			continue
+		}
+		if rule.anyElement || slices.ContainsFunc(rule.selectors, func(sel ruleSelector) bool { return selectorDependsOnTree(sel.query) }) {
+			return true
+		}
+	}
+	return false
+}
+
+// treePseudoClasses are the pseudo-classes whose match depends on other
+// elements than the one matched.
+var treePseudoClasses = []string{
+	":not(", ":has(", ":nth-", ":first-child", ":last-child", ":only-child",
+	":first-of-type", ":last-of-type", ":only-of-type", ":empty", ":root", ":scope",
+}
+
+// selectorDependsOnTree reports whether query, a selector with its
+// nesting resolved, has a combinator or a pseudo-class of
+// treePseudoClasses, at any depth (inside :is and :where too). Attribute
+// selectors and strings are skipped; a selector list's commas and the
+// space around them and around parentheses are no combinators.
+func selectorDependsOnTree(query string) bool {
+	var sb strings.Builder
+	quote := byte(0)
+	brackets := 0
+	for i := 0; i < len(query); i++ {
+		ch := query[i]
+		switch {
+		case quote != 0:
+			if ch == '\\' {
+				i++
+			} else if ch == quote {
+				quote = 0
+			}
+		case ch == '"' || ch == '\'':
+			quote = ch
+		case ch == '[':
+			brackets++
+		case ch == ']':
+			brackets--
+		case brackets > 0:
+		case ch == '\\':
+			sb.WriteByte(ch)
+			if i+1 < len(query) {
+				i++
+				sb.WriteByte(query[i])
+			}
+		default:
+			sb.WriteByte(ch)
+		}
+	}
+	text := strings.ToLower(sb.String())
+	for _, p := range treePseudoClasses {
+		if strings.Contains(text, p) {
+			return true
+		}
+	}
+	if strings.ContainsAny(text, ">+~") {
+		return true
+	}
+	// A space is a descendant combinator unless it is next to a comma
+	// or a parenthesis, or at either end.
+	fields := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == '(' || r == ')' })
+	for _, f := range fields {
+		if len(strings.Fields(f)) > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 // cascade holds the style rules of both origins.
@@ -241,7 +341,15 @@ func oneWhiteSpace(candidates []WhiteSpace, parent WhiteSpace) WhiteSpace {
 
 // attributes returns the declarations of el's style attribute, and reports
 // whether el is opaque: its attributes may change its style in ways the
-// cascade cannot follow.
+// cascade cannot follow. That is a style attribute holding an action, an
+// attribute whose name is an action, or an action in attribute position
+// (which may write a style attribute), or a class or id when the author
+// CSS is not known to be all of it. A class or id whose value is an
+// action, or that sits in a template branch, is not opaque: the selector
+// matcher answers Maybe for the class, id and attribute selectors it
+// could match, so it makes white-space unknown only when a rule
+// declaring white-space (or all) has such a selector, and a class no
+// white-space-declaring rule can match is harmless.
 func (c *cascade) attributes(el *template.HTMLElementNode) ([]cssDeclaration, bool) {
 	var (
 		style []cssDeclaration
@@ -258,10 +366,7 @@ func (c *cascade) attributes(el *template.HTMLElementNode) ([]cssDeclaration, bo
 			case "":
 				return nil, true
 			case "class":
-				if !isStatic(n.Value) {
-					return nil, true
-				}
-				named = named || attributeHasText(n)
+				named = named || !isStatic(n.Value) || attributeHasText(n)
 			case "id":
 				named = true
 			case "style":
@@ -272,11 +377,11 @@ func (c *cascade) attributes(el *template.HTMLElementNode) ([]cssDeclaration, bo
 				style = decls
 			}
 		case *template.IfNode, *template.RangeNode, *template.WithNode:
-			id, ok := conditionalAttributes(n)
+			conditionalNamed, ok := conditionalAttributes(n)
 			if !ok {
 				return nil, true
 			}
-			named = named || id
+			named = named || conditionalNamed
 		case *template.CommentNode:
 		default:
 			return nil, true
@@ -289,9 +394,10 @@ func (c *cascade) attributes(el *template.HTMLElementNode) ([]cssDeclaration, bo
 }
 
 // conditionalAttributes reports whether the attributes in the branches of n
-// leave the element's style to the cascade (they may not add a class, a
-// style or hidden), and whether they may add an id.
-func conditionalAttributes(n template.Node) (id, ok bool) {
+// leave the element's style to the cascade (they may not add a style
+// attribute or an attribute whose name is an action), and whether they may
+// add a class or an id. A conditional hidden only changes display.
+func conditionalAttributes(n template.Node) (named, ok bool) {
 	var lists []*template.ListNode
 	switch n := n.(type) {
 	case *template.IfNode:
@@ -309,24 +415,24 @@ func conditionalAttributes(n template.Node) (id, ok bool) {
 			switch item := item.(type) {
 			case *template.HTMLAttributeNode:
 				switch strings.ToLower(strings.TrimSpace(staticAttrName(item))) {
-				case "", "class", "style", "hidden":
+				case "", "style":
 					return false, false
-				case "id":
-					id = true
+				case "class", "id":
+					named = true
 				}
 			case *template.IfNode, *template.RangeNode, *template.WithNode:
-				nestedID, nestedOK := conditionalAttributes(item)
+				nestedNamed, nestedOK := conditionalAttributes(item)
 				if !nestedOK {
 					return false, false
 				}
-				id = id || nestedID
+				named = named || nestedNamed
 			case *template.TextNode, *template.CommentNode:
 			default:
 				return false, false
 			}
 		}
 	}
-	return id, true
+	return named, true
 }
 
 func isStatic(nodes []template.Node) bool {
@@ -610,6 +716,7 @@ type cssRule struct {
 type ruleSelector struct {
 	selector    selectors.Selector
 	specificity Specificity
+	query       string // the selector's text, nesting resolved
 }
 
 func (r cssRule) rank(d cssDeclaration, specificity Specificity) rank {
@@ -848,7 +955,7 @@ func (c *ruleCollector) rule(rule *csstree.Rule, ctx ruleContext) {
 			break
 		}
 		specificity := selectorSpecificity(sel, ctx.nesting.specificity)
-		inner.owner = append(inner.owner, ruleSelector{selector: compiled, specificity: specificity})
+		inner.owner = append(inner.owner, ruleSelector{selector: compiled, specificity: specificity, query: query})
 		resolved = append(resolved, query)
 		if inner.nesting.specificity.less(specificity) {
 			inner.nesting.specificity = specificity

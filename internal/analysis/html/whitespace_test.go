@@ -55,7 +55,26 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<div class="c"></div>`, known: true, sheet: `@media print{.c{white-space:pre}}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceUnknown}},
 		{source: `<div class="c"></div>`, known: true, sheet: `.c{display:inline!important}.c{display:block}`, selector: `div`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
 		{source: `<div class="c"></div>`, known: true, sheet: `div.c{display:inline}.c{display:block}`, selector: `div`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
-		{source: `<div {{if .H}}hidden{{end}}></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		// A conditional hidden changes only display.
+		{source: `<div {{if .H}}hidden{{end}}></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		// A dynamic or conditional class or id is left to the selector
+		// matcher: it makes white-space unknown only through a rule that
+		// declares white-space and has a selector it may match.
+		{source: `<div class="{{.C}}"></div>`, known: true, sheet: `.c{display:flex}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="{{.C}}"></div>`, known: true, sheet: `code{white-space:pre}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="{{.C}}"></div>`, known: true, sheet: `.code{white-space:pre}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceUnknown}},
+		{source: `<div class="a {{.C}}"></div>`, known: true, sheet: `[class~=code]{white-space:pre-line}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceUnknown}},
+		{source: `<div id="{{.ID}}"></div>`, known: true, sheet: `#log{white-space:pre}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceUnknown}},
+		{source: `<div id="{{.ID}}"></div>`, known: true, sheet: `.log{white-space:pre}`, selector: `div`, want: Whitespace{DisplayBlock, WhiteSpaceCollapse}},
+		{source: `<div class="{{.C}}"><span></span></div>`, known: true, sheet: `.code span{white-space:pre}`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceUnknown}},
+		{source: `<div {{if .X}}class="c"{{end}}></div>`, known: true, sheet: `.c{display:none}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
+		{source: `<div {{if .X}}class="c"{{end}}></div>`, known: true, sheet: `.c{white-space:pre}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div {{if .X}}style="white-space:pre"{{end}}></div>`, known: true, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div class="{{.C}}"></div>`, known: true, missing: true, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		// all: initial and unset are known; any other value is unknown.
+		{source: `<div class="x"></div>`, known: true, sheet: `.x{all:unset}`, selector: `div`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
+		{source: `<div class="x"></div>`, known: true, sheet: `.x{all:revert}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
+		{source: `<div class="x"></div>`, known: true, sheet: `@media print{.x{all:unset}}`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 		{source: `<pre><span></span></pre>`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpacePreserve}},
 		{source: `<div style="white-space:pre"><span style="white-space:normal"></span></div>`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpacePreserve}},
 		{source: `{{define "x"}}<span></span>{{end}}`, selector: `span`, want: Whitespace{DisplayInline, WhiteSpaceCollapse}},
@@ -197,5 +216,45 @@ func TestComputeWhitespaceMalformedStyle(t *testing.T) {
 				t.Errorf("ComputeWhitespace(%q) classified no element", source)
 			}
 		})
+	}
+}
+
+func TestWhiteSpaceDependsOnTree(t *testing.T) {
+	for _, tt := range []struct {
+		sheet   string
+		missing bool
+		want    bool
+	}{
+		{sheet: ``, want: false},
+		{sheet: `.k{white-space:pre}`, want: false},
+		{sheet: `div.k[data-x="a b > c"]{white-space:pre}`, want: false},
+		{sheet: `.a, .b{white-space:pre}`, want: false},
+		{sheet: `:is(.a, .b){white-space:pre}`, want: false},
+		{sheet: `div:hover{white-space:pre}`, want: false},
+		{sheet: `section > div{display:block}`, want: false},
+		{sheet: `section div{color:red}`, want: false},
+		{sheet: `section > div{white-space:pre}`, want: true},
+		{sheet: `section div{white-space:pre-line}`, want: true},
+		{sheet: `p + div{white-space:pre}`, want: true},
+		{sheet: `p ~ div{white-space-collapse:preserve}`, want: true},
+		{sheet: `div:not(p div){white-space:pre}`, want: true},
+		{sheet: `div:not(.x){white-space:pre}`, want: true},
+		{sheet: `div:has(p){white-space:pre}`, want: true},
+		{sheet: `:is(p .a){white-space:pre}`, want: true},
+		{sheet: `li:nth-child(2){white-space:pre}`, want: true},
+		{sheet: `p:first-child{white-space:pre}`, want: true},
+		{sheet: `p:empty{white-space:pre}`, want: true},
+		{sheet: `:root{white-space:pre}`, want: true},
+		{sheet: `.a{.b &{white-space:pre}}`, want: true},
+		{sheet: `.a{& > .b{all:unset}}`, want: true},
+		{sheet: `@media print{main p{white-space:pre}}`, want: true},
+		{sheet: `{{.Selector}}{white-space:pre}`, want: true},
+		{sheet: ``, missing: true, want: true},
+	} {
+		sheets := []Stylesheet{{Filename: "site.css", Text: tt.sheet}}
+		got := WhiteSpaceDependsOnTree(nil, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true, MissingSheets: tt.missing})
+		if got != tt.want {
+			t.Errorf("WhiteSpaceDependsOnTree(%q, missing %v) = %v, want %v", tt.sheet, tt.missing, got, tt.want)
+		}
 	}
 }

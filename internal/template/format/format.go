@@ -1,10 +1,12 @@
 // Package format reindents Go HTML template source for muxt fmt. It
-// changes only the leading whitespace of lines that already exist,
-// using the syntax tree of muxt's own template parser for depth and the
+// changes only the leading and trailing whitespace of lines that
+// already exist and the number of blank lines in a row, using the
+// syntax tree of muxt's own template parser for depth and the
 // whitespace classifier for which runs the browser lets it change.
 package format
 
 import (
+	"fmt"
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
@@ -45,13 +47,20 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // as text but a browser reads as a tag, or a self-closed HTML element
 // that is not void, is written as it is, or only the define body
 // holding the element when no {{template}} in the tree calls it (see
-// hasUnparsedMarkup and ignoredSelfCloses).
+// hasUnparsedMarkup and ignoredSelfCloses). Should the formatter fail
+// (a bug that Source reports as an error), the node's source is
+// returned as it is.
 func Node(root template.Node, opts ...Option) string {
 	list, ok := root.(*template.ListNode)
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
-	return newFormatter(opts).format(root.String(), root.Start(), list, nil)
+	src := root.String()
+	out, err := newFormatter(opts).format(src, root.Start(), list, nil)
+	if err != nil {
+		return src
+	}
+	return out
 }
 
 func newFormatter(opts []Option) *formatter {
@@ -70,29 +79,32 @@ type formatter struct {
 
 // format reindents src, the source of list starting at position base.
 // dir holds the file's muxt:fmt regions; it is nil for Node.
-func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, dir *directives) string {
+func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
 	whole, bodies := ignoredSelfCloses(list)
 	if whole || hasUnparsedMarkup(list.Nodes) {
-		return src
+		return src, nil
 	}
-	styles := analysis.ComputeWhitespace([]*template.Tree{{Root: list}}, f.whitespace)
-	if unsureMisnested(list, styles) {
-		return src
+	trees := []*template.Tree{{Root: list}}
+	styles := analysis.ComputeWhitespace(trees, f.whitespace)
+	treeSelectors := analysis.WhiteSpaceDependsOnTree(trees, f.whitespace)
+	if unsureMisnested(list, styles, treeSelectors) {
+		return src, nil
 	}
-	unsureReopened(list, styles)
-	unsureParsedElsewhere(list, styles, f.whitespace.Context)
+	unsureReopened(list, styles, treeSelectors)
+	unsureParsedElsewhere(list, styles, f.whitespace.Context, treeSelectors)
 	return newEmitter(src, base, classify(list, styles), bodies, dir).emit(list)
 }
 
 // Source formats a Go HTML template file as Node does, with the same
 // options: it reads the author CSS Styles gives and the file's <style>
-// elements. Only the whitespace after the last line break of a run the
-// browser collapses (or a trim marker removes) changes; every other
-// byte, line breaks included (CR LF stays CR LF), is the source's, so
-// the file's final whitespace and newline are as written. A file with
-// no HTML element is not a page (a plain-text email, a text-only
-// partial), so its whitespace is all preserved and Source returns it
-// unchanged.
+// elements. Only whitespace runs with a line break that the browser
+// collapses (or a trim marker removes) change: their trailing spaces go,
+// two or more blank lines become one (under pre-line every line break
+// stays), and their last line is reindented. Every other byte, line
+// breaks included (CR LF stays CR LF), is the source's, so the file's
+// final newline, or its lack of one, is as written. A file with no HTML
+// element is not a page (a plain-text email, a text-only partial), so
+// its whitespace is all preserved and Source returns it unchanged.
 func Source(filename, src string, opts ...Option) (string, error) {
 	f := newFormatter(opts)
 	tree, err := template.ParseTree(filename, filename, src, nil, lex.Options{
@@ -113,7 +125,11 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	if !hasElement(tree) || dir.startsWithWholeFile(tree.Root) {
 		return src, nil
 	}
-	return f.format(src, 0, tree.Root, dir), nil
+	out, err := f.format(src, 0, tree.Root, dir)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", filename, err)
+	}
+	return out, nil
 }
 
 // ignoredSelfCloses finds the HTML elements that are not void written
@@ -390,8 +406,9 @@ func hasElement(tree *template.Tree) bool {
 	return found
 }
 
-// voidElements are the HTML elements with no content, whose start tag
-// the formatter writes without a slash (as the template parser's list).
+// voidElements are the HTML elements with no content (as the template
+// parser's list). A self-closing slash on any other HTML element outside
+// foreign content is ignored by the browser (ignoredSelfCloses).
 var voidElements = map[string]bool{
 	"area": true, "base": true, "br": true, "col": true, "embed": true,
 	"hr": true, "img": true, "input": true, "link": true, "meta": true, "param": true,
