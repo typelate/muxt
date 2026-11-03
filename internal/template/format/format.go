@@ -212,14 +212,25 @@ func Source(filename, src string, opts ...Option) (string, error) {
 		return "", fmt.Errorf("%s: %w", filename, err)
 	}
 	if out != src {
-		// The printed actions must parse as the source's do, but for
-		// the names the emitter changed, each everywhere it appears.
-		again, err := f.parse(filename, out)
-		if err != nil || !slices.Equal(actionShapes(tree.Root, renamed(f.renames)), actionShapes(again.Root, nil)) {
-			return "", fmt.Errorf("%s: %w", filename, errActionChanged)
+		if err := f.checkReparse(filename, tree, out); err != nil {
+			return "", err
 		}
 	}
 	return out, nil
+}
+
+// checkReparse reports errActionChanged unless out, the formatted source
+// of tree, parses to the same actions: the same shapes but for the
+// names the emitter changed (f.renames), each everywhere it appears,
+// and as many distinct define and block names, so a rename never
+// merges two defines.
+func (f *formatter) checkReparse(filename string, tree *template.Tree, out string) error {
+	again, err := f.parse(filename, out)
+	if err != nil || !slices.Equal(actionShapes(tree.Root, renamed(f.renames)), actionShapes(again.Root, nil)) ||
+		len(definedNames(tree.Root)) != len(definedNames(again.Root)) {
+		return fmt.Errorf("%s: %w", filename, errActionChanged)
+	}
+	return nil
 }
 
 func (f *formatter) parse(filename, src string) (*template.Tree, error) {

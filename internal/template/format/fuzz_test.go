@@ -82,10 +82,11 @@ func FuzzFormatEquivalent(f *testing.F) {
 }
 
 // formatterBug reports whether err is one Source returns for a
-// formatter bug rather than for its input: overlapping edits, or printed
-// actions that do not parse as the source's.
+// formatter bug rather than for its input: overlapping edits, an action
+// it could not read, or printed actions that do not parse as the
+// source's.
 func formatterBug(err error) bool {
-	return errors.Is(err, errOverlappingEdits) || errors.Is(err, errActionChanged)
+	return errors.Is(err, errOverlappingEdits) || errors.Is(err, errActionChanged) || errors.Is(err, errActionUnread)
 }
 
 // checkActionShapes fails t unless output parses to the same actions as

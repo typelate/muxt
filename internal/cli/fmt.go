@@ -276,8 +276,8 @@ func (k keptNames) keep(canonical string) bool { return k.all || k.kept[canonica
 // in a muxt:fmt region say, or because it does not format. A file of
 // the run with such names is formatted first to find them, and the
 // result kept when the names found do not change it. Without a package
-// whose templates are all read (standard input, a file no package
-// embeds, a package that loads with errors), every name is kept.
+// whose templates are all read (standard input, a file outside a Go
+// package, a package that loads with errors), every name is kept.
 func (r *formatRun) namesKept(dir string, all []*formatFile) keptNames {
 	if k, ok := r.names[dir]; ok {
 		return k
