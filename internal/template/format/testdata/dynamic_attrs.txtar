@@ -11,7 +11,7 @@
 <div>
 	a<div {{if .H}}hidden{{end}}></div>b
 	<span class="{{.C}}">
- x </span>
+		x </span>
 	<p style="{{.S}}">
  y
 </p>

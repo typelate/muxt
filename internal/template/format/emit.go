@@ -1,6 +1,8 @@
 package format
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -8,21 +10,23 @@ import (
 	"github.com/typelate/muxt/internal/template/lex"
 )
 
-// emitter reindents a template (v2 spec §3 items 1–4, 8, 9). It writes
-// the source as it is except for the whitespace after the last line
-// break of a run it may reindent, which becomes one tab per depth
-// level. It never joins or splits a line and never edits a token: every
-// byte it writes that is not such a tab is copied from the source, so
-// tokens (actions, trim markers, tag names, void slashes, attribute
-// values) and runs the browser renders are as written by construction.
+// emitter reindents a template (v2 spec §3 items 1–6, 8, 9). It writes
+// the source as it is except for the whitespace of a run it may edit
+// that holds a line break: the run keeps its line breaks, drops the
+// spaces and tabs before them, and ends in one tab per depth level. It
+// never joins or splits a line and never edits a token: every byte it
+// writes that is not such a tab is copied from the source, so tokens
+// (actions, trim markers, tag names, void slashes, attribute values) and
+// runs the browser renders exactly are as written by construction.
 //
-// Which runs it may reindent comes from the classifier (classify): a run
-// the browser collapses (runReflowable, runCollapseOnly), a pre-line run
-// (runPreserveBreaks: its line breaks are kept, only the spaces after
-// the last one change), and a run a trim marker removes (runTrimmed: only
-// its line breaks are kept). A run without a line break is never
-// touched, so a run's kind (empty, spaces, line breaks) never changes.
-// Whitespace between attributes inside a start tag is reindented too.
+// Which runs it may edit comes from the classifier (classify): a run
+// the browser collapses (runCollapse), where two or
+// more blank lines also become one; a pre-line run (runPreserveBreaks),
+// whose line breaks are all kept; and a run a trim marker removes
+// (runTrimmed), treated as a collapsed one. A run without a line break
+// is never touched, so a run's kind (empty, spaces, line breaks) never
+// changes. Whitespace between attributes inside a start tag is
+// reindented too.
 //
 // Depth follows the source's tag structure (§3.3): define bodies at 0;
 // branch bodies one deeper than their keywords; element children one
@@ -72,17 +76,22 @@ func newEmitter(src string, base lex.Pos, cls classes, asWritten map[*template.D
 	return e
 }
 
-// emit returns the source of root with its edits applied.
-func (e *emitter) emit(root *template.ListNode) string {
+// emit returns the source of root with its edits applied. The edits
+// cover disjoint runs by construction; an overlap is a formatter bug,
+// reported as an error rather than written.
+func (e *emitter) emit(root *template.ListNode) (string, error) {
 	// Nothing closes the root: its last run is the end of the file,
-	// which is kept as written (closeDepth -1).
+	// whose last line is kept as written (closeDepth -1).
 	e.list(root, root.Nodes, 0, -1, nil)
-	slices.SortFunc(e.edits, func(a, b edit) int { return a.start - b.start })
+	slices.SortStableFunc(e.edits, func(a, b edit) int { return a.start - b.start })
 	var b strings.Builder
 	b.Grow(len(e.src))
 	at := 0
 	for _, ed := range e.edits {
-		if ed.start < at || e.inVerbatim(ed.start) {
+		if ed.start < at {
+			return "", fmt.Errorf("%w: offset %d", errOverlappingEdits, int(e.base)+ed.start)
+		}
+		if e.inVerbatim(ed.start) {
 			continue
 		}
 		b.WriteString(e.src[at:ed.start])
@@ -90,8 +99,12 @@ func (e *emitter) emit(root *template.ListNode) string {
 		at = ed.end
 	}
 	b.WriteString(e.src[at:])
-	return b.String()
+	return b.String(), nil
 }
+
+// errOverlappingEdits is the error emit returns when two of its edits
+// overlap.
+var errOverlappingEdits = errors.New("format: overlapping whitespace edits")
 
 func (e *emitter) inVerbatim(offset int) bool {
 	for _, span := range e.verbatim {
@@ -187,10 +200,14 @@ func (e *emitter) element(el *template.HTMLElementNode, depth, after int, open [
 		e.list(el, el.Children, inner, depth, nil)
 		return
 	}
-	// The content of an unclosed element runs to its parent's end.
-	var childOpen []openOptional
+	// The content of an unclosed element runs to its parent's end. The
+	// optional-end elements open around it stay open inside it, as far
+	// as the start tags that end them reach past it (reachesPast).
+	childOpen := slices.DeleteFunc(slices.Clone(open), func(o openOptional) bool {
+		return !reachesPast(o.tag, tag)
+	})
 	if _, ok := optionalEndClosers[tag]; ok {
-		childOpen = append(slices.Clone(open), openOptional{tag: tag, depth: depth})
+		childOpen = append(childOpen, openOptional{tag: tag, depth: depth})
 	}
 	e.list(el, el.Children, inner, after, childOpen)
 }
@@ -236,13 +253,16 @@ func elementEnd(el *template.HTMLElementNode) lex.Pos {
 	return end
 }
 
-// reindent records the edit for run g at depth: when g holds a line
-// break and its class lets the formatter change it, the whitespace
-// after its last line break becomes depth tabs. A trimmed run, which
-// never renders, keeps only its line breaks. Every other run, and
-// every run at depth -1, is left as written.
+// reindent records the edit for run g at depth (spec §3 items 2, 5, 6)
+// when g holds a line break and its class lets the formatter change it.
+// The run keeps its line breaks and loses the spaces and tabs before
+// them (trailing whitespace and blank lines' indentation); under
+// collapse, and in a trimmed run, which never renders, at most two line
+// breaks are kept (one blank line). The whitespace after its last line
+// break becomes depth tabs; at depth -1, the end of the file, it is
+// kept as written. Every other run is left as written.
 func (e *emitter) reindent(g gap, depth int) {
-	if g.text == nil || depth < 0 {
+	if g.text == nil {
 		return
 	}
 	run := g.text.Text[g.start:g.end]
@@ -250,30 +270,37 @@ func (e *emitter) reindent(g gap, depth int) {
 	if last < 0 {
 		return
 	}
-	var kept []byte
+	var kept string
 	switch g.class {
-	case runTrimmed:
-		kept = lineBreakBytes(run)
-	case runReflowable, runCollapseOnly, runPreserveBreaks:
-		kept = run[:last]
+	case runTrimmed, runCollapse:
+		kept = lineBreaks(run[:last], 2)
+	case runPreserveBreaks:
+		kept = lineBreaks(run[:last], -1)
 	default:
 		return
+	}
+	indent := string(run[last:])
+	if depth >= 0 {
+		indent = strings.Repeat("\t", depth)
 	}
 	start := int(g.text.Start()-e.base) + g.start
 	end := start + len(run)
 	if start < 0 || end > len(e.src) || e.src[start:end] != string(run) {
 		return // the text is not the source's: leave it
 	}
-	e.edits = append(e.edits, edit{start: start, end: end, text: string(kept) + strings.Repeat("\t", depth)})
+	if text := kept + indent; text != string(run) {
+		e.edits = append(e.edits, edit{start: start, end: end, text: text})
+	}
 }
 
 // startTag reindents the continuation lines of el's start tag (spec §3
 // item 8): the whitespace after the last line break of a run between
-// attributes becomes depth+1 tabs, followed by the spaces the source has
-// after its last tab there (alignment). A > or /> on a line of its own
-// goes at the tag's depth, without alignment. Runs without a line break, attribute values
-// and the slash are as written. A start tag that is not a list of
-// attributes and actions separated by whitespace is as written.
+// attributes becomes depth+1 tabs. When the source indents that line
+// with tabs then spaces, the spaces are kept after the tabs (alignment).
+// A > or /> on a line of its own goes at the tag's depth, without
+// alignment. Runs without a line break, attribute values and the slash
+// are as written. A start tag that is not a list of attributes and
+// actions separated by whitespace is as written.
 func (e *emitter) startTag(el *template.HTMLElementNode, depth int) {
 	from, to := int(el.AttrStart-e.base), int(el.AttrEnd-e.base)
 	if from < 0 || to > len(e.src) || to <= from || e.src[to-1] != '>' {
@@ -319,8 +346,7 @@ func (e *emitter) startTag(el *template.HTMLElementNode, depth int) {
 		}
 		var align string
 		if !r.close {
-			indent := run[last:]
-			align = indent[strings.LastIndexByte(indent, '\t')+1:]
+			align = alignment(run[last:])
 		}
 		e.edits = append(e.edits, edit{start: r.start, end: r.end, text: run[:last] + strings.Repeat("\t", r.depth) + align})
 	}
@@ -341,15 +367,35 @@ func afterLastBreak(run []byte) int {
 	return -1
 }
 
-// lineBreakBytes returns the LF and CR bytes of run, in order.
-func lineBreakBytes(run []byte) []byte {
-	var kept []byte
-	for _, b := range run {
-		if b == '\n' || b == '\r' {
-			kept = append(kept, b)
-		}
+// alignment returns the spaces of indent, a continuation line's
+// indentation, when it is one or more tabs followed by one or more
+// spaces, and "" otherwise.
+func alignment(indent string) string {
+	tabs := strings.TrimLeft(indent, "\t")
+	if len(tabs) == len(indent) || strings.Trim(tabs, " ") != "" {
+		return ""
 	}
-	return kept
+	return tabs
+}
+
+// lineBreaks returns the line breaks of run, in order and as written:
+// CR LF, LF or CR. Its other bytes are dropped. When limit is not
+// negative, only the first limit breaks are kept.
+func lineBreaks(run []byte, limit int) string {
+	var kept strings.Builder
+	for i, n := 0, 0; i < len(run) && n != limit; i++ {
+		switch {
+		case run[i] == '\r' && i+1 < len(run) && run[i+1] == '\n':
+			kept.WriteString("\r\n")
+			i++
+		case run[i] == '\n' || run[i] == '\r':
+			kept.WriteByte(run[i])
+		default:
+			continue
+		}
+		n++
+	}
+	return kept.String()
 }
 
 // impliedEnds closes the open elements a start tag named tag implies the
@@ -376,6 +422,25 @@ func impliedEnd(open, start string) bool {
 		return start != "col" && start != "template"
 	}
 	return closers[start]
+}
+
+// reachesPast reports whether a start tag that implies the end of open
+// (impliedEnd) still does from inside an unclosed element named passed:
+// the HTML parser's loops look past it to reach open (§13.2.6.4.7). An
+// li, dt or dd is reached past any element but a special one other than
+// address, div and p; a p past any but a button-scope barrier; a table
+// part past any but table, template and html (table scope). An option is
+// ended only when it is the current node, so never.
+func reachesPast(open, passed string) bool {
+	switch open {
+	case "li", "dt", "dd":
+		return !specialTags[passed] || passed == "address" || passed == "div" || passed == "p"
+	case "p":
+		return !buttonScopeBarriers[passed]
+	case "option":
+		return false
+	}
+	return passed != "table" && passed != "template" && passed != "html"
 }
 
 func tagSet(tags ...string) map[string]bool {

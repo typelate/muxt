@@ -1,14 +1,13 @@
 package format
 
 // runClass is what the browser does with a whitespace run, and so what
-// the printer may rewrite it to (spec §6.3).
+// the formatter may rewrite it to (v2 spec §2).
 type runClass uint8
 
 const (
 	runPreserved      runClass = iota // emitted byte for byte
 	runTrimmed                        // removed at execution by a trim marker
-	runReflowable                     // touches a certain line edge: any whitespace, or none
-	runCollapseOnly                   // stays empty, one space, or one break plus indentation
+	runCollapse                       // its owner collapses white space: amount free, kind fixed
 	runPreserveBreaks                 // pre-line: spaces or the same number of breaks
 )
 

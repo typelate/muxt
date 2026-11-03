@@ -1,10 +1,14 @@
 package format_test
 
 import (
+	"bytes"
+	htmltemplate "html/template"
 	"testing"
+	textparse "text/template/parse"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template/format"
+	"github.com/typelate/muxt/internal/template/format/internal/rendering"
 )
 
 // TestEmit pins the reindent-only emitter (v2 spec §3 items 1–4, 8, 9):
@@ -155,9 +159,53 @@ func TestEmit(t *testing.T) {
 			src:  "{{define \"a\"}}\n<p>a</p>\n{{end}}\n\n{{define \"b\"}}\n<p>b</p>\n{{end}}\n{{/* doc */ -}}\n{{define \"c\"}}\n<p>c</p>\n{{end}}\n",
 		},
 		{
-			name: "blank line count is exact in this task",
+			name: "blank lines collapse to one in collapse mode",
 			src:  "<div>\n\n\n<p>x</p>\n</div>",
-			want: "<div>\n\n\n\t<p>x</p>\n</div>",
+			want: "<div>\n\n\t<p>x</p>\n</div>",
+		},
+		{
+			name: "blank lines before a doc comment collapse to one",
+			src:  "<p></p>{{define \"a\"}}<p>a</p>{{end}}\n\n\n{{/* doc */ -}}\n{{define \"b\"}}<p>b</p>{{end}}",
+			want: "<p></p>{{define \"a\"}}<p>a</p>{{end}}\n\n{{/* doc */ -}}\n{{define \"b\"}}<p>b</p>{{end}}",
+		},
+		{
+			name: "blank lines in prose collapse to one",
+			src:  "<p>a\n\n\nb</p>",
+			want: "<p>a\n\n\tb</p>",
+		},
+		{
+			name: "blank lines with spaces collapse to one empty line",
+			src:  "<p>a\n  \n\t\n \nb</p>",
+			want: "<p>a\n\n\tb</p>",
+		},
+		{
+			name: "blank CRLF lines collapse to one",
+			src:  "<div>\r\n\r\n\r\n<p>x</p>\r\n</div>",
+			want: "<div>\r\n\r\n\t<p>x</p>\r\n</div>",
+		},
+		{
+			name: "one blank line is never removed",
+			src:  "<div>\n<p>x</p>\n\n</div>",
+			want: "<div>\n\t<p>x</p>\n\n</div>",
+		},
+		{
+			name: "blank lines in a trimmed run collapse to one",
+			src:  "<div>\n{{- .A}}\n\n\n{{- .B}}\n</div>",
+			want: "<div>\n\t{{- .A}}\n\n\t{{- .B}}\n</div>",
+		},
+		{
+			name: "blank lines under pre-line are exact",
+			src:  "<div style=\"white-space:pre-line\">a\n\n\n\t\tb</div>",
+			want: "<div style=\"white-space:pre-line\">a\n\n\n\tb</div>",
+		},
+		{
+			name: "blank lines inside pre are exact",
+			src:  "<pre>a\n\n\nb</pre>",
+		},
+		{
+			name: "final blank lines collapse to one",
+			src:  "<p>x</p>\n\n\n",
+			want: "<p>x</p>\n\n",
 		},
 		// L5: no token edits.
 		{name: "L5 backtick block name", src: "<div>{{block `a b` .}}x{{end}}</div>"},
@@ -181,6 +229,31 @@ func TestEmit(t *testing.T) {
 			name: "li with a nested list",
 			src:  "<ul>\n<li>a\n<ul>\n<li>b\n</ul>\n<li>c\n</ul>",
 			want: "<ul>\n\t<li>a\n\t\t<ul>\n\t\t\t<li>b\n\t\t</ul>\n\t<li>c\n</ul>",
+		},
+		{
+			name: "unclosed span does not block an implied li end",
+			src:  "<ul>\n<li>a<span>b\n<li>c\n</ul>",
+			want: "<ul>\n\t<li>a<span>b\n\t<li>c\n</ul>",
+		},
+		{
+			name: "unclosed span does not block an implied p end",
+			src:  "<div>\n<p>a<span>b\n<p>c\n</div>",
+			want: "<div>\n\t<p>a<span>b\n\t<p>c\n</div>",
+		},
+		{
+			name: "unclosed div does not block an implied li end",
+			src:  "<ul>\n<li>a<div>b\n<li>c\n</ul>",
+			want: "<ul>\n\t<li>a<div>b\n\t<li>c\n</ul>",
+		},
+		{
+			name: "unclosed section blocks an implied li end",
+			src:  "<ul>\n<li>a<section>b\n<li>c\n</ul>",
+			want: "<ul>\n\t<li>a<section>b\n\t\t\t<li>c\n</ul>",
+		},
+		{
+			name: "unclosed span blocks an implied option end",
+			src:  "<select>\n<option>a<span>b\n<option>c\n</select>",
+			want: "<select>\n\t<option>a<span>b\n\t\t\t<option>c\n</select>",
 		},
 		{
 			name: "dt and dd",
@@ -220,6 +293,16 @@ func TestEmit(t *testing.T) {
 			src:  "<div>\n    <pre>\nx\n</pre>\n    </div>",
 			want: "<div>\n    <pre>\nx\n</pre>\n</div>",
 		},
+		{
+			name: "textarea on one line is reindented",
+			src:  "<form>\n    <textarea>x  </textarea>\n</form>",
+			want: "<form>\n\t<textarea>x  </textarea>\n</form>",
+		},
+		{
+			name: "textarea over several lines left whole",
+			src:  "<form>\n    <textarea>\nx  \n</textarea>\n    </form>",
+			want: "<form>\n    <textarea>\nx  \n</textarea>\n</form>",
+		},
 		{name: "script left whole", src: "<body>\n  <script>\n  var x = 1;\n</script>\n</body>"},
 		{
 			name: "pre-line keeps every line break",
@@ -256,6 +339,16 @@ func TestEmit(t *testing.T) {
 			src:  "<div>\n<a\n\thref=\"x\"\n    >z</a>\n</div>",
 			want: "<div>\n\t<a\n\t\thref=\"x\"\n\t>z</a>\n</div>",
 		},
+		{
+			name: "attribute continuation indented with spaces only gets tabs",
+			src:  "<div>\n<a href=\"x\"\n    title=\"y\">z</a>\n</div>",
+			want: "<div>\n\t<a href=\"x\"\n\t\ttitle=\"y\">z</a>\n</div>",
+		},
+		{
+			name: "attribute continuation with mixed indent gets tabs",
+			src:  "<div>\n<a href=\"x\"\n\t \ttitle=\"y\">z</a>\n</div>",
+			want: "<div>\n\t<a href=\"x\"\n\t\ttitle=\"y\">z</a>\n</div>",
+		},
 		{name: "attribute spacing on one line as written", src: "<a  href=\"x\"   class=\"y\" >z</a>"},
 		{
 			name: "attribute value line break exact",
@@ -274,10 +367,39 @@ func TestEmit(t *testing.T) {
 			want: "<div>\r\t<p>x</p>\r</div>",
 		},
 		{
-			name: "trailing spaces before a break kept in this task",
-			src:  "<div>  \n<p>x</p>\n</div>",
-			want: "<div>  \n\t<p>x</p>\n</div>",
+			name: "trailing spaces before a break stripped",
+			src:  "<div>  \n<p>x</p>\t\n</div>",
+			want: "<div>\n\t<p>x</p>\n</div>",
 		},
+		{
+			name: "trailing spaces in prose stripped",
+			src:  "<p>x  \ny</p>",
+			want: "<p>x\n\ty</p>",
+		},
+		{
+			name: "trailing spaces before CRLF stripped",
+			src:  "<div> \r\n<p>x</p>\r\n</div>",
+			want: "<div>\r\n\t<p>x</p>\r\n</div>",
+		},
+		{
+			name: "trailing spaces under pre-line stripped",
+			src:  "<div style=\"white-space:pre-line\">a  \n\tb</div>",
+			want: "<div style=\"white-space:pre-line\">a\n\tb</div>",
+		},
+		{
+			name: "trailing spaces in a trimmed run stripped",
+			src:  "<div>\n{{- .A}}  \n{{- .B}}\n</div>",
+			want: "<div>\n\t{{- .A}}\n\t{{- .B}}\n</div>",
+		},
+		{name: "trailing spaces inside pre exact", src: "<pre>x  \ny</pre>"},
+		{name: "trailing spaces before a comment have no break to strip", src: "<p>x\t{{/*\n*/}}y</p>"},
+		{name: "trailing spaces in an attribute value exact", src: "<p title=\"a  \nb\">x</p>"},
+		{
+			name: "trailing spaces on the last line stripped",
+			src:  "<p>x</p>  \n",
+			want: "<p>x</p>\n",
+		},
+		{name: "trailing spaces without a final newline kept", src: "<p>x</p>  "},
 		{name: "no final newline", src: "<p>x</p>"},
 		{name: "final blank lines kept", src: "<p>x</p>\n\n"},
 		{
@@ -337,6 +459,68 @@ func TestEmit(t *testing.T) {
 			if again != got {
 				t.Errorf("not idempotent: Source(%q) = %q", got, again)
 			}
+			var sheets []analysis.Stylesheet
+			if tt.css != "" {
+				sheets = []analysis.Stylesheet{{Filename: "a.css", Text: tt.css}}
+			}
+			checkRendering(t, tt.src, got, tt.left, tt.right, sheets)
 		})
 	}
+}
+
+// checkRendering is the rendering oracle (the one FuzzFormatEquivalent
+// runs) for one emit row: every template of src and of out, executed
+// with each fuzz dot, renders the same page. A template the input
+// cannot execute, or whose page the oracle cannot read, is skipped.
+func checkRendering(t *testing.T, src, out, left, right string, sheets []analysis.Stylesheet) {
+	t.Helper()
+	parse := func(text string) *htmltemplate.Template {
+		tmpl, err := htmltemplate.New("t.gohtml").Delims(left, right).Parse(text)
+		if err != nil {
+			t.Fatalf("html/template parse: %v\n%q", err, text)
+		}
+		return tmpl
+	}
+	in, formatted := parse(src), parse(out)
+	for _, tmpl := range in.Templates() {
+		name := tmpl.Name()
+		if tmpl.Tree == nil || textparse.IsEmptyTree(tmpl.Tree.Root) {
+			continue
+		}
+		for _, dot := range []map[string]any{
+			{},
+			{"Show": true, "X": "x", "Items": []any{"a", "b"}, "A": true, "B": true, "L": []any{"a", "b"}, "State": "clean"},
+		} {
+			want, err := execute(in, name, dot)
+			if err != nil {
+				continue
+			}
+			if _, err := rendering.Tokens(want, rendering.Body, sheets); err != nil {
+				continue
+			}
+			got, err := execute(formatted, name, dot)
+			if err != nil {
+				t.Fatalf("output template %q does not execute with %v: %v", name, dot, err)
+			}
+			diff, err := rendering.Diff(want, got, rendering.Body, sheets)
+			if err != nil {
+				t.Fatalf("rendering.Diff of %q with %v: %v", name, dot, err)
+			}
+			if diff != "" {
+				t.Errorf("rendering of %q changed with %v: %s\ninput rendered:  %q\noutput rendered: %q", name, dot, diff, want, got)
+			}
+		}
+	}
+}
+
+func execute(tmpl *htmltemplate.Template, name string, dot map[string]any) (string, error) {
+	clone, err := tmpl.Clone()
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := clone.ExecuteTemplate(&buf, name, dot); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

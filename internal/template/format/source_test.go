@@ -13,7 +13,7 @@ func TestSource(t *testing.T) {
 		{"no trailing newline", "<p>hi</p>", "<p>hi</p>"},
 		{"one trailing newline", "<p>hi</p>\n", "<p>hi</p>\n"},
 		{"two trailing newlines", "<p>hi</p>\n\n", "<p>hi</p>\n\n"},
-		{"extra trailing spaces", "<p>hi</p>  \n", "<p>hi</p>  \n"},
+		{"trailing spaces stripped", "<p>hi</p>  \n", "<p>hi</p>\n"},
 		{"empty", "", ""},
 		{"trim marker inside pre kept", "<pre>a{{- .X}}</pre>", "<pre>a{{- .X}}</pre>"},
 		{"unneeded trim marker kept", "<p>a{{- .X}}</p>", "<p>a{{- .X}}</p>"},

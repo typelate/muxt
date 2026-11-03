@@ -381,19 +381,24 @@ func TestAttributesAndCRLF(t *testing.T) {
 			want:  `<a href="https://example.com/` + strings.Repeat("a", 92) + `">x</a>`,
 		},
 		{
-			name:  "continuation lines take one tab past the tag and keep alignment spaces",
+			name:  "continuation lines take one tab past the tag",
 			input: "<input type=\"text\"\n    name=\"x\"\nrequired>",
+			want:  "<input type=\"text\"\n\tname=\"x\"\n\trequired>",
+		},
+		{
+			name:  "continuation lines keep alignment spaces after tabs",
+			input: "<input type=\"text\"\n\t\t    name=\"x\"\nrequired>",
 			want:  "<input type=\"text\"\n\t    name=\"x\"\n\trequired>",
 		},
 		{
 			name:  "attribute list re-indented one tab deeper than its tag",
 			input: "<div>\n<p>\n<input type=\"text\"\n      name=\"x\"\n  required>\n</p>\n</div>",
-			want:  "<div>\n\t<p>\n\t\t<input type=\"text\"\n\t\t\t      name=\"x\"\n\t\t\t  required>\n\t</p>\n</div>",
+			want:  "<div>\n\t<p>\n\t\t<input type=\"text\"\n\t\t\tname=\"x\"\n\t\t\trequired>\n\t</p>\n</div>",
 		},
 		{
 			name:  "closing bracket on its own line stays there",
 			input: "<input\n  type=\"text\"\n  name=\"x\"\n>",
-			want:  "<input\n\t  type=\"text\"\n\t  name=\"x\"\n>",
+			want:  "<input\n\ttype=\"text\"\n\tname=\"x\"\n>",
 		},
 		{
 			name:  "spaces between attributes as written",
@@ -448,12 +453,12 @@ func TestAttributesAndCRLF(t *testing.T) {
 		{
 			name:  "CRLF in a broken attribute list",
 			input: "<input type=\"text\"\r\n  name=\"x\">\r\n",
-			want:  "<input type=\"text\"\r\n\t  name=\"x\">\r\n",
+			want:  "<input type=\"text\"\r\n\tname=\"x\">\r\n",
 		},
 		{
-			name:  "final run kept: three line feeds",
+			name:  "final blank lines collapse to one",
 			input: "<p>a</p>\n\n\n",
-			want:  "<p>a</p>\n\n\n",
+			want:  "<p>a</p>\n\n",
 		},
 		{
 			name:  "final run kept: none",

@@ -33,35 +33,38 @@ type classes struct {
 
 // opaqueTagNames name the elements whose content is emitted from source
 // whatever the CSS says: raw text and RCDATA elements, and the
-// preformatted elements whose content the parser treats specially.
+// preformatted elements whose content the parser treats specially; the
+// SVG text content elements, whose whitespace SVG handles by its own
+// rules (xml:space, and SVG 1.1 deleting line breaks, turn indentation
+// after a line break into a space); and the MathML token elements, whose
+// rendering (mi auto-italic) depends on their exact characters and whose
+// whitespace implementations treat differently.
 var opaqueTagNames = map[string]bool{
 	"pre": true, "listing": true, "xmp": true, "plaintext": true, "textarea": true,
 	"script": true, "style": true, "title": true, "iframe": true,
 	"noembed": true, "noframes": true, "noscript": true,
+	"text": true, "tspan": true, "textpath": true,
+	"mi": true, "mo": true, "mn": true, "ms": true, "mtext": true, "annotation-xml": true,
 }
 
 // classify sorts every whitespace run under root by what the browser does
-// with it (spec §6.3–6.5). A run is reflowable when every item that may
-// render next to it on one side, through control flow, is a certain line
-// edge. When root contains no HTML element the text is not a page, so
+// with it (v2 spec §2). Only white-space decides: a run whose owning
+// element collapses white space may be reindented (runCollapse), a
+// pre-line run keeps its line breaks (runPreserveBreaks), a run a trim
+// marker removes is runTrimmed, and every other run is preserved.
+// Display does not matter: the formatter keeps each run's kind (empty,
+// spaces, line breaks), so whether a run touches a line edge never
+// matters. When root contains no HTML element the text is not a page, so
 // every run is preserved.
 func classify(root *template.ListNode, styles analysis.Whitespaces) classes {
 	c := &classifier{
 		styles: styles,
-		lists:  make(map[template.Node]*childList),
-		places: make(map[template.Node]place),
-		exits:  make(map[*template.RangeNode][]place),
-		target: make(map[template.Node]*template.RangeNode),
-		first:  make(map[template.Node]*memo),
-		last:   make(map[template.Node]*memo),
-		left:   make(map[place]*memo),
-		right:  make(map[place]*memo),
 		out: classes{
 			gaps: make(map[gapKey]gap),
 			runs: make(map[*template.TextNode][]gap),
 		},
 	}
-	c.build(root, root.Nodes, nil, false, analysis.WhiteSpaceCollapse, nil)
+	c.build(root, root.Nodes, nil, false, analysis.WhiteSpaceCollapse, false)
 	for _, l := range c.order {
 		c.classifyList(l)
 	}
@@ -122,108 +125,161 @@ type childList struct {
 	isElse bool          // the else list of owner
 }
 
-// place is the position before item i of l.
-type place struct {
-	l *childList
-	i int
-}
-
-// side is what may render on one side of a point: edge when every item
-// is a certain line edge, unsure when some item is an element whose
-// display is none or unknown, which forbids reflowing a run next to it
-// whatever the other side is.
-type side struct {
-	edge, unsure bool
-}
-
-func (a side) and(b side) side {
-	return side{edge: a.edge && b.edge, unsure: a.unsure || b.unsure}
-}
-
-var (
-	edgeSide   = side{edge: true}
-	opaqueSide = side{}
-	unsureSide = side{unsure: true}
-)
-
-type memo struct {
-	done     bool
-	side     side
-	nullable bool
-}
-
 type classifier struct {
 	styles   analysis.Whitespaces
-	lists    map[template.Node]*childList
 	order    []*childList
-	places   map[template.Node]place               // item → its position
-	exits    map[*template.RangeNode][]place       // break and continue positions
-	target   map[template.Node]*template.RangeNode // break or continue → its range
-	elements bool                                  // the tree has an HTML element
-	first    map[template.Node]*memo
-	last     map[template.Node]*memo
-	left     map[place]*memo
-	right    map[place]*memo
+	elements bool // the tree has an HTML element
 	out      classes
 }
 
-func (c *classifier) build(key template.Node, children []template.Node, owner template.Node, isElse bool, mode analysis.WhiteSpace, loop *template.RangeNode) {
+// build records the child list of key and, below it, of every element,
+// branch, define and block. inSVG reports that the list is SVG content
+// outside a foreignObject.
+func (c *classifier) build(key template.Node, children []template.Node, owner template.Node, isElse bool, mode analysis.WhiteSpace, inSVG bool) {
 	items, gaps := splitChildren(children)
 	l := &childList{key: key, items: items, gaps: gaps, mode: mode, owner: owner, isElse: isElse}
-	c.lists[key] = l
 	c.order = append(c.order, l)
-	for i, item := range items {
-		c.places[item] = place{l, i}
+	for _, item := range items {
 		switch n := item.(type) {
 		case *template.HTMLElementNode:
 			c.elements = true
-			if c.isOpaque(n) {
+			tag := strings.ToLower(n.TagName)
+			svg := inSVG && tag != "foreignobject" || tag == "svg"
+			if c.isOpaque(n, svg) {
 				c.out.opaque = append(c.out.opaque, n)
 				continue
 			}
-			c.build(n, n.Children, n, false, c.styles[n].WhiteSpace, loop)
+			c.build(n, n.Children, n, false, c.styles[n].WhiteSpace, svg)
 		case *template.IfNode:
-			c.buildBranch(&n.BranchNode, n, mode, loop, loop)
+			c.buildBranch(&n.BranchNode, n, mode, inSVG)
 		case *template.WithNode:
-			c.buildBranch(&n.BranchNode, n, mode, loop, loop)
+			c.buildBranch(&n.BranchNode, n, mode, inSVG)
 		case *template.RangeNode:
-			c.buildBranch(&n.BranchNode, n, mode, n, loop)
+			c.buildBranch(&n.BranchNode, n, mode, inSVG)
 		case *template.DefineNode:
-			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, nil)
+			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, false)
 		case *template.BlockNode:
-			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, nil)
-		case *template.BreakNode, *template.ContinueNode:
-			if loop != nil {
-				c.target[n] = loop
-				c.exits[loop] = append(c.exits[loop], place{l, i})
-			}
+			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, false)
 		}
 	}
 }
 
-func (c *classifier) buildBranch(b *template.BranchNode, owner template.Node, mode analysis.WhiteSpace, bodyLoop, elseLoop *template.RangeNode) {
+func (c *classifier) buildBranch(b *template.BranchNode, owner template.Node, mode analysis.WhiteSpace, inSVG bool) {
 	if b.List != nil {
-		c.build(b.List, b.List.Nodes, owner, false, mode, bodyLoop)
+		c.build(b.List, b.List.Nodes, owner, false, mode, inSVG)
 	}
 	if b.ElseList != nil {
-		c.build(b.ElseList, b.ElseList.Nodes, owner, true, mode, elseLoop)
+		c.build(b.ElseList, b.ElseList.Nodes, owner, true, mode, inSVG)
 	}
 }
 
-func (c *classifier) isOpaque(el *template.HTMLElementNode) bool {
-	if opaqueTagNames[strings.ToLower(el.TagName)] {
+// isOpaque reports whether el is written as it is: one of opaqueTagNames;
+// a custom element (a hyphenated name) or another shadow host
+// (isShadowHost), whose slotted text inherits shadow CSS the formatter
+// cannot see; an SVG element with
+// text of its own (svg reports that el is SVG content); or an element
+// whose white-space is preserve or unknown.
+func (c *classifier) isOpaque(el *template.HTMLElementNode, svg bool) bool {
+	tag := strings.ToLower(el.TagName)
+	if opaqueTagNames[tag] || strings.Contains(tag, "-") || isShadowHost(el) || svg && hasText(el) {
 		return true
 	}
 	ws, ok := c.styles[el]
 	return !ok || ws.WhiteSpace == analysis.WhiteSpacePreserve || ws.WhiteSpace == analysis.WhiteSpaceUnknown
 }
 
-func (c *classifier) display(el *template.HTMLElementNode) analysis.Display {
-	ws, ok := c.styles[el]
-	if !ok {
-		return analysis.DisplayUnknown
+// hasAttribute reports whether attrs, an element's attribute list, holds
+// an attribute named name, in a template branch too. An attribute whose
+// name is an action, or an action in attribute position, makes the
+// element's white-space unknown already (analysis.ComputeWhitespace).
+func hasAttribute(attrs []template.Node, name string) bool {
+	for _, n := range attrs {
+		switch n := n.(type) {
+		case *template.HTMLAttributeNode:
+			if n.Namespace != "" {
+				continue
+			}
+			var key strings.Builder
+			for _, k := range n.Key {
+				if text, ok := k.(*template.TextNode); ok {
+					key.Write(text.Text)
+				}
+			}
+			if strings.EqualFold(strings.TrimSpace(key.String()), name) {
+				return true
+			}
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil && hasAttribute(b.List.Nodes, name) || b.ElseList != nil && hasAttribute(b.ElseList.Nodes, name) {
+				return true
+			}
+		}
 	}
-	return ws.Display
+	return false
+}
+
+// isShadowHost reports whether el may get a shadow root, under whose CSS
+// the browser lays out its slotted light-DOM text: a customized built-in
+// element (an is attribute, in a branch too), or the host of a
+// declarative shadow root (a template child with shadowrootmode, or the
+// legacy shadowroot). A template without either is an ordinary template:
+// its contents are cloned into unknown places, and the formatter
+// reindents them as collapsing content (WHATWG rulings).
+func isShadowHost(el *template.HTMLElementNode) bool {
+	if hasAttribute(el.Attr, "is") {
+		return true
+	}
+	var visit func(nodes []template.Node) bool
+	visit = func(nodes []template.Node) bool {
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *template.HTMLDocumentFragmentNode:
+				if visit(n.Children) {
+					return true
+				}
+			case *template.HTMLElementNode:
+				if strings.EqualFold(n.TagName, "template") && (hasAttribute(n.Attr, "shadowrootmode") || hasAttribute(n.Attr, "shadowroot")) {
+					return true
+				}
+			case *template.IfNode, *template.WithNode, *template.RangeNode:
+				b := branchOf(n)
+				if b.List != nil && visit(b.List.Nodes) || b.ElseList != nil && visit(b.ElseList.Nodes) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(el.Children)
+}
+
+// hasText reports whether el has a child, through branches, that may
+// write text: text with content or an action.
+func hasText(el *template.HTMLElementNode) bool {
+	var visit func(nodes []template.Node) bool
+	visit = func(nodes []template.Node) bool {
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *template.HTMLDocumentFragmentNode:
+				if visit(n.Children) {
+					return true
+				}
+			case *template.TextNode:
+				if !isRunOnly(n.Text) {
+					return true
+				}
+			case *template.ActionNode, *template.TemplateNode, *template.BlockNode:
+				return true
+			case *template.IfNode, *template.WithNode, *template.RangeNode:
+				b := branchOf(n)
+				if b.List != nil && visit(b.List.Nodes) || b.ElseList != nil && visit(b.ElseList.Nodes) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(el.Children)
 }
 
 func (c *classifier) classifyList(l *childList) {
@@ -289,7 +345,8 @@ func (c *classifier) gapRun(l *childList, i int) (g gap, leftTouch, rightTouch b
 
 // runClassOf classifies a run of l whose left side, when leftTouch, is
 // the position before item before, and whose right side, when
-// rightTouch, is the position before item after.
+// rightTouch, is the position before item after. Only the white-space of
+// l's owner and the trim markers next to the run decide.
 func (c *classifier) runClassOf(l *childList, before, after int, nonEmpty, leftTouch, rightTouch bool) runClass {
 	switch {
 	case !c.elements:
@@ -301,17 +358,7 @@ func (c *classifier) runClassOf(l *childList, before, after int, nonEmpty, leftT
 	case l.mode != analysis.WhiteSpaceCollapse:
 		return runPreserved
 	}
-	left, right := opaqueSide, opaqueSide
-	if leftTouch {
-		left = c.leftSide(place{l, before})
-	}
-	if rightTouch {
-		right = c.rightSide(place{l, after})
-	}
-	if !left.unsure && !right.unsure && (left.edge || right.edge) {
-		return runReflowable
-	}
-	return runCollapseOnly
+	return runCollapse
 }
 
 // trimmedAfter reports whether a -}} ends what precedes position i of l.
@@ -410,287 +457,10 @@ func trimsRight(n template.Node) bool {
 	return false
 }
 
-// The adjacency functions below answer "what may render next to this
-// point?" Items that render nothing are looked through. Each is memoized;
-// a cycle through control flow (a continue reaching its own range)
-// answers opaque, which only makes runs less reflowable.
-
-// enter returns the memo for key, with ok false when it is being computed
-// already (a cycle).
-func enter[K comparable](m map[K]*memo, key K) (result *memo, ok bool) {
-	if r, seen := m[key]; seen {
-		return r, r.done
-	}
-	r := &memo{}
-	m[key] = r
-	return r, true
-}
-
-// rightSide is what may render after position p.
-func (c *classifier) rightSide(p place) side {
-	r, ok := enter(c.right, p)
-	if !ok {
-		return opaqueSide
-	}
-	if r.done {
-		return r.side
-	}
-	result, nullable := edgeSide, true
-	for _, item := range p.l.items[p.i:] {
-		s, n := c.firstOf(item)
-		result = result.and(s)
-		if !n {
-			nullable = false
-			break
-		}
-	}
-	if nullable {
-		result = result.and(c.endSide(p.l))
-	}
-	*r = memo{done: true, side: result}
-	return result
-}
-
-// leftSide is what may render before position p.
-func (c *classifier) leftSide(p place) side {
-	r, ok := enter(c.left, p)
-	if !ok {
-		return opaqueSide
-	}
-	if r.done {
-		return r.side
-	}
-	result, nullable := edgeSide, true
-	for i := p.i - 1; i >= 0; i-- {
-		s, n := c.lastOf(p.l.items[i])
-		result = result.and(s)
-		if !n {
-			nullable = false
-			break
-		}
-	}
-	if nullable {
-		result = result.and(c.startSide(p.l))
-	}
-	*r = memo{done: true, side: result}
-	return result
-}
-
-// after is the position following item n in its list.
-func (c *classifier) after(n template.Node) place {
-	p := c.places[n]
-	return place{p.l, p.i + 1}
-}
-
-// endSide is what may render after the end of l.
-func (c *classifier) endSide(l *childList) side {
-	switch n := l.owner.(type) {
-	case *template.HTMLElementNode:
-		switch c.display(n) {
-		case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayAtomic:
-			return edgeSide
-		case analysis.DisplayInline, analysis.DisplayContents:
-			return c.rightSide(c.after(n))
-		case analysis.DisplayUnknown:
-			return unsureSide
-		}
-	case *template.IfNode, *template.WithNode:
-		return c.rightSide(c.after(n))
-	case *template.RangeNode:
-		if l.isElse {
-			return c.rightSide(c.after(n))
-		}
-		// The body's end meets the next iteration's start or what
-		// follows the range.
-		next, _ := c.listFirst(l)
-		return next.and(c.rightSide(c.after(n)))
-	}
-	// The tree root or a define or block body (the caller is unknown), or
-	// the inside of an element whose display is none. The inside of an
-	// element whose display is unknown is unsure: it may be inline next
-	// to anything, or the browser may build it elsewhere.
-	return opaqueSide
-}
-
-// startSide is what may render before the start of l.
-func (c *classifier) startSide(l *childList) side {
-	switch n := l.owner.(type) {
-	case *template.HTMLElementNode:
-		switch c.display(n) {
-		case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayAtomic:
-			return edgeSide
-		case analysis.DisplayInline, analysis.DisplayContents:
-			return c.leftSide(c.places[n])
-		case analysis.DisplayUnknown:
-			return unsureSide
-		}
-	case *template.IfNode, *template.WithNode:
-		return c.leftSide(c.places[n])
-	case *template.RangeNode:
-		if l.isElse {
-			return c.leftSide(c.places[n])
-		}
-		// The body's start meets what precedes the range, the previous
-		// iteration's end, or a continue.
-		result, _ := c.listLast(l)
-		result = result.and(c.leftSide(c.places[n]))
-		for _, exit := range c.exits[n] {
-			if _, ok := exit.l.items[exit.i].(*template.ContinueNode); ok {
-				result = result.and(c.leftSide(exit))
-			}
-		}
-		return result
-	}
-	return opaqueSide
-}
-
-func (c *classifier) listFirst(l *childList) (side, bool) {
-	result := edgeSide
-	for _, item := range l.items {
-		s, n := c.firstOf(item)
-		result = result.and(s)
-		if !n {
-			return result, false
-		}
-	}
-	return result, true
-}
-
-func (c *classifier) listLast(l *childList) (side, bool) {
-	result := edgeSide
-	for i := len(l.items) - 1; i >= 0; i-- {
-		s, n := c.lastOf(l.items[i])
-		result = result.and(s)
-		if !n {
-			return result, false
-		}
-	}
-	return result, true
-}
-
-// firstOf is what may render first in n, and whether n may render
-// nothing.
-func (c *classifier) firstOf(n template.Node) (result side, nullable bool) {
-	r, ok := enter(c.first, n)
-	if !ok {
-		return opaqueSide, false
-	}
-	if r.done {
-		return r.side, r.nullable
-	}
-	switch n := n.(type) {
-	case *template.HTMLElementNode:
-		result, nullable = c.elementOutside(n, c.listFirst)
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
-		result, nullable = c.branchEnds(branchOf(n), c.listFirst)
-	case *template.BreakNode:
-		result = opaqueSide
-		if loop := c.target[n]; loop != nil {
-			result = c.rightSide(c.after(loop))
-		}
-	case *template.ContinueNode:
-		result = opaqueSide
-		if loop := c.target[n]; loop != nil {
-			result = c.endSide(c.lists[loop.List])
-		}
-	default:
-		result, nullable = transparent(n)
-	}
-	*r = memo{done: true, side: result, nullable: nullable}
-	return result, nullable
-}
-
-// lastOf is what may render last in n, and whether n may render nothing.
-func (c *classifier) lastOf(n template.Node) (result side, nullable bool) {
-	r, ok := enter(c.last, n)
-	if !ok {
-		return opaqueSide, false
-	}
-	if r.done {
-		return r.side, r.nullable
-	}
-	switch n := n.(type) {
-	case *template.HTMLElementNode:
-		result, nullable = c.elementOutside(n, c.listLast)
-	case *template.IfNode, *template.WithNode:
-		result, nullable = c.branchEnds(branchOf(n), c.listLast)
-	case *template.RangeNode:
-		result, nullable = c.branchEnds(&n.BranchNode, c.listLast)
-		// A break or continue ends the range next to what precedes it.
-		for _, exit := range c.exits[n] {
-			result = result.and(c.leftSide(exit))
-		}
-	case *template.BreakNode, *template.ContinueNode:
-		// Nothing after it in its list renders; the range accounts for
-		// what precedes it.
-		result, nullable = edgeSide, false
-	default:
-		result, nullable = transparent(n)
-	}
-	*r = memo{done: true, side: result, nullable: nullable}
-	return result, nullable
-}
-
-// elementOutside is how el looks from outside: a certain line edge, its
-// children (display: contents), opaque (inline and atomic boxes), or
-// unsure. An element whose display is none or unknown is unsure: a
-// script may show a hidden element, and then it lays out by its own
-// display, so no run next to it may be reflowed.
-func (c *classifier) elementOutside(el *template.HTMLElementNode, ends func(*childList) (side, bool)) (side, bool) {
-	switch c.display(el) {
-	case analysis.DisplayBlock, analysis.DisplayTableInternal, analysis.DisplayNewline:
-		return edgeSide, false
-	case analysis.DisplayInline, analysis.DisplayAtomic:
-		return opaqueSide, false
-	case analysis.DisplayContents:
-		if l, ok := c.lists[el]; ok {
-			return ends(l)
-		}
-		return opaqueSide, false
-	}
-	return unsureSide, false
-}
-
-func (c *classifier) branchEnds(b *template.BranchNode, ends func(*childList) (side, bool)) (side, bool) {
-	result, nullable := edgeSide, true
-	if l, ok := c.lists[b.List]; ok {
-		result, nullable = ends(l)
-	}
-	if b.ElseList == nil {
-		return result, true
-	}
-	if l, ok := c.lists[b.ElseList]; ok {
-		s, n := ends(l)
-		return result.and(s), nullable || n
-	}
-	return result, nullable
-}
-
-// transparent classifies the remaining items: those that render nothing
-// are looked through; text with content, actions, template calls and
-// blocks are opaque. Of the nodes the parser reads as a doctype, only a
-// doctype renders nothing: html/template writes the < of a bogus comment
-// or processing instruction (<!x>, <?x>) as &lt;, so it is text.
-func transparent(n template.Node) (side, bool) {
-	switch n := n.(type) {
-	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode:
-		return edgeSide, true
-	case *template.HTMLDoctypeNode:
-		if isDoctype(n) {
-			return edgeSide, true
-		}
-	case *template.TextNode:
-		if isRunOnly(n.Text) {
-			return edgeSide, true
-		}
-	}
-	return opaqueSide, false
-}
-
 // tableParents names, for each table-part tag, the parent elements in
 // which the HTML parser keeps it. Elsewhere the parser drops the tag
 // (HTML §13.2.6.4.7, "in body": a start tag tr, td, … is a parse error;
-// ignore the token), so the element is no line edge.
+// ignore the token) and builds its children in the parent.
 var tableParents = map[string][]string{
 	"caption":  {"table"},
 	"colgroup": {"table"},
@@ -711,21 +481,68 @@ var tableContexts = map[string]bool{"table": true, "tbody": true, "thead": true,
 
 var keptInTable = map[string]bool{"script": true, "style": true, "template": true}
 
-// unsureParsedElsewhere sets the display of the elements whose box the
-// HTML parser does not build where the template tree puts it to unknown,
-// so the classifier treats them as unsure:
+// misplacement is an element the HTML parser builds, or whose content it
+// builds, under owner instead of where the template tree puts it; owner
+// nil is the tree root or a define or block body, which collapse.
+type misplacement struct {
+	el, owner *template.HTMLElementNode
+}
+
+// whiteSpaceOf is the white-space of el, collapse for nil (the tree root
+// or a define or block body), unknown for an element styles lacks.
+func whiteSpaceOf(styles analysis.Whitespaces, el *template.HTMLElementNode) analysis.WhiteSpace {
+	if el == nil {
+		return analysis.WhiteSpaceCollapse
+	}
+	if ws, ok := styles[el]; ok {
+		return ws.WhiteSpace
+	}
+	return analysis.WhiteSpaceUnknown
+}
+
+// unsure sets the white-space of el to unknown, so the classifier writes
+// it as it is.
+func unsure(styles analysis.Whitespaces, el *template.HTMLElementNode) {
+	if ws, ok := styles[el]; ok {
+		ws.WhiteSpace = analysis.WhiteSpaceUnknown
+		styles[el] = ws
+	}
+}
+
+// unsureParsedElsewhere applies parsedElsewhere: an element whose runs the
+// browser may own by a white-space other than its own is unsure (spec §2:
+// when the candidate owners differ, the most-preserving one wins; unknown
+// is taken for it). Where both collapse, as on most pages, the runs stay
+// reindentable: the formatter changes only amounts, never kinds, so the
+// box the browser builds them next to does not matter. With treeSelectors
+// (analysis.WhiteSpaceDependsOnTree) every such element is unsure: its
+// white-space was matched in the template tree, and a rule whose match
+// depends on the tree may match it differently where the browser puts it.
+func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree, treeSelectors bool) {
+	for _, m := range parsedElsewhere(root, styles, context) {
+		if treeSelectors || whiteSpaceOf(styles, m.el) != whiteSpaceOf(styles, m.owner) {
+			unsure(styles, m.el)
+		}
+	}
+}
+
+// parsedElsewhere finds the elements whose box, or content, the HTML
+// parser does not build where the template tree puts it, each with the
+// element it builds there under:
 //   - a table part whose parent the parser does not keep it in (a table
-//     part at the top of a define or block body has an unknown parent);
+//     part at the top of a define or block body has an unknown parent),
+//     whose children are built in its parent;
 //   - an element foster-parented out of a table context, and the table
 //     elements it is moved out of, since it renders next to the table;
 //     text with content, or an action that may write text, marks the
-//     table elements the same way;
+//     table elements the same way; each is built under the table's
+//     parent;
 //   - an html, head or body element the parser does not build where it
 //     stands: once the document holds content (text, an action, an
 //     element that belongs in the body), and for a second one, the
 //     parser drops the tag and its children are built where it stood
-//     (HTML §13.2.6.4.7). A define or block body is taken to start a
-//     document.
+//     (HTML §13.2.6.4.7), in its parent. A define or block body is
+//     taken to start a document.
 //
 // A {{template}} call or a {{block}} stands for every non-empty body of
 // that name in root and the context trees (the package's other
@@ -736,13 +553,8 @@ var keptInTable = map[string]bool{"script": true, "style": true, "template": tru
 // head, table content in a table context) only when the file's html
 // and body, or the table's parent, certainly collapse white space;
 // otherwise it is taken to write text.
-func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) {
-	unsure := func(el *template.HTMLElementNode) {
-		if ws, ok := styles[el]; ok {
-			ws.Display = analysis.DisplayUnknown
-			styles[el] = ws
-		}
-	}
+func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) []misplacement {
+	var out []misplacement
 	collapses := func(el *template.HTMLElementNode) bool {
 		ws, ok := styles[el]
 		return ok && ws.WhiteSpace == analysis.WhiteSpaceCollapse
@@ -781,9 +593,17 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 	// is the nearest enclosing element, nil at the top of root or a body.
 	var walk func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode)
 	walk = func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode) {
+		// fosterTarget is the element foster-parented content is built
+		// in: the parent of the nearest table.
+		fosterTarget := func() *template.HTMLElementNode {
+			if len(chain) == 0 {
+				return nil
+			}
+			return tableParent[chain[0]]
+		}
 		fosterParented := func() {
 			for _, el := range chain {
-				unsure(el)
+				out = append(out, misplacement{el, fosterTarget()})
 			}
 		}
 		// mayWriteText is an action's effect: it may write text, which
@@ -843,18 +663,18 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 			case *template.HTMLElementNode:
 				tag := strings.ToLower(n.TagName)
 				if !doc.inPlace(tag, parent) {
-					unsure(n)
+					out = append(out, misplacement{n, parentEl})
 					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				}
 				allowed, isPart := tableParents[tag]
 				switch {
 				case isPart && !slices.Contains(allowed, parent):
-					unsure(n)
+					out = append(out, misplacement{n, parentEl})
 					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				case tableContexts[parent] && !isPart && tag != "table" && !keptInTable[tag]:
-					unsure(n)
+					out = append(out, misplacement{n, fosterTarget()})
 					fosterParented()
 				}
 				var inner []*template.HTMLElementNode
@@ -906,6 +726,7 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 		}
 	}
 	walk(root.Nodes, "", nil, nil)
+	return out
 }
 
 // documentElementsCollapse reports whether root holds an html and a body
@@ -1007,18 +828,21 @@ var repairedTags = map[string]bool{
 	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
 }
 
-// unsureMisnested sets the display of the elements the browser builds
-// differently from the template tree to unknown, so the classifier
-// treats them as unsure and leaves the runs next to and inside them as
-// written (collapse-only at most). These are the elements carrying a
+// unsureMisnested finds the elements the browser builds differently from
+// the template tree, whose runs it may own by another element than the
+// template tree does, and makes them unsure (white-space unknown, written
+// as they are) when those candidate owners do not all have the same
+// white-space (spec §2: the most-preserving one wins). Where they all
+// collapse, as on most pages, the runs stay reindentable: the formatter
+// changes only amounts, never kinds. These are the elements carrying a
 // structural diagnostic from analysis.CheckStructure (auto-closed,
 // misnested, foster-parented, nested forms, links and buttons), the list
 // items closesListItem and the tables closesTable finds, and their
 // ancestors up to the element their start tag closes, then on up to the
 // nearest clean block: a block
 // element that carries no diagnostic and that no start tag closes.
-// Whitespace there may land in a reopened formatting element or next to
-// a box the template tree does not have. Every unclosed element is
+// Whitespace there may land in a reopened formatting element or in an
+// element the template tree does not put it in. Every unclosed element is
 // flagged too, an implied end tag (p, li) included: the formatter does
 // not write the closing tag the source leaves out, the browser may end
 // the element before the template tree does, and the template tree runs
@@ -1033,8 +857,11 @@ var repairedTags = map[string]bool{
 // unclosed preformatted element, what follows the p to the end of its
 // parent is the element's content: that parent is written as it is, and
 // at the tree root or in a define or block body unsureMisnested returns
-// true, and the whole tree is written as it is.
-func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs bool) {
+// true, and the whole tree is written as it is. With treeSelectors
+// (analysis.WhiteSpaceDependsOnTree) every flagged element and its group
+// is unsure whatever their white-space: a rule whose match depends on the
+// tree may match them differently in the browser's tree.
+func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, treeSelectors bool) (asIs bool) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
 	for _, d := range analysis.CheckStructure(tree) {
@@ -1129,19 +956,33 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs
 	if len(flagged) == 0 && len(unreadStarts) == 0 {
 		return false
 	}
+	type reach struct {
+		stop  template.Node // the node the reach ends at; nil is the tree root
+		owner *ownerGroup
+	}
 	var (
-		marked []*template.HTMLElementNode
+		groups []*ownerGroup
 		// held are, per element the browser keeps open past its end
-		// in the template tree, the node its reach ends at; nil is the
-		// tree root.
-		held []template.Node
+		// in the template tree, its reach and the group of elements
+		// whose runs it may own.
+		held []reach
 	)
+	// mark starts a group with the ancestors of a flagged element (or of
+	// a start tag read as text) up to the node the marking stops at.
+	mark := func(path []template.Node, closed *template.HTMLElementNode) (*ownerGroup, template.Node) {
+		g := new(ownerGroup)
+		groups = append(groups, g)
+		stop := markMisnestedAncestors(&g.members, path, closed, styles, flagged)
+		g.add(stop)
+		return g, stop
+	}
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
 		if text, ok := n.(*template.TextNode); ok && unreadStarts[text] {
 			if parent := nearestElement(path); parent != nil && parent.Closed && endTagPops[strings.ToLower(parent.TagName)] && !hasUnreadSpecialTag(text.Text) {
 				return // the parent's end tag closes it; the parent is as written
 			}
-			held = append(held, markMisnestedAncestors(&marked, path, nil, styles, flagged))
+			g, stop := mark(path, nil)
+			held = append(held, reach{stop, g})
 			return
 		}
 		el, ok := n.(*template.HTMLElementNode)
@@ -1149,31 +990,30 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces) (asIs
 			return
 		}
 		for _, r := range held {
-			if r == nil || slices.Contains(path, r) {
-				marked = append(marked, el)
-				break
+			if r.stop == nil || slices.Contains(path, r.stop) {
+				r.owner.members = append(r.owner.members, el)
 			}
 		}
 		if !flagged[el.Start()] {
 			return
 		}
-		marked = append(marked, el)
-		stop := markMisnestedAncestors(&marked, path, closes[el], styles, flagged)
+		// el's own content stays el's; its ancestors' may move. el
+		// itself may be matched differently where the browser puts it.
+		g, stop := mark(path, closes[el])
+		if treeSelectors {
+			g.members = append(g.members, el)
+		}
 		if heldOpen(el, path) || closesP[el] && !el.Closed {
-			held = append(held, stop)
+			// What follows el in its reach may be el's content.
+			g.members = append(g.members, el)
+			held = append(held, reach{stop, g})
 		}
 	})
-	for _, el := range marked {
-		if ws, ok := styles[el]; ok {
-			ws.Display = analysis.DisplayUnknown
-			styles[el] = ws
-		}
+	for _, g := range groups {
+		g.settle(styles, treeSelectors)
 	}
 	for _, el := range asWritten {
-		if ws, ok := styles[el]; ok {
-			ws.WhiteSpace = analysis.WhiteSpaceUnknown
-			styles[el] = ws
-		}
+		unsure(styles, el)
 	}
 	return false
 }
@@ -1214,6 +1054,51 @@ func hasUnreadSpecialTag(text []byte) bool {
 		}
 	}
 	return false
+}
+
+// ownerGroup is a set of elements whose runs the browser may build under
+// any one of them, the tree root (or a define or block body) included
+// when root is set.
+type ownerGroup struct {
+	members []*template.HTMLElementNode
+	root    bool
+}
+
+// add puts n, where a marking stopped, in g: an element as a member, any
+// other node (the tree root, a define, block, attribute or comment) as
+// the root, which collapses.
+func (g *ownerGroup) add(n template.Node) {
+	if el, ok := n.(*template.HTMLElementNode); ok {
+		g.members = append(g.members, el)
+		return
+	}
+	g.root = true
+}
+
+// settle makes every member of g unsure when the members (and the root)
+// do not all have the same white-space: a run may then be owned by an
+// element whose white-space differs from the one the template tree
+// gives it. With treeSelectors every member is unsure.
+func (g *ownerGroup) settle(styles analysis.Whitespaces, treeSelectors bool) {
+	if treeSelectors {
+		for _, el := range g.members {
+			unsure(styles, el)
+		}
+		return
+	}
+	modes := make(map[analysis.WhiteSpace]bool)
+	if g.root {
+		modes[analysis.WhiteSpaceCollapse] = true
+	}
+	for _, el := range g.members {
+		modes[whiteSpaceOf(styles, el)] = true
+	}
+	if len(modes) < 2 {
+		return
+	}
+	for _, el := range g.members {
+		unsure(styles, el)
+	}
 }
 
 // markMisnestedAncestors appends to marked the ancestors on path of a
@@ -1303,23 +1188,38 @@ func inRawText(path []template.Node) bool {
 // element inside one is not reconstructed past its end.
 var formattingMarkers = map[string]bool{"td": true, "th": true, "caption": true, "template": true}
 
-// unsureReopened sets the display of the elements that whitespace may
-// reach after an unclosed formatting element (a, b, em, strong, …) to
-// unknown: the element's ancestors and every element after it in
-// document order, up to the end of the nearest formatting marker, define
-// or block body, or the tree root. The browser keeps such an element in
-// its list of active formatting elements past the block that closes it in
-// the template tree, and any text there, a run the formatter writes
-// included, reopens it (HTML §13.2.6.4.7, reconstruct the active
-// formatting elements), so no gap there may take a break it did not have.
-// A formatting start tag the template parser read as text counts too.
-func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
+// unsureReopened makes unsure the elements whose runs may be built
+// inside a reopened unclosed formatting element (a, b, em, strong, …)
+// whose white-space differs from theirs: the element's ancestors and
+// every element after it in document order, up to the end of the nearest
+// formatting marker, define or block body, or the tree root. The browser
+// keeps such an element in its list of active formatting elements past
+// the block that closes it in the template tree, and any text there, a
+// run included, reopens it (HTML §13.2.6.4.7, reconstruct the active
+// formatting elements) as a child of the element the run is in. A
+// formatting start tag the template parser read as text counts too; that
+// element has no computed style, so its white-space is taken as unknown.
+// Where the white-space is the same, as on most pages, the runs stay
+// reindentable: the formatter changes only amounts, never kinds. With
+// treeSelectors (analysis.WhiteSpaceDependsOnTree) every element in the
+// reach is unsure: the clone is matched where the browser puts it.
+func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, treeSelectors bool) {
 	tree := &template.Tree{Root: root}
+	type reopened struct {
+		stop template.Node // where its reach ends; nil is the root
+		mode analysis.WhiteSpace
+	}
 	var (
-		reaches []template.Node // per unclosed formatting element: where its reach ends; nil is the root
+		reaches []reopened // per unclosed formatting element
 		marked  []*template.HTMLElementNode
 	)
+	mark := func(el *template.HTMLElementNode, mode analysis.WhiteSpace) {
+		if treeSelectors || whiteSpaceOf(styles, el) != mode {
+			marked = append(marked, el)
+		}
+	}
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+		var mode analysis.WhiteSpace
 		switch n := n.(type) {
 		case *template.TextNode:
 			// A formatting start tag the parser read as text (<a/x>)
@@ -1327,32 +1227,30 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces) {
 			if inRawText(path) || !hasUnreadFormattingTag(n.Text) {
 				return
 			}
+			mode = analysis.WhiteSpaceUnknown
 		case *template.HTMLElementNode:
 			for _, r := range reaches {
-				if r == nil || slices.Contains(path, r) {
-					marked = append(marked, n)
-					break
+				if r.stop == nil || slices.Contains(path, r.stop) {
+					mark(n, r.mode)
 				}
 			}
 			if n.Closed || n.Void || !template.FormattingElements[strings.ToLower(n.TagName)] {
 				return
 			}
+			mode = whiteSpaceOf(styles, n)
 		default:
 			return
 		}
 		reach := reachOf(path)
-		reaches = append(reaches, reach)
+		reaches = append(reaches, reopened{reach, mode})
 		for i := len(path) - 1; i >= 0 && path[i] != reach; i-- {
 			if p, ok := path[i].(*template.HTMLElementNode); ok {
-				marked = append(marked, p)
+				mark(p, mode)
 			}
 		}
 	})
 	for _, el := range marked {
-		if ws, ok := styles[el]; ok {
-			ws.Display = analysis.DisplayUnknown
-			styles[el] = ws
-		}
+		unsure(styles, el)
 	}
 }
 
