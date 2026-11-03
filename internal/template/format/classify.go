@@ -55,10 +55,19 @@ var opaqueTagNames = map[string]bool{
 // Display does not matter: the formatter keeps each run's kind (empty,
 // spaces, line breaks), so whether a run touches a line edge never
 // matters. When root contains no HTML element the text is not a page, so
-// every run is preserved.
+// every run is preserved. Define and block bodies collapse at their top
+// level; classifyModes gives them their call sites' modes.
 func classify(root *template.ListNode, styles analysis.Whitespaces) classes {
+	return classifyModes(root, styles, nil)
+}
+
+// classifyModes is classify with the top level of each define and block
+// body in the mode modes holds for its name (callSiteModes), collapse
+// for a name it lacks.
+func classifyModes(root *template.ListNode, styles analysis.Whitespaces, modes map[string]rootMode) classes {
 	c := &classifier{
 		styles: styles,
+		modes:  modes,
 		out: classes{
 			gaps: make(map[gapKey]gap),
 			runs: make(map[*template.TextNode][]gap),
@@ -127,6 +136,7 @@ type childList struct {
 
 type classifier struct {
 	styles   analysis.Whitespaces
+	modes    map[string]rootMode // define and block bodies' root modes
 	order    []*childList
 	elements bool // the tree has an HTML element
 	out      classes
@@ -157,9 +167,9 @@ func (c *classifier) build(key template.Node, children []template.Node, owner te
 		case *template.RangeNode:
 			c.buildBranch(&n.BranchNode, n, mode, inSVG)
 		case *template.DefineNode:
-			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, false)
+			c.build(n.Body, n.Body.Nodes, n, false, c.modes[n.Name].whiteSpace(), false)
 		case *template.BlockNode:
-			c.build(n.Body, n.Body.Nodes, n, false, analysis.WhiteSpaceCollapse, false)
+			c.build(n.Body, n.Body.Nodes, n, false, c.modes[n.Name].whiteSpace(), false)
 		}
 	}
 }
@@ -1656,4 +1666,209 @@ func collectDefines(nodes []template.Node, defines map[string][]*template.ListNo
 			record(n.Name, n.Body)
 		}
 	}
+}
+
+// rootMode is the mode of a define or block body's top level, taken from
+// its call sites (WHATWG rulings, define bodies (c)): the most-preserving
+// white-space of the places its output lands, or verbatim when one of
+// them is an attribute value, a start tag, or RCDATA or raw text, where
+// every byte of the body is content. The zero value, collapse, is what a
+// body with no call site in the parse set takes: a define executed from
+// Go (a route), never called, or called from another package.
+type rootMode struct {
+	ws       analysis.WhiteSpace
+	verbatim bool
+}
+
+// or is the more preserving of m and o.
+func (m rootMode) or(o rootMode) rootMode {
+	return rootMode{ws: max(m.ws, o.ws), verbatim: m.verbatim || o.verbatim}
+}
+
+// whiteSpace is the white-space the body's top level and elements
+// inherit: a verbatim body preserves (and its defines are written as
+// they are, verbatimDefines).
+func (m rootMode) whiteSpace() analysis.WhiteSpace {
+	if m.verbatim {
+		return analysis.WhiteSpaceUnknown
+	}
+	return m.ws
+}
+
+// callSiteModes finds the root mode of each define and block name in
+// trees over every {{template}} call and {{block}} of that name in
+// trees, including those inside other bodies, whose own root mode then
+// carries over (transitively). It raises the white-space of each body's
+// elements in styles to its root mode, as inheritance would, which errs
+// toward preserving for an element that sets a less preserving
+// white-space of its own. A site's mode is the white-space of the
+// element it stands in, or its body's root mode at a body's top level
+// (collapse at a tree root); unknown inside a custom element, a shadow
+// host, SVG text content or a MathML token element, whose white-space
+// the formatter cannot see (isOpaque); verbatim in an attribute or in a
+// raw text or RCDATA element. A {{block}} is a call site of its name
+// where it stands, so it governs the defines that override it as well as
+// its own body. Every body takes at least floor: unknown when call
+// sites may be missing (the package's templates could not all be read).
+func callSiteModes(trees []*template.Tree, styles analysis.Whitespaces, floor analysis.WhiteSpace) map[string]rootMode {
+	modes := make(map[string]rootMode)
+	for {
+		w := siteWalk{styles: styles, modes: modes, out: make(map[string]rootMode)}
+		if floor != analysis.WhiteSpaceCollapse {
+			for _, t := range trees {
+				template.Walk(t, func(_ *template.Tree, n template.Node) {
+					switch n := n.(type) {
+					case *template.DefineNode:
+						w.out[n.Name] = rootMode{ws: floor}
+					case *template.BlockNode:
+						w.out[n.Name] = rootMode{ws: floor}
+					}
+				})
+			}
+		}
+		for _, t := range trees {
+			if t != nil && t.Root != nil {
+				w.walk(t.Root.Nodes, siteContext{})
+			}
+		}
+		for _, t := range trees {
+			if t != nil && t.Root != nil {
+				raiseBodies(t.Root.Nodes, analysis.WhiteSpaceCollapse, styles, w.out)
+			}
+		}
+		// Modes and styles only grow toward preserving, so this ends.
+		if maps.Equal(w.out, modes) {
+			return modes
+		}
+		modes = w.out
+	}
+}
+
+// siteContext is where a siteWalk is: the mode a call there has, short
+// of the nearest element's white-space.
+type siteContext struct {
+	floor    analysis.WhiteSpace // the least preserving mode a call here has
+	verbatim bool                // a call here is written into an attribute, raw text or RCDATA
+	el       *template.HTMLElementNode
+	svg      bool // SVG content outside a foreignObject
+}
+
+type siteWalk struct {
+	styles analysis.Whitespaces
+	modes  map[string]rootMode // the root modes found so far
+	out    map[string]rootMode // the root modes this walk finds
+}
+
+func (w *siteWalk) site(name string, ctx siteContext) {
+	m := rootMode{ws: ctx.floor, verbatim: ctx.verbatim}
+	if ctx.el != nil {
+		m.ws = max(m.ws, whiteSpaceOf(w.styles, ctx.el))
+	}
+	w.out[name] = w.out[name].or(m)
+}
+
+// body walks the body of the define or block name from its own top.
+func (w *siteWalk) body(name string, body *template.ListNode) {
+	if body == nil {
+		return
+	}
+	m := w.modes[name]
+	w.walk(body.Nodes, siteContext{floor: m.whiteSpace(), verbatim: m.verbatim})
+}
+
+func (w *siteWalk) walk(nodes []template.Node, ctx siteContext) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.ListNode:
+			if n != nil {
+				w.walk(n.Nodes, ctx)
+			}
+		case *template.HTMLDocumentFragmentNode:
+			w.walk(n.Children, ctx)
+		case *template.HTMLAttributeNode:
+			w.walk(n.Key, ctx)
+			w.walk(n.Value, ctx)
+		case *template.HTMLElementNode:
+			attrs := ctx
+			attrs.verbatim = true
+			w.walk(n.Attr, attrs)
+			tag := strings.ToLower(n.TagName)
+			inner := ctx
+			inner.el = n
+			inner.svg = ctx.svg && tag != "foreignobject" || tag == "svg"
+			switch {
+			case rawTextTags[tag]:
+				inner.verbatim = true
+			case opaqueTagNames[tag] || strings.Contains(tag, "-") || isShadowHost(n) || inner.svg && hasText(n):
+				inner.floor = analysis.WhiteSpaceUnknown
+			}
+			w.walk(n.Children, inner)
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil {
+				w.walk(b.List.Nodes, ctx)
+			}
+			if b.ElseList != nil {
+				w.walk(b.ElseList.Nodes, ctx)
+			}
+		case *template.TemplateNode:
+			w.site(n.Name, ctx)
+		case *template.DefineNode:
+			w.body(n.Name, n.Body)
+		case *template.BlockNode:
+			w.site(n.Name, ctx)
+			w.body(n.Name, n.Body)
+		}
+	}
+}
+
+// raiseBodies raises the white-space of the elements in nodes, which
+// inherit ws, and in the define and block bodies there, which inherit
+// their root modes, to at least that.
+func raiseBodies(nodes []template.Node, ws analysis.WhiteSpace, styles analysis.Whitespaces, modes map[string]rootMode) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.ListNode:
+			if n != nil {
+				raiseBodies(n.Nodes, ws, styles, modes)
+			}
+		case *template.HTMLDocumentFragmentNode:
+			raiseBodies(n.Children, ws, styles, modes)
+		case *template.HTMLAttributeNode:
+			raiseBodies(n.Value, ws, styles, modes)
+		case *template.HTMLElementNode:
+			if s, ok := styles[n]; ok && s.WhiteSpace < ws {
+				s.WhiteSpace = ws
+				styles[n] = s
+			}
+			raiseBodies(n.Attr, ws, styles, modes)
+			raiseBodies(n.Children, ws, styles, modes)
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil {
+				raiseBodies(b.List.Nodes, ws, styles, modes)
+			}
+			if b.ElseList != nil {
+				raiseBodies(b.ElseList.Nodes, ws, styles, modes)
+			}
+		case *template.DefineNode:
+			if n.Body != nil {
+				raiseBodies(n.Body.Nodes, modes[n.Name].whiteSpace(), styles, modes)
+			}
+		case *template.BlockNode:
+			if n.Body != nil {
+				raiseBodies(n.Body.Nodes, modes[n.Name].whiteSpace(), styles, modes)
+			}
+		}
+	}
+}
+
+// verbatimDefines adds to bodies the defines in root whose root mode is
+// verbatim: the emitter writes them as they are.
+func verbatimDefines(root *template.ListNode, modes map[string]rootMode, bodies map[*template.DefineNode]bool) {
+	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+		if d, ok := n.(*template.DefineNode); ok && modes[d.Name].verbatim {
+			bodies[d] = true
+		}
+	})
 }

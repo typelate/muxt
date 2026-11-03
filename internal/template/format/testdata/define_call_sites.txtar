@@ -1,0 +1,97 @@
+Defines with indentation, trailing spaces and a blank-line run, each
+called from one context. A body called from collapse is reindented and
+loses its trailing spaces and extra blank lines; one called from
+pre-line is reindented but keeps every line break (spec §2, WHATWG
+ruling 10: pre-line call sites still allow reindenting); one called from
+pre-wrap, an attribute value or a textarea keeps every byte.
+-- input.gohtml --
+{{define "collapse"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "preline"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "prewrap"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "attr"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "area"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+<div>{{template "collapse" .}}</div>
+<div style="white-space:pre-line">{{template "preline" .}}</div>
+<div style="white-space:pre-wrap">{{template "prewrap" .}}</div>
+<p title="{{template "attr" .}}"></p>
+<textarea>{{template "area" .}}</textarea>
+-- format.gohtml --
+{{define "collapse"}}
+a
+b
+
+c
+{{end}}
+
+{{define "preline"}}
+a
+b
+
+
+c
+{{end}}
+
+{{define "prewrap"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "attr"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+{{define "area"}}
+a  
+		b
+
+
+	c
+{{end}}
+
+<div>{{template "collapse" .}}</div>
+<div style="white-space:pre-line">{{template "preline" .}}</div>
+<div style="white-space:pre-wrap">{{template "prewrap" .}}</div>
+<p title="{{template "attr" .}}"></p>
+<textarea>{{template "area" .}}</textarea>

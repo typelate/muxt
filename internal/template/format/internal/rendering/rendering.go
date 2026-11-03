@@ -259,25 +259,35 @@ func classify(nodes []*html.Node, sheets []analysis.Stylesheet) (map[*html.Node]
 	return styles, nil
 }
 
-// markOpaque makes the white-space of foreign (SVG and MathML) elements,
-// custom elements (a hyphenated name or an is attribute) and everything
-// inside a custom element unknown, so their text compares exactly: SVG
-// text turns indentation after an LF into a space, MathML token
-// elements differ between engines, and slotted text takes shadow CSS
-// the cascade cannot see (WHATWG rulings, "Exceptions").
-func markOpaque(n *html.Node, styles map[*html.Node]analysis.Whitespace, inCustom bool) {
+// markOpaque makes the white-space of SVG text content elements, MathML
+// token elements, custom elements (a hyphenated name or an is
+// attribute), and everything inside them unknown, so their text
+// compares exactly: SVG text turns indentation after an LF into a
+// space, MathML token elements differ between engines, and slotted text
+// takes shadow CSS the cascade cannot see (WHATWG rulings, "Exceptions").
+// Other foreign elements' text is judged like HTML text.
+func markOpaque(n *html.Node, styles map[*html.Node]analysis.Whitespace, inOpaque bool) {
 	if n.Type == html.ElementNode {
-		inCustom = inCustom || isCustomElement(n)
-		if inCustom || n.Namespace == "svg" || n.Namespace == "math" {
+		inOpaque = inOpaque || isCustomElement(n) ||
+			n.Namespace == "svg" && svgText[n.Data] ||
+			n.Namespace == "math" && mathToken[n.Data]
+		if inOpaque {
 			ws := styles[n]
 			ws.WhiteSpace = analysis.WhiteSpaceUnknown
 			styles[n] = ws
 		}
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		markOpaque(c, styles, inCustom)
+		markOpaque(c, styles, inOpaque)
 	}
 }
+
+// svgText are the SVG text content elements (x/net/html lower-cases
+// textPath), mathToken the MathML token elements and annotation-xml.
+var (
+	svgText   = map[string]bool{"text": true, "tspan": true, "textpath": true, "textPath": true}
+	mathToken = map[string]bool{"mi": true, "mo": true, "mn": true, "ms": true, "mtext": true, "annotation-xml": true}
+)
 
 func isCustomElement(n *html.Node) bool {
 	if strings.Contains(n.Data, "-") {

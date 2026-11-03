@@ -1,6 +1,8 @@
 package analysis
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/typelate/muxt/internal/template"
@@ -271,4 +273,96 @@ func TestWhiteSpaceMovedMatcher(t *testing.T) {
 			t.Errorf("WhiteSpaceMovedMatcher(%q, missing %v).MayMatch(div#moved) = %v, want %v", tt.sheet, tt.missing, got, tt.want)
 		}
 	}
+}
+
+// TestComputeWhitespaceAncestry checks author selectors that depend on
+// ancestors: an element of a define or block body has the ancestors of
+// each call site (certain only when every site agrees, maybe with no
+// site); an ancestor opened in a template branch, or whose end tag is in
+// one, may or may not hold what follows, and so may the html and body
+// elements a file without them is implied into.
+func TestComputeWhitespaceAncestry(t *testing.T) {
+	const bubble = `.bubble p{white-space:pre}`
+	for _, test := range []struct {
+		name    string
+		source  string
+		context string
+		sheet   string
+		want    WhiteSpace // of the first p
+	}{
+		{name: "call site matches", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}<div class="bubble">{{template "m"}}</div>`, want: WhiteSpacePreserve},
+		{name: "call site does not match", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}<div class="x">{{template "m"}}</div>`, want: WhiteSpaceCollapse},
+		{name: "call sites disagree", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}<div class="bubble">{{template "m"}}</div><div>{{template "m"}}</div>`, want: WhiteSpaceUnknown},
+		{name: "no call site", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}<div></div>`, want: WhiteSpaceUnknown},
+		{name: "call site in a context template", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}`, context: `<div class="bubble">{{template "m"}}</div>`, want: WhiteSpacePreserve},
+		{name: "through another define", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}{{define "n"}}<b>{{template "m"}}</b>{{end}}<div class="bubble">{{template "n"}}</div>`, want: WhiteSpacePreserve},
+		{name: "child through a call site", sheet: `.bubble>p{white-space:pre}`, source: `{{define "m"}}<p></p>{{end}}<div class="bubble">{{template "m"}}</div>`, want: WhiteSpacePreserve},
+		{name: "child not through a wrapper", sheet: `.bubble>p{white-space:pre}`, source: `{{define "m"}}<p></p>{{end}}<div class="bubble"><b>{{template "m"}}</b></div>`, want: WhiteSpaceCollapse},
+		{name: "recursive call", sheet: bubble, source: `{{define "m"}}<p></p>{{template "m"}}{{end}}<div class="bubble">{{template "m"}}</div>`, want: WhiteSpaceUnknown},
+		{name: "block in place", sheet: bubble, source: `<div class="bubble">{{block "b" .}}<p></p>{{end}}</div>`, want: WhiteSpacePreserve},
+		{name: "ancestor opened in a branch", sheet: bubble, source: `{{if .}}<div class="bubble">{{else}}<div>{{end}}<p></p></div>`, want: WhiteSpaceUnknown},
+		{name: "ancestor opened in a branch before a call", sheet: bubble, source: `{{define "m"}}<p></p>{{end}}{{if .}}<div class="bubble">{{else}}<div>{{end}}{{template "m"}}</div>`, want: WhiteSpaceUnknown},
+		{name: "parent opened in a branch", sheet: `.bubble>p{white-space:pre}`, source: `{{if .}}<div class="bubble">{{end}}<p></p>{{if .}}</div>{{end}}`, want: WhiteSpaceUnknown},
+		{name: "ancestors opened in a branch match nothing", sheet: bubble, source: `{{if .}}<div class="x">{{else}}<div class="y">{{end}}<p></p></div>`, want: WhiteSpaceCollapse},
+		{name: "ancestor closed in a branch", sheet: bubble, source: `<div class="bubble">{{if .}}</div>{{end}}<p></p>`, want: WhiteSpaceUnknown},
+		{name: "a closed ancestor before a branch", sheet: bubble, source: `<div class="bubble">{{if .}}<b>x</b>{{end}}<p></p></div>`, want: WhiteSpacePreserve},
+		{name: "implied body", sheet: `body p{white-space:pre}`, source: `<div><p></p></div>`, want: WhiteSpaceUnknown},
+		{name: "implied body in a define", sheet: `body p{white-space:pre}`, source: `{{define "m"}}<p></p>{{end}}<div>{{template "m"}}</div>`, want: WhiteSpaceUnknown},
+		{name: "body", sheet: `body p{white-space:pre}`, source: `<html><body><div><p></p></div></body></html>`, want: WhiteSpacePreserve},
+		{name: "a class on the implied body", sheet: `.dark p{white-space:pre}`, source: `<div><p></p></div>`, want: WhiteSpaceCollapse},
+		{name: "child of the implied body", sheet: `div>p{white-space:pre}`, source: `<p></p>`, want: WhiteSpaceCollapse},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
+			options := WhitespaceOptions{AuthorCSSKnown: true, Sheets: []Stylesheet{{Filename: "site.css", Text: test.sheet}}}
+			if test.context != "" {
+				options.Context = []*template.Tree{parseWhitespaceTree(t, "c.gohtml", test.context)}
+			}
+			got := ComputeWhitespace(trees, options)[queryElement(t, trees, "p")]
+			if got.WhiteSpace != test.want {
+				t.Errorf("ComputeWhitespace(%q)[p].WhiteSpace = %v, want %v", test.source, got.WhiteSpace, test.want)
+			}
+		})
+	}
+}
+
+// BenchmarkComputeWhitespaceCallSites classifies a file of 50 defines,
+// each of 20 elements nested four deep and called from the 5 defines
+// after it (so the ways up from an element multiply), under 60
+// descendant white-space rules.
+func BenchmarkComputeWhitespaceCallSites(b *testing.B) {
+	trees, options := callSitesBenchmarkInput(b)
+	b.ResetTimer()
+	for range b.N {
+		ComputeWhitespace(trees, options)
+	}
+}
+
+func callSitesBenchmarkInput(tb testing.TB) ([]*template.Tree, WhitespaceOptions) {
+	tb.Helper()
+	const defines, sites = 50, 5
+	var src, css strings.Builder
+	for i := range defines {
+		fmt.Fprintf(&src, `{{define "d%d"}}`, i)
+		for k := range 5 {
+			fmt.Fprintf(&src, `<div class="c%d"><section><article><p>x</p></article></section></div>`, (i+k)%60)
+		}
+		for k := 1; k <= sites && i+k < defines; k++ {
+			if k == 1 {
+				fmt.Fprintf(&src, `<div class="c%d">{{template "d%d"}}</div>`, i%60, i+k)
+			} else {
+				fmt.Fprintf(&src, `{{template "d%d"}}`, i+k)
+			}
+		}
+		src.WriteString(`{{end}}`)
+	}
+	src.WriteString(`<main>{{template "d0"}}</main>`)
+	for r := range 60 {
+		fmt.Fprintf(&css, ".c%d p{white-space:pre}\n", r)
+	}
+	tree, err := template.ParseTree("bench.gohtml", "bench.gohtml", src.String(), nil, lex.NewOptions())
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return []*template.Tree{tree}, WhitespaceOptions{AuthorCSSKnown: true, Sheets: []Stylesheet{{Filename: "site.css", Text: css.String()}}}
 }

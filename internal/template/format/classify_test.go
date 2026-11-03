@@ -3,6 +3,7 @@ package format
 import (
 	"cmp"
 	"fmt"
+	htmltemplate "html/template"
 	"slices"
 	"strings"
 	"testing"
@@ -747,4 +748,292 @@ func TestShadowHosts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDefineCallSiteModes checks that a define body takes the
+// most-preserving mode of its call sites in the parse set (the file and
+// the package's other templates, context), transitively through other
+// define bodies (WHATWG rulings, define bodies (c)): a call from a
+// collapsing element, or none (a define run from Go), reindents; one
+// from pre-line keeps the line-break count; one from a preserving or
+// unknown element keeps the body exact, and so does one in an attribute
+// value, a start tag, RCDATA or raw text. A {{block}}'s site governs the
+// defines that override it, and its own body.
+func TestDefineCallSiteModes(t *testing.T) {
+	const bubble = ".bubble{white-space:pre-wrap}"
+	for _, tt := range []struct {
+		name    string
+		src     string
+		context []string
+		css     string
+		known   bool
+		want    string
+	}{
+		{
+			name:  "pre-wrap element",
+			src:   "{{define \"m\"}}\n hi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n",
+			css:   bubble,
+			known: true,
+			want:  "{{define \"m\"}}\n hi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n",
+		},
+		{
+			name: "attribute value",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<p title=\"{{template \"m\"}}\"></p>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n<p title=\"{{template \"m\"}}\"></p>\n",
+		},
+		{
+			name: "start tag",
+			src:  "{{define \"a\"}}class=\"x\n\t\ty\"\n\t\tid=z{{end}}\n<div {{template \"a\"}}></div>\n",
+			want: "{{define \"a\"}}class=\"x\n\t\ty\"\n\t\tid=z{{end}}\n<div {{template \"a\"}}></div>\n",
+		},
+		{
+			name: "textarea",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<textarea>{{template \"m\"}}</textarea>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n<textarea>{{template \"m\"}}</textarea>\n",
+		},
+		{
+			name: "script",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<script>{{template \"m\"}}</script>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n<script>{{template \"m\"}}</script>\n",
+		},
+		{
+			name: "collapsing element",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<div>{{template \"m\"}}</div>\n",
+			want: "{{define \"m\"}}\nhi\n{{end}}\n<div>{{template \"m\"}}</div>\n",
+		},
+		{
+			name: "no call site (run from Go)",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+			want: "{{define \"m\"}}\nhi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name:  "the most-preserving site wins",
+			src:   "{{define \"m\"}}\n hi\n{{end}}\n<div>{{template \"m\"}}</div>\n<div class=bubble>{{template \"m\"}}</div>\n",
+			css:   bubble,
+			known: true,
+			want:  "{{define \"m\"}}\n hi\n{{end}}\n<div>{{template \"m\"}}</div>\n<div class=bubble>{{template \"m\"}}</div>\n",
+		},
+		{
+			name: "unknown element",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<div class=x>{{template \"m\"}}</div>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n<div class=x>{{template \"m\"}}</div>\n",
+		},
+		{
+			name: "custom element",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n<my-chip>{{template \"m\"}}</my-chip>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n<my-chip>{{template \"m\"}}</my-chip>\n",
+		},
+		{
+			name:    "a block's site governs the define that overrides it",
+			src:     "{{define \"b\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"<div class=bubble>{{block \"b\" .}}x{{end}}</div>"},
+			css:     bubble,
+			known:   true,
+			want:    "{{define \"b\"}}\n hi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name:    "a block in an attribute value makes its define exact",
+			src:     "{{define \"b\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"<p title=\"{{block \"b\" .}}x{{end}}\"></p>"},
+			want:    "{{define \"b\"}}\n hi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name:    "a block in a collapsing element reindents its define",
+			src:     "{{define \"b\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"<div>{{block \"b\" .}}x{{end}}</div>"},
+			want:    "{{define \"b\"}}\nhi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name: "a block's own body in pre-line keeps its line breaks",
+			src:  "<div style=\"white-space:pre-line\">{{block \"b\" .}}a\n\n\n\t\tb{{end}}</div>\n",
+			want: "<div style=\"white-space:pre-line\">{{block \"b\" .}}a\n\n\n\tb{{end}}</div>\n",
+		},
+		{
+			name: "pre-line keeps blank lines",
+			src:  "<div style=\"white-space:pre-line\">{{template \"m\"}}</div>{{define \"m\"}}a\n\n\nb{{end}}",
+			want: "<div style=\"white-space:pre-line\">{{template \"m\"}}</div>{{define \"m\"}}a\n\n\nb{{end}}",
+		},
+		{
+			name: "pre-line still reindents",
+			src:  "<div style=\"white-space:pre-line\">{{template \"m\"}}</div>{{define \"m\"}}a  \n\t\t\tb{{end}}",
+			want: "<div style=\"white-space:pre-line\">{{template \"m\"}}</div>{{define \"m\"}}a\nb{{end}}",
+		},
+		{
+			name: "pre keeps blank lines and trailing spaces",
+			src:  "<pre>{{template \"m\"}}</pre>{{define \"m\"}}a  \n\n\n  b{{end}}",
+			want: "<pre>{{template \"m\"}}</pre>{{define \"m\"}}a  \n\n\n  b{{end}}",
+		},
+		{
+			name: "elements in the body inherit the site's white-space",
+			src:  "{{define \"m\"}}<div>\n\t\t<p>x</p>\n</div>{{end}}\n<div style=\"white-space:pre-wrap\">{{template \"m\"}}</div>\n",
+			want: "{{define \"m\"}}<div>\n\t\t<p>x</p>\n</div>{{end}}\n<div style=\"white-space:pre-wrap\">{{template \"m\"}}</div>\n",
+		},
+		{
+			name: "an element in the body that sets white-space itself under pre-line",
+			src:  "{{define \"m\"}}<div style=\"white-space:normal\">\n\t\t\t<p>x</p>\n</div>{{end}}\n<div style=\"white-space:pre-line\">{{template \"m\"}}</div>\n",
+			want: "{{define \"m\"}}<div style=\"white-space:normal\">\n\t<p>x</p>\n</div>{{end}}\n<div style=\"white-space:pre-line\">{{template \"m\"}}</div>\n",
+		},
+		{
+			name:  "through another define",
+			src:   "{{define \"m\"}}\n hi\n{{end}}\n{{define \"n\"}}{{template \"m\"}}{{end}}\n<div class=bubble>{{template \"n\"}}</div>\n",
+			css:   bubble,
+			known: true,
+			want:  "{{define \"m\"}}\n hi\n{{end}}\n{{define \"n\"}}{{template \"m\"}}{{end}}\n<div class=bubble>{{template \"n\"}}</div>\n",
+		},
+		{
+			name: "through another define in an attribute value",
+			src:  "{{define \"m\"}}\n hi\n{{end}}\n{{define \"n\"}}<b>{{template \"m\"}}</b>{{end}}\n<p title=\"{{template \"n\"}}\"></p>\n",
+			want: "{{define \"m\"}}\n hi\n{{end}}\n{{define \"n\"}}<b>{{template \"m\"}}</b>{{end}}\n<p title=\"{{template \"n\"}}\"></p>\n",
+		},
+		{
+			name:    "from another template of the package",
+			src:     "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"<div class=bubble>{{template \"m\"}}</div>"},
+			css:     bubble,
+			known:   true,
+			want:    "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name:    "through a define of another template of the package",
+			src:     "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"{{define \"n\"}}<b>{{template \"m\"}}</b>{{end}}", "<div class=bubble>{{template \"n\"}}</div>"},
+			css:     bubble,
+			known:   true,
+			want:    "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+		},
+		{
+			name:    "a collapsing site in another template of the package",
+			src:     "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n",
+			context: []string{"<div class=card>{{template \"m\"}}</div>"},
+			css:     bubble,
+			known:   true,
+			want:    "{{define \"m\"}}\nhi\n{{end}}\n<div></div>\n",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			options := analysis.WhitespaceOptions{AuthorCSSKnown: tt.known}
+			if tt.css != "" {
+				options.Sheets = []analysis.Stylesheet{{Filename: "site.css", Text: tt.css}}
+			}
+			for i, src := range tt.context {
+				name := fmt.Sprintf("context%d.gohtml", i)
+				tree, err := template.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
+				if err != nil {
+					t.Fatalf("parse %q: %v", src, err)
+				}
+				options.Context = append(options.Context, tree)
+			}
+			got, err := Source("input.gohtml", tt.src, Styles(options))
+			if err != nil {
+				t.Fatalf("Source(%q): %v", tt.src, err)
+			}
+			if got != tt.want {
+				t.Errorf("Source(%q) =\n%q\nwant\n%q", tt.src, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDefineCallSiteSelectors checks that a white-space rule whose
+// selector depends on the tree (a combinator, a structural, relational
+// or negation pseudo-class) is matched for an element of a define or
+// block body through the body's call sites: a descendant or child
+// combinator against each site's ancestors, anything else as maybe. The
+// oracle renders input and output with the author sheet; a negative row
+// (changed) reindents because no site matches.
+func TestDefineCallSiteSelectors(t *testing.T) {
+	const body = "{{define \"m\"}}<p>\n\t\tx\n\t\ty\n</p>{{end}}\n"
+	for _, tt := range []struct {
+		name    string
+		css     string
+		src     string
+		context []string
+		missing bool
+		changed bool
+		data    any // the dot the pages render with
+	}{
+		{name: "descendant", css: ".bubble p{white-space:pre}", src: body + "<div class=bubble>{{template \"m\"}}</div>\n"},
+		{name: "descendant, site in another template", css: ".bubble p{white-space:pre}", src: body + "<div></div>\n", context: []string{"<div class=bubble>{{template \"m\"}}</div>"}},
+		{name: "child", css: "section>p{white-space:pre}", src: body + "<section>{{template \"m\"}}</section>\n"},
+		{name: "adjacent sibling", css: "h2+p{white-space:pre}", src: body + "<div><h2>t</h2>{{template \"m\"}}</div>\n"},
+		{name: "structural negation", css: "p:not(:last-child){white-space:pre}", src: body + "<div>{{template \"m\"}}<i></i></div>\n"},
+		{name: "has at the site", css: ".bubble:has(p){white-space:pre}", src: body + "<div class=bubble>{{template \"m\"}}</div>\n"},
+		{name: "block in place, descendant", css: ".bubble p{white-space:pre}", src: "<div class=bubble>{{block \"b\" .}}<p>\n\t\tx\n\t\ty\n</p>{{end}}</div>\n"},
+		{name: "block in place, child", css: ".bubble>p{white-space:pre}", src: "<div class=bubble>{{block \"b\" .}}<p>\n\t\tx\n\t\ty\n</p>{{end}}</div>\n"},
+		{name: "define overriding a block", css: ".bubble p{white-space:pre}", src: "{{define \"b\"}}<p>\n\t\tx\n\t\ty\n</p>{{end}}\n<div></div>\n", context: []string{"<div class=bubble>{{block \"b\" .}}{{end}}</div>"}},
+		{name: "a descendant rule no site matches", css: ".other p{white-space:pre}", src: body + "<div class=bubble>{{template \"m\"}}</div>\n", changed: true},
+		{name: "a descendant rule no site in another template matches", css: ".other p{white-space:pre}", src: body + "<div></div>\n", context: []string{"<div class=bubble>{{template \"m\"}}</div>"}, changed: true},
+		{name: "a child rule no site matches", css: "section>p{white-space:pre}", src: body + "<div><section></section>{{template \"m\"}}</div>\n", changed: true},
+		{name: "broken package context", src: "{{define \"m\"}}\n hi\n{{end}}\n<div></div>\n", missing: true},
+		// An ancestor opened in a branch is not the template tree's: it
+		// may or may not hold what follows the branch.
+		{name: "ancestor opened in a branch", css: ".bubble p{white-space:pre}", src: body + "{{if .}}<div class=bubble>{{else}}<div>{{end}}{{template \"m\"}}</div>\n", data: true},
+		{name: "parent opened in a branch", css: ".bubble>p{white-space:pre}", src: body + "{{if .}}<div class=bubble>{{else}}<div>{{end}}{{template \"m\"}}</div>\n", data: true},
+		{name: "conditional wrapper", css: ".bubble p{white-space:pre}", src: body + "{{if .}}<div class=bubble>{{end}}{{template \"m\"}}{{if .}}</div>{{end}}\n", data: true},
+		{name: "ancestor opened in a branch, page element", css: ".bubble p{white-space:pre}", src: "{{if .}}<div class=bubble>{{else}}<div>{{end}}<p>\n\t\tx\n\t\ty\n</p></div>\n", data: true},
+		{name: "conditional wrapper, page element", css: ".bubble p{white-space:pre}", src: "{{if .}}<div class=bubble>{{end}}<p>\n\t\tx\n\t\ty\n</p>{{if .}}</div>{{end}}\n", data: true},
+		{name: "implied body", css: "body p{white-space:pre}", src: "<div><p>\n\t\tx\n\t\ty\n</p></div>\n"},
+		{name: "implied body, define", css: "body p{white-space:pre}", src: body + "<div>{{template \"m\"}}</div>\n"},
+		{name: "a body rule with a body", css: "body p{white-space:pre}", src: "<html><body><div><p>\n\t\tx\n</p></div></body></html>\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			options := analysis.WhitespaceOptions{AuthorCSSKnown: true, MissingSheets: tt.missing}
+			if tt.css != "" {
+				options.Sheets = []analysis.Stylesheet{{Filename: "site.css", Text: tt.css}}
+			}
+			for i, src := range tt.context {
+				name := fmt.Sprintf("context%d.gohtml", i)
+				tree, err := template.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
+				if err != nil {
+					t.Fatalf("parse %q: %v", src, err)
+				}
+				options.Context = append(options.Context, tree)
+			}
+			got, err := Source("input.gohtml", tt.src, Styles(options))
+			if err != nil {
+				t.Fatalf("Source(%q): %v", tt.src, err)
+			}
+			if changed := got != tt.src; changed != tt.changed {
+				t.Errorf("Source(%q) = %q, changed %v, want %v", tt.src, got, changed, tt.changed)
+			}
+			pages := append([]string{tt.src}, tt.context...)
+			for i := range pages {
+				want, err := renderPackage(tt.src, tt.context, i, tt.data)
+				if err != nil {
+					t.Fatalf("render input: %v", err)
+				}
+				out, err := renderPackage(got, tt.context, i, tt.data)
+				if err != nil {
+					t.Fatalf("render output: %v", err)
+				}
+				diff, err := rendering.Diff(want, out, rendering.Body, options.Sheets)
+				if err != nil {
+					t.Fatalf("rendering.Diff: %v", err)
+				}
+				if diff != "" {
+					t.Errorf("Source(%q) = %q changes the rendering of page %d:\n%s", tt.src, got, i, diff)
+				}
+			}
+		})
+	}
+}
+
+// renderPackage executes the top level of page i of src and context
+// (src is page 0) with html/template and dot data, every page's defines
+// in scope.
+func renderPackage(src string, context []string, i int, data any) (string, error) {
+	tmpl := htmltemplate.New("page0")
+	if _, err := tmpl.Parse(src); err != nil {
+		return "", err
+	}
+	for k, c := range context {
+		if _, err := tmpl.New(fmt.Sprintf("page%d", k+1)).Parse(c); err != nil {
+			return "", err
+		}
+	}
+	var b strings.Builder
+	if err := tmpl.ExecuteTemplate(&b, fmt.Sprintf("page%d", i), data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }

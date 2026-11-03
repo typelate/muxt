@@ -128,6 +128,13 @@ func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whites
 	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0, nil)}
 	c.rules = append(c.rules, authorRules(trees, options)...)
 	c.authorVisible = options.AuthorCSSKnown
+	c.sites = callSites(append(slices.Clip(trees), options.Context...))
+	c.segments = make(map[callSite]*segment)
+	c.matches = make(map[compoundAt]selectors.Trit)
+	c.beyond = make(map[beyondKey]selectors.Trit)
+	c.regionCalls = make(map[template.Node]bool)
+	c.fileHas = make(map[template.Node]map[string]bool)
+	c.implied = make(map[string]*template.HTMLElementNode)
 	out := make(Whitespaces)
 	for _, root := range templateRoots(trees) {
 		c.walk(root, WhiteSpaceCollapse, out)
@@ -439,6 +446,16 @@ func splitTopLevel(s string, sep byte) []string {
 type cascade struct {
 	rules         []cssRule
 	authorVisible bool
+	// sites are the nodes that hold each {{template}} call and {{block}},
+	// by name: the logical parents of the define and block bodies of that
+	// name (callSites).
+	sites       map[string][]callSite
+	segments    map[callSite]*segment
+	matches     map[compoundAt]selectors.Trit
+	beyond      map[beyondKey]selectors.Trit
+	regionCalls map[template.Node]bool
+	fileHas     map[template.Node]map[string]bool
+	implied     map[string]*template.HTMLElementNode
 }
 
 func (c *cascade) walk(n template.Node, parent WhiteSpace, out Whitespaces) {
@@ -736,8 +753,11 @@ func (c *cascade) candidates(el *template.HTMLElementNode, attribute []cssDeclar
 			continue
 		}
 		for _, sel := range rule.selectors {
-			ok, trit := sel.selector.Matches(el)
-			if !ok {
+			_, trit := sel.selector.Matches(el)
+			if rule.author {
+				trit = c.acrossCalls(el, sel, trit)
+			}
+			if trit == selectors.TritNo {
 				continue
 			}
 			for _, d := range rule.declarations {
@@ -912,6 +932,7 @@ type ruleSelector struct {
 	selector    selectors.Selector
 	specificity Specificity
 	query       string // the selector's text, nesting resolved
+	across      *acrossCalls
 }
 
 func (r cssRule) rank(d cssDeclaration, specificity Specificity) rank {
@@ -1150,7 +1171,7 @@ func (c *ruleCollector) rule(rule *csstree.Rule, ctx ruleContext) {
 			break
 		}
 		specificity := selectorSpecificity(sel, ctx.nesting.specificity)
-		inner.owner = append(inner.owner, ruleSelector{selector: compiled, specificity: specificity, query: query})
+		inner.owner = append(inner.owner, ruleSelector{selector: compiled, specificity: specificity, query: query, across: compileAcross(query)})
 		resolved = append(resolved, query)
 		if inner.nesting.specificity.less(specificity) {
 			inner.nesting.specificity = specificity
@@ -1452,4 +1473,459 @@ func positionValue(words []string) uint8 {
 		return flowOut
 	}
 	return flowUnknown
+}
+
+// acrossCalls is how a selector is matched for an element whose tree
+// reaches past a define or block boundary. selectors matches in the
+// template tree, where a define or block body is a detached root: its
+// elements have no ancestors or siblings beyond the body, and a
+// {{template}} call or {{block}} contributes no elements to its parent.
+// compileAcross returns nil for a selector that depends on the element
+// alone.
+type acrossCalls struct {
+	// compounds and combinators are an ancestor chain (only descendant
+	// and child combinators, simple compounds), the subject last: it is
+	// matched against the ancestors of each call site.
+	compounds   []selectors.Selector
+	combinators []byte
+	// tree reports a selector that depends on siblings or structure
+	// (+, ~, :has, :nth-child, :not with a combinator, …): it is maybe
+	// for an element near a call, unless necessary, the subject compound
+	// without its pseudo-classes, rules it out.
+	tree         bool
+	necessary    selectors.Selector
+	hasNecessary bool
+}
+
+// compileAcross reads query, a complex selector with its nesting
+// resolved, for acrossCalls.
+func compileAcross(query string) *acrossCalls {
+	if len(splitTopLevel(query, ',')) > 1 {
+		return &acrossCalls{tree: true}
+	}
+	compounds, combinators, groups := splitSelector(query)
+	if len(compounds) == 0 {
+		return &acrossCalls{tree: true}
+	}
+	text := strings.ToLower(query)
+	global := nestedCombinator(groups) || slices.ContainsFunc(globalPseudoClasses, func(p string) bool { return strings.Contains(text, p) })
+	chain := !global && !slices.ContainsFunc(combinators, func(c byte) bool { return c != ' ' && c != '>' })
+	if chain && len(combinators) == 0 {
+		return nil
+	}
+	if chain {
+		var a acrossCalls
+		for _, compound := range compounds {
+			sel, err := selectors.Compile(compound)
+			if err != nil {
+				chain = false
+				break
+			}
+			a.compounds = append(a.compounds, sel)
+		}
+		if chain {
+			a.combinators = combinators
+			return &a
+		}
+	}
+	a := acrossCalls{tree: true}
+	if sel, err := selectors.Compile(withoutPseudoClasses(compounds[len(compounds)-1])); err == nil {
+		a.necessary, a.hasNecessary = sel, true
+	}
+	return &a
+}
+
+// withoutPseudoClasses cuts compound at its first pseudo-class, outside
+// brackets and escapes; what is left is a necessary condition for it.
+func withoutPseudoClasses(compound string) string {
+	brackets := 0
+	for i := 0; i < len(compound); i++ {
+		switch compound[i] {
+		case '\\':
+			i++
+		case '[':
+			brackets++
+		case ']':
+			brackets--
+		case ':':
+			if brackets == 0 {
+				return cmp.Or(compound[:i], "*")
+			}
+		}
+	}
+	return compound
+}
+
+// acrossCalls corrects trit, sel's match for el in the template tree,
+// for el's place in the page (segmentFrom). An ancestor chain is matched
+// against the ways up from el: through each call site of a define or
+// block body it is in (certain only when every site agrees; maybe for a
+// body with no call site in the parse set, run from Go, uncalled or
+// called from another package, or for a recursive call), with an
+// ancestor that may not hold el (opened or closed in a template branch,
+// or the implied html and body of a file without them) matching at most
+// maybe. Any other selector that depends on the tree is maybe for an
+// element of a body, of a page region holding a call, or under such an
+// uncertain ancestor, which may write or move siblings and descendants
+// the template tree lacks.
+func (c *cascade) acrossCalls(el *template.HTMLElementNode, sel ruleSelector, trit selectors.Trit) selectors.Trit {
+	a := sel.across
+	if a == nil || !a.tree && a.compounds == nil {
+		return trit
+	}
+	seg := c.segmentFrom(callSite{node: el, parent: parentOf(el)})
+	if a.tree {
+		if !seg.crossed && !seg.uncertain && !c.regionHasCall(seg.root) {
+			return trit
+		}
+		if a.hasNecessary {
+			if _, t := a.necessary.Matches(el); t == selectors.TritNo {
+				return selectors.TritNo
+			}
+		}
+		return selectors.TritMaybe
+	}
+	if !seg.crossed && !seg.uncertain && !seg.implied {
+		return trit
+	}
+	last := len(a.compounds) - 1
+	subject := c.match(a, last, el)
+	if subject == selectors.TritNo {
+		return selectors.TritNo
+	}
+	return subject.And(c.place(a, last-1, seg, 0))
+}
+
+// compoundAt is compound i of an ancestor chain at an element.
+type compoundAt struct {
+	a  *acrossCalls
+	i  int
+	el *template.HTMLElementNode
+}
+
+func (c *cascade) match(a *acrossCalls, i int, el *template.HTMLElementNode) selectors.Trit {
+	key := compoundAt{a, i, el}
+	if t, ok := c.matches[key]; ok {
+		return t
+	}
+	_, t := a.compounds[i].Matches(el)
+	c.matches[key] = t
+	return t
+}
+
+// place matches a.compounds[:i+1] with compound i at an ancestor of seg
+// from start on: the first one present for a child combinator after it,
+// any one for a descendant combinator.
+func (c *cascade) place(a *acrossCalls, i int, seg *segment, start int) selectors.Trit {
+	at := func(j int) selectors.Trit {
+		t := c.match(a, i, seg.elements[j])
+		if seg.maybe[j] {
+			t = t.And(selectors.TritMaybe)
+		}
+		if t != selectors.TritNo && i > 0 {
+			t = t.And(c.place(a, i-1, seg, j+1))
+		}
+		return t
+	}
+	result := selectors.TritNo
+	if a.combinators[i] == '>' {
+		absent := selectors.TritYes // every ancestor before j may be absent
+		for j := start; j < len(seg.elements) && absent != selectors.TritNo && result != selectors.TritYes; j++ {
+			result = result.Or(absent.And(at(j)))
+			if !seg.maybe[j] {
+				absent = selectors.TritNo
+			}
+			absent = absent.And(selectors.TritMaybe)
+		}
+		if absent != selectors.TritNo && result != selectors.TritYes {
+			result = result.Or(absent.And(c.past(a, i, seg)))
+		}
+		return result
+	}
+	for j := start; j < len(seg.elements) && result != selectors.TritYes; j++ {
+		result = result.Or(at(j))
+	}
+	if result != selectors.TritYes {
+		result = result.Or(c.past(a, i, seg))
+	}
+	return result
+}
+
+// beyondKey is compound i of an ancestor chain placed past a boundary of
+// the body named name.
+type beyondKey struct {
+	a    *acrossCalls
+	i    int
+	name string
+}
+
+// past is place past seg's end: nothing past a tree root; past a body
+// boundary, place over the ways up from each of the body's call sites,
+// yes or no only when they all agree, maybe with none, or for a call
+// the walk is already in (recursion).
+func (c *cascade) past(a *acrossCalls, i int, seg *segment) selectors.Trit {
+	if !seg.crossed {
+		return selectors.TritNo
+	}
+	key := beyondKey{a, i, seg.boundary}
+	if t, ok := c.beyond[key]; ok {
+		return t
+	}
+	c.beyond[key] = selectors.TritMaybe // in progress: a recursive call is maybe
+	sites := c.sites[seg.boundary]
+	result := selectors.TritMaybe
+	for k, site := range sites {
+		t := c.place(a, i, c.segmentFrom(site), 0)
+		switch {
+		case k == 0:
+			result = t
+		case t != result:
+			result = selectors.TritMaybe
+		}
+		if result == selectors.TritMaybe {
+			break
+		}
+	}
+	c.beyond[key] = result
+	return result
+}
+
+// callSite is a node and its parent where the template tree records none
+// (a {{block}}, a detached root, stands where it is written): the start
+// of a way up.
+type callSite struct {
+	node, parent template.Node
+}
+
+// segment is the way up from a node to the first define or block
+// boundary or the tree root: its ancestors, nearest first. maybe[j]
+// reports an ancestor that may not hold the node: one the source leaves
+// unclosed (its end tag in a branch, or missing), one opened in a branch
+// before the node and left open there, or the implied html and body of a
+// file without them.
+type segment struct {
+	elements  []*template.HTMLElementNode
+	maybe     []bool
+	crossed   bool   // the segment ends at a body boundary
+	boundary  string // that body's name
+	uncertain bool   // a maybe ancestor other than an implied one
+	implied   bool   // an implied html or body ends it
+	root      template.Node
+}
+
+func (c *cascade) segmentFrom(start callSite) *segment {
+	if seg, ok := c.segments[start]; ok {
+		return seg
+	}
+	seg := &segment{root: start.node}
+	add := func(el *template.HTMLElementNode, maybe bool) {
+		seg.elements = append(seg.elements, el)
+		seg.maybe = append(seg.maybe, maybe)
+	}
+	child := start.node
+	for p := start.parent; p != nil; child, p = p, parentOf(p) {
+		seg.root = p
+		for _, el := range leakedBefore(p, child) {
+			add(el, true)
+			seg.uncertain = true
+		}
+		switch p := p.(type) {
+		case *template.HTMLElementNode:
+			open := !p.Closed && !p.Void
+			add(p, open)
+			seg.uncertain = seg.uncertain || open
+		case *template.DefineNode:
+			seg.crossed, seg.boundary = true, p.Name
+		case *template.BlockNode:
+			seg.crossed, seg.boundary = true, p.Name
+		}
+		if seg.crossed {
+			break
+		}
+	}
+	if !seg.crossed {
+		for _, tag := range []string{"body", "html"} {
+			if !c.fileHasElement(seg.root, tag) {
+				add(c.impliedElement(tag), true)
+				seg.implied = true
+			}
+		}
+	}
+	c.segments[start] = seg
+	return seg
+}
+
+// leakedBefore returns the elements a template branch before child in
+// container's children leaves open, nearest first: the browser keeps
+// them open past the branch when it renders, so they may hold child.
+func leakedBefore(container, child template.Node) []*template.HTMLElementNode {
+	var children []template.Node
+	switch p := container.(type) {
+	case *template.HTMLElementNode:
+		children = p.Children
+	case *template.ListNode:
+		children = p.Nodes
+	case *template.HTMLDocumentFragmentNode:
+		children = p.Children
+	default:
+		return nil
+	}
+	var leaked []*template.HTMLElementNode
+	for _, n := range children {
+		if n == child {
+			break
+		}
+		if b := branchList(n); b != nil {
+			leakedIn(&leaked, []template.Node{b.List, b.ElseList})
+		}
+	}
+	slices.Reverse(leaked)
+	return leaked
+}
+
+// leakedIn adds the elements nodes leave open, in source order.
+func leakedIn(out *[]*template.HTMLElementNode, nodes []template.Node) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.ListNode:
+			if n != nil {
+				leakedIn(out, n.Nodes)
+			}
+		case *template.HTMLDocumentFragmentNode:
+			leakedIn(out, n.Children)
+		case *template.HTMLElementNode:
+			if !n.Closed && !n.Void {
+				*out = append(*out, n)
+				leakedIn(out, n.Children)
+			}
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchList(n)
+			leakedIn(out, []template.Node{b.List, b.ElseList})
+		}
+	}
+}
+
+func branchList(n template.Node) *template.BranchNode {
+	switch n := n.(type) {
+	case *template.IfNode:
+		return &n.BranchNode
+	case *template.WithNode:
+		return &n.BranchNode
+	case *template.RangeNode:
+		return &n.BranchNode
+	}
+	return nil
+}
+
+// fileHasElement reports whether the file whose root is root has an
+// element named tag, in a define body too.
+func (c *cascade) fileHasElement(root template.Node, tag string) bool {
+	tags, ok := c.fileHas[root]
+	if !ok {
+		tags = make(map[string]bool)
+		if list, isList := root.(*template.ListNode); isList {
+			template.Walk(&template.Tree{Root: list}, func(_ *template.Tree, n template.Node) {
+				if el, isEl := n.(*template.HTMLElementNode); isEl {
+					tags[strings.ToLower(el.TagName)] = true
+				}
+			})
+		}
+		c.fileHas[root] = tags
+	}
+	return tags[tag]
+}
+
+// impliedElement is the html or body element the browser implies around
+// a file without one; it has no attributes.
+func (c *cascade) impliedElement(tag string) *template.HTMLElementNode {
+	if el, ok := c.implied[tag]; ok {
+		return el
+	}
+	el := &template.HTMLElementNode{TagName: tag, Closed: true}
+	c.implied[tag] = el
+	return el
+}
+
+func parentOf(n template.Node) template.Node {
+	if p, ok := n.(interface{ Parent() template.Node }); ok {
+		return p.Parent()
+	}
+	return nil
+}
+
+// regionHasCall reports whether root, the top of a tree, holds a
+// {{template}} call or {{block}} outside define bodies.
+func (c *cascade) regionHasCall(root template.Node) bool {
+	if root == nil {
+		return false
+	}
+	if found, ok := c.regionCalls[root]; ok {
+		return found
+	}
+	if c.regionCalls == nil {
+		c.regionCalls = make(map[template.Node]bool)
+	}
+	found := false
+	walkCallSites(root, nil, func(string, template.Node, template.Node) { found = true }, false)
+	c.regionCalls[root] = found
+	return found
+}
+
+// callSites maps each name to the nodes holding the {{template}} calls
+// and {{block}}s of that name in trees.
+func callSites(trees []*template.Tree) map[string][]callSite {
+	sites := make(map[string][]callSite)
+	seen := make(map[*template.ListNode]bool)
+	for _, t := range trees {
+		if t == nil || t.Root == nil || seen[t.Root] {
+			continue
+		}
+		seen[t.Root] = true
+		walkCallSites(t.Root, nil, func(name string, call, parent template.Node) {
+			sites[name] = append(sites[name], callSite{node: call, parent: parent})
+		}, true)
+	}
+	return sites
+}
+
+// walkCallSites calls fn with each {{template}} call and {{block}} under
+// n, whose parent is parent, and the node holding it; into define bodies
+// only when defines.
+func walkCallSites(n, parent template.Node, fn func(name string, call, parent template.Node), defines bool) {
+	each := func(nodes []template.Node) {
+		for _, child := range nodes {
+			walkCallSites(child, n, fn, defines)
+		}
+	}
+	switch n := n.(type) {
+	case *template.ListNode:
+		if n != nil {
+			each(n.Nodes)
+		}
+	case *template.HTMLDocumentFragmentNode:
+		each(n.Children)
+	case *template.HTMLElementNode:
+		each(n.Attr)
+		each(n.Children)
+	case *template.HTMLAttributeNode:
+		each(n.Key)
+		each(n.Value)
+	case *template.IfNode:
+		each([]template.Node{n.List, n.ElseList})
+	case *template.RangeNode:
+		each([]template.Node{n.List, n.ElseList})
+	case *template.WithNode:
+		each([]template.Node{n.List, n.ElseList})
+	case *template.TemplateNode:
+		fn(n.Name, n, parent)
+	case *template.BlockNode:
+		fn(n.Name, n, parent)
+		if defines {
+			each([]template.Node{n.Body})
+		}
+	case *template.DefineNode:
+		if defines {
+			each([]template.Node{n.Body})
+		}
+	}
 }
