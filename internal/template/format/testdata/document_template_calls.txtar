@@ -1,0 +1,42 @@
+A {{template}} call in the head that writes head tags does not start the
+body, and one in a table section that writes rows is not foster-parented:
+the call stands for the body of the define it resolves to.
+-- input.gohtml --
+{{define "h"}}<meta charset="utf-8">{{end}}
+{{define "r"}}<tr><td>{{.}}</td></tr>{{end}}
+<html>
+<head><title>T</title>{{template "h"}}</head>
+<body>
+<main><h1>x</h1></main>
+<table>
+<tbody>
+{{range .Items}}
+{{template "r" .}}
+{{end}}
+</tbody>
+</table>
+</body>
+</html>
+-- format.gohtml --
+{{define "h"}}<meta charset="utf-8">{{end}}
+
+{{define "r"}}<tr><td>{{.}}</td></tr>{{end}}
+<html>
+	<head><title>T</title>{{template "h"}}</head>
+	<body>
+		<main>
+			<h1>x</h1>
+		</main>
+		<table>
+			<tbody>
+				{{range .Items}}
+					{{template "r" .}}
+					{{end}}
+			</tbody>
+		</table>
+	</body>
+</html>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Items": ["a", "b"], "X": "x"}

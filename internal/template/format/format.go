@@ -91,7 +91,7 @@ func (f *formatter) format(root template.Node) string {
 		return f.sb.String()
 	}
 	unsureReopened(list, f.styles)
-	unsureParsedElsewhere(list, f.styles)
+	unsureParsedElsewhere(list, f.styles, f.whitespace.Context)
 	f.cls = classify(list, f.styles)
 	f.opaque = make(map[template.Node]bool, len(f.cls.opaque))
 	for _, n := range f.cls.opaque {

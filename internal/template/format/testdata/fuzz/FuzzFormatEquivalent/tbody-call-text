@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"r\"}}x{{end}}<table>\n<tbody>\n{{range .Items}}\n{{template \"r\" .}}\n{{end}}\n</tbody>\n</table>")

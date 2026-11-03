@@ -1,6 +1,7 @@
 package format
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -717,36 +718,107 @@ var keptInTable = map[string]bool{"script": true, "style": true, "template": tru
 //     part at the top of a define or block body has an unknown parent);
 //   - an element foster-parented out of a table context, and the table
 //     elements it is moved out of, since it renders next to the table;
-//     text with content, or an action, template call or block that may
-//     write text, marks the table elements the same way;
+//     text with content, or an action that may write text, marks the
+//     table elements the same way;
 //   - an html, head or body element the parser does not build where it
 //     stands: once the document holds content (text, an action, an
 //     element that belongs in the body), and for a second one, the
 //     parser drops the tag and its children are built where it stood
 //     (HTML §13.2.6.4.7). A define or block body is taken to start a
 //     document.
-func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces) {
+//
+// A {{template}} call or a {{block}} stands for every non-empty body of
+// that name in root and the context trees (the package's other
+// templates), a block's own body included, each walked where it is
+// called; the marks of all of them are kept. A recursive call is taken
+// to write text, like an action. A call to a template defined nowhere
+// is taken to write what belongs where it stands (head content in a
+// head, table content in a table context) only when the file's html
+// and body, or the table's parent, certainly collapse white space;
+// otherwise it is taken to write text.
+func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) {
 	unsure := func(el *template.HTMLElementNode) {
 		if ws, ok := styles[el]; ok {
 			ws.Display = analysis.DisplayUnknown
 			styles[el] = ws
 		}
 	}
+	collapses := func(el *template.HTMLElementNode) bool {
+		ws, ok := styles[el]
+		return ok && ws.WhiteSpace == analysis.WhiteSpaceCollapse
+	}
+	// defines are the non-empty bodies each defined name may resolve to,
+	// from root and the context trees (the package's other templates):
+	// which one html/template runs depends on parse order, so a call
+	// stands for every one of them.
+	defines := make(map[string][]*template.ListNode)
+	collectDefines(root.Nodes, defines)
+	for _, tree := range context {
+		if tree != nil && tree.Root != nil {
+			collectDefines(tree.Root.Nodes, defines)
+		}
+	}
+	// A call defined nowhere is taken to write what belongs where it
+	// stands only where guessing wrong cannot change rendering: the
+	// document's html and body (for a call in the head), or the table's
+	// parent (for a call in a table context), collapse white space.
+	documentCollapses := documentElementsCollapse(root, collapses)
+	tableParent := make(map[*template.HTMLElementNode]*template.HTMLElementNode)
+	// calling holds the templates whose body the walk is in, so a
+	// recursive call stops; walked memoizes in-place walks.
+	calling := make(map[string]bool)
+	type walkKey struct {
+		name, parent string
+		parentEl     *template.HTMLElementNode
+		doc          documentState
+		calling      string
+	}
+	walked := make(map[walkKey]documentState)
 	// doc is what the walk has seen of the document so far.
 	var doc documentState
 	// chain is the table-context elements from the nearest table down to
-	// the current parent; it is empty outside a table context.
-	var walk func(nodes []template.Node, parent string, chain []*template.HTMLElementNode)
-	walk = func(nodes []template.Node, parent string, chain []*template.HTMLElementNode) {
+	// the current parent; it is empty outside a table context. parentEl
+	// is the nearest enclosing element, nil at the top of root or a body.
+	var walk func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode)
+	walk = func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode) {
 		fosterParented := func() {
 			for _, el := range chain {
 				unsure(el)
 			}
 		}
+		// mayWriteText is an action's effect: it may write text, which
+		// starts the body outside a head tag and is foster-parented in
+		// a table context.
+		mayWriteText := func() {
+			doc.content = doc.content || !headTags[parent]
+			if tableContexts[parent] {
+				fosterParented()
+			}
+		}
+		// inPlace walks each body template name may run where it is
+		// called, each from the same document state, and keeps every mark.
+		inPlace := func(name string, bodies []*template.ListNode) {
+			names := slices.Sorted(maps.Keys(calling))
+			key := walkKey{name, parent, parentEl, doc, strings.Join(names, "\x00")}
+			if out, ok := walked[key]; ok {
+				doc = out
+				return
+			}
+			start, out := doc, doc
+			calling[name] = true
+			for _, body := range bodies {
+				doc = start
+				walk(body.Nodes, parent, parentEl, chain)
+				out = out.or(doc)
+			}
+			delete(calling, name)
+			doc = out
+			walked[key] = out
+		}
 		for _, n := range nodes {
 			switch n := n.(type) {
 			case *template.HTMLDocumentFragmentNode:
-				walk(n.Children, parent, chain)
+				walk(n.Children, parent, parentEl, chain)
 			case *template.TextNode:
 				if !isRunOnly(n.Text) {
 					doc.content = doc.content || !headTags[parent]
@@ -754,23 +826,32 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 						fosterParented()
 					}
 				}
-			case *template.ActionNode, *template.TemplateNode:
-				doc.content = doc.content || !headTags[parent]
-				if tableContexts[parent] {
-					fosterParented()
+			case *template.ActionNode:
+				mayWriteText()
+			case *template.TemplateNode:
+				bodies, defined := defines[n.Name]
+				switch {
+				case calling[n.Name]:
+					mayWriteText()
+				case defined:
+					inPlace(n.Name, bodies)
+				case parent == "head" && documentCollapses:
+				case tableContexts[parent] && collapses(tableParent[chain[0]]):
+				default:
+					mayWriteText()
 				}
 			case *template.HTMLElementNode:
 				tag := strings.ToLower(n.TagName)
 				if !doc.inPlace(tag, parent) {
 					unsure(n)
-					walk(n.Children, parent, chain) // the parser drops the tag
+					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				}
 				allowed, isPart := tableParents[tag]
 				switch {
 				case isPart && !slices.Contains(allowed, parent):
 					unsure(n)
-					walk(n.Children, parent, chain) // the parser drops the tag
+					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				case tableContexts[parent] && !isPart && tag != "table" && !keptInTable[tag]:
 					unsure(n)
@@ -780,40 +861,101 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces)
 				if tableContexts[tag] {
 					if tag != "table" {
 						inner = chain
+					} else {
+						tableParent[n] = parentEl
 					}
 					inner = append(slices.Clip(inner), n)
 				}
-				walk(n.Children, tag, inner)
+				walk(n.Children, tag, n, inner)
 			case *template.IfNode, *template.WithNode, *template.RangeNode:
 				b := branchOf(n)
 				if b.List != nil {
-					walk(b.List.Nodes, parent, chain)
+					walk(b.List.Nodes, parent, parentEl, chain)
 				}
 				if b.ElseList != nil {
-					walk(b.ElseList.Nodes, parent, chain)
+					walk(b.ElseList.Nodes, parent, parentEl, chain)
 				}
 			case *template.DefineNode:
 				if n.Body != nil {
 					outer := doc
 					doc = documentState{}
-					walk(n.Body.Nodes, "", nil)
+					walk(n.Body.Nodes, "", nil, nil)
 					doc = outer
 				}
 			case *template.BlockNode:
-				doc.content = true
-				if tableContexts[parent] {
-					fosterParented()
+				if n.Body == nil {
+					continue
 				}
+				// The block writes its own body or a define of the same
+				// name, unless the walk is in that body already.
+				if calling[n.Name] {
+					mayWriteText()
+				} else {
+					bodies := defines[n.Name]
+					if !slices.Contains(bodies, n.Body) {
+						bodies = append(slices.Clip(bodies), n.Body)
+					}
+					inPlace(n.Name, bodies)
+				}
+				// The body is also a define of its own.
+				outer := doc
+				doc = documentState{}
+				walk(n.Body.Nodes, "", nil, nil)
+				doc = outer
+			}
+		}
+	}
+	walk(root.Nodes, "", nil, nil)
+}
+
+// documentElementsCollapse reports whether root holds an html and a body
+// element and every one of them collapses white space.
+func documentElementsCollapse(root *template.ListNode, collapses func(*template.HTMLElementNode) bool) bool {
+	found := map[string]bool{}
+	ok := true
+	var visit func(nodes []template.Node)
+	visit = func(nodes []template.Node) {
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *template.HTMLDocumentFragmentNode:
+				visit(n.Children)
+			case *template.HTMLElementNode:
+				if tag := strings.ToLower(n.TagName); tag == "html" || tag == "body" {
+					found[tag] = true
+					ok = ok && collapses(n)
+				}
+				visit(n.Children)
+			case *template.IfNode, *template.WithNode, *template.RangeNode:
+				b := branchOf(n)
+				if b.List != nil {
+					visit(b.List.Nodes)
+				}
+				if b.ElseList != nil {
+					visit(b.ElseList.Nodes)
+				}
+			case *template.DefineNode:
 				if n.Body != nil {
-					outer := doc
-					doc = documentState{}
-					walk(n.Body.Nodes, "", nil)
-					doc = outer
+					visit(n.Body.Nodes)
+				}
+			case *template.BlockNode:
+				if n.Body != nil {
+					visit(n.Body.Nodes)
 				}
 			}
 		}
 	}
-	walk(root.Nodes, "", nil)
+	visit(root.Nodes)
+	return ok && found["html"] && found["body"]
+}
+
+// or is what either walk saw of the document.
+func (d documentState) or(e documentState) documentState {
+	return documentState{
+		content: d.content || e.content,
+		html:    d.html || e.html,
+		head:    d.head || e.head,
+		body:    d.body || e.body,
+	}
 }
 
 // documentState is what a walk in source order has seen of a document:
@@ -1506,4 +1648,42 @@ var specialTags = map[string]bool{
 	"td": true, "template": true, "textarea": true, "tfoot": true, "th": true,
 	"thead": true, "title": true, "tr": true, "track": true, "ul": true,
 	"wbr": true, "xmp": true,
+}
+
+// collectDefines appends to defines the body of every define and block
+// in nodes that is not empty (an empty one does not replace another of
+// the same name in html/template), and records names whose bodies are
+// all empty with no body.
+func collectDefines(nodes []template.Node, defines map[string][]*template.ListNode) {
+	record := func(name string, body *template.ListNode) {
+		if body == nil {
+			return
+		}
+		bodies := defines[name]
+		if !template.IsEmptyTree(body) && !slices.Contains(bodies, body) {
+			bodies = append(bodies, body)
+		}
+		defines[name] = bodies
+		collectDefines(body.Nodes, defines)
+	}
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.HTMLDocumentFragmentNode:
+			collectDefines(n.Children, defines)
+		case *template.HTMLElementNode:
+			collectDefines(n.Children, defines)
+		case *template.IfNode, *template.WithNode, *template.RangeNode:
+			b := branchOf(n)
+			if b.List != nil {
+				collectDefines(b.List.Nodes, defines)
+			}
+			if b.ElseList != nil {
+				collectDefines(b.ElseList.Nodes, defines)
+			}
+		case *template.DefineNode:
+			record(n.Name, n.Body)
+		case *template.BlockNode:
+			record(n.Name, n.Body)
+		}
+	}
 }

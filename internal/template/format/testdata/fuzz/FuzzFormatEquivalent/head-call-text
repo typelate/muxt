@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"h\"}}x{{end}}<html><head>{{template \"h\"}}</head><body> <span>a</span></body></html>")

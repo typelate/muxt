@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"x\"}}{{end}}{{define \"y\"}}t{{end}}<html><head>{{template \"x\"}}{{template \"y\"}}</head><body> <span>a</span></body></html>")

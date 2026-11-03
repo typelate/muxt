@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<table>\n<tbody>\n{{block \"r\" .}}<tr><td>x</td></tr>{{end}}\n</tbody>\n</table> <span>a</span>")

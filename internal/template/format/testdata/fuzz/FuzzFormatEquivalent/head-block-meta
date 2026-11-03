@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<html>\n<head><title>T</title>{{block \"head\" .}}<meta charset=\"utf-8\">{{end}}</head>\n<body>\n<main><h1>x</h1></main>\n</body>\n</html>")
