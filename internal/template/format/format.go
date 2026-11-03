@@ -86,12 +86,14 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	}
 	trees := []*template.Tree{{Root: list}}
 	styles := analysis.ComputeWhitespace(trees, f.whitespace)
-	treeSelectors := analysis.WhiteSpaceDependsOnTree(trees, f.whitespace)
-	if unsureMisnested(list, styles, treeSelectors) {
+	moved := analysis.WhiteSpaceMovedMatcher(trees, f.whitespace)
+	if unsureMisnested(list, styles, moved) {
 		return src, nil
 	}
-	unsureReopened(list, styles, treeSelectors)
-	unsureParsedElsewhere(list, styles, f.whitespace.Context, treeSelectors)
+	unsureReopened(list, styles, moved)
+	if unsureParsedElsewhere(list, styles, f.whitespace.Context, moved) {
+		return src, nil
+	}
 	return newEmitter(src, base, classify(list, styles), bodies, dir).emit(list)
 }
 

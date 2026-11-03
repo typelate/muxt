@@ -153,54 +153,226 @@ func authorRules(trees []*template.Tree, options WhitespaceOptions) []cssRule {
 	return rules
 }
 
-// WhiteSpaceDependsOnTree reports whether a rule of the author CSS that
-// ComputeWhitespace sees for trees and options declares white-space,
-// white-space-collapse or all with a selector whose match depends on
-// where the element sits in the document: one with a combinator
-// (descendant, >, + or ~) or a structural, relational or negation
-// pseudo-class (:not, :has, :is or :where holding either, :nth-*,
-// :first-child, :last-child, :only-child, the -of-type ones, :empty,
-// :root, :scope), or a rule whose selectors are unknown. ComputeWhitespace
-// matches selectors in the template tree; where the browser builds an
-// element elsewhere (misnesting, foster parenting, a dropped tag, a
-// reopened formatting element), such a rule may match it differently
-// there. The user-agent sheet's such rules (nobr wbr, select option) only
-// set collapsing values and do not count.
-func WhiteSpaceDependsOnTree(trees []*template.Tree, options WhitespaceOptions) bool {
+// MovedMatcher answers whether the author CSS that declares white-space
+// (white-space, white-space-collapse or all) may match an element the
+// browser builds somewhere other than where the template tree puts it
+// differently there. ComputeWhitespace matches selectors in the template
+// tree; a misnested, foster-parented, dropped or reopened element is
+// matched by the browser in its own tree. Only a selector with a
+// combinator or a pseudo-class that looks at other elements can tell the
+// two places apart. The zero value matches nothing.
+type MovedMatcher struct {
+	// all reports a rule that may match any moved element differently:
+	// one with :has, a structural pseudo-class, a :not, :is or :where
+	// holding a combinator, a compound the selectors package cannot
+	// compile, or unknown selectors.
+	all   bool
+	rules []movedRule
+}
+
+// movedRule is a selector with a combinator: its subject compound, and
+// the compounds immediately left of a + or ~ combinator.
+type movedRule struct {
+	subject  selectors.Selector
+	siblings []selectors.Selector
+}
+
+// WhiteSpaceMovedMatcher returns the MovedMatcher of the author CSS that
+// ComputeWhitespace sees for trees and options. The user-agent sheet's
+// rules with combinators (nobr wbr, select option) only set collapsing
+// values and do not count.
+func WhiteSpaceMovedMatcher(trees []*template.Tree, options WhitespaceOptions) MovedMatcher {
+	var m MovedMatcher
 	for _, rule := range authorRules(trees, options) {
 		if !slices.ContainsFunc(rule.declarations, func(d cssDeclaration) bool { return d.property == propertyWhiteSpace }) {
 			continue
 		}
-		if rule.anyElement || slices.ContainsFunc(rule.selectors, func(sel ruleSelector) bool { return selectorDependsOnTree(sel.query) }) {
+		if rule.anyElement {
+			m.all = true
+			continue
+		}
+		for _, sel := range rule.selectors {
+			for _, query := range splitTopLevel(sel.query, ',') {
+				r, simple, ok := compileMovedRule(query)
+				switch {
+				case !ok:
+					m.all = true
+				case !simple:
+					m.rules = append(m.rules, r)
+				}
+			}
+		}
+	}
+	return m
+}
+
+// MayMatch reports whether a white-space rule may match one of moved, or
+// one of their descendants, differently in the browser's tree: a rule
+// that may match any moved element, a subject compound that may match
+// (yes or maybe) one of moved or their descendants, or a compound left of
+// a + or ~ combinator that may match one of moved, whose new siblings may
+// then match. Compounds left of a descendant or child combinator need no
+// check: the subject they constrain is moved or below a moved element.
+func (m MovedMatcher) MayMatch(moved []*template.HTMLElementNode) bool {
+	if m.all {
+		return true
+	}
+	if len(m.rules) == 0 || len(moved) == 0 {
+		return false
+	}
+	var below []*template.HTMLElementNode
+	for _, el := range moved {
+		collectDescendants(&below, el.Children)
+	}
+	matches := func(sel selectors.Selector, elements []*template.HTMLElementNode) bool {
+		return slices.ContainsFunc(elements, func(el *template.HTMLElementNode) bool {
+			ok, _ := sel.Matches(el)
+			return ok
+		})
+	}
+	for _, r := range m.rules {
+		if matches(r.subject, moved) || matches(r.subject, below) {
 			return true
+		}
+		for _, sib := range r.siblings {
+			if matches(sib, moved) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// treePseudoClasses are the pseudo-classes whose match depends on other
-// elements than the one matched.
-var treePseudoClasses = []string{
-	":not(", ":has(", ":nth-", ":first-child", ":last-child", ":only-child",
+func collectDescendants(out *[]*template.HTMLElementNode, nodes []template.Node) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *template.HTMLElementNode:
+			*out = append(*out, n)
+			collectDescendants(out, n.Children)
+		case *template.HTMLDocumentFragmentNode:
+			collectDescendants(out, n.Children)
+		case *template.ListNode:
+			if n != nil {
+				collectDescendants(out, n.Nodes)
+			}
+		case *template.IfNode:
+			collectDescendants(out, []template.Node{n.List, n.ElseList})
+		case *template.RangeNode:
+			collectDescendants(out, []template.Node{n.List, n.ElseList})
+		case *template.WithNode:
+			collectDescendants(out, []template.Node{n.List, n.ElseList})
+		}
+	}
+}
+
+// globalPseudoClasses are the pseudo-classes whose match depends on other
+// elements in a way MovedMatcher does not follow: the relational :has and
+// the structural ones.
+var globalPseudoClasses = []string{
+	":has(", ":nth-", ":first-child", ":last-child", ":only-child",
 	":first-of-type", ":last-of-type", ":only-of-type", ":empty", ":root", ":scope",
 }
 
-// selectorDependsOnTree reports whether query, a selector with its
-// nesting resolved, has a combinator or a pseudo-class of
-// treePseudoClasses, at any depth (inside :is and :where too). Attribute
-// selectors and strings are skipped; a selector list's commas and the
-// space around them and around parentheses are no combinators.
-func selectorDependsOnTree(query string) bool {
-	var sb strings.Builder
-	quote := byte(0)
-	brackets := 0
+// compileMovedRule reads query, one complex selector with its nesting
+// resolved. simple reports that it has no combinator and no global
+// pseudo-class: its match does not depend on where the element is. ok
+// false means the rule may match any moved element.
+func compileMovedRule(query string) (r movedRule, simple, ok bool) {
+	compounds, combinators, groups := splitSelector(query)
+	text := strings.ToLower(query)
+	for _, p := range globalPseudoClasses {
+		if strings.Contains(text, p) {
+			return movedRule{}, false, false
+		}
+	}
+	if nestedCombinator(groups) {
+		return movedRule{}, false, false // :not, :is or :where holding a combinator
+	}
+	if len(combinators) == 0 {
+		return movedRule{}, true, true
+	}
+	compile := func(compound string) (selectors.Selector, bool) {
+		sel, err := selectors.Compile(compound)
+		return sel, err == nil
+	}
+	subject, ok := compile(compounds[len(compounds)-1])
+	if !ok {
+		return movedRule{}, false, false
+	}
+	r.subject = subject
+	for i, c := range combinators {
+		if c != '+' && c != '~' {
+			continue
+		}
+		sib, ok := compile(compounds[i])
+		if !ok {
+			return movedRule{}, false, false
+		}
+		r.siblings = append(r.siblings, sib)
+	}
+	return r, false, true
+}
+
+// nestedCombinator reports whether a combinator occurs at any depth in
+// groups, the texts of parenthesized groups (:not(:is(p div))).
+func nestedCombinator(groups []string) bool {
+	for _, g := range groups {
+		for _, inner := range splitTopLevel(g, ',') {
+			_, combinators, nested := splitSelector(inner)
+			if len(combinators) > 0 || nestedCombinator(nested) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// splitSelector splits a complex selector into its compounds and the
+// combinators between them (' ' for descendant, '>', '+', '~'), and
+// returns the text inside every parenthesized group at the top level.
+// Brackets, strings and escapes are skipped.
+func splitSelector(query string) (compounds []string, combinators []byte, groups []string) {
+	var (
+		cur      strings.Builder
+		pending  byte // the combinator seen since the last compound
+		quote    byte
+		brackets int
+		parens   int
+		group    int // start of the current top-level parenthesized group
+	)
+	flush := func() {
+		if cur.Len() == 0 {
+			return
+		}
+		if len(compounds) > 0 {
+			combinators = append(combinators, cmp.Or(pending, ' '))
+		}
+		compounds = append(compounds, cur.String())
+		cur.Reset()
+		pending = 0
+	}
 	for i := 0; i < len(query); i++ {
 		ch := query[i]
+		if quote == 0 && brackets == 0 && parens == 0 {
+			switch ch {
+			case ' ', '\t', '\n', '\r', '\f':
+				flush()
+				continue
+			case '>', '+', '~':
+				flush()
+				pending = ch
+				continue
+			}
+		}
+		cur.WriteByte(ch)
 		switch {
-		case quote != 0:
-			if ch == '\\' {
+		case ch == '\\':
+			if i+1 < len(query) {
 				i++
-			} else if ch == quote {
+				cur.WriteByte(query[i])
+			}
+		case quote != 0:
+			if ch == quote {
 				quote = 0
 			}
 		case ch == '"' || ch == '\'':
@@ -210,34 +382,57 @@ func selectorDependsOnTree(query string) bool {
 		case ch == ']':
 			brackets--
 		case brackets > 0:
-		case ch == '\\':
-			sb.WriteByte(ch)
-			if i+1 < len(query) {
-				i++
-				sb.WriteByte(query[i])
+		case ch == '(':
+			if parens == 0 {
+				group = i + 1
 			}
-		default:
-			sb.WriteByte(ch)
+			parens++
+		case ch == ')':
+			parens--
+			if parens == 0 {
+				groups = append(groups, query[group:i])
+			}
 		}
 	}
-	text := strings.ToLower(sb.String())
-	for _, p := range treePseudoClasses {
-		if strings.Contains(text, p) {
-			return true
+	flush()
+	return compounds, combinators, groups
+}
+
+// splitTopLevel splits s at each sep outside brackets, parentheses,
+// strings and escapes.
+func splitTopLevel(s string, sep byte) []string {
+	var (
+		out      []string
+		start    int
+		quote    byte
+		brackets int
+		parens   int
+	)
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch == '\\':
+			i++
+		case quote != 0:
+			if ch == quote {
+				quote = 0
+			}
+		case ch == '"' || ch == '\'':
+			quote = ch
+		case ch == '[':
+			brackets++
+		case ch == ']':
+			brackets--
+		case ch == '(':
+			parens++
+		case ch == ')':
+			parens--
+		case ch == sep && brackets == 0 && parens == 0:
+			out = append(out, s[start:i])
+			start = i + 1
 		}
 	}
-	if strings.ContainsAny(text, ">+~") {
-		return true
-	}
-	// A space is a descendant combinator unless it is next to a comma
-	// or a parenthesis, or at either end.
-	fields := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == '(' || r == ')' })
-	for _, f := range fields {
-		if len(strings.Fields(f)) > 1 {
-			return true
-		}
-	}
-	return false
+	return append(out, s[start:])
 }
 
 // cascade holds the style rules of both origins.

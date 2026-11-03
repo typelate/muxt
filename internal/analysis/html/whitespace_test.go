@@ -219,42 +219,56 @@ func TestComputeWhitespaceMalformedStyle(t *testing.T) {
 	}
 }
 
-func TestWhiteSpaceDependsOnTree(t *testing.T) {
+func TestWhiteSpaceMovedMatcher(t *testing.T) {
+	const page = `<section class="post"><div id="moved"><pre></pre><b></b></div><span></span></section>`
 	for _, tt := range []struct {
 		sheet   string
 		missing bool
-		want    bool
+		want    bool // MayMatch(the div with id moved)
 	}{
 		{sheet: ``, want: false},
 		{sheet: `.k{white-space:pre}`, want: false},
-		{sheet: `div.k[data-x="a b > c"]{white-space:pre}`, want: false},
-		{sheet: `.a, .b{white-space:pre}`, want: false},
-		{sheet: `:is(.a, .b){white-space:pre}`, want: false},
+		{sheet: `div{white-space:pre}`, want: false}, // no combinator: matched alike anywhere
+		{sheet: `div:not(.x){white-space:pre}`, want: false},
 		{sheet: `div:hover{white-space:pre}`, want: false},
 		{sheet: `section > div{display:block}`, want: false},
 		{sheet: `section div{color:red}`, want: false},
+		{sheet: `.post code{white-space:pre}`, want: false},
+		{sheet: `.post [data-x="a > b"]{white-space:pre}`, want: false},
 		{sheet: `section > div{white-space:pre}`, want: true},
-		{sheet: `section div{white-space:pre-line}`, want: true},
-		{sheet: `p + div{white-space:pre}`, want: true},
-		{sheet: `p ~ div{white-space-collapse:preserve}`, want: true},
+		{sheet: `.post pre{white-space:pre-line}`, want: true},
+		{sheet: `div b{white-space-collapse:preserve}`, want: true},
+		{sheet: `div + span{white-space:pre}`, want: true},
+		{sheet: `div ~ code{white-space:pre}`, want: true}, // the moved div gets new later siblings
+		{sheet: `b ~ code{white-space:pre}`, want: false},  // b keeps its siblings
+		{sheet: `p ~ div{white-space:pre}`, want: true},
+		{sheet: `.a, section div{white-space:pre}`, want: true},
+		{sheet: `:is(.a, .b) div{white-space:pre}`, want: true},
 		{sheet: `div:not(p div){white-space:pre}`, want: true},
-		{sheet: `div:not(.x){white-space:pre}`, want: true},
-		{sheet: `div:has(p){white-space:pre}`, want: true},
-		{sheet: `:is(p .a){white-space:pre}`, want: true},
+		{sheet: `:where(.a > .b){white-space:pre}`, want: true},
+		{sheet: `div:not(:is(p div)){white-space:pre}`, want: true},
+		{sheet: `div:where(:not(p > div)){white-space:pre}`, want: true},
+		{sheet: `span:is(:not(p + span)){white-space:pre}`, want: true},
+		{sheet: `div:is(:not(.a)){white-space:pre}`, want: false},
+		{sheet: `main:has(p){white-space:pre}`, want: true},
 		{sheet: `li:nth-child(2){white-space:pre}`, want: true},
 		{sheet: `p:first-child{white-space:pre}`, want: true},
 		{sheet: `p:empty{white-space:pre}`, want: true},
 		{sheet: `:root{white-space:pre}`, want: true},
-		{sheet: `.a{.b &{white-space:pre}}`, want: true},
-		{sheet: `.a{& > .b{all:unset}}`, want: true},
-		{sheet: `@media print{main p{white-space:pre}}`, want: true},
-		{sheet: `{{.Selector}}{white-space:pre}`, want: true},
+		{sheet: `.post{& > div{all:unset}}`, want: true},
+		{sheet: `.post{& code{all:unset}}`, want: false},
+		{sheet: `@media print{section div{white-space:pre}}`, want: true},
 		{sheet: ``, missing: true, want: true},
 	} {
+		tree := parseWhitespaceTree(t, "page", page)
+		moved, _ := selectors.MustCompile(`#moved`).QuerySelector(tree.Root)
+		if moved == nil {
+			t.Fatal("no moved element")
+		}
 		sheets := []Stylesheet{{Filename: "site.css", Text: tt.sheet}}
-		got := WhiteSpaceDependsOnTree(nil, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true, MissingSheets: tt.missing})
-		if got != tt.want {
-			t.Errorf("WhiteSpaceDependsOnTree(%q, missing %v) = %v, want %v", tt.sheet, tt.missing, got, tt.want)
+		m := WhiteSpaceMovedMatcher(nil, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true, MissingSheets: tt.missing})
+		if got := m.MayMatch([]*template.HTMLElementNode{moved}); got != tt.want {
+			t.Errorf("WhiteSpaceMovedMatcher(%q, missing %v).MayMatch(div#moved) = %v, want %v", tt.sheet, tt.missing, got, tt.want)
 		}
 	}
 }

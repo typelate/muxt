@@ -391,7 +391,8 @@ func TestUnsureParsedElsewhere(t *testing.T) {
 			}
 			styles := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{Context: context, AuthorCSSKnown: true})
 			var unknown []*template.HTMLElementNode
-			for _, m := range parsedElsewhere(tree.Root, styles, context) {
+			misplaced, _ := parsedElsewhere(tree.Root, styles, context)
+			for _, m := range misplaced {
 				if !slices.Contains(unknown, m.el) {
 					unknown = append(unknown, m.el)
 				}
@@ -599,6 +600,30 @@ func TestWhiteSpaceOnly(t *testing.T) {
 			src:  "<div><p>a<div>\nb</div>\nc\n  d</p></div>",
 			want: "<div><p>a<div>\n\t\t\tb</div>\n\t\tc\n\t\td</p></div>",
 		},
+		// Text a head writes implies the body, which owns the runs
+		// after it.
+		{
+			name:  "text in a head with a body that preserves",
+			src:   "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head><body></body></html>",
+			css:   "body{white-space:pre-wrap}",
+			known: true,
+			want:  "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head><body></body></html>",
+		},
+		{
+			name: "text in a head with no body element",
+			src:  "<html><head>{{.X}}\n\t\t<link></head></html>",
+			want: "<html><head>{{.X}}\n\t\t<link></head></html>",
+		},
+		{
+			name: "text in a head with a body that collapses",
+			src:  "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head><body></body></html>",
+			want: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t<link></head><body></body></html>",
+		},
+		{
+			name: "a head that writes only elements",
+			src:  "{{define \"h\"}}<meta>{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>",
+			want: "{{define \"h\"}}<meta>{{end}}<html><head>{{template \"h\"}}\n\t<link></head></html>",
+		},
 		{
 			name: "a custom element's parent still reindents",
 			src:  "<div>\n<p>a</p>\n<my-chip>a\n b</my-chip>\n</div>",
@@ -646,6 +671,20 @@ func TestMovedElementSelectors(t *testing.T) {
 		{name: "dropped td, simple selector", src: "<style>.k{white-space:pre}</style><div><td><p>\n  a</p></td></div>", changed: true},
 		{name: "reopened, simple selector", src: "<style>.k{white-space:pre}</style><div><p><b>x</p>\n<p>\n  y</p></div>", changed: true},
 		{name: "a combinator elsewhere leaves unmoved elements alone", src: "<style>main > p{white-space:pre}</style><div>\n<p>a</p>\n</div>", changed: true},
+		// The element that receives a moved one, and its children, are
+		// matched differently too.
+		{name: "foster-parented before a later sibling", src: "<style>p ~ span{white-space:pre}</style><div><table><p>x</p></table><span>\n  a</span></div>"},
+		{name: "foster-parented shifts nth-child", src: "<style>span:nth-child(3){white-space:pre}</style><div><table><p>x</p></table><span>\n  a</span></div>"},
+		{name: "foster-parented child of a has", src: "<style>div:has(> p){white-space:pre}</style><div><table><p>x</p></table>\n  a</div>"},
+		{name: "dropped td under a not-has", src: "<style>div:not(:has(td)){white-space:pre}</style><div><td>x</td>\n  a</div>"},
+		{name: "dropped td shifts first-child", src: "<style>div > span:first-child{white-space:pre}</style><div><td>x</td><span>\n  a</span></div>"},
+		// Only a rule that may match the moved elements counts.
+		{name: "a descendant rule whose subject matches nothing moved", src: "<style>.post pre{white-space:pre}</style><section class=\"post\"><p><div>\n a</div></p></section>", changed: true},
+		{name: "a descendant rule whose subject is in a moved element", src: "<style>.post pre{white-space:pre}</style><section class=\"post\"><p><div>\n a<pre>x</pre></div></p></section>"},
+		{name: "a child rule whose subject is moved", src: "<style>section > div{white-space:pre}</style><section class=\"post\"><p><div>\n a</div></p></section>"},
+		{name: "a sibling rule whose left compound is moved", src: "<style>div ~ span{white-space:pre}</style><section><p>x<div>y</div></p><span>\n  a</span></section>"},
+		{name: "a has rule", src: "<style>section:has(> div){white-space:pre}</style><section class=\"post\"><p><div>\n a</div></p></section>"},
+		{name: "a descendant rule and implied end tags", src: "<style>article code{white-space:pre}</style><ul><li>a\n<li>\n  b</ul>", changed: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := Source("input.gohtml", tt.src, Styles(analysis.WhitespaceOptions{AuthorCSSKnown: true}))
