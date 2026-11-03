@@ -14,11 +14,13 @@ import (
 // emitter reindents a template (v2 spec §3 items 1–6, 8, 9). It writes
 // the source as it is except for the whitespace of a run it may edit
 // that holds a line break: the run keeps its line breaks, drops the
-// spaces and tabs before them, and ends in one tab per depth level. It
-// never joins or splits a line and never edits a token: every byte it
-// writes that is not such a tab is copied from the source, so tokens
-// (actions, trim markers, tag names, void slashes, attribute values) and
-// runs the browser renders exactly are as written by construction.
+// spaces and tabs before them, and ends in one tab per depth level, and
+// for an action token, which never renders, whose printed form
+// (printToken) replaces it. Outside actions it never joins or splits a
+// line and never edits a token: every byte it writes that is not such a
+// tab or part of a printed action is copied from the source, so tokens
+// (trim markers, tag names, void slashes, attribute values) and runs the
+// browser renders exactly are as written by construction.
 //
 // Which runs it may edit comes from the classifier (classify): a run
 // the browser collapses (runCollapse), where two or
@@ -47,13 +49,18 @@ type emitter struct {
 	asWrittenDefine map[*template.DefineNode]bool // define bodies left as written
 	verbatim        [][2]int                      // source spans never edited: muxt:fmt regions
 	frozenBranches  map[*template.BranchNode]bool // memo of frozenBranch
+	left, right     string                        // the template delimiters
+	actions         []*actionToken                // in source order (collectActions)
+	printed         []*actionToken                // the actions not left as written
 	edits           []edit
 }
 
-// edit replaces src[start:end], a whitespace run, with text.
+// edit replaces src[start:end], a whitespace run, with text, or, when
+// action is set, an action token with its printed form.
 type edit struct {
 	start, end int
 	text       string
+	action     *actionToken
 }
 
 // openOptional is an element whose end tag the source leaves out and
@@ -63,7 +70,9 @@ type openOptional struct {
 	depth int
 }
 
-func newEmitter(src string, base lex.Pos, cls classes, asWritten map[*template.DefineNode]bool, dir *directives) *emitter {
+// newEmitter returns the emitter of root, whose source is src starting
+// at position base, written with the delimiters left and right.
+func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives) *emitter {
 	e := &emitter{
 		src:             src,
 		base:            base,
@@ -71,6 +80,8 @@ func newEmitter(src string, base lex.Pos, cls classes, asWritten map[*template.D
 		opaque:          make(map[template.Node]bool, len(cls.opaque)),
 		asWrittenDefine: asWritten,
 		frozenBranches:  make(map[*template.BranchNode]bool),
+		left:            left,
+		right:           right,
 	}
 	for _, n := range cls.opaque {
 		e.opaque[n] = true
@@ -78,6 +89,12 @@ func newEmitter(src string, base lex.Pos, cls classes, asWritten map[*template.D
 	if dir != nil {
 		for c, r := range dir.regions {
 			e.verbatim = append(e.verbatim, [2]int{dir.commentEnd(c) - int(base), r.end - int(base)})
+		}
+	}
+	e.collectActions(root, left, right)
+	for _, tok := range e.actions {
+		if !tok.asWritten {
+			e.printed = append(e.printed, tok)
 		}
 	}
 	return e
@@ -90,6 +107,16 @@ func (e *emitter) emit(root *template.ListNode) (string, error) {
 	// Nothing closes the root: its last run is the end of the file,
 	// whose last line is kept as written (closeDepth -1).
 	e.list(root, root.Nodes, 0, -1, nil, false, false)
+	return e.apply()
+}
+
+// apply returns the source with the edits recorded so far and the
+// printed actions applied. An action's continuation lines take the
+// indentation its first line has in the output.
+func (e *emitter) apply() (string, error) {
+	for _, tok := range e.printed {
+		e.edits = append(e.edits, edit{start: tok.start, end: tok.end, action: tok})
+	}
 	slices.SortStableFunc(e.edits, func(a, b edit) int { return a.start - b.start })
 	var b strings.Builder
 	b.Grow(len(e.src))
@@ -102,7 +129,12 @@ func (e *emitter) emit(root *template.ListNode) (string, error) {
 			continue
 		}
 		b.WriteString(e.src[at:ed.start])
-		b.WriteString(ed.text)
+		if ed.action != nil {
+			indent, lineStart := lineIndent(b.String())
+			b.WriteString(e.printToken(ed.action, e.left, e.right, indent, lineStart))
+		} else {
+			b.WriteString(ed.text)
+		}
 		at = ed.end
 	}
 	b.WriteString(e.src[at:])
@@ -138,9 +170,9 @@ func (e *emitter) inVerbatim(offset int) bool {
 // its items. What closes the list still lands at its depth. A branch
 // whose body is so frozen is as written whole, keyword lines included
 // (frozenBranch); its siblings reindent. An item left whole by nature
-// (leftWhole: pre, script, a custom element, a multi-line action or
-// opener) is an island: its first line is as written and its siblings
-// reindent. A {{define}} is a top-level declaration wherever it sits:
+// (leftWhole: pre, script, a custom element, an action or opener left
+// as written over several lines) is an island: its first line is as
+// written and its siblings reindent. A {{define}} is a top-level declaration wherever it sits:
 // its opener, body and {{end}} are at column 0 whatever list it is in.
 func (e *emitter) list(key template.Node, children []template.Node, depth, closeDepth int, open []openOptional, frozen, closeAsWritten bool) {
 	items, _ := splitChildren(children)
@@ -354,12 +386,13 @@ func (e *emitter) element(el *template.HTMLElementNode, depth, after int, open [
 // leftWhole reports whether n, item i of the list key at depth, is left
 // as written over more than one line: an element the formatter does not
 // reindent inside (opaque); a define body left as written; an action,
-// template call or branch, define or block opener spanning lines, whose
-// string literals may hold line breaks; or a {{/* */}} comment whose
+// template call or branch, define or block opener left as written
+// (actionToken.asWritten) over several lines; or a {{/* */}} comment whose
 // continuation lines cannot shift by its first line's change
 // (shiftComment). The run before it, which starts its first line, is
 // left as written too, so it keeps its own columns (spec §3 item 4). An
-// element or define that fits on a line has its line reindented.
+// element or define that fits on a line has its line reindented; line
+// breaks inside printed actions do not count (spansLines).
 func (e *emitter) leftWhole(key template.Node, i int, n template.Node, depth int) bool {
 	switch n := n.(type) {
 	case *template.HTMLElementNode:
@@ -438,12 +471,30 @@ func lineOf(s string) string {
 	return s
 }
 
+// spansLines reports whether the source from start to end holds a line
+// break the output keeps as written: one outside the actions the
+// formatter prints. A printed action's own line breaks follow the line
+// it starts on (printToken), so they do not count.
 func (e *emitter) spansLines(start, end lex.Pos) bool {
 	from, to := int(start-e.base), int(end-e.base)
 	if from < 0 || to > len(e.src) || from > to {
 		return true
 	}
-	return strings.Contains(e.src[from:to], "\n")
+	at := from
+	i, _ := slices.BinarySearchFunc(e.printed, from, func(t *actionToken, from int) int {
+		if t.end <= from {
+			return -1
+		}
+		return 1
+	})
+	for ; i < len(e.printed) && e.printed[i].start < to; i++ {
+		t := e.printed[i]
+		if t.start > at && strings.Contains(e.src[at:t.start], "\n") {
+			return true
+		}
+		at = max(at, t.end)
+	}
+	return at < to && strings.Contains(e.src[at:to], "\n")
 }
 
 // elementEnd is the end of el's source: its end tag, or for an element

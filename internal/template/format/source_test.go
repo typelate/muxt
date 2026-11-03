@@ -17,7 +17,7 @@ func TestSource(t *testing.T) {
 		{"empty", "", ""},
 		{"trim marker inside pre kept", "<pre>a{{- .X}}</pre>", "<pre>a{{- .X}}</pre>"},
 		{"unneeded trim marker kept", "<p>a{{- .X}}</p>", "<p>a{{- .X}}</p>"},
-		{"no element: unchanged", "Hi {{ .Name }},\n\n  bye {{- .X}}", "Hi {{ .Name }},\n\n  bye {{- .X}}"},
+		{"no element: only actions printed", "Hi {{ .Name }},\n\n  bye {{- .X}}", "Hi {{.Name}},\n\n  bye {{- .X}}"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := format.Source("a.gohtml", tt.src)

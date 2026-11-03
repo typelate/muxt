@@ -1,0 +1,56 @@
+Action interiors are printed from the parse tree (spec §3.10):
+canonical spacing, redundant parentheses dropped, complex actions that
+start their line and author-broken ones one stage or argument per line,
+also inside attribute values and preformatted text; a complex action in
+the middle of a line stays on it.
+-- input.gohtml --
+{{ define "page" }}
+<main>
+  {{ if and (eq .Kind "a") (ne .Name "") (not .Hidden) }}
+    <h1 title="{{ .Name | printf "%s!" | html }}">{{ .Name }}</h1>
+  {{ else   if (.Hidden) }}
+    <p>{{ template "note"  . }}</p>
+  {{ end }}
+  <ul>
+  {{ range $i,$v:=.Items }}
+    <li>{{$i}}: {{ $v
+      | printf "%v" }}</li>
+  {{ end }}
+  </ul>
+<pre>
+  {{ .Name }}
+</pre>
+</main>
+{{ end }}
+
+{{ define "note" }}<em>{{ len .Items }}</em>{{ end }}
+-- format.gohtml --
+{{define "page"}}
+<main>
+	{{if and
+		(eq .Kind "a")
+		(ne .Name "")
+		(not .Hidden)
+	}}
+		<h1 title="{{.Name | printf "%s!" | html}}">{{.Name}}</h1>
+	{{else if .Hidden}}
+		<p>{{template "note" .}}</p>
+	{{end}}
+	<ul>
+		{{range $i, $v := .Items}}
+			<li>{{$i}}: {{$v
+				| printf "%v"
+			}}</li>
+		{{end}}
+	</ul>
+<pre>
+  {{.Name}}
+</pre>
+</main>
+{{end}}
+
+{{define "note"}}<em>{{len .Items}}</em>{{end}}
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Kind":"a","Name":"n","Hidden":false,"Items":["x","y"]}

@@ -33,7 +33,7 @@ func FuzzFormatEquivalent(f *testing.F) {
 	})
 	f.Fuzz(func(t *testing.T, input string) {
 		out, err := Source("fuzz.gohtml", input)
-		if errors.Is(err, errOverlappingEdits) {
+		if formatterBug(err) {
 			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
 		}
 		if err != nil {
@@ -43,6 +43,7 @@ func FuzzFormatEquivalent(f *testing.F) {
 		if err != nil {
 			t.Fatalf("Source(output) error: %v\ninput:  %q\noutput: %q", err, input, out)
 		}
+		checkActionShapes(t, input, out)
 		if again != out {
 			t.Errorf("not idempotent\ninput:      %q\nformat(1):  %q\nformat(2):  %q", input, out, again)
 		}
@@ -55,7 +56,7 @@ func FuzzFormatEquivalent(f *testing.F) {
 			if c.CallSite {
 				in = input + oracleCallerDefine(c)
 				formatted, err = Source("fuzz.gohtml", in)
-				if errors.Is(err, errOverlappingEdits) {
+				if formatterBug(err) {
 					t.Fatalf("Source(input with caller %s) error: %v\ninput: %q", c.Name, err, in)
 				}
 				if err != nil {
@@ -78,6 +79,34 @@ func FuzzFormatEquivalent(f *testing.F) {
 			}
 		}
 	})
+}
+
+// formatterBug reports whether err is one Source returns for a
+// formatter bug rather than for its input: overlapping edits, or printed
+// actions that do not parse as the source's.
+func formatterBug(err error) bool {
+	return errors.Is(err, errOverlappingEdits) || errors.Is(err, errActionChanged)
+}
+
+// checkActionShapes fails t unless output parses to the same actions as
+// input (actionShapes), positions and spacing aside.
+func checkActionShapes(t *testing.T, input, output string) {
+	t.Helper()
+	parse := func(src string) []string {
+		tree, err := template.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
+			EmitComment: true,
+			ParseHTML:   true,
+			BreakOK:     true,
+			ContinueOK:  true,
+		})
+		if err != nil {
+			t.Fatalf("ParseTree: %v\nsource: %q", err, src)
+		}
+		return actionShapes(tree.Root)
+	}
+	if in, out := parse(input), parse(output); !slices.Equal(in, out) {
+		t.Errorf("actions parse differently\ninput:  %q\noutput: %q\ninput actions:  %q\noutput actions: %q", input, output, in, out)
+	}
 }
 
 // FuzzFormatUnresolvedCalls formats inputs that call templates they do not
@@ -107,12 +136,13 @@ func FuzzFormatUnresolvedCalls(f *testing.F) {
 			return
 		}
 		out, err := Source("fuzz.gohtml", input)
-		if errors.Is(err, errOverlappingEdits) {
+		if formatterBug(err) {
 			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
 		}
 		if err != nil {
 			return
 		}
+		checkActionShapes(t, input, out)
 		for _, body := range []string{"t", "<tr><td>t</td></tr>", "<span>t</span>", " \n\t"} {
 			var defines strings.Builder
 			for _, name := range names {
@@ -246,13 +276,20 @@ func FuzzFormatIdempotent(f *testing.F) {
 		`{{else if .Other}}<p>other</p>`,
 		`<script>var x = {{.}};</script>`,
 		`<button onclick="{{.Handler}}">click</button>`,
+		"<p>{{ if and (eq .A 1) (eq .B 2) (not .C) }}x{{ end }}</p>",
+		"<div>\n<p>{{.X | printf \"%s\" | len}}</p>\n</div>",
+		"<div>\n  {{.X | printf \"%s\" | printf \"%s\" | len}}\n</div>",
+		"<span class='chip'{{if or (eq .A 1) (eq .B 2) (eq .C 3)}} x{{end}}>y</span>",
+		"<p>{{.X\n| len}}{{printf \"%s %s\"\n.X .X}}</p>",
+		"<a href=\"{{ (.X) }}\">{{ ( .M ).k }}</a>",
+		"{{- with $v := (.) -}}<p>{{- $v | printf \"%v\" | len -}}</p>{{- end -}}",
 	}
 	for _, s := range seeds {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, input string) {
 		formatted1, err := Source("fuzz.gohtml", input)
-		if errors.Is(err, errOverlappingEdits) {
+		if formatterBug(err) {
 			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
 		}
 		if err != nil {
@@ -262,6 +299,7 @@ func FuzzFormatIdempotent(f *testing.F) {
 		if err != nil {
 			t.Fatalf("re-parse of formatted output failed:\n  input:     %q\n  formatted: %q\n  error:     %v", input, formatted1, err)
 		}
+		checkActionShapes(t, input, formatted1)
 		if formatted1 != formatted2 {
 			t.Errorf("format not idempotent:\n  input:      %q\n  format(1):  %q\n  format(2):  %q", input, formatted1, formatted2)
 		}

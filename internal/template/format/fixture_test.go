@@ -376,18 +376,60 @@ func pendingErrors(pending map[string]string, problems []problem) (errs, documen
 	return append(errs, missing...), documented
 }
 
+// checkOpaqueRegions checks that each opaque region of input is in
+// output, in order, byte for byte outside its actions: the formatter
+// prints action interiors everywhere (they never render), so each action
+// token counts as one placeholder.
 func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analysis.Stylesheet) {
 	t.Helper()
+	maskedIn, maskedOut := maskActions(input), collapseMasks(maskActions(output))
 	cursor := 0
 	for _, r := range opaqueRegions(input, sheets) {
-		region := input[r[0]:r[1]]
-		i := strings.Index(output[cursor:], region)
+		region := collapseMasks(maskedIn[r[0]:r[1]])
+		i := strings.Index(maskedOut[cursor:], region)
 		if i < 0 {
 			t.Errorf("%s: opaque region at input bytes %d:%d not found in output after byte %d: %q", name, r[0], r[1], cursor, region)
 			continue
 		}
 		cursor += i + len(region)
 	}
+}
+
+// maskActions returns src with each byte of its action tokens (actions,
+// branch keywords, template calls; not comments) replaced by NUL, so
+// offsets into src stay valid. A src that does not parse is returned as
+// it is.
+func maskActions(src string) string {
+	tree, err := template.ParseTree("mask", "mask", src, nil, lex.Options{
+		EmitComment: true,
+		ParseHTML:   true,
+		BreakOK:     true,
+		ContinueOK:  true,
+	})
+	if err != nil {
+		return src
+	}
+	e := newEmitter(src, 0, tree.Root, "{{", "}}", classes{}, nil, nil)
+	masked := []byte(src)
+	for _, tok := range e.actions {
+		for i := tok.start; i < tok.end; i++ {
+			masked[i] = 0
+		}
+	}
+	return string(masked)
+}
+
+// collapseMasks returns s with each run of NULs (maskActions) written
+// as one.
+func collapseMasks(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0 && i > 0 && s[i-1] == 0 {
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // defineCallSiteModes reports whether the formatter keeps a define's
