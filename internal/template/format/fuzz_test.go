@@ -29,7 +29,7 @@ func FuzzFormatEquivalent(f *testing.F) {
 	addFixtureSeeds(f)
 	var pending, unparsable atomic.Int64
 	f.Cleanup(func() {
-		f.Logf("call-site caller failures pending Task 7: %d; callers skipped because input plus caller does not parse: %d", pending.Load(), unparsable.Load())
+		f.Logf("call-site caller failures pending Task 7: %d; callers skipped because caller plus input does not parse: %d", pending.Load(), unparsable.Load())
 	})
 	f.Fuzz(func(t *testing.T, input string) {
 		out, err := Source("fuzz.gohtml", input)
@@ -54,14 +54,14 @@ func FuzzFormatEquivalent(f *testing.F) {
 		for _, c := range callers {
 			in, formatted := input, out
 			if c.CallSite {
-				in = input + oracleCallerDefine(c)
+				in = oracleCallerDefine(c) + input
 				formatted, err = Source("fuzz.gohtml", in)
 				if formatterBug(err) {
 					t.Fatalf("Source(input with caller %s) error: %v\ninput: %q", c.Name, err, in)
 				}
 				if err != nil {
-					// The input ends so that the appended define does not
-					// parse (an open delimiter, say): not a formatter bug.
+					// The input with the define before it does not parse
+					// (a stray {{end}}, say): not a formatter bug.
 					unparsable.Add(1)
 					continue
 				}
@@ -112,8 +112,9 @@ func checkActionShapes(t *testing.T, input, output string) {
 
 // FuzzFormatUnresolvedCalls formats inputs that call templates they do not
 // define, as the formatter sees a partial without its package, then
-// renders input and output with a small define set appended under every
-// unresolved name. The formatter assumes such a call writes what belongs
+// renders input and output with a small define set put before them under
+// every unresolved name (after, an element the input leaves open could
+// swallow it). The formatter assumes such a call writes what belongs
 // where it stands (spec §2); each define set must render alike.
 func FuzzFormatUnresolvedCalls(f *testing.F) {
 	for _, s := range []string{
@@ -156,7 +157,7 @@ func FuzzFormatUnresolvedCalls(f *testing.F) {
 				outDefines.WriteString(`{{define ` + strconv.Quote(name) + `}}` + body + `{{end}}`)
 			}
 			for _, dot := range fuzzDots() {
-				if p := fuzzRenderingProblem(input+defines.String(), out+outDefines.String(), "", rendering.Body, dot); p != "" {
+				if p := fuzzRenderingProblem(defines.String()+input, outDefines.String()+out, "", rendering.Body, dot); p != "" {
 					t.Errorf("with every unresolved name defined as %q: %s", body, p)
 				}
 			}
