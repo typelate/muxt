@@ -610,6 +610,9 @@ var whatwgRegressions = []whatwgRow{
 	// line is reindented but never joined.
 	{snippet: 5, input: "a<!--x-->b\n", want: "a<!--x-->b\n"},
 	{snippet: 5, input: "<div>\na\n\t\t<!--x-->\nb\n</div>\n", want: "<div>\n\ta\n\t<!--x-->\n\tb\n</div>\n"},
+	// 6: with body pre-wrap, a call that writes text in <head> moves the
+	// following run into <body>, which preserves it.
+	{snippet: 6, css: "body{white-space:pre-wrap}", input: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n", want: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n"},
 	// 9: no LF is added before {{end}} of a define used inline.
 	{snippet: 9, input: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n", want: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n"},
 	// 10: no final LF is added.
@@ -638,9 +641,6 @@ var whatwgRegressions = []whatwgRow{
 // Move a row to whatwgRegressions when TestWHATWGRegressions reports
 // that it passes.
 var whatwgPending = []whatwgRow{
-	// 6: with body pre-wrap, a call that writes text in <head> moves the
-	// following run into <body>, which preserves it.
-	{snippet: 6, task: "Task 6 follow-up (ruling 14)", css: "body{white-space:pre-wrap}", input: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n", want: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n"},
 	// 7: a define called from a pre-wrap element keeps its bytes.
 	{snippet: 7, task: "Task 7", css: ".bubble{white-space:pre-wrap}", input: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n", want: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n"},
 	// 8: a define called from an attribute value keeps its bytes.

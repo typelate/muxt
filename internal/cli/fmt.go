@@ -157,16 +157,29 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 
 // generatedTemplateLine matches the line that marks a generated
 // template: Go's convention (^// Code generated .* DO NOT EDIT\.$) in a
-// template comment, trim markers allowed, or in an HTML comment.
-var generatedTemplateLine = regexp.MustCompile(`^(?:\{\{-? ?/\* Code generated .* DO NOT EDIT\. \*/ ?-?\}\}|<!-- Code generated .* DO NOT EDIT\. -->)$`)
+// template comment, trim markers allowed, or in an HTML comment. The
+// first group is the template comment's text, the second the HTML
+// comment's; isGeneratedTemplate requires the line to be that one
+// comment.
+var generatedTemplateLine = regexp.MustCompile(`^(?:\{\{-? ?/\* (Code generated .* DO NOT EDIT\.) \*/ ?-?\}\}|<!-- (Code generated .* DO NOT EDIT\.) -->)$`)
 
 // isGeneratedTemplate reports whether the first line of source that is
-// not blank marks it generated (generatedTemplateLine).
+// not blank is a single comment that marks it generated
+// (generatedTemplateLine): the marker never spans two comments.
 func isGeneratedTemplate(source []byte) bool {
 	for line := range bytes.Lines(source) {
 		line = bytes.Trim(line, " \t\r\n")
-		if len(line) > 0 {
-			return generatedTemplateLine.Match(line)
+		if len(line) == 0 {
+			continue
+		}
+		m := generatedTemplateLine.FindSubmatch(line)
+		switch {
+		case m == nil:
+			return false
+		case m[1] != nil:
+			return !bytes.Contains(m[1], []byte("*/"))
+		default:
+			return !bytes.Contains(m[2], []byte("-->")) && !bytes.Contains(m[2], []byte("--!>"))
 		}
 	}
 	return false

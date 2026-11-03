@@ -483,9 +483,13 @@ var keptInTable = map[string]bool{"script": true, "style": true, "template": tru
 
 // misplacement is an element the HTML parser builds, or whose content it
 // builds, under owner instead of where the template tree puts it; owner
-// nil is the tree root or a define or block body, which collapse.
+// nil is the tree root or a define or block body, which collapse, whose
+// items are top. text reports that only el's text content moves (a table
+// element whose text is foster-parented), not el.
 type misplacement struct {
 	el, owner *template.HTMLElementNode
+	text      bool
+	top       []template.Node
 }
 
 // whiteSpaceOf is the white-space of el, collapse for nil (the tree root
@@ -514,16 +518,62 @@ func unsure(styles analysis.Whitespaces, el *template.HTMLElementNode) {
 // when the candidate owners differ, the most-preserving one wins; unknown
 // is taken for it). Where both collapse, as on most pages, the runs stay
 // reindentable: the formatter changes only amounts, never kinds, so the
-// box the browser builds them next to does not matter. With treeSelectors
-// (analysis.WhiteSpaceDependsOnTree) every such element is unsure: its
-// white-space was matched in the template tree, and a rule whose match
-// depends on the tree may match it differently where the browser puts it.
-func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree, treeSelectors bool) {
-	for _, m := range parsedElsewhere(root, styles, context) {
-		if treeSelectors || whiteSpaceOf(styles, m.el) != whiteSpaceOf(styles, m.owner) {
+// box the browser builds them next to does not matter.
+//
+// Selectors were matched in the template tree. When a white-space rule
+// may match the moved element differently where the browser puts it
+// (moved.MayMatch), the element is unsure, and so is the element that
+// receives it, with its children, whose siblings and structure change:
+// the owner, or each element at the top of the tree root or define body.
+//
+// When text in a head implies the body (parsedElsewhere) and the body does
+// not certainly collapse white space (a body element whose white-space is
+// not collapse, or none in root, whose implied body's is not known),
+// unsureParsedElsewhere returns asIs: the runs from that text through the
+// head's end and the head/body boundary are the body's, and the whole
+// tree is written as it is.
+func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree, moved analysis.MovedMatcher) (asIs bool) {
+	misplaced, impliesBody := parsedElsewhere(root, styles, context)
+	if impliesBody && !bodiesCollapse(root, styles) {
+		return true
+	}
+	for _, m := range misplaced {
+		var els []*template.HTMLElementNode
+		if !m.text {
+			els = []*template.HTMLElementNode{m.el}
+		}
+		if moved.MayMatch(els) {
+			unsure(styles, m.el)
+			if m.owner != nil {
+				unsure(styles, m.owner)
+				continue
+			}
+			items, _ := splitChildren(m.top)
+			for _, item := range items {
+				if el, ok := item.(*template.HTMLElementNode); ok {
+					unsure(styles, el)
+				}
+			}
+			continue
+		}
+		if whiteSpaceOf(styles, m.el) != whiteSpaceOf(styles, m.owner) {
 			unsure(styles, m.el)
 		}
 	}
+	return false
+}
+
+// bodiesCollapse reports whether root holds a body element and every one
+// of them certainly collapses white space.
+func bodiesCollapse(root *template.ListNode, styles analysis.Whitespaces) bool {
+	found, ok := false, true
+	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+		if el, isEl := n.(*template.HTMLElementNode); isEl && strings.EqualFold(el.TagName, "body") {
+			found = true
+			ok = ok && whiteSpaceOf(styles, el) == analysis.WhiteSpaceCollapse
+		}
+	})
+	return found && ok
 }
 
 // parsedElsewhere finds the elements whose box, or content, the HTML
@@ -553,8 +603,11 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 // head, table content in a table context) only when the file's html
 // and body, or the table's parent, certainly collapse white space;
 // otherwise it is taken to write text.
-func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) []misplacement {
-	var out []misplacement
+//
+// impliesBody reports text, or an action or call that may write text, in
+// a head or in html before a body: the browser closes the head there and
+// implies the body, which owns the runs that follow up to the body tag.
+func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) (out []misplacement, impliesBody bool) {
 	collapses := func(el *template.HTMLElementNode) bool {
 		ws, ok := styles[el]
 		return ok && ws.WhiteSpace == analysis.WhiteSpaceCollapse
@@ -588,6 +641,9 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 	walked := make(map[walkKey]documentState)
 	// doc is what the walk has seen of the document so far.
 	var doc documentState
+	// top is the item list of the tree root or define or block body the
+	// walk is in.
+	top := root.Nodes
 	// chain is the table-context elements from the nearest table down to
 	// the current parent; it is empty outside a table context. parentEl
 	// is the nearest enclosing element, nil at the top of root or a body.
@@ -603,13 +659,17 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 		}
 		fosterParented := func() {
 			for _, el := range chain {
-				out = append(out, misplacement{el, fosterTarget()})
+				out = append(out, misplacement{el: el, owner: fosterTarget(), text: true, top: top})
 			}
 		}
-		// mayWriteText is an action's effect: it may write text, which
-		// starts the body outside a head tag and is foster-parented in
-		// a table context.
+		// mayWriteText is the effect of text with content, or of an
+		// action that may write text: it starts the body outside a head
+		// tag (in a head, or in html before a body, the browser implies
+		// the body there) and is foster-parented in a table context.
 		mayWriteText := func() {
+			if parent == "head" || parent == "html" && !doc.body {
+				impliesBody = true
+			}
 			doc.content = doc.content || !headTags[parent]
 			if tableContexts[parent] {
 				fosterParented()
@@ -641,10 +701,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 				walk(n.Children, parent, parentEl, chain)
 			case *template.TextNode:
 				if !isRunOnly(n.Text) {
-					doc.content = doc.content || !headTags[parent]
-					if tableContexts[parent] {
-						fosterParented()
-					}
+					mayWriteText()
 				}
 			case *template.ActionNode:
 				mayWriteText()
@@ -663,18 +720,18 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 			case *template.HTMLElementNode:
 				tag := strings.ToLower(n.TagName)
 				if !doc.inPlace(tag, parent) {
-					out = append(out, misplacement{n, parentEl})
+					out = append(out, misplacement{el: n, owner: parentEl, top: top})
 					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				}
 				allowed, isPart := tableParents[tag]
 				switch {
 				case isPart && !slices.Contains(allowed, parent):
-					out = append(out, misplacement{n, parentEl})
+					out = append(out, misplacement{el: n, owner: parentEl, top: top})
 					walk(n.Children, parent, parentEl, chain) // the parser drops the tag
 					continue
 				case tableContexts[parent] && !isPart && tag != "table" && !keptInTable[tag]:
-					out = append(out, misplacement{n, fosterTarget()})
+					out = append(out, misplacement{el: n, owner: fosterTarget(), top: top})
 					fosterParented()
 				}
 				var inner []*template.HTMLElementNode
@@ -697,10 +754,10 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 				}
 			case *template.DefineNode:
 				if n.Body != nil {
-					outer := doc
-					doc = documentState{}
+					outer, outerTop := doc, top
+					doc, top = documentState{}, n.Body.Nodes
 					walk(n.Body.Nodes, "", nil, nil)
-					doc = outer
+					doc, top = outer, outerTop
 				}
 			case *template.BlockNode:
 				if n.Body == nil {
@@ -718,15 +775,15 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 					inPlace(n.Name, bodies)
 				}
 				// The body is also a define of its own.
-				outer := doc
-				doc = documentState{}
+				outer, outerTop := doc, top
+				doc, top = documentState{}, n.Body.Nodes
 				walk(n.Body.Nodes, "", nil, nil)
-				doc = outer
+				doc, top = outer, outerTop
 			}
 		}
 	}
 	walk(root.Nodes, "", nil, nil)
-	return out
+	return out, impliesBody
 }
 
 // documentElementsCollapse reports whether root holds an html and a body
@@ -857,11 +914,11 @@ var repairedTags = map[string]bool{
 // unclosed preformatted element, what follows the p to the end of its
 // parent is the element's content: that parent is written as it is, and
 // at the tree root or in a define or block body unsureMisnested returns
-// true, and the whole tree is written as it is. With treeSelectors
-// (analysis.WhiteSpaceDependsOnTree) every flagged element and its group
-// is unsure whatever their white-space: a rule whose match depends on the
-// tree may match them differently in the browser's tree.
-func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, treeSelectors bool) (asIs bool) {
+// true, and the whole tree is written as it is. Selectors were matched in
+// the template tree: when a white-space rule may match a group's elements
+// (the flagged element included) differently in the browser's tree
+// (moved.MayMatch), the whole group is unsure whatever its white-space.
+func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) (asIs bool) {
 	tree := &template.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
 	for _, d := range analysis.CheckStructure(tree) {
@@ -1000,9 +1057,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, treeS
 		// el's own content stays el's; its ancestors' may move. el
 		// itself may be matched differently where the browser puts it.
 		g, stop := mark(path, closes[el])
-		if treeSelectors {
-			g.members = append(g.members, el)
-		}
+		g.moved = append(g.moved, el)
 		if heldOpen(el, path) || closesP[el] && !el.Closed {
 			// What follows el in its reach may be el's content.
 			g.members = append(g.members, el)
@@ -1010,7 +1065,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, treeS
 		}
 	})
 	for _, g := range groups {
-		g.settle(styles, treeSelectors)
+		g.settle(styles, moved)
 	}
 	for _, el := range asWritten {
 		unsure(styles, el)
@@ -1062,6 +1117,9 @@ func hasUnreadSpecialTag(text []byte) bool {
 type ownerGroup struct {
 	members []*template.HTMLElementNode
 	root    bool
+	// moved are elements the browser builds elsewhere whose own runs
+	// stay theirs: they count for the selectors, not the white-space.
+	moved []*template.HTMLElementNode
 }
 
 // add puts n, where a marking stopped, in g: an element as a member, any
@@ -1078,10 +1136,11 @@ func (g *ownerGroup) add(n template.Node) {
 // settle makes every member of g unsure when the members (and the root)
 // do not all have the same white-space: a run may then be owned by an
 // element whose white-space differs from the one the template tree
-// gives it. With treeSelectors every member is unsure.
-func (g *ownerGroup) settle(styles analysis.Whitespaces, treeSelectors bool) {
-	if treeSelectors {
-		for _, el := range g.members {
+// gives it. When a white-space rule may match the members or moved
+// elements differently in the browser's tree, all of them are unsure.
+func (g *ownerGroup) settle(styles analysis.Whitespaces, moved analysis.MovedMatcher) {
+	if all := slices.Concat(g.members, g.moved); moved.MayMatch(all) {
+		for _, el := range all {
 			unsure(styles, el)
 		}
 		return
@@ -1200,21 +1259,25 @@ var formattingMarkers = map[string]bool{"td": true, "th": true, "caption": true,
 // formatting start tag the template parser read as text counts too; that
 // element has no computed style, so its white-space is taken as unknown.
 // Where the white-space is the same, as on most pages, the runs stay
-// reindentable: the formatter changes only amounts, never kinds. With
-// treeSelectors (analysis.WhiteSpaceDependsOnTree) every element in the
-// reach is unsure: the clone is matched where the browser puts it.
-func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, treeSelectors bool) {
+// reindentable: the formatter changes only amounts, never kinds. When a
+// white-space rule may match the formatting element or the elements in
+// its reach differently in the browser's tree (moved.MayMatch: the clone
+// is matched where the browser puts it, and the elements after it get a
+// new ancestor), every element in the reach is unsure.
+func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) {
 	tree := &template.Tree{Root: root}
 	type reopened struct {
-		stop template.Node // where its reach ends; nil is the root
-		mode analysis.WhiteSpace
+		stop     template.Node // where its reach ends; nil is the root
+		mode     analysis.WhiteSpace
+		elements []*template.HTMLElementNode // the formatting element (if any) and its reach
 	}
 	var (
-		reaches []reopened // per unclosed formatting element
+		reaches []*reopened // per unclosed formatting element
 		marked  []*template.HTMLElementNode
 	)
-	mark := func(el *template.HTMLElementNode, mode analysis.WhiteSpace) {
-		if treeSelectors || whiteSpaceOf(styles, el) != mode {
+	mark := func(r *reopened, el *template.HTMLElementNode) {
+		r.elements = append(r.elements, el)
+		if whiteSpaceOf(styles, el) != r.mode {
 			marked = append(marked, el)
 		}
 	}
@@ -1231,7 +1294,7 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, treeSe
 		case *template.HTMLElementNode:
 			for _, r := range reaches {
 				if r.stop == nil || slices.Contains(path, r.stop) {
-					mark(n, r.mode)
+					mark(r, n)
 				}
 			}
 			if n.Closed || n.Void || !template.FormattingElements[strings.ToLower(n.TagName)] {
@@ -1241,14 +1304,23 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, treeSe
 		default:
 			return
 		}
-		reach := reachOf(path)
-		reaches = append(reaches, reopened{reach, mode})
-		for i := len(path) - 1; i >= 0 && path[i] != reach; i-- {
+		stop := reachOf(path)
+		r := &reopened{stop: stop, mode: mode}
+		reaches = append(reaches, r)
+		for i := len(path) - 1; i >= 0 && path[i] != stop; i-- {
 			if p, ok := path[i].(*template.HTMLElementNode); ok {
-				mark(p, mode)
+				mark(r, p)
 			}
 		}
+		if el, ok := n.(*template.HTMLElementNode); ok {
+			r.elements = append(r.elements, el) // matched where it is reopened
+		}
 	})
+	for _, r := range reaches {
+		if moved.MayMatch(r.elements) {
+			marked = append(marked, r.elements...)
+		}
+	}
 	for _, el := range marked {
 		unsure(styles, el)
 	}
