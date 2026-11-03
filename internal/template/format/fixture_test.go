@@ -409,7 +409,7 @@ func maskActions(src string) string {
 	if err != nil {
 		return src
 	}
-	e := newEmitter(src, 0, tree.Root, "{{", "}}", classes{}, nil, nil)
+	e := newEmitter(src, 0, tree.Root, "{{", "}}", classes{}, nil, nil, nil)
 	masked := []byte(src)
 	for _, tok := range e.actions {
 		for i := tok.start; i < tok.end; i++ {
@@ -503,7 +503,7 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 					continue
 				}
 			}
-			got, err := render(out, c.Source, ds.value)
+			got, err := render(out, renamedCaller(c.Source, out), ds.value)
 			if err != nil {
 				r.problems = append(r.problems, problem{key: c.Name, kind: kindOutputError, msg: fmt.Sprintf("%s: output: %v", label, err)})
 				continue

@@ -299,11 +299,22 @@ func IsRouteDefinitionName(name string) bool {
 }
 
 func newDefinition(t *html.Template) (Definition, error, bool) {
-	in := t.Name()
-	if !templateNameMux.MatchString(in) {
+	def, httpStatusCode, ok := splitDefinitionName(t.Name())
+	if !ok {
 		return Definition{}, nil, false
 	}
+	def.template = t
+	err := def.parseParts(httpStatusCode)
+	return def, err, true
+}
+
+// splitDefinitionName matches in against templateNameMux and returns the
+// definition with its name parts set, and the status code text.
+func splitDefinitionName(in string) (Definition, string, bool) {
 	matches := templateNameMux.FindStringSubmatch(in)
+	if matches == nil {
+		return Definition{}, "", false
+	}
 	def := Definition{
 		name:              in,
 		method:            matches[templateNameMux.SubexpIndex("METHOD")],
@@ -313,14 +324,52 @@ func newDefinition(t *html.Template) (Definition, error, bool) {
 		pattern:           matches[templateNameMux.SubexpIndex("pattern")],
 		fileSet:           token.NewFileSet(),
 		defaultStatusCode: http.StatusOK,
-		template:          t,
 		spans:             newNameSpans(templateNameMux.FindStringSubmatchIndex(in)),
 	}
 	if def.handler != "" {
 		def.handlerOffset = def.spans.call[0] + strings.Index(in[def.spans.call[0]:], def.handler)
 	}
-	err := def.parseParts(matches[templateNameMux.SubexpIndex("HTTP_STATUS")])
-	return def, err, true
+	return def, matches[templateNameMux.SubexpIndex("HTTP_STATUS")], true
+}
+
+// DefinitionName is a template name with the shape of a route
+// definition, split into its parts as written.
+type DefinitionName struct {
+	// Method, Host and Path are the pattern's parts; Method and Host
+	// may be empty. Host holds what the name has between the method and
+	// the path, spaces included.
+	Method, Host, Path string
+
+	// Status is the status code as written ("201",
+	// "http.StatusCreated"), or "".
+	Status string
+
+	// Call is the handler call as the Go parser reads it, positioned in
+	// FileSet; nil when the name has none.
+	Call    *ast.CallExpr
+	FileSet *token.FileSet
+}
+
+// ParseDefinitionName splits name as muxt reads a route definition's
+// name: an HTTP pattern optionally followed by a status code and a
+// handler call. It reports false when name does not have that shape, or
+// its handler does not parse as a call of a function identifier. It
+// checks no more than that: the method, status code and arguments are
+// not validated, and the call is as written, wrappers included.
+func ParseDefinitionName(name string) (DefinitionName, bool) {
+	def, status, ok := splitDefinitionName(name)
+	if !ok {
+		return DefinitionName{}, false
+	}
+	parts := DefinitionName{Method: def.method, Host: def.host, Path: def.path, Status: status, FileSet: def.fileSet}
+	if def.handler != "" {
+		_, call, err := parseHandlerCall(def.fileSet, &def)
+		if err != nil {
+			return DefinitionName{}, false
+		}
+		parts.Call = call
+	}
+	return parts, true
 }
 
 // parseParts checks the parts of the name in order and reports the first

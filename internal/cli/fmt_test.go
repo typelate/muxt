@@ -243,6 +243,68 @@ func TestFormatRun(t *testing.T) {
 	})
 }
 
+// TestFormatDefineNames pins the consistency rule for route names:
+// muxt fmt rewrites a name only when every template of the package that
+// names it is in the run or spells it canonically already, so a define
+// and its calls change together.
+func TestFormatDefineNames(t *testing.T) {
+	const (
+		goMod   = "module example.com/m\n\ngo 1.22\n"
+		embed   = "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar f embed.FS\n"
+		define  = `{{define "GET  /x/{id}  M( ctx , id )"}}<p>{{.}}</p>{{end}}` + "\n"
+		call    = `<div>{{template "GET  /x/{id}  M( ctx , id )" .}}</div>` + "\n"
+		defineC = `{{define "GET /x/{id} M(ctx, id)"}}<p>{{.}}</p>{{end}}` + "\n"
+		callC   = `<div>{{template "GET /x/{id} M(ctx, id)" .}}</div>` + "\n"
+		pinned  = "<div>\n\t{{/* muxt:fmt off */}}\n{{template \"GET  /x/{id}  M( ctx , id )\" .}}\n</div>\n"
+	)
+	for _, tt := range []struct {
+		name             string
+		call             string
+		args             []string
+		wantA, wantB     string
+		stdin, wantStdin string
+	}{
+		{name: "define and call in the run", call: call, args: []string{"-w", "."}, wantA: defineC, wantB: callC},
+		{name: "files named one by one", call: call, args: []string{"-w", "a.gohtml", "b.gohtml"}, wantA: defineC, wantB: callC},
+		{name: "the call outside the run spelled the old way", call: call, args: []string{"-w", "a.gohtml"}, wantA: define, wantB: call},
+		{name: "the call outside the run already canonical", call: callC, args: []string{"-w", "a.gohtml"}, wantA: defineC, wantB: callC},
+		{name: "a call in a muxt:fmt region", call: pinned, args: []string{"-w", "."}, wantA: define, wantB: pinned},
+		{name: "standard input has no package", call: call, stdin: define, wantA: define, wantB: call, wantStdin: define},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			wd := t.TempDir()
+			writeTestFile(t, wd, "go.mod", goMod)
+			writeTestFile(t, wd, "t.go", embed)
+			writeTestFile(t, wd, "a.gohtml", define)
+			writeTestFile(t, wd, "b.gohtml", tt.call)
+			stdout, stderr, err := runFormat(t, wd, tt.stdin, tt.args...)
+			require.NoError(t, err, "muxt fmt %q", tt.args)
+			assert.Empty(t, stderr, "muxt fmt %q", tt.args)
+			assert.Equal(t, tt.wantStdin, stdout, "muxt fmt %q", tt.args)
+			for name, want := range map[string]string{"a.gohtml": tt.wantA, "b.gohtml": tt.wantB} {
+				got, err := os.ReadFile(filepath.Join(wd, name))
+				require.NoError(t, err)
+				assert.Equal(t, want, string(got), "%s after muxt fmt %q", name, tt.args)
+			}
+		})
+	}
+
+	// A template of the package that does not parse may name the route
+	// any way: every name is kept.
+	t.Run("a template of the package that does not parse", func(t *testing.T) {
+		wd := t.TempDir()
+		writeTestFile(t, wd, "go.mod", goMod)
+		writeTestFile(t, wd, "t.go", embed)
+		writeTestFile(t, wd, "a.gohtml", define)
+		writeTestFile(t, wd, "b.gohtml", "{{if}}\n")
+		_, _, err := runFormat(t, wd, "", "-w", ".")
+		require.Error(t, err, "muxt fmt -w .")
+		got, err := os.ReadFile(filepath.Join(wd, "a.gohtml"))
+		require.NoError(t, err)
+		assert.Equal(t, define, string(got), "a.gohtml after muxt fmt -w .")
+	})
+}
+
 func TestEmbeddingPackageDir(t *testing.T) {
 	const goMod = "module example.com/m\n\ngo 1.24\n"
 	embed := func(pkg, pattern string) string {

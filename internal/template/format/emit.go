@@ -52,6 +52,8 @@ type emitter struct {
 	left, right     string                        // the template delimiters
 	actions         []*actionToken                // in source order (collectActions)
 	printed         []*actionToken                // the actions not left as written
+	unprinted       []string                      // names of the defines, blocks and template calls collectActions did not find a token for
+	renames         map[string]string             // name → canonical name, for the names planRenames changes
 	edits           []edit
 }
 
@@ -72,7 +74,7 @@ type openOptional struct {
 
 // newEmitter returns the emitter of root, whose source is src starting
 // at position base, written with the delimiters left and right.
-func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives) *emitter {
+func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives, keep func(string) bool) *emitter {
 	e := &emitter{
 		src:             src,
 		base:            base,
@@ -97,6 +99,7 @@ func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right s
 			e.printed = append(e.printed, tok)
 		}
 	}
+	e.planRenames(root, keep)
 	return e
 }
 

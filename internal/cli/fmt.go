@@ -42,7 +42,7 @@ type formatFile struct {
 // gofmt does. Problems with a file are reported on stderr, one line each,
 // and the other files are still formatted.
 func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration) error {
-	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage), loads: make(map[string]packageLoad), unread: make(map[string]bool)}
+	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage), loads: make(map[string]packageLoad), unread: make(map[string]bool), names: make(map[string]keptNames), firstPass: make(map[*formatFile]formatResult)}
 	var files []*formatFile
 	if len(config.Paths) == 0 {
 		source, err := io.ReadAll(cmd.InOrStdin())
@@ -79,7 +79,15 @@ type formatRun struct {
 	packages       map[string]formatPackage
 	loads          map[string]packageLoad // load.EmbeddedFiles by directory
 	unread         map[string]bool        // keys of run files that could not be read, already reported
+	names          map[string]keptNames   // by package directory (namesKept)
+	firstPass      map[*formatFile]formatResult
 	failed         bool
+}
+
+// formatResult is what formatSource returned for a file.
+type formatResult struct {
+	out string
+	err error
 }
 
 // formatPackage is the Go package in a directory, as muxt fmt sees it:
@@ -191,14 +199,30 @@ func skipFormatDirectory(name string) bool {
 	return name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
 
-// format formats f, with the run's other files of f's package and the
-// templates that package embeds as context for its author CSS, and writes
-// the result where config says. A file embedded by another package, or by
-// none, is in another package, whose CSS does not reach f's. When a template of the package
-// cannot be read or parsed, or the package loads with errors, it may link
-// or hold any stylesheet, so f is formatted as with a link that does not
-// resolve: every element may have unknown CSS.
+// format formats f (formatSource), with the names of its package kept
+// as namesKept says, and writes the result where config says.
 func (r *formatRun) format(f *formatFile, all []*formatFile) {
+	keep := r.namesKept(f.dir, all)
+	result, ok := r.firstPass[f]
+	if !ok {
+		result.out, result.err = r.formatSource(f, all, keep.keep)
+	}
+	if result.err != nil {
+		r.report(result.err.Error())
+		return
+	}
+	r.write(f, []byte(result.out))
+}
+
+// formatSource formats f, with the run's other files of f's package and
+// the templates that package embeds as context for its author CSS, and
+// keeps the template names keep reports (format.KeepNames). A file
+// embedded by another package, or by none, is in another package, whose
+// CSS does not reach f's. When a template of the package cannot be read
+// or parsed, or the package loads with errors, it may link or hold any
+// stylesheet, so f is formatted as with a link that does not resolve:
+// every element may have unknown CSS. The error is the line to report.
+func (r *formatRun) formatSource(f *formatFile, all []*formatFile, keep func(string) bool) (string, error) {
 	pkg := r.packageIn(f.dir, all)
 	contextBroken := pkg.broken
 	var context []*template.Tree
@@ -225,16 +249,107 @@ func (r *formatRun) format(f *formatFile, all []*formatFile) {
 	}
 	styles, err := formatStyles(f.dir, pkg.loaded, files, context)
 	if err != nil {
-		r.report(fmt.Sprintf("%s: %v", f.name, err))
-		return
+		return "", fmt.Errorf("%s: %v", f.name, err)
 	}
 	styles.MissingSheets = styles.MissingSheets || contextBroken
-	out, err := format.Source(f.name, string(f.source), format.Styles(styles))
+	out, err := format.Source(f.name, string(f.source), format.Styles(styles), format.KeepNames(keep))
 	if err != nil {
-		r.report(formatErrorLine(f.name, err))
-		return
+		return "", errors.New(formatErrorLine(f.name, err))
 	}
-	r.write(f, []byte(out))
+	return out, nil
+}
+
+// keptNames are the template names of a package whose spellings stay as
+// written (format.KeepNames): all of them, or those in kept.
+type keptNames struct {
+	all  bool
+	kept map[string]bool
+}
+
+func (k keptNames) keep(canonical string) bool { return k.all || k.kept[canonical] }
+
+// namesKept returns, once per package directory, the template names
+// muxt fmt keeps as written so every reference to a template keeps
+// naming it: a name a template of the package outside the run spells
+// otherwise than canonically, or that two of its define names share
+// (format.KeptNames), and a name a file of the run keeps for itself,
+// in a muxt:fmt region say, or because it does not format. A file of
+// the run with such names is formatted first to find them, and the
+// result kept when the names found do not change it. Without a package
+// whose templates are all read (standard input, a file no package
+// embeds, a package that loads with errors), every name is kept.
+func (r *formatRun) namesKept(dir string, all []*formatFile) keptNames {
+	if k, ok := r.names[dir]; ok {
+		return k
+	}
+	k := r.findNamesKept(dir, all)
+	r.names[dir] = k
+	return k
+}
+
+func (r *formatRun) findNamesKept(dir string, all []*formatFile) keptNames {
+	keepAll := keptNames{all: true}
+	if dir == "" {
+		return keepAll
+	}
+	pkg := r.packageIn(dir, all)
+	if !pkg.loaded || pkg.broken {
+		return keepAll
+	}
+	var run []*formatFile
+	var runTrees []*template.Tree
+	inRun := make(map[string]bool)
+	for _, f := range all {
+		if f.dir != dir {
+			continue
+		}
+		if f.tree == nil {
+			return keepAll
+		}
+		run = append(run, f)
+		runTrees = append(runTrees, f.tree)
+		inRun[f.key] = true
+	}
+	var outside []*template.Tree
+	for _, e := range pkg.embedded {
+		if !inRun[e.key] {
+			outside = append(outside, e.tree)
+		}
+	}
+	first := keptNames{kept: format.KeptNames(runTrees, outside)}
+	// The names each file would change: those it spells otherwise.
+	changes := make(map[*formatFile]map[string]bool)
+	var formatted []*template.Tree
+	for _, f := range run {
+		names := format.KeptNames(nil, []*template.Tree{f.tree})
+		maps.DeleteFunc(names, func(name string, _ bool) bool { return first.kept[name] })
+		if len(names) == 0 {
+			continue
+		}
+		changes[f] = names
+		out, err := r.formatSource(f, all, first.keep)
+		r.firstPass[f] = formatResult{out: out, err: err}
+		tree := f.tree
+		if err == nil {
+			if again, err := parseFormatTree(f.name, []byte(out)); err == nil {
+				tree = again
+			}
+		}
+		formatted = append(formatted, tree)
+	}
+	k := keptNames{kept: first.kept}
+	for name := range format.KeptNames(nil, formatted) {
+		k.kept[name] = true
+	}
+	for f, names := range changes {
+		for name := range names {
+			if k.kept[name] {
+				delete(r.firstPass, f)
+				break
+			}
+		}
+	}
+	return k
 }
 
 func formatErrorLine(name string, err error) string {

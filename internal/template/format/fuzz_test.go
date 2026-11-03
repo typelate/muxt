@@ -102,7 +102,7 @@ func checkActionShapes(t *testing.T, input, output string) {
 		if err != nil {
 			t.Fatalf("ParseTree: %v\nsource: %q", err, src)
 		}
-		return actionShapes(tree.Root)
+		return actionShapes(tree.Root, CanonicalName)
 	}
 	if in, out := parse(input), parse(output); !slices.Equal(in, out) {
 		t.Errorf("actions parse differently\ninput:  %q\noutput: %q\ninput actions:  %q\noutput actions: %q", input, output, in, out)
@@ -143,13 +143,19 @@ func FuzzFormatUnresolvedCalls(f *testing.F) {
 			return
 		}
 		checkActionShapes(t, input, out)
+		// The output calls a route name as the formatter rewrote it
+		// (CanonicalName); the package defines it so too.
+		outNames := unresolvedCalls(out)
 		for _, body := range []string{"t", "<tr><td>t</td></tr>", "<span>t</span>", " \n\t"} {
-			var defines strings.Builder
+			var defines, outDefines strings.Builder
 			for _, name := range names {
 				defines.WriteString(`{{define ` + strconv.Quote(name) + `}}` + body + `{{end}}`)
 			}
+			for _, name := range outNames {
+				outDefines.WriteString(`{{define ` + strconv.Quote(name) + `}}` + body + `{{end}}`)
+			}
 			for _, dot := range fuzzDots() {
-				if p := fuzzRenderingProblem(input+defines.String(), out+defines.String(), "", rendering.Body, dot); p != "" {
+				if p := fuzzRenderingProblem(input+defines.String(), out+outDefines.String(), "", rendering.Body, dot); p != "" {
 					t.Errorf("with every unresolved name defined as %q: %s", body, p)
 				}
 			}
@@ -192,7 +198,7 @@ func fuzzRenderingProblem(input, output, callerSrc string, ctx rendering.Context
 	if _, err := rendering.Tokens(want, ctx, nil); err != nil {
 		return "" // the oracle cannot read the input's page (e.g. parsers disagree on a tag)
 	}
-	got, err := render(output, callerSrc, dot)
+	got, err := render(output, renamedCaller(callerSrc, output), dot)
 	if err != nil {
 		return fmt.Sprintf("output does not execute with %v: %v\ninput:  %q\noutput: %q", dot, err, input, output)
 	}
