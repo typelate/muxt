@@ -2,6 +2,7 @@ package format
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -238,4 +239,172 @@ func nodeEnd(src string, n template.Node) int {
 		return int(n.End()) + strings.Index(src[n.End():], "}}") + len("}}")
 	}
 	return int(n.End())
+}
+
+// TestUnsureParsedElsewhere checks which elements the insertion-mode model
+// takes as built somewhere other than where the template tree puts them:
+// it lists, in source order, the tags whose display unsureParsedElsewhere
+// sets to unknown. A {{template}} call or {{block}} stands for what its
+// body writes, resolved in the file or in the package's other templates
+// (context), and a call to a template defined nowhere is taken to write
+// what belongs where it stands.
+func TestUnsureParsedElsewhere(t *testing.T) {
+	const page = "<html>\n<head><title>T</title>%s</head>\n<body>\n<main><h1>x</h1></main>\n</body>\n</html>"
+	for _, tt := range []struct {
+		name    string
+		src     string
+		context []string
+		want    []string
+	}{
+		{
+			name: "call in head defined elsewhere",
+			src:  strings.ReplaceAll(page, "%s", `{{template "head"}}`),
+		},
+		{
+			name: "block in head writing head tags",
+			src:  strings.ReplaceAll(page, "%s", `{{block "head" .}}<meta charset="utf-8">{{end}}`),
+		},
+		{
+			name: "call in head resolving to head tags",
+			src:  `{{define "h"}}<meta charset="utf-8">{{end}}` + strings.ReplaceAll(page, "%s", `{{template "h"}}`),
+		},
+		{
+			name: "call in head resolving to text",
+			src:  `{{define "h"}}x{{end}}<html><head>{{template "h"}}</head><body> <span>a</span></body></html>`,
+			want: []string{"body"},
+		},
+		{
+			name: "block in head writing an action",
+			src:  "<html><head>{{block \"h\" .}}{{.X}}{{end}}</head>\n<body>\n <span>a</span></body></html>",
+			want: []string{"body"},
+		},
+		{
+			name: "call in a table section resolving to rows",
+			src:  "{{define \"r\"}}<tr><td>{{.}}</td></tr>{{end}}<table>\n<tbody>\n{{range .Items}}\n{{template \"r\" .}}\n{{end}}\n</tbody>\n</table>",
+			want: []string{"tr", "td"}, // the define body alone starts a document
+		},
+		{
+			name: "call in a table section resolving to text",
+			src:  "{{define \"r\"}}x{{end}}<table>\n<tbody>\n{{range .Items}}\n{{template \"r\" .}}\n{{end}}\n</tbody>\n</table>",
+			want: []string{"table", "tbody"},
+		},
+		{
+			name: "call in a table section defined elsewhere",
+			src:  "<div><table>\n<tbody>\n{{range .Items}}\n{{template \"r\" .}}\n{{end}}\n</tbody>\n</table></div>",
+		},
+		{
+			name: "call in a table section defined elsewhere, table parent not in the file",
+			src:  "<table>\n<tbody>\n{{template \"r\" .}}\n</tbody>\n</table>",
+			want: []string{"table", "tbody"},
+		},
+		{
+			name: "call in a table section defined elsewhere, table parent preserves",
+			src:  "<style>div{white-space:pre}</style><div><table>\n<tbody>\n{{template \"r\" .}}\n</tbody>\n</table></div>",
+			want: []string{"table", "tbody"},
+		},
+		{
+			name: "call in head defined elsewhere, body preserves",
+			src:  "<html><head><style>body{white-space:pre-wrap}</style>{{template \"head\"}}</head><body> <span>a</span></body></html>",
+			want: []string{"body"},
+		},
+		{
+			name: "call in head defined elsewhere, no body in the file",
+			src:  "<head>{{template \"head\"}}</head>",
+		},
+		{
+			name:    "block in head overridden by text in the package",
+			src:     `<html><head>{{block "extra" .}}{{end}}</head><body> <span>a</span></body></html>`,
+			context: []string{`{{define "extra"}}t{{end}}`},
+			want:    []string{"body"},
+		},
+		{
+			name:    "block in a table section overridden by text in the package",
+			src:     `<span>a</span><table><tbody>{{block "r" .}}<tr><td>x</td></tr>{{end}}</tbody></table>`,
+			context: []string{`{{define "r"}}t{{end}}`},
+			want:    []string{"table", "tbody", "tr", "td"}, // tr, td: the block body alone starts a document
+		},
+		{
+			name:    "call in a table section with a name defined twice",
+			src:     "<div><table>\n<tbody>\n{{template \"r\" .}}\n</tbody>\n</table></div>",
+			context: []string{`{{define "r"}}<tr><td>{{.}}</td></tr>{{end}}`, `{{define "r"}}t{{end}}`},
+			want:    []string{"table", "tbody"},
+		},
+		{
+			name:    "empty define does not shadow a real one",
+			src:     `<html><head>{{template "x"}}</head><body> <span>a</span></body></html>`,
+			context: []string{`{{define "x"}}{{end}}`, `{{define "x"}}t{{end}}`},
+			want:    []string{"body"},
+		},
+		{
+			name: "mutually recursive calls in head",
+			src:  `{{define "a"}}{{template "b"}}{{end}}{{define "b"}}{{template "a"}}{{end}}<html><head>{{template "a"}}</head><body> <span>a</span></body></html>`,
+			want: []string{"body"},
+		},
+		{
+			name: "recursive call in head",
+			src:  `{{define "h"}}{{template "h"}}{{end}}<html><head>{{template "h"}}</head><body> <span>a</span></body></html>`,
+			want: []string{"body"},
+		},
+		{
+			name: "action in head",
+			src:  `<html><head>{{.X}}</head><body> <span>a</span></body></html>`,
+			want: []string{"body"},
+		},
+		{
+			name:    "call in head resolving to text in the package",
+			src:     `<html><head>{{template "h"}}</head><body> <span>a</span></body></html>`,
+			context: []string{`{{define "h"}}x{{end}}`},
+			want:    []string{"body"},
+		},
+		{
+			name:    "call in head resolving to head tags in the package",
+			src:     `<html><head>{{template "h"}}</head><body> <span>a</span></body></html>`,
+			context: []string{`{{define "h"}}<meta charset="utf-8">{{end}}`},
+		},
+		{
+			name:    "call in a table section resolving to text in the package",
+			src:     "<table>\n<tbody>\n{{template \"r\" .}}\n</tbody>\n</table>",
+			context: []string{`{{define "r"}}x{{end}}`},
+			want:    []string{"table", "tbody"},
+		},
+		{
+			name:    "call in a table section resolving to rows in the package",
+			src:     "<table>\n<tbody>\n{{template \"r\" .}}\n</tbody>\n</table>",
+			context: []string{`{{define "r"}}<tr><td>{{.}}</td></tr>{{end}}`},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			parse := func(name, src string) *template.Tree {
+				tree, err := template.ParseTree(name, name, src, nil, lex.Options{
+					EmitComment: true,
+					ParseHTML:   true,
+				})
+				if err != nil {
+					t.Fatalf("parse %q: %v", src, err)
+				}
+				return tree
+			}
+			tree := parse("input.gohtml", tt.src)
+			var context []*template.Tree
+			for i, src := range tt.context {
+				context = append(context, parse(fmt.Sprintf("context%d.gohtml", i), src))
+			}
+			styles := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{Context: context, AuthorCSSKnown: true})
+			unsureParsedElsewhere(tree.Root, styles, context)
+			var unknown []*template.HTMLElementNode
+			for el, ws := range styles {
+				if ws.Display == analysis.DisplayUnknown {
+					unknown = append(unknown, el)
+				}
+			}
+			slices.SortFunc(unknown, func(a, b *template.HTMLElementNode) int { return cmp.Compare(a.Start(), b.Start()) })
+			var got []string
+			for _, el := range unknown {
+				got = append(got, strings.ToLower(el.TagName))
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("unsureParsedElsewhere(%q) marks %q, want %q", tt.src, got, tt.want)
+			}
+		})
+	}
 }

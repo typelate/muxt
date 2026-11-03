@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{{define \"h\"}}<meta charset=\"utf-8\">{{end}}<html>\n<head><title>T</title>{{template \"h\"}}</head>\n<body>\n<main><h1>x</h1></main>\n</body>\n</html>")
