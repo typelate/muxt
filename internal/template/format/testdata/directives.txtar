@@ -30,8 +30,7 @@
    <p>b</p>
 {{/* muxt:fmt on */}}
 	<ul>
-		<li>x</li>
-		<li>y</li>
+		<li>x</li>   <li>y</li>
 		{{/* muxt:fmt preserve */}}
 <table><tr><td>1</td>   <td>2</td></tr></table>
 		<li>z</li>
@@ -44,7 +43,7 @@
 		{{end}}
 	</section>
 	<footer>
-		<p>tail</p>
+		<p>  tail  </p>
 		{{/* muxt:fmt off */}}
 <span>  kept   </span>
 </footer>

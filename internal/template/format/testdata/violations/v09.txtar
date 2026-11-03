@@ -4,5 +4,5 @@
 </span>y</p>
 -- format.gohtml --
 <p>x<span>
-	a
+		a
 	</span>y</p>

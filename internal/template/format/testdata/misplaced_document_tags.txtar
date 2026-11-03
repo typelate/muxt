@@ -15,16 +15,14 @@
 0<html>0</html>
 <p>a</p>
 <html lang="en">
-	<p>b</p>
+<p>b</p>
 </html>
-<body><div>
-	<p>c</p>
-</div></body>
+<body><div><p>c</p></div></body>
 <head><title>t</title></head>
 <div>
 	<body>
-	<p>d</p>
-</body>
-	</div>
+		<p>d</p>
+	</body>
+</div>
 -- data/empty.json --
 {}

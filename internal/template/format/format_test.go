@@ -36,33 +36,28 @@ func TestCustomDelimiters(t *testing.T) {
 			input: "<p><% .Name %></p>",
 			left:  "<%",
 			right: "%>",
-			want:  "<p><%.Name%></p>",
+			want:  "<p><% .Name %></p>",
 		},
 		{
-			// The body holds a block-level p and its boundary gaps are
-			// reflowable, so it takes block layout (spec §6.4).
 			name:  "custom delimiters branch",
-			input: "<% if .Show %><p>yes</p><% end %>",
+			input: "<% if .Show %>\n<p>yes</p>\n  <% end %>",
 			left:  "<%",
 			right: "%>",
-			want:  "<%if .Show%>\n\t<p>yes</p>\n<%end%>",
+			want:  "<% if .Show %>\n\t<p>yes</p>\n<% end %>",
 		},
 		{
-			// The body's first and last items are block-level, so its
-			// edge gaps are reflowable and block layout needs no trim
-			// markers (spec §6.5). The formatter no longer forces them.
 			name:  "custom delimiters define",
-			input: `<% define "foo" %><p>hi</p><% end %>`,
+			input: "<% define \"foo\" %>\n  <p>hi</p>\n<% end %>",
 			left:  "<%",
 			right: "%>",
-			want:  "<%define \"foo\"%>\n\t<p>hi</p>\n<%end%>",
+			want:  "<% define \"foo\" %>\n<p>hi</p>\n<% end %>",
 		},
 		{
 			name:  "custom delimiters template call",
 			input: `<td><% template "comp" .X %></td>`,
 			left:  "<%",
 			right: "%>",
-			want:  "<td><%template \"comp\" .X%></td>",
+			want:  "<td><% template \"comp\" .X %></td>",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,39 +92,34 @@ func TestIdempotency(t *testing.T) {
 		`{{if .A -}}<p>a</p>{{else -}}<p>b</p>{{end}}`,
 		"<div>\n\t<p>first</p>\n\n\t<p>second</p>\n</div>",
 		"<pre>  line one\n\n  line two  </pre>",
-		// Short elements with template calls stay inline
+		// Template calls
 		`<td>{{template "comp" .X}}</td>`,
 		`<th>1 Year<br>{{template "note" ""}}</th>`,
-		// Short branch bodies stay inline
+		// Branch bodies on one line
 		`{{if .Show}}<p>yes</p>{{end}}`,
 		`{{with .X}}<p>{{.Value}}</p>{{else}}<p>fallback</p>{{end}}`,
 		`{{if .A}}<p>a</p>{{else if .B}}<p>b</p>{{else}}<p>c</p>{{end}}`,
-		// Inline element spacing
+		// Spacing between elements
 		`<p><span>a</span> <span>b</span></p>`,
-		// Trim markers with short inline bodies
+		// Trim markers
 		`{{- if .Label -}}{{.Label}}{{- else -}}Entity[{{.ID}}]{{- end -}}`,
-		// Space between adjacent actions in inline content
+		// Spaces between adjacent actions
 		`<p>&copy; {{.Year}} {{.Title}}</p>`,
-		// Inline prose flows with elements
+		// Prose with elements
 		`<p>Visit <a href="#">link</a> for info.</p>`,
 		`<p><strong>Notice:</strong> {{.Message}}</p>`,
-		// Inline define body stays on one line
+		// A define body on one line
 		`{{define "comp"}}{{.Value}}{{end}}`,
-		// Block layout follows the source (gofmt model): a line break
-		// in a gap the browser drops keeps the list a block, and the
-		// same list without it stays inline, however long its line.
+		// No line width: a long line stays one line.
 		`{{define "x"}}<b>a</b>{{end}}` + "\n\n" + `{{define "y"}}<b>b</b>{{end}}`,
 		`{{define "x"}}<b>` + strings.Repeat("a", 100) + `</b>{{end}}{{define "y"}}<b>b</b>{{end}}`,
 		`<br>{{define "x"}}<p>` + strings.Repeat("a", 44) + `</p>{{end}}<br>`,
-		// Adjacent defines in a block-layout list get the blank line
-		// between them on the first pass, not only once the break is
-		// in the source (found by fuzzing).
+		// Adjacent defines with no run between them (found by fuzzing
+		// against the earlier layout engine).
 		`{{define "a"}}{{end}}{{define "b"}}{{end}}<p></p>0`,
-		// A define body ending in an unclosed element stays inline: a
-		// break after it would be its content next pass.
+		// A define body ending in an unclosed element.
 		"{{define \"0\"}}\n<A0>{{end}}0",
-		// {{else}}{{with}} is not merged into {{else with}}, which the
-		// template parser does not read in HTML input.
+		// {{else}}{{with}} is not merged into {{else with}}.
 		"{{if .}}{{else}}{{with .}}{{end}}{{end}}<A>",
 	}
 	for _, input := range inputs {
@@ -391,24 +381,24 @@ func TestAttributesAndCRLF(t *testing.T) {
 			want:  `<a href="https://example.com/` + strings.Repeat("a", 92) + `">x</a>`,
 		},
 		{
-			name:  "attributes the source breaks go one per line",
+			name:  "continuation lines take one tab past the tag and keep alignment spaces",
 			input: "<input type=\"text\"\n    name=\"x\"\nrequired>",
-			want:  "<input type=\"text\"\n\tname=\"x\"\n\trequired>",
+			want:  "<input type=\"text\"\n\t    name=\"x\"\n\trequired>",
 		},
 		{
 			name:  "attribute list re-indented one tab deeper than its tag",
 			input: "<div>\n<p>\n<input type=\"text\"\n      name=\"x\"\n  required>\n</p>\n</div>",
-			want:  "<div>\n\t<p>\n\t\t<input type=\"text\"\n\t\t\tname=\"x\"\n\t\t\trequired>\n\t</p>\n</div>",
+			want:  "<div>\n\t<p>\n\t\t<input type=\"text\"\n\t\t\t      name=\"x\"\n\t\t\t  required>\n\t</p>\n</div>",
 		},
 		{
 			name:  "closing bracket on its own line stays there",
 			input: "<input\n  type=\"text\"\n  name=\"x\"\n>",
-			want:  "<input\n\ttype=\"text\"\n\tname=\"x\"\n>",
+			want:  "<input\n\t  type=\"text\"\n\t  name=\"x\"\n>",
 		},
 		{
-			name:  "spaces between attributes become one",
+			name:  "spaces between attributes as written",
 			input: `<div  class="a"   id="b"  >x</div>`,
-			want:  `<div class="a" id="b">x</div>`,
+			want:  `<div  class="a"   id="b"  >x</div>`,
 		},
 		{
 			name:  "attribute value with a line break keeps its lines",
@@ -451,14 +441,14 @@ func TestAttributesAndCRLF(t *testing.T) {
 			want:  `<A0 x />`,
 		},
 		{
-			name:  "CRLF is written as LF outside opaque regions",
+			name:  "CRLF is kept",
 			input: "<div>\r\n<p>a</p>\r\n</div>\r\n<pre>\r\nx\r\n</pre>\r\n",
-			want:  "<div>\n\t<p>a</p>\n</div>\n<pre>\r\nx\r\n</pre>\r\n",
+			want:  "<div>\r\n\t<p>a</p>\r\n</div>\r\n<pre>\r\nx\r\n</pre>\r\n",
 		},
 		{
 			name:  "CRLF in a broken attribute list",
 			input: "<input type=\"text\"\r\n  name=\"x\">\r\n",
-			want:  "<input type=\"text\"\n\tname=\"x\">\r\n",
+			want:  "<input type=\"text\"\r\n\t  name=\"x\">\r\n",
 		},
 		{
 			name:  "final run kept: three line feeds",
@@ -488,7 +478,7 @@ func TestAttributesAndCRLF(t *testing.T) {
 // is unknown (decision 1) and its content is left as written, even next
 // to a <style> element: that may not be all the CSS (Task 21).
 func TestCSSEntryPoints(t *testing.T) {
-	const input = `<div class="c"><p>a</p></div>`
+	const input = "<div class=\"c\">\n<p>a</p>\n</div>"
 	t.Run("Node without CSS", func(t *testing.T) {
 		assert.Equal(t, input, format.Node(parse(t, input)))
 	})
@@ -517,54 +507,54 @@ func TestUnparsedMarkup(t *testing.T) {
 		{name: "start tag with < in its attributes", input: "<teXtAreA </teXtAreA><A  >0", want: "<teXtAreA </teXtAreA><A  >0"},
 		{name: "bogus end tag", input: "<div>a</ b>  <p>  c</p></div>", want: "<div>a</ b>  <p>  c</p></div>"},
 		{name: "comment action first", input: "{{/* c */}}<div>a</ b>  <p>  c</p></div>", want: "{{/* c */}}<div>a</ b>  <p>  c</p></div>"},
-		{name: "unmatched end tag makes its parent unsure", input: "<div><p>a</p></b></div><div><p>b</p></div>", want: "<div><p>a</p></b></div><div>\n\t<p>b</p>\n</div>"},
-		{name: "unread start tag keeps its parent as written", input: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div><p>b</p></div>", want: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div>\n\t<p>b</p>\n</div>"},
-		{name: "unread special start tag keeps what follows its parent as written", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div><p>b</p></div>"},
-		{name: "less-than in prose is text", input: "<div>a < b<p>c</p></div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
+		{name: "unmatched end tag makes its parent unsure", input: "<div><p>a</p></b></div><div>\n<p>b</p>\n</div>", want: "<div><p>a</p></b></div><div>\n\t<p>b</p>\n</div>"},
+		{name: "unread start tag keeps its parent as written", input: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div>\n<p>b</p>\n</div>", want: "<ul>\n<span{{if .A}} class=\"a\"{{end}}>x</span>\n</ul><div>\n\t<p>b</p>\n</div>"},
+		{name: "unread special start tag keeps its parent as written; what follows only reindents", input: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div>\n<p>b</p>\n</div>", want: "<ul>\n<li{{if .A}} class=\"a\"{{end}}>x</li>\n</ul><div>\n\t<p>b</p>\n</div>"},
+		{name: "less-than in prose is text", input: "<div>\na < b\n<p>c</p>\n</div>", want: "<div>\n\ta < b\n\t<p>c</p>\n</div>"},
 		{name: "unread a start tag is reopened", input: "<div><a/x></div><div><p>0</p>0</div>", want: "<div><a/x></div><div><p>0</p>0</div>"},
 		{name: "bogus comment body is live markup", input: "<!<style>  </style><a>", want: "<!<style>  </style><a>"},
 		{name: "processing instruction body is live markup", input: "<?<pre>  a</pre>?><div><p>b</p></div>", want: "<?<pre>  a</pre>?><div><p>b</p></div>"},
 		{name: "pre closing a p keeps the file as written", input: "<p><pre></p>  0", want: "<p><pre></p>  0"},
-		{name: "pre closing a p keeps its parent as written", input: "<div><p><pre></p>  0</div><div><p>b</p></div>", want: "<div><p><pre></p>  0</div>\n<div>\n\t<p>b</p>\n</div>"},
+		{name: "pre closing a p keeps its parent as written", input: "<div><p><pre></p>  0</div>\n<div>\n<p>b</p>\n</div>", want: "<div><p><pre></p>  0</div>\n<div>\n\t<p>b</p>\n</div>"},
 		{name: "stray span end tag leaves pre open", input: "<span><pre></span>  0", want: "<span><pre></span>  0"},
 		{name: "formatting end tag leaves pre open", input: "<b><pre></b>  0", want: "<b><pre></b>  0"},
 		{name: "p end tag behind a button leaves pre open", input: "<p><button><pre></p>  0</button>", want: "<p><button><pre></p>  0</button>"},
 		{name: "p end tag behind an object leaves pre open", input: "<p><object><pre></p>  0</object>", want: "<p><object><pre></p>  0</object>"},
-		{name: "stray end tag in a span keeps its parent as written", input: "<div><span><pre></span>  0</div><div><p>b</p></div>", want: "<div><span><pre></span>  0</div>\n<div>\n\t<p>b</p>\n</div>"},
+		{name: "stray end tag in a span keeps its parent as written", input: "<div><span><pre></span>  0</div>\n<div>\n<p>b</p>\n</div>", want: "<div><span><pre></span>  0</div>\n<div>\n\t<p>b</p>\n</div>"},
 		{name: "if end leaves pre open", input: "{{if .Show}}<pre>{{end}}  0", want: "{{if .Show}}<pre>{{end}}  0"},
 		{name: "if end leaves pre open in a div", input: "<div>{{if .Show}}<pre>{{end}}  0</div>", want: "<div>{{if .Show}}<pre>{{end}}  0</div>"},
-		{name: "if end leaves pre open in a nested div", input: "<section><div>{{if .Show}}<pre>{{end}}  0</div></section>", want: "<section>\n\t<div>{{if .Show}}<pre>{{end}}  0</div>\n</section>"},
-		{name: "closed pre in an if still formats", input: "{{if .Show}}<pre> x </pre>{{end}}  <p> y </p>", want: "{{if .Show}}\n\t<pre> x </pre>\n{{end}}\n<p>y</p>"},
-		{name: "pre after a closed p still formats", input: "<p>a</p>  <pre> x </pre>", want: "<p>a</p>\n<pre> x </pre>"},
+		{name: "if end leaves pre open in a nested div", input: "<section>\n<div>{{if .Show}}<pre>{{end}}  0</div>\n</section>", want: "<section>\n\t<div>{{if .Show}}<pre>{{end}}  0</div>\n</section>"},
+		{name: "closed pre in an if still formats", input: "{{if .Show}}\n<pre> x </pre>\n{{end}}\n  <p> y </p>", want: "{{if .Show}}\n\t<pre> x </pre>\n{{end}}\n<p> y </p>"},
+		{name: "pre after a closed p still formats", input: "<p>a</p>\n  <pre> x </pre>", want: "<p>a</p>\n<pre> x </pre>"},
 		{name: "abruptly closed comment", input: "<a>0<!-->-->0", want: "<a>0<!-->-->0"},
 		{name: "abruptly closed comment with a dash", input: "<a>0<!--->-->0", want: "<a>0<!--->-->0"},
-		{name: "comment with --!> before its --> still formats", input: "<div><!-- a --!> b --><p>c</p></div>", want: "<div>\n\t<!-- a --!> b -->\n\t<p>c</p>\n</div>"},
-		{name: "empty comment still formats", input: "<div><!----><p>c</p></div>", want: "<div>\n\t<!---->\n\t<p>c</p>\n</div>"},
-		{name: "comment with inner dashes still formats", input: "<div><!-- a -- b --><p>c</p></div>", want: "<div>\n\t<!-- a -- b -->\n\t<p>c</p>\n</div>"},
+		{name: "comment with --!> before its --> still formats", input: "<div>\n<!-- a --!> b -->\n<p>c</p>\n</div>", want: "<div>\n\t<!-- a --!> b -->\n\t<p>c</p>\n</div>"},
+		{name: "empty comment still formats", input: "<div>\n<!---->\n<p>c</p>\n</div>", want: "<div>\n\t<!---->\n\t<p>c</p>\n</div>"},
+		{name: "comment with inner dashes still formats", input: "<div>\n<!-- a -- b -->\n<p>c</p>\n</div>", want: "<div>\n\t<!-- a -- b -->\n\t<p>c</p>\n</div>"},
 		{name: "unread pre before an if", input: "<pre/x>{{if .}}<a>\n{{end}}", want: "<pre/x>{{if .}}<a>\n{{end}}"},
 		{name: "unread textarea", input: "<textarea/x>  0", want: "<textarea/x>  0"},
-		{name: "unread pre in a div", input: "<div><pre/x>  0</div>  <p> y </p>", want: "<div><pre/x>  0</div> <p> y </p>"},
+		{name: "unread pre in a div", input: "<div><pre/x>  0</div>  <p> y </p>", want: "<div><pre/x>  0</div>  <p> y </p>"},
 		{name: "unread pre past a formatting end tag", input: "<b><pre/x></b>  0", want: "<b><pre/x></b>  0"},
 		{name: "unread pre then a pre", input: "<pre/x><pre>  0", want: "<pre/x><pre>  0"},
 		{name: "unread pre closed by an end tag read as text", input: "<pre/x>  0</pre>  <p> y </p>", want: "<pre/x>  0</pre>  <p> y </p>"},
 		{name: "unread span that author CSS preformats", input: "<style>span{white-space:pre}</style><span/x>{{if .}}<a>\n{{end}}", want: "<style>span{white-space:pre}</style><span/x>{{if .}}<a>\n{{end}}"},
-		{name: "brace before end keeps a space", input: "<div>{{if .}}a{ {{end}}<p></p></div>", want: "<div>\n\t{{if .}}a{ {{end}}\n\t<p></p>\n</div>"},
-		{name: "brace before a trimmed end", input: "<div>{{if .}}a{ {{- end}}<p></p></div>", want: "<div>\n\t{{if .}}a{ {{- end}}\n\t<p></p>\n</div>"},
-		{name: "brace before a comment action", input: "<div>{{if .}}a{ {{/* c */}}{{end}}<p></p></div>", want: "<div>\n\t{{if .}}a{ {{/* c */}}{{end}}\n\t<p></p>\n</div>"},
-		{name: "brace before else keeps a space", input: "<div>{{if .}}a{ {{else}}b{{end}}<p></p></div>", want: "<div>\n\t{{if .}}a{ {{else}}b{{end}}\n\t<p></p>\n</div>"},
-		{name: "brace after an action joins it: the action ends at the first }}", input: "<div><p></p>{{if .}} }a{{end}}</div>", want: "<div>\n\t<p></p>\n\t{{if .}}}a{{end}}\n</div>"},
-		{name: "tags in script are raw text", input: "<script>a <b</script><div><p>c</p></div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
+		{name: "brace before end keeps a space", input: "<div>\n{{if .}}a{ {{end}}\n<p></p>\n</div>", want: "<div>\n\t{{if .}}a{ {{end}}\n\t<p></p>\n</div>"},
+		{name: "brace before a trimmed end", input: "<div>\n{{if .}}a{ {{- end}}\n<p></p>\n</div>", want: "<div>\n\t{{if .}}a{ {{- end}}\n\t<p></p>\n</div>"},
+		{name: "brace before a comment action", input: "<div>\n{{if .}}a{ {{/* c */}}{{end}}\n<p></p>\n</div>", want: "<div>\n\t{{if .}}a{ {{/* c */}}{{end}}\n\t<p></p>\n</div>"},
+		{name: "brace before else keeps a space", input: "<div>\n{{if .}}a{ {{else}}b{{end}}\n<p></p>\n</div>", want: "<div>\n\t{{if .}}a{ {{else}}b{{end}}\n\t<p></p>\n</div>"},
+		{name: "brace after an action joins it: the action ends at the first }}", input: "<div>\n<p></p>\n{{if .}} }a{{end}}\n</div>", want: "<div>\n\t<p></p>\n\t{{if .}} }a{{end}}\n</div>"},
+		{name: "tags in script are raw text", input: "<script>a <b</script><div>\n<p>c</p>\n</div>", want: "<script>a <b</script><div>\n\t<p>c</p>\n</div>"},
 		{name: "self-closed pre holds what follows", input: "<pre/> 00", want: "<pre/> 00"},
 		{name: "self-closed span holds what follows", input: "<div><span/>  a</div><div><p>b</p></div>", want: "<div><span/>  a</div><div><p>b</p></div>"},
-		{name: "self-closed in a define body", input: "{{define \"x\"}}<path/>  a{{end}}<div><p>b</p></div>", want: "{{define \"x\"}}<path/>  a{{end}}\n<div>\n\t<p>b</p>\n</div>"},
-		{name: "self-closed in a define keeps only that define", input: "{{define \"icon\"}}<path d=\"M0\"/>  a{{end}}\n{{define \"page\"}}<div><p>b</p></div>{{end}}", want: "{{define \"icon\"}}<path d=\"M0\"/>  a{{end}}\n\n{{define \"page\"}}\n\t<div>\n\t\t<p>b</p>\n\t</div>\n{{end}}"},
+		{name: "self-closed in a define body", input: "{{define \"x\"}}<path/>\n  a{{end}}\n<div>\n<p>b</p>\n</div>", want: "{{define \"x\"}}<path/>\n  a{{end}}\n<div>\n\t<p>b</p>\n</div>"},
+		{name: "self-closed in a define keeps only that define", input: "{{define \"icon\"}}<path d=\"M0\"/>\n  a{{end}}\n{{define \"page\"}}\n<div>\n<p>b</p>\n</div>\n{{end}}", want: "{{define \"icon\"}}<path d=\"M0\"/>\n  a{{end}}\n{{define \"page\"}}\n<div>\n\t<p>b</p>\n</div>\n{{end}}"},
 		{name: "self-closed in a define called in the file", input: "{{define \"icon\"}}<path/>{{end}}<div>{{template \"icon\"}}  a  b</div>", want: "{{define \"icon\"}}<path/>{{end}}<div>{{template \"icon\"}}  a  b</div>"},
 		{name: "self-closed pre breaks out of svg", input: "<svg><pre/>  a  b</svg>", want: "<svg><pre/>  a  b</svg>"},
 		{name: "self-closed pre breaks out of svg in a div", input: "<div><svg><pre/>  a  b</svg></div>", want: "<div><svg><pre/>  a  b</svg></div>"},
 		{name: "self-closed path after a breakout tag in svg", input: "<svg><b></b><path/>  a  b</svg>", want: "<svg><b></b><path/>  a  b</svg>"},
 		{name: "self-closed pre breaks out of svg across lines", input: "<svg><pre/>\n\n  a  b\n</svg>", want: "<svg><pre/>\n\n  a  b\n</svg>"},
 		{name: "self-closed in foreignObject", input: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>", want: "<svg><foreignObject><div/>  a</foreignObject></svg><div><p>b</p></div>"},
-		{name: "self-closed in svg closes", input: "<svg><path/></svg><div><p>b</p></div>", want: "<svg><path/></svg>\n<div>\n\t<p>b</p>\n</div>"},
+		{name: "self-closed in svg closes", input: "<svg><path/></svg>\n<div>\n<p>b</p>\n</div>", want: "<svg><path/></svg>\n<div>\n\t<p>b</p>\n</div>"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := format.Source("t.gohtml", tt.input)

@@ -3,4 +3,6 @@
 	a<span> b </span>c
 </p>
 -- format.gohtml --
-<p>a<span> b </span>c</p>
+<p>
+	a<span> b </span>c
+</p>

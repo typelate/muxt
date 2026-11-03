@@ -9,13 +9,12 @@
 </section>
 -- format.gohtml --
 <section>
-	<div class="code">
+<div class="code">
   x
 </div>
 	<span class="card">a</span>
 	<span class="other">
-		b
-	</span>
+		b </span>
 </section>
 -- css/app.css --
 .code{white-space:pre}.card{display:block}

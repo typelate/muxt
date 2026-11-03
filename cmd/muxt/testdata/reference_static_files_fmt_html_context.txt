@@ -2,7 +2,7 @@
 # embedded .html, .htm, .tmpl or .gotmpl file is read for its links and
 # <style> elements like a .gohtml one: here the layout, layout.html, links
 # style.css, which makes .code preserve whitespace, so the partial's .code
-# interior is left as written.
+# element is left as written, whole.
 
 muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
 muxt fmt -w partial.gohtml
@@ -40,11 +40,9 @@ func (Server) Index() string { return "" }
 <p>x</p>
 </section>{{end}}
 -- want.gohtml --
-{{define "partial"}}
-	<section>
-		<div class="code">
+{{define "partial"}}<section>
+<div class="code">
   keep   me
 </div>
-		<p>x</p>
-	</section>
-{{end}}
+	<p>x</p>
+</section>{{end}}

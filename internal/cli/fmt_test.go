@@ -204,10 +204,10 @@ func TestFormatRun(t *testing.T) {
 		wd := t.TempDir()
 		writeTestFile(t, wd, "go.mod", "module example.com/m\n\ngo 1.22\n")
 		writeTestFile(t, wd, "t.go", "package m\n\nimport \"embed\"\n\n//go:embed *.gohtml *.html *.txt\nvar f embed.FS\n")
-		writeTestFile(t, wd, "layout.html", "<style>.x{display:block}</style>\n")
-		writeTestFile(t, wd, "notes.txt", "{{if}}<style>.y{display:block}</style>\n")
-		const page = "<p>a<span class=\"x\">b</span> c</p>\n<p>a<span class=\"y\">b</span> c</p>\n"
-		const want = "<p>\n\ta\n\t<span class=\"x\">b</span>\n\tc\n</p>\n<p>a<span class=\"y\">b</span> c</p>\n"
+		writeTestFile(t, wd, "layout.html", "<style>.x{white-space:pre}</style>\n")
+		writeTestFile(t, wd, "notes.txt", "{{if}}<style>.y{white-space:pre}</style>\n")
+		const page = "<div class=\"x\">\n  b\n</div>\n<div class=\"y\">\n  b\n</div>\n"
+		const want = "<div class=\"x\">\n  b\n</div>\n<div class=\"y\">\n\tb\n</div>\n"
 		writeTestFile(t, wd, "page.gohtml", page)
 		stdout, stderr, err := runFormat(t, wd, "", "page.gohtml")
 		require.NoError(t, err, "muxt fmt page.gohtml")

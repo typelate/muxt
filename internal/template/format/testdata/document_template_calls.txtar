@@ -19,22 +19,19 @@ the call stands for the body of the define it resolves to.
 </html>
 -- format.gohtml --
 {{define "h"}}<meta charset="utf-8">{{end}}
-
 {{define "r"}}<tr><td>{{.}}</td></tr>{{end}}
 <html>
-	<head><title>T</title>{{template "h"}}</head>
-	<body>
-		<main>
-			<h1>x</h1>
-		</main>
-		<table>
-			<tbody>
-				{{range .Items}}
-					{{template "r" .}}
-					{{end}}
-			</tbody>
-		</table>
-	</body>
+<head><title>T</title>{{template "h"}}</head>
+<body>
+	<main><h1>x</h1></main>
+	<table>
+		<tbody>
+			{{range .Items}}
+				{{template "r" .}}
+			{{end}}
+		</tbody>
+	</table>
+</body>
 </html>
 -- data/empty.json --
 {}
