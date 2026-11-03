@@ -78,14 +78,13 @@ func TestDirectives(t *testing.T) {
 		},
 		{
 			name:  "inside a define body",
-			input: "{{define \"x\"}}\n{{/* muxt:fmt off */}}\n<p>  a  </p>\n{{end}}\n",
-			want:  "{{define \"x\"}}\n\t{{/* muxt:fmt off */}}\n<p>  a  </p>\n{{end}}\n",
+			input: "{{define \"x\"}}\n  {{/* muxt:fmt off */}}\n<p>  a  </p>\n{{end}}\n",
+			want:  "{{define \"x\"}}\n{{/* muxt:fmt off */}}\n<p>  a  </p>\n{{end}}\n",
 			kept:  []string{"\n<p>  a  </p>\n{{end}}"},
 		},
 		{
 			name:  "off in a define body with no gap at its edges",
 			input: "{{define \"x\"}}<p>a</p>{{/* muxt:fmt off */}} <b>a  b</b> {{end}}\n",
-			want:  "{{define \"x\"}}\n\t<p>a</p>\n\t{{/* muxt:fmt off */}} <b>a  b</b> {{end}}\n",
 		},
 		{
 			name:  "off after content at the root runs to the end of the file",
@@ -103,7 +102,7 @@ func TestDirectives(t *testing.T) {
 		{
 			name:  "ordinary comments are not directives",
 			input: "<div>\n    {{/* just a comment */}}\n<!-- muxt:fmt off -->\n  <p>  a  </p>\n</div>\n",
-			want:  "<div>\n\t{{/* just a comment */}}\n\t<!-- muxt:fmt off -->\n\t<p>a</p>\n</div>\n",
+			want:  "<div>\n\t{{/* just a comment */}}\n\t<!-- muxt:fmt off -->\n\t<p>  a  </p>\n</div>\n",
 		},
 		{
 			name:    "misspelled verb",

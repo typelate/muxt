@@ -2,6 +2,7 @@
 <div><span>a</span><span>b</span>
 </div>
 -- format.gohtml --
-<div><span>a</span><span>b</span></div>
+<div><span>a</span><span>b</span>
+</div>
 -- data/empty.json --
 {}

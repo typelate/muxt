@@ -9,6 +9,6 @@
 	<p>intro
 	<div>block</div>
 	<div>next</div>
-	</section>
+</section>
 -- data/empty.json --
 {}

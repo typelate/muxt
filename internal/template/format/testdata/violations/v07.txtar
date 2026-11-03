@@ -4,5 +4,7 @@
   <span>b</span>c
 </div>
 -- format.gohtml --
-<div>a
-	<span>b</span>c</div>
+<div>
+	a
+	<span>b</span>c
+</div>

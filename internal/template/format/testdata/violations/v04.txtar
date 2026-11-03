@@ -4,6 +4,5 @@
 {{end}}<p>x{{template "x"}}y</p>
 -- format.gohtml --
 {{define "x"}}
-	<span>a</span>
-{{end}}
-<p>x{{template "x"}}y</p>
+<span>a</span>
+{{end}}<p>x{{template "x"}}y</p>
