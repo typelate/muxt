@@ -458,12 +458,33 @@ type BranchNode struct {
 	ElseTrimRight  bool // -}} on else
 	EndTrimLeft    bool // {{- on end
 	EndTrimRight   bool // -}} on end
+
+	elseChained bool // the else is written {{else if}} / {{else with}}
 }
 
 func (b *BranchNode) Start() lex.Pos { return b.start }
 func (b *BranchNode) End() lex.Pos   { return b.end }
 func (b *BranchNode) String() string {
 	return b.tr.src(b.Start(), b.End())
+}
+
+// ElseChain returns the branch the source chained onto b's else, as in
+// {{if .A}}a{{else if .B}}b{{end}}, or nil when b has no else or the
+// else is a plain {{else}} (even one holding only a nested branch).
+// The chained branch starts at the {{else if}} / {{else with}} action,
+// so its source opener is that action, and it holds the shared {{end}}.
+func (b *BranchNode) ElseChain() *BranchNode {
+	if !b.elseChained {
+		return nil
+	}
+	switch n := b.ElseList.Nodes[0].(type) {
+	case *IfNode:
+		return &n.BranchNode
+	case *WithNode:
+		return &n.BranchNode
+	default:
+		return nil
+	}
 }
 
 func (b *BranchNode) tree() *Tree { return b.tr }

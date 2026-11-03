@@ -714,6 +714,7 @@ type branchTrim struct {
 	StartTrimLeft, StartTrimRight bool
 	ElseTrimLeft, ElseTrimRight   bool
 	EndTrimLeft, EndTrimRight     bool
+	ElseChained                   bool // else written {{else if}} / {{else with}}
 }
 
 func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line int, pipe *PipeNode, list, elseList *ListNode, trim branchTrim, err error) {
@@ -760,6 +761,10 @@ func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line i
 			// defer in textOrAction already cleared it, but the inner
 			// branch shares the same {{- opening delimiter as the else.
 			t.actionTrimLeft = n.TrimLeft
+			// Likewise the chained if starts at the {{else if}} action
+			// (the defer cleared actionPos too), and the else list spans
+			// the chain through its shared {{end}}.
+			t.actionPos = next.Start()
 			elseList = t.newList(next.Start())
 			var ifNode Node
 			ifNode, err = t.ifControl()
@@ -768,6 +773,8 @@ func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line i
 			}
 			elseList.Nodes = append(elseList.Nodes, ifNode)
 			endPos = ifNode.End()
+			elseList.end = endPos
+			trim.ElseChained = true
 			// The chain's {{end}} trim lives on the innermost node.
 			inner := ifNode.(*IfNode)
 			trim.EndTrimLeft = inner.EndTrimLeft
@@ -775,6 +782,7 @@ func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line i
 		} else if context == "with" && t.peek().Type == lex.TokenTypeWith {
 			t.next()
 			t.actionTrimLeft = n.TrimLeft
+			t.actionPos = next.Start()
 			elseList = t.newList(next.Start())
 			var withNode Node
 			withNode, err = t.withControl()
@@ -783,6 +791,8 @@ func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line i
 			}
 			elseList.Nodes = append(elseList.Nodes, withNode)
 			endPos = withNode.End()
+			elseList.end = endPos
+			trim.ElseChained = true
 			inner := withNode.(*WithNode)
 			trim.EndTrimLeft = inner.EndTrimLeft
 			trim.EndTrimRight = inner.EndTrimRight
@@ -823,6 +833,7 @@ func (t *Tree) ifControl() (Node, error) {
 	n.ElseTrimRight = trim.ElseTrimRight
 	n.EndTrimLeft = trim.EndTrimLeft
 	n.EndTrimRight = trim.EndTrimRight
+	n.elseChained = trim.ElseChained
 	return n, nil
 }
 
@@ -844,6 +855,7 @@ func (t *Tree) rangeControl() (Node, error) {
 	n.ElseTrimRight = trim.ElseTrimRight
 	n.EndTrimLeft = trim.EndTrimLeft
 	n.EndTrimRight = trim.EndTrimRight
+	n.elseChained = trim.ElseChained
 	return n, nil
 }
 
@@ -865,6 +877,7 @@ func (t *Tree) withControl() (Node, error) {
 	n.ElseTrimRight = trim.ElseTrimRight
 	n.EndTrimLeft = trim.EndTrimLeft
 	n.EndTrimRight = trim.EndTrimRight
+	n.elseChained = trim.ElseChained
 	return n, nil
 }
 
