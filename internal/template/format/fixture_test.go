@@ -740,9 +740,9 @@ var whatwgRegressions = []whatwgRow{
 	// 14: an empty element never gains an LF (:empty).
 	{snippet: 14, input: "<div class=x></div>\n", want: "<div class=x></div>\n"},
 	{snippet: 14, input: "<div>\n<div class=x></div>\n</div>\n", want: "<div>\n\t<div class=x></div>\n</div>\n"},
-	// 15: CR is a segment break (the parser turns it into LF), so the
-	// line after it is reindented and the CR kept; FF is content.
-	{snippet: 15, input: "<p>a\rb</p>\n", want: "<p>a\r\tb</p>\n"},
+	// 15: CR is a segment break (the parser turns it into LF): Source
+	// writes it as LF and the line after it is reindented; FF is content.
+	{snippet: 15, input: "<p>a\rb</p>\n", want: "<p>a\n\tb</p>\n"},
 	{snippet: 15, input: "<p>a\fb</p>\n", want: "<p>a\fb</p>\n"},
 }
 

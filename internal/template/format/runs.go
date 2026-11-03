@@ -12,7 +12,8 @@ const (
 )
 
 // segment is a maximal span of text that is all whitespace run bytes
-// (U+0020, U+0009, U+000A, U+000D) or all other bytes.
+// (U+0020, U+0009, U+000A) or all other bytes. Source has written
+// every CR as LF before parsing.
 type segment struct {
 	start, end int
 	space      bool
@@ -33,7 +34,7 @@ func splitRuns(text []byte) []segment {
 }
 
 func isRunByte(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
+	return b == ' ' || b == '\t' || b == '\n'
 }
 
 // isRunOnly reports whether text is non-empty and all whitespace run bytes.

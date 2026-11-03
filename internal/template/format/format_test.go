@@ -366,7 +366,7 @@ func TestDefineSemanticPreservation(t *testing.T) {
 	}
 }
 
-func TestAttributesAndCRLF(t *testing.T) {
+func TestAttributesAndLineEndings(t *testing.T) {
 	for _, tt := range []struct {
 		name, input, want string
 	}{
@@ -446,14 +446,14 @@ func TestAttributesAndCRLF(t *testing.T) {
 			want:  `<A0 x />`,
 		},
 		{
-			name:  "CRLF is kept",
+			name:  "CRLF becomes LF",
 			input: "<div>\r\n<p>a</p>\r\n</div>\r\n<pre>\r\nx\r\n</pre>\r\n",
-			want:  "<div>\r\n\t<p>a</p>\r\n</div>\r\n<pre>\r\nx\r\n</pre>\r\n",
+			want:  "<div>\n\t<p>a</p>\n</div>\n<pre>\nx\n</pre>\n",
 		},
 		{
 			name:  "CRLF in a broken attribute list",
 			input: "<input type=\"text\"\r\n  name=\"x\">\r\n",
-			want:  "<input type=\"text\"\r\n\tname=\"x\">\r\n",
+			want:  "<input type=\"text\"\n\tname=\"x\">\n",
 		},
 		{
 			name:  "final blank lines collapse to one",
@@ -474,6 +474,20 @@ func TestAttributesAndCRLF(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, got, again, "not idempotent")
 		})
+	}
+}
+
+// TestNodeCarriageReturn checks that Node, whose tree's positions refer
+// to the source as parsed, leaves a node holding a carriage return as
+// written: only Source normalizes line endings, before parsing.
+func TestNodeCarriageReturn(t *testing.T) {
+	for _, input := range []string{
+		"<div>\r\n<p>a</p>\r\n</div>",
+		"<div style=\"white-space:pre-line\">a\r \nb</div>",
+	} {
+		if got := format.Node(parse(t, input)); got != input {
+			t.Errorf("Node(%q) = %q, want it as written", input, got)
+		}
 	}
 }
 
