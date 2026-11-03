@@ -52,6 +52,7 @@ type emitter struct {
 	left, right     string                        // the template delimiters
 	actions         []*actionToken                // in source order (collectActions)
 	printed         []*actionToken                // the actions not left as written
+	unread          bool                          // an action collectActions could not find in src (errActionUnread)
 	unprinted       []string                      // names of the defines, blocks and template calls collectActions did not find a token for
 	renames         map[string]string             // name → canonical name, for the names planRenames changes
 	edits           []edit
@@ -117,6 +118,9 @@ func (e *emitter) emit(root *template.ListNode) (string, error) {
 // printed actions applied. An action's continuation lines take the
 // indentation its first line has in the output.
 func (e *emitter) apply() (string, error) {
+	if e.unread {
+		return "", errActionUnread
+	}
 	for _, tok := range e.printed {
 		e.edits = append(e.edits, edit{start: tok.start, end: tok.end, action: tok})
 	}

@@ -1,6 +1,7 @@
 package format
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -165,7 +166,32 @@ func TestActionFormat(t *testing.T) {
 		{
 			name: "a qualifying nested pipeline in an unsplit command",
 			src:  "<div>\n{{printf \"%d\" (.X | printf \"%s\" | printf \"%s\" | len)}}\n</div>",
-			want: "<div>\n\t{{printf \"%d\" (.X\n\t\t| printf \"%s\"\n\t\t| printf \"%s\"\n\t\t| len\n\t)}}\n</div>",
+			want: "<div>\n\t{{printf \"%d\" (.X\n\t\t| printf \"%s\"\n\t\t| printf \"%s\"\n\t\t| len\n\t)\n\t}}\n</div>",
+		},
+		{
+			name: "a qualifying pipeline in head parentheses closes before the delimiter",
+			src:  "{{if (and (eq .A true) (eq .B true) (eq .C true))}}<p>x</p>{{end}}",
+			want: "{{if (and\n\t(eq .A true)\n\t(eq .B true)\n\t(eq .C true)\n)\n}}<p>x</p>{{end}}",
+		},
+		{
+			name: "split arguments split the stages too",
+			src:  "{{if and (eq .A true) (eq .B true) (eq .C true) | not}}<p>x</p>{{end}}",
+			want: "{{if and\n\t\t(eq .A true)\n\t\t(eq .B true)\n\t\t(eq .C true)\n\t| not\n}}<p>x</p>{{end}}",
+		},
+		{
+			name: "author-broken arguments split the stages too",
+			src:  "<p>{{if or (eq .A true)\n(eq .B true) | not}}x{{end}}</p>",
+			want: "<p>{{if or\n\t\t(eq .A true)\n\t\t(eq .B true)\n\t| not\n}}x{{end}}</p>",
+		},
+		{
+			name: "split first command and four stages",
+			src:  "<div>\n{{printf \"%d %d %d\" (len .L) (len .X) (len .X) | printf \"%s\" | len | printf \"%d\"}}\n</div>",
+			want: "<div>\n\t{{printf\n\t\t\t\"%d %d %d\"\n\t\t\t(len .L)\n\t\t\t(len .X)\n\t\t\t(len .X)\n\t\t| printf \"%s\"\n\t\t| len\n\t\t| printf \"%d\"\n\t}}\n</div>",
+		},
+		{
+			name: "keywords without a space before parentheses",
+			src:  "{{if(.X)}}<p>x</p>{{else if(.B)}}<p>b</p>{{end}}{{range(.L)}}{{end}}{{with(.X)}}{{end}}",
+			want: "{{if .X}}<p>x</p>{{else if .B}}<p>b</p>{{end}}{{range .L}}{{end}}{{with .X}}{{end}}",
 		},
 		{
 			name: "split stages and split arguments",
@@ -276,4 +302,72 @@ func actionDots() []map[string]any {
 		"L": []any{"a", "b"},
 		"M": map[string]any{"k": map[string]any{"Name": "n"}},
 	})
+}
+
+// TestActionShapes checks that the re-parse guard tells apart trees whose
+// actions read alike but nest differently or lose a plain {{else}}.
+func TestActionShapes(t *testing.T) {
+	for _, tt := range []struct{ a, b string }{
+		{"{{if .A}}{{if .B}}{{end}}{{end}}", "{{if .A}}{{end}}{{if .B}}{{end}}"},
+		{"{{if .A}}a{{else}}{{end}}", "{{if .A}}a{{end}}"},
+		// The same action in a branch's body or in its else list.
+		{"{{if .A}}{{.X}}{{else}}{{end}}", "{{if .A}}{{else}}{{.X}}{{end}}"},
+		{"{{range .L}}{{.X}}{{else}}{{end}}", "{{range .L}}{{else}}{{.X}}{{end}}"},
+		{"{{with .A}}{{.X}}{{else}}{{end}}", "{{with .A}}{{else}}{{.X}}{{end}}"},
+		{"{{range .L}}{{.}}{{end}}", "{{range .L}}{{end}}{{.}}"},
+		{"{{define \"a\"}}{{.}}{{end}}", "{{define \"a\"}}{{end}}{{.}}"},
+	} {
+		a, b := parseShapes(t, tt.a, "{{", "}}"), parseShapes(t, tt.b, "{{", "}}")
+		if slices.Equal(a, b) {
+			t.Errorf("actionShapes(%q) = actionShapes(%q) = %q", tt.a, tt.b, a)
+		}
+	}
+}
+
+// TestActionUnread checks that an action the emitter cannot find in its
+// source is reported, not silently left as written.
+func TestActionUnread(t *testing.T) {
+	tree, err := template.ParseTree("t", "t", "<p>{{ .X }}</p>", nil, lex.Options{EmitComment: true, ParseHTML: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := newEmitter("<p>{{ .X ]]</p>", 0, tree.Root, "{{", "}}", classes{}, nil, nil, nil)
+	if _, err := e.apply(); !errors.Is(err, errActionUnread) {
+		t.Errorf("apply() error = %v, want errActionUnread", err)
+	}
+}
+
+// TestDefinedNames pins the count Source's guard compares: distinct
+// define and block names.
+func TestDefinedNames(t *testing.T) {
+	tree, err := template.ParseTree("t", "t", `{{define "a"}}{{end}}{{block "b" .}}{{end}}{{define "a"}}{{end}}`, nil, lex.Options{EmitComment: true, ParseHTML: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(definedNames(tree.Root)); got != 2 {
+		t.Errorf("len(definedNames) = %d, want 2", got)
+	}
+}
+
+// TestCheckReparseMergedDefines checks Source's re-parse guard
+// (checkReparse) against a rename that merges two defines: their shapes
+// agree name for name, but the output defines one name where the source
+// defined two. The bodies are empty, since text/template allows an empty
+// redefinition and would reject any other at the re-parse.
+func TestCheckReparseMergedDefines(t *testing.T) {
+	const src = `{{define "a"}}{{end}}{{define "b"}}{{end}}<p></p>`
+	const out = `{{define "a"}}{{end}}{{define "a"}}{{end}}<p></p>`
+	f := newFormatter(nil)
+	tree, err := f.parse("t.gohtml", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.renames = map[string]string{"b": "a"}
+	if err := f.checkReparse("t.gohtml", tree, out); !errors.Is(err, errActionChanged) {
+		t.Errorf("checkReparse with b renamed to a = %v, want errActionChanged", err)
+	}
+	f.renames = nil
+	if err := f.checkReparse("t.gohtml", tree, src); err != nil {
+		t.Errorf("checkReparse of the source itself = %v, want nil", err)
+	}
 }

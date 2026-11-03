@@ -14,6 +14,11 @@ import (
 // parse to the same actions as its input: an action printer bug.
 var errActionChanged = errors.New("format: printed actions do not parse as written")
 
+// errActionUnread is the error Source returns when the emitter cannot
+// find an action of the tree in the source to print it: a formatter
+// bug, reported rather than leaving the action unformatted.
+var errActionUnread = errors.New("format: an action could not be read for printing")
+
 // actionShapes describes, in source order, every action-bearing node of
 // root as its parse tree has it, positions and spacing aside: kind,
 // trim markers, names, declarations, commands and their arguments, with
@@ -26,8 +31,9 @@ func actionShapes(root *template.ListNode, rename func(string) string) []string 
 		rename = func(name string) string { return name }
 	}
 	var shapes []string
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+	template.WalkPath(&template.Tree{Root: root}, func(_ *template.Tree, path []template.Node, n template.Node) {
 		var b strings.Builder
+		b.WriteString(shapeNesting(path))
 		switch n := n.(type) {
 		case *template.ActionNode:
 			b.WriteString("action")
@@ -70,10 +76,59 @@ func actionShapes(root *template.ListNode, rename func(string) string) []string 
 	return shapes
 }
 
+// shapeNesting describes where a node with ancestors path sits among
+// the template's structures: each enclosing branch, define and block,
+// and for a branch whether the node is in its body or its else list.
+func shapeNesting(path []template.Node) string {
+	var b strings.Builder
+	for i, n := range path {
+		var kind string
+		var branch *template.BranchNode
+		switch n := n.(type) {
+		case *template.IfNode:
+			kind, branch = "if", &n.BranchNode
+		case *template.WithNode:
+			kind, branch = "with", &n.BranchNode
+		case *template.RangeNode:
+			kind, branch = "range", &n.BranchNode
+		case *template.DefineNode:
+			kind = "define"
+		case *template.BlockNode:
+			kind = "block"
+		default:
+			continue
+		}
+		b.WriteString(kind)
+		if branch != nil && i+1 < len(path) && branch.ElseList != nil && path[i+1] == template.Node(branch.ElseList) {
+			b.WriteString(".else")
+		}
+		b.WriteString("/")
+	}
+	return b.String()
+}
+
+// definedNames returns the distinct names root's defines and blocks
+// declare.
+func definedNames(root *template.ListNode) map[string]bool {
+	names := make(map[string]bool)
+	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+		switch n := n.(type) {
+		case *template.DefineNode:
+			names[n.Name] = true
+		case *template.BlockNode:
+			names[n.Name] = true
+		}
+	})
+	return names
+}
+
 func shapeBranch(b *strings.Builder, keyword string, n *template.BranchNode) {
 	b.WriteString(keyword)
-	if n.ElseChain() != nil {
+	switch {
+	case n.ElseChain() != nil:
 		b.WriteString(" chained")
+	case n.ElseList != nil:
+		b.WriteString(" else")
 	}
 	shapeTrims(b, n.StartTrimLeft, n.StartTrimRight, n.ElseTrimLeft, n.ElseTrimRight, n.EndTrimLeft, n.EndTrimRight)
 	shapePipe(b, n.Pipe)
@@ -288,6 +343,7 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 	add := func(start lex.Pos, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode) {
 		tok, ok := e.scanToken(start, wantEnd, keyword, named, left, right)
 		if !ok {
+			e.unread = true
 			if named {
 				e.unprinted = append(e.unprinted, name)
 			}
@@ -314,6 +370,7 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 			e.collectBranch(add, "range", &n.BranchNode, chained)
 		case *template.DefineNode:
 			if n.Body == nil {
+				e.unread = true
 				e.unprinted = append(e.unprinted, n.Name)
 				return
 			}
@@ -321,6 +378,7 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 			add(n.Body.End(), n.End(), "end", false, "", nil)
 		case *template.BlockNode:
 			if n.Body == nil || n.Pipe == nil {
+				e.unread = true
 				e.unprinted = append(e.unprinted, n.Name)
 				return
 			}
@@ -329,12 +387,35 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 		}
 	})
 	slices.SortFunc(e.actions, func(a, b *actionToken) int { return a.start - b.start })
-	// Tokens never overlap; should two, leave both as written.
+	// Tokens never overlap; should two, leave both as written and
+	// report it.
 	for i := 1; i < len(e.actions); i++ {
 		if e.actions[i].start < e.actions[i-1].end {
 			e.actions[i].asWritten, e.actions[i-1].asWritten = true, true
+			e.unread = true
 		}
 	}
+}
+
+// hasKeyword reports whether inner, a token's interior, starts with the
+// words of keyword ("if", "else if"), each after optional whitespace and
+// ending where an identifier would: {{if(.X)}} holds "if".
+func hasKeyword(inner, keyword string) bool {
+	for _, word := range strings.Fields(keyword) {
+		inner = strings.TrimLeft(inner, " \t\r\n")
+		if !strings.HasPrefix(inner, word) {
+			return false
+		}
+		inner = inner[len(word):]
+		if inner != "" && isIdentByte(inner[0]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || c >= 0x80
 }
 
 // scanToken reads the token for keyword whose left delimiter is at
@@ -346,9 +427,7 @@ func (e *emitter) scanToken(start, wantEnd lex.Pos, keyword string, named bool, 
 	if !ok || wantEnd >= 0 && s.end != int(wantEnd-e.base) {
 		return nil, false
 	}
-	fields := strings.Fields(s.inner)
-	words := strings.Fields(keyword)
-	if len(fields) < len(words) || !slices.Equal(fields[:len(words)], words) {
+	if !hasKeyword(s.inner, keyword) {
 		return nil, false
 	}
 	tok := &actionToken{
@@ -374,6 +453,7 @@ func (e *emitter) scanToken(start, wantEnd lex.Pos, keyword string, named bool, 
 // {{end}}, which a chain shares with its last branch.
 func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode), keyword string, b *template.BranchNode, chained map[*template.BranchNode]bool) {
 	if b.List == nil || b.Pipe == nil {
+		e.unread = true
 		return
 	}
 	opener := keyword
@@ -416,7 +496,10 @@ func (e *emitter) printToken(tok *actionToken, left, right, indent string, lineS
 	if tok.pipe != nil && tok.head != "" {
 		p.b.WriteByte(' ')
 	}
-	if tok.pipe != nil && p.pipe(tok.pipe, 0) {
+	if tok.pipe != nil {
+		p.pipe(tok.pipe, 0)
+	}
+	if strings.Contains(p.b.String(), "\n") {
 		p.newline(0)
 		if tok.trimRight {
 			p.b.WriteByte('-')
@@ -469,13 +552,13 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
 			p.b.WriteString(" := ")
 		}
 	}
-	split := p.auto && len(pl.Commands) >= 4
-	for i := 1; i < len(pl.Commands) && !split; i++ {
-		split = strings.Contains(p.between(pl.Commands[i-1], pl.Commands[i]), "\n")
-	}
-	splitArgs := false
+	split, splitArgs := p.stagesSplit(pl), false
 	for i, c := range pl.Commands {
 		switch {
+		case i == 0 && split:
+			// The first command's arguments nest under the stage
+			// lines, so a later "|" never reads as an argument.
+			splitArgs = p.command(c, level+1, true)
 		case i == 0:
 			splitArgs = p.command(c, level, true)
 		case split:
@@ -490,18 +573,38 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
 	return split || splitArgs
 }
 
-// command prints c, whose line is at level; first reports that c is
-// the first command of its pipeline. It reports whether c's arguments
-// split.
-func (p *actionPrinter) command(c *template.CommandNode, level int, first bool) bool {
+// stagesSplit reports whether pl's stages go one per line: it has four
+// or more (when splitting is automatic), the source breaks between two
+// of them, or it has two or more and one command's arguments split.
+func (p *actionPrinter) stagesSplit(pl *template.PipeNode) bool {
+	if p.auto && len(pl.Commands) >= 4 {
+		return true
+	}
+	for i := 1; i < len(pl.Commands); i++ {
+		if strings.Contains(p.between(pl.Commands[i-1], pl.Commands[i]), "\n") {
+			return true
+		}
+	}
+	if len(pl.Commands) < 2 {
+		return false
+	}
+	return slices.ContainsFunc(pl.Commands, p.argsSplit)
+}
+
+// argsSplit reports whether c's arguments go one per line: it has three
+// or more parenthesized ones (when splitting is automatic), or the
+// source breaks between two of them.
+func (p *actionPrinter) argsSplit(c *template.CommandNode) bool {
 	parens := 0
 	for _, arg := range c.Args {
 		if parenthesized(arg) {
 			parens++
 		}
 	}
-	split := p.auto && parens >= 3
-	for i := 1; i < len(c.Args) && !split; i++ {
+	if p.auto && parens >= 3 {
+		return true
+	}
+	for i := 1; i < len(c.Args); i++ {
 		gap := p.between(c.Args[i-1], c.Args[i])
 		if _, ok := c.Args[i].(*template.PipeNode); ok {
 			// A pipeline argument starts after its "(": a break
@@ -510,8 +613,18 @@ func (p *actionPrinter) command(c *template.CommandNode, level int, first bool) 
 				gap = gap[:j]
 			}
 		}
-		split = strings.Contains(gap, "\n")
+		if strings.Contains(gap, "\n") {
+			return true
+		}
 	}
+	return false
+}
+
+// command prints c, whose line is at level; first reports that c is
+// the first command of its pipeline. It reports whether c's arguments
+// split.
+func (p *actionPrinter) command(c *template.CommandNode, level int, first bool) bool {
+	split := p.argsSplit(c)
 	for i, arg := range c.Args {
 		switch {
 		case i == 0:

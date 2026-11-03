@@ -78,9 +78,16 @@ What is normalized:
 
 - Spacing. No space next to the delimiters, one space between words, ` | ` between pipeline stages, and `$i, $v := ` in declarations: `{{ range $i,$v:=.Items }}` becomes `{{range $i, $v := .Items}}`, and `{{end }}`, `{{ else }}` and `{{ break }}` become `{{end}}`, `{{else}}` and `{{break}}`.
 - Redundant parentheses are dropped where the grammar does not need them: around the whole pipeline of an action, when what they hold is a single field, variable, dot, constant or `nil` (`{{if (.X)}}` becomes `{{if .X}}`). A call (`(len .X)`), an argument (`printf "%s" (.X)`, `eq .A (1)`, `printf "%v" (nil)`), a later stage (`.X | (len)`) and a pipeline followed by a field (`(index .M "k").Name`) keep theirs: there they change how the template runs. A bare constant argument takes the parameter's type while `(1)` is an `int`; `(nil)` as an argument is an error while bare `nil` is a nil value; `(.X)` unwraps an `any` that holds nil; and a parenthesized later stage refuses the piped value. Parentheses are never added.
-- Line breaks. A pipeline the source breaks between stages is printed one stage per line with the `|` leading each continuation line, and a command the source breaks between arguments is printed one argument per line, wherever the action is. An action that starts its line (only whitespace before it) is also split when it is complex: a pipeline with four or more stages, or a command with three or more parenthesized arguments. An action inside a start tag or in the middle of text stays on one line unless you broke it. Each continuation line is one tab deeper than the line the action starts on, and the closing delimiter goes on a line of its own at that line's indentation. A parenthesized pipeline that itself splits recurses one level deeper and closes with `)` on its own line. Any other line break inside an action is dropped, so a short action that spans lines becomes one line.
+- Line breaks. A pipeline the source breaks between stages is printed one stage per line with the `|` leading each continuation line, and a command the source breaks between arguments is printed one argument per line, wherever the action is. An action that starts its line (only whitespace before it) is also split when it is complex: a pipeline with four or more stages, or a command with three or more parenthesized arguments. An action inside a start tag or in the middle of text stays on one line unless you broke it. Each continuation line is one tab deeper than the line the action starts on. When a command's arguments split in a pipeline of two or more stages, the stages split too, and the arguments go one level deeper than the stage lines, so a `|` line never reads as an argument. A parenthesized pipeline that itself splits recurses one level deeper and closes with `)` on its own line at the argument's indentation. Whenever an action spans lines, its closing delimiter goes on a line of its own at the indentation of the line the action starts on. Any other line break inside an action is dropped, so a short action that spans lines becomes one line.
 
 ```gohtml
+{{if and
+		(eq .Kind "a")
+		(ne .Name "")
+	| not
+}}
+	<p>{{.Name}}</p>
+{{end}}
 {{if and
 	(eq .Kind "a")
 	(ne .Name "")
@@ -103,7 +110,7 @@ What is kept:
 - An action holding a raw string literal that spans lines, which is left as written whole.
 - Actions inside a `muxt:fmt off` or `preserve` region.
 
-After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, positions and spacing aside and route names rewritten everywhere they appear, and reports an error rather than write a file where it does not.
+After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, nested in the same branches, defines and blocks and in the same body or `{{else}}` list, positions and spacing aside and route names rewritten everywhere they appear. It reports an error rather than write a file where it does not, and also when it cannot find an action in the source to print it, so no action is left unformatted silently.
 
 ## Define patterns
 
