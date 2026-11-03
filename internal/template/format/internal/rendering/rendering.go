@@ -121,6 +121,9 @@ func Tokens(rendered string, ctx Context, sheets []analysis.Stylesheet) ([]Token
 	if err != nil {
 		return nil, err
 	}
+	for _, n := range nodes {
+		markOpaque(n, styles, false)
+	}
 	b := builder{styles: styles}
 	return b.container(nodes, analysis.WhiteSpaceCollapse), nil
 }
@@ -254,6 +257,38 @@ func classify(nodes []*html.Node, sheets []analysis.Stylesheet) (map[*html.Node]
 		styles[n] = ws
 	}
 	return styles, nil
+}
+
+// markOpaque makes the white-space of foreign (SVG and MathML) elements,
+// custom elements (a hyphenated name or an is attribute) and everything
+// inside a custom element unknown, so their text compares exactly: SVG
+// text turns indentation after an LF into a space, MathML token
+// elements differ between engines, and slotted text takes shadow CSS
+// the cascade cannot see (WHATWG rulings, "Exceptions").
+func markOpaque(n *html.Node, styles map[*html.Node]analysis.Whitespace, inCustom bool) {
+	if n.Type == html.ElementNode {
+		inCustom = inCustom || isCustomElement(n)
+		if inCustom || n.Namespace == "svg" || n.Namespace == "math" {
+			ws := styles[n]
+			ws.WhiteSpace = analysis.WhiteSpaceUnknown
+			styles[n] = ws
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		markOpaque(c, styles, inCustom)
+	}
+}
+
+func isCustomElement(n *html.Node) bool {
+	if strings.Contains(n.Data, "-") {
+		return true
+	}
+	for _, a := range n.Attr {
+		if a.Namespace == "" && a.Key == "is" {
+			return true
+		}
+	}
+	return false
 }
 
 func collectElements(out *[]*html.Node, n *html.Node) {

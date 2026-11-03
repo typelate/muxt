@@ -209,3 +209,25 @@ func TestWPTOracle(t *testing.T) {
 		}
 	})
 }
+
+func TestDiffOpaqueElements(t *testing.T) {
+	for _, test := range []struct{ a, b string }{
+		{a: "<svg><text>a\nb</text></svg>", b: "<svg><text>a\n\tb</text></svg>"},
+		{a: "<math><mi>x </mi></math>", b: "<math><mi>x</mi></math>"},
+		{a: "<my-chip>a\n\tb</my-chip>", b: "<my-chip>a\nb</my-chip>"},
+		{a: "<my-chip><b>a\n\tb</b></my-chip>", b: "<my-chip><b>a\nb</b></my-chip>"},
+		{a: "<button is=x-b>a\n\tb</button>", b: "<button is=x-b>a\nb</button>"},
+	} {
+		got, err := Diff(test.a, test.b, Body, nil)
+		if err != nil {
+			t.Fatalf("Diff(%q, %q) error: %v", test.a, test.b, err)
+		}
+		if got == "" {
+			t.Errorf("Diff(%q, %q) = \"\", want a difference", test.a, test.b)
+		}
+	}
+	// Outside them, indentation after an LF is still free.
+	if got, err := Diff("<div><svg></svg>\n\t<p>a</p></div>", "<div><svg></svg>\n<p>a</p></div>", Body, nil); err != nil || got != "" {
+		t.Errorf("Diff around an svg = %q, %v, want equivalent", got, err)
+	}
+}

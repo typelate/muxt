@@ -1,18 +1,112 @@
 package format
 
 import (
+	"errors"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
+	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // FuzzFormatEquivalent checks that formatting is idempotent and keeps the
 // rendered page (spec §8.3) for every input that parses, under each dot
 // from fuzzDots that the input executes with and renders to a page the
-// oracle can read. Its seeds are the fixture inputs.
+// oracle can read: at the top level and through the synthetic callers of
+// each {{define}} (rendering.Callers). Its seeds are the fixture inputs
+// and the WHATWG regression snippets.
 func FuzzFormatEquivalent(f *testing.F) {
+	addFixtureSeeds(f)
+	f.Fuzz(func(t *testing.T, input string) {
+		out, err := Source("fuzz.gohtml", input)
+		if errors.Is(err, errOverlappingEdits) {
+			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
+		}
+		if err != nil {
+			return
+		}
+		again, err := Source("fuzz.gohtml", out)
+		if err != nil {
+			t.Fatalf("Source(output) error: %v\ninput:  %q\noutput: %q", err, input, out)
+		}
+		if again != out {
+			t.Errorf("not idempotent\ninput:      %q\nformat(1):  %q\nformat(2):  %q", input, out, again)
+		}
+		callers, err := defineCallers(input)
+		if err != nil {
+			callers = []rendering.Caller{{Name: "top", Context: rendering.Body}}
+		}
+		for _, c := range callers {
+			in, formatted := input, out
+			if c.CallSite {
+				if !defineCallSiteModes {
+					continue // Task 7
+				}
+				in = input + oracleCallerDefine(c)
+				if formatted, err = Source("fuzz.gohtml", in); err != nil {
+					t.Fatalf("Source(input with caller %s) error: %v\ninput: %q", c.Name, err, in)
+				}
+			}
+			for _, dot := range fuzzDots() {
+				checkFuzzRendering(t, in, formatted, c.Source, c.Context, dot)
+			}
+		}
+	})
+}
+
+// FuzzFormatUnresolvedCalls formats inputs that call templates they do not
+// define, as the formatter sees a partial without its package, then
+// renders input and output with a small define set appended under every
+// unresolved name. The formatter assumes such a call writes what belongs
+// where it stands (spec §2); each define set must render alike.
+func FuzzFormatUnresolvedCalls(f *testing.F) {
+	for _, s := range []string{
+		`<p>a{{template "x" .}}b</p>`,
+		"<div>\n\t{{template \"x\" .}}\n</div>",
+		"<p>\n\ta\n\t{{template \"x\" .}}\n\tb\n</p>",
+		"<table>\n\t{{template \"row\" .}}\n</table>",
+		"<table>\n<tbody>\n{{range .Items}}\n{{template \"row\" .}}\n{{end}}\n</tbody>\n</table>",
+		"<html>\n<head>\n{{template \"head\" .}}\n\t<link>\n</head>\n<body>\n{{template \"body\" .}}\n</body>\n</html>",
+		"<ul>\n{{range .Items}}\n\t<li>{{template \"x\" .}}</li>\n{{end}}\n</ul>",
+		"{{template \"x\" .}}\n\t{{template \"y\" .}}",
+		"<span>{{template \"x\" .}}</span> <span>{{block \"b\" .}}{{template \"y\"}}{{end}}</span>",
+		"{{if .A}}\n\t{{template \"x\" .}}\n{{else}}\n\t<p>{{template \"x\" .}}</p>\n{{end}}",
+	} {
+		f.Add(s)
+	}
+	addFixtureSeeds(f)
+	f.Fuzz(func(t *testing.T, input string) {
+		names := unresolvedCalls(input)
+		if len(names) == 0 {
+			return
+		}
+		out, err := Source("fuzz.gohtml", input)
+		if errors.Is(err, errOverlappingEdits) {
+			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
+		}
+		if err != nil {
+			return
+		}
+		for _, body := range []string{"t", "<tr><td>t</td></tr>", "<span>t</span>", " \n\t"} {
+			var defines strings.Builder
+			for _, name := range names {
+				defines.WriteString(`{{define ` + strconv.Quote(name) + `}}` + body + `{{end}}`)
+			}
+			for _, dot := range fuzzDots() {
+				checkFuzzRendering(t, input+defines.String(), out+defines.String(), "", rendering.Body, dot)
+			}
+		}
+	})
+}
+
+// addFixtureSeeds adds the fixture inputs and the WHATWG regression
+// snippets to f's corpus.
+func addFixtureSeeds(f *testing.F) {
 	for _, filename := range fixtureFiles(f) {
 		ar, err := txtar.ParseFile(filename)
 		if err != nil {
@@ -24,49 +118,77 @@ func FuzzFormatEquivalent(f *testing.F) {
 			}
 		}
 	}
-	f.Fuzz(func(t *testing.T, input string) {
-		out, err := Source("fuzz.gohtml", input)
-		if err != nil {
-			return
-		}
-		again, err := Source("fuzz.gohtml", out)
-		if err != nil {
-			t.Fatalf("Source(output) error: %v\ninput:  %q\noutput: %q", err, input, out)
-		}
-		if again != out {
-			t.Errorf("not idempotent\ninput:      %q\nformat(1):  %q\nformat(2):  %q", input, out, again)
-		}
-		for _, dot := range fuzzDots() {
-			want, err := render(input, "", dot)
-			if err != nil {
-				continue
-			}
-			if _, err := rendering.Tokens(want, rendering.Body, nil); err != nil {
-				continue // the oracle cannot read the input's page (e.g. parsers disagree on a tag)
-			}
-			got, err := render(out, "", dot)
-			if err != nil {
-				t.Fatalf("output does not execute with %v: %v\ninput:  %q\noutput: %q", dot, err, input, out)
-			}
-			diff, err := rendering.Diff(want, got, rendering.Body, nil)
-			if err != nil {
-				t.Fatalf("rendering.Diff with %v: %v\ninput:  %q\noutput: %q", dot, err, input, out)
-			}
-			if diff != "" {
-				t.Errorf("rendering changed with %v: %s\ninput:  %q\noutput: %q\ninput rendered:  %q\noutput rendered: %q", dot, diff, input, out, want, got)
+	for _, row := range whatwgRegressions {
+		f.Add(row.input) // not whatwgPending: those fail until their task lands
+	}
+}
+
+// checkFuzzRendering reports whether output renders like input through
+// callerSrc ("" for the top level) with dot. Inputs that do not execute,
+// or whose page the oracle cannot read, are not checked.
+func checkFuzzRendering(t *testing.T, input, output, callerSrc string, ctx rendering.Context, dot map[string]any) {
+	t.Helper()
+	want, err := render(input, callerSrc, dot)
+	if err != nil {
+		return
+	}
+	if _, err := rendering.Tokens(want, ctx, nil); err != nil {
+		return // the oracle cannot read the input's page (e.g. parsers disagree on a tag)
+	}
+	got, err := render(output, callerSrc, dot)
+	if err != nil {
+		t.Fatalf("output does not execute with %v, caller %q: %v\ninput:  %q\noutput: %q", dot, callerSrc, err, input, output)
+	}
+	diff, err := rendering.Diff(want, got, ctx, nil)
+	if err != nil {
+		t.Fatalf("rendering.Diff with %v, caller %q: %v\ninput:  %q\noutput: %q", dot, callerSrc, err, input, output)
+	}
+	if diff != "" {
+		t.Errorf("rendering changed with %v, caller %q: %s\ninput:  %q\noutput: %q\ninput rendered:  %q\noutput rendered: %q", dot, callerSrc, diff, input, output, want, got)
+	}
+}
+
+// unresolvedCalls returns the names src calls with {{template}} that no
+// {{define}} or {{block}} in src defines, in order of first call.
+func unresolvedCalls(src string) []string {
+	tree, err := template.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
+		EmitComment: true,
+		ParseHTML:   true,
+		BreakOK:     true,
+		ContinueOK:  true,
+	})
+	if err != nil {
+		return nil
+	}
+	defined := map[string]bool{"fuzz.gohtml": true}
+	var called []string
+	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+		switch n := n.(type) {
+		case *template.DefineNode:
+			defined[n.Name] = true
+		case *template.BlockNode:
+			defined[n.Name] = true
+		case *template.TemplateNode:
+			if !slices.Contains(called, n.Name) {
+				called = append(called, n.Name)
 			}
 		}
 	})
+	return slices.DeleteFunc(called, func(name string) bool { return defined[name] })
 }
 
-// fuzzDots returns the data FuzzFormatEquivalent executes each input with:
-// empty, so falsy arms render, and truthy, so if/with bodies and a
-// non-empty range render.
+// fuzzDots returns the data the fuzz targets execute each input with:
+// empty, so falsy arms render, and each mix of true and false A and B,
+// with Show true, a one-element Items, and an X that starts with an LF
+// (as <pre>{{.X}} must keep) and ends with a space.
 func fuzzDots() []map[string]any {
-	return []map[string]any{
-		{},
-		{"Show": true, "X": "x", "Items": []any{"a", "b"}},
+	dots := []map[string]any{{}}
+	for _, a := range []bool{true, false} {
+		for _, b := range []bool{true, false} {
+			dots = append(dots, map[string]any{"Show": true, "A": a, "B": b, "X": "\nhi ", "Items": []any{"a"}})
+		}
 	}
+	return dots
 }
 
 // FuzzFormatIdempotent fuzzes the formatter and checks that formatting is
@@ -102,6 +224,9 @@ func FuzzFormatIdempotent(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, input string) {
 		formatted1, err := Source("fuzz.gohtml", input)
+		if errors.Is(err, errOverlappingEdits) {
+			t.Fatalf("Source(input) error: %v\ninput: %q", err, input)
+		}
 		if err != nil {
 			return
 		}

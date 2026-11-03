@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"text/template/parse"
@@ -165,6 +164,10 @@ func fixtureName(filename string) string {
 }
 
 func TestFixtures(t *testing.T) {
+	skipped, pending := 0, 0
+	defer func() {
+		t.Logf("synthetic callers skipped: %d; call-site callers pending Task 7: %d", skipped, pending)
+	}()
 	for _, filename := range fixtureFiles(t) {
 		name := fixtureName(filename)
 		t.Run(name, func(t *testing.T) {
@@ -198,13 +201,16 @@ func TestFixtures(t *testing.T) {
 			checkDirectiveRegions(t, name, fx.input, got)
 
 			// (d) and (e) rendering equivalence
-			problems, err := renderingProblems(fx, got)
+			oracle, err := renderingProblems(fx, got)
 			if err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
-			for _, p := range problems {
+			for _, p := range oracle.problems {
 				t.Errorf("%s: %s", name, p)
 			}
+			logOracleSkips(t, oracle)
+			skipped += len(oracle.skipped)
+			pending += len(oracle.pending)
 		})
 	}
 }
@@ -314,6 +320,18 @@ func writeGolden(t *testing.T, filename string, ar *txtar.Archive, got string) {
 	}
 }
 
+// logOracleSkips logs the callers the oracle skipped and the call-site
+// failures pending Task 7.
+func logOracleSkips(t *testing.T, oracle oracleResult) {
+	t.Helper()
+	for _, s := range oracle.skipped {
+		t.Logf("skipped %s", s)
+	}
+	for _, p := range oracle.pending {
+		t.Logf("pending Task 7: %s", p)
+	}
+}
+
 func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analysis.Stylesheet) {
 	t.Helper()
 	cursor := 0
@@ -328,49 +346,93 @@ func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analy
 	}
 }
 
+// defineCallSiteModes reports whether the formatter keeps a define's
+// bytes when it sees a preserving call site (plan Task 7). Until it does,
+// call-site caller failures are reported as pending, not as problems.
+const defineCallSiteModes = false
+
+// oracleResult is what renderingProblems found.
+type oracleResult struct {
+	problems []string // rendering changed, or the output no longer executes
+	pending  []string // call-site caller failures while !defineCallSiteModes
+	skipped  []string // synthetic callers the input does not execute in
+}
+
 // renderingProblems runs checks (d) and (e): for each data set, input and
-// output render equivalently at the top level and inside each caller of
-// each {{define}}. It returns one message per failing data set and caller.
-// An error means the fixture itself is broken (its input does not run).
-func renderingProblems(fx fixture, output string) ([]string, error) {
+// output render equivalently at the top level and inside each synthetic
+// caller of each {{define}} (rendering.Callers). A call-site caller is
+// appended to the input as a {{define}} before formatting, so the
+// formatter sees the call site; the others render output, formatted
+// without them. A caller the input does not execute in (an html/template
+// context error, say) or that the oracle cannot read is skipped. An
+// error means the fixture itself is broken (its top level does not run).
+func renderingProblems(fx fixture, output string) (oracleResult, error) {
 	callers, err := defineCallers(fx.input)
 	if err != nil {
-		return nil, err
+		return oracleResult{}, err
 	}
-	var problems []string
+	styles := Styles(analysis.WhitespaceOptions{Sheets: fx.sheets, AuthorCSSKnown: true})
+	var r oracleResult
 	for _, ds := range fx.data {
 		for _, c := range callers {
-			want, err := render(fx.input, c.source, ds.value)
-			if err != nil {
-				return nil, fmt.Errorf("data %s, caller %s: input: %w", ds.name, c.name, err)
+			label := fmt.Sprintf("data %s, caller %s", ds.name, c.Name)
+			input, out := fx.input, output
+			if c.CallSite {
+				input = fx.input + oracleCallerDefine(c)
+				out, err = Source("input.gohtml", input, styles)
+				if err != nil {
+					r.problems = append(r.problems, fmt.Sprintf("%s: Source(input with caller) error: %v", label, err))
+					continue
+				}
 			}
-			got, err := render(output, c.source, ds.value)
+			want, err := render(input, c.Source, ds.value)
 			if err != nil {
-				problems = append(problems, fmt.Sprintf("data %s, caller %s: output: %v", ds.name, c.name, err))
+				if c.Source == "" {
+					return oracleResult{}, fmt.Errorf("%s: input: %w", label, err)
+				}
+				r.skipped = append(r.skipped, fmt.Sprintf("%s: input: %v", label, err))
 				continue
 			}
-			diff, err := rendering.Diff(want, got, c.context, fx.sheets)
-			if err != nil {
-				return nil, fmt.Errorf("data %s, caller %s: %w", ds.name, c.name, err)
+			if c.Source != "" {
+				if _, err := rendering.Tokens(want, c.Context, fx.sheets); err != nil {
+					r.skipped = append(r.skipped, fmt.Sprintf("%s: oracle cannot read the input's page: %v", label, err))
+					continue
+				}
 			}
-			if diff != "" {
-				problems = append(problems, fmt.Sprintf("data %s, caller %s: rendering changed: %s\ninput rendered:\n%s\noutput rendered:\n%s", ds.name, c.name, diff, want, got))
+			var problem string
+			got, err := render(out, c.Source, ds.value)
+			if err != nil {
+				problem = fmt.Sprintf("%s: output: %v", label, err)
+			} else {
+				diff, err := rendering.Diff(want, got, c.Context, fx.sheets)
+				if err != nil {
+					return oracleResult{}, fmt.Errorf("%s: %w", label, err)
+				}
+				if diff != "" {
+					problem = fmt.Sprintf("%s: rendering changed: %s\ninput rendered:\n%s\noutput rendered:\n%s", label, diff, want, got)
+				}
+			}
+			switch {
+			case problem == "":
+			case c.CallSite && !defineCallSiteModes:
+				r.pending = append(r.pending, problem)
+			default:
+				r.problems = append(r.problems, problem)
 			}
 		}
 	}
-	return problems, nil
+	return r, nil
 }
 
-type caller struct {
-	name    string // "top" or the caller source
-	source  string // "" renders the file's top-level template
-	context rendering.Context
+// oracleCallerDefine wraps a call-site caller in a {{define}} the
+// formatter sees beside the input.
+func oracleCallerDefine(c rendering.Caller) string {
+	return `{{define "muxt-oracle-caller"}}` + c.Source + `{{end}}`
 }
 
-// defineCallers lists the top-level render plus, for each {{define}} in
-// src, the wrappers of spec §8.2: block, inline, and table when the
-// body's first element is a tr.
-func defineCallers(src string) ([]caller, error) {
+// defineCallers lists the top-level render (an empty Source) plus the
+// synthetic callers of each {{define}} in src.
+func defineCallers(src string) ([]rendering.Caller, error) {
 	tree, err := template.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
@@ -380,7 +442,7 @@ func defineCallers(src string) ([]caller, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse input: %w", err)
 	}
-	callers := []caller{{name: "top", context: rendering.Body}}
+	callers := []rendering.Caller{{Name: "top", Context: rendering.Body}}
 	var defines []string
 	firstElement := make(map[string]string)
 	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
@@ -402,15 +464,7 @@ func defineCallers(src string) ([]caller, error) {
 		}
 	})
 	for _, name := range defines {
-		call := `{{template ` + strconv.Quote(name) + ` .}}`
-		callers = append(callers,
-			caller{name: "<div>" + call + "</div>", source: "<div>" + call + "</div>", context: rendering.Body},
-			caller{name: "<p>a" + call + "b</p>", source: "<p>a" + call + "b</p>", context: rendering.Body},
-		)
-		if firstElement[name] == "tr" {
-			s := "<table><tbody>" + call + "</tbody></table>"
-			callers = append(callers, caller{name: s, source: s, context: rendering.TableBody})
-		}
+		callers = append(callers, rendering.Callers(name, firstElement[name])...)
 	}
 	return callers, nil
 }
@@ -482,4 +536,165 @@ func checkDirectiveRegions(t *testing.T, name, input, output string) {
 		}
 		cursor += i + len(region)
 	}
+}
+
+func TestRenderingProblemsCallers(t *testing.T) {
+	fx := fixture{
+		input: "{{define \"m\"}}\n\thi\n{{end}}\n",
+		data:  []dataSet{{name: "{}", value: map[string]any{}}},
+	}
+	got, err := Source("input.gohtml", fx.input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := renderingProblems(fx, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.problems) != 0 || len(r.skipped) != 0 {
+		t.Errorf("renderingProblems(%q) problems %q, skipped %q, want none", fx.input, r.problems, r.skipped)
+	}
+	// Formatted without its call site, the body loses its tab, which
+	// pre-wrap, the attribute and the textarea all keep.
+	if wantPending := 3; !defineCallSiteModes && len(r.pending) != wantPending {
+		t.Errorf("renderingProblems(%q) has %d pending, want %d: %q", fx.input, len(r.pending), wantPending, r.pending)
+	}
+
+	// A joined line changes the inline caller's rendering (SB -> empty).
+	r, err = renderingProblems(fx, "{{define \"m\"}}hi{{end}}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(r.problems, func(p string) bool { return strings.Contains(p, "caller inline:") }) {
+		t.Errorf("renderingProblems with a joined body: problems %q, want one for the inline caller", r.problems)
+	}
+
+	// A body that ends inside an attribute value cannot be called from
+	// one: html/template rejects that caller, and only that caller.
+	fx.input = `{{define "a"}}<a href="{{.}}">x</a>{{end}}`
+	r, err = renderingProblems(fx, fx.input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.skipped) != 1 || !strings.Contains(r.skipped[0], "caller attribute:") {
+		t.Errorf("renderingProblems(%q) skipped %q, want the attribute caller only", fx.input, r.skipped)
+	}
+}
+
+// whatwgRow is one regression snippet from the WHATWG rulings
+// (docs/superpowers/specs/panel/whatwg-rulings.md §4) with the exact
+// output the rulings and the style rules (spec §3) allow.
+type whatwgRow struct {
+	snippet int    // the snippet's number in §4
+	input   string // the file's whole source
+	want    string // Source's exact output
+	css     string // a stylesheet file, if any
+	data    map[string]any
+	task    string // for whatwgPending: the plan task the row waits for
+}
+
+// whatwgRegressions must pass.
+var whatwgRegressions = []whatwgRow{
+	// 1: the kind never changes (a segment break between East Asian
+	// characters is removed; a space is kept).
+	{snippet: 1, input: "<p>日本\n語</p>\n", want: "<p>日本\n\t語</p>\n"},
+	{snippet: 1, input: "<p>日本 語</p>\n", want: "<p>日本 語</p>\n"},
+	// 2: pre-line keeps the LF count; b may be reindented.
+	{snippet: 2, input: "<div style=\"white-space:pre-line\">a\n\n\t\tb</div>\n", want: "<div style=\"white-space:pre-line\">a\n\n\tb</div>\n"},
+	// 3: no LF is inserted after <pre>, and its leading LF stays.
+	{snippet: 3, input: "<pre>{{.X}}</pre>\n", want: "<pre>{{.X}}</pre>\n", data: map[string]any{"X": "\nhi"}},
+	{snippet: 3, input: "<pre>\n\nx</pre>\n", want: "<pre>\n\nx</pre>\n"},
+	// 4: adjacent inline elements are never split.
+	{snippet: 4, input: "<button><span>Un</span><span>read</span></button>\n", want: "<button><span>Un</span><span>read</span></button>\n"},
+	// 5: a comment between text is never split off, and one on its own
+	// line is reindented but never joined.
+	{snippet: 5, input: "a<!--x-->b\n", want: "a<!--x-->b\n"},
+	{snippet: 5, input: "<div>\na\n\t\t<!--x-->\nb\n</div>\n", want: "<div>\n\ta\n\t<!--x-->\n\tb\n</div>\n"},
+	// 9: no LF is added before {{end}} of a define used inline.
+	{snippet: 9, input: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n", want: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n"},
+	// 10: no final LF is added.
+	{snippet: 10, input: "<b>{{.}}</b>", want: "<b>{{.}}</b>"},
+	// 11: the run before {{.B -}} keeps its kind (trailing tab stripped,
+	// LF kept); the trimmed run after it is reindented.
+	{snippet: 11, input: "<div>\n{{.A}}\t\n{{.B -}}\n\tx\n</div>\n", want: "<div>\n\t{{.A}}\n\t{{.B -}}\n\tx\n</div>\n", data: map[string]any{"A": "a", "B": "b"}},
+	// 12: attribute separators survive; continuation lines are reindented.
+	{snippet: 12, input: "<a href=x\nclass=y>z</a>\n", want: "<a href=x\n\tclass=y>z</a>\n"},
+	{snippet: 12, input: "<a href=x />\n", want: "<a href=x />\n"},
+	// 13: SVG text content and custom elements are left verbatim, the
+	// latter whole: opener line, body and closer (spec §3 item 4).
+	{snippet: 13, input: "<svg><text>a\nb</text></svg>\n", want: "<svg><text>a\nb</text></svg>\n"},
+	{snippet: 13, input: "<my-chip>a\n\tb</my-chip>\n", want: "<my-chip>a\n\tb</my-chip>\n"},
+	{snippet: 13, input: "<div>\n<my-chip>a\n\t\t\tb</my-chip>\n</div>\n", want: "<div>\n<my-chip>a\n\t\t\tb</my-chip>\n</div>\n"},
+	// 14: an empty element never gains an LF (:empty).
+	{snippet: 14, input: "<div class=x></div>\n", want: "<div class=x></div>\n"},
+	{snippet: 14, input: "<div>\n<div class=x></div>\n</div>\n", want: "<div>\n\t<div class=x></div>\n</div>\n"},
+	// 15: CR is a segment break (the parser turns it into LF), so the
+	// line after it is reindented and the CR kept; FF is content.
+	{snippet: 15, input: "<p>a\rb</p>\n", want: "<p>a\r\tb</p>\n"},
+	{snippet: 15, input: "<p>a\fb</p>\n", want: "<p>a\fb</p>\n"},
+}
+
+// whatwgPending wait for a later plan task; each row's task says which.
+// Move a row to whatwgRegressions when TestWHATWGRegressions reports
+// that it passes.
+var whatwgPending = []whatwgRow{
+	// 6: with body pre-wrap, a call that writes text in <head> moves the
+	// following run into <body>, which preserves it.
+	{snippet: 6, task: "Task 6 follow-up (ruling 14)", css: "body{white-space:pre-wrap}", input: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n", want: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n"},
+	// 7: a define called from a pre-wrap element keeps its bytes.
+	{snippet: 7, task: "Task 7", css: ".bubble{white-space:pre-wrap}", input: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n", want: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n"},
+	// 8: a define called from an attribute value keeps its bytes.
+	{snippet: 8, task: "Task 7", input: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n", want: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n"},
+}
+
+// TestWHATWGRegressions checks each snippet's exact output, idempotency
+// and rendering under the oracle (with its synthetic define callers).
+func TestWHATWGRegressions(t *testing.T) {
+	for i, row := range whatwgRegressions {
+		t.Run(fmt.Sprintf("%d/%d", row.snippet, i), func(t *testing.T) {
+			for _, f := range whatwgFailures(row) {
+				t.Errorf("snippet %d %q: %s", row.snippet, row.input, f)
+			}
+		})
+	}
+	for i, row := range whatwgPending {
+		t.Run(fmt.Sprintf("pending/%d/%d", row.snippet, i), func(t *testing.T) {
+			failures := whatwgFailures(row)
+			if len(failures) == 0 {
+				t.Skipf("pending %s, but snippet %d %q passes now: move it to whatwgRegressions", row.task, row.snippet, row.input)
+			}
+			t.Skipf("pending %s: snippet %d %q:\n%s", row.task, row.snippet, row.input, strings.Join(failures, "\n"))
+		})
+	}
+}
+
+func whatwgFailures(row whatwgRow) []string {
+	fx := fixture{input: row.input, data: []dataSet{{name: "row", value: row.data}}}
+	if row.data == nil {
+		fx.data[0].value = map[string]any{}
+	}
+	if row.css != "" {
+		fx.sheets = []analysis.Stylesheet{{Filename: "css/row.css", Text: row.css}}
+	}
+	styles := Styles(analysis.WhitespaceOptions{Sheets: fx.sheets, AuthorCSSKnown: true})
+	got, err := Source("input.gohtml", row.input, styles)
+	if err != nil {
+		return []string{fmt.Sprintf("Source error: %v", err)}
+	}
+	var failures []string
+	if got != row.want {
+		failures = append(failures, fmt.Sprintf("Source = %q, want %q", got, row.want))
+	}
+	if again, err := Source("format.gohtml", got, styles); err != nil || again != got {
+		failures = append(failures, fmt.Sprintf("not idempotent: Source(%q) = %q, %v", got, again, err))
+	}
+	oracle, err := renderingProblems(fx, got)
+	if err != nil {
+		return append(failures, err.Error())
+	}
+	failures = append(failures, oracle.problems...)
+	for _, p := range oracle.pending {
+		failures = append(failures, "Task 7: "+p)
+	}
+	return failures
 }
