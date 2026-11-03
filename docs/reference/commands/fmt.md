@@ -97,13 +97,33 @@ What is normalized:
 
 What is kept:
 
-- String, raw string, number and character literals as written (`0x1F` stays `0x1F`, a backquoted string keeps its backquotes), and the names of `{{define}}`, `{{block}}` and `{{template}}` as written.
+- String, raw string, number and character literals as written (`0x1F` stays `0x1F`, a backquoted string keeps its backquotes), and the names of `{{define}}`, `{{block}}` and `{{template}}` as written, except route names; see [Define patterns](#define-patterns).
 - The delimiters, custom ones included, and the trim markers: `{{-  .X  -}}` becomes `{{- .X -}}`.
 - Comments, `{{/* ... */}}`, which shift with their line but are otherwise untouched.
 - An action holding a raw string literal that spans lines, which is left as written whole.
 - Actions inside a `muxt:fmt off` or `preserve` region.
 
-After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, positions and spacing aside, and reports an error rather than write a file where it does not.
+After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, positions and spacing aside and route names rewritten everywhere they appear, and reports an error rather than write a file where it does not.
+
+## Define patterns
+
+A `{{define}}`, `{{block}}` or `{{template}}` name that muxt reads as a route (an HTTP pattern, optionally followed by a status code and a handler call) is written in one canonical form: method, pattern, status code and call separated by single spaces, and the call printed as `gofmt` prints Go, with no spaces inside the parentheses and `, ` between arguments. The literal keeps its quotes, double or backquoted, and string arguments are kept as written ([names_test.go](../../../internal/template/format/names_test.go)).
+
+```gohtml
+{{define "GET  /x/{id}   M( ctx , id )"}}
+```
+
+becomes
+
+```gohtml
+{{define "GET /x/{id} M(ctx, id)"}}
+```
+
+Any other name is left as written: a partial such as `"with  spaces"`, and a route name whose call does not parse as Go, holds a comment or spans lines.
+
+A template is looked up by its exact name, so every reference to it changes together or none does. In one file, `fmt` rewrites the define and its `{{template}}` calls alike, and leaves them all as written when one sits in a `muxt:fmt` region. Across the package, it rewrites a name only when every template of the package that names it is formatted in the same run or already spells it canonically. Format only the define while another template of the package calls it the old way, and both are left as written; run `muxt fmt -w .` on the package to rewrite them together. Two defines whose names differ only in spacing are left as written. Standard input and a file outside a Go package have no package to look through, and a package that loads with errors or holds a template that cannot be read or parsed cannot be looked through whole, so their route names are left as written ([fmt_test.go](../../../internal/cli/fmt_test.go)).
+
+The generated routes file names each route template too, and Go code that calls `ExecuteTemplate` may. Run `muxt generate` after formatting. Until then, `muxt check` reports the route as having no generated handler and the old name as not found.
 
 ## What is left as written
 

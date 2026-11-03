@@ -267,7 +267,7 @@ func parseShapes(t *testing.T, src, left, right string) []string {
 	if err != nil {
 		t.Fatalf("ParseTree(%q): %v", src, err)
 	}
-	return actionShapes(tree.Root)
+	return actionShapes(tree.Root, CanonicalName)
 }
 
 func actionDots() []map[string]any {

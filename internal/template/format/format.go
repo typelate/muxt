@@ -86,7 +86,9 @@ type formatter struct {
 	leftDelim  string
 	rightDelim string
 	whitespace analysis.WhitespaceOptions
-	testEdits  []edit // edits a test seeds the emitter with
+	keep       func(canonical string) bool // KeepNames
+	renames    map[string]string           // the names the last format or actionsOnly changed
+	testEdits  []edit                      // edits a test seeds the emitter with
 }
 
 // format reindents src, the source of list starting at position base.
@@ -117,8 +119,9 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	// The elements made unsure may hold call sites.
 	modes := callSiteModes(sites, styles, floor)
 	verbatimDefines(list, modes, bodies)
-	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classifyModes(list, styles, modes), bodies, dir)
+	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classifyModes(list, styles, modes), bodies, dir, f.keep)
 	e.edits = f.testEdits
+	f.renames = e.renames
 	return e.emit(list)
 }
 
@@ -126,7 +129,9 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 // base, with only its actions printed (printToken): the whitespace
 // between them is as written.
 func (f *formatter) actionsOnly(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
-	return newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir).apply()
+	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir, f.keep)
+	f.renames = e.renames
+	return e.apply()
 }
 
 // callSiteTrees returns the trees whose {{template}} calls and {{block}}s
@@ -176,7 +181,8 @@ func (f *formatter) callSiteTrees(list *template.ListNode, styles analysis.White
 // attribute values, comments, preserved and muxt:fmt off regions), as
 // the HTML parser does before tokenizing (§13.2.3.5) and as gofmt does
 // for Go. Every action outside a muxt:fmt region is printed from its
-// parse tree (printToken). Every other byte is the source's, so the
+// parse tree (printToken), a route name in it as CanonicalName writes
+// it unless KeepNames keeps it (planRenames). Every other byte is the source's, so the
 // file's final newline, or its lack of one, is as written. A file with
 // no HTML element is not a page (a plain-text email, a text-only
 // partial), so its whitespace is all preserved and Source changes only
@@ -206,9 +212,10 @@ func Source(filename, src string, opts ...Option) (string, error) {
 		return "", fmt.Errorf("%s: %w", filename, err)
 	}
 	if out != src {
-		// The printed actions must parse as the source's do.
+		// The printed actions must parse as the source's do, but for
+		// the names the emitter changed, each everywhere it appears.
 		again, err := f.parse(filename, out)
-		if err != nil || !slices.Equal(actionShapes(tree.Root), actionShapes(again.Root)) {
+		if err != nil || !slices.Equal(actionShapes(tree.Root, renamed(f.renames)), actionShapes(again.Root, nil)) {
 			return "", fmt.Errorf("%s: %w", filename, errActionChanged)
 		}
 	}

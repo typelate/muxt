@@ -1,0 +1,26 @@
+Route names in define, block and template are written in one canonical
+form: single spaces between method, pattern, status code and call, the
+call printed Go-style, the literal's quotes kept. The define and the
+call that names it change together; a partial name is as written.
+-- input.gohtml --
+{{define "GET  /x/{id}   Show( ctx , id )"}}<p>{{.Name}}</p>{{end}}
+{{define `POST /x  201 Create(ctx,form)`}}<p>made</p>{{end}}
+{{define "with  spaces"}}<p>partial</p>{{end}}
+<div>
+	{{template "GET  /x/{id}   Show( ctx , id )" .}}
+	{{template "with  spaces" .}}
+	{{block "GET   /y Y( ctx )" .}}<p>y</p>{{end}}
+</div>
+-- format.gohtml --
+{{define "GET /x/{id} Show(ctx, id)"}}<p>{{.Name}}</p>{{end}}
+{{define `POST /x 201 Create(ctx, form)`}}<p>made</p>{{end}}
+{{define "with  spaces"}}<p>partial</p>{{end}}
+<div>
+	{{template "GET /x/{id} Show(ctx, id)" .}}
+	{{template "with  spaces" .}}
+	{{block "GET /y Y(ctx)" .}}<p>y</p>{{end}}
+</div>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Kind":"a","Name":"n","Hidden":false,"Items":["x","y"]}

@@ -19,8 +19,12 @@ var errActionChanged = errors.New("format: printed actions do not parse as writt
 // trim markers, names, declarations, commands and their arguments, with
 // literals as written. The parentheses printPipe drops (redundantParens)
 // are dropped here too, so a source and its formatted output have the
-// same shapes. It is independent of the printer: it reads the tree only.
-func actionShapes(root *template.ListNode) []string {
+// same shapes. Each name is written as rename returns it, when rename is
+// not nil. It is independent of the printer: it reads the tree only.
+func actionShapes(root *template.ListNode, rename func(string) string) []string {
+	if rename == nil {
+		rename = func(name string) string { return name }
+	}
 	var shapes []string
 	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
 		var b strings.Builder
@@ -36,17 +40,17 @@ func actionShapes(root *template.ListNode) []string {
 		case *template.RangeNode:
 			shapeBranch(&b, "range", &n.BranchNode)
 		case *template.TemplateNode:
-			b.WriteString("template " + strconv.Quote(n.Name))
+			b.WriteString("template " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
 			if n.Pipe != nil {
 				shapePipe(&b, n.Pipe)
 			}
 		case *template.BlockNode:
-			b.WriteString("block " + strconv.Quote(n.Name))
+			b.WriteString("block " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
 			shapePipe(&b, n.Pipe)
 		case *template.DefineNode:
-			b.WriteString("define " + strconv.Quote(n.Name))
+			b.WriteString("define " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
 		case *template.BreakNode:
 			b.WriteString("break")
@@ -172,7 +176,11 @@ type actionToken struct {
 	// template, block and define, the name literal as written ("" for a
 	// plain action).
 	head string
-	pipe *template.PipeNode // nil when the token has none
+	// named reports a template, block or define token: name is the
+	// name it parses to and literal the name literal as written.
+	named         bool
+	name, literal string
+	pipe          *template.PipeNode // nil when the token has none
 	// asWritten reports that the token is copied as it is: it is in a
 	// muxt:fmt region, or a string literal in it spans lines.
 	asWritten bool
@@ -277,42 +285,27 @@ func nameLiteral(inner string) (string, bool) {
 // order, for the emitter to print.
 func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 	chained := make(map[*template.BranchNode]bool)
-	add := func(start lex.Pos, wantEnd lex.Pos, keyword string, named bool, pipe *template.PipeNode) {
-		at := int(start - e.base)
-		s, ok := scanAction(e.src, at, left, right)
-		if !ok || wantEnd >= 0 && s.end != int(wantEnd-e.base) {
-			return
-		}
-		fields := strings.Fields(s.inner)
-		words := strings.Fields(keyword)
-		if len(fields) < len(words) || !slices.Equal(fields[:len(words)], words) {
-			return
-		}
-		head := keyword
-		if named {
-			name, ok := nameLiteral(s.inner)
-			if !ok {
-				return
+	add := func(start lex.Pos, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode) {
+		tok, ok := e.scanToken(start, wantEnd, keyword, named, left, right)
+		if !ok {
+			if named {
+				e.unprinted = append(e.unprinted, name)
 			}
-			head += " " + name
+			return
 		}
-		e.actions = append(e.actions, &actionToken{
-			start: at, end: s.end,
-			trimLeft: s.trimLeft, trimRight: s.trimRight,
-			head: head, pipe: pipe,
-			asWritten: s.literalBreak || e.inVerbatim(at),
-		})
+		tok.name, tok.pipe = name, pipe
+		e.actions = append(e.actions, tok)
 	}
 	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
 		switch n := n.(type) {
 		case *template.ActionNode:
-			add(n.Start(), n.End(), "", false, n.Pipe)
+			add(n.Start(), n.End(), "", false, "", n.Pipe)
 		case *template.TemplateNode:
-			add(n.Start(), n.End(), "template", true, n.Pipe)
+			add(n.Start(), n.End(), "template", true, n.Name, n.Pipe)
 		case *template.BreakNode:
-			add(n.Start(), n.End(), "break", false, nil)
+			add(n.Start(), n.End(), "break", false, "", nil)
 		case *template.ContinueNode:
-			add(n.Start(), n.End(), "continue", false, nil)
+			add(n.Start(), n.End(), "continue", false, "", nil)
 		case *template.IfNode:
 			e.collectBranch(add, "if", &n.BranchNode, chained)
 		case *template.WithNode:
@@ -320,15 +313,19 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 		case *template.RangeNode:
 			e.collectBranch(add, "range", &n.BranchNode, chained)
 		case *template.DefineNode:
-			if n.Body != nil {
-				add(n.Start(), -1, "define", true, nil)
-				add(n.Body.End(), n.End(), "end", false, nil)
+			if n.Body == nil {
+				e.unprinted = append(e.unprinted, n.Name)
+				return
 			}
+			add(n.Start(), -1, "define", true, n.Name, nil)
+			add(n.Body.End(), n.End(), "end", false, "", nil)
 		case *template.BlockNode:
-			if n.Body != nil && n.Pipe != nil {
-				add(n.Start(), n.Pipe.End(), "block", true, n.Pipe)
-				add(n.Body.End(), n.End(), "end", false, nil)
+			if n.Body == nil || n.Pipe == nil {
+				e.unprinted = append(e.unprinted, n.Name)
+				return
 			}
+			add(n.Start(), n.Pipe.End(), "block", true, n.Name, n.Pipe)
+			add(n.Body.End(), n.End(), "end", false, "", nil)
 		}
 	})
 	slices.SortFunc(e.actions, func(a, b *actionToken) int { return a.start - b.start })
@@ -340,10 +337,42 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 	}
 }
 
+// scanToken reads the token for keyword whose left delimiter is at
+// start and, unless wantEnd is -1, whose end is at wantEnd. It reports
+// false when the source there is not that token.
+func (e *emitter) scanToken(start, wantEnd lex.Pos, keyword string, named bool, left, right string) (*actionToken, bool) {
+	at := int(start - e.base)
+	s, ok := scanAction(e.src, at, left, right)
+	if !ok || wantEnd >= 0 && s.end != int(wantEnd-e.base) {
+		return nil, false
+	}
+	fields := strings.Fields(s.inner)
+	words := strings.Fields(keyword)
+	if len(fields) < len(words) || !slices.Equal(fields[:len(words)], words) {
+		return nil, false
+	}
+	tok := &actionToken{
+		start: at, end: s.end,
+		trimLeft: s.trimLeft, trimRight: s.trimRight,
+		head:      keyword,
+		named:     named,
+		asWritten: s.literalBreak || e.inVerbatim(at),
+	}
+	if named {
+		literal, ok := nameLiteral(s.inner)
+		if !ok {
+			return nil, false
+		}
+		tok.literal = literal
+		tok.head += " " + literal
+	}
+	return tok, true
+}
+
 // collectBranch adds b's opener ({{else if}} or {{else with}} when b is
 // chained onto another branch's else), its plain {{else}}, and its
 // {{end}}, which a chain shares with its last branch.
-func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string, named bool, pipe *template.PipeNode), keyword string, b *template.BranchNode, chained map[*template.BranchNode]bool) {
+func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode), keyword string, b *template.BranchNode, chained map[*template.BranchNode]bool) {
 	if b.List == nil || b.Pipe == nil {
 		return
 	}
@@ -351,7 +380,7 @@ func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string,
 	if chained[b] {
 		opener = "else " + keyword
 	}
-	add(b.Start(), b.Pipe.End(), opener, false, b.Pipe)
+	add(b.Start(), b.Pipe.End(), opener, false, "", b.Pipe)
 	chain := b.ElseChain()
 	if chain != nil {
 		chained[chain] = true
@@ -359,10 +388,10 @@ func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string,
 	}
 	last := b.List
 	if b.ElseList != nil {
-		add(b.List.End(), -1, "else", false, nil)
+		add(b.List.End(), -1, "else", false, "", nil)
 		last = b.ElseList
 	}
-	add(last.End(), b.End(), "end", false, nil)
+	add(last.End(), b.End(), "end", false, "", nil)
 }
 
 // printToken returns tok printed from its parse tree: its delimiters
