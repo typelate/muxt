@@ -113,6 +113,8 @@ func (t Token) equal(o Token) bool {
 // whitespace-normalized token stream. sheets are the stylesheet files the
 // page uses besides its <style> elements and style attributes.
 func Tokens(rendered string, ctx Context, sheets []analysis.Stylesheet) ([]Token, error) {
+	// A browser decodes a byte that is not UTF-8 as U+FFFD.
+	rendered = strings.ToValidUTF8(rendered, "\uFFFD")
 	nodes, err := parse(rendered, ctx)
 	if err != nil {
 		return nil, err

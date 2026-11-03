@@ -45,6 +45,8 @@ func TestDiff(t *testing.T) {
 		{a: `<style>.f{float:left}</style><span>a <div class=f>f</div> b</span>`, b: `<style>.f{float:left}</style><span>a<div class=f>f</div>b</span>`, equivalent: false},
 		{a: `<!DOCTYPE html><html><body>a</body></html>`, b: `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html><body>a</body></html>`, equivalent: false},
 		{a: `<p>a&#13;b</p>`, b: `<p>a b</p>`, equivalent: false},
+		{a: "<textarea>\x8f</textarea>\n<p>a\n\tb</p>", b: "<textarea>\x8f</textarea>\n<p>a\nb</p>", equivalent: true},
+		{a: "<p>\x8f</p>", b: "<p>\ufffd</p>", equivalent: true},
 		{a: "<p>中 <span>\n文</span></p>", b: `<p>中 <span>文</span></p>`, equivalent: false},
 		{a: `<xmp>a  b</xmp>`, b: `<xmp>a b</xmp>`, equivalent: false},
 		{a: `<noscript>a  b</noscript>`, b: `<noscript>a b</noscript>`, equivalent: false},

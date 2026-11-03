@@ -794,6 +794,62 @@ func TestHTMLParse(t *testing.T) {
 	}
 }
 
+// TestHTMLParseInvalidUTF8 checks that a byte that is not UTF-8 is just a
+// character (a browser decodes it as U+FFFD): a raw text or RCDATA element
+// still closes at its end tag, the nodes after it parse, and the bytes stay
+// as written.
+func TestHTMLParseInvalidUTF8(t *testing.T) {
+	text := func(s string) Node { return &TextNode{Text: []byte(s)} }
+	elem := func(tag, content string) Node {
+		return &HTMLElementNode{TagName: tag, Closed: true, Children: []Node{text(content)}}
+	}
+	following := elem("p", "x")
+	fragment := func(nodes ...Node) Node {
+		return &ListNode{Nodes: []Node{&HTMLDocumentFragmentNode{Children: nodes}}}
+	}
+	for _, test := range []htmlParseTest{
+		{name: "textarea start", input: "<textarea>\x8fab</textarea><p>x</p>", exp: fragment(elem("textarea", "\x8fab"), following)},
+		{name: "textarea middle", input: "<textarea>a\x8fb</textarea><p>x</p>", exp: fragment(elem("textarea", "a\x8fb"), following)},
+		{name: "textarea end", input: "<textarea>ab\x8f</textarea><p>x</p>", exp: fragment(elem("textarea", "ab\x8f"), following)},
+		{name: "textarea only", input: "<textarea>\x8f</textarea><p>x</p>", exp: fragment(elem("textarea", "\x8f"), following)},
+		{name: "textarea upper case", input: "<TEXTAREA>\x8f</TEXTAREA><p>x</p>", exp: fragment(&HTMLElementNode{TagName: "TEXTAREA", Closed: true, Children: []Node{text("\x8f")}}, following)},
+		{name: "textarea many", input: "<textarea>\xff\xfe\x80a\x8f</textarea><p>x</p>", exp: fragment(elem("textarea", "\xff\xfe\x80a\x8f"), following)},
+		{name: "textarea action", input: "<textarea>\x8f{{.X}}\x8f</textarea><p>x</p>", exp: fragment(&HTMLElementNode{TagName: "textarea", Closed: true, Children: []Node{
+			text("\x8f"),
+			&ActionNode{Pipe: &PipeNode{Commands: []*CommandNode{{Args: []Node{&FieldNode{Ident: []string{"X"}}}}}}},
+			text("\x8f"),
+		}}, following)},
+		{name: "textarea false end tag", input: "<textarea>\x8f</textareax>\x8f</textarea><p>x</p>", exp: fragment(elem("textarea", "\x8f</textareax>\x8f"), following)},
+		{name: "title start", input: "<title>\xffab</title><p>x</p>", exp: fragment(elem("title", "\xffab"), following)},
+		{name: "title middle", input: "<title>a\xffb</title><p>x</p>", exp: fragment(elem("title", "a\xffb"), following)},
+		{name: "title end", input: "<title>ab\xff</title><p>x</p>", exp: fragment(elem("title", "ab\xff"), following)},
+		{name: "script start", input: "<script>\x8fab</script><p>x</p>", exp: fragment(elem("script", "\x8fab"), following)},
+		{name: "script middle", input: "<script>a\x8fb</script><p>x</p>", exp: fragment(elem("script", "a\x8fb"), following)},
+		{name: "script end", input: "<script>ab\x8f</script><p>x</p>", exp: fragment(elem("script", "ab\x8f"), following)},
+		{name: "style start", input: "<style>\x8fab</style><p>x</p>", exp: fragment(elem("style", "\x8fab"), following)},
+		{name: "style middle", input: "<style>a\x8fb</style><p>x</p>", exp: fragment(elem("style", "a\x8fb"), following)},
+		{name: "style end", input: "<style>ab\x8f</style><p>x</p>", exp: fragment(elem("style", "ab\x8f"), following)},
+		{name: "lone lead byte", input: "<textarea>\xc0</textarea><p>x</p>", exp: fragment(elem("textarea", "\xc0"), following)},
+		{name: "lone lead byte before end tag", input: "<script>a\xc0</script><p>x</p>", exp: fragment(elem("script", "a\xc0"), following)},
+		{name: "truncated sequence before end tag", input: "<textarea>\xe2\x82</textarea><p>x</p>", exp: fragment(elem("textarea", "\xe2\x82"), following)},
+		{name: "truncated sequence at EOF", input: "<textarea>a\xe2\x82", exp: fragment(&HTMLElementNode{TagName: "textarea", Children: []Node{text("a\xe2\x82")}})},
+		{name: "truncated sequence at EOF in text", input: "<p>x</p>a\xe2\x82", exp: fragment(following, text("a\xe2\x82"))},
+		{name: "pre", input: "<pre>\x8f</pre><p>x</p>", exp: fragment(elem("pre", "\x8f"), following)},
+		{name: "p", input: "<p>\x8f</p><p>x</p>", exp: fragment(elem("p", "\x8f"), following)},
+		{name: "ordinary text", input: "a\x8fb<p>x</p>", exp: fragment(text("a\x8fb"), following)},
+		{name: "attribute value", input: "<div title=\"\x8f\">y</div><p>x</p>", exp: fragment(&HTMLElementNode{TagName: "div", Closed: true, Attr: []Node{
+			&HTMLAttributeNode{HasValue: true, Key: []Node{text("title")}, Value: []Node{text("\"\x8f\"")}},
+		}, Children: []Node{text("y")}}, following)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			tmpl, err := ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			require.NoError(t, err)
+			assert.Equal(t, test.input, tmpl.Root.String())
+			requireASTEqual(t, tmpl.Root, test.exp)
+		})
+	}
+}
+
 func TestHTMLParseErrors(t *testing.T) {
 	for _, test := range []struct {
 		name   string

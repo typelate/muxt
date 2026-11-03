@@ -465,7 +465,7 @@ type oracleResult struct {
 // output render equivalently at the top level and inside each synthetic
 // caller of each {{define}} (rendering.Callers; a caller's problem key is
 // "<define> <caller>"). A call-site caller is
-// appended to the input as a {{define}} before formatting, so the
+// prepended to the input as a {{define}} before formatting, so the
 // formatter sees the call site; the others render output, formatted
 // without them. A caller the input does not execute in (an html/template
 // context error, say) or that the oracle cannot read is skipped. An
@@ -482,7 +482,7 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 			label := fmt.Sprintf("data %s, caller %s", ds.name, c.Name)
 			input, out := fx.input, output
 			if c.CallSite {
-				input = fx.input + oracleCallerDefine(c)
+				input = oracleCallerDefine(c) + fx.input
 				out, err = Source("input.gohtml", input, styles)
 				if err != nil {
 					r.problems = append(r.problems, problem{key: c.Name, kind: kindSourceError, msg: fmt.Sprintf("%s: Source(input with caller) error: %v", label, err)})
@@ -521,11 +521,13 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 }
 
 // oracleCallerDefine wraps a call-site caller in a {{define}} the
-// formatter sees beside the input. The leading LF keeps a trailing "{"
-// in the input from joining the define's delimiter; only the caller
-// renders, so the top-level text it adds is never drawn.
+// formatter sees beside the input, to be put before it: an element the
+// input leaves open (a <textarea> at its end, say) would swallow a
+// define put after it. The trailing LF keeps the input's first line its
+// own; only the caller renders, so the top-level text it adds is never
+// drawn.
 func oracleCallerDefine(c rendering.Caller) string {
-	return "\n" + `{{define "muxt-oracle-caller"}}` + c.Source + `{{end}}`
+	return `{{define "muxt-oracle-caller"}}` + c.Source + `{{end}}` + "\n"
 }
 
 // defineCallers lists the top-level render (an empty Source) plus the
@@ -688,6 +690,30 @@ func TestRenderingProblemsCallers(t *testing.T) {
 	}
 	if got := ids(r.problems); slices.Contains(got, "m div: rendering changed") || slices.Contains(got, "m inline: rendering changed") {
 		t.Errorf("renderingProblems with one LF lost: problems %q, want none for collapse callers", got)
+	}
+
+	// An element the input leaves open at its end does not swallow the
+	// call-site caller (fuzz, 2026-11-03): the formatter sees it and keeps
+	// the trailing spaces pre-wrap and the attribute draw. The top level
+	// ends in RCDATA and does not execute, so this checks each caller as
+	// FuzzFormatEquivalent does.
+	open := "{{define \"0\"}}  \n{{end}}0<teXtAreA>"
+	openCallers, err := defineCallers(open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range openCallers {
+		if !c.CallSite {
+			continue
+		}
+		in := oracleCallerDefine(c) + open
+		formatted, err := Source("input.gohtml", in)
+		if err != nil {
+			t.Fatalf("Source(%q) error: %v", in, err)
+		}
+		if p := fuzzRenderingProblem(in, formatted, c.Source, c.Context, map[string]any{}); p != "" && defineCallSiteModes {
+			t.Errorf("caller %s: %s", c.Name, p)
+		}
 	}
 
 	// A body that ends inside an attribute value cannot be called from

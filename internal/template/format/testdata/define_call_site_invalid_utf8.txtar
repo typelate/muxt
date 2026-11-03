@@ -1,0 +1,23 @@
+A define called from pre-line keeps its line-break count, even when an
+earlier raw-text element holds a byte that is not UTF-8 (fuzz,
+2026-11-03). A browser decodes the byte as U+FFFD and closes the
+<textarea>; the template parser must close it too, or the call site
+after it is not seen and the body's blank lines collapse.
+-- input.gohtml --
+{{define "m"}}
+a
+
+
+c
+{{end}}
+<textarea>è</textarea>
+{{define "k"}}<div style="white-space:pre-line">{{template "m" .}}</div>{{end}}
+-- format.gohtml --
+{{define "m"}}
+a
+
+
+c
+{{end}}
+<textarea>è</textarea>
+{{define "k"}}<div style="white-space:pre-line">{{template "m" .}}</div>{{end}}

@@ -927,7 +927,12 @@ func lexHTMLRawText(l *Scanner) stateFn {
 		// space, '>', or '/'.
 		idxEndTag := -1
 		endTagPrefix := "</" + l.htmlRawTag
-		restLower := strings.ToLower(rest)
+		// ASCII-only lowering keeps byte offsets: strings.ToLower would
+		// widen each byte that is not UTF-8 to U+FFFD (three bytes), so
+		// its indexes would not fit rest and the end tag would be missed.
+		// A browser decodes such a byte as U+FFFD, a character like any
+		// other, and closes the element at its end tag.
+		restLower := asciiLower(rest)
 		searchFrom := 0
 		for {
 			idx := strings.Index(restLower[searchFrom:], endTagPrefix)
@@ -993,6 +998,22 @@ func lexHTMLRawText(l *Scanner) stateFn {
 			return lexHTMLTag
 		}
 	}
+}
+
+// asciiLower returns s with ASCII upper case letters lowered and every
+// other byte as written, so it has the same length as s. HTML tag names
+// are matched ASCII case-insensitively.
+func asciiLower(s string) string {
+	if !strings.ContainsFunc(s, func(r rune) bool { return 'A' <= r && r <= 'Z' }) {
+		return s
+	}
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 func isASCIIAlpha(r rune) bool {
