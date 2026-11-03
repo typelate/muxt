@@ -48,15 +48,21 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // as text but a browser reads as a tag, or a self-closed HTML element
 // that is not void, is written as it is, or only the define body
 // holding the element when no {{template}} in the tree calls it (see
-// hasUnparsedMarkup and ignoredSelfCloses). Should the formatter fail
-// (a bug that Source reports as an error), the node's source is
-// returned as it is.
+// hasUnparsedMarkup and ignoredSelfCloses). Its emitter knows only LF
+// line breaks, which Source makes sure of before parsing; the tree's
+// positions cannot follow such a change, so a node whose source holds a
+// carriage return is returned as it is. Should the formatter fail (a bug
+// that Source reports as an error), the node's source is returned as it
+// is.
 func Node(root template.Node, opts ...Option) string {
 	list, ok := root.(*template.ListNode)
 	if !ok {
 		list = &template.ListNode{Nodes: []template.Node{root}}
 	}
 	src := root.String()
+	if strings.Contains(src, "\r") {
+		return src
+	}
 	out, err := newFormatter(opts).format(src, root.Start(), list, nil)
 	if err != nil {
 		return src
@@ -154,12 +160,17 @@ func (f *formatter) callSiteTrees(list *template.ListNode, styles analysis.White
 // elements. Only whitespace runs with a line break that the browser
 // collapses (or a trim marker removes) change: their trailing spaces go,
 // two or more blank lines become one (under pre-line every line break
-// stays), and their last line is reindented. Every other byte, line
-// breaks included (CR LF stays CR LF), is the source's, so the file's
-// final newline, or its lack of one, is as written. A file with no HTML
+// stays), and their last line is reindented. First, every line ending
+// in the file becomes LF: CR LF and a lone CR, everywhere (raw text,
+// attribute values, comments, preserved and muxt:fmt off regions), as
+// the HTML parser does before tokenizing (§13.2.3.5) and as gofmt does
+// for Go. Every other byte is the source's, so the file's final
+// newline, or its lack of one, is as written. A file with no HTML
 // element is not a page (a plain-text email, a text-only partial), so
-// its whitespace is all preserved and Source returns it unchanged.
+// its whitespace is all preserved and Source returns it with only its
+// line endings changed.
 func Source(filename, src string, opts ...Option) (string, error) {
+	src = normalizeLineEndings(src)
 	f := newFormatter(opts)
 	tree, err := template.ParseTree(filename, filename, src, nil, lex.Options{
 		EmitComment: true,
@@ -184,6 +195,15 @@ func Source(filename, src string, opts ...Option) (string, error) {
 		return "", fmt.Errorf("%s: %w", filename, err)
 	}
 	return out, nil
+}
+
+// normalizeLineEndings returns src with CR LF and lone CR written as
+// LF. Positions in the tree Source parses refer to its result.
+func normalizeLineEndings(src string) string {
+	if !strings.Contains(src, "\r") {
+		return src
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(src, "\r\n", "\n"), "\r", "\n")
 }
 
 // ignoredSelfCloses finds the HTML elements that are not void written

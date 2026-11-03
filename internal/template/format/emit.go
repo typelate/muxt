@@ -1,6 +1,7 @@
 package format
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -404,12 +405,12 @@ func (e *emitter) commentShifts(c *template.CommentNode, g gap, depth int) ([]ed
 		return nil, true
 	}
 	old, indent, moved := e.indents(g, depth)
-	if !moved || old == indent || !strings.ContainsAny(e.src[from:to], "\n\r") {
+	if !moved || old == indent || !strings.Contains(e.src[from:to], "\n") {
 		return nil, true
 	}
 	var shifts []edit
 	for at := from; at < to; at++ {
-		if b := e.src[at]; b != '\n' && (b != '\r' || at+1 < to && e.src[at+1] == '\n') {
+		if e.src[at] != '\n' {
 			continue
 		}
 		line := at + 1
@@ -431,7 +432,7 @@ func (e *emitter) commentShifts(c *template.CommentNode, g gap, depth int) ([]ed
 
 // lineOf returns s up to its first line break.
 func lineOf(s string) string {
-	if i := strings.IndexAny(s, "\n\r"); i >= 0 {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i]
 	}
 	return s
@@ -442,7 +443,7 @@ func (e *emitter) spansLines(start, end lex.Pos) bool {
 	if from < 0 || to > len(e.src) || from > to {
 		return true
 	}
-	return strings.ContainsAny(e.src[from:to], "\n\r")
+	return strings.Contains(e.src[from:to], "\n")
 }
 
 // elementEnd is the end of el's source: its end tag, or for an element
@@ -588,18 +589,17 @@ func (e *emitter) startTag(el *template.HTMLElementNode, depth int) {
 }
 
 // tagWhitespace is the whitespace the HTML tokenizer skips between
-// attributes.
-const tagWhitespace = " \t\n\r\f"
+// attributes (CR is gone before parsing: Source).
+const tagWhitespace = " \t\n\f"
 
-// afterLastBreak returns the index after the last line break (LF or CR)
-// in run, or -1 when it has none.
+// afterLastBreak returns the index after the last line break (LF) in
+// run, or -1 when it has none.
 func afterLastBreak(run []byte) int {
-	for i := len(run) - 1; i >= 0; i-- {
-		if run[i] == '\n' || run[i] == '\r' {
-			return i + 1
-		}
+	i := bytes.LastIndexByte(run, '\n')
+	if i < 0 {
+		return -1
 	}
-	return -1
+	return i + 1
 }
 
 // alignment returns the spaces of indent, a continuation line's
@@ -613,24 +613,15 @@ func alignment(indent string) string {
 	return tabs
 }
 
-// lineBreaks returns the line breaks of run, in order and as written:
-// CR LF, LF or CR. Its other bytes are dropped. When limit is not
-// negative, only the first limit breaks are kept.
+// lineBreaks returns the line breaks (LF) of run; its other bytes are
+// dropped. When limit is not negative, only the first limit breaks are
+// kept.
 func lineBreaks(run []byte, limit int) string {
-	var kept strings.Builder
-	for i, n := 0, 0; i < len(run) && n != limit; i++ {
-		switch {
-		case run[i] == '\r' && i+1 < len(run) && run[i+1] == '\n':
-			kept.WriteString("\r\n")
-			i++
-		case run[i] == '\n' || run[i] == '\r':
-			kept.WriteByte(run[i])
-		default:
-			continue
-		}
-		n++
+	n := bytes.Count(run, []byte{'\n'})
+	if limit >= 0 {
+		n = min(n, limit)
 	}
-	return kept.String()
+	return strings.Repeat("\n", n)
 }
 
 // impliedEnds closes the open elements a start tag named tag implies the

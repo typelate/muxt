@@ -181,7 +181,7 @@ func TestEmit(t *testing.T) {
 		{
 			name: "blank CRLF lines collapse to one",
 			src:  "<div>\r\n\r\n\r\n<p>x</p>\r\n</div>",
-			want: "<div>\r\n\r\n\t<p>x</p>\r\n</div>",
+			want: "<div>\n\n\t<p>x</p>\n</div>",
 		},
 		{
 			name: "one blank line is never removed",
@@ -356,15 +356,83 @@ func TestEmit(t *testing.T) {
 			want: "<div>\n\t<p title=\"a\n  b\">x</p>\n</div>",
 		},
 		// Line endings and file edges.
+		// Line endings are normalized to LF everywhere in the file, before
+		// parsing: CR LF and a lone CR become LF (HTML §13.2.3.5 does the
+		// same before tokenizing, so the page is unchanged).
 		{
-			name: "CRLF kept",
+			name: "CRLF becomes LF",
 			src:  "<div>\r\n<p>x</p>\r\n</div>\r\n",
-			want: "<div>\r\n\t<p>x</p>\r\n</div>\r\n",
+			want: "<div>\n\t<p>x</p>\n</div>\n",
 		},
 		{
-			name: "CR alone is a line break",
+			name: "CR alone becomes LF",
 			src:  "<div>\r<p>x</p>\r</div>",
-			want: "<div>\r\t<p>x</p>\r</div>",
+			want: "<div>\n\t<p>x</p>\n</div>",
+		},
+		{
+			name: "mixed line endings become LF",
+			src:  "<div>\r\n<p>x</p>\n<p>y</p>\r</div>\n\r",
+			want: "<div>\n\t<p>x</p>\n\t<p>y</p>\n</div>\n\n",
+		},
+		{
+			name: "lone CR file without an element becomes LF",
+			src:  "a\rb\r",
+			want: "a\nb\n",
+		},
+		{
+			name: "CRLF in pre becomes LF",
+			src:  "<div>\r\n<pre>\r\nx\r\n  y\r\n</pre>\r\n</div>\r\n",
+			want: "<div>\n<pre>\nx\n  y\n</pre>\n</div>\n",
+		},
+		{
+			name: "CRLF in textarea becomes LF",
+			src:  "<div>\r\n<textarea>\r\na\r\n  b</textarea>\r\n</div>\r\n",
+			want: "<div>\n<textarea>\na\n  b</textarea>\n</div>\n",
+		},
+		{
+			name: "CRLF in script becomes LF",
+			src:  "<script>\r\nlet a = 1;\r\n  let b = 2;\r\n</script>\r\n",
+			want: "<script>\nlet a = 1;\n  let b = 2;\n</script>\n",
+		},
+		{
+			name: "CRLF in an attribute value becomes LF",
+			src:  "<div>\r\n<p title=\"a\r\n  b\rc\">x</p>\r\n</div>",
+			want: "<div>\n\t<p title=\"a\n  b\nc\">x</p>\n</div>",
+		},
+		{
+			name: "CRLF in an HTML comment becomes LF",
+			src:  "<div>\r\n<!-- a\r\n  b -->\r\n</div>",
+			want: "<div>\n\t<!-- a\n  b -->\n</div>",
+		},
+		{
+			name: "CRLF in a template comment becomes LF",
+			src:  "<div>\r\n{{/* a\r\nb */}}\r\n</div>",
+			want: "<div>\n\t{{/* a\n\tb */}}\n</div>",
+		},
+		{
+			name: "CRLF in a muxt:fmt off region becomes LF",
+			src:  "<div>\r\n{{/* muxt:fmt off */}}\r\n    <p>x</p>\r\n{{/* muxt:fmt on */}}\r\n</div>\r\n",
+			want: "<div>\n\t{{/* muxt:fmt off */}}\n    <p>x</p>\n{{/* muxt:fmt on */}}\n</div>\n",
+		},
+		{
+			name: "CRLF in a file kept whole by muxt:fmt off becomes LF",
+			src:  "{{/* muxt:fmt off */}}\r\n<div>\r\n    <p>x</p>\r\n</div>\r\n",
+			want: "{{/* muxt:fmt off */}}\n<div>\n    <p>x</p>\n</div>\n",
+		},
+		{
+			name: "CRLF in a file left as written becomes LF",
+			src:  "<div>\r\n  <p>x</p>\r\n<!x>\r\n</div>",
+			want: "<div>\n  <p>x</p>\n<!x>\n</div>",
+		},
+		{
+			name: "CR, space, LF under pre-line keeps both breaks",
+			src:  "<div style=\"white-space:pre-line\">a\r \nb</div>",
+			want: "<div style=\"white-space:pre-line\">a\n\n\tb</div>",
+		},
+		{
+			name: "CR, space, LF under collapse is two breaks",
+			src:  "<p>a\r \nb</p>",
+			want: "<p>a\n\n\tb</p>",
 		},
 		{
 			name: "trailing spaces before a break stripped",
@@ -379,7 +447,7 @@ func TestEmit(t *testing.T) {
 		{
 			name: "trailing spaces before CRLF stripped",
 			src:  "<div> \r\n<p>x</p>\r\n</div>",
-			want: "<div>\r\n\t<p>x</p>\r\n</div>",
+			want: "<div>\n\t<p>x</p>\n</div>",
 		},
 		{
 			name: "trailing spaces under pre-line stripped",

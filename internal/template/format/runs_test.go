@@ -10,7 +10,7 @@ func TestSplitRuns(t *testing.T) {
 		text string
 		want []segment
 	}{
-		{text: "a \t\n\r b", want: []segment{{0, 1, false}, {1, 6, true}, {6, 7, false}}},
+		{text: "a \t\n b", want: []segment{{0, 1, false}, {1, 5, true}, {5, 6, false}}},
 		{text: "a b", want: []segment{{0, 1, false}, {1, 2, true}, {2, 3, false}}},
 		{text: "a\fb", want: []segment{{0, 3, false}}},
 		{text: "a\u00a0b", want: []segment{{0, 4, false}}},
