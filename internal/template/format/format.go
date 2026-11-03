@@ -7,6 +7,7 @@ package format
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
@@ -75,6 +76,7 @@ type formatter struct {
 	leftDelim  string
 	rightDelim string
 	whitespace analysis.WhitespaceOptions
+	testEdits  []edit // edits a test seeds the emitter with
 }
 
 // format reindents src, the source of list starting at position base.
@@ -86,6 +88,14 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	}
 	trees := []*template.Tree{{Root: list}}
 	styles := analysis.ComputeWhitespace(trees, f.whitespace)
+	sites := f.callSiteTrees(list, styles)
+	// With a template of the package unreadable, call sites may be
+	// missing: every body's root mode is unknown.
+	floor := analysis.WhiteSpaceCollapse
+	if f.whitespace.MissingSheets {
+		floor = analysis.WhiteSpaceUnknown
+	}
+	callSiteModes(sites, styles, floor)
 	moved := analysis.WhiteSpaceMovedMatcher(trees, f.whitespace)
 	if unsureMisnested(list, styles, moved) {
 		return src, nil
@@ -94,7 +104,49 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	if unsureParsedElsewhere(list, styles, f.whitespace.Context, moved) {
 		return src, nil
 	}
-	return newEmitter(src, base, classify(list, styles), bodies, dir).emit(list)
+	// The elements made unsure may hold call sites.
+	modes := callSiteModes(sites, styles, floor)
+	verbatimDefines(list, modes, bodies)
+	e := newEmitter(src, base, classifyModes(list, styles, modes), bodies, dir)
+	e.edits = f.testEdits
+	return e.emit(list)
+}
+
+// callSiteTrees returns the trees whose {{template}} calls and {{block}}s
+// set the root modes of list's define and block bodies (callSiteModes):
+// list's own, and the package's other templates (the Styles context)
+// when one of them calls a name list defines, whose elements' white-space
+// it then adds to styles. Defines called only from other packages, or
+// from Go, are not seen and collapse (spec §2).
+func (f *formatter) callSiteTrees(list *template.ListNode, styles analysis.Whitespaces) []*template.Tree {
+	trees := []*template.Tree{{Root: list}}
+	defined := make(map[string]bool)
+	template.Walk(trees[0], func(_ *template.Tree, n template.Node) {
+		switch n := n.(type) {
+		case *template.DefineNode:
+			defined[n.Name] = true
+		case *template.BlockNode:
+			defined[n.Name] = true
+		}
+	})
+	calls := false
+	for _, t := range f.whitespace.Context {
+		template.Walk(t, func(_ *template.Tree, n template.Node) {
+			switch n := n.(type) {
+			case *template.TemplateNode:
+				calls = calls || defined[n.Name]
+			case *template.BlockNode:
+				calls = calls || defined[n.Name]
+			}
+		})
+	}
+	if !calls {
+		return trees
+	}
+	options := f.whitespace
+	options.Context = trees
+	maps.Copy(styles, analysis.ComputeWhitespace(f.whitespace.Context, options))
+	return append(trees, f.whitespace.Context...)
 }
 
 // Source formats a Go HTML template file as Node does, with the same

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -100,7 +101,15 @@ type fixture struct {
 	format  string
 	data    []dataSet
 	sheets  []analysis.Stylesheet
+	pending map[string]string // problem id -> plan task (see pendingLine)
 }
+
+// pendingLine is a line of a fixture's comment that documents one check
+// expected to fail until a plan task lands: "pending Task 7: <id>", where
+// <id> is a problem's id ("golden: mismatch", "top: rendering changed",
+// "<define> <caller>: rendering changed"). checkPending fails the test
+// when a documented problem does not occur or an undocumented one does.
+var pendingLine = regexp.MustCompile(`(?m)^pending (Task \d+): (.+)$`)
 
 type dataSet struct {
 	name  string
@@ -113,7 +122,10 @@ func readFixture(t *testing.T, filename string) fixture {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	fx := fixture{archive: ar, format: "\x00missing"}
+	fx := fixture{archive: ar, format: "\x00missing", pending: make(map[string]string)}
+	for _, m := range pendingLine.FindAllStringSubmatch(string(ar.Comment), -1) {
+		fx.pending[m[2]] = m[1]
+	}
 	hasInput := false
 	for _, f := range ar.Files {
 		switch {
@@ -166,7 +178,7 @@ func fixtureName(filename string) string {
 func TestFixtures(t *testing.T) {
 	skipped, pending := 0, 0
 	defer func() {
-		t.Logf("synthetic callers skipped: %d; call-site callers pending Task 7: %d", skipped, pending)
+		t.Logf("synthetic callers skipped: %d; documented pending problems: %d", skipped, pending)
 	}()
 	for _, filename := range fixtureFiles(t) {
 		name := fixtureName(filename)
@@ -182,10 +194,16 @@ func TestFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: Source(input) error: %v", name, err)
 			}
-			if *update {
+			var problems []problem
+			goldenPending := fx.pending[goldenMismatch.id()] != ""
+			switch {
+			case *update && !goldenPending:
 				writeGolden(t, filename, fx.archive, got)
-			} else if got != fx.format {
-				t.Errorf("%s: Source(input) does not match format.gohtml\ngot:\n%s\nwant:\n%s", name, got, fx.format)
+			case got != fx.format:
+				problems = append(problems, problem{
+					key: goldenMismatch.key, kind: goldenMismatch.kind,
+					msg: fmt.Sprintf("Source(input) does not match format.gohtml\ngot:\n%s\nwant:\n%s", got, fx.format),
+				})
 			}
 
 			// (b) idempotency
@@ -205,12 +223,11 @@ func TestFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
-			for _, p := range oracle.problems {
-				t.Errorf("%s: %s", name, p)
+			for _, s := range oracle.skipped {
+				t.Logf("skipped %s", s)
 			}
-			logOracleSkips(t, oracle)
 			skipped += len(oracle.skipped)
-			pending += len(oracle.pending)
+			pending += checkPending(t, name, fx.pending, append(problems, oracle.problems...))
 		})
 	}
 }
@@ -320,16 +337,43 @@ func writeGolden(t *testing.T, filename string, ar *txtar.Archive, got string) {
 	}
 }
 
-// logOracleSkips logs the callers the oracle skipped and the call-site
-// failures pending Task 7.
-func logOracleSkips(t *testing.T, oracle oracleResult) {
+// checkPending reports each problem not documented in pending as an
+// error, logs the documented ones, and reports each documented problem
+// that did not occur as an error too (pendingErrors). It returns the
+// number of documented problems that occurred.
+func checkPending(t *testing.T, name string, pending map[string]string, problems []problem) int {
 	t.Helper()
-	for _, s := range oracle.skipped {
-		t.Logf("skipped %s", s)
+	errs, documented := pendingErrors(pending, problems)
+	for _, e := range errs {
+		t.Errorf("%s: %s", name, e)
 	}
-	for _, p := range oracle.pending {
-		t.Logf("pending Task 7: %s", p)
+	for _, id := range documented {
+		t.Logf("%s: pending %s: %s", name, pending[id], id)
 	}
+	return len(documented)
+}
+
+// pendingErrors matches problems against pending, which names exactly
+// the checks that fail and how: errs has a message for each problem
+// pending does not document and for each pending entry no problem
+// matches; documented lists the ids of the documented problems that
+// occurred, in order of first occurrence.
+func pendingErrors(pending map[string]string, problems []problem) (errs, documented []string) {
+	for _, p := range problems {
+		if _, ok := pending[p.id()]; !ok {
+			errs = append(errs, p.id()+": "+p.msg)
+		} else if !slices.Contains(documented, p.id()) {
+			documented = append(documented, p.id())
+		}
+	}
+	var missing []string
+	for id, task := range pending {
+		if !slices.Contains(documented, id) {
+			missing = append(missing, fmt.Sprintf("pending %s %q did not occur: remove or correct the pending entry", task, id))
+		}
+	}
+	slices.Sort(missing)
+	return append(errs, missing...), documented
 }
 
 func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analysis.Stylesheet) {
@@ -347,20 +391,38 @@ func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analy
 }
 
 // defineCallSiteModes reports whether the formatter keeps a define's
-// bytes when it sees a preserving call site (plan Task 7). Until it does,
-// call-site caller failures are reported as pending, not as problems.
-const defineCallSiteModes = false
+// line breaks or bytes when it sees a preserving call site (plan Task 7).
+// Until it does, the fuzz targets tally call-site caller failures
+// instead of failing; fixtures document theirs as pending.
+const defineCallSiteModes = true
+
+// problem is one failing check: what failed (key: "golden", "top", or
+// "<define> <caller>"), how (kind), and the details.
+type problem struct {
+	key, kind, msg string
+}
+
+// id is how a pending entry names the problem.
+func (p problem) id() string { return p.key + ": " + p.kind }
+
+const (
+	kindRenderingChanged = "rendering changed"
+	kindOutputError      = "output does not execute"
+	kindSourceError      = "Source error"
+)
+
+var goldenMismatch = problem{key: "golden", kind: "mismatch"}
 
 // oracleResult is what renderingProblems found.
 type oracleResult struct {
-	problems []string // rendering changed, or the output no longer executes
-	pending  []string // call-site caller failures while !defineCallSiteModes
-	skipped  []string // synthetic callers the input does not execute in
+	problems []problem // rendering changed, or the output no longer executes
+	skipped  []string  // synthetic callers the input does not execute in
 }
 
 // renderingProblems runs checks (d) and (e): for each data set, input and
 // output render equivalently at the top level and inside each synthetic
-// caller of each {{define}} (rendering.Callers). A call-site caller is
+// caller of each {{define}} (rendering.Callers; a caller's problem key is
+// "<define> <caller>"). A call-site caller is
 // appended to the input as a {{define}} before formatting, so the
 // formatter sees the call site; the others render output, formatted
 // without them. A caller the input does not execute in (an html/template
@@ -381,7 +443,7 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 				input = fx.input + oracleCallerDefine(c)
 				out, err = Source("input.gohtml", input, styles)
 				if err != nil {
-					r.problems = append(r.problems, fmt.Sprintf("%s: Source(input with caller) error: %v", label, err))
+					r.problems = append(r.problems, problem{key: c.Name, kind: kindSourceError, msg: fmt.Sprintf("%s: Source(input with caller) error: %v", label, err)})
 					continue
 				}
 			}
@@ -399,25 +461,17 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 					continue
 				}
 			}
-			var problem string
 			got, err := render(out, c.Source, ds.value)
 			if err != nil {
-				problem = fmt.Sprintf("%s: output: %v", label, err)
-			} else {
-				diff, err := rendering.Diff(want, got, c.Context, fx.sheets)
-				if err != nil {
-					return oracleResult{}, fmt.Errorf("%s: %w", label, err)
-				}
-				if diff != "" {
-					problem = fmt.Sprintf("%s: rendering changed: %s\ninput rendered:\n%s\noutput rendered:\n%s", label, diff, want, got)
-				}
+				r.problems = append(r.problems, problem{key: c.Name, kind: kindOutputError, msg: fmt.Sprintf("%s: output: %v", label, err)})
+				continue
 			}
-			switch {
-			case problem == "":
-			case c.CallSite && !defineCallSiteModes:
-				r.pending = append(r.pending, problem)
-			default:
-				r.problems = append(r.problems, problem)
+			diff, err := rendering.Diff(want, got, c.Context, fx.sheets)
+			if err != nil {
+				return oracleResult{}, fmt.Errorf("%s: %w", label, err)
+			}
+			if diff != "" {
+				r.problems = append(r.problems, problem{key: c.Name, kind: kindRenderingChanged, msg: fmt.Sprintf("%s: %s\ninput rendered:\n%s\noutput rendered:\n%s", label, diff, want, got)})
 			}
 		}
 	}
@@ -425,9 +479,11 @@ func renderingProblems(fx fixture, output string) (oracleResult, error) {
 }
 
 // oracleCallerDefine wraps a call-site caller in a {{define}} the
-// formatter sees beside the input.
+// formatter sees beside the input. The leading LF keeps a trailing "{"
+// in the input from joining the define's delimiter; only the caller
+// renders, so the top-level text it adds is never drawn.
 func oracleCallerDefine(c rendering.Caller) string {
-	return `{{define "muxt-oracle-caller"}}` + c.Source + `{{end}}`
+	return "\n" + `{{define "muxt-oracle-caller"}}` + c.Source + `{{end}}`
 }
 
 // defineCallers lists the top-level render (an empty Source) plus the
@@ -464,7 +520,10 @@ func defineCallers(src string) ([]rendering.Caller, error) {
 		}
 	})
 	for _, name := range defines {
-		callers = append(callers, rendering.Callers(name, firstElement[name])...)
+		for _, c := range rendering.Callers(name, firstElement[name]) {
+			c.Name = name + " " + c.Name
+			callers = append(callers, c)
+		}
 	}
 	return callers, nil
 }
@@ -539,6 +598,13 @@ func checkDirectiveRegions(t *testing.T, name, input, output string) {
 }
 
 func TestRenderingProblemsCallers(t *testing.T) {
+	ids := func(problems []problem) []string {
+		var out []string
+		for _, p := range problems {
+			out = append(out, p.id())
+		}
+		return out
+	}
 	fx := fixture{
 		input: "{{define \"m\"}}\n\thi\n{{end}}\n",
 		data:  []dataSet{{name: "{}", value: map[string]any{}}},
@@ -551,13 +617,15 @@ func TestRenderingProblemsCallers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.problems) != 0 || len(r.skipped) != 0 {
-		t.Errorf("renderingProblems(%q) problems %q, skipped %q, want none", fx.input, r.problems, r.skipped)
+	// Formatted without seeing its call site, the body loses its tab,
+	// which pre-wrap, the attribute and the textarea all keep (pre-line
+	// lets it go).
+	var want []string
+	if !defineCallSiteModes {
+		want = []string{"m pre-wrap: rendering changed", "m attribute: rendering changed", "m textarea: rendering changed"}
 	}
-	// Formatted without its call site, the body loses its tab, which
-	// pre-wrap, the attribute and the textarea all keep.
-	if wantPending := 3; !defineCallSiteModes && len(r.pending) != wantPending {
-		t.Errorf("renderingProblems(%q) has %d pending, want %d: %q", fx.input, len(r.pending), wantPending, r.pending)
+	if got := ids(r.problems); !slices.Equal(got, want) || len(r.skipped) != 0 {
+		t.Errorf("renderingProblems(%q) problems %q, skipped %q, want problems %q", fx.input, got, r.skipped, want)
 	}
 
 	// A joined line changes the inline caller's rendering (SB -> empty).
@@ -565,8 +633,19 @@ func TestRenderingProblemsCallers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.ContainsFunc(r.problems, func(p string) bool { return strings.Contains(p, "caller inline:") }) {
-		t.Errorf("renderingProblems with a joined body: problems %q, want one for the inline caller", r.problems)
+	if got := ids(r.problems); !slices.Contains(got, "m inline: rendering changed") {
+		t.Errorf("renderingProblems with a joined body: problems %q, want one for the inline caller", got)
+	}
+
+	// Losing one of two LFs changes only what pre-line (and the preserve
+	// callers) draw.
+	fx.input = "{{define \"m\"}}a\n\nb{{end}}\n"
+	r, err = renderingProblems(fx, "{{define \"m\"}}a\nb{{end}}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(r.problems); slices.Contains(got, "m div: rendering changed") || slices.Contains(got, "m inline: rendering changed") {
+		t.Errorf("renderingProblems with one LF lost: problems %q, want none for collapse callers", got)
 	}
 
 	// A body that ends inside an attribute value cannot be called from
@@ -576,8 +655,29 @@ func TestRenderingProblemsCallers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.skipped) != 1 || !strings.Contains(r.skipped[0], "caller attribute:") {
+	if len(r.skipped) != 1 || !strings.Contains(r.skipped[0], "caller a attribute:") {
 		t.Errorf("renderingProblems(%q) skipped %q, want the attribute caller only", fx.input, r.skipped)
+	}
+}
+
+func TestPendingErrors(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		pending  map[string]string
+		problems []problem
+		fails    bool
+	}{
+		{name: "none"},
+		{name: "documented", pending: map[string]string{"top: rendering changed": "Task 7"}, problems: []problem{{key: "top", kind: kindRenderingChanged}}},
+		{name: "undocumented", problems: []problem{{key: "top", kind: kindRenderingChanged}}, fails: true},
+		{name: "other kind", pending: map[string]string{"top: rendering changed": "Task 7"}, problems: []problem{{key: "top", kind: kindOutputError}}, fails: true},
+		{name: "other caller", pending: map[string]string{"m pre-line: rendering changed": "Task 7"}, problems: []problem{{key: "m pre-wrap", kind: kindRenderingChanged}}, fails: true},
+		{name: "no longer fails", pending: map[string]string{"top: rendering changed": "Task 7"}, fails: true},
+	} {
+		errs, _ := pendingErrors(tt.pending, tt.problems)
+		if got := len(errs) > 0; got != tt.fails {
+			t.Errorf("pendingErrors(%s) = %q, want failure %v", tt.name, errs, tt.fails)
+		}
 	}
 }
 
@@ -590,7 +690,8 @@ type whatwgRow struct {
 	want    string // Source's exact output
 	css     string // a stylesheet file, if any
 	data    map[string]any
-	task    string // for whatwgPending: the plan task the row waits for
+	task    string   // for whatwgPending: the plan task the row waits for
+	fails   []string // for whatwgPending: the ids of the problems it has until then
 }
 
 // whatwgRegressions must pass.
@@ -613,6 +714,10 @@ var whatwgRegressions = []whatwgRow{
 	// 6: with body pre-wrap, a call that writes text in <head> moves the
 	// following run into <body>, which preserves it.
 	{snippet: 6, css: "body{white-space:pre-wrap}", input: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n", want: "{{define \"h\"}}t{{end}}<html><head>{{template \"h\"}}\n\t\t<link></head></html>\n"},
+	// 7: a define called from a pre-wrap element keeps its bytes.
+	{snippet: 7, css: ".bubble{white-space:pre-wrap}", input: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n", want: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n"},
+	// 8: a define called from an attribute value keeps its bytes.
+	{snippet: 8, input: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n", want: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n"},
 	// 9: no LF is added before {{end}} of a define used inline.
 	{snippet: 9, input: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n", want: "{{define \"n\"}}<b>x</b>{{end}}\n{{template \"n\" .}},\n"},
 	// 10: no final LF is added.
@@ -628,6 +733,10 @@ var whatwgRegressions = []whatwgRow{
 	{snippet: 13, input: "<svg><text>a\nb</text></svg>\n", want: "<svg><text>a\nb</text></svg>\n"},
 	{snippet: 13, input: "<my-chip>a\n\tb</my-chip>\n", want: "<my-chip>a\n\tb</my-chip>\n"},
 	{snippet: 13, input: "<div>\n<my-chip>a\n\t\t\tb</my-chip>\n</div>\n", want: "<div>\n<my-chip>a\n\t\t\tb</my-chip>\n</div>\n"},
+	// Whitespace-only gaps inside them too.
+	{snippet: 13, input: "<svg><text>\n\t\t<tspan>a</tspan>\n</text></svg>\n", want: "<svg><text>\n\t\t<tspan>a</tspan>\n</text></svg>\n"},
+	{snippet: 13, input: "<math><mi>\n x\n</mi></math>\n", want: "<math><mi>\n x\n</mi></math>\n"},
+	{snippet: 13, input: "<my-chip>\n\t<b>a</b>\n</my-chip>\n", want: "<my-chip>\n\t<b>a</b>\n</my-chip>\n"},
 	// 14: an empty element never gains an LF (:empty).
 	{snippet: 14, input: "<div class=x></div>\n", want: "<div class=x></div>\n"},
 	{snippet: 14, input: "<div>\n<div class=x></div>\n</div>\n", want: "<div>\n\t<div class=x></div>\n</div>\n"},
@@ -637,38 +746,33 @@ var whatwgRegressions = []whatwgRow{
 	{snippet: 15, input: "<p>a\fb</p>\n", want: "<p>a\fb</p>\n"},
 }
 
-// whatwgPending wait for a later plan task; each row's task says which.
-// Move a row to whatwgRegressions when TestWHATWGRegressions reports
-// that it passes.
-var whatwgPending = []whatwgRow{
-	// 7: a define called from a pre-wrap element keeps its bytes.
-	{snippet: 7, task: "Task 7", css: ".bubble{white-space:pre-wrap}", input: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n", want: "{{define \"m\"}}\n\thi\n{{end}}\n<div class=bubble>{{template \"m\"}}</div>\n"},
-	// 8: a define called from an attribute value keeps its bytes.
-	{snippet: 8, task: "Task 7", input: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n", want: "{{define \"t\"}}a\n\t\tb\n{{end}}\n<p title=\"{{template \"t\"}}\"></p>\n"},
-}
+// whatwgPending wait for a later plan task; each row's task says which,
+// and its fails lists exactly the problems it has until then. When the
+// task lands TestWHATWGRegressions reports the entries that no longer
+// occur: move the row to whatwgRegressions.
+var whatwgPending = []whatwgRow{}
 
 // TestWHATWGRegressions checks each snippet's exact output, idempotency
-// and rendering under the oracle (with its synthetic define callers).
+// and rendering under the oracle (with its synthetic define callers). A
+// pending row must fail exactly as its fails documents.
 func TestWHATWGRegressions(t *testing.T) {
 	for i, row := range whatwgRegressions {
 		t.Run(fmt.Sprintf("%d/%d", row.snippet, i), func(t *testing.T) {
-			for _, f := range whatwgFailures(row) {
-				t.Errorf("snippet %d %q: %s", row.snippet, row.input, f)
-			}
+			checkPending(t, fmt.Sprintf("snippet %d %q", row.snippet, row.input), nil, whatwgProblems(row))
 		})
 	}
 	for i, row := range whatwgPending {
 		t.Run(fmt.Sprintf("pending/%d/%d", row.snippet, i), func(t *testing.T) {
-			failures := whatwgFailures(row)
-			if len(failures) == 0 {
-				t.Skipf("pending %s, but snippet %d %q passes now: move it to whatwgRegressions", row.task, row.snippet, row.input)
+			pending := make(map[string]string)
+			for _, id := range row.fails {
+				pending[id] = row.task
 			}
-			t.Skipf("pending %s: snippet %d %q:\n%s", row.task, row.snippet, row.input, strings.Join(failures, "\n"))
+			checkPending(t, fmt.Sprintf("snippet %d %q", row.snippet, row.input), pending, whatwgProblems(row))
 		})
 	}
 }
 
-func whatwgFailures(row whatwgRow) []string {
+func whatwgProblems(row whatwgRow) []problem {
 	fx := fixture{input: row.input, data: []dataSet{{name: "row", value: row.data}}}
 	if row.data == nil {
 		fx.data[0].value = map[string]any{}
@@ -679,22 +783,18 @@ func whatwgFailures(row whatwgRow) []string {
 	styles := Styles(analysis.WhitespaceOptions{Sheets: fx.sheets, AuthorCSSKnown: true})
 	got, err := Source("input.gohtml", row.input, styles)
 	if err != nil {
-		return []string{fmt.Sprintf("Source error: %v", err)}
+		return []problem{{key: "input", kind: kindSourceError, msg: err.Error()}}
 	}
-	var failures []string
+	var problems []problem
 	if got != row.want {
-		failures = append(failures, fmt.Sprintf("Source = %q, want %q", got, row.want))
+		problems = append(problems, problem{key: goldenMismatch.key, kind: goldenMismatch.kind, msg: fmt.Sprintf("Source = %q, want %q", got, row.want)})
 	}
 	if again, err := Source("format.gohtml", got, styles); err != nil || again != got {
-		failures = append(failures, fmt.Sprintf("not idempotent: Source(%q) = %q, %v", got, again, err))
+		problems = append(problems, problem{key: "idempotent", kind: "mismatch", msg: fmt.Sprintf("Source(%q) = %q, %v", got, again, err)})
 	}
 	oracle, err := renderingProblems(fx, got)
 	if err != nil {
-		return append(failures, err.Error())
+		return append(problems, problem{key: "oracle", kind: "error", msg: err.Error()})
 	}
-	failures = append(failures, oracle.problems...)
-	for _, p := range oracle.pending {
-		failures = append(failures, "Task 7: "+p)
-	}
-	return failures
+	return append(problems, oracle.problems...)
 }
