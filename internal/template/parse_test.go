@@ -1868,3 +1868,61 @@ func TestBlockNodeTrimMarkers(t *testing.T) {
 		})
 	}
 }
+
+// TestElseChainPositions pins the positions of a chained {{else if}} /
+// {{else with}}: the chained branch starts at the else action, the
+// parent's else list spans the chain, and ElseChain tells the chained
+// form from an {{else}} holding a nested branch.
+func TestElseChainPositions(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		src       string
+		html      bool
+		chained   bool   // the outer branch's else list is an {{else if}} / {{else with}} chain
+		chainText string // String() of the chained branch
+	}{
+		{name: "else if", src: `{{if .A}}a{{ else  if .B }}b{{else}}c{{end}}`, chained: true, chainText: `{{ else  if .B }}b{{else}}c{{end}}`},
+		{name: "else if html", src: `<p>{{if .A}}a{{else if .B}}b{{end}}</p>`, html: true, chained: true, chainText: `{{else if .B}}b{{end}}`},
+		{name: "else with", src: `{{with .A}}a{{- else with .B -}}b{{end}}`, chained: true, chainText: `{{- else with .B -}}b{{end}}`},
+		{name: "nested", src: `{{if .A}}a{{else}}{{if .B}}b{{end}}{{end}}`, chainText: `{{if .B}}b{{end}}`},
+		{name: "nested html", src: `<p>{{if .A}}a{{else}}{{if .B}}b{{end}}{{end}}</p>`, html: true, chainText: `{{if .B}}b{{end}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := lex.NewOptions()
+			opt.ParseHTML = tt.html
+			tree, err := ParseTree("t", "t", tt.src, nil, opt)
+			require.NoError(t, err)
+			var branches []*BranchNode
+			Walk(tree, func(_ *Tree, n Node) {
+				switch n := n.(type) {
+				case *IfNode:
+					branches = append(branches, &n.BranchNode)
+				case *WithNode:
+					branches = append(branches, &n.BranchNode)
+				}
+			})
+			require.Len(t, branches, 2, "branches in %q", tt.src)
+			outer, inner := branches[0], branches[1]
+
+			chain := outer.ElseChain()
+			if got := chain != nil; got != tt.chained {
+				t.Fatalf("ElseChain() of %q = %v, want chained %v", tt.src, chain, tt.chained)
+			}
+			if tt.chained && chain != inner {
+				t.Errorf("ElseChain() of %q is not the inner branch", tt.src)
+			}
+			if inner.ElseChain() != nil {
+				t.Errorf("inner ElseChain() of %q = %v, want nil", tt.src, inner.ElseChain())
+			}
+			if got := inner.String(); got != tt.chainText {
+				t.Errorf("inner String() of %q = %q, want %q", tt.src, got, tt.chainText)
+			}
+			if got, want := outer.ElseList.End(), outer.End(); tt.chained && got != want {
+				t.Errorf("outer ElseList.End() of %q = %d, want %d", tt.src, got, want)
+			}
+			if got := tree.Root.String(); got != tt.src {
+				t.Errorf("Root.String() = %q, want %q", got, tt.src)
+			}
+		})
+	}
+}
