@@ -1,0 +1,35 @@
+# A subdirectory may hold its own Go package that does not embed its
+# templates while a parent package does. muxt fmt formats a template
+# with the package that embeds it: the parent's layout.gohtml makes .x
+# preserve whitespace, so its interior is kept as written.
+
+! muxt fmt -l templates/page.gohtml
+cmp stdout want-list.txt
+muxt fmt templates/page.gohtml
+stdout '(?m)^\t<p>a</p>$'
+stdout '\n  keep   me\n</div>\n'
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- m.go --
+package m
+
+import "embed"
+
+//go:embed templates/*.gohtml
+var templates embed.FS
+-- templates/templates.go --
+package templates
+-- templates/layout.gohtml --
+{{define "head"}}<style>.x{white-space:pre}</style>{{end}}
+-- templates/page.gohtml --
+<section class="y">
+<div class="x">
+  keep   me
+</div>
+<p>a</p>
+</section>
+-- want-list.txt --
+templates/page.gohtml

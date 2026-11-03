@@ -1,0 +1,47 @@
+# The generated routes of the package that embeds a template record its
+# static assets route, even when the template is in a subdirectory. The
+# <link> in templates/page.gohtml resolves to assets/style.css, which
+# makes .x preserve whitespace: the section is reindented and the .x
+# interior is kept as written.
+
+muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static --use-receiver-type=Server
+! muxt fmt -l templates/page.gohtml
+cmp stdout want-list.txt
+muxt fmt templates/page.gohtml
+stdout '(?m)^\t<p>a</p>$'
+stdout '\n  keep   me\n</div>\n'
+
+-- go.mod --
+module example.com
+
+go 1.24
+-- templates.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed templates/*.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "templates/*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "" }
+-- assets/style.css --
+.x{white-space:pre}
+-- templates/layout.gohtml --
+{{define "GET / Index()"}}{{template "page.gohtml"}}{{end}}
+-- templates/page.gohtml --
+<link rel="stylesheet" href="/static/style.css">
+<section>
+<div class="x">
+  keep   me
+</div>
+<p>a</p>
+</section>
+-- want-list.txt --
+templates/page.gohtml
