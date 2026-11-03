@@ -215,3 +215,72 @@ func TestFormatRun(t *testing.T) {
 		assert.Empty(t, stderr, "muxt fmt page.gohtml")
 	})
 }
+
+func TestEmbeddingPackageDir(t *testing.T) {
+	const goMod = "module example.com/m\n\ngo 1.24\n"
+	embed := func(pkg, pattern string) string {
+		return "package " + pkg + "\n\nimport \"embed\"\n\n//go:embed " + pattern + "\nvar templates embed.FS\n"
+	}
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+		path  string
+		want  string
+	}{
+		{
+			name:  "a template beside its package",
+			files: map[string]string{"go.mod": goMod, "m.go": embed("m", "*.gohtml"), "page.gohtml": ""},
+			path:  "page.gohtml",
+			want:  ".",
+		},
+		{
+			name:  "a parent package embeds the subdirectory",
+			files: map[string]string{"go.mod": goMod, "m.go": embed("m", "templates/*.gohtml"), "templates/page.gohtml": ""},
+			path:  "templates/page.gohtml",
+			want:  ".",
+		},
+		{
+			name:  "the parent wins over a subdirectory package that does not embed the file",
+			files: map[string]string{"go.mod": goMod, "m.go": embed("m", "templates/*.gohtml"), "templates/t.go": "package t\n", "templates/page.gohtml": ""},
+			path:  "templates/page.gohtml",
+			want:  ".",
+		},
+		{
+			name:  "the nearest embedding package wins",
+			files: map[string]string{"go.mod": goMod, "m.go": embed("m", "b/*.gohtml"), "b/b.go": embed("b", "*.gohtml"), "b/page.gohtml": ""},
+			path:  "b/page.gohtml",
+			want:  "b",
+		},
+		{
+			name:  "no package embeds the file",
+			files: map[string]string{"go.mod": goMod, "m.go": "package m\n", "templates/page.gohtml": ""},
+			path:  "templates/page.gohtml",
+			want:  "templates",
+		},
+		{
+			name:  "the walk stops at the module root",
+			files: map[string]string{"m.go": embed("m", "inner/templates/*.gohtml"), "inner/go.mod": goMod, "inner/templates/page.gohtml": ""},
+			path:  "inner/templates/page.gohtml",
+			want:  "inner/templates",
+		},
+		{
+			name:  "outside any module",
+			files: map[string]string{"templates/page.gohtml": ""},
+			path:  "templates/page.gohtml",
+			want:  "templates",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			wd := t.TempDir()
+			for name, content := range tt.files {
+				path := filepath.Join(wd, filepath.FromSlash(name))
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+				writeTestFile(t, filepath.Dir(path), filepath.Base(path), content)
+			}
+			r := formatRun{loads: make(map[string]packageLoad)}
+			path := filepath.Join(wd, filepath.FromSlash(tt.path))
+			got := r.embeddingPackageDir(path, resolvedPath(path))
+			assert.Equal(t, filepath.Join(wd, filepath.FromSlash(tt.want)), got, "embeddingPackageDir(%q)", tt.path)
+		})
+	}
+}

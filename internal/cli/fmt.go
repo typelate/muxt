@@ -32,7 +32,7 @@ type formatFile struct {
 	name   string // as given or as walked; how the file is reported
 	path   string // where it is read and written; "" for standard input
 	key    string // path with symbolic links resolved, to match the files a package embeds
-	dir    string // the directory whose package the file belongs to; "" for standard input, which has none
+	dir    string // the directory of the package that embeds the file, else the file's own; "" for standard input, which has none
 	source []byte
 	tree   *template.Tree // nil when the file does not parse
 }
@@ -41,7 +41,7 @@ type formatFile struct {
 // gofmt does. Problems with a file are reported on stderr, one line each,
 // and the other files are still formatted.
 func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration) error {
-	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage), unread: make(map[string]bool)}
+	r := formatRun{wd: wd, config: config, stdout: cmd.OutOrStdout(), stderr: cmd.ErrOrStderr(), packages: make(map[string]formatPackage), loads: make(map[string]packageLoad), unread: make(map[string]bool)}
 	var files []*formatFile
 	if len(config.Paths) == 0 {
 		source, err := io.ReadAll(cmd.InOrStdin())
@@ -54,6 +54,9 @@ func runFormatCommand(cmd *cobra.Command, wd string, config formatConfiguration)
 		files = append(files, &formatFile{name: standardInputName, source: source})
 	} else {
 		files = r.readFiles(wd, config.Paths)
+		for _, f := range files {
+			f.dir = r.embeddingPackageDir(f.path, f.key)
+		}
 	}
 	for _, f := range files {
 		f.tree, _ = parseFormatTree(f.name, f.source) // format.Source reports the error
@@ -73,7 +76,8 @@ type formatRun struct {
 	config         formatConfiguration
 	stdout, stderr io.Writer
 	packages       map[string]formatPackage
-	unread         map[string]bool // keys of run files that could not be read, already reported
+	loads          map[string]packageLoad // load.EmbeddedFiles by directory
+	unread         map[string]bool        // keys of run files that could not be read, already reported
 	failed         bool
 }
 
@@ -109,7 +113,7 @@ func (r *formatRun) readFiles(wd string, paths []string) []*formatFile {
 			r.report(err.Error())
 			return
 		}
-		files = append(files, &formatFile{name: name, path: path, key: resolvedPath(path), dir: filepath.Dir(path), source: source})
+		files = append(files, &formatFile{name: name, path: path, key: resolvedPath(path), source: source})
 	}
 	for _, name := range paths {
 		info, err := os.Stat(absoluteDir(wd, name))
@@ -152,10 +156,10 @@ func skipFormatDirectory(name string) bool {
 	return name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
 
-// format formats f, with the run's other files in f's directory and the
-// templates f's package embeds as context for its author CSS, and writes
-// the result where config says. A file in another directory is in another
-// package, whose CSS does not reach f's. When a template of the package
+// format formats f, with the run's other files of f's package and the
+// templates that package embeds as context for its author CSS, and writes
+// the result where config says. A file embedded by another package, or by
+// none, is in another package, whose CSS does not reach f's. When a template of the package
 // cannot be read or parsed, or the package loads with errors, it may link
 // or hold any stylesheet, so f is formatted as with a link that does not
 // resolve: every element may have unknown CSS.
@@ -243,7 +247,8 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 		r.packages[dir] = pkg
 		return pkg
 	}
-	embedded, ok, err := load.EmbeddedFiles(dir)
+	l := r.load(dir)
+	embedded, ok, err := l.files, l.ok, l.err
 	if ok {
 		pkg = formatPackage{loaded: true, keys: make(map[string]bool)}
 		if err != nil {
@@ -288,6 +293,67 @@ func (r *formatRun) packageIn(dir string, all []*formatFile) formatPackage {
 	}
 	r.packages[dir] = pkg
 	return pkg
+}
+
+// packageLoad is what load.EmbeddedFiles returned for a directory.
+type packageLoad struct {
+	files []string
+	ok    bool
+	err   error
+}
+
+// load loads the package in dir once per run, for embeddingPackageDir to
+// probe and packageIn to use. It reports nothing: only the errors of the
+// package a file belongs to are reported, by packageIn.
+func (r *formatRun) load(dir string) packageLoad {
+	if l, ok := r.loads[dir]; ok {
+		return l
+	}
+	var l packageLoad
+	l.files, l.ok, l.err = load.EmbeddedFiles(dir)
+	r.loads[dir] = l
+	return l
+}
+
+// embeddingPackageDir is the directory of the package that embeds the file
+// at path, whose key is its path with symbolic links resolved: the nearest
+// directory, from the file's own up to the one holding go.mod, whose
+// package embeds key. A //go:embed pattern reaches only its package's
+// directory and those below it, in the same module, so no other directory
+// can. A file no package embeds, or one outside any module, belongs to its
+// own directory.
+func (r *formatRun) embeddingPackageDir(path, key string) string {
+	own := filepath.Dir(path)
+	root, ok := moduleRoot(own)
+	if !ok {
+		return own
+	}
+	for dir := own; ; dir = filepath.Dir(dir) {
+		l := r.load(dir)
+		for _, file := range l.files {
+			if resolvedPath(file) == key {
+				return dir
+			}
+		}
+		if dir == root || filepath.Dir(dir) == dir {
+			return own
+		}
+	}
+}
+
+// moduleRoot is the nearest directory, from dir up, that holds a go.mod
+// file.
+func moduleRoot(dir string) (string, bool) {
+	for {
+		if info, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && !info.IsDir() {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 // reportLoadError reports each error of a package load on its own line,
