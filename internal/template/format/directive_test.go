@@ -31,8 +31,14 @@ func TestDirectives(t *testing.T) {
 			input: "  {{/* muxt:fmt off */}}\n<div>\n<p>  a  </p>\n      <p>b</p>\n</div>\n",
 		},
 		{
-			name:  "preserve first in the file keeps the file",
+			name:  "preserve first in the file keeps only the next node",
 			input: "{{/* muxt:fmt preserve */}}\n<div>\n<p>  a  </p>\n      <p>b</p>\n</div>\n<ul>\n<li>x</li></ul>\n",
+			want:  "{{/* muxt:fmt preserve */}}\n<div>\n<p>  a  </p>\n      <p>b</p>\n</div>\n<ul>\n\t<li>x</li></ul>\n",
+			kept:  []string{"\n<div>\n<p>  a  </p>\n      <p>b</p>\n</div>\n"},
+		},
+		{
+			name:  "off first in the file without on keeps the file, siblings too",
+			input: "{{/* muxt:fmt off */}}\n<div>\n<p>  a  </p>\n      <p>b</p>\n</div>\n<ul>\n<li>x</li></ul>\n",
 		},
 		{
 			name:  "off first and ended by on is a region",

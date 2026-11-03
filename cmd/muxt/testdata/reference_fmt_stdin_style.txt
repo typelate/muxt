@@ -1,7 +1,8 @@
 # Standard input has no package, so its author CSS is not known to be
 # complete: a <style> element is not all the CSS a page may load. An
-# element with a class is left as written, whole; the rest of the section
-# around it, which no author rule can reach, is indented.
+# element with a class is unsure, so the section holding it is left as
+# written, whole (its sibling too); a list without one, like main's, is
+# indented.
 
 stdin page.gohtml
 muxt fmt
@@ -15,11 +16,17 @@ cmp stdout want.gohtml
 </div>
 <p>x</p>
 </section>
+<main>
+<p>y</p>
+</main>
 -- want.gohtml --
 <style>p{color:red}</style>
 <section>
 <div class="code">
   keep   me
 </div>
-	<p>x</p>
+<p>x</p>
 </section>
+<main>
+	<p>y</p>
+</main>

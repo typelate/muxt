@@ -38,7 +38,7 @@ Only the `ul` is kept. The `p` is formatted.
 
 ## Keep a file
 
-`off` as the first thing in a file, with no `on` after it, keeps the whole file. So does `preserve` in that position. An `off` closed by a later `on` keeps only the region between them.
+`off` as the first thing in a file, with no `on` after it, keeps the whole file. An `off` closed by a later `on` keeps only the region between them. A `preserve` in that position keeps only the next node, as anywhere else.
 
 ```gohtml
 {{/* muxt:fmt off */}}

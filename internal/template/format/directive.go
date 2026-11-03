@@ -282,7 +282,8 @@ func (s *directiveScanner) skipRange(key template.Node, from, to int) {
 }
 
 // startsWithWholeFile reports whether the first thing in the file is a muxt:fmt
-// preserve, or a muxt:fmt off that nothing ends (spec §7.2).
+// off that nothing ends (spec §7.2). A muxt:fmt preserve there keeps only
+// the next node, as anywhere else.
 func (d *directives) startsWithWholeFile(root *template.ListNode) bool {
 	for _, n := range flatten(root.Nodes) {
 		if text, ok := n.(*template.TextNode); ok && isRunOnly(text.Text) {
@@ -292,7 +293,7 @@ func (d *directives) startsWithWholeFile(root *template.ListNode) bool {
 		if !ok {
 			return false
 		}
-		return verbOf(text) == verbPreserve || d.regions[c].toEnd
+		return verbOf(text) != verbPreserve && d.regions[c].toEnd
 	}
 	return false
 }
