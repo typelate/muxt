@@ -29,6 +29,12 @@ type classes struct {
 	gaps   map[gapKey]gap
 	runs   map[*template.TextNode][]gap // runs inside text with content, in order
 	opaque []template.Node              // subtrees emitted from source, outermost only
+	// unsure are the opaque elements and the child lists whose
+	// white-space the formatter cannot tell (unknown CSS, missing sheets,
+	// dynamic style or class attributes, unknown call sites), as opposed
+	// to those preserved by nature (pre, script, custom elements, SVG text)
+	// or by known CSS.
+	unsure map[template.Node]bool
 }
 
 // opaqueTagNames name the elements whose content is emitted from source
@@ -69,8 +75,9 @@ func classifyModes(root *template.ListNode, styles analysis.Whitespaces, modes m
 		styles: styles,
 		modes:  modes,
 		out: classes{
-			gaps: make(map[gapKey]gap),
-			runs: make(map[*template.TextNode][]gap),
+			gaps:   make(map[gapKey]gap),
+			runs:   make(map[*template.TextNode][]gap),
+			unsure: make(map[template.Node]bool),
 		},
 	}
 	c.build(root, root.Nodes, nil, false, analysis.WhiteSpaceCollapse, false)
@@ -149,6 +156,9 @@ func (c *classifier) build(key template.Node, children []template.Node, owner te
 	items, gaps := splitChildren(children)
 	l := &childList{key: key, items: items, gaps: gaps, mode: mode, owner: owner, isElse: isElse}
 	c.order = append(c.order, l)
+	if mode == analysis.WhiteSpaceUnknown {
+		c.out.unsure[key] = true
+	}
 	for _, item := range items {
 		switch n := item.(type) {
 		case *template.HTMLElementNode:
@@ -157,6 +167,9 @@ func (c *classifier) build(key template.Node, children []template.Node, owner te
 			svg := inSVG && tag != "foreignobject" || tag == "svg"
 			if c.isOpaque(n, svg) {
 				c.out.opaque = append(c.out.opaque, n)
+				if ws, ok := c.styles[n]; !opaqueByNature(n, svg) && (!ok || ws.WhiteSpace == analysis.WhiteSpaceUnknown) {
+					c.out.unsure[n] = true
+				}
 				continue
 			}
 			c.build(n, n.Children, n, false, c.styles[n].WhiteSpace, svg)
@@ -190,12 +203,19 @@ func (c *classifier) buildBranch(b *template.BranchNode, owner template.Node, mo
 // text of its own (svg reports that el is SVG content); or an element
 // whose white-space is preserve or unknown.
 func (c *classifier) isOpaque(el *template.HTMLElementNode, svg bool) bool {
-	tag := strings.ToLower(el.TagName)
-	if opaqueTagNames[tag] || strings.Contains(tag, "-") || isShadowHost(el) || svg && hasText(el) {
+	if opaqueByNature(el, svg) {
 		return true
 	}
 	ws, ok := c.styles[el]
 	return !ok || ws.WhiteSpace == analysis.WhiteSpacePreserve || ws.WhiteSpace == analysis.WhiteSpaceUnknown
+}
+
+// opaqueByNature reports whether el is written as it is whatever the
+// CSS says (isOpaque): one of opaqueTagNames, a custom element or other
+// shadow host, or SVG content with text of its own.
+func opaqueByNature(el *template.HTMLElementNode, svg bool) bool {
+	tag := strings.ToLower(el.TagName)
+	return opaqueTagNames[tag] || strings.Contains(tag, "-") || isShadowHost(el) || svg && hasText(el)
 }
 
 // hasAttribute reports whether attrs, an element's attribute list, holds

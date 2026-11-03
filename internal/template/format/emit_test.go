@@ -22,6 +22,7 @@ func TestEmit(t *testing.T) {
 		// known says the author CSS is known (css is all of it); without
 		// it an element with a class or id is unknown.
 		known       bool
+		missing     bool // a stylesheet of the package is unreadable
 		css         string
 		left, right string
 	}{
@@ -125,9 +126,8 @@ func TestEmit(t *testing.T) {
 			want: "<main>\n    <div class=\"c\">\n  <h2>x</h2>\n    </div>\n</main>",
 		},
 		{
-			name: "L2 unknown element in a branch",
+			name: "L2 unknown element in a branch leaves the branch as written",
 			src:  "<main>\n{{if .A}}\n<div class=\"c\">\n<h2>x</h2>\n</div>\n{{else}}\n<p>n</p>\n{{end}}\n</main>",
-			want: "<main>\n\t{{if .A}}\n<div class=\"c\">\n<h2>x</h2>\n</div>\n\t{{else}}\n\t\t<p>n</p>\n\t{{end}}\n</main>",
 		},
 		{
 			name: "L2 one-line unknown element is reindented and blank line kept",
@@ -407,6 +407,114 @@ func TestEmit(t *testing.T) {
 			src:  "\t\t<div>\n\t\t\t\t<p>x</p>\n\t\t</div>",
 			want: "\t\t<div>\n\t<p>x</p>\n</div>",
 		},
+		// Task 11 (trial t7): consistency within a list, nested defines,
+		// multi-line comments and actions.
+		{
+			name:    "list with an as-written gap: trimmed gaps as written too",
+			src:     "{{define \"GET / Index()\" -}}\n{{- if .Err -}}\n<!DOCTYPE html>\n<html>\n<head><link rel=\"stylesheet\" href=\"/app.css\"></head>\n<body><p>x</p></body>\n</html>\n{{- end}}\n{{- end}}",
+			missing: true,
+		},
+		{
+			name:    "one preserved gap and several trimmed gaps: all as written",
+			src:     "<p>x</p>\n{{define \"x\" -}}\n  {{- template \"a\" .}}\n  {{- template \"b\" .}}\n  {{template \"c\" .}}\n{{- end}}",
+			missing: true,
+		},
+		{
+			name:    "no preserved gap: trimmed gaps reindent",
+			src:     "<p>x</p>\n{{define \"x\" -}}\n  {{- template \"a\" .}}\n  {{- template \"b\" .}}\n{{- end}}",
+			want:    "<p>x</p>\n{{define \"x\" -}}\n{{- template \"a\" .}}\n{{- template \"b\" .}}\n{{- end}}",
+			missing: true,
+		},
+		{
+			name: "unsure element in a branch: the whole branch as written, its siblings reindent",
+			src:  "<main>\n  <p>a</p>\n{{if .A -}}\n  <hr>\n<div class=\"c\">\n<h2>x</h2>\n</div>\n{{- else -}}\n  <p>n</p>\n{{- end}}\n  <p>b</p>\n</main>",
+			want: "<main>\n\t<p>a</p>\n{{if .A -}}\n  <hr>\n<div class=\"c\">\n<h2>x</h2>\n</div>\n{{- else -}}\n  <p>n</p>\n{{- end}}\n\t<p>b</p>\n</main>",
+		},
+		{
+			name: "a list left as written leaves its items' subtrees as written",
+			src:  "{{define \"x\"}}\n\t<div class=\"c\">\n  {{- template \"l\" .}}\n\t</div>\n\t{{if .A -}}\n    {{template \"i\" . -}}\n\t{{end}}\n  <section\n      id=\"s\">\n<p>y</p>\n  </section>\n{{end}}",
+		},
+		{
+			name: "with whose body is left as written keeps its keyword lines",
+			src:  "{{define \"x\" -}}\n{{- if .Err}}{{template \"e\" .}}{{else}}\n{{- with .Result}}\n<div class=\"k\">\n<p>x</p>\n</div>\n{{- end}}\n{{- end}}\n{{- end}}",
+		},
+		{
+			name:    "a frozen branch freezes the branch bodies around it up to the define body",
+			src:     "{{define \"POST /m M()\" -}}\n{{- if .Err}}{{.E}}\n{{- else}}{{.R}}\n{{- range .Tabs}}\n{{- template \"wb\" .}}\n{{- if .Path}}\n<hx-partial hx-target='#t'>{{template \"t\" .}}</hx-partial>\n{{- end}}\n{{- end}}\n{{- end}}\n{{- end}}",
+			missing: true,
+		},
+		{
+			name: "a frozen branch chain in an element is an island: its siblings reindent",
+			src:  "<div>\n  <main>\n  <p>a</p>\n{{- if .A}}\n{{- range .L}}\n<div class=\"c\">\n<b>x</b>\n</div>\n{{- end}}\n{{- end}}\n  </main>\n</div>",
+			want: "<div>\n\t<main>\n\t\t<p>a</p>\n{{- if .A}}\n{{- range .L}}\n<div class=\"c\">\n<b>x</b>\n</div>\n{{- end}}\n{{- end}}\n\t</main>\n</div>",
+		},
+		{
+			name: "an unsure multi-line element freezes its list wherever it starts",
+			src:  "<section><div class=\"code\">\n  keep\n</div>\n<p>x</p>\n</section>",
+		},
+		{
+			name: "script in head is an island: its siblings reindent",
+			src:  "<head>\n<meta>\n<script>\nx\n</script>\n<link>\n</head>",
+			want: "<head>\n\t<meta>\n<script>\nx\n</script>\n\t<link>\n</head>",
+		},
+		{
+			name: "pre is an island: its siblings reindent",
+			src:  "<div>\n<p>a</p>\n<pre>\nx\n</pre>\n<p>b</p>\n</div>",
+			want: "<div>\n\t<p>a</p>\n<pre>\nx\n</pre>\n\t<p>b</p>\n</div>",
+		},
+		{
+			name: "an unsure element leaves its list as written",
+			src:  "<div>\n<p>a</p>\n<div class=\"k\">\n<p>x</p>\n</div>\n<p>b</p>\n</div>",
+		},
+		{
+			name: "multi-line else keeps its opening line",
+			src:  "<div>\n{{if .A}}\n<p>a</p>\n    {{else\n}}\n<p>b</p>\n{{end}}\n</div>",
+			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n    {{else\n}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
+		},
+		{
+			name: "multi-line else if keeps its opening line",
+			src:  "<div>\n{{if .A}}\n<p>a</p>\n    {{else if and\n .B .C}}\n<p>b</p>\n{{end}}\n</div>",
+			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n    {{else if and\n .B .C}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
+		},
+		{
+			name: "multi-line end keeps its opening line",
+			src:  "<div>\n{{range .L}}\n<p>a</p>\n    {{end\n}}\n</div>",
+			want: "<div>\n\t{{range .L}}\n\t\t<p>a</p>\n    {{end\n}}\n</div>",
+		},
+		{
+			name: "define in an element is at column 0",
+			src:  "<body>\n{{define \"y\"}}\n<p>a</p>\n{{end}}\n</body>",
+		},
+		{
+			name: "indented define in an element moves to column 0",
+			src:  "<div>\n\t\t{{define \"y\"}}\n\t<p>a</p>\n\t{{end}}\n\t<p>b</p>\n</div>",
+			want: "<div>\n{{define \"y\"}}\n<p>a</p>\n{{end}}\n\t<p>b</p>\n</div>",
+		},
+		{
+			name: "multi-line comment continuation lines shift with its first line",
+			src:  "{{define \"x\"}}\n\t<p>a</p>\n\t{{- /* one\n\t       two */ -}}\n\t<p>b</p>\n{{end}}",
+			want: "{{define \"x\"}}\n<p>a</p>\n{{- /* one\n       two */ -}}\n<p>b</p>\n{{end}}",
+		},
+		{
+			name: "multi-line comment indented deeper keeps its hanging alignment",
+			src:  "<div>\n{{/* one\n   two\n\n   three */}}\n</div>",
+			want: "<div>\n\t{{/* one\n\t   two\n\n\t   three */}}\n</div>",
+		},
+		{
+			name: "multi-line comment that cannot shift exactly is as written, its siblings reindent",
+			src:  "<div>\n\t\t{{/* one\n two */}}\n\t\t<p>x</p>\n\t\t</div>",
+			want: "<div>\n\t\t{{/* one\n two */}}\n\t<p>x</p>\n</div>",
+		},
+		{
+			name: "multi-line action keeps its opening line",
+			src:  "<div>\n    {{template \"a\"\n\t.}}\n  <p>x</p>\n</div>",
+			want: "<div>\n    {{template \"a\"\n\t.}}\n\t<p>x</p>\n</div>",
+		},
+		{
+			name: "multi-line branch pipeline keeps its opening line",
+			src:  "<div>\n    {{if and\n\t.A .B}}\n\t\t\t<p>x</p>\n    {{end}}\n</div>",
+			want: "<div>\n    {{if and\n\t.A .B}}\n\t\t<p>x</p>\n\t{{end}}\n</div>",
+		},
 		// Directives and custom delimiters.
 		{
 			name: "muxt:fmt off region as written",
@@ -417,6 +525,15 @@ func TestEmit(t *testing.T) {
 			name: "muxt:fmt preserve element as written",
 			src:  "<div>\n{{/* muxt:fmt preserve */}}\n    <p>x</p>\n    <p>y</p>\n</div>",
 			want: "<div>\n\t{{/* muxt:fmt preserve */}}\n    <p>x</p>\n\t<p>y</p>\n</div>",
+		},
+		{
+			name: "muxt:fmt preserve first in the file keeps only the next node",
+			src:  "{{/* muxt:fmt preserve */}}\n<span>a</span>\n<div>\n<p>\nb\n</p>\n</div>\n",
+			want: "{{/* muxt:fmt preserve */}}\n<span>a</span>\n<div>\n\t<p>\n\t\tb\n\t</p>\n</div>\n",
+		},
+		{
+			name: "muxt:fmt off first in the file without on keeps the file",
+			src:  "{{/* muxt:fmt off */}}\n<span>a</span>\n<div>\n<p>\nb\n</p>\n</div>\n",
 		},
 		{
 			name: "custom delimiters",
@@ -437,6 +554,9 @@ func TestEmit(t *testing.T) {
 					sheets = []analysis.Stylesheet{{Filename: "a.css", Text: tt.css}}
 				}
 				opts = append(opts, format.Styles(analysis.WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true}))
+			}
+			if tt.missing {
+				opts = append(opts, format.Styles(analysis.WhitespaceOptions{MissingSheets: true}))
 			}
 			if tt.left != "" {
 				opts = append(opts, format.Delimiters(tt.left, tt.right))
