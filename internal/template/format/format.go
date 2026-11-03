@@ -2,12 +2,15 @@
 // changes only the leading and trailing whitespace of lines that
 // already exist and the number of blank lines in a row, using the
 // syntax tree of muxt's own template parser for depth and the
-// whitespace classifier for which runs the browser lets it change.
+// whitespace classifier for which runs the browser lets it change, and
+// prints each template action, which never renders, from its parse
+// tree in one canonical form (printToken).
 package format
 
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
@@ -42,13 +45,14 @@ func Styles(options analysis.WhitespaceOptions) Option {
 
 // Node formats the given AST node, which must come from a parsed tree,
 // as Source formats a file: it reindents the lines the source already
-// has, one tab per level, and copies every other byte from the node's
-// source. It sees only the author CSS that Styles gives and the tree's
-// own <style> elements. A tree holding markup the template parser read
-// as text but a browser reads as a tag, or a self-closed HTML element
-// that is not void, is written as it is, or only the define body
-// holding the element when no {{template}} in the tree calls it (see
-// hasUnparsedMarkup and ignoredSelfCloses). Its emitter knows only LF
+// has, one tab per level, prints its actions (printToken), and copies
+// every other byte from the node's source. It sees only the author CSS
+// that Styles gives and the tree's own <style> elements. A tree holding
+// markup the template parser read as text but a browser reads as a tag,
+// or a self-closed HTML element that is not void, is written as it is
+// but for its actions, or only the define body holding the element is,
+// when no {{template}} in the tree calls it (see hasUnparsedMarkup and
+// ignoredSelfCloses). Its emitter knows only LF
 // line breaks, which Source makes sure of before parsing; the tree's
 // positions cannot follow such a change, so a node whose source holds a
 // carriage return is returned as it is. Should the formatter fail (a bug
@@ -90,7 +94,7 @@ type formatter struct {
 func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
 	whole, bodies := ignoredSelfCloses(list)
 	if whole || hasUnparsedMarkup(list.Nodes) {
-		return src, nil
+		return f.actionsOnly(src, base, list, dir)
 	}
 	trees := []*template.Tree{{Root: list}}
 	styles := analysis.ComputeWhitespace(trees, f.whitespace)
@@ -104,18 +108,25 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	callSiteModes(sites, styles, floor)
 	moved := analysis.WhiteSpaceMovedMatcher(trees, f.whitespace)
 	if unsureMisnested(list, styles, moved) {
-		return src, nil
+		return f.actionsOnly(src, base, list, dir)
 	}
 	unsureReopened(list, styles, moved)
 	if unsureParsedElsewhere(list, styles, f.whitespace.Context, moved) {
-		return src, nil
+		return f.actionsOnly(src, base, list, dir)
 	}
 	// The elements made unsure may hold call sites.
 	modes := callSiteModes(sites, styles, floor)
 	verbatimDefines(list, modes, bodies)
-	e := newEmitter(src, base, classifyModes(list, styles, modes), bodies, dir)
+	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classifyModes(list, styles, modes), bodies, dir)
 	e.edits = f.testEdits
 	return e.emit(list)
+}
+
+// actionsOnly returns src, the source of list starting at position
+// base, with only its actions printed (printToken): the whitespace
+// between them is as written.
+func (f *formatter) actionsOnly(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
+	return newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir).apply()
 }
 
 // callSiteTrees returns the trees whose {{template}} calls and {{block}}s
@@ -164,22 +175,17 @@ func (f *formatter) callSiteTrees(list *template.ListNode, styles analysis.White
 // in the file becomes LF: CR LF and a lone CR, everywhere (raw text,
 // attribute values, comments, preserved and muxt:fmt off regions), as
 // the HTML parser does before tokenizing (§13.2.3.5) and as gofmt does
-// for Go. Every other byte is the source's, so the file's final
-// newline, or its lack of one, is as written. A file with no HTML
-// element is not a page (a plain-text email, a text-only partial), so
-// its whitespace is all preserved and Source returns it with only its
-// line endings changed.
+// for Go. Every action outside a muxt:fmt region is printed from its
+// parse tree (printToken). Every other byte is the source's, so the
+// file's final newline, or its lack of one, is as written. A file with
+// no HTML element is not a page (a plain-text email, a text-only
+// partial), so its whitespace is all preserved and Source changes only
+// its line endings and actions. Should the printed actions not parse
+// as the source's (a formatter bug), Source returns an error.
 func Source(filename, src string, opts ...Option) (string, error) {
 	src = normalizeLineEndings(src)
 	f := newFormatter(opts)
-	tree, err := template.ParseTree(filename, filename, src, nil, lex.Options{
-		EmitComment: true,
-		ParseHTML:   true,
-		BreakOK:     true,
-		ContinueOK:  true,
-		LeftDelim:   f.leftDelim,
-		RightDelim:  f.rightDelim,
-	})
+	tree, err := f.parse(filename, src)
 	if err != nil {
 		return "", err
 	}
@@ -187,14 +193,37 @@ func Source(filename, src string, opts ...Option) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !hasElement(tree) || dir.startsWithWholeFile(tree.Root) {
+	if dir.startsWithWholeFile(tree.Root) {
 		return src, nil
 	}
-	out, err := f.format(src, 0, tree.Root, dir)
+	var out string
+	if hasElement(tree) {
+		out, err = f.format(src, 0, tree.Root, dir)
+	} else {
+		out, err = f.actionsOnly(src, 0, tree.Root, dir)
+	}
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", filename, err)
 	}
+	if out != src {
+		// The printed actions must parse as the source's do.
+		again, err := f.parse(filename, out)
+		if err != nil || !slices.Equal(actionShapes(tree.Root), actionShapes(again.Root)) {
+			return "", fmt.Errorf("%s: %w", filename, errActionChanged)
+		}
+	}
 	return out, nil
+}
+
+func (f *formatter) parse(filename, src string) (*template.Tree, error) {
+	return template.ParseTree(filename, filename, src, nil, lex.Options{
+		EmitComment: true,
+		ParseHTML:   true,
+		BreakOK:     true,
+		ContinueOK:  true,
+		LeftDelim:   f.leftDelim,
+		RightDelim:  f.rightDelim,
+	})
 }
 
 // normalizeLineEndings returns src with CR LF and lone CR written as

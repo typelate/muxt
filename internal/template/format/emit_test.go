@@ -207,14 +207,15 @@ func TestEmit(t *testing.T) {
 			src:  "<p>x</p>\n\n\n",
 			want: "<p>x</p>\n\n",
 		},
-		// L5: no token edits.
+		// L5: no token edits outside actions; action interiors are
+		// printed from the parse tree (TestActionFormat).
 		{name: "L5 backtick block name", src: "<div>{{block `a b` .}}x{{end}}</div>"},
 		{name: "L5 void slash", src: "<input value='{{.ID}}'/><br/><br />"},
 		{name: "L5 trim markers kept", src: "{{define \"x\" -}}{{template \"y\"}}{{- end}}<p></p>"},
-		{name: "L5 action spacing", src: "<p>{{ if  .A }}x{{ end }}{{ .X }}</p>"},
+		{name: "L5 action spacing normalized", src: "<p>{{ if  .A }}x{{ end }}{{ .X }}</p>", want: "<p>{{if .A}}x{{end}}{{.X}}</p>"},
 		{name: "L5 closing tag case and space", src: "<DIV>x</div >"},
 		{name: "L5 nested else-if not merged", src: "<p>{{if .A}}a{{else}}{{if .B}}b{{end}}{{end}}</p>"},
-		{name: "L5 chained else-if kept", src: "<p>{{if .A}}a{{ else if .B }}b{{end}}</p>"},
+		{name: "L5 chained else-if kept", src: "<p>{{if .A}}a{{ else if .B }}b{{end}}</p>", want: "<p>{{if .A}}a{{else if .B}}b{{end}}</p>"},
 		// L6: no split.
 		{name: "L6 one-line block stays", src: "<div><p>e</p></div>"},
 		{name: "L6 one-line define body stays", src: "{{define \"a\"}}<p>a</p>{{end}}"},
@@ -535,19 +536,19 @@ func TestEmit(t *testing.T) {
 			src:  "<div>\n<p>a</p>\n<div class=\"k\">\n<p>x</p>\n</div>\n<p>b</p>\n</div>",
 		},
 		{
-			name: "multi-line else keeps its opening line",
+			name: "multi-line else is printed on one line",
 			src:  "<div>\n{{if .A}}\n<p>a</p>\n    {{else\n}}\n<p>b</p>\n{{end}}\n</div>",
-			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n    {{else\n}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
+			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n\t{{else}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
 		},
 		{
-			name: "multi-line else if keeps its opening line",
+			name: "multi-line else if is laid out one argument per line",
 			src:  "<div>\n{{if .A}}\n<p>a</p>\n    {{else if and\n .B .C}}\n<p>b</p>\n{{end}}\n</div>",
-			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n    {{else if and\n .B .C}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
+			want: "<div>\n\t{{if .A}}\n\t\t<p>a</p>\n\t{{else if and\n\t\t.B\n\t\t.C\n\t}}\n\t\t<p>b</p>\n\t{{end}}\n</div>",
 		},
 		{
-			name: "multi-line end keeps its opening line",
+			name: "multi-line end is printed on one line",
 			src:  "<div>\n{{range .L}}\n<p>a</p>\n    {{end\n}}\n</div>",
-			want: "<div>\n\t{{range .L}}\n\t\t<p>a</p>\n    {{end\n}}\n</div>",
+			want: "<div>\n\t{{range .L}}\n\t\t<p>a</p>\n\t{{end}}\n</div>",
 		},
 		{
 			name: "define in an element is at column 0",
@@ -574,14 +575,19 @@ func TestEmit(t *testing.T) {
 			want: "<div>\n\t\t{{/* one\n two */}}\n\t<p>x</p>\n</div>",
 		},
 		{
-			name: "multi-line action keeps its opening line",
+			name: "multi-line action is printed on one line",
 			src:  "<div>\n    {{template \"a\"\n\t.}}\n  <p>x</p>\n</div>",
-			want: "<div>\n    {{template \"a\"\n\t.}}\n\t<p>x</p>\n</div>",
+			want: "<div>\n\t{{template \"a\" .}}\n\t<p>x</p>\n</div>",
 		},
 		{
-			name: "multi-line branch pipeline keeps its opening line",
+			name: "multi-line branch pipeline is laid out one argument per line",
 			src:  "<div>\n    {{if and\n\t.A .B}}\n\t\t\t<p>x</p>\n    {{end}}\n</div>",
-			want: "<div>\n    {{if and\n\t.A .B}}\n\t\t<p>x</p>\n\t{{end}}\n</div>",
+			want: "<div>\n\t{{if and\n\t\t.A\n\t\t.B\n\t}}\n\t\t<p>x</p>\n\t{{end}}\n</div>",
+		},
+		{
+			name: "action with a raw string spanning lines keeps its opening line",
+			src:  "<div>\n    {{printf `a\nb`\n\t.X}}\n  <p>x</p>\n</div>",
+			want: "<div>\n    {{printf `a\nb`\n\t.X}}\n\t<p>x</p>\n</div>",
 		},
 		// Directives and custom delimiters.
 		{

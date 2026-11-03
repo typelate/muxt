@@ -10,7 +10,7 @@ muxt fmt -w .
 muxt fmt [flags] [path ...]
 ```
 
-`muxt fmt` changes only the leading whitespace of existing lines, strips trailing whitespace, and collapses runs of blank lines to one. It never joins or splits a line, never edits a token, and leaves what it is unsure about exactly as written, whole element at a time.
+`muxt fmt` changes only the leading whitespace of existing lines, strips trailing whitespace, and collapses runs of blank lines to one. Outside template actions it never joins or splits a line, never edits a token, and leaves what it is unsure about exactly as written, whole element at a time. Inside an action, which never renders, it prints the action in one canonical form; see [Actions](#actions).
 
 Like `gofmt`, it has no formatting options. Indentation is one tab per level. The flags only say where the result goes.
 
@@ -44,7 +44,7 @@ A problem with one file is printed on stderr and the other files are still forma
 
 ## What it changes
 
-`muxt fmt` is a reindenter. Every line that exists in the source still exists in the output, with the same text after its indentation. The one thing that changes is how much whitespace comes before that text (and the whitespace after it, which is removed).
+`muxt fmt` is a reindenter. Every line that exists in the source still exists in the output, with the same text after its indentation, except inside actions ([Actions](#actions)). The one thing that changes is how much whitespace comes before that text (and the whitespace after it, which is removed).
 
 The safety rule, in terms of what a reader of the page could notice: whitespace between two pieces of content can change in amount, never in whether it exists and never in kind. A gap with no whitespace stays empty. A gap with spaces and no line break stays a gap with no line break. A gap with a line break keeps at least one line break. So a space the browser shows between two words is still there, and two inline elements that touch still touch. `fmt` checks this against the HTML parser's own tree, so a gap is judged by the element the browser puts it in, not by where it sits in the source ([reference_fmt_write.txt](../../../cmd/muxt/testdata/reference_fmt_write.txt)).
 
@@ -54,7 +54,7 @@ Beyond that:
 - Trailing whitespace is stripped only where the run is one `fmt` may re-indent; inside text it leaves as written it stays.
 - Blank lines: a run of several becomes one. Blank lines are never added and never removed entirely. The final newline of the file is kept.
 - Line endings are normalized to LF (CRLF and lone CR), everywhere in the file, like `gofmt`: raw text, attribute values, comments, and regions left as written or under `muxt:fmt off` included. The browser does the same before it reads the page, so the page does not change ([format_test.go](../../../internal/template/format/format_test.go), case "CRLF becomes LF"; [emit_test.go](../../../internal/template/format/emit_test.go)).
-- Trim markers (`{{-`, `-}}`) and the spacing inside an action are never touched. Whitespace that a trim marker removes at run time may be re-indented, since it is never rendered, but a marker is never added or removed.
+- Trim markers (`{{-`, `-}}`) are never added or removed. Whitespace that a trim marker removes at run time may be re-indented, since it is never rendered.
 - Attribute continuation lines in a tag are indented one level deeper than the tag. Spaces after the tabs, used to line attributes up, are kept only when the source line already starts with tabs followed by spaces; otherwise the whole indent becomes tabs.
 
 ## Depth
@@ -67,8 +67,43 @@ Depth follows the tag structure of the source, one tab per level ([full_page.txt
 - `{{template}}` and `{{block}}` are transparent: the content of a `{{block}}` sits at the depth of the block itself.
 - `{{define}}` is a top-level declaration wherever it sits. Its opener, body and `{{end}}` start at column 0, and the body is indented from there.
 - Optional end tags (`li`, `dt`, `dd`, `p`, `option`, `tr`, `td`, `th`, `thead`, `tbody`, `tfoot`, `colgroup`, `caption`) are implied the way the HTML Standard says. Any other element left unclosed ends at its parent's end tag.
-- A multi-line `{{/* comment */}}` shifts as a unit, its continuation lines moving by the same amount as its first line, when each continuation line starts with the old indent. A multi-line action keeps its opening line as written, because string literals inside it may contain whitespace.
+- A multi-line `{{/* comment */}}` shifts as a unit, its continuation lines moving by the same amount as its first line, when each continuation line starts with the old indent. An action is laid out by its own rules ([Actions](#actions)); one holding a raw string literal that spans lines is left as written, opening line included.
 - `<template>` contents are re-indented like any other markup.
+
+## Actions
+
+Actions are the one place `muxt fmt` edits tokens. Text inside `{{` and `}}` is never part of the page, so every action is printed from its parse tree in one canonical form: plain actions, the openers of `{{if}}`, `{{with}}`, `{{range}}`, `{{define}}` and `{{block}}`, `{{else}}` and `{{else if}}`, `{{end}}`, `{{template}}`, `{{break}}` and `{{continue}}`. That holds wherever the action sits, inside attribute values, `<pre>` and raw text elements included ([action_interiors.txtar](../../../internal/template/format/testdata/action_interiors.txtar), [actions_test.go](../../../internal/template/format/actions_test.go)).
+
+What is normalized:
+
+- Spacing. No space next to the delimiters, one space between words, ` | ` between pipeline stages, and `$i, $v := ` in declarations: `{{ range $i,$v:=.Items }}` becomes `{{range $i, $v := .Items}}`, and `{{end }}`, `{{ else }}` and `{{ break }}` become `{{end}}`, `{{else}}` and `{{break}}`.
+- Redundant parentheses are dropped where the grammar does not need them: around the whole pipeline of an action, when what they hold is a single field, variable, dot, constant or `nil` (`{{if (.X)}}` becomes `{{if .X}}`). A call (`(len .X)`), an argument (`printf "%s" (.X)`, `eq .A (1)`, `printf "%v" (nil)`), a later stage (`.X | (len)`) and a pipeline followed by a field (`(index .M "k").Name`) keep theirs: there they change how the template runs. A bare constant argument takes the parameter's type while `(1)` is an `int`; `(nil)` as an argument is an error while bare `nil` is a nil value; `(.X)` unwraps an `any` that holds nil; and a parenthesized later stage refuses the piped value. Parentheses are never added.
+- Line breaks. A pipeline the source breaks between stages is printed one stage per line with the `|` leading each continuation line, and a command the source breaks between arguments is printed one argument per line, wherever the action is. An action that starts its line (only whitespace before it) is also split when it is complex: a pipeline with four or more stages, or a command with three or more parenthesized arguments. An action inside a start tag or in the middle of text stays on one line unless you broke it. Each continuation line is one tab deeper than the line the action starts on, and the closing delimiter goes on a line of its own at that line's indentation. A parenthesized pipeline that itself splits recurses one level deeper and closes with `)` on its own line. Any other line break inside an action is dropped, so a short action that spans lines becomes one line.
+
+```gohtml
+{{if and
+	(eq .Kind "a")
+	(ne .Name "")
+	(not .Hidden)
+}}
+	<h1>{{.Name | printf "%s!"}}</h1>
+	{{.Items
+		| len
+		| printf "%d items"
+		| html
+	}}
+{{end}}
+```
+
+What is kept:
+
+- String, raw string, number and character literals as written (`0x1F` stays `0x1F`, a backquoted string keeps its backquotes), and the names of `{{define}}`, `{{block}}` and `{{template}}` as written.
+- The delimiters, custom ones included, and the trim markers: `{{-  .X  -}}` becomes `{{- .X -}}`.
+- Comments, `{{/* ... */}}`, which shift with their line but are otherwise untouched.
+- An action holding a raw string literal that spans lines, which is left as written whole.
+- Actions inside a `muxt:fmt off` or `preserve` region.
+
+After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, positions and spacing aside, and reports an error rather than write a file where it does not.
 
 ## What is left as written
 

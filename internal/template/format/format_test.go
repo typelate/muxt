@@ -36,28 +36,28 @@ func TestCustomDelimiters(t *testing.T) {
 			input: "<p><% .Name %></p>",
 			left:  "<%",
 			right: "%>",
-			want:  "<p><% .Name %></p>",
+			want:  "<p><%.Name%></p>",
 		},
 		{
 			name:  "custom delimiters branch",
 			input: "<% if .Show %>\n<p>yes</p>\n  <% end %>",
 			left:  "<%",
 			right: "%>",
-			want:  "<% if .Show %>\n\t<p>yes</p>\n<% end %>",
+			want:  "<%if .Show%>\n\t<p>yes</p>\n<%end%>",
 		},
 		{
 			name:  "custom delimiters define",
 			input: "<% define \"foo\" %>\n  <p>hi</p>\n<% end %>",
 			left:  "<%",
 			right: "%>",
-			want:  "<% define \"foo\" %>\n<p>hi</p>\n<% end %>",
+			want:  "<%define \"foo\"%>\n<p>hi</p>\n<%end%>",
 		},
 		{
 			name:  "custom delimiters template call",
 			input: `<td><% template "comp" .X %></td>`,
 			left:  "<%",
 			right: "%>",
-			want:  "<td><% template \"comp\" .X %></td>",
+			want:  "<td><%template \"comp\" .X%></td>",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
