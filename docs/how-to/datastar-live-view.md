@@ -25,7 +25,7 @@ Datastar morphs the element by id.
 type Delta struct{ Delta string `json:"delta"` }
 ```
 
-The struct's `json` tags must match the page's `data-signals` keys; muxt does not check this, so a typo fails silently in the browser. The wire format is asserted in [reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt).
+The struct's `json` tags must match the page's `data-signals` keys. The wire format is asserted in [reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt).
 
 Inbound, the `signals` argument binds the posted body on non-GET routes ([arguments](../reference/call-parameters.md#arguments)):
 
@@ -64,4 +64,5 @@ Drive the generated routes with `httptest` and assert on the events. The `patchE
 ## Edge cases
 
 - **More than id matching.** When matching by id is not enough, the fragment template calls `.Selector`, `.Mode`, or `.UseViewTransition` on the dot. [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) shows `.Selector` and `.Mode`.
+- **Signal names are not checked.** muxt does not compare the `json` tags with the page's `data-signals` keys, so a typo fails silently in the browser.
 - **`.Path` inside `{{range}}`.** Use `$.Path`, as in `{{$.Path.ToggleTodo .ID}}`.
