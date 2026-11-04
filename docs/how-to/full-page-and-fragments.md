@@ -64,4 +64,4 @@ When rendering the whole page every time is cheap enough, leave the route templa
 
 ## Datastar
 
-A Datastar action sends `Datastar-Request: true`. Branch on it with `{{if eq (.Request.Header.Get "Datastar-Request") "true"}}` and set `Vary` to `Datastar-Request` the same way; [Datastar live view](datastar-live-view.md) covers routes that answer Datastar actions.
+A Datastar action sends `Datastar-Request: true`. With `--output-datastar`, branch on `{{if .DatastarRequest}}` and set `Vary` to `Datastar-Request` the same way; [Datastar live view](datastar-live-view.md) covers routes that answer Datastar actions.

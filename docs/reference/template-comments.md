@@ -31,4 +31,4 @@ To switch off a block of markup while you work on it, wrap it in `{{/*` and `*/}
 
 An HTML comment in text never reaches the browser. If one must, write it from a `template.HTML` value.
 
-[`muxt fmt`](commands/fmt.md) leaves these shapes as written.
+[`muxt check`](commands/check.md) reports the shapes the page would show: a `<!--` inside `<title>` or `<textarea>`, a `<!` or `<?` that starts no comment or doctype, and a comment opened as `<!-->`. [`muxt fmt`](commands/fmt.md) leaves these shapes as written.
