@@ -142,11 +142,11 @@ func (cp *CoverProfile) WriteNewlyCovered(w io.Writer, written map[string]struct
 		buf = strconv.AppendInt(buf, int64(b.endLine), 10)
 		buf = append(buf, '.')
 		buf = strconv.AppendInt(buf, int64(b.endCol), 10)
-		key := string(buf[start:])
-		if _, ok := written[key]; ok {
+		if _, ok := written[string(buf[start:])]; ok { // no allocation for the lookup
 			buf = buf[:start]
 			continue
 		}
+		key := string(buf[start:])
 		buf = append(buf, " 1 1\n"...)
 		written[key] = struct{}{}
 		keys = append(keys, key)

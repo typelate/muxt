@@ -30,12 +30,18 @@ var processCover = coverExportFor(os.Getenv(coverEnv))
 // profile file the first time each is reached. Mode set is monotone, so
 // a block is written once; every write is synchronous, so nothing is lost
 // when the test binary exits, and no goroutine or timer is involved.
+//
+// Coverage is a by-product of the user's tests, so it never fails them:
+// the first error opening or writing the file is reported once on stderr
+// and turns the export off for the rest of the process.
 type coverExport struct {
-	path string
+	path   string
+	stderr io.Writer
 
-	mu      sync.Mutex
-	file    *os.File
-	written map[string]struct{}
+	mu       sync.Mutex
+	disabled bool
+	file     *os.File
+	written  map[string]struct{}
 }
 
 func coverExportFor(dir string) *coverExport {
@@ -44,6 +50,7 @@ func coverExportFor(dir string) *coverExport {
 	}
 	return &coverExport{
 		path:    filepath.Join(dir, strconv.Itoa(os.Getpid())+".cov"),
+		stderr:  os.Stderr,
 		written: make(map[string]struct{}),
 	}
 }
@@ -52,27 +59,33 @@ func coverExportFor(dir string) *coverExport {
 // the run reached for the first time. A profile per execute, rather than
 // one for the process, keeps the export from holding every tree ever
 // parsed and walking all of them after each execute; c.written carries
-// what is already in the file. An export failure is returned along with
-// any execution error so a broken coverage run cannot pass silently.
+// what is already in the file. It returns only the execution error.
 func (c *coverExport) execute(wr io.Writer, tree *engine.Tree, data any, opts []engine.Option) error {
 	cp := new(engine.CoverProfile)
 	err := engine.ExecuteTemplate(wr, tree, data, append(opts, engine.WithCoverProfile(cp))...)
-	if exportErr := c.append(cp); exportErr != nil {
-		return errors.Join(err, fmt.Errorf("html/template: exporting template coverage: %w", exportErr))
-	}
+	c.append(cp)
 	return err
 }
 
-func (c *coverExport) append(cp *engine.CoverProfile) error {
+func (c *coverExport) append(cp *engine.CoverProfile) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.disabled {
+		return
+	}
+	if err := c.appendLocked(cp); err != nil {
+		c.disabled = true
+		// The export is off from here on; a failure to report that has
+		// nowhere better to go.
+		_, _ = fmt.Fprintf(c.stderr, "muxt: template coverage export disabled: %v\n", err)
+	}
+}
+
+func (c *coverExport) appendLocked(cp *engine.CoverProfile) error {
 	if c.file == nil {
-		f, err := os.OpenFile(c.path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+		f, err := openProfile(c.path)
 		if err != nil {
 			return err
-		}
-		if _, err := io.WriteString(f, "mode: set\n"); err != nil {
-			return errors.Join(err, f.Close())
 		}
 		// The file stays open for the life of the process; the operating
 		// system closes it at exit, and every write before then has
@@ -81,4 +94,24 @@ func (c *coverExport) append(cp *engine.CoverProfile) error {
 	}
 	_, err := cp.WriteNewlyCovered(c.file, c.written)
 	return err
+}
+
+// openProfile opens name for appending, writing the mode line only if the
+// file is empty: a predecessor with the same pid, as after syscall.Exec,
+// may already have written to it.
+func openProfile(name string) (*os.File, error) {
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, errors.Join(err, f.Close())
+	}
+	if info.Size() == 0 {
+		if _, err := io.WriteString(f, "mode: set\n"); err != nil {
+			return nil, errors.Join(err, f.Close())
+		}
+	}
+	return f, nil
 }

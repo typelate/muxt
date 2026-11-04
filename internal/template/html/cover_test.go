@@ -1,12 +1,11 @@
 package html
 
 import (
-	"errors"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/cover"
@@ -111,14 +110,63 @@ func TestExecuteWithoutCoverExportWritesNothing(t *testing.T) {
 	}
 }
 
-func TestExecuteReportsCoverExportFailure(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing")
-	useCoverExport(t, coverExportFor(missing))
+func TestExecuteDisablesCoverExportOnFailure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "missing")
+	export := coverExportFor(dir)
+	var stderr strings.Builder
+	export.stderr = &stderr
+	useCoverExport(t, export)
 
 	ts := Must(New("page").Parse(`<p>{{.}}</p>`))
-	err := ts.Execute(io.Discard, "x")
-	if !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("Execute with the cover directory missing returned %v, want an error wrapping fs.ErrNotExist", err)
+	for i := range 2 {
+		var out strings.Builder
+		if err := ts.Execute(&out, "x"); err != nil {
+			t.Errorf("Execute %d with the cover directory missing returned %v, want nil", i, err)
+		}
+		if got, want := out.String(), "<p>x</p>"; got != want {
+			t.Errorf("Execute %d wrote %s, want %s", i, got, want)
+		}
+		if i == 0 {
+			// Once disabled, the export does not try again even when it
+			// could now succeed.
+			if err := os.Mkdir(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := ts.ExecuteTemplate(io.Discard, "page", "y"); err != nil {
+		t.Errorf("ExecuteTemplate after the export was disabled returned %v, want nil", err)
+	}
+
+	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
+	if len(lines) != 1 || !strings.HasPrefix(lines[0], "muxt: template coverage export disabled: ") {
+		t.Errorf("stderr = %q, want one line starting %q", stderr.String(), "muxt: template coverage export disabled: ")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("%s has %d entries after the export was disabled, want none", dir, len(entries))
+	}
+}
+
+func TestCoverExportAppendsToExistingProfile(t *testing.T) {
+	export := coverExportFor(t.TempDir())
+	useCoverExport(t, export)
+	// A predecessor with the same pid (before syscall.Exec, say) already
+	// wrote the header and a block.
+	const before = "mode: set\nprev:1.1,1.2 1 1\n"
+	if err := os.WriteFile(export.path, []byte(before), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ts := Must(New("page").Parse(`x`))
+	if err := ts.Execute(io.Discard, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, export.path), before+"page:1.1,1.2 1 1\n"; got != want {
+		t.Errorf("profile is\n%s\nwant\n%s", got, want)
 	}
 }
 
