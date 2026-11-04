@@ -2,8 +2,11 @@ package format
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"testing"
+	texttemplate "text/template"
+	textparse "text/template/parse"
 
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
@@ -47,7 +50,27 @@ func TestActionFormat(t *testing.T) {
 		{name: "parens around nil in an argument are kept", src: `<p>{{printf "%v" (nil)}}</p>`},
 		{name: "parens around an argument of a later stage are kept", src: `<p>{{.A | printf "%v" (.B)}}</p>`},
 		{name: "parens of a later stage are kept", src: "<p>{{.X | (len)}}</p>"},
+		// A parenthesized later stage with arguments is "can't give
+		// argument to non-function" in text/template; bare, the piped
+		// value is printf's last argument.
+		{name: "parens of a later stage with arguments are kept", src: `<p>{{.X | (printf "%s" .A)}}</p>`},
+		{name: "parens of arguments of a call are kept", src: "<p>{{if and (eq .A true) (not .B)}}x{{end}}</p>"},
+		// Declared inside, a variable is the parenthesized pipeline's.
 		{name: "parens with a declaration are kept", src: "<p>{{($y := .X)}}</p>"},
+		// The whole first command in parentheses, with nothing piped
+		// into it: text/template evaluates the inner pipeline and goes
+		// on with its value, as it does with the inner commands inlined.
+		{name: "a call in head parentheses is inlined", src: `<p>{{(index .M "k")}}</p>`, want: `<p>{{index .M "k"}}</p>`},
+		{name: "a pipeline in head parentheses is inlined", src: "<p>{{(.X | len)}}</p>", want: "<p>{{.X | len}}</p>"},
+		{name: "a pipeline in head parentheses joins the later stages", src: `<p>{{(.X | printf "%s") | len}}</p>`, want: `<p>{{.X | printf "%s" | len}}</p>`},
+		{name: "nested head parentheses are inlined", src: "<p>{{((.X))}}</p>", want: "<p>{{.X}}</p>"},
+		{name: "nested head parentheses around a pipeline", src: `<p>{{(((.X) | printf "%s"))}}</p>`, want: `<p>{{.X | printf "%s"}}</p>`},
+		{name: "head parentheses after a declaration are inlined", src: "{{$x := (len .X)}}<p>{{$x}}</p>", want: "{{$x := len .X}}<p>{{$x}}</p>"},
+		{name: "head parentheses of an if are inlined", src: "<p>{{if (and (eq .A true) (gt (len .X) 0) (not .C))}}x{{end}}</p>", want: "<p>{{if and (eq .A true) (gt (len .X) 0) (not .C)}}x{{end}}</p>"},
+		{name: "head parentheses of an else if are inlined", src: "{{if .B}}<p>b</p>{{else if (and (eq .A true) (not .B))}}<p>a</p>{{end}}", want: "{{if .B}}<p>b</p>{{else if and (eq .A true) (not .B)}}<p>a</p>{{end}}"},
+		{name: "head parentheses of a range are inlined", src: "{{range (slice .L 1)}}<p>{{.}}</p>{{end}}", want: "{{range slice .L 1}}<p>{{.}}</p>{{end}}"},
+		{name: "head parentheses of a with are inlined", src: `{{with (index .M "k")}}<p>{{.Name}}</p>{{end}}`, want: `{{with index .M "k"}}<p>{{.Name}}</p>{{end}}`},
+		{name: "head parentheses of a template call are inlined", src: `{{define "a"}}<p>{{.}}</p>{{end}}{{template "a" (printf "%s" .X)}}`, want: `{{define "a"}}<p>{{.}}</p>{{end}}{{template "a" printf "%s" .X}}`},
 		{name: "parens before a field chain are kept", src: `<p>{{(index .M "k").Name}}</p>`},
 		{name: "parens before a field chain lose their spaces", src: "<p>{{( .M ).k}}</p>", want: "<p>{{(.M).k}}</p>"},
 		{name: "template call", src: "{{define \"a\"}}<p>a</p>{{end}}{{template \"a\"  .}}", want: "{{define \"a\"}}<p>a</p>{{end}}{{template \"a\" .}}"},
@@ -169,9 +192,14 @@ func TestActionFormat(t *testing.T) {
 			want: "<div>\n\t{{printf \"%d\" (.X\n\t\t| printf \"%s\"\n\t\t| printf \"%s\"\n\t\t| len\n\t)\n\t}}\n</div>",
 		},
 		{
-			name: "a qualifying pipeline in head parentheses closes before the delimiter",
-			src:  "{{if (and (eq .A true) (eq .B true) (eq .C true))}}<p>x</p>{{end}}",
-			want: "{{if (and\n\t(eq .A true)\n\t(eq .B true)\n\t(eq .C true)\n)\n}}<p>x</p>{{end}}",
+			name: "a qualifying call in head parentheses is inlined and split",
+			src:  "{{if (and (eq .A true) (gt (len .X) 0) (not .C))}}<p>x</p>{{end}}",
+			want: "{{if and\n\t(eq .A true)\n\t(gt (len .X) 0)\n\t(not .C)\n}}<p>x</p>{{end}}",
+		},
+		{
+			name: "a qualifying pipeline in argument parentheses closes before the delimiter",
+			src:  "<div>\n{{not (and (eq .A true) (eq .B true) (eq .C true))}}\n</div>",
+			want: "<div>\n\t{{not (and\n\t\t(eq .A true)\n\t\t(eq .B true)\n\t\t(eq .C true)\n\t)\n\t}}\n</div>",
 		},
 		{
 			name: "split arguments split the stages too",
@@ -268,6 +296,9 @@ func TestActionFormat(t *testing.T) {
 			if !slices.Equal(in, out) {
 				t.Errorf("parse trees differ\n input: %q\noutput: %q", in, out)
 			}
+			if in, out := textTrees(t, tt.src, left, right), textTrees(t, got, left, right); !maps.Equal(in, out) {
+				t.Errorf("text/template trees differ\n input: %q\noutput: %q", in, out)
+			}
 			if tt.left != "" {
 				return // the oracle renders with the default delimiters
 			}
@@ -277,6 +308,81 @@ func TestActionFormat(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// textTrees parses src with text/template and returns each template's
+// tree as text/template prints it, with its text emptied (the formatter
+// reindents it) and after inlining the parentheses the formatter drops
+// (inlineHeadParens), so a source and its output compare equal under the
+// standard parser too.
+func textTrees(t *testing.T, src, left, right string) map[string]string {
+	t.Helper()
+	tmpl, err := texttemplate.New("t.gohtml").Delims(left, right).Parse(src)
+	if err != nil {
+		t.Fatalf("text/template Parse(%q): %v", src, err)
+	}
+	trees := make(map[string]string)
+	for _, tm := range tmpl.Templates() {
+		if tm.Tree == nil {
+			continue
+		}
+		inlineHeadParens(tm.Tree.Root)
+		trees[tm.Name()] = tm.Tree.Root.String()
+	}
+	return trees
+}
+
+// inlineHeadParens rewrites the pipelines under n as the formatter
+// prints them: a first command that is one parenthesized pipeline
+// without declarations is replaced by that pipeline's commands. It
+// empties text nodes on the way.
+func inlineHeadParens(n textparse.Node) {
+	switch n := n.(type) {
+	case *textparse.TextNode:
+		n.Text = nil
+	case *textparse.ListNode:
+		if n == nil {
+			return
+		}
+		for _, c := range n.Nodes {
+			inlineHeadParens(c)
+		}
+	case *textparse.ActionNode:
+		inlineHeadParens(n.Pipe)
+	case *textparse.IfNode:
+		inlineBranch(&n.BranchNode)
+	case *textparse.RangeNode:
+		inlineBranch(&n.BranchNode)
+	case *textparse.WithNode:
+		inlineBranch(&n.BranchNode)
+	case *textparse.TemplateNode:
+		if n.Pipe != nil {
+			inlineHeadParens(n.Pipe)
+		}
+	case *textparse.PipeNode:
+		for len(n.Cmds) > 0 && len(n.Cmds[0].Args) == 1 {
+			inner, ok := n.Cmds[0].Args[0].(*textparse.PipeNode)
+			if !ok || len(inner.Decl) > 0 || len(inner.Cmds) == 0 {
+				break
+			}
+			n.Cmds = append(slices.Clone(inner.Cmds), n.Cmds[1:]...)
+		}
+		for _, c := range n.Cmds {
+			for _, arg := range c.Args {
+				inlineHeadParens(arg)
+			}
+		}
+	case *textparse.ChainNode:
+		inlineHeadParens(n.Node)
+	}
+}
+
+func inlineBranch(b *textparse.BranchNode) {
+	inlineHeadParens(b.Pipe)
+	inlineHeadParens(b.List)
+	if b.ElseList != nil {
+		inlineHeadParens(b.ElseList)
 	}
 }
 

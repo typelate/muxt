@@ -22,7 +22,7 @@ var errActionUnread = errors.New("format: an action could not be read for printi
 // actionShapes describes, in source order, every action-bearing node of
 // root as its parse tree has it, positions and spacing aside: kind,
 // trim markers, names, declarations, commands and their arguments, with
-// literals as written. The parentheses printPipe drops (redundantParens)
+// literals as written. The parentheses printPipe drops (commands)
 // are dropped here too, so a source and its formatted output have the
 // same shapes. Each name is written as rename returns it, when rename is
 // not nil. It is independent of the printer: it reads the tree only.
@@ -154,12 +154,9 @@ func shapePipe(b *strings.Builder, p *template.PipeNode) {
 	if len(p.Decl) > 0 && p.IsAssign {
 		b.WriteString("assign ")
 	}
-	for i, c := range p.Commands {
+	for _, c := range commands(p) {
 		b.WriteString(" cmd(")
-		for j, arg := range c.Args {
-			if j == 0 && i == 0 && len(c.Args) == 1 {
-				arg = redundantParens(arg)
-			}
+		for _, arg := range c.Args {
 			shapeArg(b, arg)
 		}
 		b.WriteString(")")
@@ -196,28 +193,31 @@ func shapeArg(b *strings.Builder, n template.Node) {
 	}
 }
 
-// redundantParens returns the operand n stands for when n is a
-// parenthesized pipeline whose parentheses change nothing at the head
-// of the first command of a pipeline that has no other argument: a
-// pipeline without declarations holding one command of one argument
-// that is a field, variable, dot, constant or nil (itself perhaps
-// parenthesized so). text/template evaluates such a command the same
-// with or without them. A call (an identifier) keeps them, as does any
-// other place: as an argument, (.X) unwraps an any-typed nil that .X
-// passes as is, and a constant takes the parameter's type only bare; in
-// a later stage, parentheses refuse the piped value that a bare field
-// or variable takes as a method argument.
-func redundantParens(n template.Node) template.Node {
-	p, ok := n.(*template.PipeNode)
-	if !ok || len(p.Decl) > 0 || len(p.Commands) != 1 || len(p.Commands[0].Args) != 1 {
-		return n
+// commands returns pl's commands as the formatter prints them: while
+// the first command is one parenthesized pipeline without declarations,
+// with nothing piped into it, that pipeline's commands take its place.
+// text/template evaluates such a command by evaluating the inner
+// pipeline and going on with its value (evalCommand's *PipeNode case),
+// as it does with the inner commands inlined. Anywhere else parentheses
+// stay, as the evaluator treats them differently:
+//   - an argument, (.X) or (1) or (nil), goes through evalPipeline,
+//     which unwraps an any-typed nil that bare .X passes as is, gives a
+//     constant its default type where a bare one takes the parameter's,
+//     and is "nil is not a command" where bare nil is a nil value;
+//   - a later stage in parentheses refuses the piped value (notAFunction)
+//     that a bare command takes as its last argument;
+//   - a parenthesized pipeline with a field chain, (index .M "k").Name;
+//   - one that declares a variable, ($y := .X).
+func commands(pl *template.PipeNode) []*template.CommandNode {
+	cmds := pl.Commands
+	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
+		inner, ok := cmds[0].Args[0].(*template.PipeNode)
+		if !ok || len(inner.Decl) > 0 || len(inner.Commands) == 0 {
+			break
+		}
+		cmds = append(slices.Clone(inner.Commands), cmds[1:]...)
 	}
-	switch inner := redundantParens(p.Commands[0].Args[0]); inner.(type) {
-	case *template.FieldNode, *template.VariableNode, *template.DotNode, *template.NilNode,
-		*template.BoolNode, *template.NumberNode, *template.StringNode:
-		return inner
-	}
-	return n
+	return cmds
 }
 
 // actionToken is one action-bearing token of the source: an action, a
@@ -478,7 +478,7 @@ func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string,
 // printToken returns tok printed from its parse tree: its delimiters
 // and trim markers, one space between words, " | " between pipeline
 // stages, literals and names as written, and the parentheses the
-// grammar needs (redundantParens). A pipeline the source breaks between
+// grammar needs (commands). A pipeline the source breaks between
 // stages and a command the source breaks between arguments are laid out
 // one stage or argument per line, each continuation line one tab deeper
 // than the line it continues (indent is the indentation of the line the
@@ -553,43 +553,45 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
 			p.b.WriteString(" := ")
 		}
 	}
-	split, splitArgs := p.stagesSplit(pl), false
-	for i, c := range pl.Commands {
+	cmds := commands(pl)
+	split, splitArgs := p.stagesSplit(cmds), false
+	for i, c := range cmds {
 		switch {
 		case i == 0 && split:
 			// The first command's arguments nest under the stage
 			// lines, so a later "|" never reads as an argument.
-			splitArgs = p.command(c, level+1, true)
+			splitArgs = p.command(c, level+1)
 		case i == 0:
-			splitArgs = p.command(c, level, true)
+			splitArgs = p.command(c, level)
 		case split:
 			p.newline(level + 1)
 			p.b.WriteString("| ")
-			splitArgs = p.command(c, level+1, false) || splitArgs
+			splitArgs = p.command(c, level+1) || splitArgs
 		default:
 			p.b.WriteString(" | ")
-			splitArgs = p.command(c, level, false) || splitArgs
+			splitArgs = p.command(c, level) || splitArgs
 		}
 	}
 	return split || splitArgs
 }
 
-// stagesSplit reports whether pl's stages go one per line: it has four
+// stagesSplit reports whether a pipeline's stages, cmds (commands), go
+// one per line: it has four
 // or more (when splitting is automatic), the source breaks between two
 // of them, or it has two or more and one command's arguments split.
-func (p *actionPrinter) stagesSplit(pl *template.PipeNode) bool {
-	if p.auto && len(pl.Commands) >= 4 {
+func (p *actionPrinter) stagesSplit(cmds []*template.CommandNode) bool {
+	if p.auto && len(cmds) >= 4 {
 		return true
 	}
-	for i := 1; i < len(pl.Commands); i++ {
-		if strings.Contains(p.between(pl.Commands[i-1], pl.Commands[i]), "\n") {
+	for i := 1; i < len(cmds); i++ {
+		if strings.Contains(p.between(cmds[i-1], cmds[i]), "\n") {
 			return true
 		}
 	}
-	if len(pl.Commands) < 2 {
+	if len(cmds) < 2 {
 		return false
 	}
-	return slices.ContainsFunc(pl.Commands, p.argsSplit)
+	return slices.ContainsFunc(cmds, p.argsSplit)
 }
 
 // argsSplit reports whether c's arguments go one per line: it has three
@@ -621,17 +623,13 @@ func (p *actionPrinter) argsSplit(c *template.CommandNode) bool {
 	return false
 }
 
-// command prints c, whose line is at level; first reports that c is
-// the first command of its pipeline. It reports whether c's arguments
-// split.
-func (p *actionPrinter) command(c *template.CommandNode, level int, first bool) bool {
+// command prints c, whose line is at level. It reports whether c's
+// arguments split.
+func (p *actionPrinter) command(c *template.CommandNode, level int) bool {
 	split := p.argsSplit(c)
 	for i, arg := range c.Args {
 		switch {
 		case i == 0:
-			if first && len(c.Args) == 1 {
-				arg = redundantParens(arg)
-			}
 			p.operand(arg, level)
 		case split:
 			p.newline(level + 1)
