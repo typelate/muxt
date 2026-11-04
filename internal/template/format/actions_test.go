@@ -331,7 +331,7 @@ func TestActionUnread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := newEmitter("<p>{{ .X ]]</p>", 0, tree.Root, "{{", "}}", classes{}, nil, nil, nil)
+	e := newEmitter("<p>{{ .X ]]</p>", 0, tree.Root, "{{", "}}", classes{}, nil, nil, nameRule{})
 	if _, err := e.apply(); !errors.Is(err, errActionUnread) {
 		t.Errorf("apply() error = %v, want errActionUnread", err)
 	}

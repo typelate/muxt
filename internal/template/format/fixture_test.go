@@ -409,7 +409,7 @@ func maskActions(src string) string {
 	if err != nil {
 		return src
 	}
-	e := newEmitter(src, 0, tree.Root, "{{", "}}", classes{}, nil, nil, nil)
+	e := newEmitter(src, 0, tree.Root, "{{", "}}", classes{}, nil, nil, nameRule{})
 	masked := []byte(src)
 	for _, tok := range e.actions {
 		for i := tok.start; i < tok.end; i++ {

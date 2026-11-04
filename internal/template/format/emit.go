@@ -75,7 +75,7 @@ type openOptional struct {
 
 // newEmitter returns the emitter of root, whose source is src starting
 // at position base, written with the delimiters left and right.
-func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives, keep func(string) bool) *emitter {
+func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives, names nameRule) *emitter {
 	e := &emitter{
 		src:             src,
 		base:            base,
@@ -100,7 +100,7 @@ func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right s
 			e.printed = append(e.printed, tok)
 		}
 	}
-	e.planRenames(root, keep)
+	e.planRenames(root, names)
 	return e
 }
 

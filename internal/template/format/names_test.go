@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
 	"github.com/typelate/muxt/internal/template/lex"
@@ -24,6 +25,9 @@ func TestDefineNames(t *testing.T) {
 		src  string
 		want string // "" means unchanged
 		keep func(string) bool
+		// context is another template of the package (Styles), whose
+		// defines a call may resolve to.
+		context string
 	}{
 		{name: "method pattern and call", src: `{{define "GET  /x/{id}   M( ctx , id )"}}<p>a</p>{{end}}`, want: `{{define "GET /x/{id} M(ctx, id)"}}<p>a</p>{{end}}`},
 		{name: "call arguments", src: `{{define "POST /x M(ctx,form)"}}<p>a</p>{{end}}`, want: `{{define "POST /x M(ctx, form)"}}<p>a</p>{{end}}`},
@@ -39,7 +43,12 @@ func TestDefineNames(t *testing.T) {
 		{name: "host with spaces", src: `{{define " GET /x"}}<p>a</p>{{end}}`},
 		{name: "lowercase method", src: `{{define "get  /x"}}<p>a</p>{{end}}`},
 		{name: "template call with its define", src: `{{define "GET  /x  M(ctx)"}}<p>a</p>{{end}}{{template "GET  /x  M(ctx)" .}}`, want: `{{define "GET /x M(ctx)"}}<p>a</p>{{end}}{{template "GET /x M(ctx)" .}}`},
-		{name: "template call alone", src: `<div>{{template "GET  /x  M(ctx)" .}}</div>`, want: `<div>{{template "GET /x M(ctx)" .}}</div>`},
+		// A call no define of the file or package spells exactly is
+		// unresolved (an execution error, or a template registered
+		// from Go): its canonical spelling may name another template.
+		{name: "unresolved call", src: `<div>{{template "GET  /x  M( ctx )"}}</div>`},
+		{name: "unresolved call beside the define of its canonical form", src: `{{define "T / Show(ctx,id)"}}{{end}}{{template "T / Show(ctx,id )"}}`, want: `{{define "T / Show(ctx, id)"}}{{end}}{{template "T / Show(ctx,id )"}}`},
+		{name: "call resolved in the context", src: `<div>{{template "GET  /x  M(ctx)" .}}</div>`, want: `<div>{{template "GET /x M(ctx)" .}}</div>`, context: `{{define "GET  /x  M(ctx)"}}<p>a</p>{{end}}`},
 		{name: "block", src: `{{block "GET  /x M( ctx )" .}}<p>b</p>{{end}}`, want: `{{block "GET /x M(ctx)" .}}<p>b</p>{{end}}`},
 		{name: "call that does not parse", src: `{{define "GET  /x M(ctx,"}}<p>a</p>{{end}}`},
 		{name: "handler that is not a call", src: `{{define "GET  /x M"}}<p>a</p>{{end}}`},
@@ -62,6 +71,9 @@ func TestDefineNames(t *testing.T) {
 			var opts []Option
 			if tt.keep != nil {
 				opts = append(opts, KeepNames(tt.keep))
+			}
+			if tt.context != "" {
+				opts = append(opts, Styles(analysis.WhitespaceOptions{Context: parseTrees(t, []string{tt.context})}))
 			}
 			got, err := Source("t.gohtml", tt.src, opts...)
 			if err != nil {
@@ -180,7 +192,10 @@ func TestDefineNamesAcrossFiles(t *testing.T) {
 			}
 			gotCalls := callsIn
 			if tt.outside == "" {
-				if gotCalls, err = Source("calls.gohtml", calls, keep); err != nil {
+				// As muxt fmt does, the package's other templates are
+				// the context, where the call resolves.
+				context := Styles(analysis.WhitespaceOptions{Context: parseTrees(t, []string{defines})})
+				if gotCalls, err = Source("calls.gohtml", calls, keep, context); err != nil {
 					t.Fatalf("Source(calls) error: %v", err)
 				}
 			}
