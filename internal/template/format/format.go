@@ -119,7 +119,7 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 	// The elements made unsure may hold call sites.
 	modes := callSiteModes(sites, styles, floor)
 	verbatimDefines(list, modes, bodies)
-	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classifyModes(list, styles, modes), bodies, dir, f.keep)
+	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classifyModes(list, styles, modes), bodies, dir, f.nameRule())
 	e.edits = f.testEdits
 	f.renames = e.renames
 	return e.emit(list)
@@ -129,9 +129,16 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 // base, with only its actions printed (printToken): the whitespace
 // between them is as written.
 func (f *formatter) actionsOnly(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
-	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir, f.keep)
+	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir, f.nameRule())
 	f.renames = e.renames
 	return e.apply()
+}
+
+// nameRule is what the emitter renames names by: KeepNames, and the
+// package's other templates (the Styles context), whose defines a call
+// may resolve to.
+func (f *formatter) nameRule() nameRule {
+	return nameRule{keep: f.keep, context: f.whitespace.Context}
 }
 
 // callSiteTrees returns the trees whose {{template}} calls and {{block}}s

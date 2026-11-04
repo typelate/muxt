@@ -2,6 +2,7 @@ package format
 
 import (
 	"go/printer"
+	"maps"
 	"strconv"
 	"strings"
 	"unicode"
@@ -132,9 +133,17 @@ func KeptNames(run, outside []*template.Tree) map[string]bool {
 // when keep reports it, when two define or block names of root share
 // its canonical form (KeptNames), or when a token naming it, or a
 // spelling of it, is left as written (a muxt:fmt region, say), so every
-// reference in the file changes together or none does.
-func (e *emitter) planRenames(root *template.ListNode, keep func(string) bool) {
+// reference in the file changes together or none does. A {{template}}
+// call is renamed only with the define or block it resolves to: one
+// whose exact spelling neither root nor context defines (an execution
+// error, or a template registered from Go) is as written, since its
+// canonical spelling may name another template.
+func (e *emitter) planRenames(root *template.ListNode, names nameRule) {
 	kept := KeptNames([]*template.Tree{{Root: root}}, nil)
+	defined := definedNames(root)
+	for _, t := range names.context {
+		maps.Copy(defined, definedNames(t.Root))
+	}
 	for _, name := range e.unprinted {
 		if c, ok := canonicalName(name); ok && c != name {
 			kept[c] = true
@@ -149,11 +158,11 @@ func (e *emitter) planRenames(root *template.ListNode, keep func(string) bool) {
 		}
 	}
 	for _, tok := range e.printed {
-		if !tok.named {
+		if !tok.named || tok.call && !defined[tok.name] {
 			continue
 		}
 		c, ok := canonicalName(tok.name)
-		if !ok || c == tok.name || kept[c] || keep != nil && keep(c) {
+		if !ok || c == tok.name || kept[c] || names.keep != nil && names.keep(c) {
 			continue
 		}
 		if e.renames == nil {
@@ -162,6 +171,14 @@ func (e *emitter) planRenames(root *template.ListNode, keep func(string) bool) {
 		e.renames[tok.name] = c
 		tok.head = strings.TrimSuffix(tok.head, tok.literal) + quoteLike(tok.literal, c)
 	}
+}
+
+// nameRule is what planRenames renames names by: the names KeepNames
+// keeps, and the package's other templates, whose defines and blocks
+// {{template}} calls may resolve to.
+type nameRule struct {
+	keep    func(canonical string) bool
+	context []*template.Tree
 }
 
 // renamed returns the rename actionShapes reads a source's names with,

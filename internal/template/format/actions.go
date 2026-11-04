@@ -232,8 +232,9 @@ type actionToken struct {
 	// plain action).
 	head string
 	// named reports a template, block or define token: name is the
-	// name it parses to and literal the name literal as written.
-	named         bool
+	// name it parses to and literal the name literal as written; call
+	// reports a {{template}} call.
+	named, call   bool
 	name, literal string
 	pipe          *template.PipeNode // nil when the token has none
 	// asWritten reports that the token is copied as it is: it is in a
@@ -349,7 +350,7 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 			}
 			return
 		}
-		tok.name, tok.pipe = name, pipe
+		tok.name, tok.pipe, tok.call = name, pipe, keyword == "template"
 		e.actions = append(e.actions, tok)
 	}
 	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
