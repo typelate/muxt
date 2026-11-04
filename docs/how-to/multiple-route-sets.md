@@ -13,7 +13,7 @@ var publicTmpl = template.Must(template.Must(template.ParseFS(templateSource, "s
 var adminTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "admin/*.gohtml"))
 ```
 
-Both generated files share the package, so every default identifier is renamed with its `--output-*` flag ([flags](../reference/cli.md#flags)): the routes function, file, receiver interface, template data type, and paths type (the route and route builder types are named after the paths type: `PublicPathsRoute` and `PublicPathsRouteBuilder` here); add `--output-sse-template-data-type` when both sets have `sse` routes. Check each set separately: `muxt check --use-templates-variable=publicTmpl` and again for `adminTmpl`. One run with two `--use-templates-variable` flags merges both sets into one routes function ([multiple templates variables](../reference/templates-variable.md#multiple-template-variables)); two runs keep them apart.
+Both generated files share the package, so every default identifier is renamed with its `--output-*` flag ([flags](../reference/cli.md#flags)): the routes function, file, receiver interface, template data type, and paths type; add `--output-sse-template-data-type` when both sets have `sse` routes. Check each set separately: `muxt check --use-templates-variable=publicTmpl` and again for `adminTmpl`. One run with two `--use-templates-variable` flags merges both sets into one routes function ([multiple templates variables](../reference/templates-variable.md#multiple-template-variables)); two runs keep them apart.
 
 Register each set with its own receiver, with your own constructors:
 
@@ -23,5 +23,9 @@ AdminRoutes(mux, NewAdminHandler(db, adminLogger))
 ```
 
 Each receiver interface lists only the methods its templates call.
+
+## Edge cases
+
+- **Route and route builder types** are named after the paths type: `PublicPathsRoute` and `PublicPathsRouteBuilder` here.
 
 The full test is [reference_multiple_generated_routes.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes.txt).

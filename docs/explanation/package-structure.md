@@ -4,7 +4,7 @@
 
 ## Why package-level
 
-Muxt reads the package for the variable named by `--use-templates-variable` (default `templates`) and evaluates its initializer statically, a chain of the calls listed in [Templates Variable](../reference/templates-variable.md). A variable built inside a function has no initializer, so muxt cannot see it. For the same reason `Funcs` needs a literal `template.FuncMap`. Templates need not be files: `template.New("GET / List()").Parse(...)` works ([reference_import_with_v2_module.txt](../../cmd/muxt/testdata/reference_import_with_v2_module.txt)).
+Muxt reads the package for the variable named by `--use-templates-variable` (default `templates`) and evaluates its initializer statically, a chain of the calls listed in [Templates Variable](../reference/templates-variable.md). A variable built inside a function has no initializer, so muxt cannot see it.
 
 ## What embed allows
 
@@ -32,3 +32,8 @@ var templates = template.Must(template.ParseFS(templatesDir, "*.gohtml", "*/*.go
 ```
 
 A bare directory name, `//go:embed templates`, embeds the tree recursively, but `ParseFS` still needs a glob per level.
+
+## Edge cases
+
+- **`Funcs` needs a literal.** muxt reads `Funcs` statically too, so it needs a literal `template.FuncMap`.
+- **Templates need not be files.** `template.New("GET / List()").Parse(...)` works ([reference_import_with_v2_module.txt](../../cmd/muxt/testdata/reference_import_with_v2_module.txt)).

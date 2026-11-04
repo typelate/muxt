@@ -128,13 +128,13 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 |--------|---------|
 | `KILL` | A test failed. |
 | `MISS` | Every test passed: a missing assertion, an untested branch, or an equivalent mutant whose output cannot differ. |
-| `SKIP` | Not run: the mutant does not parse or type check (else its render error would count as a kill), is `condition-dead`, exceeds `--max-cases`, or is in a node no test reaches. See [coverage pre-pass](#coverage-pre-pass). [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
+| `SKIP` | Not run: the mutant does not parse or type check, is `condition-dead`, exceeds `--max-cases`, or is in a node no test reaches. See [coverage pre-pass](#coverage-pre-pass). [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
 | `FLAKY` | A test failed, then passed when run again alone (`--workers` above 1 only). Neither a kill nor a miss; the reason names the tests. See [flaky kills](#flaky-kills). |
 | `PEND` | Enumerated but not run (`--dry-run`). |
 
 ### Flaky kills
 
-Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed (all the tests when a package failed without naming one, and exactly the tests `--run` or a `-run` after `--` selected when you gave one). If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
+Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed. If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
 
 ```text
     FLAKY 1:39 if-true (TestGreeting failed beside other mutants, passed when run alone)
@@ -301,6 +301,8 @@ A run adds `seconds` per result and a top-level `baseline` object with `passed` 
 - Each mutant is a full `go test -count=1` run.
 - A source parsed with `Delims` that holds no `{{define}}` is read with the default delimiters.
 - **`{{block}}` is never dropped.** `template-drop` applies to `{{template}}` calls only.
+- **Broken mutants are skipped.** A mutant that does not parse or type check is not run, because its render error would count as a kill.
+- **Which tests a recheck runs.** When a package failed without naming a test, the repeat runs all the tests. When you gave `--run` or a `-run` after `--`, it runs exactly the tests that flag selected.
 - **A repeat that cannot run** keeps the kill and says why in its reason.
 - **The JSON `flaky` count.** `--format json` adds a top-level `flaky` count only when it is not zero.
 - **Type aliases under `--diff`.** Types are compared by name, looking through type aliases wherever they appear, the type arguments of a generic dot included: retargeting `type Page = page.Data` to another type counts as a new type of dot.

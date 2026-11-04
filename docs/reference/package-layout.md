@@ -11,7 +11,7 @@ internal/hypertext/
 ├── errors.go                  # domain errors with StatusCode() methods
 ├── portfolio.go               # receiver methods, one file per domain
 ├── portfolio_list.gohtml      # route templates, prefixed by domain
-├── _header.gohtml             # shared partials, prefixed with _ (a bare-directory //go:embed skips them; use a glob or all:)
+├── _header.gohtml             # shared partials, prefixed with _
 ├── template_routes.go         # generated
 ├── portfolio_list_template_routes_gen.go   # generated with --output-multiple-files
 ├── portfolio_test.go          # receiver tests against fakes, route tests through httptest
@@ -27,3 +27,7 @@ internal/hypertext/
 | `portfolio_test.go` | [Structure a project for testing](../how-to/receiver-package-and-testing.md) |
 
 Commit the generated files.
+
+## Edge cases
+
+- **Partials prefixed with `_`.** A bare-directory `//go:embed` skips them, so embed them with a glob or `all:`.

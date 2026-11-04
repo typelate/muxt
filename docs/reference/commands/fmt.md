@@ -44,7 +44,7 @@ A problem with one file is printed on stderr and the other files are still forma
 
 ## What it changes
 
-`muxt fmt` is a reindenter. Every line that exists in the source still exists in the output, with the same text after its indentation, except inside actions ([Actions](#actions)). The one thing that changes is how much whitespace comes before that text (and the whitespace after it, which is removed).
+`muxt fmt` is a reindenter. Every line that exists in the source still exists in the output, with the same text after its indentation, except inside actions ([Actions](#actions)). The one thing that changes is how much whitespace comes before that text. The whitespace after it is removed.
 
 The safety rule, in terms of what a reader of the page could notice: whitespace between two pieces of content can change in amount, never in whether it exists and never in kind. A gap with no whitespace stays empty. A gap with spaces and no line break stays a gap with no line break. A gap with a line break keeps at least one line break. So a space the browser shows between two words is still there, and two inline elements that touch still touch. `fmt` checks this against the HTML parser's own tree, so a gap is judged by the element the browser puts it in, not by where it sits in the source ([reference_fmt_write.txt](../../../cmd/muxt/testdata/reference_fmt_write.txt)).
 

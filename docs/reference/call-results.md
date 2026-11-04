@@ -87,7 +87,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Header key value` | the data, for chaining |
 | `.Redirect url code` | the data and an error when `code` is outside 300 to 399 |
 | `.RedirectMultipleChoices url`, `.RedirectMovedPermanently url`, `.RedirectFound url`, `.RedirectSeeOther url` | `.Redirect` with 300, 301, 302, or 303 |
-| `.String` | `""`: a stray `{{.}}` and a chained setter such as `{{.Header "HX-Trigger" "saved"}}` print nothing, and `muxt check` does not flag `{{.}}`. Print `{{.Result}}` for the value |
+| `.String` | `""`: a stray `{{.}}` and a chained setter such as `{{.Header "HX-Trigger" "saved"}}` print nothing. Print `{{.Result}}` for the value |
 
 ```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{if .Request.Header.Get "HX-Request"}}{{.Result.Name}}{{else}}<html>...</html>{{end}}{{end}}
@@ -150,6 +150,7 @@ A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, g
 ## Edge cases
 
 - **A concrete type that implements `error`.** A lone result of such a type is the `T` shape: the value is `.Result`.
+- **A stray `{{.}}` is not flagged.** `muxt check` does not report `{{.}}`, which prints nothing because `.String` is `""`.
 - **Selecting from a route that takes arguments.** Call the `.Route` method in parentheses before selecting from its result: `{{(.Route.GetUser .Result.ID).Method}}`. `{{or .Route.Index.Method "GET"}}` falls back for a pattern with no method.
 - **Set, not add.** `.Header` and every `HX*` setter call `Header().Set`, so a second call with the same key replaces the first and the last call wins. To trigger several events, pass them in one call, as comma-separated names (`{{.HXTrigger "saved, closed"}}`) or as one JSON object when an event needs a detail: ``{{.HXTrigger `{"saved": null, "toast": "Saved"}`}}``.
 - **Same method, different arguments.** Only the method's name is compared, so routes that pass different arguments to it still collide.
