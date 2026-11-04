@@ -98,6 +98,8 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 
 With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`, `.HXPushURL`, `.HXRedirect`, `.HXRefresh`, `.HXReplaceURL`, `.HXReswap`, `.HXRetarget`, `.HXReselect`, `.HXTrigger`, `.HXTriggerAfterSettle` and `.HXTriggerAfterSwap`, which chain and print nothing, and the request readers `.HXBoosted`, `.HXCurrentURL`, `.HXHistoryRestoreRequest`, `.HXPrompt`, `.HXRequest`, `.HXTargetElementID`, `.HXTriggerName` and `.HXTriggerElementID`.
 
+`.Header` and every `HX*` setter call `Header().Set`, so a second call with the same key replaces the first and the last call wins. To trigger several events, pass them in one call, as comma-separated names (`{{.HXTrigger "saved, closed"}}`) or as one JSON object when an event needs a detail: ``{{.HXTrigger `{"saved": null, "toast": "Saved"}`}}``.
+
 With `--output-datastar`, `TemplateData` also has the request reader `.DatastarRequest`, true when the request carries `Datastar-Request: true`, which every Datastar `@get`, `@post`, `@put`, `@patch` and `@delete` action sends ([reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt)). `SSETemplateData` does not have it: a Datastar stream is always opened by an action.
 
 ### Route methods

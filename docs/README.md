@@ -20,6 +20,8 @@ The [README](../README.md) introduces muxt.
 
 - [Structure a project for testing](how-to/receiver-package-and-testing.md)
 - [Build a Datastar live view](how-to/datastar-live-view.md)
+- [Serve full pages and fragments from one route](how-to/full-page-and-fragments.md): layout partials, `.HXRequest`, `Vary`
+- [Handle expired sessions in htmx requests](how-to/expired-sessions.md): middleware, heartbeats, a lock dialog
 - [Extend TemplateData](how-to/extend-template-data.md): request-aware template helpers
 - [Map domain errors to status codes](how-to/domain-error-status-codes.md)
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
@@ -44,6 +46,7 @@ The [README](../README.md) introduces muxt.
 - [Call Results](reference/call-results.md): what a method may return and how it renders
 - [Templates Variable](reference/templates-variable.md): how muxt finds templates
 - [Type Checking](reference/type-checking.md): what `muxt check` verifies and what it cannot
+- [Template Comments](reference/template-comments.md): which comments reach the response, and why to use `{{/* */}}`
 - [Package Layout](reference/package-layout.md)
 - [Template Engine](reference/template-engine.md): the public `template` packages, versioned with the CLI
 - [Known Issues](reference/known-issues.md)

@@ -234,7 +234,6 @@ ls cmd/muxt/testdata/err_*.txt
 ### Documentation
 - `docs/reference/` — Feature reference
 - `docs/explanation/` — Design philosophy
-- `docs/skills/` — Claude Code skills for AI assistants
 
 ## Important Implementation Details
 
