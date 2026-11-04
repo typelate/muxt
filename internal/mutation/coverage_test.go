@@ -439,14 +439,20 @@ func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
 
 // slowTest takes longer than a plan does, so a run that runs the tests
 // before failing to plan shows it.
-const slowTest = `package server
+// markingTest leaves a file in its package directory so a test can tell
+// whether the runner ran the tests at all.
+const markingTest = `package server
 
 import (
+	"os"
 	"testing"
-	"time"
 )
 
-func TestSlow(t *testing.T) { time.Sleep(4 * time.Second) }
+func TestMarks(t *testing.T) {
+	if err := os.WriteFile("tests_ran.txt", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 `
 
 // TestRunPlansBeforeThePrePass states that a run that cannot plan says so
@@ -463,17 +469,17 @@ func TestRunPlansBeforeThePrePass(t *testing.T) {
 	}{
 		{
 			name:   "a template pattern matching nothing",
-			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "slow_test.go": slowTest},
+			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "marking_test.go": markingTest},
 			config: func(c *Configuration) { c.TemplatePattern = regexp.MustCompile(`^nomatch$`) },
 		},
 		{
 			name:   "no call sites",
-			files:  map[string]string{"go.mod": goMod, "template.go": strings.Replace(greetingGo, "return templates.ExecuteTemplate(w, \"greeting\", greeting)", "return nil", 1), "slow_test.go": slowTest},
+			files:  map[string]string{"go.mod": goMod, "template.go": strings.Replace(greetingGo, "return templates.ExecuteTemplate(w, \"greeting\", greeting)", "return nil", 1), "marking_test.go": markingTest},
 			config: func(*Configuration) {},
 		},
 		{
 			name:   "a templates variable that does not exist",
-			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "slow_test.go": slowTest},
+			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "marking_test.go": markingTest},
 			config: func(c *Configuration) { c.TemplatesVariables = []string{"missing"} },
 		},
 	} {
@@ -482,11 +488,9 @@ func TestRunPlansBeforeThePrePass(t *testing.T) {
 			dir := module(t, tt.files)
 			config := greetingConfig()
 			tt.config(&config)
-			started := time.Now()
 			_, err := Run(t.Context(), config, dir, nil)
-			took := time.Since(started)
 			require.Error(t, err, "Run")
-			assert.Less(t, took, 4*time.Second, "Run returned %v after %s, as if it had run the tests", err, took)
+			assert.NoFileExists(t, filepath.Join(dir, "tests_ran.txt"), "Run returned %v after running the tests", err)
 		})
 	}
 }
