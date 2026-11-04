@@ -20,8 +20,9 @@ Open http://localhost:8000.
 
 1. [template.gohtml](template.gohtml): route templates plus the `todo-item`, `footer`, and `error` fragments.
 2. [main.go](main.go): `Server` and its `Load` and `Save` methods.
-3. [template_routes_test.go](template_routes_test.go): tests through the generated handlers.
-4. [template_test.go](template_test.go): `muxt check` run as a test.
+3. [template_data.go](template_data.go): the `Item` method on `TemplateData`, which hands `todo-item` a todo together with the route paths ([extend TemplateData](../../how-to/extend-template-data.md)).
+4. [template_routes_test.go](template_routes_test.go): tests through the generated handlers.
+5. [template_test.go](template_test.go): `muxt check` run as a test.
 
 ## Routes
 
@@ -35,5 +36,7 @@ Open http://localhost:8000.
 | `POST /todos/clear-completed ClearCompleted()` | `ClearCompleted() TodoListChange` |
 
 `ListTodos` renders through `execute` while holding the mutex, so the page sees one consistent snapshot ([the `execute` callback](../../reference/call-results.md#the-execute-callback)).
+
+Every URL in the templates comes from `.Path`, so a changed route pattern changes the links with it and `muxt check` rejects a call to a route that no longer exists. `footer` takes the route's `TemplateData`, so it reads `.Result.ItemsLeft` and `.Path.ClearCompleted`; `muxt check` checks it once per calling route, against that route's result type. `todo-item` is called inside `{{range}}`, where dot is a `Todo`, so the route passes `$.Item .` instead.
 
 Every successful mutation response ends with the `footer` fragment; its `hx-swap-oob="true"` updates the items-left count and filter links with the list. `ToggleTodo` on an unknown id sets [`{{.StatusCode 404}}`](../../reference/call-results.md#status-code-control) and renders the `error` fragment; the checkbox and delete button carry `hx-target-4*="#error"` from the `response-targets` extension, since stock htmx does not swap 4xx bodies. The banner's `data-remove-me="5s"` from the `remove-me` extension clears it.

@@ -23,10 +23,10 @@
 <li id="todo-{{.ID}}" class="{{if .Done}}completed{{end}}">
 	<div class="view">
 		<input class="toggle" type="checkbox" {{if .Done}}checked{{end}}
-		       hx-patch="/todos/{{.ID}}" hx-target="#todo-{{.ID}}" hx-swap="outerHTML"
+		       hx-patch="{{.Path.ToggleTodo .ID}}" hx-target="#todo-{{.ID}}" hx-swap="outerHTML"
 		       hx-target-4*="#error" hx-swap-4*="innerHTML">
 		<label>{{.Title}}</label>
-		<button class="destroy" hx-delete="/todos/{{.ID}}" hx-target="#todo-{{.ID}}" hx-swap="delete"
+		<button class="destroy" hx-delete="{{.Path.DeleteTodo .ID}}" hx-target="#todo-{{.ID}}" hx-swap="delete"
 		        hx-target-4*="#error" hx-swap-4*="innerHTML"></button>
 	</div>
 </li>
@@ -34,13 +34,13 @@
 
 {{define "footer"}}
 <footer id="footer" class="footer" hx-swap-oob="true">
-	<span class="todo-count"><strong>{{.ItemsLeft}}</strong> {{if eq .ItemsLeft 1}}item{{else}}items{{end}} left</span>
+	<span class="todo-count"><strong>{{.Result.ItemsLeft}}</strong> {{if eq .Result.ItemsLeft 1}}item{{else}}items{{end}} left</span>
 	<ul class="filters">
-		<li><a href="/" class="{{if eq .Filter ""}}selected{{end}}">All</a></li>
-		<li><a href="/?filter=active" class="{{if eq .Filter "active"}}selected{{end}}">Active</a></li>
-		<li><a href="/?filter=completed" class="{{if eq .Filter "completed"}}selected{{end}}">Completed</a></li>
+		<li><a href="{{.Path.ListTodos}}" class="{{if eq .Result.Filter ""}}selected{{end}}">All</a></li>
+		<li><a href="{{.Path.ListTodos}}?filter=active" class="{{if eq .Result.Filter "active"}}selected{{end}}">Active</a></li>
+		<li><a href="{{.Path.ListTodos}}?filter=completed" class="{{if eq .Result.Filter "completed"}}selected{{end}}">Completed</a></li>
 	</ul>
-	{{if .HasCompleted}}<button class="clear-completed" hx-post="/todos/clear-completed" hx-target="#todo-list" hx-swap="innerHTML">Clear completed</button>{{end}}
+	{{if .Result.HasCompleted}}<button class="clear-completed" hx-post="{{.Path.ClearCompleted}}" hx-target="#todo-list" hx-swap="innerHTML">Clear completed</button>{{end}}
 </footer>
 {{end}}
 
@@ -57,47 +57,47 @@
 		<header class="header">
 			<h1>todos</h1>
 			<div id="error"></div>
-			<form hx-post="/todos" hx-target="#todo-list" hx-swap="beforeend" hx-on::after-request="if(event.detail.successful) this.reset()">
+			<form hx-post="{{.Path.CreateTodo}}" hx-target="#todo-list" hx-swap="beforeend" hx-on::after-request="if(event.detail.successful) this.reset()">
 				<input class="new-todo" name="todo" placeholder="What needs to be done?" autofocus>
 			</form>
 		</header>
 		<section class="main">
 			<input id="toggle-all" class="toggle-all" type="checkbox" {{if .Result.AllDone}}checked{{end}}
-			       hx-post="/todos/toggle-all" hx-target="#todo-list" hx-swap="innerHTML">
+			       hx-post="{{.Path.ToggleAll}}" hx-target="#todo-list" hx-swap="innerHTML">
 			<label for="toggle-all">Mark all as complete</label>
 			<ul id="todo-list" class="todo-list">
-				{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
+				{{range .Result.Todos}}{{template "todo-item" $.Item .}}{{end}}
 			</ul>
 		</section>
-		{{template "footer" .Result}}
+		{{template "footer" .}}
 	</section>
 </body>
 </html>
 {{end}}
 
 {{define "POST /todos CreateTodo(form)"}}
-{{template "todo-item" .Result.Todo}}
-{{template "footer" .Result}}
+{{template "todo-item" .Item .Result.Todo}}
+{{template "footer" .}}
 {{end}}
 
 {{define "PATCH /todos/{id} ToggleTodo(id)"}}
 {{- if .Err}}{{.StatusCode 404}}{{template "error" .Err}}
 {{- else}}
-{{template "todo-item" .Result.Todo}}
-{{template "footer" .Result}}
+{{template "todo-item" .Item .Result.Todo}}
+{{template "footer" .}}
 {{- end}}
 {{end}}
 
 {{define "DELETE /todos/{id} DeleteTodo(id)"}}
-{{template "footer" .Result}}
+{{template "footer" .}}
 {{end}}
 
 {{define "POST /todos/toggle-all ToggleAll()"}}
-{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
-{{template "footer" .Result}}
+{{range .Result.Todos}}{{template "todo-item" $.Item .}}{{end}}
+{{template "footer" .}}
 {{end}}
 
 {{define "POST /todos/clear-completed ClearCompleted()"}}
-{{range .Result.Todos}}{{template "todo-item" .}}{{end}}
-{{template "footer" .Result}}
+{{range .Result.Todos}}{{template "todo-item" $.Item .}}{{end}}
+{{template "footer" .}}
 {{end}}

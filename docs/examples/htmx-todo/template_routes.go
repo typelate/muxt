@@ -151,10 +151,6 @@ func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePa
 			defaultStatusCode = http.StatusNoContent
 		}
 		statusCode := cmp.Or(td.statusCode, td.errStatusCode, defaultStatusCode)
-		if td.redirectURL != "" {
-			http.Redirect(response, request, td.redirectURL, statusCode)
-			return
-		}
 		if contentType := response.Header().Get("content-type"); contentType == "" {
 			response.Header().Set("content-type", "text/html; charset=utf-8")
 		}
