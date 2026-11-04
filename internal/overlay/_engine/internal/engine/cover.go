@@ -103,6 +103,66 @@ func (cp *CoverProfile) WriteTo(w io.Writer) (int64, error) {
 	return total, nil
 }
 
+// WriteNewlyCovered writes a line for each executed block of the profile's
+// trees that is not yet in written, then adds those blocks to written. It
+// is for exporting coverage incrementally: mode set is monotone, so a block
+// needs writing only once, the first time its counter is nonzero.
+//
+// Lines are in WriteTo's format, without the mode line, one block per
+// coverable node (not collapsed, since a neighbor reached later would
+// change a collapsed range) and with count 1. A block is identified by its
+// parse name and position range, so a reparsed tree whose blocks were
+// already written writes nothing. The lines go to w in one Write; if it
+// fails, nothing is added to written.
+func (cp *CoverProfile) WriteNewlyCovered(w io.Writer, written map[string]struct{}) (int64, error) {
+	if cp == nil {
+		return 0, nil
+	}
+	cp.mu.Lock()
+	trees := make([]*Tree, len(cp.trees))
+	copy(trees, cp.trees)
+	cp.mu.Unlock()
+	var blocks []coverBlock
+	for _, tree := range trees {
+		blocks = coverWalkNode(tree, tree.Root, blocks)
+	}
+	var buf []byte
+	var keys []string
+	for _, b := range blocks {
+		if b.count == 0 {
+			continue
+		}
+		start := len(buf)
+		buf = append(buf, b.parseName...)
+		buf = append(buf, ':')
+		buf = strconv.AppendInt(buf, int64(b.startLine), 10)
+		buf = append(buf, '.')
+		buf = strconv.AppendInt(buf, int64(b.startCol), 10)
+		buf = append(buf, ',')
+		buf = strconv.AppendInt(buf, int64(b.endLine), 10)
+		buf = append(buf, '.')
+		buf = strconv.AppendInt(buf, int64(b.endCol), 10)
+		key := string(buf[start:])
+		if _, ok := written[key]; ok {
+			buf = buf[:start]
+			continue
+		}
+		buf = append(buf, " 1 1\n"...)
+		written[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+	n, err := w.Write(buf)
+	if err != nil {
+		for _, key := range keys {
+			delete(written, key)
+		}
+	}
+	return int64(n), err
+}
+
 // coverWalkNode recursively walks the AST, emitting coverage blocks for
 // coverable nodes. Blocks are flat and non-overlapping.
 func coverWalkNode(tree *Tree, node Node, blocks []coverBlock) []coverBlock {

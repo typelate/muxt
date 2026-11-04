@@ -2,6 +2,8 @@ package template_test
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -273,3 +275,52 @@ func execCoverage(t *testing.T, tc coverCase) (out, profile string) {
 
 	return outBuf.String(), profBuf.String()
 }
+
+func TestCoverProfileWriteNewlyCovered(t *testing.T) {
+	tree := parseText(t, "test", "{{if .}}yes{{end}}END")
+	written := make(map[string]struct{})
+
+	newlyCovered := func(data any) string {
+		t.Helper()
+		var cp template.CoverProfile
+		require.NoError(t, template.ExecuteTemplate(io.Discard, tree, data, template.WithCoverProfile(&cp)))
+		var buf bytes.Buffer
+		n, err := cp.WriteNewlyCovered(&buf, written)
+		require.NoError(t, err)
+		assert.Equal(t, int64(buf.Len()), n, "bytes reported by WriteNewlyCovered")
+		return buf.String()
+	}
+
+	assert.Equal(t, "test:1.1,1.9 1 1\ntest:1.12,1.19 1 1\ntest:1.19,1.22 1 1\n", newlyCovered(false),
+		"first execute writes each executed block, uncollapsed, without a mode line")
+	assert.Equal(t, "", newlyCovered(false), "a second execute of the same nodes writes nothing")
+	assert.Equal(t, "test:1.9,1.12 1 1\n", newlyCovered(true), "only the block reached for the first time")
+
+	t.Run("a reparsed tree with the same positions is already written", func(t *testing.T) {
+		tree = parseText(t, "test", "{{if .}}yes{{end}}END")
+		assert.Equal(t, "", newlyCovered(true))
+	})
+
+	t.Run("a failed write marks nothing written", func(t *testing.T) {
+		var cp template.CoverProfile
+		fresh := parseText(t, "other", "x")
+		require.NoError(t, template.ExecuteTemplate(io.Discard, fresh, nil, template.WithCoverProfile(&cp)))
+		_, err := cp.WriteNewlyCovered(failingWriter{}, written)
+		require.Error(t, err)
+		var buf bytes.Buffer
+		_, err = cp.WriteNewlyCovered(&buf, written)
+		require.NoError(t, err)
+		assert.Equal(t, "other:1.1,1.2 1 1\n", buf.String())
+	})
+
+	t.Run("nil profile writes nothing", func(t *testing.T) {
+		var cp *template.CoverProfile
+		n, err := cp.WriteNewlyCovered(failingWriter{}, written)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), n)
+	})
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }

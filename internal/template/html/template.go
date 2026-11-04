@@ -13,13 +13,17 @@ import (
 	"maps"
 	"sort"
 	"strings"
+	texttemplate "text/template"
 
 	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/lex"
 )
 
 // FuncMap is the type of the map defining the mapping from names to functions.
-type FuncMap = template.FuncMap
+//
+// It is text/template's FuncMap, as in the standard library, so code that
+// names either compiles against this package laid over html/template.
+type FuncMap = texttemplate.FuncMap
 
 // Template is the representation of a parsed template. The *Template
 // returned by New, Parse, and related methods is safe for concurrent use
@@ -35,7 +39,7 @@ type Template struct {
 
 type common struct {
 	tmpl       map[string]*Template
-	funcMap    FuncMap
+	funcMap    template.FuncMap
 	missingKey template.MissingKeyMode
 	leftDelim  string
 	rightDelim string
@@ -126,7 +130,7 @@ func (t *Template) DefinedTemplates() string {
 // value is the template, so calls can be chained.
 func (t *Template) Funcs(funcMap FuncMap) *Template {
 	if t.common.funcMap == nil {
-		t.common.funcMap = make(FuncMap)
+		t.common.funcMap = make(template.FuncMap)
 	}
 	for k, v := range funcMap {
 		t.common.funcMap[k] = v
@@ -297,6 +301,9 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
 	}
 	opts := t.execOptions()
+	if processCover != nil {
+		return processCover.execute(wr, tmpl.Tree, data, opts)
+	}
 	return template.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
 }
 
