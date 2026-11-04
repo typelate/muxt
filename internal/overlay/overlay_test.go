@@ -21,7 +21,7 @@ func TestWriteOverlay(t *testing.T) {
 	stdDir := filepath.Join(goroot, "src", "html", "template")
 	scratch := t.TempDir()
 
-	jsonPath, err := overlay.Write(ctx, "go", scratch)
+	jsonPath, err := overlay.Write(ctx, overlay.Toolchain{}, scratch)
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestWriteOverlay(t *testing.T) {
 
 func TestGOROOT(t *testing.T) {
 	want := realGOROOT(t)
-	got, err := overlay.GOROOT(context.Background(), "go")
+	got, err := overlay.GOROOT(context.Background(), overlay.Toolchain{})
 	if err != nil {
 		t.Fatalf("GOROOT: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestProbe(t *testing.T) {
 		t.Skip("runs go list with a GOROOT overlay")
 	}
 	realGOROOT(t)
-	if err := overlay.Probe(context.Background(), "go"); err != nil {
+	if err := overlay.Probe(context.Background(), overlay.Toolchain{}); err != nil {
 		t.Fatalf("Probe: %v", err)
 	}
 }
@@ -131,11 +131,11 @@ func TestProbeReportsARefusedOverlay(t *testing.T) {
 	goroot := t.TempDir()
 	goBin := fakeGo(t, goroot, t.TempDir(), `echo "go: overlay contains a replacement for GOROOT" >&2; exit 1`)
 
-	err := overlay.Probe(context.Background(), goBin)
+	err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin})
 	if err == nil {
 		t.Fatal("Probe succeeded against a go command that refuses the overlay")
 	}
-	for _, want := range []string{"overlay", "html/template", "go: overlay contains a replacement for GOROOT"} {
+	for _, want := range []string{"overlay", "html/template", "go: overlay contains a replacement for GOROOT", "GOTOOLCHAIN=local"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Probe error %q does not mention %q", err, want)
 		}
@@ -146,8 +146,39 @@ func TestProbeReportsAnIgnoredOverlay(t *testing.T) {
 	goroot := t.TempDir()
 	goBin := fakeGo(t, goroot, t.TempDir(), `echo template.go`)
 
-	if err := overlay.Probe(context.Background(), goBin); err == nil {
+	if err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin}); err == nil {
 		t.Fatal("Probe succeeded though go list did not see the probe file")
+	}
+}
+
+// TestToolchainRunsInItsDirAndEnv states that the go command runs where
+// and how the toolchain says: the directory's go.mod and the environment
+// both decide which toolchain, and so which GOROOT, is used.
+func TestToolchainRunsInItsDirAndEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake go command is a shell script")
+	}
+	dir := t.TempDir()
+	goroot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(goroot, "src", "html", "template"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := `#!/bin/sh
+[ "$(pwd -P)" = "$(cd "$WANT_DIR" && pwd -P)" ] || { echo "ran in $(pwd), want $WANT_DIR" >&2; exit 3; }
+[ "$PWD" = "$WANT_DIR" ] || { echo "PWD=$PWD, want $WANT_DIR" >&2; exit 3; }
+printf '%s\n%s\n' "$FAKE_GOROOT" "$WANT_DIR/modcache"
+`
+	goBin := filepath.Join(t.TempDir(), "go")
+	if err := os.WriteFile(goBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tc := overlay.Toolchain{Go: goBin, Dir: dir, Env: []string{"WANT_DIR=" + dir, "FAKE_GOROOT=" + goroot}}
+	got, err := overlay.GOROOT(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("GOROOT: %v", err)
+	}
+	if got != goroot {
+		t.Errorf("GOROOT = %q, want %q", got, goroot)
 	}
 }
 
@@ -157,13 +188,13 @@ func TestGOROOTUnderGOMODCACHE(t *testing.T) {
 	goBin := fakeGo(t, goroot, modcache, `exit 1`)
 	ctx := context.Background()
 
-	if _, err := overlay.GOROOT(ctx, goBin); err == nil || !strings.Contains(err.Error(), "GOMODCACHE") {
+	if _, err := overlay.GOROOT(ctx, overlay.Toolchain{Go: goBin}); err == nil || !strings.Contains(err.Error(), "GOMODCACHE") {
 		t.Errorf("GOROOT error = %v, want one naming GOMODCACHE", err)
 	}
-	if _, err := overlay.Write(ctx, goBin, t.TempDir()); err == nil {
+	if _, err := overlay.Write(ctx, overlay.Toolchain{Go: goBin}, t.TempDir()); err == nil {
 		t.Error("Write succeeded with GOROOT under GOMODCACHE")
 	}
-	if err := overlay.Probe(ctx, goBin); err == nil {
+	if err := overlay.Probe(ctx, overlay.Toolchain{Go: goBin}); err == nil {
 		t.Error("Probe succeeded with GOROOT under GOMODCACHE")
 	}
 }
@@ -173,7 +204,7 @@ func TestOverlayBuildsFixture(t *testing.T) {
 		t.Skip("builds html/template from the overlaid engine with the go command")
 	}
 	realGOROOT(t)
-	jsonPath, err := overlay.Write(context.Background(), "go", t.TempDir())
+	jsonPath, err := overlay.Write(context.Background(), overlay.Toolchain{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}

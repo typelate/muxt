@@ -8,7 +8,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// TestCheckGoTestArgsSaysWhyCoverpkgIsRefused states that the refusal
+// names the package and the reason, the template coverage pre-pass.
+func TestCheckGoTestArgsSaysWhyCoverpkgIsRefused(t *testing.T) {
+	err := CheckGoTestArgs([]string{"-coverpkg=./...,std"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-coverpkg")
+	assert.Contains(t, err.Error(), "html/template")
+	assert.Contains(t, err.Error(), "std")
+}
 
 func TestCheckGoTestArgs(t *testing.T) {
 	for _, tt := range []struct {
@@ -28,6 +39,16 @@ func TestCheckGoTestArgs(t *testing.T) {
 		{name: "json with two dashes", args: []string{"--json"}, refused: true},
 		{name: "json with a value", args: []string{"-json=true"}, refused: true},
 		{name: "a json flag for the test binary", args: []string{"-args", "-json"}},
+		{name: "coverpkg of the main module", args: []string{"-coverpkg=./..."}},
+		{name: "coverpkg naming html/template", args: []string{"-coverpkg=html/template"}, refused: true},
+		{name: "coverpkg with two dashes", args: []string{"--coverpkg=./...,html/template"}, refused: true},
+		{name: "coverpkg with its value as the next argument", args: []string{"-coverpkg", "html/template"}, refused: true},
+		{name: "coverpkg of std", args: []string{"-coverpkg=std"}, refused: true},
+		{name: "coverpkg of all", args: []string{"-coverpkg=all"}, refused: true},
+		{name: "coverpkg of a pattern matching html/template", args: []string{"-coverpkg=html/..."}, refused: true},
+		{name: "coverpkg of another package named template", args: []string{"-coverpkg=example.com/html/template"}},
+		{name: "html/template as another flag's value", args: []string{"-run", "html/template"}},
+		{name: "a coverpkg flag for the test binary", args: []string{"-args", "-coverpkg=std"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := CheckGoTestArgs(tt.args)

@@ -111,12 +111,12 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 			"func TestGreeting(t *testing.T) {\n\tif err := templates.ExecuteTemplate(io.Discard, \"greeting\", Greeting{Name: \"World\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n",
 	})
 
-	_, err := newPlan(t.Context(), greetingConfig(), dir)
+	_, err := newPlan(t.Context(), greetingConfig(), dir, nil)
 	require.ErrorAs(t, err, new(*NoCallSitesError), "newPlan: the only call site is in a test")
 
 	config := greetingConfig()
 	config.IncludeTests = true
-	p, err := newPlan(t.Context(), config, dir)
+	p, err := newPlan(t.Context(), config, dir, nil)
 	require.NoError(t, err)
 	require.Len(t, p.mutants, 1, "the one action")
 	m := p.mutants[0]
@@ -145,7 +145,7 @@ func TestRunPlanDryRun(t *testing.T) {
 	baseline, verdict := neverRun(t)
 
 	var status strings.Builder
-	report, err := runPlan(t.Context(), p, Configuration{DryRun: true}, &status, baseline, verdict, nil)
+	report, err := runPlan(t.Context(), p, Configuration{DryRun: true}, t.TempDir(), &status, baseline, verdict, nil)
 	require.NoError(t, err)
 	assert.True(t, report.DryRun, "the report says it was a dry run")
 	assert.Empty(t, status.String(), "status")
@@ -160,7 +160,7 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	_, verdict := neverRun(t)
 	failed := exitStatusOne(t)
 
-	_, err := runPlan(t.Context(), p, Configuration{}, nil, func(context.Context) (string, error) {
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
 		return "--- FAIL: TestIndex (0.00s)\n", failed
 	}, verdict, nil)
 
@@ -178,7 +178,7 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 	_, verdict := neverRun(t)
 	cannotRun := errors.New("go: no such tool")
 
-	_, err := runPlan(t.Context(), p, Configuration{}, nil, func(context.Context) (string, error) {
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
 		return "", cannotRun
 	}, verdict, nil)
 
@@ -199,7 +199,7 @@ func TestRunPlanStopsWhenCancelled(t *testing.T) {
 		mu       sync.Mutex
 		overlays []string
 	)
-	_, err := runPlan(ctx, p, Configuration{Workers: 2}, nil, func(context.Context) (string, error) {
+	_, err := runPlan(ctx, p, Configuration{Workers: 2}, t.TempDir(), nil, func(context.Context) (string, error) {
 		return "", nil
 	}, func(ctx context.Context, overlay string) (Status, []string, error) {
 		mu.Lock()
@@ -228,7 +228,7 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true, false, true})
 
 	var status strings.Builder
-	got, err := runPlan(t.Context(), p, Configuration{Verbose: true}, &status, func(context.Context) (string, error) {
+	got, err := runPlan(t.Context(), p, Configuration{Verbose: true}, t.TempDir(), &status, func(context.Context) (string, error) {
 		return "", nil
 	}, func(_ context.Context, overlay string) (Status, []string, error) {
 		if strings.Contains(readMutated(t, overlay), "K") {
@@ -262,7 +262,7 @@ func TestRunPlanProgressWithoutVerbose(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, p := runnerFixture(t, []bool{true, false, true})
 			var status strings.Builder
-			_, err := runPlan(t.Context(), p, tt.config, &status, func(context.Context) (string, error) {
+			_, err := runPlan(t.Context(), p, tt.config, t.TempDir(), &status, func(context.Context) (string, error) {
 				return "", nil
 			}, func(_ context.Context, overlay string) (Status, []string, error) {
 				if strings.Contains(readMutated(t, overlay), "K") {

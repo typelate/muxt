@@ -122,10 +122,15 @@ const DefaultMaxCases = 8
 // Run mutates every action the configuration selects and reports which
 // variations the tests catch.
 //
-// status receives the preamble once the baseline has run, and when the
-// configuration is verbose a line per mutant as it completes, and when it
-// is verbose or Progress a line per template as it completes; it may be
-// nil.
+// Before planning, the tests run once with muxt's template engine in
+// place of html/template, to learn which template blocks they execute;
+// a dry run skips this. Tests that fail there stop the run as a failing
+// baseline does.
+//
+// status receives a warning line when that template coverage is unknown,
+// the preamble once the baseline has run, and when the configuration is
+// verbose a line per mutant as it completes, and when it is verbose or
+// Progress a line per template as it completes; it may be nil.
 //
 // When ctx is done the go test runs in flight are interrupted, the
 // temporary files the run wrote are removed, and Run returns ctx's error.
@@ -134,22 +139,37 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 		// A drawn seed is reported so the run can be repeated exactly.
 		config.Seed = rand.Uint64()
 	}
-	p, err := newPlan(ctx, config, workingDirectory)
+	scratch, err := os.MkdirTemp("", "muxt-mutation-")
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = os.RemoveAll(scratch) }()
+
 	tester := config.goTest(workingDirectory)
-	return runPlan(ctx, p, config, status, tester.baseline, tester.verdict, tester.recheck)
+	// The pre-pass runs the tests, which a dry run never does.
+	var cov coverage
+	if !config.DryRun {
+		cov, err = templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
+		if err != nil {
+			return nil, err
+		}
+	}
+	p, err := newPlan(ctx, config, workingDirectory, cov)
+	if err != nil {
+		return nil, err
+	}
+	return runPlan(ctx, p, config, scratch, status, tester.baseline, tester.verdict, tester.recheck)
 }
 
 // runPlan runs an enumerated plan: the suite once unmutated, and then each
-// mutant against its own overlay.
+// mutant against its own overlay, which it writes under scratch and
+// removes.
 //
 // Running the suite arrives as baseline and verdict rather than being
 // built here, because it is the slow part of a run and everything this
 // decides -- what a failing baseline means, what the preamble says, what
 // a dry run returns -- is then worth stating without it.
-func runPlan(ctx context.Context, p *plan, config Configuration, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
+func runPlan(ctx context.Context, p *plan, config Configuration, scratch string, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -192,17 +212,19 @@ func runPlan(ctx context.Context, p *plan, config Configuration, status io.Write
 	}
 	reportTrims(progress, report.Trimmed)
 
-	scratch, err := os.MkdirTemp("", "muxt-mutation-")
+	// The mutants' files go in a directory of their own, removed as the
+	// run ends however it ends.
+	mutants, err := os.MkdirTemp(scratch, "mutants-")
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = os.RemoveAll(scratch) }()
+	defer func() { _ = os.RemoveAll(mutants) }()
 
 	runner := &mutantRunner{
 		plan:      p,
 		test:      verdict,
 		recheck:   recheck,
-		scratch:   scratch,
+		scratch:   mutants,
 		progress:  progress,
 		templates: templates,
 		clock:     clock,

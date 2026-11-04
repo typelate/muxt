@@ -10,17 +10,41 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// GOROOT is go env GOROOT of goBin, exactly as it prints it. Overlay keys
+// Toolchain is the go command as a caller runs it. The directory matters
+// because its go.mod can select another toolchain, and the environment
+// because GOTOOLCHAIN and GOROOT can; either changes which GOROOT an
+// overlay must be keyed on. A caller passes the ones its go test uses.
+type Toolchain struct {
+	// Go is the go command, "go" when empty.
+	Go string
+
+	// Dir is the directory the go command runs in, the process's own
+	// when empty.
+	Dir string
+
+	// Env is the go command's environment, nil for the process's own.
+	Env []string
+}
+
+func (tc Toolchain) goBin() string {
+	if tc.Go == "" {
+		return "go"
+	}
+	return tc.Go
+}
+
+// GOROOT is go env GOROOT of the toolchain, exactly as it prints it. Overlay keys
 // must be the paths the go command itself uses, so symbolic links are not
 // resolved.
 //
 // A GOROOT under GOMODCACHE is an error: that is where a toolchain the go
 // command downloaded lives, and it refuses to overlay files there.
-func GOROOT(ctx context.Context, goBin string) (string, error) {
-	out, err := goOutput(ctx, goBin, "env", "GOROOT", "GOMODCACHE")
+func GOROOT(ctx context.Context, tc Toolchain) (string, error) {
+	out, err := goOutput(ctx, tc, "env", "GOROOT", "GOMODCACHE")
 	if err != nil {
 		return "", err
 	}
@@ -41,15 +65,18 @@ func GOROOT(ctx context.Context, goBin string) (string, error) {
 }
 
 // Write copies the engine into scratchDir and writes, beside it, the
-// overlay JSON that makes goBin build the engine as html/template. It
+// overlay JSON that makes the toolchain build the engine as html/template. It
 // returns the JSON's path, for go build -overlay.
 //
 // The overlay deletes every non-test Go file of $GOROOT/src/html/template,
 // as listed on disk now, and adds each engine file at its path under that
 // directory. Packages the engine adds under GOROOT have no directory on
 // disk, so go test must run with -vet=off.
-func Write(ctx context.Context, goBin, scratchDir string) (string, error) {
-	goroot, err := GOROOT(ctx, goBin)
+//
+// The overlay names the engine files by their paths under scratchDir as
+// given, so scratchDir should be absolute; the caller removes it.
+func Write(ctx context.Context, tc Toolchain, scratchDir string) (string, error) {
+	goroot, err := GOROOT(ctx, tc)
 	if err != nil {
 		return "", err
 	}
@@ -100,12 +127,12 @@ func Write(ctx context.Context, goBin, scratchDir string) (string, error) {
 // probeFile is the file Probe adds to html/template.
 const probeFile = "muxt_overlay_probe.go"
 
-// Probe checks that goBin honors an overlay of GOROOT's html/template: it
+// Probe checks that the toolchain honors an overlay of GOROOT's html/template: it
 // adds a one-line file to the package and asks go list whether the package
 // has it. An error means the engine cannot replace html/template with
 // this toolchain.
-func Probe(ctx context.Context, goBin string) (err error) {
-	goroot, err := GOROOT(ctx, goBin)
+func Probe(ctx context.Context, tc Toolchain) (err error) {
+	goroot, err := GOROOT(ctx, tc)
 	if err != nil {
 		return err
 	}
@@ -128,9 +155,9 @@ func Probe(ctx context.Context, goBin string) (err error) {
 	if err := writeOverlay(jsonPath, map[string]string{key: local}); err != nil {
 		return err
 	}
-	out, err := goOutput(ctx, goBin, "list", "-overlay="+jsonPath, "-f", "{{range .GoFiles}}{{println .}}{{end}}", "html/template")
+	out, err := goOutput(ctx, tc, "list", "-overlay="+jsonPath, "-f", "{{range .GoFiles}}{{println .}}{{end}}", "html/template")
 	if err != nil {
-		return fmt.Errorf("the go command refuses an overlay of GOROOT's html/template: %w", err)
+		return fmt.Errorf("the go command refuses an overlay of GOROOT's html/template (try GOTOOLCHAIN=local): %w", err)
 	}
 	for _, name := range strings.Fields(string(out)) {
 		if name == probeFile {
@@ -151,10 +178,21 @@ func writeOverlay(jsonPath string, replace map[string]string) error {
 	return nil
 }
 
-// goOutput runs goBin with args and returns its standard output. An error
-// carries what it printed to standard error.
-func goOutput(ctx context.Context, goBin string, args ...string) ([]byte, error) {
+// goOutput runs the toolchain's go command with args and returns its
+// standard output. An error carries what it printed to standard error.
+func goOutput(ctx context.Context, tc Toolchain, args ...string) ([]byte, error) {
+	goBin := tc.goBin()
 	cmd := exec.CommandContext(ctx, goBin, args...)
+	cmd.Dir = tc.Dir
+	if tc.Env != nil {
+		cmd.Env = tc.Env
+		if tc.Dir != "" {
+			// os/exec points PWD at Dir only when it supplies the
+			// environment itself, and the go command reads paths the
+			// way PWD says.
+			cmd.Env = append(slices.Clip(tc.Env), "PWD="+tc.Dir)
+		}
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

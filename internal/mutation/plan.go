@@ -47,6 +47,10 @@ type plan struct {
 	// told from templates that hold nothing to vary.
 	pattern          *regexp.Regexp
 	reached, matched int
+
+	// coverage is the template blocks the tests executed, from the
+	// coverage pre-pass; nil when it is unknown.
+	coverage coverage
 }
 
 // narrowed reports whether the run was asked to mutate only some of the
@@ -174,11 +178,12 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-func newPlan(ctx context.Context, config Configuration, workingDirectory string) (*plan, error) {
+func newPlan(ctx context.Context, config Configuration, workingDirectory string, cov coverage) (*plan, error) {
 	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
 		return nil, err
 	}
+	in.coverage = cov
 	// Loading takes no context, so a run interrupted while loading
 	// stops here instead.
 	if err := ctx.Err(); err != nil {
@@ -221,6 +226,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		diff:      config.Diff,
 		diffError: diffError,
 		pattern:   config.TemplatePattern,
+		coverage:  in.coverage,
 	}
 	sel := selector{
 		before:    before,

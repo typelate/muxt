@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -86,6 +88,41 @@ func (t goTest) run(ctx context.Context, limit int, flags ...string) (*goTestOut
 func (t goTest) baseline(ctx context.Context) (string, error) {
 	out, err := t.run(ctx, 0)
 	return out.String(), err
+}
+
+// templateCoverEnv and coverExportDisabled are the coverage export's
+// side of the pre-pass, as internal/template/html defines them: the
+// environment variable naming the directory each test binary writes its
+// <pid>.cov to, and what a binary prints on stderr when it stops writing.
+const (
+	templateCoverEnv    = "MUXT_TEMPLATE_COVER"
+	coverExportDisabled = "muxt: template coverage export disabled:"
+)
+
+// coverageOutputLimit is how much of the pre-pass's output is kept. It
+// runs verbose, so that a passing package's stderr is printed too, and a
+// failure shows the end of that.
+const coverageOutputLimit = 1 << 20
+
+// coverageFlags are the go test flags of the coverage pre-pass.
+//
+// -v makes go test print a passing package's output, where a test binary
+// that stopped exporting coverage says so. The engine adds packages
+// under GOROOT that have no directory on disk, which vet cannot read.
+func coverageFlags(overlay string) []string {
+	return []string{"-v", "-vet=off", "-overlay=" + overlay}
+}
+
+// coverage runs the tests once, unmutated, with overlay laying muxt's
+// template engine over html/template and coverDir receiving the template
+// blocks each test binary executes.
+func (t goTest) coverage(ctx context.Context, overlay, coverDir string) (*goTestOutput, error) {
+	env := t.env
+	if env == nil {
+		env = os.Environ()
+	}
+	t.env = append(slices.Clip(env), templateCoverEnv+"="+coverDir)
+	return t.run(ctx, coverageOutputLimit, coverageFlags(overlay)...)
 }
 
 // mutantOutputLimit is how much of one mutant's go test output is kept:
@@ -217,6 +254,10 @@ type goTestOutput struct {
 	// binary that timed out, panicked outside a test, or exited from
 	// TestMain.
 	named, unnamed bool
+
+	// coverDisabled is the first line in which a test binary said it
+	// stopped exporting template coverage, from the marker on.
+	coverDisabled string
 }
 
 const maxMarkerLine = 1 << 10
@@ -262,6 +303,11 @@ func (o *goTestOutput) keep(p []byte) {
 // already not a kill.
 func (o *goTestOutput) mark(line string) {
 	line = strings.TrimSuffix(line, "\r")
+	if i := strings.Index(line, coverExportDisabled); i >= 0 && o.coverDisabled == "" {
+		// Unanchored: a test's own output without a newline can precede
+		// it on the line.
+		o.coverDisabled = line[i:]
+	}
 	switch {
 	case strings.HasPrefix(strings.TrimLeft(line, " \t"), "--- FAIL"):
 		o.testFailed = true
@@ -307,7 +353,8 @@ func (o *goTestOutput) String() string {
 	return string(kept)
 }
 
-// CheckGoTestArgs refuses a pass-through flag muxt sets itself.
+// CheckGoTestArgs refuses a pass-through flag muxt sets itself, or one
+// that cannot work beside what it sets.
 //
 // -overlay is how a mutant reaches the build. A second one would either be
 // ignored or replace the mutant, and either way the run would measure the
@@ -316,8 +363,14 @@ func (o *goTestOutput) String() string {
 // -json is refused because a mutant is killed when go test's text output
 // says a test failed; the JSON stream has none of those lines, so every
 // failing mutant would be read as a run that could not happen.
+//
+// -coverpkg is refused when it covers html/template, by name, by a pattern
+// matching it, or as std or all: the coverage pre-pass replaces that
+// package with muxt's template engine, whose files have no directory on
+// disk for coverage instrumentation to work from.
 func CheckGoTestArgs(args []string) error {
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "-args" || arg == "--args" {
 			// Everything after -args belongs to the test binary.
 			return nil
@@ -326,13 +379,43 @@ func CheckGoTestArgs(args []string) error {
 			// A flag's value, such as the pattern after -run.
 			continue
 		}
-		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		name, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		switch name {
 		case "overlay":
 			return errors.New("go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant")
 		case "json":
 			return errors.New("go test flag -json cannot be passed through: muxt reads go test's text output to tell a failed test from a failed build")
+		case "coverpkg":
+			if !hasValue && i+1 < len(args) {
+				i++
+				value = args[i]
+			}
+			if pattern, ok := coversHTMLTemplate(value); ok {
+				return fmt.Errorf("go test flag -coverpkg cannot cover html/template (%q does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead", pattern)
+			}
 		}
 	}
 	return nil
+}
+
+// coversHTMLTemplate returns the first of a -coverpkg value's
+// comma-separated patterns that takes in html/template.
+func coversHTMLTemplate(value string) (string, bool) {
+	for pattern := range strings.SplitSeq(value, ",") {
+		switch {
+		case pattern == "std", pattern == "all":
+			return pattern, true
+		case strings.Contains(pattern, "..."):
+			parts := strings.Split(pattern, "...")
+			for j := range parts {
+				parts[j] = regexp.QuoteMeta(parts[j])
+			}
+			if regexp.MustCompile("^" + strings.Join(parts, ".*") + "$").MatchString("html/template") {
+				return pattern, true
+			}
+		case pattern == "html/template":
+			return pattern, true
+		}
+	}
+	return "", false
 }
