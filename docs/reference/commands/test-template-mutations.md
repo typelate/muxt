@@ -38,6 +38,7 @@ muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--dry-run` | `false` | Enumerate and report the mutants without running tests. |
+| `--include-uncovered-nodes` | `false` | Run the mutants in template nodes no test reaches instead of skipping them. See [coverage pre-pass](#coverage-pre-pass). |
 | `--verbose`, `-v` | `false` | Report every mutant, not only misses, and stream progress: a line per template and a line per mutant. |
 | `--template-pattern` | all | Mutate only templates whose name matches this regular expression. |
 | `--run` | all | Passed to `go test -run`. |
@@ -118,7 +119,7 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 |--------|---------|
 | `KILL` | A test failed. |
 | `MISS` | Every test passed: a missing assertion, an untested branch, or an equivalent mutant whose output cannot differ. |
-| `SKIP` | Not run: the mutant does not parse or type check (else its render error would count as a kill), is `condition-dead`, or exceeds `--max-cases`. [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
+| `SKIP` | Not run: the mutant does not parse or type check (else its render error would count as a kill), is `condition-dead`, exceeds `--max-cases`, or is in a node no test reaches ([coverage pre-pass](#coverage-pre-pass)). [reference_test_template_mutations_skipped.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_skipped.txt) |
 | `FLAKY` | A test failed, then passed when run again alone (`--workers` above 1 only). Neither a kill nor a miss; the reason names the tests. See [flaky kills](#flaky-kills). |
 | `PEND` | Enumerated but not run (`--dry-run`). |
 
@@ -140,22 +141,34 @@ The repeat is serial on purpose, since contention is what it checks for, and it 
 
 Before the baseline, the tests run once more, unmutated, to learn which template actions they execute. This run is `go test -count=1 -vet=off -v` with your `go test` flags, and with `-overlay` replacing `html/template` in GOROOT by muxt's own template engine, which records each template block it executes. The kill runs that follow are untouched: they use the real `html/template`, so the engine never decides whether a mutant is killed.
 
-A mutant whose action no test executed is unreached. It still runs, and is almost certainly a `MISS`, so the report says why rather than leaving it out. With `-v` the unreached mutants are listed after the templates, and the summary line gains `N unreached` whenever there is one:
+A mutant whose action no test executed is unreached. Nothing could kill it, so by default it is not run: it is a `SKIP` with the reason `no test reaches it`, counted among the skipped, and a skip does not fail the run. With `-v` the unreached mutants are also listed after the templates, and the summary line gains `N unreached` whenever there is one:
 
 ```text
+    SKIP 1:49 action-zero (no test reaches it)
+
 no test reaches 1 mutant:
   "page" templates.gohtml 1:49 action-zero
 
-4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached
+4 mutants, 2 killed, 1 missed, 1 skipped, 1 unreached
 ```
 
-A miss listed there needs a test that renders that branch, not a stronger assertion. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
+A mutant listed there needs a test that renders that branch, not a stronger assertion. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
+
+`--include-uncovered-nodes` runs the unreached mutants anyway, each almost certainly a `MISS`, which fails the run. They are still listed under `no test reaches`, so you can tell which misses are untested branches, and the summary says they ran:
+
+```text
+4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached (run)
+```
+
+[reference_test_template_mutations_include_uncovered.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_include_uncovered.txt)
+
+When coverage is unknown nothing is skipped as unreached, with or without the flag. `--dry-run`, with or without `--diff`, skips the pre-pass, so it lists every mutant, unreached or not.
 
 `-vet=off` applies to the pre-pass only. The engine's files are added under GOROOT through the overlay and have no directory on disk, which vet needs. Your normal test run and the kill runs still vet. `-v` is there so that a test binary that stopped recording coverage can say so in its output. Your `-cover`, `-covermode`, `-coverprofile` and `-coverpkg` are left out of the pre-pass, so a profile is written once, by the baseline. The pre-pass runs after planning, and only when there is a mutant to run. `--dry-run` runs no tests, so it skips the pre-pass and never reports anything unreached.
 
 ### When coverage is unknown
 
-The pre-pass never fails the run. When it cannot tell which actions the tests reach, stderr gets one line starting `warning: template coverage unknown:` and saying why, no mutant is reported unreached, and the run goes on as it would without the pre-pass. That happens when:
+The pre-pass never fails the run. When it cannot tell which actions the tests reach, stderr gets one line starting `warning: template coverage unknown:` and saying why, no mutant is reported unreached or skipped as unreached, and the run goes on as it would without the pre-pass. That happens when:
 
 - the go command refuses or ignores the overlay of GOROOT's `html/template`, which muxt checks with a probe first.
 - the tests fail, or do not build, with the engine in place. The line names the first failure:
@@ -193,7 +206,7 @@ Error: go test flag -coverpkg cannot cover html/template ("std" does): muxt repl
 
 The command exits non-zero when:
 
-- any mutant is a `MISS`. A `FLAKY` one does not fail the run. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants and `--dry-run` do not fail.
+- any mutant is a `MISS`. A `FLAKY` one does not fail the run. The report is written first, and stderr ends with `Error: N mutants missed`. Skipped mutants, unreached ones among them, and `--dry-run` do not fail.
   [reference_test_template_mutations_go_test_flags.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_go_test_flags.txt)
 - the baseline (unmutated) test run fails. Nothing is mutated.
   [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
@@ -292,7 +305,7 @@ The revision is read with `git archive`. If the templates cannot be read there, 
 }
 ```
 
-A run adds `seconds` per result and a top-level `baseline` object with `passed` and `seconds`. When the pre-pass learned the coverage, a run adds `"coverage_known": true`, plus `unreached` listing each unreached mutant's template, file, line, column, operator and replacement when there are any. A `--diff` run adds `diff`, plus `unchanged` when any template was left alone or `diff_error` when the revision could not be read. [reference_test_template_mutations_json.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_json.txt)
+A run adds `seconds` per result and a top-level `baseline` object with `passed` and `seconds`. When the pre-pass learned the coverage, a run adds `"coverage_known": true`, plus `unreached` listing each unreached mutant's template, file, line, column, operator and replacement when there are any. With `--include-uncovered-nodes` it adds `"include_uncovered_nodes": true`. A `--diff` run adds `diff`, plus `unchanged` when any template was left alone or `diff_error` when the revision could not be read. [reference_test_template_mutations_json.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_json.txt)
 
 ## Limitations
 

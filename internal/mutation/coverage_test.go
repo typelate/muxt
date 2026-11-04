@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -491,6 +492,69 @@ func TestRunPlansBeforeThePrePass(t *testing.T) {
 			_, err := Run(t.Context(), config, dir, nil)
 			require.Error(t, err, "Run")
 			assert.NoFileExists(t, filepath.Join(dir, "tests_ran.txt"), "Run returned %v after running the tests", err)
+		})
+	}
+}
+
+// TestRunPlanSkipsUnreachedMutants states that a mutant the coverage
+// pre-pass shows no test reaching is not run unless the configuration
+// includes uncovered nodes: it is skipped, counted with the other skips
+// and still listed as unreached. Coverage that is unknown skips nothing.
+//
+// The greeting has three mutants: the name action, reached by a block
+// over it, and the if's two, which nothing reaches.
+func TestRunPlanSkipsUnreachedMutants(t *testing.T) {
+	t.Parallel()
+	nameReached := coverage{"greeting": {
+		{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 8}:  {},
+		{StartLine: 1, StartCol: 8, EndLine: 1, EndCol: 17}: {},
+	}}
+	for _, tt := range []struct {
+		name         string
+		coverage     coverage
+		include      bool
+		runs         int
+		skipped      int
+		unreached    int
+		summary      string
+		includeField bool
+	}{
+		{name: "unreached skipped by default", coverage: nameReached, runs: 1, skipped: 2, unreached: 2, summary: "\n3 mutants, 1 killed, 0 missed, 2 skipped, 2 unreached\n"},
+		{name: "every mutant unreached", coverage: coverage{}, runs: 0, skipped: 3, unreached: 3, summary: "\n3 mutants, 0 killed, 0 missed, 3 skipped, 3 unreached\n"},
+		{name: "unreached run when included", coverage: nameReached, include: true, runs: 3, unreached: 2, summary: "\n3 mutants, 3 killed, 0 missed, 0 skipped, 2 unreached (run)\n", includeField: true},
+		{name: "coverage unknown", runs: 3, summary: "\n3 mutants, 3 killed, 0 missed, 0 skipped\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo})
+			config := greetingConfig()
+			config.IncludeUncoveredNodes = tt.include
+			p, err := newPlan(t.Context(), config, dir, tt.coverage)
+			require.NoError(t, err)
+			var (
+				mu   sync.Mutex
+				runs int
+			)
+			report, err := runPlan(t.Context(), p, config, t.TempDir(), nil, func(context.Context) (string, error) {
+				return "", nil
+			}, func(context.Context, string) (Status, []string, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				runs++
+				return StatusKilled, nil, nil
+			}, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.runs, runs, "mutant runs")
+			assert.Equal(t, tt.skipped, report.Skipped, "skipped")
+			assert.Len(t, report.Unreached, tt.unreached, "unreached")
+			assert.Equal(t, tt.includeField, report.IncludeUncoveredNodes, "include uncovered nodes")
+			report.Verbose = true
+			text := writeReport(t, report)
+			assert.Contains(t, text, tt.summary, "summary")
+			if tt.skipped > 0 && !tt.include {
+				assert.Contains(t, text, "SKIP 8:80 if-false (no test reaches it)", "the skipped mutant says why")
+			}
+			assert.NoError(t, report.Err(), "nothing missed")
 		})
 	}
 }

@@ -59,6 +59,10 @@ type plan struct {
 	candidates []candidate
 	unreached  []UnreachedMutant
 
+	// includeUnreached runs the unreached mutants rather than skipping
+	// them: --include-uncovered-nodes.
+	includeUnreached bool
+
 	// parsedFrom is the texts each parse name was given to, which says
 	// whether a block filed under one is ambiguous.
 	parsedFrom parseNameSources
@@ -116,6 +120,8 @@ func (p *plan) report() *Report {
 
 		CoverageKnown: p.coverage != nil,
 		Unreached:     p.unreached,
+
+		IncludeUncoveredNodes: p.includeUnreached,
 	}
 }
 
@@ -246,13 +252,46 @@ func newPlan(ctx context.Context, config Configuration, workingDirectory string,
 
 // cover records what the coverage pre-pass saw the tests execute, nil
 // when it is unknown, and how long it took, and finds the mutants it
-// shows no test reaches. It comes after planning, so that a run with
-// nothing to mutate, or one that cannot plan at all, never waits for the
-// pre-pass.
+// shows no test reaches, which it skips unless the run includes them. It
+// comes after planning, so that a run with nothing to mutate, or one that
+// cannot plan at all, never waits for the pre-pass.
 func (p *plan) cover(cov coverage, took time.Duration) {
 	p.coverage = cov
 	p.prePass = took
 	p.unreached = p.findUnreached(p.parsedFrom)
+	if !p.includeUnreached {
+		p.skipUnreached()
+	}
+}
+
+// unreachedReason is why a mutant no test reaches was not run.
+const unreachedReason = "no test reaches it"
+
+// skipUnreached marks every unreached mutant skipped, so it is not run
+// and counts among the skips. A mutation nothing executes is all but
+// certain to be missed, and running it costs a run of the suite to learn
+// what the pre-pass already said.
+func (p *plan) skipUnreached() {
+	if len(p.unreached) == 0 {
+		return
+	}
+	unreached := make(map[int]struct{}, len(p.unreached))
+	for _, u := range p.unreached {
+		unreached[u.mutantIndex] = struct{}{}
+	}
+	for i := range p.groups {
+		for j := range p.groups[i].Templates {
+			results := p.groups[i].Templates[j].Results
+			for k := range results {
+				if _, ok := unreached[results[k].mutantIndex]; !ok || results[k].Status != StatusPending {
+					continue
+				}
+				results[k].Status = StatusSkipped
+				results[k].Reason = unreachedReason
+				p.runnableN--
+			}
+		}
+	}
 }
 
 // planFrom walks the templates each ExecuteTemplate call in the input
@@ -269,6 +308,8 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		diff:      config.Diff,
 		diffError: diffError,
 		pattern:   config.TemplatePattern,
+
+		includeUnreached: config.IncludeUncoveredNodes,
 	}
 	sel := selector{
 		before:    before,
@@ -471,8 +512,7 @@ func (s parseNameSources) ambiguous(parseName string) bool { return len(s[parseN
 // template the tests never executed has no blocks, so every mutant in it
 // is unreached.
 //
-// Nothing is skipped because of it: the mutants still run, and this says
-// why they will be missed.
+// Finding them skips nothing; cover decides whether they run.
 func (p *plan) findUnreached(parsedFrom parseNameSources) []UnreachedMutant {
 	if p.coverage == nil {
 		return nil
@@ -503,6 +543,8 @@ func (p *plan) findUnreached(parsedFrom parseNameSources) []UnreachedMutant {
 			Column:   c.result.Column,
 			Operator: c.result.Operator,
 			Mutated:  c.result.Mutated,
+
+			mutantIndex: c.mutant,
 		})
 	}
 	return unreached

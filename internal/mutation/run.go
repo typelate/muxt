@@ -55,6 +55,13 @@ type Configuration struct {
 	// It skips the coverage pre-pass too, so it runs no tests at all.
 	DryRun bool
 
+	// IncludeUncoveredNodes runs the mutants in template nodes the
+	// coverage pre-pass saw no test reach. Off, they are skipped: a
+	// mutation nothing executes is missed without telling anything new,
+	// and each is a full run of the suite. Either way they are listed as
+	// unreached. When coverage is unknown nothing is skipped for it.
+	IncludeUncoveredNodes bool
+
 	// Verbose reports every mutant rather than only the ones no test
 	// caught, and streams progress while the run is in flight.
 	Verbose bool

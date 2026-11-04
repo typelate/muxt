@@ -113,9 +113,9 @@ type UnchangedTemplate struct {
 }
 
 // UnreachedMutant is a mutant no test reaches: the coverage pre-pass saw
-// no test execute its action. It is still run, and almost certainly
-// missed, so it is reported to say why, not to say it was left out; a
-// later flag may skip running such mutants.
+// no test execute its action. It is skipped unless the run includes
+// uncovered nodes, in which case it runs and is almost certainly missed;
+// either way it is reported, to say why.
 type UnreachedMutant struct {
 	Template string   `json:"template"`
 	File     string   `json:"file"`
@@ -123,6 +123,9 @@ type UnreachedMutant struct {
 	Column   int      `json:"column"`
 	Operator Operator `json:"operator"`
 	Mutated  string   `json:"mutated"`
+
+	// mutantIndex locates the mutant in the plan, so it can be skipped.
+	mutantIndex int
 }
 
 // BaselineResult records the unmutated run the mutants are compared
@@ -166,6 +169,10 @@ type Report struct {
 	// line counts them when there are any.
 	CoverageKnown bool              `json:"coverage_known,omitzero"`
 	Unreached     []UnreachedMutant `json:"unreached,omitzero"`
+
+	// IncludeUncoveredNodes is whether the unreached mutants were run.
+	// Without it they were skipped, and count among Skipped.
+	IncludeUncoveredNodes bool `json:"include_uncovered_nodes,omitzero"`
 
 	// Note says why a run narrowed by --template-pattern or --diff has
 	// nothing to mutate, so an empty report is not read as one that
@@ -384,6 +391,10 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 		// the line reads as it always has, and of one whose coverage is
 		// unknown, which the pre-pass already warned about.
 		unreached = fmt.Sprintf(", %d unreached", len(r.Unreached))
+		if r.IncludeUncoveredNodes {
+			// Otherwise they are among the skips.
+			unreached += " (run)"
+		}
 	}
 	if r.DryRun {
 		_, _ = fmt.Fprintf(out, "%d %s, %d runnable, %d skipped%s\n",

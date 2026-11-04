@@ -681,6 +681,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			want: mutation.Configuration{TemplatesVariables: []string{"pages"}, Packages: []string{}, DryRun: true, Seed: 1, SeedSet: true, MaxCases: mutation.DefaultMaxCases, Workers: 1},
 		},
 		{
+			name: "mutations including the nodes no test reaches",
+			args: "test-template-mutations --include-uncovered-nodes --seed=1",
+			want: mutation.Configuration{TemplatesVariables: []string{"templates"}, Packages: []string{}, IncludeUncoveredNodes: true, Seed: 1, SeedSet: true, MaxCases: mutation.DefaultMaxCases, Workers: 1},
+		},
+		{
 			// The package directory is where the command runs; see
 			// TestChangeDirectory. go test runs ./... from there.
 			name: "mutations of a package directory, with patterns and go test flags",

@@ -4,15 +4,20 @@
 # The first run mutates only alpha and runs only TestAlpha, which renders
 # alpha and compares the whole string, so the mutant is caught.
 #
-# The second run mutates only beta but still runs only TestAlpha. Nothing
-# that executes is looking at beta, so the mutant survives. Narrowing --run
-# narrows what can catch a mutant, which is what makes a miss reported
-# under --run a statement about that subset and not about the whole suite.
+# The second run mutates only beta but still runs only TestAlpha. --run
+# narrows the coverage pre-pass too, so no test it runs reaches beta, and
+# the mutant is skipped as unreached. Run anyway, with
+# --include-uncovered-nodes, it survives. Narrowing --run narrows what can
+# catch a mutant, which is what makes a miss reported under --run a
+# statement about that subset and not about the whole suite.
 
 muxt test-template-mutations -v --template-pattern '^alpha$' --run TestAlpha --seed 1
 cmp stdout want-alpha.txt
 
-! muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1
+muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1
+cmp stdout want-beta-skipped.txt
+
+! muxt test-template-mutations -v --template-pattern '^beta$' --run TestAlpha --seed 1 --include-uncovered-nodes
 cmp stdout want-beta.txt
 stderr '(?m)^Error: 1 mutant missed$'
 
@@ -95,4 +100,16 @@ template.go:23:9 ExecuteTemplate "beta" (dot: server.Data)
 no test reaches 1 mutant:
   "beta" templates.gohtml 2:19 action-zero
 
-1 mutant, 0 killed, 1 missed, 0 skipped, 1 unreached
+1 mutant, 0 killed, 1 missed, 0 skipped, 1 unreached (run)
+-- want-beta-skipped.txt --
+1 mutant across 1 template (complexity 1, seed 1)
+baseline ok
+
+template.go:23:9 ExecuteTemplate "beta" (dot: server.Data)
+  "beta" templates.gohtml (complexity 1, dot: server.Data)
+    SKIP 2:19 action-zero (no test reaches it)
+
+no test reaches 1 mutant:
+  "beta" templates.gohtml 2:19 action-zero
+
+1 mutant, 0 killed, 0 missed, 1 skipped, 1 unreached

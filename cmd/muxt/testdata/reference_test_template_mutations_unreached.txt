@@ -2,11 +2,13 @@
 # place of html/template, to learn which template actions they execute.
 #
 # The test below renders the page for a guest only, so nothing it runs
-# reaches the {{.Secret}} inside {{if .Admin}}. That mutant still runs,
-# and is missed, and -v lists it under "no test reaches" so the miss reads
-# as an untested branch rather than a weak assertion. The summary line
-# counts it. The mutants the test does reach are killed or missed as they
-# would be without the pre-pass.
+# reaches the {{.Secret}} inside {{if .Admin}}. That mutant is skipped
+# rather than run, since nothing could catch it, and -v lists it under
+# "no test reaches" so the gap reads as an untested branch. The summary
+# counts it among the skips and as unreached. The mutants the test does
+# reach are killed or missed as they would be without the pre-pass.
+# --include-uncovered-nodes runs it anyway; see
+# reference_test_template_mutations_include_uncovered.txt.
 
 ! muxt test-template-mutations -v --seed 1
 cmp stdout want.txt
@@ -68,9 +70,9 @@ template.go:21:9 ExecuteTemplate "page" (dot: server.Page)
     KILL 1:25 action-zero
     MISS 1:35 if-false
     KILL 1:35 if-true
-    MISS 1:49 action-zero
+    SKIP 1:49 action-zero (no test reaches it)
 
 no test reaches 1 mutant:
   "page" templates.gohtml 1:49 action-zero
 
-4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached
+4 mutants, 2 killed, 1 missed, 1 skipped, 1 unreached
