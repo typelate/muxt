@@ -287,6 +287,10 @@ func (data *TemplateData[R, T]) String() string {
 	return ""
 }
 
+func (data *TemplateData[R, T]) DatastarRequest() bool {
+	return data.Request().Header.Get("Datastar-Request") == "true"
+}
+
 type SSETemplateData[R, T any] struct {
 	receiver          R
 	request           *http.Request

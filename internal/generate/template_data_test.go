@@ -57,6 +57,11 @@ func TestTemplateDataMethods(t *testing.T) {
 			want: "func (data *TemplateData[R, T]) HXRequest() bool {\n\treturn data.Request().Header.Get(\"HX-Request\") == \"true\"\n}",
 		},
 		{
+			name: "datastar request",
+			decl: templateDataDatastarRequestMethod("TemplateData"),
+			want: "func (data *TemplateData[R, T]) DatastarRequest() bool {\n\treturn data.Request().Header.Get(\"Datastar-Request\") == \"true\"\n}",
+		},
+		{
 			name: "path",
 			decl: templateDataPathMethod(config),
 			want: "func (data *TemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}\n}",

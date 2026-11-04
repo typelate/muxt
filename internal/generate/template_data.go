@@ -344,6 +344,13 @@ func templateDataHTMXHelperMethods(typeIdent string) []*ast.FuncDecl {
 	}
 }
 
+// templateDataDatastarRequestMethod reports whether the request came from a
+// Datastar action: every @get/@post/@put/@patch/@delete fetch sends
+// "Datastar-Request: true".
+func templateDataDatastarRequestMethod(typeIdent string) *ast.FuncDecl {
+	return htmxRequestHeaderBoolTrueMethod(typeIdent, "DatastarRequest", "Datastar-Request")
+}
+
 func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 	decls := []ast.Decl{
 		templateDataType(file, config.TemplateDataType),
@@ -371,6 +378,9 @@ func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 		for _, method := range templateDataHTMXHelperMethods(config.TemplateDataType) {
 			decls = append(decls, method)
 		}
+	}
+	if config.OutputDatastar {
+		decls = append(decls, templateDataDatastarRequestMethod(config.TemplateDataType))
 	}
 	return decls
 }

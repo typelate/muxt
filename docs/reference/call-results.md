@@ -98,6 +98,8 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 
 With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`, `.HXPushURL`, `.HXRedirect`, `.HXRefresh`, `.HXReplaceURL`, `.HXReswap`, `.HXRetarget`, `.HXReselect`, `.HXTrigger`, `.HXTriggerAfterSettle` and `.HXTriggerAfterSwap`, which chain and print nothing, and the request readers `.HXBoosted`, `.HXCurrentURL`, `.HXHistoryRestoreRequest`, `.HXPrompt`, `.HXRequest`, `.HXTargetElementID`, `.HXTriggerName` and `.HXTriggerElementID`.
 
+With `--output-datastar`, `TemplateData` also has the request reader `.DatastarRequest`, true when the request carries `Datastar-Request: true`, which every Datastar `@get`, `@post`, `@put`, `@patch` and `@delete` action sends ([reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt)). `SSETemplateData` does not have it: a Datastar stream is always opened by an action.
+
 ### Route methods
 
 A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two or more routes call the same method, every one of them, including the first, is named `<route name>Calling<Method>`, where the route name is built from the pattern as described below: `GET /one Dup(ctx)` and `GET /two Dup(ctx)` become `ReadOneCallingDup` and `ReadTwoCallingDup`. Only the method's name is compared, so routes that pass different arguments to it still collide. A long path therefore produces a long name, such as `CreateExAnteCompositionsPolicyByIDCallingEvaluateComposition`.

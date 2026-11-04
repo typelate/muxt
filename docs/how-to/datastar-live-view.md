@@ -1,6 +1,6 @@
 # How to build a Datastar live view
 
-Generate with `--output-datastar`. Server-Sent Events routes then emit Datastar patch events. The [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search) examples cover every section below except the patch setters.
+Generate with `--output-datastar`. Server-Sent Events routes then emit Datastar patch events. The [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search) examples cover every section below except the patch setters and `.DatastarRequest`.
 
 ## Patch elements
 
@@ -32,6 +32,22 @@ Inbound, the `signals` argument binds the posted body on non-GET routes ([argume
 ```gotmpl
 {{define "POST /search sse(SearchProverbs(ctx, signals, sseResults))"}}{{end}}
 ```
+
+## Serve a fragment and a full page from one GET route
+
+A route does not have to stream. Datastar patches a `text/html` response by element id, so a plain GET route can answer an `@get` action with a fragment and a direct visit with the whole page. `.DatastarRequest` is true when the request carries `Datastar-Request: true`, which every Datastar action sends:
+
+```gotmpl
+{{define "GET /list List(ctx)"}}
+{{- with .Header "Vary" "Datastar-Request"}}
+{{- if .DatastarRequest}}{{template "list" .Result}}
+{{- else}}<!DOCTYPE html><html lang="en"><body>{{template "list" .Result}}</body></html>{{end}}
+{{- end}}
+{{- end}}
+{{define "list"}}<ul id="list">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
+```
+
+`Vary` keeps a cache from serving the fragment to a direct visit. [reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt) asserts both responses.
 
 ## Use .Path inside Datastar attributes
 

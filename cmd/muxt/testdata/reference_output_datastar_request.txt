@@ -1,0 +1,100 @@
+# Under --output-datastar TemplateData gains DatastarRequest, true when the
+# request carries "Datastar-Request: true" (every Datastar @get/@post/...
+# action sends it). A plain GET route can branch on it: a fragment for an
+# action, the full page for a direct visit, with Vary so caches keep both.
+# Without the flag the method does not exist.
+
+muxt generate --use-receiver-type=Server
+! grep 'DatastarRequest' template_routes.go
+! muxt check
+
+muxt generate --output-datastar --use-receiver-type=Server
+muxt check
+
+grep 'func \(data \*TemplateData\[R, T\]\) DatastarRequest\(\) bool' template_routes.go
+! grep 'func \(m \*SSETemplateData\[R, T\]\) DatastarRequest' template_routes.go
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "GET /list List(ctx)" -}}
+{{- with .Header "Vary" "Datastar-Request" -}}
+{{- if .DatastarRequest -}}
+{{- template "list" .Result -}}
+{{- else -}}
+<!DOCTYPE html>
+<html lang="en"><body>{{ template "list" .Result }}</body></html>
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "list" -}}
+<ul id="list">{{ range . }}<li>{{ . }}</li>{{ end }}</ul>
+{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Server struct{}
+
+func (Server) List(context.Context) []string { return []string{"one", "two"} }
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for _, tt := range []struct {
+		name     string
+		header   string
+		wantPage bool
+	}{
+		{name: "direct visit", wantPage: true},
+		{name: "datastar action", header: "true", wantPage: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/list", nil)
+			if tt.header != "" {
+				req.Header.Set("Datastar-Request", tt.header)
+			}
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			if got := rec.Header().Get("Vary"); got != "Datastar-Request" {
+				t.Errorf("Vary = %q, want Datastar-Request", got)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `<ul id="list"><li>one</li><li>two</li></ul>`) {
+				t.Errorf("body = %q, want the list fragment", body)
+			}
+			if got := strings.Contains(body, "<!DOCTYPE html>"); got != tt.wantPage {
+				t.Errorf("full page = %t, want %t; body = %q", got, tt.wantPage, body)
+			}
+		})
+	}
+}
