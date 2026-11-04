@@ -45,7 +45,7 @@ cmpenv stderr want-err.txt
 {{end}}
 -- want-err.txt --
 $WORK/template.gohtml:6:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:7:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+$WORK/template.gohtml:7:6: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
 $WORK/template.gohtml:8:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 $WORK/template.gohtml:9:17: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 

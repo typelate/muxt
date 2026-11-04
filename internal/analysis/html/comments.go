@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -118,7 +119,7 @@ func (c *commentChecker) node(n template.Node) {
 		}
 	case *template.HTMLDoctypeNode:
 		if !IsDoctype(n) && !strings.HasPrefix(n.Text, commentOpen) {
-			c.report(n.Start(), DiagEscapedMarkup, msgEscapedMarkup)
+			c.report(n.Start(), DiagEscapedMarkup, msgEscapedMarkup, n.Text[:len("<!")])
 		}
 	case *template.HTMLCommentNode:
 		if !CommentDelimitedAlike(n) {
@@ -164,6 +165,8 @@ func branchNodes(lists ...*template.ListNode) []template.Node {
 
 // text reports each <! not starting a comment or doctype, and each <?, in
 // text the parser did not read as markup, such as a <! an action follows.
+// One inside a quoted attribute value of a tag the parser read as text
+// (<li{{if .X}} title="<!x>"{{end}}>) is skipped: html/template keeps it.
 func (c *commentChecker) text(n *template.TextNode) {
 	text := n.Text
 	for i := 0; i+1 < len(text); i++ {
@@ -179,8 +182,44 @@ func (c *commentChecker) text(n *template.TextNode) {
 			len(rest) >= len("!DOCTYPE") && strings.EqualFold(string(rest[1:len("!DOCTYPE")]), "DOCTYPE"):
 			continue
 		}
-		c.report(n.Start()+lex.Pos(i), DiagEscapedMarkup, msgEscapedMarkup)
+		if inQuotedValue(text[:i]) {
+			continue
+		}
+		c.report(n.Start()+lex.Pos(i), DiagEscapedMarkup, msgEscapedMarkup, text[i:i+2])
 	}
+}
+
+// inQuotedValue reports whether text, after its last >, leaves an
+// attribute value open: an = then a quote the text does not close.
+func inQuotedValue(text []byte) bool {
+	text = text[bytes.LastIndexByte(text, '>')+1:]
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		switch c := text[i]; {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '=':
+			j := i + 1
+			for j < len(text) && isHTMLSpace(text[j]) {
+				j++
+			}
+			if j < len(text) && (text[j] == '"' || text[j] == '\'') {
+				quote = text[j]
+				i = j
+			}
+		}
+	}
+	return quote != 0
+}
+
+func isHTMLSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\r', '\f':
+		return true
+	}
+	return false
 }
 
 // abruptComment reports a comment a browser ends at its <!--> or <!--->,

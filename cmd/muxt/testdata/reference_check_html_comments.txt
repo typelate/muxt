@@ -13,14 +13,14 @@ exec go build
 <html>
 <head>
 <title>Todo</title>
-<style>/* <!-- kept --> */</style>
+<style>/* <!-- passes --> */</style>
 </head>
 <body>
 <!-- a comment -->
 <!-- {{.}} is stripped, but it still runs -->
 <!---->
 <p title="<!-- kept -->">kept</p>
-<script>/* <!-- kept --> */ if (1 <!x) {}</script>
+<script>/* <!-- passes --> */ if (1 <!x) {}</script>
 <textarea name="note">a &lt;!-- b</textarea>
 {{/* a template comment */}}
 </body>

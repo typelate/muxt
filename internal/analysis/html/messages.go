@@ -28,7 +28,7 @@ const (
 // Comment diagnostic message formats.
 const (
 	msgCommentInRCDATA       = `html/template writes this <!-- as text inside <%s>; browsers show it`
-	msgEscapedMarkup         = `html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->`
+	msgEscapedMarkup         = `html/template escapes this %q, so browsers show it as text; comment with {{/* */}} or <!-- -->`
 	msgAbruptComment         = `browsers end this comment at %q but html/template strips through the next "-->" at %d:%d, hiding the markup between`
 	msgAbruptCommentUnclosed = `browsers end this comment at %q but html/template strips through the next "-->", and the comment never closes`
 )

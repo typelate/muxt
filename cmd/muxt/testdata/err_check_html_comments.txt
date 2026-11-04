@@ -10,7 +10,7 @@ cmpenv stderr want-err.txt
 -- want-err.txt --
 $WORK/template.gohtml:4:18: html/template writes this <!-- as text inside <title>; browsers show it
 $WORK/template.gohtml:8:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:9:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+$WORK/template.gohtml:9:4: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
 $WORK/template.gohtml:10:4: browsers end this comment at "<!-->" but html/template strips through the next "-->" at 12:1, hiding the markup between
 $WORK/template.gohtml:14:23: html/template writes this <!-- as text inside <textarea>; browsers show it
 
@@ -27,7 +27,7 @@ $WORK/template.gohtml:14:23: html/template writes this <!-- as text inside <text
 <p><!-->hidden
 <b>by html/template</b>
 -->
-<script>/* <!-- kept --> */</script>
+<script>/* <!-- passes --> */</script>
 <textarea name="note"><!-- shown --></textarea>
 </body>
 </html>

@@ -12,6 +12,7 @@ import (
 func TestCheckComments(t *testing.T) {
 	const (
 		bang  = `html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->`
+		pi    = `html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->`
 		title = `html/template writes this <!-- as text inside <title>; browsers show it`
 		area  = `html/template writes this <!-- as text inside <textarea>; browsers show it`
 	)
@@ -38,10 +39,24 @@ func TestCheckComments(t *testing.T) {
 		{name: "comment in svg title", input: `<svg><title><!-- c --></title></svg>`, want: []string{"1:13: " + title}},
 
 		{name: "bogus comment", input: `<p><!x></p>`, want: []string{"1:4: " + bang}},
-		{name: "processing instruction", input: `<p><?x></p>`, want: []string{"1:4: " + bang}},
+		{name: "processing instruction", input: `<p><?x></p>`, want: []string{"1:4: " + pi}},
 		{name: "conditional comment", input: "<div>\n  <![if !IE]>a<![endif]>\n</div>", want: []string{"2:3: " + bang, "2:15: " + bang}},
 		{name: "bang before action", input: `<p><!{{.X}}></p>`, want: []string{"1:4: " + bang}},
 		{name: "bang in branch", input: `<p>{{if .X}}<!{{end}}x></p>`, want: []string{"1:13: " + bang}},
+
+		{name: "bang in quoted value of unread tag", input: `<li{{if .X}} title="<!x>"{{end}}>a</li>`},
+		{name: "question in single-quoted value of unread tag", input: `<li{{if .X}} title='a <?x>'{{end}}>a</li>`},
+		{name: "bang in branch content", input: `<p>{{if .X}}<!x>{{end}}</p>`, want: []string{"1:13: " + bang}},
+		{name: "bang after closed value of unread tag", input: `<li{{if .X}} title="a" <!x>{{end}}>a</li>`, want: []string{"1:24: " + bang}},
+
+		{name: "comments in title branches", input: `<title>{{if .A}}<!-- a -->{{else}}<!-- b -->{{end}}{{range .R}}<!-- c -->{{end}}{{with .W}}<!-- d -->{{end}}</title>`, want: []string{
+			"1:17: " + title, "1:35: " + title, "1:64: " + title, "1:92: " + title,
+		}},
+		{name: "range and with content", input: `<p>{{range .R}}<!x>{{else}}<?y>{{end}}{{with .W}}<!-->a-->{{end}}</p>`, want: []string{
+			"1:16: " + bang,
+			"1:28: " + pi,
+			`1:50: browsers end this comment at "<!-->" but html/template strips through the next "-->" at 1:56, hiding the markup between`,
+		}},
 
 		{name: "abrupt comment", input: "<p><!-->a\n<b>x</b> --></p>", want: []string{
 			`1:4: browsers end this comment at "<!-->" but html/template strips through the next "-->" at 2:10, hiding the markup between`,
