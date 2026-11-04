@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -203,8 +205,8 @@ func TestTemplateCoverageFailingUnderTheEngine(t *testing.T) {
 			got, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
 			require.NoError(t, err, "the run goes on")
 			assert.Nil(t, got, "coverage is unknown")
-			want := "muxt: tests fail under muxt's template engine (coverage pre-pass): " + tt.first +
-				"; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown\n"
+			want := "warning: template coverage unknown: tests fail under muxt's template engine (coverage pre-pass): " + tt.first +
+				"; known gaps: Template.Tree, AddParseTree, Error.Node\n"
 			assert.Equal(t, want, warnings.String(), "warning")
 		})
 	}
@@ -243,9 +245,9 @@ func TestRunGoesOnWhenTheEngineDoesNotBuild(t *testing.T) {
 	assert.True(t, report.Baseline.Passed, "baseline passed")
 	assert.Equal(t, 3, report.Killed+report.Missed, "every mutant ran")
 	first, _, _ := strings.Cut(status.String(), "\n")
-	assert.True(t, strings.HasPrefix(first, "muxt: tests fail under muxt's template engine (coverage pre-pass): "), "status opens with the warning:\n%s", status.String())
+	assert.True(t, strings.HasPrefix(first, "warning: template coverage unknown: tests fail under muxt's template engine (coverage pre-pass): "), "status opens with the warning:\n%s", status.String())
 	assert.Contains(t, first, "tree_test.go", "the warning names the build error")
-	assert.True(t, strings.HasSuffix(first, "; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown"), "warning %q", first)
+	assert.True(t, strings.HasSuffix(first, "; known gaps: Template.Tree, AddParseTree, Error.Node"), "warning %q", first)
 }
 
 // TestTemplateCoverageStopsWhenCancelled states that an interrupted
@@ -271,9 +273,50 @@ func TestGoTestOutputNotesTheCoverageMarker(t *testing.T) {
 		{name: "a line of its own", out: "muxt: template coverage export disabled: no space left on device\n", want: "muxt: template coverage export disabled: no space left on device"},
 		{name: "after a test's unterminated output", out: "partialmuxt: template coverage export disabled: x\n", want: "muxt: template coverage export disabled: x"},
 		{name: "the first of several", out: "muxt: template coverage export disabled: a\nmuxt: template coverage export disabled: b\n", want: "muxt: template coverage export disabled: a"},
+		{name: "past the line cap", out: strings.Repeat("x", 3*maxMarkerLine) + "muxt: template coverage export disabled: late\n", want: "muxt: template coverage export disabled: late"},
+		{name: "without a newline", out: "muxt: template coverage export disabled: last", want: "muxt: template coverage export disabled: last"},
+		{name: "a long reason is cut", out: "muxt: template coverage export disabled: " + strings.Repeat("y", 2*maxMarkerLine) + "\n", want: ("muxt: template coverage export disabled: " + strings.Repeat("y", 2*maxMarkerLine))[:maxMarkerLine]},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, testOutput(tt.out).coverDisabled, "coverDisabled after %q", tt.out)
+		})
+	}
+}
+
+// TestGoTestOutputNotesAMarkerSplitAcrossWrites states that the marker is
+// found however go test's output is cut into writes.
+func TestGoTestOutputNotesAMarkerSplitAcrossWrites(t *testing.T) {
+	text := strings.Repeat("x", 3*maxMarkerLine) + "muxt: template coverage export disabled: split reason\nok  \tserver\t0.1s\n"
+	for size := 1; size <= 64; size *= 2 {
+		out := &goTestOutput{limit: 16}
+		for rest := text; len(rest) > 0; {
+			n := min(size, len(rest))
+			_, _ = out.Write([]byte(rest[:n]))
+			rest = rest[n:]
+		}
+		assert.Equal(t, "muxt: template coverage export disabled: split reason", out.coverDisabled, "coverDisabled in writes of %d bytes", size)
+	}
+}
+
+// TestWithoutCoverFlags states which of the caller's flags the pre-pass
+// drops: its own coverage would otherwise be a second profile written to
+// the caller's file, or instrumentation of the engine's packages.
+func TestWithoutCoverFlags(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		args, want []string
+	}{
+		{name: "none", args: []string{"-short", "-v"}, want: []string{"-short", "-v"}},
+		{name: "cover", args: []string{"-cover", "-short"}, want: []string{"-short"}},
+		{name: "cover with a value", args: []string{"-cover=true", "--cover"}, want: []string{}},
+		{name: "covermode", args: []string{"-covermode=atomic", "-covermode", "set", "-short"}, want: []string{"-short"}},
+		{name: "coverprofile", args: []string{"-coverprofile=c.out", "--coverprofile", "d.out"}, want: []string{}},
+		{name: "coverpkg", args: []string{"-coverpkg", "./...", "-coverpkg=./a"}, want: []string{}},
+		{name: "a flag only starting with cover", args: []string{"-coverx", "-covers=1"}, want: []string{"-coverx", "-covers=1"}},
+		{name: "test binary flags", args: []string{"-cover", "-args", "-coverprofile=x", "-cover"}, want: []string{"-args", "-coverprofile=x", "-cover"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, withoutCoverFlags(tt.args), "withoutCoverFlags(%q)", tt.args)
 		})
 	}
 }
@@ -375,4 +418,75 @@ func TestCoverageSeesADisabledExport(t *testing.T) {
 	out, err := config.goTest(dir).coverage(t.Context(), overlayPath, coverDir)
 	require.NoError(t, err, "the tests pass whatever the export does:\n%s", out.String())
 	assert.True(t, strings.HasPrefix(out.coverDisabled, html.CoverDisabledMarker), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
+}
+
+// TestRunPlanPreambleCountsThePrePass states that the preamble says the
+// coverage pre-pass was one more run of the suite, and how long it took.
+func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
+	t.Parallel()
+	_, p := runnerFixture(t, []bool{true})
+	p.prePass = 2 * time.Second
+	var status strings.Builder
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), &status, func(context.Context) (string, error) {
+		return "", nil
+	}, func(context.Context, string) (Status, []string, error) {
+		return StatusKilled, nil, nil
+	}, nil)
+	require.NoError(t, err)
+	first, _, _ := strings.Cut(status.String(), "\n")
+	assert.Contains(t, first, ", coverage pre-pass 2s, ", "preamble %q", first)
+}
+
+// slowTest takes longer than a plan does, so a run that runs the tests
+// before failing to plan shows it.
+const slowTest = `package server
+
+import (
+	"testing"
+	"time"
+)
+
+func TestSlow(t *testing.T) { time.Sleep(4 * time.Second) }
+`
+
+// TestRunPlansBeforeThePrePass states that a run that cannot plan says so
+// without running the tests: the coverage pre-pass comes after planning,
+// and only when there is a mutant to run.
+func TestRunPlansBeforeThePrePass(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go test")
+	}
+	for _, tt := range []struct {
+		name   string
+		files  map[string]string
+		config func(*Configuration)
+	}{
+		{
+			name:   "a template pattern matching nothing",
+			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "slow_test.go": slowTest},
+			config: func(c *Configuration) { c.TemplatePattern = regexp.MustCompile(`^nomatch$`) },
+		},
+		{
+			name:   "no call sites",
+			files:  map[string]string{"go.mod": goMod, "template.go": strings.Replace(greetingGo, "return templates.ExecuteTemplate(w, \"greeting\", greeting)", "return nil", 1), "slow_test.go": slowTest},
+			config: func(*Configuration) {},
+		},
+		{
+			name:   "a templates variable that does not exist",
+			files:  map[string]string{"go.mod": goMod, "template.go": greetingGo, "slow_test.go": slowTest},
+			config: func(c *Configuration) { c.TemplatesVariables = []string{"missing"} },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, tt.files)
+			config := greetingConfig()
+			tt.config(&config)
+			started := time.Now()
+			_, err := Run(t.Context(), config, dir, nil)
+			took := time.Since(started)
+			require.Error(t, err, "Run")
+			assert.Less(t, took, 4*time.Second, "Run returned %v after %s, as if it had run the tests", err, took)
+		})
+	}
 }

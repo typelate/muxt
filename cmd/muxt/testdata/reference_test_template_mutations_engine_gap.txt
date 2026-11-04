@@ -10,9 +10,8 @@
 
 muxt test-template-mutations --seed 1
 cmp stdout want.txt
-stderr '(?m)^muxt: tests fail under muxt''s template engine \(coverage pre-pass\): \./render_test\.go:20:25: cannot use templates\.Lookup\("greeting"\)\.Tree \(variable of type \*engine\.Tree\) as \*parse\.Tree value in variable declaration; known gaps: Template\.Tree, AddParseTree, Error\.Node; coverage unknown$'
+stderr '(?m)^warning: template coverage unknown: tests fail under muxt''s template engine \(coverage pre-pass\): \./render_test\.go:20:25: cannot use templates\.Lookup\("greeting"\)\.Tree \(variable of type \*engine\.Tree\) as \*parse\.Tree value in variable declaration; known gaps: Template\.Tree, AddParseTree, Error\.Node$'
 ! stdout unreached
-! stderr 'warning:'
 
 -- go.mod --
 module server

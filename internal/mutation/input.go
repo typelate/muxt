@@ -20,10 +20,6 @@ import (
 type input struct {
 	dir string
 	pkg source.Package
-
-	// coverage is what the coverage pre-pass saw the tests execute, nil
-	// when it is unknown.
-	coverage coverage
 }
 
 // loadInput loads the package in dir, with its test files when the

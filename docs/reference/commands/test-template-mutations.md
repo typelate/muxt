@@ -151,17 +151,17 @@ no test reaches 1 mutant:
 
 A miss listed there needs a test that renders that branch, not a stronger assertion. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
 
-`-vet=off` applies to the pre-pass only. The engine's files are added under GOROOT through the overlay and have no directory on disk, which vet needs. Your normal test run and the kill runs still vet. `-v` is there so that a test binary that stopped recording coverage can say so in its output. `--dry-run` runs no tests, so it skips the pre-pass and never reports anything unreached.
+`-vet=off` applies to the pre-pass only. The engine's files are added under GOROOT through the overlay and have no directory on disk, which vet needs. Your normal test run and the kill runs still vet. `-v` is there so that a test binary that stopped recording coverage can say so in its output. Your `-cover`, `-covermode`, `-coverprofile` and `-coverpkg` are left out of the pre-pass, so a profile is written once, by the baseline. The pre-pass runs after planning, and only when there is a mutant to run. `--dry-run` runs no tests, so it skips the pre-pass and never reports anything unreached.
 
 ### When coverage is unknown
 
-The pre-pass never fails the run. When it cannot tell which actions the tests reach, stderr gets one line saying why, no mutant is reported unreached, and the run goes on as it would without the pre-pass. That happens when:
+The pre-pass never fails the run. When it cannot tell which actions the tests reach, stderr gets one line starting `warning: template coverage unknown:` and saying why, no mutant is reported unreached, and the run goes on as it would without the pre-pass. That happens when:
 
-- the go command refuses or ignores the overlay of GOROOT's `html/template`, which muxt checks with a probe first. The line starts `warning: template coverage unknown:`.
+- the go command refuses or ignores the overlay of GOROOT's `html/template`, which muxt checks with a probe first.
 - the tests fail, or do not build, with the engine in place. The line names the first failure:
 
   ```text
-  muxt: tests fail under muxt's template engine (coverage pre-pass): ./render_test.go:20:25: cannot use templates.Lookup("greeting").Tree (variable of type *engine.Tree) as *parse.Tree value in variable declaration; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown
+  warning: template coverage unknown: tests fail under muxt's template engine (coverage pre-pass): ./render_test.go:20:25: cannot use templates.Lookup("greeting").Tree (variable of type *engine.Tree) as *parse.Tree value in variable declaration; known gaps: Template.Tree, AddParseTree, Error.Node
   ```
 
   Whether the tests pass is still the baseline's to say. [reference_test_template_mutations_engine_gap.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_engine_gap.txt)
@@ -206,10 +206,10 @@ The command exits non-zero when:
 
 ## Timing
 
-The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline run, stderr reports the baseline duration and an estimate for the whole run:
+The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline run, stderr reports the baseline duration, how long the [coverage pre-pass](#coverage-pre-pass) took when it ran (one more run of the suite, already done and not in the estimate), and an estimate for the rest of the run:
 
 ```text
-20 mutants across 6 templates (complexity 10), baseline 1.9s, estimated 38s
+20 mutants across 6 templates (complexity 10), baseline 1.9s, coverage pre-pass 2.4s, estimated 38s
 ```
 
 Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took. With `--workers` above 1 templates finish in whatever order their last mutant does.

@@ -82,7 +82,7 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 		// Kill runs use the real html/template, so this says nothing
 		// about the verdicts; whether the tests pass is the baseline's
 		// to say.
-		return failingUnderEngine(warn, out, err)
+		return coverageUnknown(warn, engineFailure(out, err))
 	case err != nil:
 		return coverageUnknown(warn, "go test with muxt's template engine in place of html/template did not run: "+firstError(out.String(), err))
 	case out.coverDisabled != "":
@@ -95,20 +95,16 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 	return cov, nil
 }
 
-// failingUnderEngine writes the one warning for tests that fail, or do
-// not build, with the engine in place, naming the first failure, and
-// returns no coverage.
-func failingUnderEngine(warn io.Writer, out *goTestOutput, err error) (coverage, error) {
-	if warn == nil {
-		return nil, nil
-	}
+// engineFailure is why coverage is unknown when the tests fail, or do not
+// build, with the engine in place: the first failure, and the engine's
+// known gaps, which are the likely cause.
+func engineFailure(out *goTestOutput, err error) string {
 	first := firstError(out.String(), err)
 	if !out.couldNotRun && len(out.failed) > 0 {
 		first = "--- FAIL: " + out.failed[0]
 	}
-	_, _ = fmt.Fprintf(warn, "muxt: tests fail under muxt's template engine (coverage pre-pass): %s; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown\n",
-		strings.Join(strings.Fields(first), " "))
-	return nil, nil
+	return "tests fail under muxt's template engine (coverage pre-pass): " + first +
+		"; known gaps: Template.Tree, AddParseTree, Error.Node"
 }
 
 // coverageUnknown writes why the run goes on without coverage, on one

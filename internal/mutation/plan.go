@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/typelate/muxt/internal/template"
 
@@ -57,6 +58,14 @@ type plan struct {
 	// is planned: whether a parse name is ambiguous is only known then.
 	candidates []candidate
 	unreached  []UnreachedMutant
+
+	// parsedFrom is the texts each parse name was given to, which says
+	// whether a block filed under one is ambiguous.
+	parsedFrom parseNameSources
+
+	// prePass is how long the coverage pre-pass took, zero when it did
+	// not run.
+	prePass time.Duration
 }
 
 // candidate is a runnable mutant in an html/template set, with the name
@@ -202,7 +211,6 @@ func newPlan(ctx context.Context, config Configuration, workingDirectory string,
 	if err != nil {
 		return nil, err
 	}
-	in.coverage = cov
 	// Loading takes no context, so a run interrupted while loading
 	// stops here instead.
 	if err := ctx.Err(); err != nil {
@@ -228,7 +236,23 @@ func newPlan(ctx context.Context, config Configuration, workingDirectory string,
 			return nil, err
 		}
 	}
-	return planFrom(config, in, before, diffError)
+	p, err := planFrom(config, in, before, diffError)
+	if err != nil {
+		return nil, err
+	}
+	p.cover(cov, 0)
+	return p, nil
+}
+
+// cover records what the coverage pre-pass saw the tests execute, nil
+// when it is unknown, and how long it took, and finds the mutants it
+// shows no test reaches. It comes after planning, so that a run with
+// nothing to mutate, or one that cannot plan at all, never waits for the
+// pre-pass.
+func (p *plan) cover(cov coverage, took time.Duration) {
+	p.coverage = cov
+	p.prePass = took
+	p.unreached = p.findUnreached(p.parsedFrom)
 }
 
 // planFrom walks the templates each ExecuteTemplate call in the input
@@ -245,7 +269,6 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		diff:      config.Diff,
 		diffError: diffError,
 		pattern:   config.TemplatePattern,
-		coverage:  in.coverage,
 	}
 	sel := selector{
 		before:    before,
@@ -274,7 +297,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		p.reached += chosen.reached
 		p.matched += chosen.matched
 	}
-	p.unreached = p.findUnreached(parsedFrom)
+	p.parsedFrom = parsedFrom
 
 	if err := p.validate(config.TemplatesVariables); err != nil {
 		return nil, err

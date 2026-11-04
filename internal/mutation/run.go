@@ -123,9 +123,9 @@ const DefaultMaxCases = 8
 // Run mutates every action the configuration selects and reports which
 // variations the tests catch.
 //
-// Before planning, the tests run once with muxt's template engine in
-// place of html/template, to learn which template blocks they execute;
-// a dry run skips this. Tests that fail there leave coverage unknown, with
+// Once the run is planned, and when it has a mutant to run, the tests run
+// once with muxt's template engine in place of html/template, to learn
+// which template blocks they execute; a dry run skips this. Tests that fail there leave coverage unknown, with
 // a warning, and the run goes on.
 //
 // status receives a warning line when that template coverage is unknown,
@@ -146,18 +146,20 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 	}
 	defer func() { _ = os.RemoveAll(scratch) }()
 
+	p, err := newPlan(ctx, config, workingDirectory, nil)
+	if err != nil {
+		return nil, err
+	}
 	tester := config.goTest(workingDirectory)
-	// The pre-pass runs the tests, which a dry run never does.
-	var cov coverage
-	if !config.DryRun {
-		cov, err = templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
+	// The pre-pass runs the tests, which a dry run never does, and is
+	// worth a run of the suite only when there is a mutant to run.
+	if !config.DryRun && p.runnable() > 0 {
+		started := time.Now()
+		cov, err := templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
 		if err != nil {
 			return nil, err
 		}
-	}
-	p, err := newPlan(ctx, config, workingDirectory, cov)
-	if err != nil {
-		return nil, err
+		p.cover(cov, time.Since(started))
 	}
 	return runPlan(ctx, p, config, scratch, status, tester.baseline, tester.verdict, tester.recheck)
 }
@@ -206,10 +208,16 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 	clock := &estimate{perMutant: took, remaining: p.runnable(), workers: workers}
 
 	if status != nil {
-		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s, estimated %s\n",
+		// The coverage pre-pass is one more run of the suite, already
+		// done, which the estimate leaves out.
+		prePass := ""
+		if p.prePass > 0 {
+			prePass = ", coverage pre-pass " + roundDuration(p.prePass)
+		}
+		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s%s, estimated %s\n",
 			report.Total, pluralize(report.Total, "mutant"),
 			report.Templates, pluralize(report.Templates, "template"),
-			report.Complexity, roundDuration(took), clock.left())
+			report.Complexity, roundDuration(took), prePass, clock.left())
 	}
 	reportTrims(progress, report.Trimmed)
 

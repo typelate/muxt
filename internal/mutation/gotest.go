@@ -109,6 +109,8 @@ func coverageFlags(overlay string) []string {
 // template engine over html/template and coverDir, named by
 // html.CoverEnv, receiving the template blocks each test binary executes.
 //
+// It leaves out the caller's Go coverage flags; see withoutCoverFlags.
+//
 // It runs go test with -v, and must: without it go test prints nothing a
 // passing package's test binary wrote, and a binary whose export failed
 // says so only on its stderr, with html.CoverDisabledMarker. Without -v a
@@ -119,7 +121,41 @@ func (t goTest) coverage(ctx context.Context, overlay, coverDir string) (*goTest
 		env = os.Environ()
 	}
 	t.env = append(slices.Clip(env), html.CoverEnv+"="+coverDir)
+	t.extra = withoutCoverFlags(t.extra)
 	return t.run(ctx, coverageOutputLimit, coverageFlags(overlay)...)
+}
+
+// withoutCoverFlags is the caller's go test flags less the ones for Go
+// coverage, which the pre-pass must not pass on: -coverprofile would be
+// written once by it and again by the baseline, and -coverpkg or -cover
+// would instrument the engine's packages, which have no directory on
+// disk. The baseline and the kill runs keep them. A flag's value as the
+// next argument goes with it; everything from -args on is the test
+// binary's and is kept.
+func withoutCoverFlags(args []string) []string {
+	kept := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-args" || arg == "--args" {
+			return append(kept, args[i:]...)
+		}
+		name, _, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if !strings.HasPrefix(arg, "-") {
+			kept = append(kept, arg)
+			continue
+		}
+		switch name {
+		case "cover":
+			continue
+		case "covermode", "coverprofile", "coverpkg":
+			if !hasValue && i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+		kept = append(kept, arg)
+	}
+	return kept
 }
 
 // mutantOutputLimit is how much of one mutant's go test output is kept:
@@ -253,14 +289,25 @@ type goTestOutput struct {
 	named, unnamed bool
 
 	// coverDisabled is the first line in which a test binary said it
-	// stopped exporting template coverage, from the marker on.
+	// stopped exporting template coverage, from html.CoverDisabledMarker
+	// on, cut at maxMarkerLine bytes. It is looked for in everything
+	// written, not only in lines short enough to be markers: a test's own
+	// output with no newline can precede it on a long line.
 	coverDisabled string
+
+	// markerTail is the end of what has been written, a byte short of a
+	// whole marker, so that one split across writes is still found.
+	// capturing is set from the marker to the end of its line, and
+	// markerFound after.
+	markerTail             []byte
+	capturing, markerFound bool
 }
 
 const maxMarkerLine = 1 << 10
 
 func (o *goTestOutput) Write(p []byte) (int, error) {
 	o.keep(p)
+	o.findMarker(p)
 	for rest := p; len(rest) > 0; {
 		chunk, after, ended := bytes.Cut(rest, []byte("\n"))
 		if !o.overflow && len(o.line)+len(chunk) <= maxMarkerLine {
@@ -278,6 +325,46 @@ func (o *goTestOutput) Write(p []byte) (int, error) {
 		rest = after
 	}
 	return len(p), nil
+}
+
+// findMarker looks through p for the first html.CoverDisabledMarker and
+// collects the rest of its line into coverDisabled.
+func (o *goTestOutput) findMarker(p []byte) {
+	marker := []byte(html.CoverDisabledMarker)
+	for len(p) > 0 && !o.markerFound {
+		if o.capturing {
+			chunk, _, ended := bytes.Cut(p, []byte("\n"))
+			chunk = chunk[:min(len(chunk), maxMarkerLine-len(o.coverDisabled))]
+			o.coverDisabled += string(chunk)
+			if ended || len(o.coverDisabled) >= maxMarkerLine {
+				o.coverDisabled = strings.TrimSuffix(o.coverDisabled, "\r")
+				o.capturing, o.markerFound = false, true
+			}
+			return
+		}
+		// A marker that starts in what came before ends in the first
+		// len(marker)-1 bytes of p.
+		window := append(slices.Clip(o.markerTail), p[:min(len(p), len(marker)-1)]...)
+		start := -1
+		if i := bytes.Index(window, marker); i >= 0 {
+			start = i - len(o.markerTail)
+		} else if i := bytes.Index(p, marker); i >= 0 {
+			start = i
+		}
+		if start == -1 {
+			o.markerTail = lastBytes(append(slices.Clip(o.markerTail), lastBytes(p, len(marker)-1)...), len(marker)-1)
+			return
+		}
+		o.coverDisabled = string(marker)
+		o.capturing = true
+		o.markerTail = nil
+		p = p[start+len(marker):]
+	}
+}
+
+// lastBytes is a copy of at most the last n bytes of b.
+func lastBytes(b []byte, n int) []byte {
+	return slices.Clone(b[max(len(b)-n, 0):])
 }
 
 // keep appends p, and drops the front once more than twice the limit is
@@ -300,11 +387,6 @@ func (o *goTestOutput) keep(p []byte) {
 // already not a kill.
 func (o *goTestOutput) mark(line string) {
 	line = strings.TrimSuffix(line, "\r")
-	if i := strings.Index(line, html.CoverDisabledMarker); i >= 0 && o.coverDisabled == "" {
-		// Unanchored: a test's own output without a newline can precede
-		// it on the line.
-		o.coverDisabled = line[i:]
-	}
 	switch {
 	case strings.HasPrefix(strings.TrimLeft(line, " \t"), "--- FAIL"):
 		o.testFailed = true
