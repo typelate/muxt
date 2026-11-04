@@ -43,9 +43,9 @@ Each partial takes the route's `TemplateData`, so every one of them can call `.P
 {{end}}
 ```
 
-- `.HXRequest` is true when the request carries `HX-Request: true`, and `.HXTargetElementID` is the id of the element the response will replace, from `HX-Target`. Both read request headers; neither can tell a user from a script that sets them, so never decide access on them.
-- `not .HXHistoryRestoreRequest` sends the whole page when htmx restores history. When the user goes back to a URL that `hx-push-url` added and htmx has no snapshot of it, htmx requests that URL with `HX-Request: true` and `HX-History-Restore-Request: true`, without `HX-Target`, and puts the response in place of the whole body. A fragment there would replace the page.
-- `Vary` tells the browser and any proxy that the response depends on those two request headers, so a cached `#results` list is not served for a direct visit to the same URL. `.Header` calls `Header().Set`: a later `.Header "Vary"` replaces this one rather than adding to it ([call results](../reference/call-results.md#templatedata)).
+- `.HXRequest` is true when the request carries `HX-Request: true`, and `.HXTargetElementID` is the id of the element the response will replace, from `HX-Target`.
+- `not .HXHistoryRestoreRequest` sends the whole page when htmx restores history (see edge cases).
+- `Vary` tells the browser and any proxy that the response depends on those two request headers, so a cached `#results` list is not served for a direct visit to the same URL.
 - `hx-push-url="true"` puts the requested URL in the address bar, so the back button and a copied link both reach a route that can render the full page.
 
 ## Let muxt check the partials
@@ -61,6 +61,12 @@ When rendering the whole page every time is cheap enough, leave the route templa
 ```
 
 `hx-select` takes the element matching the selector out of the response and swaps only that. The server renders and sends the full page on each request, and no `Vary` header is needed because every response is the same.
+
+## Edge cases
+
+- **History restore.** When the user goes back to a URL that `hx-push-url` added and htmx has no snapshot of it, htmx requests that URL with `HX-Request: true` and `HX-History-Restore-Request: true`, without `HX-Target`, and puts the response in place of the whole body. A fragment there would replace the page, which is why the route template guards on `not .HXHistoryRestoreRequest`.
+- **Headers are client input.** The `.HX*` readers cannot tell a user from a script that sets the same headers, so never decide access on them.
+- **`Vary` is set, not added.** `.Header` calls `Header().Set`, so a later `.Header "Vary"` in a partial replaces this one rather than adding to it ([call results](../reference/call-results.md#templatedata)). Set it once, in the route template.
 
 ## Datastar
 

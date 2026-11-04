@@ -2,7 +2,7 @@
 
 When a session expires, the next htmx request must not get the login page back. A redirect to `/login` is followed inside the XMLHttpRequest, so htmx receives a 200 login page and swaps it into whatever small element asked, leaving a page inside the page. Detect htmx requests in middleware and answer them in a way htmx acts on. Keep background polling from extending the session, and show a lock dialog when it ends.
 
-`sessions` stands for your session package: `Lookup` finds the request's session, `Touch` extends its expiry and returns the session with the new `ExpiresAt`, which is when it ends. The deadline below is read after `Touch`, so a stream opened by user activity lasts the extended session.
+`sessions` stands for your session package: `Lookup` finds the request's session, `Touch` extends its expiry and returns the session with the new `ExpiresAt`, which is when it ends.
 
 ## Wrap every route with middleware
 
@@ -12,7 +12,7 @@ Generate with `--output-routes-func-with-middleware-param` ([generate](../refere
 TemplateRoutes(mux, srv, requireSession(store))
 ```
 
-The middleware runs after the mux has matched, so `r.Pattern` holds the pattern of the matched route, as written in the template name (with the prefix in front under `--output-routes-func-with-path-prefix-param`). It wraps the static assets handler too.
+The middleware runs after the mux has matched, so `r.Pattern` holds the pattern of the matched route, as written in the template name. It wraps the static assets handler too.
 
 ```go
 func requireSession(store *sessions.Store) func(http.Handler) http.Handler {
@@ -74,11 +74,9 @@ func nextPath(r *http.Request) string {
 }
 ```
 
-htmx 2 reads `HX-Redirect` before it looks at the status code, sets `location.href`, and swaps nothing, so the 401 still navigates the whole tab. Any client that is not htmx sees a 401 instead of a 200. `next` comes from `HX-Current-URL`, the page htmx was on, not from the fragment URL it requested. Check `next` again in the login handler before redirecting to it: it is input from the client.
+htmx 2 reads `HX-Redirect` before it looks at the status code, sets `location.href`, and swaps nothing, so the 401 still navigates the whole tab. `next` comes from `HX-Current-URL`, the page htmx was on, not from the fragment URL it requested.
 
 `HX-Refresh: true` in place of `HX-Redirect` reloads the page instead. The reload is a plain request that the `default` case answers with a 303 to the login page, with `next` set to the page URL. That costs a round trip and needs no `HX-Current-URL`.
-
-htmx reads no response headers when it restores history: when the user goes back to a pushed URL that htmx has no snapshot of, it requests the URL with `HX-History-Restore-Request: true` and only swaps responses below 400. The 401 there makes htmx fire `htmx:historyCacheMissLoadError`; the script below reloads the page on it.
 
 ## Or show a lock dialog on 401
 
@@ -101,7 +99,7 @@ To keep the page in place and show your own lock screen, drop the `HX-Redirect` 
 </script>
 ```
 
-Put both in the layout so every page has them. htmx does not swap a 401 body by default, but an element with `hx-target-401` or `hx-target-4*` from the response-targets extension does, so keep the 401 body empty.
+Put both in the layout so every page has them.
 
 ## Keep polling from extending the session
 
@@ -142,6 +140,15 @@ func (s *Server) SessionStatus(r *http.Request) SessionState {
 ```
 
 While the session lasts the template renders nothing, so the route answers 204 ([status codes](../reference/call-results.md#status-code-control)) and htmx swaps nothing. Once it has ended the route answers 286: htmx swaps the response, which with `hx-swap="none"` means only the out-of-band dialog replaces the `#session-lock` in the layout, and 286 stops the polling. `hx-on::load` runs once htmx has processed the new dialog and opens it as a modal.
+
+## Edge cases
+
+- **History restore.** htmx reads no response headers when it restores history: when the user goes back to a pushed URL that htmx has no snapshot of, it requests the URL with `HX-History-Restore-Request: true` and only swaps responses below 400. `refuseExpired` answers a bare 401 there, htmx fires `htmx:historyCacheMissLoadError`, and the layout script reloads the page.
+- **`next` is client input.** It comes from a request header, so the login handler must check it again before redirecting to it. `nextPath` keeps only a path and query, which rules out another host.
+- **Clients that are not htmx** get the 401 (or the 303) rather than a 200 login page, which is what an API client or a test should see.
+- **The 401 body.** htmx does not swap a 401 body by default, but an element with `hx-target-401` or `hx-target-4*` from the response-targets extension does, so keep the body empty.
+- **The deadline follows `Touch`.** The middleware reads `ExpiresAt` from the session `Touch` returns, so a stream opened by user activity lasts the extended session, not the one it found.
+- **Path prefixes.** Under `--output-routes-func-with-path-prefix-param`, `r.Pattern` carries the prefix in front of the pattern written in the template name, so the `switch` must include it.
 
 ## Datastar
 
