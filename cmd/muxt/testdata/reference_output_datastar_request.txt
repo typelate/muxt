@@ -7,6 +7,7 @@
 muxt generate --use-receiver-type=Server
 ! grep 'DatastarRequest' template_routes.go
 ! muxt check
+stderr 'DatastarRequest'
 
 muxt generate --output-datastar --use-receiver-type=Server
 muxt check

@@ -2,7 +2,7 @@
 
 When a session expires, the next htmx request must not get the login page back. A redirect to `/login` is followed inside the XMLHttpRequest, so htmx receives a 200 login page and swaps it into whatever small element asked, leaving a page inside the page. Detect htmx requests in middleware and answer them in a way htmx acts on. Keep background polling from extending the session, and show a lock dialog when it ends.
 
-`sessions` stands for your session package: `Lookup` finds the request's session, `Touch` extends its expiry, and `ExpiresAt` is when it ends.
+`sessions` stands for your session package: `Lookup` finds the request's session, `Touch` extends its expiry and returns the session with the new `ExpiresAt`, which is when it ends. The deadline below is read after `Touch`, so a stream opened by user activity lasts the extended session.
 
 ## Wrap every route with middleware
 
@@ -12,7 +12,7 @@ Generate with `--output-routes-func-with-middleware-param` ([generate](../refere
 TemplateRoutes(mux, srv, requireSession(store))
 ```
 
-The middleware runs after the mux has matched, so `r.Pattern` holds the pattern of the matched route, as written in the template name. It wraps the static assets handler too.
+The middleware runs after the mux has matched, so `r.Pattern` holds the pattern of the matched route, as written in the template name (with the prefix in front under `--output-routes-func-with-path-prefix-param`). It wraps the static assets handler too.
 
 ```go
 func requireSession(store *sessions.Store) func(http.Handler) http.Handler {
@@ -33,7 +33,7 @@ func requireSession(store *sessions.Store) func(http.Handler) http.Handler {
 				return
 			}
 			if r.Header.Get("X-Background") != "true" {
-				store.Touch(w, session)
+				session = store.Touch(w, session)
 			}
 			ctx, cancel := context.WithDeadline(r.Context(), session.ExpiresAt)
 			defer cancel()

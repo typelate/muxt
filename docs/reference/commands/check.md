@@ -24,7 +24,7 @@ What fails: [Type Checking](../type-checking.md#what-is-checked). A template sha
 
 In an `html/template` set, check also fails on HTML comments and markup that `html/template` writes differently from what the template says, each at its `file:line:col`:
 
-- a `<!--` inside `<title>` or `<textarea>`: `html/template` escapes it there, so the page shows the comment;
+- a `<!--` inside `<title>` or `<textarea>`: those elements hold text, not markup, so the page shows the comment;
 - a `<!` that starts no comment or doctype (`<![if !IE]>`, `<!x>`), or a `<?`: `html/template` escapes the `<`, so the page shows the text;
 - a comment opened as `<!-->` or `<!--->`: a browser ends the comment right there, but `html/template` strips everything through the next `-->`, and the message gives that position.
 

@@ -19,7 +19,7 @@ One URL often needs three responses: the whole page for a direct visit, the main
 {{define "articles-main"}}<h1>Articles</h1>
 <input type="search" name="q" value="{{.Result.Query}}"
        hx-get="{{.Path.ListArticles}}" hx-trigger="input changed delay:300ms"
-       hx-target="#results" hx-push-url="true">
+       hx-target="#results" hx-swap="outerHTML" hx-push-url="true">
 {{template "article-results" .}}{{end}}
 
 {{define "article-results"}}<ul id="results">
