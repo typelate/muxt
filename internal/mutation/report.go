@@ -112,6 +112,19 @@ type UnchangedTemplate struct {
 	DataType string `json:"data_type"`
 }
 
+// UnreachedMutant is a mutant no test reaches: the coverage pre-pass saw
+// no test execute its action. It is still run, and almost certainly
+// missed, so it is reported to say why, not to say it was left out; a
+// later flag may skip running such mutants.
+type UnreachedMutant struct {
+	Template string   `json:"template"`
+	File     string   `json:"file"`
+	Line     int      `json:"line"`
+	Column   int      `json:"column"`
+	Operator Operator `json:"operator"`
+	Mutated  string   `json:"mutated"`
+}
+
 // BaselineResult records the unmutated run the mutants are compared
 // against.
 type BaselineResult struct {
@@ -146,6 +159,13 @@ type Report struct {
 	Diff      string              `json:"diff,omitempty"`
 	DiffError string              `json:"diff_error,omitempty"`
 	Unchanged []UnchangedTemplate `json:"unchanged,omitempty"`
+
+	// CoverageKnown is whether the run knew which template blocks the
+	// tests execute. Only then does Unreached list the mutants no test
+	// reaches; without it nothing is known to be unreached. The summary
+	// line counts them when there are any.
+	CoverageKnown bool              `json:"coverage_known,omitzero"`
+	Unreached     []UnreachedMutant `json:"unreached,omitzero"`
 
 	// Note says why a run narrowed by --template-pattern or --diff has
 	// nothing to mutate, so an empty report is not read as one that
@@ -224,6 +244,7 @@ func (r *Report) WriteTo(w io.Writer) (int64, error) {
 
 	r.writeTrimmed(out)
 	r.writeUnchanged(out)
+	r.writeUnreached(out)
 	r.writeSummary(out)
 
 	if err := out.Flush(); err != nil {
@@ -343,11 +364,30 @@ func (r *Report) writeUnchanged(out *bufio.Writer) {
 	}
 }
 
+func (r *Report) writeUnreached(out *bufio.Writer) {
+	if !r.Verbose || len(r.Unreached) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "\nno test reaches %d %s:\n",
+		len(r.Unreached), pluralize(len(r.Unreached), "mutant"))
+	for _, u := range r.Unreached {
+		_, _ = fmt.Fprintf(out, "  %s %s %d:%d %s\n", strconv.Quote(u.Template), u.File,
+			u.Line, u.Column, Result{Operator: u.Operator, Mutated: u.Mutated}.label())
+	}
+}
+
 func (r *Report) writeSummary(out *bufio.Writer) {
 	_, _ = fmt.Fprintln(out)
+	unreached := ""
+	if r.CoverageKnown && len(r.Unreached) > 0 {
+		// Left out of a run in which the tests reach every mutant, so
+		// the line reads as it always has, and of one whose coverage is
+		// unknown, which the pre-pass already warned about.
+		unreached = fmt.Sprintf(", %d unreached", len(r.Unreached))
+	}
 	if r.DryRun {
-		_, _ = fmt.Fprintf(out, "%d %s, %d runnable, %d skipped\n",
-			r.Total, pluralize(r.Total, "mutant"), r.Total-r.Skipped, r.Skipped)
+		_, _ = fmt.Fprintf(out, "%d %s, %d runnable, %d skipped%s\n",
+			r.Total, pluralize(r.Total, "mutant"), r.Total-r.Skipped, r.Skipped, unreached)
 		return
 	}
 	flaky := ""
@@ -356,8 +396,8 @@ func (r *Report) writeSummary(out *bufio.Writer) {
 		// always has unless --workers produced a failure to explain.
 		flaky = fmt.Sprintf(", %d flaky", r.Flaky)
 	}
-	_, _ = fmt.Fprintf(out, "%d %s, %d killed%s, %d missed, %d skipped\n",
-		r.Total, pluralize(r.Total, "mutant"), r.Killed, flaky, r.Missed, r.Skipped)
+	_, _ = fmt.Fprintf(out, "%d %s, %d killed%s, %d missed, %d skipped%s\n",
+		r.Total, pluralize(r.Total, "mutant"), r.Killed, flaky, r.Missed, r.Skipped, unreached)
 }
 
 func pluralize(n int, word string) string {

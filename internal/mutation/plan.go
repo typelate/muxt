@@ -51,6 +51,22 @@ type plan struct {
 	// coverage is the template blocks the tests executed, from the
 	// coverage pre-pass; nil when it is unknown.
 	coverage coverage
+
+	// candidates are the runnable mutants coverage may show no test
+	// reaches, and unreached the ones it does once every template set
+	// is planned: whether a parse name is ambiguous is only known then.
+	candidates []candidate
+	unreached  []UnreachedMutant
+}
+
+// candidate is a runnable mutant in an html/template set, with the name
+// its template's text is parsed under at run time, which is what a cover
+// profile keys its blocks on.
+type candidate struct {
+	mutant    int
+	parseName string
+	result    Result
+	file      string
 }
 
 // narrowed reports whether the run was asked to mutate only some of the
@@ -88,6 +104,9 @@ func (p *plan) report() *Report {
 		Diff:      p.diff,
 		DiffError: p.diffError,
 		Unchanged: p.unchanged,
+
+		CoverageKnown: p.coverage != nil,
+		Unreached:     p.unreached,
 	}
 }
 
@@ -235,6 +254,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		include:   templateFilter(config.TemplatePattern),
 		wd:        in.dir,
 	}
+	parsedFrom := make(parseNameSources)
 
 	for _, variable := range in.pkg.Variables {
 		lt := newChecked(in.pkg, variable)
@@ -243,6 +263,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		if err != nil {
 			return nil, err
 		}
+		parsedFrom.add(lt, index)
 
 		chosen := sel.choose(traverse(lt, index))
 		for _, sc := range chosen.mutate {
@@ -253,6 +274,7 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		p.reached += chosen.reached
 		p.matched += chosen.matched
 	}
+	p.unreached = p.findUnreached(parsedFrom)
 
 	if err := p.validate(config.TemplatesVariables); err != nil {
 		return nil, err
@@ -329,6 +351,9 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 			result.Reason = reason
 		} else {
 			p.runnableN++
+			if name := parseNameOf(lt, sc.template); name != "" {
+				p.candidates = append(p.candidates, candidate{mutant: len(p.mutants), parseName: name, result: result, file: report.File})
+			}
 		}
 		result.mutantIndex = len(p.mutants)
 		p.mutants = append(p.mutants, m)
@@ -372,6 +397,118 @@ func (p *plan) add(lt *checked, sc scope, workingDirectory string) {
 		DataType:  typeDisplay(sc.call.DataType),
 		Templates: []TemplateReport{report},
 	})
+}
+
+// parseNameOf is the name a template's text is parsed under when the
+// tests execute it, which is the name a cover profile files its blocks
+// under: a file's base name, or the name of the template a Go string was
+// parsed into. The set was loaded the way the tests load it, so its tree
+// carries that name.
+//
+// It is empty, meaning unknown, for a text/template set: the coverage
+// pre-pass lays muxt's engine over html/template only, so the tests never
+// report executing one.
+func parseNameOf(lt *checked, name string) string {
+	if lt.Text {
+		return ""
+	}
+	t := lt.Set.Lookup(name)
+	if t == nil || t.Tree == nil {
+		return ""
+	}
+	return t.Tree.ParseName
+}
+
+// parseNameSources is the texts each parse name was given to, across
+// every template set in the package, by file and offset of the literal
+// in it.
+type parseNameSources map[string]map[sourceKey]struct{}
+
+func (s parseNameSources) add(lt *checked, index map[string]treeLocation) {
+	for name, location := range index {
+		parseName := parseNameOf(lt, name)
+		if parseName == "" {
+			continue
+		}
+		if s[parseName] == nil {
+			s[parseName] = make(map[sourceKey]struct{})
+		}
+		s[parseName][sourceKey{file: location.src.file, litStart: location.src.litStart}] = struct{}{}
+	}
+}
+
+// ambiguous reports whether more than one text was parsed under a name,
+// in which case a block filed under it may be in either.
+func (s parseNameSources) ambiguous(parseName string) bool { return len(s[parseName]) > 1 }
+
+// findUnreached lists the runnable mutants the coverage pre-pass saw no
+// test reach. A mutant is unreached only when coverage is known, its
+// template's parse name holds no other text in the package, and no block
+// executed under that name overlaps the action the mutant changes. A
+// template the tests never executed has no blocks, so every mutant in it
+// is unreached.
+//
+// Nothing is skipped because of it: the mutants still run, and this says
+// why they will be missed.
+func (p *plan) findUnreached(parsedFrom parseNameSources) []UnreachedMutant {
+	if p.coverage == nil {
+		return nil
+	}
+	lines := make(map[*templateSource]lineIndex)
+	var unreached []UnreachedMutant
+	for _, c := range p.candidates {
+		if parsedFrom.ambiguous(c.parseName) {
+			continue
+		}
+		m := p.mutants[c.mutant]
+		_, r, ok := regionAt(m.src.regions, m.start())
+		if !ok {
+			continue
+		}
+		index, ok := lines[m.src]
+		if !ok {
+			index = newLineIndex(m.src.text)
+			lines[m.src] = index
+		}
+		if p.coverage.reaches(c.parseName, index, r) {
+			continue
+		}
+		unreached = append(unreached, UnreachedMutant{
+			Template: m.Template,
+			File:     c.file,
+			Line:     c.result.Line,
+			Column:   c.result.Column,
+			Operator: c.result.Operator,
+			Mutated:  c.result.Mutated,
+		})
+	}
+	return unreached
+}
+
+// reaches reports whether a block executed in the template parsed under
+// parseName overlaps the action r, located in the text lines indexes.
+// Blocks are spans of the parsed text, end exclusive, as the engine's
+// cover profile writes them.
+//
+// A {{block}} call is always reached: the engine records no block for the
+// call itself, only for the body, which an override may replace.
+func (c coverage) reaches(parseName string, lines lineIndex, r region) bool {
+	if r.keyword == "block" {
+		return true
+	}
+	for b := range c[parseName] {
+		start, startOK := lines.offset(b.StartLine, b.StartCol)
+		end, endOK := lines.offset(b.EndLine, b.EndCol)
+		if !startOK || !endOK {
+			// Not a span of this text: the block is in another one
+			// parsed under the same name.
+			continue
+		}
+		if start < r.end && r.start < end {
+			return true
+		}
+	}
+	return false
 }
 
 // invalid reports whether a mutant would break the template rather than
@@ -565,4 +702,18 @@ func relativePosition(workingDirectory string, position token.Position) string {
 	}
 	path := relativePath(workingDirectory, position.Filename)
 	return path + ":" + strconv.Itoa(position.Line) + ":" + strconv.Itoa(position.Column)
+}
+
+// offset turns a one based line and column, counting bytes, back into an
+// offset, reporting false for a line the text does not have or a column
+// past the end of its line.
+func (l lineIndex) offset(line, column int) (int, bool) {
+	if line < 1 || line > len(l) || column < 1 {
+		return 0, false
+	}
+	offset := l[line-1] + column - 1
+	if line < len(l) && offset >= l[line] {
+		return 0, false
+	}
+	return offset, true
 }

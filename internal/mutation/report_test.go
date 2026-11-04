@@ -182,3 +182,42 @@ func TestReportListsFlakyKills(t *testing.T) {
 	assert.Contains(t, text, "2 mutants, 1 killed, 1 flaky, 0 missed, 0 skipped\n", "summary")
 	assert.NoError(t, report.Err(), "a flaky kill does not fail the run")
 }
+
+// TestReportCountsUnreachedMutants states that when the run knew which
+// template blocks the tests execute, the summary line counts the mutants
+// no test reaches, when there are any, and a verbose report lists
+// them after the other skips. They still run, so kills and misses are
+// counted as before.
+func TestReportCountsUnreachedMutants(t *testing.T) {
+	unreached := []UnreachedMutant{
+		{Template: "page", File: "page.gohtml", Line: 1, Column: 30, Operator: OperatorIfFalse, Mutated: "false"},
+		{Template: "page", File: "page.gohtml", Line: 1, Column: 40, Operator: OperatorOperands, Mutated: `.A="abcd" .B=3`},
+	}
+
+	report := sampleReport()
+	report.CoverageKnown, report.Unreached = true, unreached
+	text := writeReport(t, report)
+	assert.Contains(t, text, "\n7 mutants, 3 killed, 3 missed, 1 skipped, 2 unreached\n", "summary")
+	assert.NotContains(t, text, "no test reaches", "unreached mutants are listed only with -v")
+	assert.Equal(t, 3, report.Missed, "misses")
+
+	report.Verbose = true
+	assert.Contains(t, writeReport(t, report), `
+trimmed 1 subtree already mutated with the same dot:
+  "row" at page.go:12:9, first reached from page.go:9:9
+
+no test reaches 2 mutants:
+  "page" page.gohtml 1:30 if-false
+  "page" page.gohtml 1:40 operands .A="abcd" .B=3
+
+7 mutants, 3 killed, 3 missed, 1 skipped, 2 unreached
+`, "verbose report")
+
+	report = sampleReport()
+	report.CoverageKnown = true
+	assert.Contains(t, writeReport(t, report), "\n7 mutants, 3 killed, 3 missed, 1 skipped\n", "summary with every mutant reached")
+
+	report.DryRun = true
+	report.Unreached = unreached
+	assert.Contains(t, writeReport(t, report), "\n7 mutants, 6 runnable, 1 skipped, 2 unreached\n", "dry run summary")
+}

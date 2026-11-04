@@ -491,3 +491,128 @@ func TestRelativePath(t *testing.T) {
 		})
 	}
 }
+
+// sameBaseNameGo parses two files named row.gohtml, from two directories,
+// into two template sets. Both are parsed under the name row.gohtml, so a
+// cover profile cannot say which of the two a block is in.
+const sameBaseNameGo = `package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed a/row.gohtml
+var aFiles embed.FS
+
+//go:embed b/row.gohtml
+var bFiles embed.FS
+
+var (
+	aTemplates = template.Must(template.ParseFS(aFiles, "a/row.gohtml"))
+	bTemplates = template.Must(template.ParseFS(bFiles, "b/row.gohtml"))
+)
+
+func RenderA(w io.Writer, name string) error { return aTemplates.ExecuteTemplate(w, "row.gohtml", name) }
+
+func RenderB(w io.Writer, name string) error { return bTemplates.ExecuteTemplate(w, "row.gohtml", name) }
+`
+
+// unreachedMutants names each mutant a plan reports no test reaching.
+func unreachedMutants(p *plan) []string {
+	var names []string
+	for _, u := range p.report().Unreached {
+		names = append(names, u.Template+" "+u.File+" "+strconv.Itoa(u.Line)+":"+strconv.Itoa(u.Column)+" "+Result{Operator: u.Operator, Mutated: u.Mutated}.label())
+	}
+	return names
+}
+
+// TestPlanReportsUnreachedMutants states which mutants the coverage
+// pre-pass says no test reaches: those whose action no executed block of
+// their template overlaps. The greeting is a Go string literal, so its
+// blocks are located in the literal's text while its mutants are located
+// in the Go file, and the template is parsed under its own name.
+//
+// "Hello, {{.Name}}!{{if .Loud}} !!!{{end}}" has the name action at
+// columns 8 to 16 of its text and the if at 18 to 29.
+func TestPlanReportsUnreachedMutants(t *testing.T) {
+	t.Parallel()
+	var (
+		hello   = coverBlock{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 8}
+		name    = coverBlock{StartLine: 1, StartCol: 8, EndLine: 1, EndCol: 17}
+		ifOpen  = coverBlock{StartLine: 1, StartCol: 18, EndLine: 1, EndCol: 30}
+		whole   = coverBlock{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 41}
+		nameMut = []string{`greeting template.go 8:70 action-zero`}
+		ifMuts  = []string{`greeting template.go 8:80 if-false`, `greeting template.go 8:80 if-true`}
+		all     = append(append([]string{}, nameMut...), ifMuts...)
+	)
+	greeting := map[string]string{"go.mod": goMod, "template.go": greetingGo}
+	textGreeting := map[string]string{"go.mod": goMod, "template.go": strings.Replace(greetingGo, `"html/template"`, `"text/template"`, 1)}
+	sameBaseName := map[string]string{
+		"go.mod": goMod, "template.go": sameBaseNameGo,
+		"a/row.gohtml": "<b>{{.}}</b>", "b/row.gohtml": "<i>{{.}}</i>",
+	}
+	for _, tt := range []struct {
+		name      string
+		files     map[string]string
+		variables []string
+		coverage  coverage
+		known     bool
+		want      []string
+	}{
+		{name: "coverage unknown", files: greeting},
+		{name: "no template executed", files: greeting, coverage: coverage{}, known: true, want: all},
+		{name: "only another template executed", files: greeting, coverage: coverage{"other": {whole: {}}}, known: true, want: all},
+		{name: "only text before the actions executed", files: greeting, coverage: coverage{"greeting": {hello: {}}}, known: true, want: all},
+		{name: "the name executed", files: greeting, coverage: coverage{"greeting": {hello: {}, name: {}}}, known: true, want: ifMuts},
+		{name: "every action executed", files: greeting, coverage: coverage{"greeting": {name: {}, ifOpen: {}}}, known: true},
+		{name: "a block spanning the actions", files: greeting, coverage: coverage{"greeting": {whole: {}}}, known: true},
+		{name: "two templates parsed under one name", files: sameBaseName, variables: []string{"aTemplates", "bTemplates"}, coverage: coverage{}, known: true},
+		{name: "a text/template set", files: textGreeting, coverage: coverage{}, known: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, tt.files)
+			config := greetingConfig()
+			if tt.variables != nil {
+				config.TemplatesVariables = tt.variables
+			}
+			p, err := newPlan(t.Context(), config, dir, tt.coverage)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, unreachedMutants(p), "unreached mutants")
+			assert.Equal(t, tt.known, p.report().CoverageKnown, "coverage known")
+		})
+	}
+}
+
+// TestCoverageReaches states how one action is read against the blocks
+// executed in its template's text: reached when an executed block
+// overlaps it, and always reached at a {{block}} call, which the engine
+// gives no block of its own.
+func TestCoverageReaches(t *testing.T) {
+	const text = "ab\n{{.X}}cd\n{{block \"b\" .}}{{end}}"
+	src := newFileSource("page.gohtml", "page.gohtml", text, "", "")
+	action, block := src.regions[0], src.regions[1]
+	require.Equal(t, "block", block.keyword, "second region")
+	for _, tt := range []struct {
+		name   string
+		blocks map[coverBlock]struct{}
+		r      region
+		want   bool
+	}{
+		{name: "no blocks", r: action},
+		{name: "the action's own block", blocks: map[coverBlock]struct{}{{StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 7}: {}}, r: action, want: true},
+		{name: "a block containing the action", blocks: map[coverBlock]struct{}{{StartLine: 1, StartCol: 1, EndLine: 3, EndCol: 1}: {}}, r: action, want: true},
+		{name: "a block ending where the action starts", blocks: map[coverBlock]struct{}{{StartLine: 1, StartCol: 1, EndLine: 2, EndCol: 1}: {}}, r: action},
+		{name: "a block starting where the action ends", blocks: map[coverBlock]struct{}{{StartLine: 2, StartCol: 7, EndLine: 2, EndCol: 9}: {}}, r: action},
+		{name: "a block past the end of the text", blocks: map[coverBlock]struct{}{{StartLine: 9, StartCol: 1, EndLine: 9, EndCol: 4}: {}}, r: action},
+		{name: "a block call", r: block, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cov := coverage{"page.gohtml": tt.blocks}
+			got := cov.reaches("page.gohtml", newLineIndex(src.text), tt.r)
+			assert.Equal(t, tt.want, got, "reaches(%q)", src.text[tt.r.start:tt.r.end])
+		})
+	}
+}
