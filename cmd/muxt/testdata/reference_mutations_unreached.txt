@@ -1,0 +1,76 @@
+# The tests run once before planning, with muxt's own template engine in
+# place of html/template, to learn which template actions they execute.
+#
+# The test below renders the page for a guest only, so nothing it runs
+# reaches the {{.Secret}} inside {{if .Admin}}. That mutant still runs,
+# and is missed, and -v lists it under "no test reaches" so the miss reads
+# as an untested branch rather than a weak assertion. The summary line
+# counts it. The mutants the test does reach are killed or missed as they
+# would be without the pre-pass.
+
+! muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+! stderr 'warning:'
+! stderr 'tests fail under'
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "page"}}Hello, {{.Name}}!{{if .Admin}} {{.Secret}}{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name   string
+	Admin  bool
+	Secret string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGuestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Name: "Ada", Secret: "s3cret"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Hello, Ada!"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+4 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:21:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 2, dot: server.Page)
+    KILL 1:25 action-zero
+    MISS 1:35 if-false
+    KILL 1:35 if-true
+    MISS 1:49 action-zero
+
+no test reaches 1 mutant:
+  "page" templates.gohtml 1:49 action-zero
+
+4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached

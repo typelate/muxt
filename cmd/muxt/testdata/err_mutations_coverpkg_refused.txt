@@ -1,0 +1,23 @@
+# The coverage pre-pass replaces html/template with muxt's template
+# engine through go test -overlay. Coverage instrumentation reads the
+# packages it instruments from disk and so would undo that replacement,
+# which is why a -coverpkg that takes in html/template is refused before
+# anything runs, whether it names the package or a pattern holding it.
+# Covering your own packages is fine.
+
+! muxt test-template-mutations --seed 1 -- -coverpkg=html/template
+cmp stderr want-html-template.txt
+! stdout .
+
+! muxt test-template-mutations --seed 1 -- -coverpkg=std
+cmp stderr want-std.txt
+! stdout .
+
+-- go.mod --
+module server
+
+go 1.24
+-- want-html-template.txt --
+Error: go test flag -coverpkg cannot cover html/template ("html/template" does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead
+-- want-std.txt --
+Error: go test flag -coverpkg cannot cover html/template ("std" does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead
