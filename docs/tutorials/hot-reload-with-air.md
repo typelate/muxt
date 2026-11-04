@@ -22,7 +22,7 @@ tmp_dir = "tmp"
   clear_on_rebuild = true
 ```
 
-`pre_cmd` regenerates before every build. `exclude_regex` stops the generated files from triggering a second rebuild. It matches `template_routes.go` in any package, the `<name>_template_routes_gen.go` files of `--output-multiple-files`, and any `--output-file` name ending in `template_routes.go`.
+`pre_cmd` regenerates before every build. `exclude_regex` stops the generated files from triggering a second rebuild. It matches `template_routes.go` in any package.
 
 ## Step 2: Run
 
@@ -44,3 +44,7 @@ Air's [proxy](https://github.com/air-verse/air#proxy-reload-the-browser-automati
 ```
 
 Browse to the proxy port.
+
+## Edge cases
+
+- **Other generated file names.** `exclude_regex` also matches the `<name>_template_routes_gen.go` files of `--output-multiple-files`, and any `--output-file` name ending in `template_routes.go`.

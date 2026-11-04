@@ -213,8 +213,7 @@ The preamble counts mutants, templates and total complexity (per template, one p
 
 With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`. A development build that `MUXT_MODULE_DIR` replaces has no version to name, so the note is `engine github.com/typelate/muxt => <dir>`.
 
-Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took. With `--workers` above 1 templates finish in whatever order their last mutant does.
-
+Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took..
 ```text
 [ 1/6] templates.gohtml "greeting": 8 mutants, 7 killed, 1 missed, 3.2s
 [ 2/6] templates.gohtml "footer": 3 mutants, 2 killed, 0 missed, 1 skipped, 1.1s
@@ -305,6 +304,7 @@ A run adds `seconds` per result and a top-level `baseline` object with `passed` 
 - **Which tests a recheck runs.** When a package failed without naming a test, the repeat runs all the tests. When you gave `--run` or a `-run` after `--`, it runs exactly the tests that flag selected.
 - **A repeat that cannot run** keeps the kill and says why in its reason.
 - **The JSON `flaky` count.** `--format json` adds a top-level `flaky` count only when it is not zero.
+- **Template order with `--workers`.** Above 1 worker, templates finish in whatever order their last mutant does.
 - **Type aliases under `--diff`.** Types are compared by name, looking through type aliases wherever they appear, the type arguments of a generic dot included: retargeting `type Page = page.Data` to another type counts as a new type of dot.
 - **An unreadable revision.** If the templates cannot be read at the `--diff` revision, every template counts as changed and the preamble says why.
 

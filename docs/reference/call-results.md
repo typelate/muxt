@@ -98,7 +98,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 
 With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`, `.HXPushURL`, `.HXRedirect`, `.HXRefresh`, `.HXReplaceURL`, `.HXReswap`, `.HXRetarget`, `.HXReselect`, `.HXTrigger`, `.HXTriggerAfterSettle` and `.HXTriggerAfterSwap`, which chain and print nothing, and the request readers `.HXBoosted`, `.HXCurrentURL`, `.HXHistoryRestoreRequest`, `.HXPrompt`, `.HXRequest`, `.HXTargetElementID`, `.HXTriggerName` and `.HXTriggerElementID`.
 
-With `--output-datastar`, `TemplateData` also has the request reader `.DatastarRequest`, true when the request carries `Datastar-Request: true`, which every Datastar `@get`, `@post`, `@put`, `@patch` and `@delete` action sends ([reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt)). `SSETemplateData` does not have it: a Datastar stream is always opened by an action.
+With `--output-datastar`, `TemplateData` also has the request reader `.DatastarRequest`, true when the request carries `Datastar-Request: true`, which every Datastar `@get`, `@post`, `@put`, `@patch` and `@delete` action sends ([reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt)).
 
 ### Route methods
 
@@ -112,7 +112,7 @@ A route without a call is named from its pattern: a verb for the HTTP method (`G
 
 The [static assets](commands/generate.md#static-assets) path method is named the same way, as a call-less `GET` route with `--output-static-assets-path`: `Read` and the path's segments in PascalCase, so `/static` is `ReadStatic`, `/static/v1/` is `ReadStaticV1`, and `/assets/img` is `ReadAssetsImg` ([reference_static_assets.txt](../../cmd/muxt/testdata/reference_static_assets.txt)).
 
-`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`.
+`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template.
 
 ## Status Code Control
 
@@ -153,7 +153,9 @@ A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, g
 - **A stray `{{.}}` is not flagged.** `muxt check` does not report `{{.}}`, which prints nothing because `.String` is `""`.
 - **Selecting from a route that takes arguments.** Call the `.Route` method in parentheses before selecting from its result: `{{(.Route.GetUser .Result.ID).Method}}`. `{{or .Route.Index.Method "GET"}}` falls back for a pattern with no method.
 - **Set, not add.** `.Header` and every `HX*` setter call `Header().Set`, so a second call with the same key replaces the first and the last call wins. To trigger several events, pass them in one call, as comma-separated names (`{{.HXTrigger "saved, closed"}}`) or as one JSON object when an event needs a detail: ``{{.HXTrigger `{"saved": null, "toast": "Saved"}`}}``.
+- **No `.DatastarRequest` on streams.** `SSETemplateData` does not have `.DatastarRequest`: a Datastar stream is always opened by an action.
 - **Same method, different arguments.** Only the method's name is compared, so routes that pass different arguments to it still collide.
 - **Long names.** Because the route name is part of a `Calling` name, a long path produces a long name, such as `CreateExAnteCompositionsPolicyByIDCallingEvaluateComposition`.
+- **Path prefixes.** Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`.
 - **Empty path values.** An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment.
 - **Escaping.** String and `TextMarshaler` path values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
