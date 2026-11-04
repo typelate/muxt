@@ -52,6 +52,7 @@ type Configuration struct {
 
 	// DryRun enumerates and reports the mutants without running any of
 	// them, which is quick enough to answer "how much work is this".
+	// It skips the coverage pre-pass too, so it runs no tests at all.
 	DryRun bool
 
 	// Verbose reports every mutant rather than only the ones no test
@@ -124,8 +125,8 @@ const DefaultMaxCases = 8
 //
 // Before planning, the tests run once with muxt's template engine in
 // place of html/template, to learn which template blocks they execute;
-// a dry run skips this. Tests that fail there stop the run as a failing
-// baseline does.
+// a dry run skips this. Tests that fail there leave coverage unknown, with
+// a warning, and the run goes on.
 //
 // status receives a warning line when that template coverage is unknown,
 // the preamble once the baseline has run, and when the configuration is

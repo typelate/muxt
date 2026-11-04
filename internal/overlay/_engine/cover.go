@@ -12,19 +12,24 @@ import (
 	"html/template/internal/engine"
 )
 
-// coverEnv names the environment variable that turns on node coverage
+// CoverEnv names the environment variable that turns on node coverage
 // export. muxt sets it to a directory when it runs a package's tests with
 // this engine laid over html/template; each test binary then appends the
 // template nodes it executes to <dir>/<pid>.cov in CoverProfile.WriteTo's
 // format, and muxt unions the files afterward.
-const coverEnv = "MUXT_TEMPLATE_COVER"
+const CoverEnv = "MUXT_TEMPLATE_COVER"
+
+// CoverDisabledMarker starts the one line a test binary prints on stderr
+// when its coverage export fails and stops; the error follows it. muxt
+// reads a run with this line in its output as coverage unknown.
+const CoverDisabledMarker = "muxt: template coverage export disabled:"
 
 // processCover is the process's coverage export: nil, the normal case,
 // unless coverEnv named a directory when the package was initialized. It
 // is this package's only mutable state. The environment can be read only
 // once per process, as there is no exit hook in which to flush a profile
 // collected in memory, so the export appends as it goes instead.
-var processCover = coverExportFor(os.Getenv(coverEnv))
+var processCover = coverExportFor(os.Getenv(CoverEnv))
 
 // coverExport appends the blocks of executed template nodes to a cover
 // profile file the first time each is reached. Mode set is monotone, so
@@ -77,7 +82,7 @@ func (c *coverExport) append(cp *engine.CoverProfile) {
 		c.disabled = true
 		// The export is off from here on; a failure to report that has
 		// nowhere better to go.
-		_, _ = fmt.Fprintf(c.stderr, "muxt: template coverage export disabled: %v\n", err)
+		_, _ = fmt.Fprintf(c.stderr, "%s %v\n", CoverDisabledMarker, err)
 	}
 }
 

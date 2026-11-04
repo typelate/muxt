@@ -2,7 +2,6 @@ package mutation
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/overlay"
+	"github.com/typelate/muxt/internal/template/html"
 )
 
 // loudTest renders the greeting loud from a second package, so its test
@@ -139,12 +139,6 @@ func TestTemplateCoverageUnknown(t *testing.T) {
 			warning: "muxt: template coverage export disabled: open /x/1.cov: permission denied",
 		},
 		{
-			name:    "the tests do not build with the engine",
-			out:     "# server\n./page.go:9:12: ts.Tree.Root undefined\nFAIL\tserver [build failed]\n",
-			err:     exitError(t, 1),
-			warning: "ts.Tree.Root undefined",
-		},
-		{
 			name:    "go test exits without a failed test",
 			out:     "go: some failure\n",
 			err:     exitError(t, 2),
@@ -177,18 +171,81 @@ func TestTemplateCoverageUnknown(t *testing.T) {
 	}
 }
 
-// TestTemplateCoverageStopsWhenATestFails states that the tests failing in
-// the pre-pass stop the run as a failing baseline does.
-func TestTemplateCoverageStopsWhenATestFails(t *testing.T) {
-	realGOROOT(t)
-	out := "--- FAIL: TestBroken (0.00s)\n    a_test.go:5: broken\nFAIL\nFAIL\tserver\t0.1s\n"
-	run := func(context.Context, string, string) (*goTestOutput, error) {
-		return testOutput(out), exitError(t, 1)
+// TestTemplateCoverageFailingUnderTheEngine states that tests failing or
+// not building with the engine in place leave coverage unknown, with one
+// warning naming the first failure and the engine's known gaps, and do
+// not stop the run: kill runs use the real html/template, so the
+// baseline, not the pre-pass, says whether the tests pass.
+func TestTemplateCoverageFailingUnderTheEngine(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		out   string
+		first string
+	}{
+		{
+			name:  "a test fails",
+			out:   "=== RUN   TestBroken\n    a_test.go:5: broken\n--- FAIL: TestBroken (0.00s)\nFAIL\nFAIL\tserver\t0.1s\n",
+			first: "--- FAIL: TestBroken",
+		},
+		{
+			name:  "a package does not build",
+			out:   "# server\n./page.go:9:12: ts.Tree.Root undefined\nFAIL\tserver [build failed]\n",
+			first: "./page.go:9:12: ts.Tree.Root undefined",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			realGOROOT(t)
+			run := func(_ context.Context, _, coverDir string) (*goTestOutput, error) {
+				writeFiles(t, coverDir, map[string]string{"1.cov": "mode: set\npage:1.1,1.8 1 1\n"})
+				return testOutput(tt.out), exitError(t, 1)
+			}
+			var warnings strings.Builder
+			got, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
+			require.NoError(t, err, "the run goes on")
+			assert.Nil(t, got, "coverage is unknown")
+			want := "muxt: tests fail under muxt's template engine (coverage pre-pass): " + tt.first +
+				"; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown\n"
+			assert.Equal(t, want, warnings.String(), "warning")
+		})
 	}
-	_, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, nil)
-	baseline, ok := errors.AsType[*BaselineFailedError](err)
-	require.True(t, ok, "templateCoverage = %v, want a failing baseline", err)
-	assert.Equal(t, out, baseline.Output, "what go test printed")
+}
+
+// parseTreeTest compiles against html/template and not against the
+// engine, whose Template.Tree is no *parse.Tree.
+const parseTreeTest = `package server
+
+import (
+	"testing"
+	"text/template/parse"
+)
+
+func TestTree(t *testing.T) {
+	var tree *parse.Tree = templates.Tree
+	if tree == nil {
+		t.Fatal("no tree")
+	}
+}
+`
+
+// TestRunGoesOnWhenTheEngineDoesNotBuild runs a module whose tests use
+// Template.Tree as a *parse.Tree: under the engine they do not compile, so
+// the pre-pass warns and the run carries on with the real html/template.
+func TestRunGoesOnWhenTheEngineDoesNotBuild(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs test binaries with html/template overlaid")
+	}
+	realGOROOT(t)
+	t.Parallel()
+	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest, "tree_test.go": parseTreeTest})
+	var status strings.Builder
+	report, err := Run(t.Context(), greetingConfig(), dir, &status)
+	require.NoError(t, err, "status:\n%s", status.String())
+	assert.True(t, report.Baseline.Passed, "baseline passed")
+	assert.Equal(t, 3, report.Killed+report.Missed, "every mutant ran")
+	first, _, _ := strings.Cut(status.String(), "\n")
+	assert.True(t, strings.HasPrefix(first, "muxt: tests fail under muxt's template engine (coverage pre-pass): "), "status opens with the warning:\n%s", status.String())
+	assert.Contains(t, first, "tree_test.go", "the warning names the build error")
+	assert.True(t, strings.HasSuffix(first, "; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown"), "warning %q", first)
 }
 
 // TestTemplateCoverageStopsWhenCancelled states that an interrupted
@@ -317,5 +374,5 @@ func TestCoverageSeesADisabledExport(t *testing.T) {
 
 	out, err := config.goTest(dir).coverage(t.Context(), overlayPath, coverDir)
 	require.NoError(t, err, "the tests pass whatever the export does:\n%s", out.String())
-	assert.True(t, strings.HasPrefix(out.coverDisabled, coverExportDisabled), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
+	assert.True(t, strings.HasPrefix(out.coverDisabled, html.CoverDisabledMarker), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
 }

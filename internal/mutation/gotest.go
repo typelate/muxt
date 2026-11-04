@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/typelate/muxt/internal/template/html"
 )
 
 // goTest runs the project's tests, optionally with extra flags.
@@ -90,15 +92,6 @@ func (t goTest) baseline(ctx context.Context) (string, error) {
 	return out.String(), err
 }
 
-// templateCoverEnv and coverExportDisabled are the coverage export's
-// side of the pre-pass, as internal/template/html defines them: the
-// environment variable naming the directory each test binary writes its
-// <pid>.cov to, and what a binary prints on stderr when it stops writing.
-const (
-	templateCoverEnv    = "MUXT_TEMPLATE_COVER"
-	coverExportDisabled = "muxt: template coverage export disabled:"
-)
-
 // coverageOutputLimit is how much of the pre-pass's output is kept. It
 // runs verbose, so that a passing package's stderr is printed too, and a
 // failure shows the end of that.
@@ -106,22 +99,26 @@ const coverageOutputLimit = 1 << 20
 
 // coverageFlags are the go test flags of the coverage pre-pass.
 //
-// -v makes go test print a passing package's output, where a test binary
-// that stopped exporting coverage says so. The engine adds packages
-// under GOROOT that have no directory on disk, which vet cannot read.
+// The engine adds packages under GOROOT that have no directory on disk,
+// which vet cannot read, hence -vet=off. -v is required: see coverage.
 func coverageFlags(overlay string) []string {
 	return []string{"-v", "-vet=off", "-overlay=" + overlay}
 }
 
 // coverage runs the tests once, unmutated, with overlay laying muxt's
-// template engine over html/template and coverDir receiving the template
-// blocks each test binary executes.
+// template engine over html/template and coverDir, named by
+// html.CoverEnv, receiving the template blocks each test binary executes.
+//
+// It runs go test with -v, and must: without it go test prints nothing a
+// passing package's test binary wrote, and a binary whose export failed
+// says so only on its stderr, with html.CoverDisabledMarker. Without -v a
+// broken export would read as templates no test reached.
 func (t goTest) coverage(ctx context.Context, overlay, coverDir string) (*goTestOutput, error) {
 	env := t.env
 	if env == nil {
 		env = os.Environ()
 	}
-	t.env = append(slices.Clip(env), templateCoverEnv+"="+coverDir)
+	t.env = append(slices.Clip(env), html.CoverEnv+"="+coverDir)
 	return t.run(ctx, coverageOutputLimit, coverageFlags(overlay)...)
 }
 
@@ -303,7 +300,7 @@ func (o *goTestOutput) keep(p []byte) {
 // already not a kill.
 func (o *goTestOutput) mark(line string) {
 	line = strings.TrimSuffix(line, "\r")
-	if i := strings.Index(line, coverExportDisabled); i >= 0 && o.coverDisabled == "" {
+	if i := strings.Index(line, html.CoverDisabledMarker); i >= 0 && o.coverDisabled == "" {
 		// Unanchored: a test's own output without a newline can precede
 		// it on the line.
 		o.coverDisabled = line[i:]

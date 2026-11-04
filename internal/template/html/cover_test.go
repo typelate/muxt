@@ -92,7 +92,7 @@ func TestExecuteWithoutCoverExportWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	// The environment is read when the package initializes; setting it
 	// later does not turn the export on.
-	t.Setenv(coverEnv, dir)
+	t.Setenv(CoverEnv, dir)
 
 	ts := Must(New("page").Parse(`<p>{{.}}</p>`))
 	if err := ts.Execute(io.Discard, "x"); err != nil {
