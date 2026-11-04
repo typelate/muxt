@@ -149,7 +149,7 @@ no test reaches 1 mutant:
 4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached
 ```
 
-A miss listed there needs a test that renders that branch, not a stronger assertion. [reference_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_mutations_unreached.txt)
+A miss listed there needs a test that renders that branch, not a stronger assertion. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
 
 `-vet=off` applies to the pre-pass only. The engine's files are added under GOROOT through the overlay and have no directory on disk, which vet needs. Your normal test run and the kill runs still vet. `-v` is there so that a test binary that stopped recording coverage can say so in its output. `--dry-run` runs no tests, so it skips the pre-pass and never reports anything unreached.
 
@@ -164,7 +164,7 @@ The pre-pass never fails the run. When it cannot tell which actions the tests re
   muxt: tests fail under muxt's template engine (coverage pre-pass): ./render_test.go:20:25: cannot use templates.Lookup("greeting").Tree (variable of type *engine.Tree) as *parse.Tree value in variable declaration; known gaps: Template.Tree, AddParseTree, Error.Node; coverage unknown
   ```
 
-  Whether the tests pass is still the baseline's to say. [reference_mutations_engine_gap.txt](../../../cmd/muxt/testdata/reference_mutations_engine_gap.txt)
+  Whether the tests pass is still the baseline's to say. [reference_test_template_mutations_engine_gap.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_engine_gap.txt)
 - a test binary could not write its coverage. It prints `muxt: template coverage export disabled:` and the reason, and the pre-pass reads that as coverage unknown rather than as templates no test reached.
 
 The engine presents the `html/template` API, with these known gaps:
@@ -187,7 +187,7 @@ Coverage instrumentation reads the packages it instruments from disk, which woul
 Error: go test flag -coverpkg cannot cover html/template ("std" does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead
 ```
 
-[err_mutations_coverpkg_refused.txt](../../../cmd/muxt/testdata/err_mutations_coverpkg_refused.txt)
+[err_test_template_mutations_coverpkg_refused.txt](../../../cmd/muxt/testdata/err_test_template_mutations_coverpkg_refused.txt)
 
 ## Exit status
 
