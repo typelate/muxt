@@ -12,7 +12,7 @@ go mod init example.com/hello-muxt
 go get -tool github.com/typelate/muxt
 ```
 
-`go get -tool` records the muxt version in `go.mod`, so the directive below runs that version with `go tool muxt`. A binary installed with `go install github.com/typelate/muxt@latest` also works, but it can fall behind the project and then fails with errors such as `unknown command`.
+`go get -tool` records the muxt version in `go.mod`, so the directive below runs that version with `go tool muxt`.
 
 ## Step 2: Create main.go
 
@@ -134,6 +134,7 @@ Open <http://localhost:8080>, type a number, click Show. The `GET /number` handl
 
 ## Edge cases
 
+- **A binary install.** A binary installed with `go install github.com/typelate/muxt@latest` also works, but it can fall behind the project and then fails with errors such as `unknown command`.
 - **Another directory.** Run `go tool muxt check` from the package directory, or pass `-C <dir>`.
 
 ## Next

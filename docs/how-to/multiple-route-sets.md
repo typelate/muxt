@@ -13,7 +13,7 @@ var publicTmpl = template.Must(template.Must(template.ParseFS(templateSource, "s
 var adminTmpl = template.Must(template.Must(template.ParseFS(templateSource, "shared/*.gohtml")).ParseFS(templateSource, "admin/*.gohtml"))
 ```
 
-Both generated files share the package, so every default identifier is renamed with its `--output-*` flag ([flags](../reference/cli.md#flags)): the routes function, file, receiver interface, template data type, and paths type. Check each set separately: `muxt check --use-templates-variable=publicTmpl` and again for `adminTmpl`. One run with two `--use-templates-variable` flags merges both sets into one routes function ([multiple templates variables](../reference/templates-variable.md#multiple-template-variables)); two runs keep them apart.
+Both generated files share the package, so every default identifier is renamed with its `--output-*` flag ([flags](../reference/cli.md#flags)): the routes function, file, receiver interface, template data type, and paths type. Check each set separately: `muxt check --use-templates-variable=publicTmpl` and again for `adminTmpl`.
 
 Register each set with its own receiver, with your own constructors:
 
@@ -28,5 +28,6 @@ Each receiver interface lists only the methods its templates call.
 
 - **Route and route builder types** are named after the paths type: `PublicPathsRoute` and `PublicPathsRouteBuilder` here.
 - **`sse` routes.** When both sets have `sse` routes, add `--output-sse-template-data-type` as well.
+- **One run, two variables.** One run with two `--use-templates-variable` flags merges both sets into one routes function ([multiple templates variables](../reference/templates-variable.md#multiple-template-variables)). Two runs keep them apart.
 
 The full test is [reference_multiple_generated_routes.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes.txt).
