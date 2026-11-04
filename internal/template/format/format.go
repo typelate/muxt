@@ -397,16 +397,19 @@ var integrationPoints = map[string]bool{
 // (<!x>, <?x>) is unparsed markup too: html/template writes its < as
 // &lt;, so the browser reads what follows as text and markup, a raw text
 // start tag (<!<style>) included. So is a comment that html/template
-// delimits differently from the parser (delimitedAlike).
+// delimits differently from the parser (analysis.CommentDelimitedAlike):
+// the parser splits text from the comment that html/template does not,
+// and the formatter, which writes a comment with a --> close, would
+// change what html/template strips, so the file is written as it is.
 func hasUnparsedMarkup(nodes []template.Node) bool {
 	for _, n := range nodes {
 		switch n := n.(type) {
 		case *template.HTMLDoctypeNode:
-			if !isDoctype(n) {
+			if !analysis.IsDoctype(n) {
 				return true
 			}
 		case *template.HTMLCommentNode:
-			if !delimitedAlike(n) {
+			if !analysis.CommentDelimitedAlike(n) {
 				return true
 			}
 		case *template.TextNode:
@@ -437,25 +440,6 @@ func hasUnparsedMarkup(nodes []template.Node) bool {
 		}
 	}
 	return false
-}
-
-// delimitedAlike reports whether html/template ends comment n where the
-// template parser does. html/template strips a comment from <!-- to the
-// first --> after it, while the parser follows the HTML tokenizer, which
-// also closes one abruptly (<!-->, <!--->). Where they differ the parser
-// splits text from the comment that html/template does not, and the
-// formatter, which writes a comment with a --> close, would change what
-// html/template strips, so the file is written as it is.
-func delimitedAlike(n *template.HTMLCommentNode) bool {
-	src := n.String()
-	return len(src) >= len("<!---->") && strings.HasSuffix(src, "-->") &&
-		strings.Index(src[len("<!--"):], "-->") == len(src)-len("<!---->")
-}
-
-// isDoctype reports whether n is a doctype, the only node the parser
-// reads as a doctype that html/template writes unchanged.
-func isDoctype(n *template.HTMLDoctypeNode) bool {
-	return strings.HasPrefix(strings.ToUpper(n.Text), "<!DOCTYPE")
 }
 
 // unreadMarkup is what a < in text the template parser did not read as

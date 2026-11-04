@@ -22,6 +22,14 @@ Run `generate` first: `check` reads receiver types from the generated file and r
 
 What fails: [Type Checking](../type-checking.md#what-is-checked). A template shared between two templates variables is reported when either leaves it unused ([err_template_in_shared_file_unused_by_one_variable.txt](../../../cmd/muxt/testdata/err_template_in_shared_file_unused_by_one_variable.txt)).
 
+In an `html/template` set, check also fails on HTML comments and markup that `html/template` writes differently from what the template says, each at its `file:line:col`:
+
+- a `<!--` inside `<title>` or `<textarea>`: `html/template` escapes it there, so the page shows the comment;
+- a `<!` that starts no comment or doctype (`<![if !IE]>`, `<!x>`), or a `<?`: `html/template` escapes the `<`, so the page shows the text;
+- a comment opened as `<!-->` or `<!--->`: a browser ends the comment right there, but `html/template` strips everything through the next `-->`, and the message gives that position.
+
+Comments in text, actions inside them (`<!-- {{.X}} -->`), and comments in attribute values, `<script>` and `<style>` pass. A `text/template` set is text, so none of this applies to it ([err_check_html_comments.txt](../../../cmd/muxt/testdata/err_check_html_comments.txt), [reference_check_html_comments.txt](../../../cmd/muxt/testdata/reference_check_html_comments.txt)). Use `{{/* */}}` for a comment that must not reach the page.
+
 `--allow-unused` lists templates nothing renders under `Unused templates (allowed by --allow-unused):` and does not fail on them. A `templates.ExecuteTemplate` call whose template name is not a literal, as in a `render(w, name, data)` helper, does not need it: check names that call with an `ExecuteTemplate not checked` line and reports nothing unused. Use `--allow-unused` for templates rendered some other way check cannot see, such as through `templates.Lookup(name).Execute`, a clone of the set, or code in another package the set is passed to. Type errors, and route templates with no generated handler, still fail ([err_check_with_unused_template.txt](../../../cmd/muxt/testdata/err_check_with_unused_template.txt)).
 
 ```bash

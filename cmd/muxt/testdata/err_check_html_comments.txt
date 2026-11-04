@@ -1,0 +1,56 @@
+# muxt check reports, in html/template templates, comments and markup
+# html/template writes as text a browser shows: a <!-- in <title> or
+# <textarea>, a <! that starts no comment or doctype, a <?, and a comment
+# a browser ends at <!--> where html/template strips through the next -->.
+
+muxt generate --use-receiver-type=T
+! muxt check
+cmpenv stderr want-err.txt
+
+-- want-err.txt --
+$WORK/template.gohtml:4:18: html/template writes this <!-- as text inside <title>; browsers show it
+$WORK/template.gohtml:8:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+$WORK/template.gohtml:9:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+$WORK/template.gohtml:10:4: browsers end this comment at "<!-->" but html/template strips through the next "-->" at 12:1, hiding the markup between
+$WORK/template.gohtml:14:23: html/template writes this <!-- as text inside <textarea>; browsers show it
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<!DOCTYPE html>
+<html>
+<head><title>Todo<!-- draft --></title></head>
+<body>
+<!-- {{.}} is stripped, but it still runs -->
+<p title="<!-- kept -->">kept</p>
+<p><![if !IE]>shown</p>
+<p><?php echo 1 ?></p>
+<p><!-->hidden
+<b>by html/template</b>
+-->
+<script>/* <!-- kept --> */</script>
+<textarea name="note"><!-- shown --></textarea>
+</body>
+</html>
+{{end}}
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+type T struct{}
+
+func (T) Index() string {
+	return "index"
+}

@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"go/token"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/typelate/muxt/template"
 	"github.com/typelate/muxt/template/html"
+
+	htmlanalysis "github.com/typelate/muxt/internal/analysis/html"
 
 	"github.com/typelate/muxt/internal/check"
 
@@ -65,6 +68,9 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 
 		if err := reportDefinitionErrors(logger, lt); err != nil {
 			errs = append(errs, err)
+		}
+		if !lt.Text {
+			errs = append(errs, reportHTMLComments(logger, lt.Set)...)
 		}
 
 		for _, position := range lt.NonLiteralCalls {
@@ -132,6 +138,45 @@ func reportDefinitionErrors(logger *log.Logger, variable source.Variable) error 
 		logger.Println(err)
 	}
 	return err
+}
+
+// reportHTMLComments logs, for every template in an html/template set,
+// the comments and markup html/template writes as text a browser shows
+// (see htmlanalysis.CheckComments), and returns one error per diagnostic.
+func reportHTMLComments(logger *log.Logger, ts *html.Template) []error {
+	var positions []token.Position
+	messages := make(map[token.Position]string)
+	for _, t := range ts.Templates() {
+		if t.Tree == nil {
+			continue
+		}
+		for _, d := range htmlanalysis.CheckComments(t.Tree) {
+			at := t.Tree.PositionAt(d.Pos)
+			position := token.Position{
+				Filename: cmp.Or(t.Tree.Filepath, at.ParseName),
+				Offset:   int(d.Pos),
+				Line:     at.Line,
+				Column:   at.Column,
+			}
+			if _, seen := messages[position]; seen {
+				continue
+			}
+			messages[position] = d.Message
+			positions = append(positions, position)
+		}
+	}
+	slices.SortFunc(positions, func(a, b token.Position) int {
+		return cmp.Or(strings.Compare(a.Filename, b.Filename), cmp.Compare(a.Offset, b.Offset))
+	})
+	errs := make([]error, 0, len(positions))
+	for _, position := range positions {
+		logger.Printf("%s: %s", position, messages[position])
+		errs = append(errs, errors.New(messages[position]))
+	}
+	if len(positions) > 0 {
+		logger.Println()
+	}
+	return errs
 }
 
 // typeErrors logs the errors the ExecuteTemplate calls of one templates

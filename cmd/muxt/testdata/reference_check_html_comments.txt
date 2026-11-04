@@ -1,0 +1,60 @@
+# muxt check passes html/template comments a browser and html/template
+# both strip, comments in attribute values, <script> and <style>, a
+# doctype, and any markup in a text/template set, which is text.
+
+muxt generate --use-receiver-type=T
+muxt check --use-templates-variable=templates,prose
+
+exec go build
+
+-- template.gohtml --
+{{define "GET / Index()"}}
+<!doctype html>
+<html>
+<head>
+<title>Todo</title>
+<style>/* <!-- kept --> */</style>
+</head>
+<body>
+<!-- a comment -->
+<!-- {{.}} is stripped, but it still runs -->
+<!---->
+<p title="<!-- kept -->">kept</p>
+<script>/* <!-- kept --> */ if (1 <!x) {}</script>
+<textarea name="note">a &lt;!-- b</textarea>
+{{/* a template comment */}}
+</body>
+</html>
+{{end}}
+-- prose.txt --
+<title>Todo<!-- draft --></title> <!x> <?x> <!-->
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+	text "text/template"
+)
+
+//go:embed *.gohtml
+var formHTML embed.FS
+
+//go:embed prose.txt
+var proseFS embed.FS
+
+var templates = template.Must(template.ParseFS(formHTML, "*"))
+
+var prose = text.Must(text.ParseFS(proseFS, "prose.txt"))
+
+type T struct{}
+
+func (T) Index() string {
+	_ = prose.ExecuteTemplate(io.Discard, "prose.txt", nil)
+	return "index"
+}
