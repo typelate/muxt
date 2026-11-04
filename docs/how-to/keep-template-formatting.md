@@ -18,11 +18,9 @@ There are three directives. Each is a template comment containing only the direc
 </div>
 ```
 
-An `off` with no `on` runs to the end of its parent. A region is kept a whole element at a time: an element the region touches is left as written from its opening line to its closing line, and the surrounding lines are still re-indented.
-
 ## Keep the next node
 
-`preserve` leaves the next sibling as written: an element with its children, or an `if` through its `{{end}}`. Whitespace and comments between the directive and that node are skipped.
+`preserve` leaves the next sibling as written: an element with its children, or an `if` through its `{{end}}`.
 
 ```gohtml
 <div>
@@ -38,13 +36,20 @@ Only the `ul` is kept. The `p` is formatted.
 
 ## Keep a file
 
-`off` as the first thing in a file, with no `on` after it, keeps the whole file. An `off` closed by a later `on` keeps only the region between them. A `preserve` in that position keeps only the next node, as anywhere else.
+`off` as the first thing in a file, with no `on` after it, keeps the whole file.
 
 ```gohtml
 {{/* muxt:fmt off */}}
 <table>
 ...
 ```
+
+## Edge cases
+
+- **An `off` with no `on`** runs to the end of its parent.
+- **Whole elements.** A region is kept a whole element at a time: an element the region touches is left as written from its opening line to its closing line, and the surrounding lines are still re-indented.
+- **What `preserve` skips.** Whitespace and comments between the directive and the next node are skipped.
+- **Other directives at the top of a file.** An `off` closed by a later `on` keeps only the region between them. A `preserve` in that position keeps only the next node, as anywhere else.
 
 ## Errors
 

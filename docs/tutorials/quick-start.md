@@ -63,7 +63,7 @@ The template name is the route.
 go generate && go tool muxt check && go run .
 ```
 
-`go tool muxt check` type-checks each template against its handler ([check](../reference/commands/check.md)). Run it from the package directory, or pass `-C <dir>`. Open <http://localhost:8080>.
+`go tool muxt check` type-checks each template against its handler ([check](../reference/commands/check.md)). Open <http://localhost:8080>.
 
 `go generate` wrote `template_routes.go`. Search it for `HandleFunc`: one call per route template, the template name as the pattern.
 
@@ -131,6 +131,10 @@ go generate && go tool muxt check && go run .
 ```
 
 Open <http://localhost:8080>, type a number, click Show. The `GET /number` handler in `template_routes.go` is identical in shape to `GET /`.
+
+## Edge cases
+
+- **Another directory.** Run `go tool muxt check` from the package directory, or pass `-C <dir>`.
 
 ## Next
 

@@ -24,7 +24,7 @@ The flags combine as they do in `gofmt`: `-l -w` lists and writes, and exits `1`
 
 ## Input
 
-With no path, `muxt fmt` reads standard input and reports it as `<standard input>`. Standard input belongs to no Go package, even when `muxt fmt` runs in a package directory: an editor pipes a buffer from wherever it runs, so the package there may not be the buffer's ([reference_fmt_stdin_package.txt](../../../cmd/muxt/testdata/reference_fmt_stdin_package.txt)). `-w` needs a file or directory and is rejected without one.
+With no path, `muxt fmt` reads standard input and reports it as `<standard input>`. `-w` needs a file or directory and is rejected without one.
 
 A path that is a file is formatted whatever its extension. A path that is a directory is walked for regular files ending in `.gohtml`. The walk skips:
 
@@ -67,7 +67,7 @@ Depth follows the tag structure of the source, one tab per level ([full_page.txt
 - `{{template}}` and `{{block}}` are transparent: the content of a `{{block}}` sits at the depth of the block itself.
 - `{{define}}` is a top-level declaration wherever it sits. Its opener, body and `{{end}}` start at column 0, and the body is indented from there.
 - Optional end tags (`li`, `dt`, `dd`, `p`, `option`, `tr`, `td`, `th`, `thead`, `tbody`, `tfoot`, `colgroup`, `caption`) are implied the way the HTML Standard says. Any other element left unclosed ends at its parent's end tag.
-- A multi-line `{{/* comment */}}` shifts as a unit, its continuation lines moving by the same amount as its first line, when each continuation line starts with the old indent. An action is laid out by its own rules ([Actions](#actions)); one holding a raw string literal that spans lines is left as written, opening line included.
+- A multi-line `{{/* comment */}}` shifts as a unit, its continuation lines moving by the same amount as its first line, when each continuation line starts with the old indent. An action is laid out by its own rules ([Actions](#actions)).
 - `<template>` contents are re-indented like any other markup.
 
 ## Actions
@@ -107,7 +107,6 @@ What is kept:
 - String, raw string, number and character literals as written (`0x1F` stays `0x1F`, a backquoted string keeps its backquotes), and the names of `{{define}}`, `{{block}}` and `{{template}}` as written, except route names; see [Define patterns](#define-patterns).
 - The delimiters, custom ones included, and the trim markers: `{{-  .X  -}}` becomes `{{- .X -}}`.
 - Comments, `{{/* ... */}}`, which shift with their line but are otherwise untouched.
-- An action holding a raw string literal that spans lines, which is left as written whole.
 - Actions inside a `muxt:fmt off` or `preserve` region.
 
 After printing, `fmt` parses its output again and checks that every action has the same parse tree as before, nested in the same branches, defines and blocks and in the same body or `{{else}}` list, positions and spacing aside and route names rewritten everywhere they appear. It reports an error rather than write a file where it does not, and also when it cannot find an action in the source to print it, so no action is left unformatted silently.
@@ -128,7 +127,7 @@ becomes
 
 Any other name is left as written: a partial such as `"with  spaces"`, and a route name whose call does not parse as Go, holds a comment or spans lines.
 
-A template is looked up by its exact name, so every reference to it changes together or none does. In one file, `fmt` rewrites the define and its `{{template}}` calls alike, and leaves them all as written when one sits in a `muxt:fmt` region. A call is renamed only together with the define it resolves to: a call whose exact name no define or block of the file or package declares (a template added from Go, or a typo) is left as written, since its canonical spelling may name a different template. Across the package, it rewrites a name only when every template of the package that names it is formatted in the same run or already spells it canonically. Format only the define while another template of the package calls it the old way, and both are left as written; run `muxt fmt -w .` on the package to rewrite them together. Two defines whose names differ only in spacing are left as written. Standard input and a file outside a Go package have no package to look through, and a package that loads with errors or holds a template that cannot be read or parsed cannot be looked through whole, so their route names are left as written ([fmt_test.go](../../../internal/cli/fmt_test.go)).
+A template is looked up by its exact name, so every reference to it changes together or none does. In one file, `fmt` rewrites the define and its `{{template}}` calls alike, and leaves them all as written when one sits in a `muxt:fmt` region. A call is renamed only together with the define it resolves to: a call whose exact name no define or block of the file or package declares (a template added from Go, or a typo) is left as written, since its canonical spelling may name a different template. Across the package, it rewrites a name only when every template of the package that names it is formatted in the same run or already spells it canonically. Format only the define while another template of the package calls it the old way, and both are left as written; run `muxt fmt -w .` on the package to rewrite them together ([fmt_test.go](../../../internal/cli/fmt_test.go)).
 
 The generated routes file names each route template too, and Go code that calls `ExecuteTemplate` may. Run `muxt generate` after formatting. Until then, `muxt check` reports the route as having no generated handler and the old name as not found.
 
@@ -136,7 +135,7 @@ The generated routes file names each route template too, and Go code that calls 
 
 When `muxt fmt` cannot be sure a change is invisible, it leaves the whole element as written: the opening line, the body and the closing line. The closing tag of its parent still lands at the parent's depth, and its siblings are still re-indented. These are the cases:
 
-- Text of `script`, `style`, `textarea`, `title`, `pre`, `iframe`, `noembed`, `noframes`, `noscript`, `listing`, `xmp`, `plaintext` and other raw text elements. Every byte after `>` up to the closing tag counts, including a line break the parser drops. An element left as written whose closing tag is on its opening line may still have that line re-indented.
+- Text of `script`, `style`, `textarea`, `title`, `pre`, `iframe`, `noembed`, `noframes`, `noscript`, `listing`, `xmp`, `plaintext` and other raw text elements. Every byte after `>` up to the closing tag counts, including a line break the parser drops.
 - Any element whose computed `white-space` preserves whitespace (`pre`, `pre-wrap`, `break-spaces`), and everything inside it. Under `pre-line` the whitespace is re-indented but the number of line breaks is kept exactly.
 - Elements whose CSS it cannot see. A rule that sets `white-space`, `white-space-collapse` or `all` and might match the element makes it unknown, as does a stylesheet that could not be loaded or a `style` attribute that contains an action. So does such a rule inside `@media`, `@supports`, `@container` or `@layer` that could give the element a different `white-space`, or an `all: revert`. `all: unset` and `all: initial` keep the element collapsing, so it is still re-indented ([whitespace_test.go](../../../internal/analysis/html/whitespace_test.go)). A class that no such rule names is harmless when a package is loaded: display (block or inline) does not matter, only `white-space` does.
 - Every element with a `class` or `id`, when no Go package is loaded for the file (standard input, or a file outside a module or outside any embedding package). Author CSS is unknown there, even next to a `<style>` element, since that may not be all the CSS ([reference_fmt_stdin_style.txt](../../../cmd/muxt/testdata/reference_fmt_stdin_style.txt)).
@@ -204,3 +203,8 @@ Then remove the hand-written file server for that directory and link the sheets 
 - CSS is read per package. When the page shell that holds the `<link>` lives in another Go package, the templates of this package see no author CSS beyond their own `<style>` elements.
 - A define that is a route, is never called, or is called only from another package is assumed to be called from a collapsing context.
 - Prose is never re-wrapped. There is no line width.
+- **Standard input has no package.** It belongs to no Go package, even when `muxt fmt` runs in a package directory: an editor pipes a buffer from wherever it runs, so the package there may not be the buffer's ([reference_fmt_stdin_package.txt](../../../cmd/muxt/testdata/reference_fmt_stdin_package.txt)).
+- **Raw strings that span lines.** An action holding a raw string literal that spans lines is left as written whole, opening line included.
+- **Names that differ only in spacing.** Two defines whose names differ only in spacing are left as written.
+- **Route names with no package to look through.** Standard input and a file outside a Go package have no package to look through, and a package that loads with errors or holds a template that cannot be read or parsed cannot be looked through whole, so their route names are left as written.
+- **A closing tag on the opening line.** An element left as written whose closing tag is on its opening line may still have that line re-indented.

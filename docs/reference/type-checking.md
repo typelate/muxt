@@ -20,7 +20,7 @@ A call whose name is not a literal, such as one in a `render(w, name, data)` hel
 ok: 4 templates, 1 call site skipped
 ```
 
-Such a call may render any template, so while one exists in the package no template is reported unused. To check the templates it renders, call `ExecuteTemplate` with a literal name and a typed value at each call site:
+To check the templates a call like that renders, call `ExecuteTemplate` with a literal name and a typed value at each call site:
 
 ```go
 // not checked
@@ -33,8 +33,6 @@ err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
 ```
 
 Alternatively, make the page a route template with a call, so the generated handler renders it.
-
-A call whose name is a literal but whose data is `any` (or another interface) is not skipped: it is checked against that interface type, so any field access on dot fails with `field or method Name not found on any` ([check_any_data.txtar](../../internal/analysis/testdata/check/check_any_data.txtar)). Pass the concrete type.
 
 ## What is checked
 
@@ -64,27 +62,30 @@ Each error names the call site, then the template position and what failed:
   }
 ```
 
-A partial that several calls render with the same type of dot fails the same way from each. The error is printed once, under the first call that reaches it; after every call is checked, it is repeated once with the other calls that reach it ([check_shared_partial_error.txtar](../../internal/analysis/testdata/check/check_shared_partial_error.txtar)):
-
-```text
-/home/me/app/server.go:17:9 ExecuteTemplate "intakes" AdminPage
-/home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
-
-/home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
-  also reached from:
-    /home/me/app/server.go:21:9 ExecuteTemplate "users" AdminPage
-    /home/me/app/server.go:25:9 ExecuteTemplate "settings" AdminPage
-```
-
 [reference_check_types.txt](../../cmd/muxt/testdata/reference_check_types.txt) · [err_check_with_wrong_field.txt](../../cmd/muxt/testdata/err_check_with_wrong_field.txt)
 
 Check also fails on:
 
-- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)); not reported while a call with a non-literal template name exists, since that call may render any template; `--allow-unused` lists these without failing, for templates rendered some other way than a `templates.ExecuteTemplate` call in the package
+- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)), except as noted under [edge cases](#edge-cases); `--allow-unused` lists these without failing, for templates rendered some other way than a `templates.ExecuteTemplate` call in the package
 - content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
-- a field or method access on an `any` value: `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt))
 
 `printf`-family format verbs are verified against the argument types. With a string `Name`, `{{printf "%d" .Name}}` is an error.
+
+## Edge cases
+
+- **A non-literal template name.** A call whose name is not a literal may render any template, so while one exists in the package no template is reported unused.
+- **Data typed `any`.** A field or method access on an `any` value fails with `field or method Name not found on any` ([howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt)). A call whose name is a literal but whose data is `any`, or another interface, is not skipped: it is checked against that interface type, so any field access on dot fails that way ([check_any_data.txtar](../../internal/analysis/testdata/check/check_any_data.txtar)). Pass the concrete type.
+- **A partial reached from several calls.** A partial that several calls render with the same type of dot fails the same way from each. The error is printed once, under the first call that reaches it; after every call is checked, it is repeated once with the other calls that reach it ([check_shared_partial_error.txtar](../../internal/analysis/testdata/check/check_shared_partial_error.txtar)):
+
+  ```text
+  /home/me/app/server.go:17:9 ExecuteTemplate "intakes" AdminPage
+  /home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+
+  /home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+    also reached from:
+      /home/me/app/server.go:21:9 ExecuteTemplate "users" AdminPage
+      /home/me/app/server.go:25:9 ExecuteTemplate "settings" AdminPage
+  ```
 
 ## What is not checked
 

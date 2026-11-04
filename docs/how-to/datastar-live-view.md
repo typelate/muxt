@@ -15,7 +15,7 @@ Each `sse`-prefixed callback renders the template of the same name into one `dat
 func (s *Server) Increment(_ context.Context, sseCount func(int64) error, deltaSignals func(Delta) error)
 ```
 
-Datastar morphs the element by id. When id matching is not enough, the fragment template calls `.Selector`, `.Mode`, or `.UseViewTransition` on the dot; [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) shows `.Selector` and `.Mode`.
+Datastar morphs the element by id.
 
 ## Patch signals
 
@@ -57,8 +57,11 @@ A route does not have to stream. Datastar patches a `text/html` response by elem
 <button data-on:click="@post('{{.Path.Increment}}')">+</button>
 ```
 
-Inside `{{range}}` use `$.Path`: `{{$.Path.ToggleTodo .ID}}`.
-
 ## Test the wire contract
 
 Drive the generated routes with `httptest` and assert on the events. The `patchElements` helper in the [datastar-todo test](../examples/datastar-todo/template_test.go) parses a patch event into a [domtest](https://pkg.go.dev/github.com/typelate/dom/domtest) fragment.
+
+## Edge cases
+
+- **More than id matching.** When matching by id is not enough, the fragment template calls `.Selector`, `.Mode`, or `.UseViewTransition` on the dot. [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) shows `.Selector` and `.Mode`.
+- **`.Path` inside `{{range}}`.** Use `$.Path`, as in `{{$.Path.ToggleTodo .ID}}`.

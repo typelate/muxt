@@ -30,7 +30,7 @@ Then call it from a directive with `//go:generate go tool muxt generate`, or fro
 
 To install a single binary on your `PATH`, use `go install github.com/typelate/muxt@latest`.
 
-`muxt check` and the other commands read the package in the working directory. Run them from the package directory, or pass `-C <dir>` (`go tool muxt -C ./web check`), because running at a repository root without a Go package there fails with `no Go package found at ...`.
+`muxt check` and the other commands read the package in the working directory. Run them from the package directory, or pass `-C <dir>` (`go tool muxt -C ./web check`). [Troubleshooting](docs/reference/cli.md#troubleshooting) lists the error a directory with no Go package gives.
 
 muxt loads Go packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
 

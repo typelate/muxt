@@ -83,7 +83,7 @@ One mutant per applicable action. No operator renames a template, so a mutant ne
 | `if-false` | `{{if}}` | Takes the else branch, or nothing. |
 | `with-empty` | `{{with}}` | Treats the value as absent. |
 | `range-never` | `{{range}}` | Iterates zero times. |
-| `template-drop` | `{{template}}` | Removes the call. `{{block}}` is never dropped. |
+| `template-drop` | `{{template}}` | Removes the call. |
 | `operands` | An action reading two or more inputs | Substitutes drawn values into one combination of its leaf operands. |
 | `condition` | One condition of an `and`/`or`/`not` decision | Forces that condition true or false while the others read real data. |
 | `condition-dead` | A condition the simplifier removed | Reported as `SKIP`, never run. |
@@ -144,7 +144,7 @@ Mutants run with `--workers` above 1 share whatever the tests share: a port, a f
 
 A flaky mutant is unknown, not caught, so close the gap by making the suite tolerate `--workers`, or run with `--workers 1`. It does not fail the exit status. With one worker nothing is repeated.
 
-The repeat is serial on purpose, since contention is what it checks for, and it costs up to one more run of the suite per kill. On a suite that kills most mutants it takes back much of what `--workers` saved. On a terminal, or with `-v`, each repeat writes a line: `[recheck 3/12] templates.gohtml "page" 1:39 if-true: killed`. The template lines written while the mutants run count kills as `(unconfirmed)` for the same reason. A repeat that cannot run keeps the kill and says why in its reason. `--format json` adds a top-level `flaky` count when it is not zero.
+The repeat is serial on purpose, since contention is what it checks for, and it costs up to one more run of the suite per kill. On a suite that kills most mutants it takes back much of what `--workers` saved. On a terminal, or with `-v`, each repeat writes a line: `[recheck 3/12] templates.gohtml "page" 1:39 if-true: killed`. The template lines written while the mutants run count kills as `(unconfirmed)` for the same reason.
 
 ## Coverage pre-pass
 
@@ -240,14 +240,14 @@ With `--dry-run` each template's heading says how many mutants it holds, which i
 muxt test-template-mutations --diff origin/main
 ```
 
-The unit is a template rendered with one type of dot. It is mutated when its text changed as parsed (reformatting inside an action or moving the file is not a change) or when it is reached with a dot type it was not reached with at the revision. Types are compared by name, looking through type aliases wherever they appear (including in the type arguments of a generic dot): retargeting `type Page = page.Data` to another type counts as a new type of dot.
+The unit is a template rendered with one type of dot. It is mutated when its text changed as parsed (reformatting inside an action or moving the file is not a change) or when it is reached with a dot type it was not reached with at the revision.
 
 ```text
 3 mutants across 2 templates (complexity 2, seed 1)
 1 template unchanged since origin/main
 ```
 
-The revision is read with `git archive`. If the templates cannot be read there, every template counts as changed and the preamble says why. [reference_test_template_mutations_diff.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_diff.txt)
+The revision is read with `git archive`. [reference_test_template_mutations_diff.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_diff.txt)
 
 ## JSON
 
@@ -300,6 +300,11 @@ A run adds `seconds` per result and a top-level `baseline` object with `passed` 
 - `eq`, `ne`, `lt`, `le`, `gt` and `ge` are checked for arity, not operand comparability, so a mutant that breaks a comparison runs and is recorded as killed by the render error.
 - Each mutant is a full `go test -count=1` run.
 - A source parsed with `Delims` that holds no `{{define}}` is read with the default delimiters.
+- **`{{block}}` is never dropped.** `template-drop` applies to `{{template}}` calls only.
+- **A repeat that cannot run** keeps the kill and says why in its reason.
+- **The JSON `flaky` count.** `--format json` adds a top-level `flaky` count only when it is not zero.
+- **Type aliases under `--diff`.** Types are compared by name, looking through type aliases wherever they appear, the type arguments of a generic dot included: retargeting `type Page = page.Data` to another type counts as a new type of dot.
+- **An unreadable revision.** If the templates cannot be read at the `--diff` revision, every template counts as changed and the preamble says why.
 
 ### Template coverage
 

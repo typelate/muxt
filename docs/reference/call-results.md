@@ -12,7 +12,7 @@ What the method returns sets `.Result`, `.Err`, and the status code.
 | `error`, or an interface embedding it | `struct{}` | the error; status 500, or its `StatusCode()` when the declared type has one ([howto_error_only_return.txt](../../cmd/muxt/testdata/howto_error_only_return.txt) · [reference_error_only_with_status_code.txt](../../cmd/muxt/testdata/reference_error_only_with_status_code.txt)) | true when the error is nil |
 | `error`, with an `execute` argument | the callback's argument, `struct{}` for `func() error` | nil; a returned error responds `500 failed to render page` and discards any rendered output | true after a successful call |
 
-The second of two results must be `error` or `bool`. Zero results, or three or more, fail generation outside `sse`. A lone result of a concrete type that implements `error` is the `T` shape: the value is `.Result`.
+The second of two results must be `error` or `bool`. Zero results, or three or more, fail generation outside `sse`.
 
 ```go
 func (s Server) About() AboutPage
@@ -81,7 +81,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Request` | `*http.Request` |
 | `.Receiver` | `R` |
 | `.Path` | `TemplateRoutePaths`: one method per route ([names](#route-methods)), taking one argument per path wildcard in order and returning the path as a `string`: `{{.Path.GetUser .Result.ID}}` |
-| `.Route` | `TemplateRouteBuilder`: the same methods, each returning a `TemplateRoute` with `Path()`, `String()` (the path, so `{{.Route.GetUser .Result.ID}}` prints it), `Method()` (empty when the pattern names none) and `HasMethod()`. A method that takes arguments is called in parentheses before its result is selected from: `{{(.Route.GetUser .Result.ID).Method}}`, or `{{or .Route.Index.Method "GET"}}` to fall back for a pattern with no method ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)) |
+| `.Route` | `TemplateRouteBuilder`: the same methods, each returning a `TemplateRoute` with `Path()`, `String()` (the path, so `{{.Route.GetUser .Result.ID}}` prints it), `Method()` (empty when the pattern names none) and `HasMethod()` ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)) |
 | `.MuxtVersion` | the generating muxt version |
 | `.StatusCode code` | the data, for chaining |
 | `.Header key value` | the data, for chaining |
@@ -98,13 +98,11 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 
 With `--output-htmx`, `TemplateData` also has the response setters `.HXLocation`, `.HXPushURL`, `.HXRedirect`, `.HXRefresh`, `.HXReplaceURL`, `.HXReswap`, `.HXRetarget`, `.HXReselect`, `.HXTrigger`, `.HXTriggerAfterSettle` and `.HXTriggerAfterSwap`, which chain and print nothing, and the request readers `.HXBoosted`, `.HXCurrentURL`, `.HXHistoryRestoreRequest`, `.HXPrompt`, `.HXRequest`, `.HXTargetElementID`, `.HXTriggerName` and `.HXTriggerElementID`.
 
-`.Header` and every `HX*` setter call `Header().Set`, so a second call with the same key replaces the first and the last call wins. To trigger several events, pass them in one call, as comma-separated names (`{{.HXTrigger "saved, closed"}}`) or as one JSON object when an event needs a detail: ``{{.HXTrigger `{"saved": null, "toast": "Saved"}`}}``.
-
 With `--output-datastar`, `TemplateData` also has the request reader `.DatastarRequest`, true when the request carries `Datastar-Request: true`, which every Datastar `@get`, `@post`, `@put`, `@patch` and `@delete` action sends ([reference_output_datastar_request.txt](../../cmd/muxt/testdata/reference_output_datastar_request.txt)). `SSETemplateData` does not have it: a Datastar stream is always opened by an action.
 
 ### Route methods
 
-A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two or more routes call the same method, every one of them, including the first, is named `<route name>Calling<Method>`, where the route name is built from the pattern as described below: `GET /one Dup(ctx)` and `GET /two Dup(ctx)` become `ReadOneCallingDup` and `ReadTwoCallingDup`. Only the method's name is compared, so routes that pass different arguments to it still collide. A long path therefore produces a long name, such as `CreateExAnteCompositionsPolicyByIDCallingEvaluateComposition`.
+A route with a call takes the call's name in PascalCase: `GET /user/{id} GetUser(ctx, id)` is `GetUser`. When two or more routes call the same method, every one of them, including the first, is named `<route name>Calling<Method>`, where the route name is built from the pattern as described below: `GET /one Dup(ctx)` and `GET /two Dup(ctx)` become `ReadOneCallingDup` and `ReadTwoCallingDup`.
 
 For a shorter name, give each route its own receiver method, even if the new method only forwards to a shared helper. A route whose method name appears once takes that name as is, so `POST /policy/{id}/evaluate EvaluatePolicy(ctx, id)` is `EvaluatePolicy`. Shortening the path in the pattern also shortens the name, since the route name is part of it. Templates that call `.Path.OldName` or `.Route.OldName` need the new name.
 
@@ -114,7 +112,7 @@ A route without a call is named from its pattern: a verb for the HTTP method (`G
 
 The [static assets](commands/generate.md#static-assets) path method is named the same way, as a call-less `GET` route with `--output-static-assets-path`: `Read` and the path's segments in PascalCase, so `/static` is `ReadStatic`, `/static/v1/` is `ReadStaticV1`, and `/assets/img` is `ReadAssetsImg` ([reference_static_assets.txt](../../cmd/muxt/testdata/reference_static_assets.txt)).
 
-`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`. An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment. String and `TextMarshaler` values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).
+`TemplateRoutes` returns the paths type, so `paths.Index()` is a `string`; the `TemplateRoute` comes from `.Route` in a template. Under a path prefix the paths of `/`, `{$}` and any route whose pattern ends in `/` keep their trailing slash: `/app/`, `/app/static/`.
 
 ## Status Code Control
 
@@ -148,3 +146,13 @@ The decision reads the route's template body, not the call in its name, and foll
 A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, gets no redirect block and its handler never calls `http.Redirect`. The scan errs toward emitting the block, because an unneeded block is harmless and a missing one would drop a redirect. The receiver method cannot set a redirect on its own, since it never receives the `TemplateData`, so a route that must redirect from Go code takes `response` and calls `http.Redirect` itself.
 
 [internal/muxt/redirect.go](../../internal/muxt/redirect.go) · [internal/generate/handler_statements.go](../../internal/generate/handler_statements.go)
+
+## Edge cases
+
+- **A concrete type that implements `error`.** A lone result of such a type is the `T` shape: the value is `.Result`.
+- **Selecting from a route that takes arguments.** Call the `.Route` method in parentheses before selecting from its result: `{{(.Route.GetUser .Result.ID).Method}}`. `{{or .Route.Index.Method "GET"}}` falls back for a pattern with no method.
+- **Set, not add.** `.Header` and every `HX*` setter call `Header().Set`, so a second call with the same key replaces the first and the last call wins. To trigger several events, pass them in one call, as comma-separated names (`{{.HXTrigger "saved, closed"}}`) or as one JSON object when an event needs a detail: ``{{.HXTrigger `{"saved": null, "toast": "Saved"}`}}``.
+- **Same method, different arguments.** Only the method's name is compared, so routes that pass different arguments to it still collide.
+- **Long names.** Because the route name is part of a `Calling` name, a long path produces a long name, such as `CreateExAnteCompositionsPolicyByIDCallingEvaluateComposition`.
+- **Empty path values.** An empty string value drops its segment, because `http.ServeMux` never matches an empty `{name}` segment.
+- **Escaping.** String and `TextMarshaler` path values are path-escaped; a trailing `{name...}` value is escaped per segment ([reference_path_param_escaping.txt](../../cmd/muxt/testdata/reference_path_param_escaping.txt)).

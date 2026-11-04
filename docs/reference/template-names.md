@@ -19,7 +19,7 @@ A template named in this shape becomes a route:
 | STATUS | `201` or `http.StatusCreated` | `200` |
 | CALL | `Method(arg, ...)` | render with no call; dot is [TemplateData](call-results.md#templatedata) with an empty `.Result` |
 
-Templates whose names do not match are ordinary templates. Any other all-caps word in the METHOD position, `HEAD` included, fails with `HEAD method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE`.
+Templates whose names do not match are ordinary templates.
 
 [tutorial_basic_route.txt](../../cmd/muxt/testdata/tutorial_basic_route.txt)
 
@@ -33,7 +33,7 @@ Muxt registers the METHOD, HOST and PATH text on an `http.ServeMux`, so [its pat
 {{define "GET /files/{path...} ServeFile(ctx, path)"}}{{end}}
 ```
 
-Muxt adds three rules. A path may not contain an empty segment, `//` (`path has an empty segment`); only a single trailing `/` is allowed. A trailing `/` is ServeMux's subtree pattern: `GET /static/` matches `/static/css/app.css` and is registered exactly as written. A trailing `/` is allowed after any path, including one with parameters (`/users/{id}/`); only a `{name...}` wildcard must be last, and `{path...}` is the alternative that binds the rest of the path. Its path helper, `Serve` for `GET /static/ Serve(request, response)` (`ReadStatic` when the name has no call), returns `/static/`. `GET /static` and `GET /static/` without a call both name `ReadStatic`, so they fail with the path method collision error ([err_trailing_slash_name_collision.txt](../../cmd/muxt/testdata/err_trailing_slash_name_collision.txt)). A wildcard name must be a Go identifier, unique within the path, and not one of `ctx`, `request`, `response`, `form`, `multipart`, `body`, `execute`, `lastEventID` (`path parameter name NAME conflicts with a reserved identifier`). The same pattern in two templates fails with `duplicate route pattern`.
+Muxt adds three rules. A path may not contain an empty segment, `//` (`path has an empty segment`). A wildcard name must be a Go identifier, unique within the path, and not one of `ctx`, `request`, `response`, `form`, `multipart`, `body`, `execute`, `lastEventID` (`path parameter name NAME conflicts with a reserved identifier`). The same pattern in two templates fails with `duplicate route pattern`.
 
 [reference_path_trailing_slash.txt](../../cmd/muxt/testdata/reference_path_trailing_slash.txt) · [reference_path_exact_match.txt](../../cmd/muxt/testdata/reference_path_exact_match.txt) · [howto_path_param.txt](../../cmd/muxt/testdata/howto_path_param.txt) · [err_duplicate_pattern.txt](../../cmd/muxt/testdata/err_duplicate_pattern.txt)
 
@@ -44,7 +44,7 @@ Muxt adds three rules. A path may not contain an empty segment, `//` (`path has 
 {{define "GET /admin http.StatusUnauthorized"}}{{end}}
 ```
 
-The name sets the default; [Call Results](call-results.md#status-code-control) lists what overrides it. A status in the name plus a `response` argument fails generation.
+The name sets the default; [Call Results](call-results.md#status-code-control) lists what overrides it.
 
 [reference_status_codes.txt](../../cmd/muxt/testdata/reference_status_codes.txt)
 
@@ -60,3 +60,10 @@ The name sets the default; [Call Results](call-results.md#status-code-control) l
 The call is parsed as a Go expression. [Call Parameters](call-parameters.md) lists every argument and the `sse`, `unmarshalJSON` and `unmarshalForm` wrappers. [Call Results](call-results.md) covers what the method may return and the [`marshalJSON`](call-results.md#json-responses) wrapper.
 
 [howto_call_with_multiple_args.txt](../../cmd/muxt/testdata/howto_call_with_multiple_args.txt)
+
+## Edge cases
+
+- **Other methods.** Any other all-caps word in the METHOD position, `HEAD` included, fails with `HEAD method not allowed; allowed methods: GET, POST, PUT, PATCH, and DELETE`.
+- **A trailing `/`.** Only a single trailing `/` is allowed. It is ServeMux's subtree pattern: `GET /static/` matches `/static/css/app.css` and is registered exactly as written. It is allowed after any path, including one with parameters (`/users/{id}/`); only a `{name...}` wildcard must be last, and `{path...}` is the alternative that binds the rest of the path. Its path helper, `Serve` for `GET /static/ Serve(request, response)` (`ReadStatic` when the name has no call), returns `/static/`.
+- **`/static` and `/static/` collide.** `GET /static` and `GET /static/` without a call both name `ReadStatic`, so they fail with the path method collision error ([err_trailing_slash_name_collision.txt](../../cmd/muxt/testdata/err_trailing_slash_name_collision.txt)).
+- **A status with `response`.** A status in the name plus a `response` argument fails generation.

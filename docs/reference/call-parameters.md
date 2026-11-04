@@ -1,6 +1,6 @@
 # Call Parameters
 
-Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and calls are allowed: a receiver method or, when the receiver has none of that name, a function declared in the package, which is called directly and is not added to `RoutesReceiver`; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
+Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and receiver method calls are allowed; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
 
 ```gotmpl
 {{define "POST /user/{id} UpdateUser(ctx, id, form)"}}{{end}}
@@ -18,25 +18,23 @@ Value and pointer receivers both work ([reference_receiver_with_pointer.txt](../
 |---|---|---|
 | `ctx` | `context.Context` | `request.Context()` ([howto_arg_context.txt](../../cmd/muxt/testdata/howto_arg_context.txt)) |
 | `request` | `*http.Request` | the request ([howto_arg_request.txt](../../cmd/muxt/testdata/howto_arg_request.txt)) |
-| `response` | `http.ResponseWriter` | the response; muxt sets no status code or headers, and still renders the template after the method returns. Generate [warns](commands/generate.md#warnings). See [routes that take `response`](#routes-that-take-response) |
+| `response` | `http.ResponseWriter` | the response; see [routes that take `response`](#routes-that-take-response) |
 | path wildcard | a [parseable type](#parseable-types) | `request.PathValue(name)` ([howto_arg_path_param.txt](../../cmd/muxt/testdata/howto_arg_path_param.txt)) |
 | `form` | struct or `url.Values` | `request.Form`: the query string plus a url-encoded body on POST, PUT, and PATCH |
 | `unmarshalForm(body)` | same as `form` | the same binding, spelled out ([reference_form_equals_unmarshal_form.txt](../../cmd/muxt/testdata/reference_form_equals_unmarshal_form.txt)) |
 | `multipart` | struct or `*multipart.Form` | `request.MultipartForm` |
 | `body` | `io.Reader`, exactly | `request.Body` ([err_body_not_reader.txt](../../cmd/muxt/testdata/err_body_not_reader.txt) · [reference_body_reader.txt](../../cmd/muxt/testdata/reference_body_reader.txt)) |
 | `unmarshalJSON(body)` | any type `encoding/json` decodes | `request.Body` |
-| `signals` | same as `unmarshalJSON(body)` | shorthand for it, and diagnostics print that form; requires `--output-datastar`. It reads only the body: Datastar sends a GET request's signals in the `datastar` query parameter, so a GET route taking `signals` responds 400 and the route should be POST ([err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt) · [datastar-live-view.md](../how-to/datastar-live-view.md)) |
+| `signals` | same as `unmarshalJSON(body)` | shorthand for it, and diagnostics print that form; requires `--output-datastar` ([err_signals_without_datastar.txt](../../cmd/muxt/testdata/err_signals_without_datastar.txt) · [datastar-live-view.md](../how-to/datastar-live-view.md)) |
 | `lastEventID` | a [parseable type](#parseable-types) | the `Last-Event-Id` header ([reference_last_event_id.txt](../../cmd/muxt/testdata/reference_last_event_id.txt)) |
 | `execute` | `func(T) error` or `func() error` | a callback that renders the template: [the `execute` callback](call-results.md#the-execute-callback), or [below](#server-sent-events) inside `sse` |
-| a call, such as `Author(id)` | its first result | called after every argument has parsed and before the outer method, under the same argument rules, except that `execute` and sse callbacks cannot be nested; a second `error` or `bool` result ends the handler as in [Result Shapes](call-results.md#result-shapes) ([reference_call_with_expression_arg.txt](../../cmd/muxt/testdata/reference_call_with_expression_arg.txt) · [reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)) |
+| a call, such as `Author(id)` | its first result | called after every argument has parsed and before the outer method, under the same argument rules ([reference_call_with_expression_arg.txt](../../cmd/muxt/testdata/reference_call_with_expression_arg.txt)) |
 
 Form fields are not arguments; bind them through `form` or `multipart`.
 
 ## Type Resolution
 
 Without `--use-receiver-type` ([cli.md](cli.md#flags)), muxt infers the signature: path values and `lastEventID` are `string`, `form` is `url.Values`, `multipart` is `*multipart.Form`, `body` is `io.Reader`, `unmarshalJSON(body)` is `json.RawMessage`, and the method returns `any`. With it, muxt parses each argument to the method's declared parameter type ([howto_arg_no_receiver.txt](../../cmd/muxt/testdata/howto_arg_no_receiver.txt) · [howto_call_with_path_param.txt](../../cmd/muxt/testdata/howto_call_with_path_param.txt)).
-
-A path value, `lastEventID`, `form`, `multipart`, `ctx` or `body` may appear more than once in a call, including inside nested calls like `f1(f2(id), id)`, when every use is passed to a parameter of an identical type, such as `Sum(id, id)` with two `int` parameters. The value is parsed once and reused. A later use whose parameter type differs from the first fails generation and names both types, so `AnyString(id, id)` with `(any, string)` is rejected. `request`, `response`, `execute` and the sse callbacks may repeat with any parameter types they are assignable to. A method muxt infers gets one parameter of the default type per use, numbering the later ones: `F(request, request)` infers `F(request *http.Request, request2 *http.Request)` ([reference_repeated_argument_on_undefined_method.txt](../../cmd/muxt/testdata/reference_repeated_argument_on_undefined_method.txt)).
 
 ## Parseable Types
 
@@ -54,7 +52,7 @@ A path value, `lastEventID`, `form`, `multipart`, `ctx` or `body` may appear mor
 
 ## Parse Failures
 
-A path value, typed form field, or `lastEventID` that fails to parse responds 400. Neither the method nor a call nested in its arguments runs ([reference_nested_call_evaluation_order.txt](../../cmd/muxt/testdata/reference_nested_call_evaluation_order.txt)). The template still renders with a zero [`.Result`](call-results.md#templatedata) and the error in `.Err`. On an `execute` route nothing renders; the response is an empty 400. On an sse route the 400 is sent before the stream opens ([reference_sse_with_typed_form_field.txt](../../cmd/muxt/testdata/reference_sse_with_typed_form_field.txt)).
+A path value, typed form field, or `lastEventID` that fails to parse responds 400. Neither the method nor a call nested in its arguments runs ([reference_nested_call_evaluation_order.txt](../../cmd/muxt/testdata/reference_nested_call_evaluation_order.txt)). The template still renders with a zero [`.Result`](call-results.md#templatedata) and the error in `.Err`.
 
 A url-encoded body that `request.ParseForm` rejects responds 400 through `http.Error` without rendering ([reference_form_parse_error.txt](../../cmd/muxt/testdata/reference_form_parse_error.txt)). A malformed multipart body sets `.Err` and responds 400 ([reference_multipart_parse_error.txt](../../cmd/muxt/testdata/reference_multipart_parse_error.txt)).
 
@@ -117,7 +115,7 @@ A call that reads the body twice, such as `(form, body)` or `(body, unmarshalJSO
 
 ## Routes that take `response`
 
-A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and writes the buffer to `response` with `WriteTo`. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route.
+A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and writes the buffer to `response` with `WriteTo`. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route. Generate [warns](commands/generate.md#warnings) about each such route.
 
 The consequence is that every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id therefore renders its error page at 200 rather than 400.
 
@@ -172,13 +170,13 @@ Return when `ctx` is done or `execute` returns an error: the client is gone, the
 
 | Rule | Detail |
 |---|---|
-| Wrapper | exactly one method call; any other shape, such as `sse()`, is an ordinary call to a function named `sse` ([reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt)) |
+| Wrapper | exactly one method call ([reference_sse.txt](../../cmd/muxt/testdata/reference_sse.txt)) |
 | Callback | `func(T) error` or `func() error`, inline or a named or aliased func type ([reference_callback_named_func_type.txt](../../cmd/muxt/testdata/reference_callback_named_func_type.txt)) |
 | Method results | none, or `error`; a returned error is logged and the stream closes ([reference_sse_error_return.txt](../../cmd/muxt/testdata/reference_sse_error_return.txt)) |
 | Nested calls | allowed, with the same arguments as on any route, such as `sse(Stream(ctx, Gate(request, id), execute))`; they run before the stream opens, and a returned error is logged and responds 500 without opening it ([reference_sse_nested_call.txt](../../cmd/muxt/testdata/reference_sse_nested_call.txt)) |
 | `response` argument | not allowed ([err_sse_with_response.txt](../../cmd/muxt/testdata/err_sse_with_response.txt)) |
 | Undefined method | fails generation: `method NAME using the execute callback must be defined on the receiver type` |
-| Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call; a path wildcard with such a name is a path value, not a callback ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
+| Extra callbacks | arguments prefixed `sse`, such as `sseClock`, render the template of the same name, which must exist at generate time; each has its own `T` and may sit anywhere in the call ([reference_sse_multiple_callbacks.txt](../../cmd/muxt/testdata/reference_sse_multiple_callbacks.txt)) |
 | Template data | `*SSETemplateData[R, T]`: `.Result`, `.Err`, `.Request`, `.Receiver`, `.Path`, `.Route`, `.String`, and chainable `.Event`, `.ID`, and `.Retry` setters. No `.Ok`, `.StatusCode`, `.Header`, or `.Redirect` |
 
 ### Datastar
@@ -188,5 +186,15 @@ Under `--output-datastar`:
 | Rule | Detail |
 |---|---|
 | Events | `datastar-patch-elements`, with each rendered line as a `data: elements` line; `.Selector`, `.Mode`, and `.UseViewTransition` replace `.Event` ([reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt)) |
-| `Signals` suffix | a callback named like `countsSignals`, typed `func(T) error`, marshals its argument as a `datastar-patch-signals` event instead of rendering; the prefix is only a label, and a path wildcard with such a name is a path value ([reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt) · [err_signals_callback_without_datastar.txt](../../cmd/muxt/testdata/err_signals_callback_without_datastar.txt)) |
+| `Signals` suffix | a callback named like `countsSignals`, typed `func(T) error`, marshals its argument as a `datastar-patch-signals` event instead of rendering; the prefix is only a label ([reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt) · [err_signals_callback_without_datastar.txt](../../cmd/muxt/testdata/err_signals_callback_without_datastar.txt)) |
 | `--output-htmx` | mutually exclusive ([err_output_htmx_and_datastar.txt](../../cmd/muxt/testdata/err_output_htmx_and_datastar.txt)) |
+
+## Edge cases
+
+- **Package functions.** When the receiver has no method of a call's name, the call may name a function declared in the package. That function is called directly and is not added to `RoutesReceiver`.
+- **`signals` on a GET route.** `signals` reads only the body. Datastar sends a GET request's signals in the `datastar` query parameter, so a GET route taking `signals` responds 400; make the route POST.
+- **Nested calls.** `execute` and the sse callbacks cannot be nested inside a call argument. A second `error` or `bool` result from a nested call ends the handler as in [Result Shapes](call-results.md#result-shapes) ([reference_call_with_bool_return.txt](../../cmd/muxt/testdata/reference_call_with_bool_return.txt)).
+- **Repeated arguments.** A path value, `lastEventID`, `form`, `multipart`, `ctx` or `body` may appear more than once in a call, including inside nested calls like `f1(f2(id), id)`, when every use is passed to a parameter of an identical type, such as `Sum(id, id)` with two `int` parameters. The value is parsed once and reused. A later use whose parameter type differs from the first fails generation and names both types, so `AnyString(id, id)` with `(any, string)` is rejected. `request`, `response`, `execute` and the sse callbacks may repeat with any parameter types they are assignable to. A method muxt infers gets one parameter of the default type per use, numbering the later ones: `F(request, request)` infers `F(request *http.Request, request2 *http.Request)` ([reference_repeated_argument_on_undefined_method.txt](../../cmd/muxt/testdata/reference_repeated_argument_on_undefined_method.txt)).
+- **Parse failures on `execute` and sse routes.** On an `execute` route nothing renders; the response is an empty 400. On an sse route the 400 is sent before the stream opens ([reference_sse_with_typed_form_field.txt](../../cmd/muxt/testdata/reference_sse_with_typed_form_field.txt)).
+- **Other `sse` shapes.** Anything other than one method call inside `sse`, such as `sse()`, is an ordinary call to a function named `sse`.
+- **Wildcards named like callbacks.** A path wildcard named with the `sse` prefix or the `Signals` suffix is a path value, not a callback.
