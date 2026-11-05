@@ -1,0 +1,51 @@
+# A module whose path is github.com/typelate/muxt, such as a fork older
+# than the CLI, gets no muxt requirement in the coverage pre-pass's
+# modfile copy, so the shim's import of template/html resolves inside the
+# module itself. When the module has no template/html, the probe says so,
+# coverage is unknown, and every mutant runs.
+
+! muxt test-template-mutations --seed 1
+stderr '(?m)^warning: template coverage unknown: the module under test is github.com/typelate/muxt without template/html; the pre-pass needs the engine packages of muxt '
+cmp stdout want.txt
+
+-- go.mod --
+module github.com/typelate/muxt
+
+go 1.27
+-- templates.gohtml --
+{{define "page"}}Hello, {{.Name}}!{{if .Admin}} {{.Secret}}{{end}}{{end}}
+-- template.go --
+package muxt
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name   string
+	Admin  bool
+	Secret string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want.txt --
+4 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:21:9 ExecuteTemplate "page" (dot: muxt.Page)
+  "page" templates.gohtml (complexity 2, dot: muxt.Page)
+    MISS 1:25 action-zero
+    MISS 1:35 if-false
+    MISS 1:35 if-true
+    MISS 1:49 action-zero
+
+4 mutants, 0 killed, 4 missed, 0 skipped

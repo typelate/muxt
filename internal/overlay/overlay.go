@@ -518,6 +518,9 @@ const probeFile = "muxt_overlay_probe.go"
 // toolchain, in this module, or with this muxt.
 func Probe(ctx context.Context, target Target) (err error) {
 	tc, goroot, targetMod, req := target.tc, target.goroot, target.goMod, target.req
+	if err := checkSelfEngine(targetMod); err != nil {
+		return err
+	}
 	dir, err := os.MkdirTemp("", "muxt-overlay-probe-")
 	if err != nil {
 		return fmt.Errorf("making the overlay probe's directory: %w", err)
@@ -551,6 +554,33 @@ func Probe(ctx context.Context, target Target) (err error) {
 		}
 	}
 	return fmt.Errorf("the go command ignores an overlay of GOROOT's html/template: go list html/template does not include %s", key)
+}
+
+// checkSelfEngine checks, when targetMod is Module's own, that its tree
+// has template/html: the modfile copy requires nothing then, so the shim's
+// import resolves inside the target, and a fork or copy older than this
+// muxt has no such package. A targetMod that is not Module's is not
+// checked.
+func checkSelfEngine(targetMod string) error {
+	self, err := isModule(targetMod)
+	if err != nil || !self {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(filepath.Dir(targetMod), "template", "html"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading the module under test's template/html: %w", err)
+	}
+	for _, e := range entries {
+		if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			return nil
+		}
+	}
+	info, ok := debug.ReadBuildInfo()
+	version, err := moduleVersion(info, ok)
+	if err != nil {
+		version = "you ran"
+	}
+	return fmt.Errorf("the module under test is %s without template/html; the pre-pass needs the engine packages of muxt %s", Module, version)
 }
 
 // probeRefusal says why the probe's go list failed: the go command's own

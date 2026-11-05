@@ -387,6 +387,24 @@ func TestProbe(t *testing.T) {
 	}
 }
 
+// TestProbeNeedsTheEngineInASamePathModule states that a module whose
+// path is muxt's, such as a fork older than the CLI, is probed for the
+// engine's package in its own tree, since the modfile copy requires
+// nothing there, and that the probe says so when it is missing.
+func TestProbeNeedsTheEngineInASamePathModule(t *testing.T) {
+	realGOROOT(t)
+	fork := writeTarget(t, map[string]string{
+		"go.mod":               "module github.com/typelate/muxt\n\ngo 1.27\n",
+		"template/a.go":        "package template\n",
+		"template/html/README": "",
+	})
+	err := probe(context.Background(), overlay.Toolchain{Dir: fork, Env: append(os.Environ(), "GOWORK=off")})
+	const want = "the module under test is github.com/typelate/muxt without template/html; the pre-pass needs the engine packages of muxt "
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Probe: error = %v, want one saying %q", err, want)
+	}
+}
+
 // TestProbeReportsARefusedOverlay states that a refusal carries the go
 // command's own reason, with advice only where it fits that reason.
 func TestProbeReportsARefusedOverlay(t *testing.T) {
