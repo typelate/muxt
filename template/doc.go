@@ -3,6 +3,11 @@
 // engine for its trees. Package template/html builds an
 // html/template-compatible API on it.
 //
+// It is muxt's analysis and coverage engine, and its contextual escaping
+// has documented gaps (see ExecuteTemplate); muxt's generated handlers
+// render with the standard library's html/template, and this package must
+// not be used to render untrusted data for a browser.
+//
 // The packages are public so that the coverage pre-pass of muxt
 // test-template-mutations can require them from the module under test, and
 // so that tools can use them. They are versioned with the muxt command:

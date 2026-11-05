@@ -1048,7 +1048,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		return nil, err
 	}
 	elem.closeCount.Add(1)
-	if !elem.Closed && !elem.Void && !elem.Misnested {
+	if !elem.Closed && !elem.Void && !elem.Misnested && !changesTextContext(elem.TagName) {
 		// html/template writes no end tag the source does not, as when
 		// one template opens <main> and another closes it.
 		s.markup.leaveOpen(n)
