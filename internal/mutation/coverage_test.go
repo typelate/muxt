@@ -79,7 +79,7 @@ import (
 	"io"
 )
 
-var templates = template.Must(template.New("row").Parse(` + "`" + `<p {{with .}}data-v='{{.}}'{{end}}>x</p>` + "`" + `))
+var templates = template.Must(template.New("row").Parse(` + "`" + `<p {{with .}}data-v="{{.}}"{{end}}>x</p>` + "`" + `))
 
 func Render(w io.Writer, version string) error {
 	return templates.ExecuteTemplate(w, "row", version)
