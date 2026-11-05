@@ -1,0 +1,72 @@
+# A template reached once, through a chain of {{template}} invocations, is
+# mutated once and trimmed nowhere.
+#
+# "page" invokes "middle", which invokes "leaf". The checker that finds
+# each invocation's dot follows it into the template it names, so it also
+# sees the invocations written further down the chain. Only the ones
+# written in a template count as its own; otherwise "leaf" would be listed
+# as trimmed against the very call that mutated it.
+
+muxt test-template-mutations --dry-run -v --seed 1
+cmp stdout want.txt
+! stdout trimmed
+
+-- go.mod --
+module server
+
+go 1.24
+-- templates.gohtml --
+{{define "leaf"}}<p>{{.Title}}</p>{{end}}
+{{define "middle"}}{{template "leaf" .}}{{end}}
+{{define "page"}}{{template "middle" .}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Title string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Title: "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "<p>hi</p>"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want.txt --
+3 mutants across 3 templates (complexity 3, seed 1)
+dry run: no tests were run
+
+template.go:19:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 1, 1 mutant, dot: server.Page)
+    PEND 3:18 template-drop
+  "middle" templates.gohtml via {{template}} (complexity 1, 1 mutant, dot: server.Page)
+    PEND 2:20 template-drop
+  "leaf" templates.gohtml via {{template}} (complexity 1, 1 mutant, dot: server.Page)
+    PEND 1:21 action-zero
+
+3 mutants, 3 runnable, 0 skipped

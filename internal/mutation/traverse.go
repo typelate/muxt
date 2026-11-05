@@ -142,17 +142,33 @@ type templateCall struct {
 	dot  types.Type
 }
 
-// templateCalls reports the {{template}} invocations in tree, with the
-// type of dot each one passes on.
+// templateCalls reports the {{template}} invocations written in tree, with
+// the type of dot each one passes on.
 //
 // The types come from the checker, which is the only thing that knows how
 // dot narrows through a range or a with on the way to the invocation.
+//
+// The checker follows each invocation into the template it names, so it
+// reports the invocations of those templates too. Only the ones written
+// in tree are kept: visit reaches the rest by recursing, and reaching them
+// here as well would record each one as a repeat of itself. A node is kept
+// the first time it is passed, which is when tree itself is being checked;
+// a template that invokes its way back to tree passes it again, with
+// whatever dot that path carries.
 func templateCalls(lt *checked, tree *template.Tree, dot types.Type) []templateCall {
 	var found []templateCall
+	passed := make(map[*template.TemplateNode]struct{})
 	// A template that does not check still yields the invocations found
 	// before the failure, which is better than none: muxt check is where
 	// a type error should be reported, not here.
-	_ = executeWith(lt, tree, dot, func(node *template.TemplateNode, _ *template.Tree, tp types.Type, _ check.Definition) {
+	_ = executeWith(lt, tree, dot, func(node *template.TemplateNode, in *template.Tree, tp types.Type, _ check.Definition) {
+		if in != tree {
+			return
+		}
+		if _, again := passed[node]; again {
+			return
+		}
+		passed[node] = struct{}{}
 		found = append(found, templateCall{name: node.Name, dot: tp})
 	})
 	return found

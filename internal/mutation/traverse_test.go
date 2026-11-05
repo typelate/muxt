@@ -122,3 +122,74 @@ func TestTypeNames(t *testing.T) {
 		})
 	}
 }
+
+// trimGoFile renders "page" from two calls, both with a Page, so the
+// second call is a genuine repeat of the first.
+const trimGoFile = `package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct{ Title string }
+
+func RenderHome(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+
+func RenderArchive(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+`
+
+// TestNewPlanTrimsOnlyRepeats states that a trim is a template reached a
+// second time with the same dot, never a template reached once through
+// a chain of {{template}} invocations.
+func TestNewPlanTrimsOnlyRepeats(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name      string
+		templates string
+		mutated   []string
+		trimmed   []TrimmedTemplate
+	}{
+		{
+			name: "a partial reached once through another",
+			templates: `{{define "leaf"}}<p>{{.Title}}</p>{{end}}
+{{define "middle"}}{{template "leaf" .}}{{end}}
+{{define "page"}}{{template "middle" .}}{{end}}
+`,
+			mutated: []string{"page server.Page", "middle server.Page", "leaf server.Page"},
+			trimmed: []TrimmedTemplate{
+				{CallSite: "template.go:21:9", Template: "page", DataType: "server.Page", FirstSeenAt: "template.go:17:9"},
+			},
+		},
+		{
+			name: "a partial invoked twice by one template",
+			templates: `{{define "leaf"}}<p>{{.Title}}</p>{{end}}
+{{define "page"}}{{template "leaf" .}}{{template "leaf" .}}{{end}}
+`,
+			mutated: []string{"page server.Page", "leaf server.Page"},
+			trimmed: []TrimmedTemplate{
+				{CallSite: "template.go:17:9", Template: "leaf", DataType: "server.Page", FirstSeenAt: "template.go:17:9"},
+				{CallSite: "template.go:21:9", Template: "page", DataType: "server.Page", FirstSeenAt: "template.go:17:9"},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, map[string]string{"go.mod": goMod, "template.go": trimGoFile, "templates.gohtml": tt.templates})
+			p, err := newPlan(t.Context(), greetingConfig(), dir)
+			require.NoError(t, err)
+			assert.Equal(t, tt.mutated, mutatedTemplates(p), "mutated")
+			assert.Equal(t, tt.trimmed, p.trimmed, "trimmed")
+		})
+	}
+}
