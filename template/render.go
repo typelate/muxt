@@ -11,7 +11,52 @@ import (
 // cannot hold, so that render can write it as html/template would. A nil
 // *markup records nothing.
 type markup struct {
-	open map[*html.Node]bool // elements whose source writes no end tag
+	open  map[*html.Node]bool          // elements whose source writes no end tag
+	attrs map[*html.Node][]*attrSyntax // each attribute's syntax, by index in Attr
+}
+
+// sourceAttr is an attribute with how its source writes it.
+type sourceAttr struct {
+	html.Attribute
+	syntax *attrSyntax // nil: a boolean attribute, or no source to follow
+}
+
+// attrSyntax is how an attribute's source writes its value.
+type attrSyntax struct {
+	quote byte   // '"', '\'', or 0 for an unquoted value
+	raw   string // the value as written between the quotes
+}
+
+// setAttrs records the syntax of n's attributes, which are attrs.
+func (m *markup) setAttrs(n *html.Node, attrs []sourceAttr) {
+	if m == nil {
+		return
+	}
+	var syntax []*attrSyntax
+	for i, a := range attrs {
+		if a.syntax == nil {
+			continue
+		}
+		if syntax == nil {
+			syntax = make([]*attrSyntax, len(attrs))
+		}
+		syntax[i] = a.syntax
+	}
+	if syntax == nil {
+		return
+	}
+	if m.attrs == nil {
+		m.attrs = make(map[*html.Node][]*attrSyntax)
+	}
+	m.attrs[n] = syntax
+}
+
+// syntax returns the syntax of n's i'th attribute, or nil.
+func (m *markup) syntax(n *html.Node, i int) *attrSyntax {
+	if m == nil || i >= len(m.attrs[n]) {
+		return nil
+	}
+	return m.attrs[n][i]
 }
 
 // leaveOpen records that the source writes no end tag for n.
@@ -30,6 +75,8 @@ func (m *markup) leaveOpen(n *html.Node) {
 //   - Void elements use <br> not <br/>
 //   - Attributes with empty values are rendered bare (e.g., disabled not disabled="")
 //   - Text content and attribute values are properly escaped
+//   - An attribute m has the syntax of is written as the source writes
+//     it, quotes and static text included
 //   - An element m says the source leaves open has no end tag
 func render(w io.Writer, n *html.Node, m *markup) error {
 	return renderer{m}.node(w, n)
@@ -90,7 +137,13 @@ func (r renderer) element(w io.Writer, n *html.Node) error {
 	if _, err := io.WriteString(w, n.Data); err != nil {
 		return err
 	}
-	for _, a := range n.Attr {
+	for i, a := range n.Attr {
+		if syntax := r.m.syntax(n, i); syntax != nil {
+			if err := renderSourceAttr(w, a, syntax); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := renderAttr(w, a); err != nil {
 			return err
 		}
@@ -155,6 +208,73 @@ func renderAttr(w io.Writer, a html.Attribute) error {
 	}
 	_, err := io.WriteString(w, `"`)
 	return err
+}
+
+// renderSourceAttr writes a as its source writes it: the value, as
+// syntax has it, between the source's quotes.
+func renderSourceAttr(w io.Writer, a html.Attribute, syntax *attrSyntax) error {
+	var b strings.Builder
+	b.WriteByte(' ')
+	if a.Namespace != "" {
+		b.WriteString(a.Namespace)
+		b.WriteByte(':')
+	}
+	b.WriteString(a.Key)
+	b.WriteByte('=')
+	if syntax.quote != 0 {
+		b.WriteByte(syntax.quote)
+	}
+	b.WriteString(syntax.raw)
+	if syntax.quote != 0 {
+		b.WriteByte(syntax.quote)
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// quotedAttrEscaper and unquotedAttrEscaper escape an action's output in
+// an attribute value as html/template's htmlEscaper and
+// htmlNospaceEscaper do.
+var (
+	quotedAttrEscaper = strings.NewReplacer(
+		"\x00", "\uFFFD",
+		`"`, "&#34;",
+		`&`, "&amp;",
+		`'`, "&#39;",
+		`+`, "&#43;",
+		`<`, "&lt;",
+		`>`, "&gt;",
+	)
+	unquotedAttrEscaper = strings.NewReplacer(
+		"\x00", "&#xfffd;",
+		"\t", "&#9;",
+		"\n", "&#10;",
+		"\v", "&#11;",
+		"\f", "&#12;",
+		"\r", "&#13;",
+		" ", "&#32;",
+		`"`, "&#34;",
+		`&`, "&amp;",
+		`'`, "&#39;",
+		`+`, "&#43;",
+		`<`, "&lt;",
+		`=`, "&#61;",
+		`>`, "&gt;",
+		"`", "&#96;",
+	)
+)
+
+// escapeAttrText escapes an action's output for an attribute value
+// between quote, 0 for none. An empty output in an unquoted value would
+// end the value, so it is ZgotmplZ, as in html/template.
+func escapeAttrText(s string, quote byte) string {
+	if quote != 0 {
+		return quotedAttrEscaper.Replace(s)
+	}
+	if s == "" {
+		return "ZgotmplZ"
+	}
+	return unquotedAttrEscaper.Replace(s)
 }
 
 // htmlEscaper escapes the five HTML special characters plus \r,

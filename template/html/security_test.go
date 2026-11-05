@@ -50,7 +50,7 @@ func TestTrustURLBypassesSchemeFilter(t *testing.T) {
 		{"trusted javascript URL passes", html.URL(`javascript:onSafeAction()`),
 			`<a href="javascript:onSafeAction()">x</a>`},
 		{"trusted custom scheme passes", html.URL(`tel:+15551234`),
-			`<a href="tel:+15551234">x</a>`},
+			`<a href="tel:&#43;15551234">x</a>`},
 		{"untrusted javascript URL filtered", `javascript:alert(1)`,
 			`<a href="#ZgotmplZ">x</a>`},
 		{"untrusted tel URL filtered", `tel:+15551234`,
