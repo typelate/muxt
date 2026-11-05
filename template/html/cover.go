@@ -30,8 +30,8 @@ const CoverDisabledMarker = "muxt: template coverage export disabled:"
 // once per process, as there is no exit hook in which to flush a profile
 // collected in memory, so the export appends as it goes instead.
 //
-// It is package-level state against the "avoid package-level state" rule
-// of CLAUDE.md, knowingly: when this package stands in for html/template,
+// It is package-level state, against the usual guideline, knowingly:
+// when this package stands in for html/template,
 // the user's code calls html/template's API and nothing else, so there is
 // no constructor or option through which an export could be passed, and
 // the environment variable, read once here, is the opt-in. Tests replace
