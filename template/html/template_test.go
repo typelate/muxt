@@ -718,3 +718,26 @@ func TestTemplateCallInATagIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestTemplateTextIsWrittenAsItIs states that the engine writes the
+// template's own text as html/template does, as it is: an entity in it is
+// not escaped again.
+func TestTemplateTextIsWrittenAsItIs(t *testing.T) {
+	for _, src := range []string{
+		`<p>a &middot; {{.}}</p>`,
+		`<p>{{if .}}a &middot; {{.}}{{end}}</p>`,
+		`<p>it's "{{.}}" &amp; more</p>`,
+		`a &hellip; {{.}}`,
+		`<title>a &hellip; {{.}}</title>`,
+		`<title>{{if .}}a &hellip; {{.}}{{end}}</title>`,
+		`<textarea>a &amp; {{.}}</textarea>`,
+		`{{define "s"}}{{.}} &ndash; z{{end}}<p>{{template "s" .}}</p>`,
+	} {
+		for _, data := range []string{"x", `<b>&amp;'"`} {
+			want := executeStdlib(t, src, data)
+			if got := executeShim(t, src, data); got != want {
+				t.Errorf("shim output for %q with %q = %q, want stdlib's %q", src, data, got, want)
+			}
+		}
+	}
+}
