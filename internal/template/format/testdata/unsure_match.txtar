@@ -1,0 +1,26 @@
+A caller writes text before its {{template}} call, so the browser opens
+<body> before the define runs and the define's own <body> is a misplaced
+tag. The ancestors of the define's elements are then unknown, and the rule
+main p might match p. It sets nowrap, which collapses whitespace exactly
+like the normal p would inherit, so the answer is the same whether it
+matches or not, and the body is re-indented.
+-- input.gohtml --
+<style>main p { white-space: nowrap; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+<main>
+<p>x</p>
+</main>
+</body>
+{{end}}
+-- format.gohtml --
+<style>main p { white-space: nowrap; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+	<main>
+		<p>x</p>
+	</main>
+</body>
+{{end}}

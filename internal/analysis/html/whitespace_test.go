@@ -275,6 +275,47 @@ func TestWhiteSpaceMovedMatcher(t *testing.T) {
 	}
 }
 
+func TestWhiteSpaceMovedMatcherMayChange(t *testing.T) {
+	const page = `<section class="post"><div id="moved"><pre></pre><b></b><p class="k"></p></div><span></span></section>`
+	for _, tt := range []struct {
+		sheet string
+		owner WhiteSpace
+		want  bool // MayChange(the div with id moved, owner)
+	}{
+		{sheet: ``, want: false},
+		{sheet: `section > div{white-space:pre}`, want: true},
+		{sheet: `section > div{white-space:nowrap}`, want: false},
+		{sheet: `section div b{white-space:normal}`, want: false},
+		{sheet: `.post b{white-space:collapse nowrap}`, want: false},
+		{sheet: `.post b{all:initial}`, want: false},
+		{sheet: `.post b{all:unset}`, want: true},
+		{sheet: `@media print{section div{white-space:nowrap}}`, want: false},
+		{sheet: `section > div{white-space:nowrap}`, owner: WhiteSpacePreserve, want: true},
+		{sheet: `section > div{white-space:nowrap}`, owner: WhiteSpacePreserveBreaks, want: true},
+		{sheet: `section > div{white-space:nowrap}`, owner: WhiteSpaceUnknown, want: true},
+		{sheet: `.post pre{white-space:normal}`, want: true},                        // pre is pre without it
+		{sheet: `div{white-space:pre} section div{white-space:normal}`, want: true}, // div is pre without it
+		{sheet: `.k{white-space:pre} .post p{white-space:normal}`, want: true},
+		{sheet: `section div{white-space:nowrap} .post pre{color:red}`, want: false}, // pre is not matched
+		{sheet: `div + span{white-space:nowrap}`, want: true},                        // the moved div gets new siblings
+		{sheet: `section div{white-space:nowrap} section b{white-space:pre}`, want: true},
+	} {
+		tree := parseWhitespaceTree(t, "page", page)
+		moved, _ := selectors.MustCompile(`#moved`).QuerySelector(tree.Root)
+		if moved == nil {
+			t.Fatal("no moved element")
+		}
+		sheets := []Stylesheet{{Filename: "site.css", Text: tt.sheet}}
+		m := WhiteSpaceMovedMatcher([]*template.Tree{tree}, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true})
+		if got := m.MayChange([]*template.HTMLElementNode{moved}, tt.owner); got != tt.want {
+			t.Errorf("WhiteSpaceMovedMatcher(%q).MayChange(div#moved, %v) = %v, want %v", tt.sheet, tt.owner, got, tt.want)
+		}
+		if !m.MayMatch([]*template.HTMLElementNode{moved}) && tt.want {
+			t.Errorf("WhiteSpaceMovedMatcher(%q): MayChange without MayMatch", tt.sheet)
+		}
+	}
+}
+
 // TestComputeWhitespaceAncestry checks author selectors that depend on
 // ancestors: an element of a define or block body has the ancestors of
 // each call site (certain only when every site agrees, maybe with no

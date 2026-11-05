@@ -1,0 +1,22 @@
+The shape of unsure_match.txtar with a bare p selector, which depends on
+the element alone and certainly matches: p is nowrap and re-indented.
+-- input.gohtml --
+<style>p { white-space: nowrap; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+<main>
+<p>x</p>
+</main>
+</body>
+{{end}}
+-- format.gohtml --
+<style>p { white-space: nowrap; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+	<main>
+		<p>x</p>
+	</main>
+</body>
+{{end}}

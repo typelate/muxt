@@ -552,9 +552,12 @@ func unsure(styles analysis.Whitespaces, el *template.HTMLElementNode) {
 //
 // Selectors were matched in the template tree. When a white-space rule
 // may match the moved element differently where the browser puts it
-// (moved.MayMatch), the element is unsure, and so is the element that
+// (moved.MayChange), the element is unsure, and so is the element that
 // receives it, with its children, whose siblings and structure change:
 // the owner, or each element at the top of the tree root or define body.
+// A rule whose values all collapse does not count where the owner and
+// the elements it may match collapse without it: matched or not, they
+// collapse.
 //
 // When text in a head implies the body (parsedElsewhere) and the body does
 // not certainly collapse white space (a body element whose white-space is
@@ -572,7 +575,7 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 		if !m.text {
 			els = []*template.HTMLElementNode{m.el}
 		}
-		if moved.MayMatch(els) {
+		if moved.MayChange(els, whiteSpaceOf(styles, m.owner)) {
 			unsure(styles, m.el)
 			if m.owner != nil {
 				unsure(styles, m.owner)

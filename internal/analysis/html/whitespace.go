@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/typelate/muxt/internal/css/csstree"
 	"github.com/typelate/muxt/internal/template/selectors"
@@ -125,8 +126,13 @@ type Whitespaces map[*template.HTMLElementNode]Whitespace
 // descendant whatever its own CSS says. Define and block bodies inherit
 // collapse.
 func ComputeWhitespace(trees []*template.Tree, options WhitespaceOptions) Whitespaces {
+	return computeWhitespace(trees, options, authorRules(trees, options))
+}
+
+// computeWhitespace is ComputeWhitespace with the author rules given.
+func computeWhitespace(trees []*template.Tree, options WhitespaceOptions, author []cssRule) Whitespaces {
 	c := cascade{rules: sheetCSS{css: cssText{text: uaCSS}}.rules(false, 0, nil)}
-	c.rules = append(c.rules, authorRules(trees, options)...)
+	c.rules = append(c.rules, author...)
 	c.authorVisible = options.AuthorCSSKnown
 	c.sites = callSites(append(slices.Clip(trees), options.Context...))
 	c.segments = make(map[callSite]*segment)
@@ -175,6 +181,12 @@ type MovedMatcher struct {
 	// compile, or unknown selectors.
 	all   bool
 	rules []movedRule
+	// collapsing are the rules whose white-space values all collapse
+	// (normal, nowrap, …), and baseline is the white-space of every
+	// element without them: such a rule cannot change the answer for an
+	// element that collapses without it (MayChange).
+	collapsing []movedRule
+	baseline   func() Whitespaces
 }
 
 // movedRule is a selector with a combinator: its subject compound, and
@@ -190,14 +202,25 @@ type movedRule struct {
 // values and do not count.
 func WhiteSpaceMovedMatcher(trees []*template.Tree, options WhitespaceOptions) MovedMatcher {
 	var m MovedMatcher
-	for _, rule := range authorRules(trees, options) {
+	rules := authorRules(trees, options)
+	var others []cssRule // the rules not in m.collapsing
+	for _, rule := range rules {
 		if !slices.ContainsFunc(rule.declarations, func(d cssDeclaration) bool { return d.property == propertyWhiteSpace }) {
+			others = append(others, rule)
 			continue
 		}
 		if rule.anyElement {
 			m.all = true
 			continue
 		}
+		collapsing := !slices.ContainsFunc(rule.declarations, func(d cssDeclaration) bool {
+			return d.property == propertyWhiteSpace && WhiteSpace(d.value) != WhiteSpaceCollapse
+		})
+		moved := &m.rules
+		if collapsing {
+			moved = &m.collapsing
+		}
+		before := len(*moved)
 		for _, sel := range rule.selectors {
 			for _, query := range splitTopLevel(sel.query, ',') {
 				r, simple, ok := compileMovedRule(query)
@@ -205,11 +228,17 @@ func WhiteSpaceMovedMatcher(trees []*template.Tree, options WhitespaceOptions) M
 				case !ok:
 					m.all = true
 				case !simple:
-					m.rules = append(m.rules, r)
+					*moved = append(*moved, r)
 				}
 			}
 		}
+		if !collapsing || len(*moved) == before {
+			others = append(others, rule)
+		}
 	}
+	m.baseline = sync.OnceValue(func() Whitespaces {
+		return computeWhitespace(trees, options, others)
+	})
 	return m
 }
 
@@ -224,21 +253,70 @@ func (m MovedMatcher) MayMatch(moved []*template.HTMLElementNode) bool {
 	if m.all {
 		return true
 	}
-	if len(m.rules) == 0 || len(moved) == 0 {
+	if len(moved) == 0 {
 		return false
 	}
+	below := descendants(moved)
+	return mayMatch(m.rules, moved, below, true) || mayMatch(m.collapsing, moved, below, true)
+}
+
+// MayChange is MayMatch for moved, elements the browser builds under an
+// element whose white-space is owner, except that a rule whose
+// white-space values all collapse counts only through its + or ~
+// compounds, or when owner does not collapse, or one of moved or their
+// descendants that its subject may match does not collapse without such
+// rules. Whether such a rule matches an element that collapses without
+// it cannot change the element's white-space: it collapses either way.
+func (m MovedMatcher) MayChange(moved []*template.HTMLElementNode, owner WhiteSpace) bool {
+	if m.all {
+		return true
+	}
+	if len(moved) == 0 {
+		return false
+	}
+	below := descendants(moved)
+	if mayMatch(m.rules, moved, below, true) || mayMatch(m.collapsing, moved, below, false) {
+		return true
+	}
+	var matched []*template.HTMLElementNode
+	for _, el := range slices.Concat(moved, below) {
+		if mayMatch(m.collapsing, []*template.HTMLElementNode{el}, nil, true) {
+			matched = append(matched, el)
+		}
+	}
+	if len(matched) == 0 {
+		return false
+	}
+	if owner != WhiteSpaceCollapse {
+		return true
+	}
+	baseline := m.baseline()
+	return slices.ContainsFunc(matched, func(el *template.HTMLElementNode) bool {
+		ws, ok := baseline[el]
+		return !ok || ws.WhiteSpace != WhiteSpaceCollapse
+	})
+}
+
+func descendants(elements []*template.HTMLElementNode) []*template.HTMLElementNode {
 	var below []*template.HTMLElementNode
-	for _, el := range moved {
+	for _, el := range elements {
 		collectDescendants(&below, el.Children)
 	}
+	return below
+}
+
+// mayMatch reports whether one of rules may match one of moved, or of
+// below, their descendants: through its subject compound when subjects
+// is set, or a compound left of a + or ~ combinator.
+func mayMatch(rules []movedRule, moved, below []*template.HTMLElementNode, subjects bool) bool {
 	matches := func(sel selectors.Selector, elements []*template.HTMLElementNode) bool {
 		return slices.ContainsFunc(elements, func(el *template.HTMLElementNode) bool {
 			ok, _ := sel.Matches(el)
 			return ok
 		})
 	}
-	for _, r := range m.rules {
-		if matches(r.subject, moved) || matches(r.subject, below) {
+	for _, r := range rules {
+		if subjects && (matches(r.subject, moved) || matches(r.subject, below)) {
 			return true
 		}
 		for _, sib := range r.siblings {

@@ -1,0 +1,23 @@
+The shape of unsure_match.txtar with pre in the rule. Whether main p
+matches decides whether p preserves its whitespace, so p and its siblings
+are left as written.
+-- input.gohtml --
+<style>main p { white-space: pre; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+<main>
+<p>x</p>
+</main>
+</body>
+{{end}}
+-- format.gohtml --
+<style>main p { white-space: pre; }</style>
+{{define "GET /x X()"}}r{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+<main>
+<p>x</p>
+</main>
+</body>
+{{end}}
