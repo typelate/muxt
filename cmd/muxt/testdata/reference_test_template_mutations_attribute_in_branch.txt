@@ -1,0 +1,81 @@
+# An attribute inside a {{with}} in a start tag is reached when the tests
+# render it, so the action in its value is mutated, not skipped as
+# unreached.
+#
+# Each row carries a data-version attribute only when it has a source,
+# and the test reads that attribute back, so it catches the mutant that
+# zeroes the version. The coverage pre-pass once counted no attribute
+# inside a branch in a start tag, reported that mutant as one no test
+# reaches, and skipped it.
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+! stdout 'no test reaches'
+! stderr 'warning:'
+
+-- go.mod --
+module server
+
+go 1.27
+-- templates.gohtml --
+{{define "rows"}}<table><tbody>{{range .}}<tr {{with .Source}}data-version='{{.Version}}'{{end}}><td>{{.State}}</td></tr>{{end}}</tbody></table>{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Source struct {
+	Version int
+}
+
+type Row struct {
+	State  string
+	Source *Source
+}
+
+func Render(w io.Writer, rows []Row) error {
+	return templates.ExecuteTemplate(w, "rows", rows)
+}
+-- render_test.go --
+package server
+
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// applied matches the first row whichever quotes the attribute is
+// written with.
+var applied = regexp.MustCompile(`<tr data-version=["']3["']><td>applied</td></tr>`)
+
+func TestRows(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, []Row{{State: "applied", Source: &Source{Version: 3}}, {State: "pending"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); !applied.MatchString(got) {
+		t.Errorf("rows = %q, want a row with data-version 3", got)
+	}
+}
+-- want.txt --
+4 mutants across 1 template (complexity 3, seed 1)
+baseline ok
+
+template.go:24:9 ExecuteTemplate "rows" (dot: []server.Row)
+  "rows" templates.gohtml (complexity 3, dot: []server.Row)
+    KILL 1:32 range-never
+    KILL 1:47 with-empty
+    KILL 1:77 action-zero
+    KILL 1:102 action-zero
+
+4 mutants, 4 killed, 0 missed, 0 skipped

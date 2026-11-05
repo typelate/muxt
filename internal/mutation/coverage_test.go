@@ -70,6 +70,68 @@ func TestTemplateCoverageOverAModule(t *testing.T) {
 	assert.Contains(t, greeting, coverBlock{StartLine: 1, StartCol: 30, EndLine: 1, EndCol: 34}, "reached by the loud package: %v", got)
 }
 
+// attributeInBranchGo has an attribute inside a {{with}} in a start tag,
+// the shape of a row whose data attribute depends on an optional field.
+const attributeInBranchGo = `package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates = template.Must(template.New("row").Parse(` + "`" + `<p {{with .}}data-v='{{.}}'{{end}}>x</p>` + "`" + `))
+
+func Render(w io.Writer, version string) error {
+	return templates.ExecuteTemplate(w, "row", version)
+}
+`
+
+// attributeInBranchTest renders the row with a version and checks the
+// attribute, so it executes every action in the start tag.
+const attributeInBranchTest = `package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRow(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); !strings.Contains(got, ` + "`" + `data-v="1"` + "`" + `) {
+		t.Errorf("row = %q, want data-v", got)
+	}
+}
+`
+
+// TestTemplateCoverageReachesAnAttributeInsideABranch runs the pre-pass
+// over a test that renders an attribute inside a {{with}} in a start tag:
+// the action in its value is executed, so no mutant of the template may
+// be reported unreached. The engine once left such an attribute's counter
+// at zero, and the action in it was skipped though a test caught it.
+func TestTemplateCoverageReachesAnAttributeInsideABranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs test binaries with html/template overlaid")
+	}
+	t.Parallel()
+	dir := module(t, map[string]string{"go.mod": goMod, "template.go": attributeInBranchGo, "render_test.go": attributeInBranchTest})
+	config := greetingConfig()
+	tester := config.goTest(dir)
+
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
+	require.NoError(t, err)
+	require.NotNil(t, got, "coverage is known; warnings:\n%s", warnings.String())
+
+	p, err := newPlan(t.Context(), config, dir)
+	require.NoError(t, err)
+	p.cover(got, 0)
+	require.NotEmpty(t, p.candidates, "mutants planned")
+	assert.Empty(t, unreachedMutants(p), "unreached mutants; coverage: %v", got)
+}
+
 // TestTemplateCoverageWarnsOfARaisedGoLine runs the pre-pass over a module
 // at go 1.24: the engine needs go 1.27, so the go command raises the
 // modfile copy's go line and compiles the module at that language

@@ -214,6 +214,33 @@ test:1.30,1.42 2 1`,
 test:1.1,1.51 10 1`,
 		},
 		{
+			name:    "html attribute inside with in a start tag",
+			tmpl:    `<p {{with .}}data-v='{{.}}'{{end}}>x</p>`,
+			mode:    parseModeHTML,
+			data:    "1",
+			wantOut: `data-v="1"`,
+			wantProfile: `mode: set
+test:1.1,1.41 7 1`,
+		},
+		{
+			name:    "html attribute inside if inside with in a start tag",
+			tmpl:    `<p {{with .}}{{if .}}data-v='{{.}}'{{end}}{{end}}>x</p>`,
+			mode:    parseModeHTML,
+			data:    "1",
+			wantOut: `data-v="1"`,
+			wantProfile: `mode: set
+test:1.1,1.56 9 1`,
+		},
+		{
+			name:    "html action in attribute position",
+			tmpl:    `<p {{.}}>x</p>`,
+			mode:    parseModeHTML,
+			data:    "hidden",
+			wantOut: `hidden`,
+			wantProfile: `mode: set
+test:1.1,1.15 5 1`,
+		},
+		{
 			name:    "html comment is stripped",
 			tmpl:    "<!-- secret --><p>hi</p>",
 			mode:    parseModeHTML,

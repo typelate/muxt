@@ -990,6 +990,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 			n.Attr = append(n.Attr, attr)
 		case *ActionNode:
 			// Action in attribute position — evaluate and treat result as attribute text.
+			a.count.Add(1)
 			val, err := s.evalPipeline(dot, a.Pipe)
 			if err != nil {
 				return nil, err
@@ -1639,6 +1640,7 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]html.Attr
 	for _, node := range list.Nodes {
 		switch n := node.(type) {
 		case *HTMLAttributeNode:
+			n.count.Add(1)
 			attr, err := s.evalHTMLAttribute(dot, n)
 			if err != nil {
 				return nil, err
@@ -1658,6 +1660,7 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]html.Attr
 			result = append(result, attrs...)
 		case *ActionNode:
 			// Action in attribute list context
+			n.count.Add(1)
 			val, err := s.evalPipeline(dot, n.Pipe)
 			if err != nil {
 				return nil, err
