@@ -462,3 +462,23 @@ func TestParseRedefinition(t *testing.T) {
 		}
 	})
 }
+
+// TestControlStructureAgainstANameMatchesStdlib states that an
+// {{if}}, {{with}} or {{range}} written against a tag or attribute name,
+// its body starting with a space, adds attributes, as in html/template;
+// the tag is not read as text.
+func TestControlStructureAgainstANameMatchesStdlib(t *testing.T) {
+	for _, src := range []string{
+		`<li{{if .}} data-a{{end}}>x</li>`,
+		`<li{{if .}} data-a{{else}} data-b{{end}}{{if not .}} c{{end}}>x</li>`,
+		`<input formnovalidate{{if .}} disabled{{end}} aria-label="x">`,
+		`<input a{{with .}} b="{{.}}"{{end}}>`,
+	} {
+		for _, data := range []bool{true, false} {
+			want := executeStdlib(t, src, data)
+			if got := executeShim(t, src, data); got != want {
+				t.Errorf("shim output for %q with %v = %q, want stdlib's %q", src, data, got, want)
+			}
+		}
+	}
+}
