@@ -103,14 +103,12 @@ func (s *state) buildDocument(dot reflect.Value, frag *HTMLDocumentFragmentNode)
 	doc := &html.Node{
 		Type: html.DocumentNode,
 	}
-	for _, child := range frag.Children {
-		nodes, err := s.walkHTMLNode(dot, child)
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range nodes {
-			doc.AppendChild(n)
-		}
+	nodes, err := s.walkHTMLNodes(dot, frag.Children, false, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range nodes {
+		doc.AppendChild(n)
 	}
 	return doc, nil
 }
@@ -1022,19 +1020,17 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 	}
 	elem.attrCount.Add(1)
 	// Process children.
-	for _, child := range elem.Children {
-		nodes, err := s.walkHTMLNode(dot, child)
-		for _, cn := range nodes {
-			n.AppendChild(cn)
+	nodes, err := s.walkHTMLNodes(dot, elem.Children, false, false)
+	for _, cn := range nodes {
+		n.AppendChild(cn)
+	}
+	if err != nil {
+		if isBreak(err) || isContinue(err) {
+			// Preserve the partially-built element. The caller
+			// (walkHTMLList) collects nodes before propagating.
+			return n, err
 		}
-		if err != nil {
-			if isBreak(err) || isContinue(err) {
-				// Preserve the partially-built element. The caller
-				// (walkHTMLList) collects nodes before propagating.
-				return n, err
-			}
-			return nil, err
-		}
+		return nil, err
 	}
 	elem.closeCount.Add(1)
 	return n, nil
@@ -1408,15 +1404,7 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	// Check if the sub-template is HTML (has an HTMLDocumentFragmentNode).
 	if len(root.Nodes) == 1 {
 		if frag, ok := root.Nodes[0].(*HTMLDocumentFragmentNode); ok {
-			var result []*html.Node
-			for _, child := range frag.Children {
-				nodes, err := newState.walkHTMLNode(newDot, child)
-				if err != nil {
-					return nil, err
-				}
-				result = append(result, nodes...)
-			}
-			return result, nil
+			return newState.walkHTMLNodes(newDot, frag.Children, false, false)
 		}
 	}
 	// Check if the root contains HTML nodes (e.g., from extracted
@@ -1443,8 +1431,15 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 }
 
 func (s *state) walkHTMLList(dot reflect.Value, list *ListNode, trimFirst, trimLast bool) ([]*html.Node, error) {
+	return s.walkHTMLNodes(dot, list.Nodes, trimFirst, trimLast)
+}
+
+// walkHTMLNodes walks sibling nodes, trimming a text node's spaces where
+// a neighbor's trim marker, or trimFirst and trimLast at the ends, says
+// to, as text/template does. On a break or continue it returns the nodes
+// built so far with the error.
+func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLast bool) ([]*html.Node, error) {
 	var result []*html.Node
-	nodes := list.Nodes
 	for i, node := range nodes {
 		if tn, ok := node.(*TextNode); ok {
 			text := string(tn.Text)
@@ -1456,8 +1451,12 @@ func (s *state) walkHTMLList(dot reflect.Value, list *ListNode, trimFirst, trimL
 			}
 			tn.count.Add(1)
 			if len(text) > 0 {
+				nodeType := html.TextNode
+				if tn.Verbatim {
+					nodeType = html.RawNode
+				}
 				result = append(result, &html.Node{
-					Type: html.TextNode,
+					Type: nodeType,
 					Data: text,
 				})
 			}

@@ -500,3 +500,22 @@ func TestActionAfterAClosingQuoteMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestTrimMarkersInElementsMatchStdlib states that a trim marker trims
+// the text beside it wherever the text is, inside an element too.
+func TestTrimMarkersInElementsMatchStdlib(t *testing.T) {
+	for _, src := range []string{
+		"x\n{{- .}}",
+		"<p>a\n{{- .}}</p>",
+		"<p>{{.}}\n {{- .}} \n</p>",
+		"<p>{{. -}}\n x</p>",
+		"<ol>\n{{- range .}}\n<li>{{.}}</li>\n{{- end}}\n</ol>",
+		`{{define "x"}}<ul>` + "\n\t{{- range .}}\n\t<li>{{.}}</li>\n\t{{- end}}</ul>{{end}}{{template \"x\" .}}",
+	} {
+		data := []int{1, 2}
+		want := executeStdlib(t, src, data)
+		if got := executeShim(t, src, data); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
+		}
+	}
+}
