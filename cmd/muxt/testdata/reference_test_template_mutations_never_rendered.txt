@@ -1,0 +1,67 @@
+# A test binary that never renders a template still ran muxt's template
+# engine, and its profile, written as it starts, says so: coverage is
+# known and empty. No test reaches any action, so every mutant is
+# skipped as unreached rather than run, and the run passes; -v lists
+# them under "no test reaches".
+
+muxt test-template-mutations -v --seed 1
+cmp stdout want.txt
+! stderr 'warning:'
+
+-- go.mod --
+module server
+
+go 1.27
+-- templates.gohtml --
+{{define "page"}}Hello, {{.Name}}!{{if .Admin}} {{.Secret}}{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name   string
+	Admin  bool
+	Secret string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- render_test.go --
+package server
+
+import "testing"
+
+func TestNothingRendered(t *testing.T) {
+	if templates.Lookup("page") == nil {
+		t.Fatal("no page template")
+	}
+}
+-- want.txt --
+4 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:21:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 2, dot: server.Page)
+    SKIP 1:25 action-zero (no test reaches it)
+    SKIP 1:35 if-false (no test reaches it)
+    SKIP 1:35 if-true (no test reaches it)
+    SKIP 1:49 action-zero (no test reaches it)
+
+no test reaches 4 mutants:
+  "page" templates.gohtml 1:25 action-zero
+  "page" templates.gohtml 1:35 if-false
+  "page" templates.gohtml 1:35 if-true
+  "page" templates.gohtml 1:49 action-zero
+
+4 mutants, 0 killed, 0 missed, 4 skipped, 4 unreached

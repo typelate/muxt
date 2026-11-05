@@ -21,22 +21,28 @@ func useCoverExport(t *testing.T, export *coverExport) {
 }
 
 func TestCoverExportFromEnv(t *testing.T) {
-	if got := coverExportFor(""); got != nil {
+	if got := coverExportFor("", io.Discard); got != nil {
 		t.Errorf(`coverExportFor("") = %+v, want nil`, got)
 	}
 	dir := t.TempDir()
-	got := coverExportFor(dir)
+	got := coverExportFor(dir, io.Discard)
 	if got == nil {
 		t.Fatalf("coverExportFor(%q) = nil, want an export", dir)
 	}
-	if want := filepath.Join(dir, strconv.Itoa(os.Getpid())+".cov"); got.path != want {
+	want := filepath.Join(dir, strconv.Itoa(os.Getpid())+".cov")
+	if got.path != want {
 		t.Errorf("coverExportFor(%q).path = %q, want %q", dir, got.path, want)
+	}
+	// The profile is written before anything is executed, so that its
+	// existence says a test binary ran the engine.
+	if got := readFile(t, want); got != "mode: set\n" {
+		t.Errorf("before any Execute the profile is %q, want only the mode line", got)
 	}
 }
 
 func TestExecuteAppendsFirstHits(t *testing.T) {
 	dir := t.TempDir()
-	export := coverExportFor(dir)
+	export := coverExportFor(dir, io.Discard)
 	useCoverExport(t, export)
 
 	ts := Must(New("page").Parse(`{{if .}}yes{{end}}END{{define "other"}}<b>{{.}}</b>{{end}}`))
@@ -112,9 +118,10 @@ func TestExecuteWithoutCoverExportWritesNothing(t *testing.T) {
 
 func TestExecuteDisablesCoverExportOnFailure(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "missing")
-	export := coverExportFor(dir)
 	var stderr strings.Builder
-	export.stderr = &stderr
+	// The profile is opened as the export is made, so a directory that
+	// is not there disables it before anything is executed.
+	export := coverExportFor(dir, &stderr)
 	useCoverExport(t, export)
 
 	ts := Must(New("page").Parse(`<p>{{.}}</p>`))
@@ -152,14 +159,15 @@ func TestExecuteDisablesCoverExportOnFailure(t *testing.T) {
 }
 
 func TestCoverExportAppendsToExistingProfile(t *testing.T) {
-	export := coverExportFor(t.TempDir())
-	useCoverExport(t, export)
+	dir := t.TempDir()
 	// A predecessor with the same pid (before syscall.Exec, say) already
 	// wrote the header and a block.
 	const before = "mode: set\nprev:1.1,1.2 1 1\n"
-	if err := os.WriteFile(export.path, []byte(before), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, strconv.Itoa(os.Getpid())+".cov"), []byte(before), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	export := coverExportFor(dir, io.Discard)
+	useCoverExport(t, export)
 
 	ts := Must(New("page").Parse(`x`))
 	if err := ts.Execute(io.Discard, nil); err != nil {

@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -177,12 +178,25 @@ func firstError(out string, err error) string {
 	return err.Error()
 }
 
+// errNoProfile is a pre-pass in which no test binary wrote a profile.
+var errNoProfile = errors.New("no test binary ran the templates (no coverage profile was written)")
+
 // mergeProfiles unions every <pid>.cov in dir by block. A block is in the
 // union when any test binary executed it.
+//
+// Every test binary that runs the engine writes its profile as it starts,
+// so a profile with no blocks is a binary that executed no template.
+// No profile at all is errNoProfile: nothing says the engine ran, as when
+// a package has no test files, -exec runs the tests elsewhere, or they
+// render through a server binary of their own, and reading it as nothing
+// reached would skip every mutant.
 func mergeProfiles(dir string) (coverage, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.cov"))
 	if err != nil {
 		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, errNoProfile
 	}
 	cov := make(coverage)
 	for _, name := range files {

@@ -29,12 +29,18 @@ const CoverDisabledMarker = "muxt: template coverage export disabled:"
 // is this package's only mutable state. The environment can be read only
 // once per process, as there is no exit hook in which to flush a profile
 // collected in memory, so the export appends as it goes instead.
-var processCover = coverExportFor(os.Getenv(CoverEnv))
+var processCover = coverExportFor(os.Getenv(CoverEnv), os.Stderr)
 
 // coverExport appends the blocks of executed template nodes to a cover
 // profile file the first time each is reached. Mode set is monotone, so
 // a block is written once; every write is synchronous, so nothing is lost
 // when the test binary exits, and no goroutine or timer is involved.
+//
+// The file, with its mode line, is created as the export is made, when
+// the package is initialized, before any template runs: its existence is
+// what tells muxt that a test binary ran this engine, so that a profile
+// with no blocks reads as templates no test reached, and no profile at
+// all as coverage unknown.
 //
 // Coverage is a by-product of the user's tests, so it never fails them:
 // the first error opening or writing the file is reported once on stderr
@@ -49,15 +55,37 @@ type coverExport struct {
 	written  map[string]struct{}
 }
 
-func coverExportFor(dir string) *coverExport {
+// coverExportFor is the export to <dir>/<pid>.cov, which it opens, nil
+// when dir is empty. A file it cannot open is reported on stderr, and the
+// export it returns is off.
+func coverExportFor(dir string, stderr io.Writer) *coverExport {
 	if dir == "" {
 		return nil
 	}
-	return &coverExport{
+	c := &coverExport{
 		path:    filepath.Join(dir, strconv.Itoa(os.Getpid())+".cov"),
-		stderr:  os.Stderr,
+		stderr:  stderr,
 		written: make(map[string]struct{}),
 	}
+	f, err := openProfile(c.path)
+	if err != nil {
+		c.disable(err)
+		return c
+	}
+	// The file stays open for the life of the process; the operating
+	// system closes it at exit, and every write before then has already
+	// reached it.
+	c.file = f
+	return c
+}
+
+// disable turns the export off and says why, once. The caller holds mu,
+// or is the only one with c.
+func (c *coverExport) disable(err error) {
+	c.disabled = true
+	// The export is off from here on; a failure to report that has
+	// nowhere better to go.
+	_, _ = fmt.Fprintf(c.stderr, "%s %v\n", CoverDisabledMarker, err)
 }
 
 // execute runs tree with a cover profile attached, then appends the blocks
@@ -78,27 +106,9 @@ func (c *coverExport) append(cp *template.CoverProfile) {
 	if c.disabled {
 		return
 	}
-	if err := c.appendLocked(cp); err != nil {
-		c.disabled = true
-		// The export is off from here on; a failure to report that has
-		// nowhere better to go.
-		_, _ = fmt.Fprintf(c.stderr, "%s %v\n", CoverDisabledMarker, err)
+	if _, err := cp.WriteNewlyCovered(c.file, c.written); err != nil {
+		c.disable(err)
 	}
-}
-
-func (c *coverExport) appendLocked(cp *template.CoverProfile) error {
-	if c.file == nil {
-		f, err := openProfile(c.path)
-		if err != nil {
-			return err
-		}
-		// The file stays open for the life of the process; the operating
-		// system closes it at exit, and every write before then has
-		// already reached it.
-		c.file = f
-	}
-	_, err := cp.WriteNewlyCovered(c.file, c.written)
-	return err
 }
 
 // openProfile opens name for appending, writing the mode line only if the

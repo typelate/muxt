@@ -1,0 +1,52 @@
+# Coverage is known only when a test binary ran muxt's template engine:
+# each one writes its profile as it starts, before it renders anything.
+# A module with no _test.go files runs no test binary, so no profile is
+# written and the pre-pass cannot tell which template actions are
+# reached. It says so, and every mutant runs. Nothing catches them, so
+# each is missed and the run fails.
+
+! muxt test-template-mutations --seed 1
+stderr '(?m)^warning: template coverage unknown: no test binary ran the templates \(no coverage profile was written\)$'
+cmp stdout want.txt
+
+-- go.mod --
+module server
+
+go 1.27
+-- templates.gohtml --
+{{define "page"}}Hello, {{.Name}}!{{if .Admin}} {{.Secret}}{{end}}{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name   string
+	Admin  bool
+	Secret string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "page", page)
+}
+-- want.txt --
+4 mutants across 1 template (complexity 2, seed 1)
+baseline ok
+
+template.go:21:9 ExecuteTemplate "page" (dot: server.Page)
+  "page" templates.gohtml (complexity 2, dot: server.Page)
+    MISS 1:25 action-zero
+    MISS 1:35 if-false
+    MISS 1:35 if-true
+    MISS 1:49 action-zero
+
+4 mutants, 0 killed, 4 missed, 0 skipped

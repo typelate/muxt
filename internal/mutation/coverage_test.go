@@ -165,17 +165,38 @@ func TestTemplateCoverageRunsTheEngineOverlay(t *testing.T) {
 	}, got, "the union of every profile, by block")
 }
 
-// TestTemplateCoverageReachingNothing states that tests that execute no
-// template leave a known, empty coverage: nothing is reached.
+// TestTemplateCoverageReachingNothing states that a test binary that ran
+// the engine and executed no template, whose profile is only its mode
+// line, leaves a known, empty coverage: nothing is reached.
 func TestTemplateCoverageReachingNothing(t *testing.T) {
 	realGOROOT(t)
-	run := func(context.Context, overlay.Files, string) (*goTestOutput, error) {
+	run := func(_ context.Context, _ overlay.Files, coverDir string) (*goTestOutput, error) {
+		writeFiles(t, coverDir, map[string]string{"1.cov": "mode: set\n"})
 		return testOutput("ok  \tserver\t0.1s\n"), nil
 	}
-	got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, nil)
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
 	require.NoError(t, err)
 	assert.NotNil(t, got, "coverage is known")
 	assert.Empty(t, got, "nothing is reached")
+	assert.Empty(t, warnings.String(), "warnings")
+}
+
+// TestTemplateCoverageWithoutAProfile states that a pre-pass in which no
+// test binary wrote a profile -- a package with no test files, tests run
+// elsewhere by -exec, a server the tests start as a binary of its own --
+// leaves coverage unknown: nothing says the engine ran, so an empty
+// profile directory is not "nothing reached".
+func TestTemplateCoverageWithoutAProfile(t *testing.T) {
+	realGOROOT(t)
+	run := func(context.Context, overlay.Files, string) (*goTestOutput, error) {
+		return testOutput("?   \tserver\t[no test files]\n"), nil
+	}
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
+	require.NoError(t, err)
+	assert.Nil(t, got, "coverage is unknown")
+	assert.Equal(t, "warning: template coverage unknown: no test binary ran the templates (no coverage profile was written)\n", warnings.String(), "warnings")
 }
 
 // TestTemplateCoverageUnknown states the pre-passes that leave coverage

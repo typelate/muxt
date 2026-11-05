@@ -15,7 +15,7 @@ import (
 	"github.com/typelate/muxt/internal/overlay"
 )
 
-// TestCoverExportUnderOverlay runs two packages' tests with the engine laid
+// TestCoverExportUnderOverlay runs three packages' tests with the engine laid
 // over html/template and MUXT_TEMPLATE_COVER set, and reads back the
 // profile each test binary appended.
 func TestCoverExportUnderOverlay(t *testing.T) {
@@ -68,6 +68,22 @@ func TestB(t *testing.T) {
 }
 `)
 
+	// c links html/template and renders nothing: its profile is the mode
+	// line alone, written as the test binary starts.
+	writeFile(t, filepath.Join(module, "c", "c_test.go"), `package c
+
+import (
+	"html/template"
+	"testing"
+)
+
+func TestC(t *testing.T) {
+	if template.New("c") == nil {
+		t.Fatal("no template")
+	}
+}
+`)
+
 	coverDir := filepath.Join(scratch, "cover")
 	if err := os.Mkdir(coverDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -83,7 +99,7 @@ func TestB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 2 {
+	if len(files) != 3 {
 		t.Fatalf("%s has cover files %v, want one per test binary", coverDir, files)
 	}
 	got := make(map[string][]string)
