@@ -614,7 +614,7 @@ func (t *Tree) htmlDefineControl(openToken lex.Token) (Node, error) {
 	// second definition of the name that is not empty is an error and an
 	// empty one gives way. Extract builds the tree a caller installs;
 	// DefinedTrees picks it by this body.
-	if err := t.addDefinition(&Tree{Name: name, Root: body, text: t.text, ParseName: t.ParseName, Filepath: t.Filepath, RootTrimFirst: startTrimRight, RootTrimLast: en.TrimLeft, define: true}); err != nil {
+	if err := t.addDefinition(&Tree{Name: name, Root: body, text: t.text, leftDelim: t.leftDelim, rightDelim: t.rightDelim, ParseName: t.ParseName, Filepath: t.Filepath, RootTrimFirst: startTrimRight, RootTrimLast: en.TrimLeft, define: true}); err != nil {
 		return nil, err
 	}
 	d := t.newDefine(actionPos, end.End(), openToken.Line, name, body)

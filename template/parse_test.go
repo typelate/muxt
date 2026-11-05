@@ -1926,3 +1926,35 @@ func TestElseChainPositions(t *testing.T) {
 		})
 	}
 }
+
+// TestTreeSourceAndDelims checks that every tree a parse yields, the root
+// and those of its define and block clauses, reports the whole text it
+// was parsed from and the delimiters it was parsed with.
+func TestTreeSourceAndDelims(t *testing.T) {
+	for _, test := range []struct {
+		name, left, right, input string
+	}{
+		{name: "default", input: `a{{define "d"}}b{{end}}{{block "k" .}}c{{end}}`, left: "{{", right: "}}"},
+		{name: "custom", input: `a[[define "d"]]b[[end]][[block "k" .]]c[[end]]`, left: "[[", right: "]]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := lex.NewOptions()
+			options.LeftDelim, options.RightDelim = test.left, test.right
+			treeSet := make(map[string]*Tree)
+			root, err := ParseTree("f.gohtml", "f.gohtml", test.input, treeSet, options)
+			require.NoError(t, err)
+			trees := DefinedTrees(root, treeSet)
+			require.Len(t, trees, 3)
+			for name, tree := range trees {
+				assert.Equal(t, test.input, tree.Source(), "Source() of %q", name)
+				left, right := tree.Delims()
+				assert.Equal(t, test.left, left, "Delims() left of %q", name)
+				assert.Equal(t, test.right, right, "Delims() right of %q", name)
+			}
+			for _, tree := range Extract(root) {
+				left, right := tree.Delims()
+				assert.Equal(t, [2]string{test.left, test.right}, [2]string{left, right}, "Delims() of extracted %q", tree.Name)
+			}
+		})
+	}
+}

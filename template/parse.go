@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"go/token"
 	"path"
@@ -39,6 +40,7 @@ type Tree struct {
 	// {{template}}-node HTML walker).
 	RootTrimFirst, RootTrimLast bool
 	text                        string // text parsed to create the template (or its parent)
+	leftDelim, rightDelim       string // action delimiters text was parsed with
 	define                      bool   // registered by a define clause; DefinedTrees installs Extract's tree for it
 	// Parsing only; cleared after parse.
 	scanner         *lex.Scanner
@@ -87,6 +89,7 @@ func ParseTree(fileName, templateName, text string, treeSet map[string]*Tree, op
 		Filepath:  fileName,
 	}
 	t.text = text
+	t.leftDelim, t.rightDelim = options.LeftDelim, options.RightDelim
 	t.functions = options.Functions
 	t.maxHTMLDepth = options.MaxHTMLDepth
 	if t.maxHTMLDepth == 0 {
@@ -200,6 +203,15 @@ func (t *Tree) RootStart() lex.Pos {
 		return root.Nodes[1].Start()
 	}
 	return root.End()
+}
+
+// Source returns the text the tree was parsed from: the whole file or
+// string, with the text of the other templates it defines.
+func (t *Tree) Source() string { return t.text }
+
+// Delims returns the action delimiters the tree was parsed with.
+func (t *Tree) Delims() (left, right string) {
+	return cmp.Or(t.leftDelim, "{{"), cmp.Or(t.rightDelim, "}}")
 }
 
 // PositionAt computes the line and column (both 1-based) for a byte offset in the template text.
@@ -424,6 +436,7 @@ func (t *Tree) parse() error {
 					Name: "definition",
 				}
 				newT.text = t.text
+				newT.leftDelim, newT.rightDelim = t.leftDelim, t.rightDelim
 				newT.functions = t.functions
 				newT.ParseName = t.ParseName
 				newT.Filepath = t.Filepath
@@ -971,6 +984,7 @@ func (t *Tree) blockControl() (Node, error) {
 	block := &Tree{Name: name}
 	block.Root = body
 	block.text = t.text
+	block.leftDelim, block.rightDelim = t.leftDelim, t.rightDelim
 	block.ParseName = t.ParseName
 	block.Filepath = t.Filepath
 	block.RootTrimFirst = startTrimRight

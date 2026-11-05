@@ -62,6 +62,7 @@ func extractDefines(yield func(string, *Tree) bool, parent *Tree, n Node) bool {
 		dt.ParseName = parent.ParseName
 		dt.Filepath = parent.Filepath
 		dt.text = parent.text
+		dt.leftDelim, dt.rightDelim = parent.leftDelim, parent.rightDelim
 		dt.Diagnostics = diagnosticsInRange(parent.Diagnostics, n.Body.Start(), n.Body.End())
 		dt.RootTrimFirst = n.StartTrimRight
 		dt.RootTrimLast = n.EndTrimLeft
@@ -82,6 +83,7 @@ func extractDefines(yield func(string, *Tree) bool, parent *Tree, n Node) bool {
 		dt.ParseName = parent.ParseName
 		dt.Filepath = parent.Filepath
 		dt.text = parent.text
+		dt.leftDelim, dt.rightDelim = parent.leftDelim, parent.rightDelim
 		dt.Diagnostics = diagnosticsInRange(parent.Diagnostics, n.Body.Start(), n.Body.End())
 		return yield(n.Name, dt)
 	case *ListNode:
