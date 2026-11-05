@@ -28,7 +28,10 @@ type state struct {
 	missingKey MissingKeyMode
 	trust      TrustFunc
 	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
-	attrValue  bool    // walking a control structure in an attribute value
+	// attrSource, while a control structure in an attribute value is
+	// walked, holds the text nodes made from the template's own text,
+	// which alone are written as they are; nil otherwise.
+	attrSource map[*html.Node]bool
 }
 
 // trustOf reports the Trust classification for a value, returning
@@ -1146,16 +1149,17 @@ func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote by
 			val.WriteString(text)
 			raw.WriteString(escapeAttrText(text, quote))
 		case *IfNode, *WithNode, *RangeNode:
-			inValue := s.attrValue
-			s.attrValue = true
+			outer := s.attrSource
+			s.attrSource = make(map[*html.Node]bool)
 			htmlNodes, err := s.walkHTMLNode(dot, vn)
-			s.attrValue = inValue
+			source := s.attrSource
+			s.attrSource = outer
 			if err != nil {
 				return err
 			}
 			for _, hn := range htmlNodes {
 				val.WriteString(htmlNodeText(hn))
-				raw.WriteString(rawAttrText(hn, quote))
+				raw.WriteString(rawAttrText(hn, quote, source))
 			}
 		}
 	}
@@ -1433,15 +1437,14 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	// Execute the template into a buffer and parse the result as HTML? No —
 	// we walk the sub-template's tree and collect html.Nodes.
 	newState := &state{
-		tree:      tree,
-		cp:        s.cp,
-		depth:     s.depth + 1,
-		funcs:     s.funcs,
-		finder:    s.finder,
-		trust:     s.trust,
-		markup:    s.markup,
-		attrValue: s.attrValue,
-		vars:      []variable{{"$", newDot}},
+		tree:   tree,
+		cp:     s.cp,
+		depth:  s.depth + 1,
+		funcs:  s.funcs,
+		finder: s.finder,
+		trust:  s.trust,
+		markup: s.markup,
+		vars:   []variable{{"$", newDot}},
 	}
 	s.cp.Init(tree)
 	root := tree.Root
@@ -1499,15 +1502,17 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 			tn.count.Add(1)
 			if len(text) > 0 {
 				nodeType := html.TextNode
-				if tn.Verbatim || s.attrValue {
-					// In an attribute value, a raw node marks the
-					// source's own text (see rawAttrText).
+				if tn.Verbatim {
 					nodeType = html.RawNode
 				}
-				result = append(result, &html.Node{
+				hn := &html.Node{
 					Type: nodeType,
 					Data: text,
-				})
+				}
+				if s.attrSource != nil {
+					s.attrSource[hn] = true
+				}
+				result = append(result, hn)
 			}
 			continue
 		}
@@ -1741,18 +1746,22 @@ func htmlNodeText(n *html.Node) string {
 }
 
 // rawAttrText is the text of an html.Node from an attribute value as
-// html/template writes it between quote: a raw node, the source's own
-// text, as it is, and other text escaped for the quote.
-func rawAttrText(n *html.Node, quote byte) string {
-	switch n.Type {
-	case html.RawNode:
+// html/template writes it between quote: the template's own text, which
+// source holds, as it is, and all else, the output of actions and of
+// called templates, trusted or not, escaped for the quote. The node's
+// type says nothing about whether it can be trusted here: a trusted
+// value or a called template's text is a raw node too.
+func rawAttrText(n *html.Node, quote byte, source map[*html.Node]bool) string {
+	if source[n] {
 		return n.Data
-	case html.TextNode:
+	}
+	switch n.Type {
+	case html.TextNode, html.RawNode:
 		return escapeAttrText(n.Data, quote)
 	}
 	var buf strings.Builder
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		buf.WriteString(rawAttrText(c, quote))
+		buf.WriteString(rawAttrText(c, quote, source))
 	}
 	return buf.String()
 }
