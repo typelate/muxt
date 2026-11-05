@@ -31,6 +31,8 @@ func TestTagScan(t *testing.T) {
 		{text: `<p =v`, want: tagScan{part: tagUnknown}},
 		{text: `<p id=a"b`, want: tagScan{part: tagUnknown}},
 		{text: `<script>`, want: tagScan{part: tagUnknown}},
+		{text: `a <`, want: tagScan{open: "<"}},
+		{text: `a </`, want: tagScan{open: "</"}},
 	} {
 		if got := (tagScan{}).text(tt.text); got != tt.want {
 			t.Errorf("tagScan{}.text(%q) = %+v, want %+v", tt.text, got, tt.want)
@@ -81,6 +83,41 @@ func TestHTMLNameFilter(t *testing.T) {
 	} {
 		if got := htmlNameFilter(tt.name, tt.trust); got != tt.want {
 			t.Errorf("htmlNameFilter(%q, %v) = %q, want %q", tt.name, tt.trust, got, tt.want)
+		}
+	}
+}
+
+func TestTagScanAcrossTexts(t *testing.T) {
+	// A "<" at the end of one text and a name at the start of the next
+	// are a tag; an action after the "<" would name the tag.
+	if got, want := (tagScan{}).text(`a <`).text(`p id`), (tagScan{part: tagAttrName, element: "p", attr: "id"}); got != want {
+		t.Errorf(`text("a <").text("p id") = %+v, want %+v`, got, want)
+	}
+	if got, want := (tagScan{}).text(`a <`).text(` b`), (tagScan{}); got != want {
+		t.Errorf(`text("a <").text(" b") = %+v, want %+v`, got, want)
+	}
+	if at, _ := (tagScan{}).text(`a <`).action(); at.part != tagUnknown {
+		t.Errorf(`text("a <").action() = %+v, want tagUnknown`, at)
+	}
+}
+
+func TestValueAttr(t *testing.T) {
+	for name, want := range map[string]string{
+		"":              "",
+		"title":         "title",
+		"on":            "onclick",
+		"onanything":    "onclick",
+		"data-on":       "onclick",
+		"href":          "href",
+		"xlink:href":    "href",
+		"xmlns:x":       "href",
+		"data-tweeturl": "href",
+		"srcset":        "srcset",
+		"style":         "style",
+		"value":         "value",
+	} {
+		if got := valueAttr(name); got != want {
+			t.Errorf("valueAttr(%q) = %q, want %q", name, got, want)
 		}
 	}
 }

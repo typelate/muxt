@@ -42,7 +42,8 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 	switch n := n.(type) {
 	case *ListNode:
 		if n != nil {
-			annotateSiblings(n.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			end := annotateSiblings(n.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			n.endsInTag = end != tagScan{}
 		}
 	case *HTMLDocumentFragmentNode:
 		annotateSiblings(n.Children, "", "", false, "", tagScan{})
@@ -107,11 +108,13 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 		annotateBranch(&n.BranchNode, parentElement, parentAttr, inComment, jsCtx)
 	case *DefineNode:
 		if n.Body != nil {
-			annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			end := annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			n.Body.endsInTag = end != tagScan{}
 		}
 	case *BlockNode:
 		if n.Body != nil {
-			annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			end := annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
+			n.Body.endsInTag = end != tagScan{}
 		}
 	}
 }
@@ -123,7 +126,7 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 // attribute value, in a comment, or in an element whose content is not
 // HTML text is not followed.
 func annotateSiblings(nodes []Node, parentElement, parentAttr string, inComment bool, jsCtx string, t tagScan) tagScan {
-	if parentAttr != "" || inComment || changesTextContext(parentElement) {
+	if parentAttr != "" || inComment || !holdsHTMLText(parentElement) {
 		for _, n := range nodes {
 			annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
 		}
@@ -150,21 +153,38 @@ func annotateSiblings(nodes []Node, parentElement, parentAttr string, inComment 
 		case *TextNode:
 			t = t.text(string(n.Text))
 		case *ActionNode:
-			if t.part == tagNone || len(n.Pipe.Decl) > 0 {
+			if len(n.Pipe.Decl) > 0 {
 				annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
 				continue
 			}
 			var at tagScan
 			at, t = t.action()
+			if at.part == tagNone {
+				annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+				continue
+			}
 			n.HTMLContext = at.context()
 		case *TemplateNode:
-			if t.part == tagNone {
+			var at tagScan
+			at, t = t.action()
+			if at.part == tagNone {
 				annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
 				continue
 			}
-			var at tagScan
-			at, t = t.action()
 			n.HTMLContext = at.context()
+		case *BlockNode:
+			// A block is a call where it stands, and its body a template.
+			annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+			if t.part != tagNone || t.open != "" || (n.Body != nil && n.Body.endsInTag) {
+				t = tagScan{part: tagUnknown}
+			}
+		case *BreakNode, *ContinueNode:
+			if t.part != tagNone || t.open != "" {
+				// The loop's next text is not what follows here.
+				t = tagScan{part: tagUnknown}
+			}
+		case *HTMLDocumentFragmentNode:
+			t = annotateSiblings(n.Children, "", "", false, "", t)
 		case *IfNode:
 			t = branch(&n.BranchNode, false)
 		case *WithNode:
@@ -176,6 +196,17 @@ func annotateSiblings(nodes []Node, parentElement, parentAttr string, inComment 
 		}
 	}
 	return t
+}
+
+// holdsHTMLText reports whether html/template reads the text in the
+// named element as HTML text, where a '<' may start a tag: not in
+// script, style, textarea or title.
+func holdsHTMLText(element string) bool {
+	switch strings.ToLower(element) {
+	case "script", "style", "textarea", "title":
+		return false
+	}
+	return true
 }
 
 func annotateBranch(n *BranchNode, parentElement, parentAttr string, inComment bool, jsCtx string) {

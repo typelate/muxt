@@ -38,6 +38,9 @@ type ListNode struct {
 	tr         *Tree
 	start, end lex.Pos
 	Nodes      []Node // The element nodes in lexical order.
+	// endsInTag is set by AnnotateHTMLContexts for a list whose text
+	// ends inside a tag: what a caller writes next would be in that tag.
+	endsInTag bool
 }
 
 func (l ListNode) Start() lex.Pos { return l.start }

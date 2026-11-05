@@ -828,6 +828,12 @@ func TestActionsInATagMatchStdlib(t *testing.T) {
 		`<p id=i {{.Y}} {{.Z}}=1 hidden>t</p>`,
 		`<p {{.Y}}=v {{if .X}}lang=en{{else}}lang=fr{{end}}>t</p>`,
 		`</p {{.Y}}=v>{{.Z}}`,
+		// A name of which only the start is known is taken by its shape.
+		`<p on{{.Y}}="{{.Z}}">t</p>`,
+		`<p on{{.Y}}={{.Z}}>t</p>`,
+		`<p {{.Y}}=v on{{if .X}}click{{end}}="{{.Z}}">t</p>`,
+		`<p data-on{{.Y}}="{{.Z}}">t</p>`,
+		`<h{{len .L}} {{.Y}}>t</h{{len .L}}>`,
 	} {
 		for _, d := range values {
 			var stdlib strings.Builder
@@ -868,13 +874,18 @@ func TestActionInATagTheEngineCannotFollowIsRefused(t *testing.T) {
 	type data struct {
 		X    bool
 		Y, Z string
+		L    []string
 	}
 	for _, src := range []string{
 		`<p {{.Y}}=v {{if .X}}title={{end}}{{.Z}}>t</p>`,
 		`<p {{.Y}}=v {{range .Y}}title="{{end}}{{.Z}}>t</p>`,
 		`<p {{.Y}}=v title=a"{{.Z}}>t</p>`,
+		// A break or continue leaves the loop inside the tag.
+		`{{range .L}}<p {{$.Y}}=v {{break}}>{{end}}{{$.Z}}<b>end</b>`,
+		`{{range .L}}<p {{$.Y}}=v a={{if $.X}}{{break}}{{end}}x>{{end}}{{$.Z}}<b>end</b>`,
+		`{{range .L}}{{$.Z}}<p {{$.Y}}=v a={{if $.X}}{{continue}}{{end}}x>{{end}}<b>end</b>`,
 	} {
-		d := data{X: true, Y: "y", Z: "onclick=alert(1)"}
+		d := data{X: true, Y: "y", Z: "x onclick=alert(1)", L: []string{"a", "b"}}
 		if err := stdtemplate.Must(stdtemplate.New("test").Parse(src)).Execute(io.Discard, d); err == nil {
 			t.Fatalf("html/template executes %q", src)
 		}
@@ -882,6 +893,37 @@ func TestActionInATagTheEngineCannotFollowIsRefused(t *testing.T) {
 		var sb strings.Builder
 		if err := tmpl.Execute(&sb, d); err == nil {
 			t.Errorf("shim executes %q: %q", src, sb.String())
+		}
+	}
+}
+
+// TestDataCannotWriteAttributesAfterATagTheEngineCannotFollow states
+// that where the engine cannot tell that an action is in a tag, it
+// fails rather than escape the action as HTML text, which would let
+// data add an attribute: after a template that ends in a tag, where
+// html/template escapes the action as a name, after a "<" that an
+// action follows, which html/template escapes, and in a noscript
+// element, which html/template refuses.
+func TestDataCannotWriteAttributesAfterATagTheEngineCannotFollow(t *testing.T) {
+	type data struct{ Y, Z string }
+	d := data{Y: "p", Z: "x onclick=alert(1)"}
+	for _, src := range []string{
+		`{{define "a"}}<p {{.Y}}=v {{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`{{block "a" .}}<p {{.Y}}=v {{end}}{{.Z}}><b>end</b>`,
+		`<{{.Y}} {{.Z}}><b>end</b>`,
+		`</{{.Y}} {{.Z}}><b>end</b>`,
+		`<noscript><p {{.Y}}=v {{.Z}}</noscript><b>end</b>`,
+	} {
+		tmpl, err := New("test").Parse(src)
+		if err != nil {
+			continue // refused when parsed
+		}
+		var sb strings.Builder
+		if err := tmpl.Execute(&sb, d); err != nil {
+			continue
+		}
+		if got := sb.String(); strings.Contains(got, " onclick=alert(1)") {
+			t.Errorf("shim output for %q = %q: data writes an attribute", src, got)
 		}
 	}
 }

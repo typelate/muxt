@@ -26,12 +26,18 @@ type tagScan struct {
 	element string // the tag's name, lowercased
 	attr    string // the attribute name's leading text, lowercased; "" when an action starts the name
 	quote   byte   // for tagValue: '"', '\'', or 0 for an unquoted value
+	// open, for tagNone, is a "<" or "</" the text ended with: what
+	// follows it may be the name of a tag.
+	open string
 }
 
 const tagSpace = " \t\n\f\r"
 
 // text returns the scan after the template text s.
 func (t tagScan) text(s string) tagScan {
+	if t.part == tagNone && t.open != "" {
+		s, t.open = t.open+s, ""
+	}
 	for len(s) > 0 && t.part != tagUnknown {
 		t, s = t.step(s)
 	}
@@ -46,7 +52,11 @@ func (t tagScan) step(s string) (tagScan, string) {
 	case tagNone:
 		for {
 			i := strings.IndexByte(s, '<')
-			if i < 0 || i+1 == len(s) {
+			if i < 0 {
+				return t, ""
+			}
+			if rest := s[i:]; rest == "<" || rest == "</" {
+				t.open = rest
 				return t, ""
 			}
 			s = s[i+1:]
@@ -139,6 +149,11 @@ func (t tagScan) step(s string) (tagScan, string) {
 // a name, and an action after a '=' writes an unquoted value.
 func (t tagScan) action() (at, after tagScan) {
 	switch t.part {
+	case tagNone:
+		if t.open != "" {
+			// The action would name the tag, as in <{{.Name}}>.
+			t = tagScan{part: tagUnknown}
+		}
 	case tagStart, tagAfterName:
 		t.part, t.attr = tagAttrName, ""
 	case tagBeforeValue:
@@ -166,9 +181,43 @@ func (a tagScan) join(b tagScan) tagScan {
 func (t tagScan) context() *HTMLContext {
 	ctx := &HTMLContext{State: "tag", Element: t.element, tag: t.part}
 	if t.part == tagValue {
-		ctx.Attr, ctx.quote = t.attr, t.quote
+		ctx.Attr, ctx.quote = valueAttr(t.attr), t.quote
 	}
 	return ctx
+}
+
+// valueAttr is an attribute whose values are escaped as html/template
+// escapes the values of the attribute named name, of which only the
+// leading text may be known, as in on{{.Event}}="…". html/template
+// goes by the name's shape: any name starting with "on" holds script,
+// and a name holding "src", "uri" or "url" holds a URL, after a "data-"
+// or namespace prefix is taken off.
+func valueAttr(name string) string {
+	short := name
+	if after, ok := strings.CutPrefix(name, "data-"); ok {
+		short = after
+	} else if prefix, after, ok := strings.Cut(name, ":"); ok {
+		if prefix == "xmlns" {
+			return "href"
+		}
+		short = after
+	}
+	switch {
+	case short == "style":
+		return "style"
+	case isSrcsetAttr(short):
+		return "srcset"
+	case isURLAttr(short):
+		return "href"
+	case isJSEventAttr(short) || strings.HasPrefix(short, "on"):
+		return "onclick"
+	case plainAttr(short):
+		return name
+	case strings.Contains(short, "src") || strings.Contains(short, "uri") || strings.Contains(short, "url"),
+		short == "archive", short == "classid", short == "profile", short == "xmlns":
+		return "href"
+	}
+	return name
 }
 
 // tagNameLen is the length of the tag name s starts with: letters and

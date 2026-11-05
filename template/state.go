@@ -1497,6 +1497,11 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	if !ok {
 		return nil, s.errorf("template %q not defined", t.Name)
 	}
+	if tree.Root != nil && tree.Root.endsInTag {
+		// What follows the call would be written in that tag, and the
+		// engine escapes it as HTML text.
+		return nil, s.errorf("template %q ends in a tag, which muxt's template engine cannot follow", t.Name)
+	}
 	newDot := dot
 	if t.Pipe != nil {
 		var err error
