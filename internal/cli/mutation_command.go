@@ -21,8 +21,9 @@ func testTemplateMutationsCommand(workingDirectory *string, run func(*cobra.Comm
 	)
 
 	cmd := &cobra.Command{
-		Use:   testTemplateMutationsName + " [package-dir] [-- go test flags]",
-		Short: "Vary template actions and report the ones no test catches",
+		Use:     testTemplateMutationsName + " [package-dir] [-- go test flags]",
+		Aliases: []string{"mut", "m"},
+		Short:   "Vary template actions and report the ones no test catches",
 		Long: `Vary each dynamic and control flow action in the project's templates, one
 at a time, and re-run the tests against each variation.
 

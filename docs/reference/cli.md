@@ -13,7 +13,7 @@
 | [`list-template-calls`](commands/list-template-calls.md) | `calls` | List the `{{template}}` calls each template makes. |
 | [`explore-module`](commands/explore-module.md) | `explore` | List every muxt package in the module. |
 | [`generate-fake-server`](commands/generate-fake-server.md) | | Write a fake server for browsing routes. |
-| [`test-template-mutations`](commands/test-template-mutations.md) | | Report template actions no test catches. |
+| [`test-template-mutations`](commands/test-template-mutations.md) | `mut`, `m` | Report template actions no test catches. |
 | [`version`](commands/version.md) | `v` | Print the version. |
 | [`documentation`](commands/documentation.md) | `docs` | Print the embedded documentation pages. |
 | `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |

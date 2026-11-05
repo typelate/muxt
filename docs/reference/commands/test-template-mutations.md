@@ -25,6 +25,8 @@ The [tutorial](../../tutorials/find-untested-template-behavior.md) turns a miss 
 
 ```text
 muxt test-template-mutations [package-dir] [-- go test flags] [flags]
+muxt mut [package-dir] [-- go test flags] [flags]
+muxt m [package-dir] [-- go test flags] [flags]
 ```
 
 The package directory defaults to the working directory and is resolved like `-C`; `go test ./...` runs from it ([reference_package_directory_argument.txt](../../../cmd/muxt/testdata/reference_package_directory_argument.txt)). Everything after `--` is passed to `go test` as written, except these, which muxt refuses before anything runs:
