@@ -1033,6 +1033,8 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 				return nil, err
 			}
 			attrs = append(attrs, branch...)
+		case *TemplateNode:
+			return nil, errTemplateInTag(s, a)
 		default:
 			return nil, s.errorf("unsupported attribute node type: %T", attrNode)
 		}
@@ -1729,6 +1731,8 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAtt
 			if text != "" {
 				result = append(result, sourceAttr{Attribute: html.Attribute{Val: text}})
 			}
+		case *TemplateNode:
+			return nil, errTemplateInTag(s, n)
 		case *TextNode:
 			// Whitespace between attributes — ignore.
 		}
@@ -1748,6 +1752,13 @@ func htmlNodeText(n *html.Node) string {
 		buf.WriteString(htmlNodeText(c))
 	}
 	return buf.String()
+}
+
+// errTemplateInTag is the error for a {{template}} call in a tag, where
+// it would add attributes: the engine has parsed the called template as
+// HTML content, not as attributes, so it cannot execute it there.
+func errTemplateInTag(s *state, n *TemplateNode) error {
+	return s.errorf("{{template %q}} in a tag is not supported by muxt's template engine", n.Name)
 }
 
 // rawAttrText is the text of an html.Node from an attribute value as

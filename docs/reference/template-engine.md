@@ -16,4 +16,4 @@ There is no stability promise beyond the CLI's own, and any release may change t
 
 `template/html` writes the template blocks each execution reaches to a cover profile when `MUXT_TEMPLATE_COVER` names a directory. The pre-pass sets it; unset, nothing is written.
 
-The `html/template` shim the pre-pass overlays has three known gaps: `Template.Tree` and `AddParseTree` use `template.Tree`, not `*parse.Tree`, and `Error.Node` is a value with only a `String` method, not a `parse.Node`.
+The `html/template` shim the pre-pass overlays has three known gaps: `Template.Tree` and `AddParseTree` use `template.Tree`, not `*parse.Tree`, and `Error.Node` is a value with only a `String` method, not a `parse.Node`. The engine also cannot execute a `{{template}}` call in a tag, as in `<input name='q'{{template "attrs" .}}>`, which `html/template` executes in attribute context.
