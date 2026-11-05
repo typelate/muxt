@@ -149,10 +149,14 @@ func (w *commandWalker) template(name string, pipe *template.PipeNode, dot bool)
 // template runs with no dot at all, and any other argument is a value
 // selected out of the current one.
 func passesDotAlong(pipe *template.PipeNode, dotIsTemplateData bool) bool {
-	if !dotIsTemplateData || pipe == nil || len(pipe.Commands) != 1 {
+	if !dotIsTemplateData || pipe == nil {
 		return false
 	}
-	cmd := pipe.Commands[0]
+	cmds := pipe.HeadCommands()
+	if len(cmds) != 1 {
+		return false
+	}
+	cmd := cmds[0]
 	if len(cmd.Args) != 1 {
 		return false
 	}

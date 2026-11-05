@@ -311,6 +311,46 @@ func main() { _ = ts.ExecuteTemplate(os.Stdout, "page", Data{}) }
 	assert.False(t, hasWarning(ws, check.WarnInconsistentTemplate))
 }
 
+// TestWarnParenthesizedCondition checks that a branch condition written as
+// one parenthesized pipeline warns as its inlined form does, since
+// text/template evaluates the two alike and muxt fmt rewrites one into the
+// other.
+func TestWarnParenthesizedCondition(t *testing.T) {
+	inner := types.NewStruct([]*types.Var{
+		types.NewField(0, nil, "Name", types.Typ[types.String], false),
+	}, nil)
+	data := types.NewStruct([]*types.Var{
+		types.NewField(0, nil, "S", types.NewPointer(inner), false),
+		types.NewField(0, nil, "B", types.Typ[types.Bool], false),
+	}, nil)
+	ptrData := types.NewPointer(data)
+	for _, tt := range []struct {
+		parenthesized, inlined string
+		data                   types.Type
+	}{
+		{`{{if (false)}}dead{{end}}`, `{{if false}}dead{{end}}`, data},
+		{`{{if ((true))}}live{{else}}dead{{end}}`, `{{if true}}live{{else}}dead{{end}}`, data},
+		{`{{if (.S)}}{{.S.Name}}{{end}}`, `{{if .S}}{{.S.Name}}{{end}}`, data},
+		{`{{if (and .S .B)}}{{.S.Name}}{{end}}`, `{{if and .S .B}}{{.S.Name}}{{end}}`, data},
+		{`{{with (.S)}}{{$.S.Name}}{{end}}`, `{{with .S}}{{$.S.Name}}{{end}}`, data},
+		{`{{if (.)}}{{.B}}{{end}}`, `{{if .}}{{.B}}{{end}}`, ptrData},
+	} {
+		t.Run(tt.parenthesized, func(t *testing.T) {
+			got := warningCodes(warningsOf(t, tt.parenthesized, tt.data))
+			want := warningCodes(warningsOf(t, tt.inlined, tt.data))
+			assert.Equal(t, want, got, "warnings of %s, want those of %s", tt.parenthesized, tt.inlined)
+		})
+	}
+}
+
+func warningCodes(ws []check.Warning) []string {
+	codes := []string{}
+	for _, w := range ws {
+		codes = append(codes, w.Code)
+	}
+	return codes
+}
+
 func TestWarnUnguardedPointer(t *testing.T) {
 	inner := types.NewStruct([]*types.Var{
 		types.NewField(0, nil, "Name", types.Typ[types.String], false),

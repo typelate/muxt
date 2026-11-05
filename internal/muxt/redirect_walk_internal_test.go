@@ -51,6 +51,42 @@ func TestWalkTemplateCommands(t *testing.T) {
 	}
 }
 
+// TestWalkTemplateCommandsParenthesizedArgument checks that a template
+// argument written as one parenthesized pipeline gives the called template
+// the dot its inlined form does: text/template evaluates the two alike, and
+// muxt fmt rewrites one into the other.
+func TestWalkTemplateCommandsParenthesizedArgument(t *testing.T) {
+	for _, tt := range []struct{ parenthesized, inlined string }{
+		{`{{template "inner" (.)}}`, `{{template "inner" .}}`},
+		{`{{template "inner" ((.))}}`, `{{template "inner" .}}`},
+		{`{{template "inner" (.A)}}`, `{{template "inner" .A}}`},
+		{`{{block "blk" (.)}}{{.Inner}}{{end}}`, `{{block "blk" .}}{{.Inner}}{{end}}`},
+	} {
+		t.Run(tt.parenthesized, func(t *testing.T) {
+			got := innerDot(t, tt.parenthesized)
+			want := innerDot(t, tt.inlined)
+			assert.Equal(t, want, got, "dot of .Inner under %s, want that under %s", tt.parenthesized, tt.inlined)
+		})
+	}
+}
+
+// innerDot reports whether walkTemplateCommands visits .Inner, in the
+// template text invokes, with dot still the template data.
+func innerDot(t *testing.T, text string) []bool {
+	t.Helper()
+	ts, page := pageIn(t, text)
+	_, err := ts.Parse(`{{define "inner"}}{{.Inner}}{{end}}`)
+	require.NoError(t, err)
+	var dots []bool
+	walkTemplateCommands(page.Tree.Root, ts, make(map[string]bool), true, func(cmd *template.CommandNode, dot bool) bool {
+		if cmd.String() == ".Inner" {
+			dots = append(dots, dot)
+		}
+		return false
+	})
+	return dots
+}
+
 func TestWalkTemplateCommandsStopsAtTheFirstAccepted(t *testing.T) {
 	ts, page := pageIn(t, `{{.A}}{{if .B}}{{.C}}{{end}}{{.D}}`)
 	var visited []string

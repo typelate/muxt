@@ -32,6 +32,11 @@ func TestResolveStylesheets(t *testing.T) {
 		{source: `<link rel="stylesheet" href="/static/app.css">`, want: []string{"/static/app.css", "/static/parts/b.css"}},
 		{source: `<link rel="stylesheet" href="{{.Path.ReadStatic}}x.css">`, want: []string{"/static/x.css"}},
 		{source: `<link rel="stylesheet" href="{{$.Path.ReadStatic}}x.css">`, want: []string{"/static/x.css"}},
+		// A parenthesized whole pipeline evaluates as its inlined form,
+		// which is what muxt fmt writes.
+		{source: `<link rel="stylesheet" href="{{(.Path.ReadStatic)}}x.css">`, want: []string{"/static/x.css"}},
+		{source: `<link rel="stylesheet" href="{{(($.Path.ReadStatic))}}x.css">`, want: []string{"/static/x.css"}},
+		{source: `<link rel="stylesheet" href="{{(.Path.ReadStatic | printf "%s")}}x.css">`, missing: true},
 		{source: `<link rel="stylesheet" href="/static/x/y.css">`, want: []string{"/static/x/y.css"}},
 		{source: `<link rel="icon" href="https://cdn.example/a.css">`},
 		{source: `<link rel="stylesheet" href="https://cdn.example/a.css">`, missing: true},

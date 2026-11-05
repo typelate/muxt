@@ -191,12 +191,17 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 // non-nil for its body, and whether the condition is such a guard. {{if .}}
 // guards "" (the dot); {{if .User}} guards ".User"; {{if and .User ...}}
 // guards ".User" too, because and evaluates left to right and stops at the
-// first empty value.
+// first empty value. A parenthesized condition, {{if (and .User .X)}}, guards as
+// its inlined form does.
 func guardedPath(pipe *template.PipeNode) (string, bool) {
-	if pipe == nil || len(pipe.Commands) != 1 {
+	if pipe == nil {
 		return "", false
 	}
-	cmd := pipe.Commands[0]
+	cmds := pipe.HeadCommands()
+	if len(cmds) != 1 {
+		return "", false
+	}
+	cmd := cmds[0]
 	if len(cmd.Args) == 0 {
 		return "", false
 	}
@@ -223,18 +228,18 @@ func fieldPathOf(n template.Node) (string, bool) {
 
 // literalCondition reports the constant truthiness of a branch pipeline when
 // it is a single literal bool (so the branch it guards is dead), and whether
-// the pipeline is such a literal at all. {{if true}} and {{if false}} qualify;
+// the pipeline is such a literal at all. {{if true}} and {{if (false)}} qualify;
 // anything with a function, field, or declaration does not. ({{if nil}} is
 // already a type error — "nil is not a command" — so it never reaches here.)
 func literalCondition(pipe *template.PipeNode) (truth, isLiteral bool) {
-	if pipe == nil || len(pipe.Decl) > 0 || len(pipe.Commands) != 1 {
+	if pipe == nil || len(pipe.Decl) > 0 {
 		return false, false
 	}
-	cmd := pipe.Commands[0]
-	if len(cmd.Args) != 1 {
+	cmds := pipe.HeadCommands()
+	if len(cmds) != 1 || len(cmds[0].Args) != 1 {
 		return false, false
 	}
-	if b, ok := cmd.Args[0].(*template.BoolNode); ok {
+	if b, ok := cmds[0].Args[0].(*template.BoolNode); ok {
 		return b.True, true
 	}
 	return false, false

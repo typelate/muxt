@@ -38,6 +38,12 @@ func TestCheckResponseWriterConflicts(t *testing.T) {
 		{name: "a chain on a chain", body: `{{((.Header "X" "y").Header "Z" "w").Redirect "/x" 302}}`, want: "Redirect"},
 		{name: "a chain on header that stays allowed", body: `{{(.Header "X" "y").Header "Z" "w"}}`},
 		{name: "a chain on the result", body: `{{(.Result).StatusCode}}`},
+		// A parenthesized head command evaluates as its inlined form,
+		// which is what muxt fmt writes.
+		{name: "a chain on doubly parenthesised dot", body: `{{((.)).StatusCode 201}}`, want: "StatusCode"},
+		{name: "a chain on parenthesised root", body: `{{(($)).StatusCode 201}}`, want: "StatusCode"},
+		{name: "a chain on a parenthesised header", body: `{{((.Header "X" "y")).StatusCode 201}}`, want: "StatusCode"},
+		{name: "a chain on the parenthesised result", body: `{{((.Result)).StatusCode}}`},
 		{name: "a chain on a result method", body: `{{(.Result.Header "X" "y").StatusCode 201}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

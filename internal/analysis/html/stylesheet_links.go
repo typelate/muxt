@@ -152,11 +152,15 @@ func (r *stylesheetResolver) href(value []template.Node) (string, bool) {
 // pathMethod returns the route whose path method action calls.
 func (r *stylesheetResolver) pathMethod(action *template.ActionNode) (StaticAssets, bool) {
 	pipe := action.Pipe
-	if pipe == nil || len(pipe.Decl) > 0 || len(pipe.Commands) != 1 || len(pipe.Commands[0].Args) != 1 {
+	if pipe == nil || len(pipe.Decl) > 0 {
+		return StaticAssets{}, false
+	}
+	cmds := pipe.HeadCommands()
+	if len(cmds) != 1 || len(cmds[0].Args) != 1 {
 		return StaticAssets{}, false
 	}
 	var ident []string
-	switch arg := pipe.Commands[0].Args[0].(type) {
+	switch arg := cmds[0].Args[0].(type) {
 	case *template.FieldNode:
 		ident = arg.Ident
 	case *template.VariableNode:

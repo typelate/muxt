@@ -154,10 +154,14 @@ func chainStartsAtTemplateData(chain *template.ChainNode, dotIsTemplateData bool
 // the TemplateData the handler passed in: (.) while dot still is, or ($), or
 // a call of one of its methods that returns it, such as (.Header "X" "y").
 func pipeIsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
-	if len(pipe.Decl) > 0 || len(pipe.Commands) != 1 || len(pipe.Commands[0].Args) == 0 {
+	if len(pipe.Decl) > 0 {
 		return false
 	}
-	args := pipe.Commands[0].Args
+	cmds := pipe.HeadCommands()
+	if len(cmds) != 1 || len(cmds[0].Args) == 0 {
+		return false
+	}
+	args := cmds[0].Args
 	if len(args) == 1 {
 		switch arg := args[0].(type) {
 		case *template.DotNode:
