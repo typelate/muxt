@@ -267,6 +267,10 @@ func (m MovedMatcher) MayMatch(moved []*template.HTMLElementNode) bool {
 // descendants that its subject may match does not collapse without such
 // rules. Whether such a rule matches an element that collapses without
 // it cannot change the element's white-space: it collapses either way.
+//
+// The discount is for collapsing rules only. A rule with a preserving
+// value counts through its subject even on an element that preserves
+// without it, since the preserving values differ from each other.
 func (m MovedMatcher) MayChange(moved []*template.HTMLElementNode, owner WhiteSpace) bool {
 	if m.all {
 		return true

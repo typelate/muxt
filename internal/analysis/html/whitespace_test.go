@@ -299,6 +299,12 @@ func TestWhiteSpaceMovedMatcherMayChange(t *testing.T) {
 		{sheet: `section div{white-space:nowrap} .post pre{color:red}`, want: false}, // pre is not matched
 		{sheet: `div + span{white-space:nowrap}`, want: true},                        // the moved div gets new siblings
 		{sheet: `section div{white-space:nowrap} section b{white-space:pre}`, want: true},
+		{sheet: `.post b{white-space:initial}`, want: false},  // initial is normal
+		{sheet: `.post b{white-space:inherit}`, want: true},   // the parent's, which may differ where it moves
+		{sheet: `.post b{white-space:var(--ws)}`, want: true}, // unknown value
+		// Only collapsing rules are discounted: a preserving rule counts
+		// even on an element that preserves without it.
+		{sheet: `.post pre{white-space:pre}`, want: true},
 	} {
 		tree := parseWhitespaceTree(t, "page", page)
 		moved, _ := selectors.MustCompile(`#moved`).QuerySelector(tree.Root)
