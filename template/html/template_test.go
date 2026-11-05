@@ -571,3 +571,44 @@ func TestAttributeSyntaxMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestElementsThatChangeTheTextContextAreClosed states that the engine
+// writes the end tag of an element whose content a browser does not read
+// as HTML text, even where the source leaves it out, so that output
+// escaped as HTML text after it cannot land in a script, style or raw
+// text context. html/template refuses the templates whose end context is
+// script, style or RCDATA; for the other raw text elements it reads what
+// follows as HTML text, so the engine's output differs from html/template's
+// only by the end tag.
+func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
+	const data = `alert(1)</x><b>'`
+	for _, tt := range []struct {
+		element      string
+		stdlibRefuse bool
+	}{
+		{"script", true}, {"style", true}, {"textarea", true}, {"title", true},
+		{"xmp", false}, {"iframe", false}, {"noembed", false}, {"noframes", false}, {"noscript", false}, {"plaintext", false},
+	} {
+		for _, src := range []string{
+			`{{define "a"}}<` + tt.element + `>{{end}}{{template "a"}}{{.}}`,
+			`{{define "a"}}<` + tt.element + `>{{end}}{{define "b"}}<p>{{.}}</p>{{end}}{{template "a"}}{{template "b" .}}`,
+		} {
+			var stdlib strings.Builder
+			err := stdtemplate.Must(stdtemplate.New("t").Parse(src)).Execute(&stdlib, data)
+			if tt.stdlibRefuse != (err != nil) {
+				t.Errorf("stdlib Execute(%q) error = %v, want refused %v", src, err, tt.stdlibRefuse)
+			}
+			got := executeShim(t, src, data)
+			end := "</" + tt.element + ">"
+			escaped := HTMLEscapeString(data)
+			if !strings.HasPrefix(got, "<"+tt.element+">"+end) || !strings.Contains(got, escaped) {
+				t.Errorf("shim output for %q = %q, want the end tag %s, then the data escaped as HTML text %q", src, got, end, escaped)
+			}
+			if !tt.stdlibRefuse {
+				if want := strings.Replace(stdlib.String(), "<"+tt.element+">", "<"+tt.element+">"+end, 1); got != want {
+					t.Errorf("shim output for %q = %q, want stdlib's with the end tag, %q", src, got, want)
+				}
+			}
+		}
+	}
+}

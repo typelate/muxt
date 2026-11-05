@@ -336,6 +336,24 @@ func IsRawTextElement(tag string) bool {
 	return isRawTextElement(tag)
 }
 
+// changesTextContext reports whether a browser reads what follows the
+// named element's start tag, until its end tag, as other than HTML text:
+// raw text (script, style, xmp, iframe, noembed, noframes, noscript,
+// plaintext) or escapable raw text (textarea, title). The engine always
+// writes such an element's end tag, even where the source leaves it out:
+// output escaped as HTML text after it, in later siblings or in a
+// template called next, would otherwise be read in the element's context,
+// as script in <script>. html/template refuses a template that ends in
+// script, style, textarea or title, and reads the others as HTML text.
+func changesTextContext(tag string) bool {
+	switch strings.ToLower(tag) {
+	case "script", "style", "textarea", "title",
+		"xmp", "iframe", "noembed", "noframes", "noscript", "plaintext":
+		return true
+	}
+	return false
+}
+
 // isRawTextElement reports whether the named element holds raw text content
 // (no HTML entity expansion). Children of these elements must be emitted
 // verbatim — HTML-escaping their text would corrupt the script or style

@@ -1,6 +1,12 @@
 // Package html provides muxt with an html/template-compatible, context-aware
 // escaping template engine built on the position-tracking template parser.
 //
+// It is muxt's analysis and coverage engine, and its contextual escaping
+// has documented gaps (see package template's ExecuteTemplate); muxt's
+// generated handlers render with the standard library's html/template,
+// and this package must not be used to render untrusted data for a
+// browser.
+//
 // Its safe-content types are its own; values of the standard library's
 // html/template content types are trusted too.
 //
