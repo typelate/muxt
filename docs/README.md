@@ -23,6 +23,7 @@ The [README](../README.md) introduces muxt.
 - [Serve full pages and fragments from one route](how-to/full-page-and-fragments.md): layout partials, `.HXRequest`, `Vary`
 - [Handle expired sessions in htmx requests](how-to/expired-sessions.md): middleware, heartbeats, a lock dialog
 - [Extend TemplateData](how-to/extend-template-data.md): request-aware template helpers
+- [Keep permissions in one place](how-to/permissions-in-one-place.md): enforce in the method or middleware, show through a field or a TemplateData method
 - [Map domain errors to status codes](how-to/domain-error-status-codes.md)
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
 - [Add custom template functions](how-to/template-functions.md)

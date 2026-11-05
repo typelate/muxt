@@ -1,6 +1,6 @@
 # How to build a Datastar live view
 
-Generate with `--output-datastar`. Server-Sent Events routes then emit Datastar patch events. The [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search) examples cover every section below except the patch setters and `.DatastarRequest`.
+Generate with `--output-datastar`. Server-Sent Events routes then emit Datastar patch events. The [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search) examples cover every section below except [the toast](#append-a-toast-with-a-second-callback), which is the first example of the patch setters, and `.DatastarRequest`.
 
 ## Patch elements
 
@@ -16,6 +16,56 @@ func (s *Server) Increment(_ context.Context, sseCount func(int64) error, deltaS
 ```
 
 Datastar morphs the element by id.
+
+## Append a toast with a second callback
+
+A route can patch more than one part of the page. Each `sse`-prefixed callback renders its own template, so a save can append the new row and then a toast:
+
+```gotmpl
+{{define "POST /items sse(Save(ctx, form, sseRow, sseToast))"}}{{end}}
+
+{{define "sseRow"}}{{.Selector "#items"}}{{.Mode "append"}}{{template "row" .Result}}{{end}}
+
+{{define "sseToast"}}{{.Selector "#toasts"}}{{.Mode "append"}}<p class="toast" role="status">{{.Result}}</p>{{end}}
+
+{{define "row"}}<li id="item-{{.ID}}">{{.Title}}</li>{{end}}
+```
+
+```go
+func (s *Server) Save(ctx context.Context, form ItemForm, sseRow func(Item) error, sseToast func(string) error) error {
+	item, err := s.items.Add(ctx, form.Title)
+	if err != nil {
+		return err
+	}
+	if err := sseRow(item); err != nil {
+		return err
+	}
+	return sseToast("Saved " + item.Title)
+}
+```
+
+This is the first example of the patch setters. A new row and a toast have no element of their own on the page yet, so matching by id has nothing to morph. `.Selector` names the element to patch and `.Mode "append"` adds the fragment as its last child. Both print nothing. The page holds the empty containers:
+
+```html
+<ul id="items"></ul>
+<div id="toasts" aria-live="polite"></div>
+```
+
+The two calls arrive as two events:
+
+```text
+event: datastar-patch-elements
+data: selector #items
+data: mode append
+data: elements <li id="item-1">Milk</li>
+
+event: datastar-patch-elements
+data: selector #toasts
+data: mode append
+data: elements <p class="toast" role="status">Saved Milk</p>
+```
+
+The fragment templates get `*SSETemplateData`, so they read `.Result.ID`, not `.ID`. `row` is a plain template both the page and `sseRow` render.
 
 ## Patch signals
 
@@ -63,6 +113,7 @@ Drive the generated routes with `httptest` and assert on the events. The `patchE
 
 ## Edge cases
 
-- **More than id matching.** When matching by id is not enough, the fragment template calls `.Selector`, `.Mode`, or `.UseViewTransition` on the dot. [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) shows `.Selector` and `.Mode`.
+- **More than id matching.** When matching by id is not enough, the fragment template calls `.Selector`, `.Mode`, or `.UseViewTransition` on the dot, as [the toast](#append-a-toast-with-a-second-callback) does. [reference_output_datastar_elements.txt](../../cmd/muxt/testdata/reference_output_datastar_elements.txt) asserts the `selector` and `mode` lines.
+- **Callback order is event order.** Each callback writes and flushes its event when called, so `sseRow` before `sseToast` means the row lands first. When `sseRow` returns an error, the client is gone or the template failed, so `Save` returns without the toast.
 - **Signal names are not checked.** muxt does not compare the `json` tags with the page's `data-signals` keys, so a typo fails silently in the browser.
 - **`.Path` inside `{{range}}`.** Use `$.Path`, as in `{{$.Path.ToggleTodo .ID}}`.
