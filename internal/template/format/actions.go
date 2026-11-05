@@ -207,17 +207,37 @@ func shapeArg(b *strings.Builder, n template.Node) {
 //   - a later stage in parentheses refuses the piped value (notAFunction)
 //     that a bare command takes as its last argument;
 //   - a parenthesized pipeline with a field chain, (index .M "k").Name;
-//   - one that declares a variable, ($y := .X).
+//   - one that declares a variable, ($y := .X);
+//   - one that calls the html or urlquery escaper, which html/template
+//     allows only as a pipeline's last command (callsPredefinedEscaper).
 func commands(pl *template.PipeNode) []*template.CommandNode {
 	cmds := pl.Commands
 	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
 		inner, ok := cmds[0].Args[0].(*template.PipeNode)
-		if !ok || len(inner.Decl) > 0 || len(inner.Commands) == 0 {
+		if !ok || len(inner.Decl) > 0 || len(inner.Commands) == 0 || callsPredefinedEscaper(inner) {
 			break
 		}
 		cmds = append(slices.Clone(inner.Commands), cmds[1:]...)
 	}
 	return cmds
+}
+
+// callsPredefinedEscaper reports whether a command of pl calls html or
+// urlquery. html/template allows those escapers only as the last command
+// of a pipeline and does not look inside a parenthesized pipeline, so
+// flattening one into the outer pipeline would make html/template reject
+// a template it accepted as written.
+func callsPredefinedEscaper(pl *template.PipeNode) bool {
+	for _, cmd := range pl.Commands {
+		if len(cmd.Args) == 0 {
+			continue
+		}
+		id, ok := cmd.Args[0].(*template.IdentifierNode)
+		if ok && (id.Ident == "html" || id.Ident == "urlquery") {
+			return true
+		}
+	}
+	return false
 }
 
 // actionToken is one action-bearing token of the source: an action, a

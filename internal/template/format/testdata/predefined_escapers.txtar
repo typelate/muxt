@@ -1,0 +1,19 @@
+Parentheses around a pipeline that calls html or urlquery stay. html/template
+allows those escapers only as the last command of a pipeline and does not look
+inside a parenthesized one, so flattening it would make html/template reject
+the template (PR #208 review). A parenthesized first command that calls
+neither is still flattened.
+-- input.gohtml --
+<p>{{ (html .Name) | printf "%s" }}</p>
+<a href="/q?{{ (urlquery .Name) | printf "q=%s" }}">x</a>
+<p>{{ (printf "%s" .Name) | html }}</p>
+<p>{{ (html .Name) }}</p>
+-- format.gohtml --
+<p>{{(html .Name) | printf "%s"}}</p>
+<a href="/q?{{(urlquery .Name) | printf "q=%s"}}">x</a>
+<p>{{printf "%s" .Name | html}}</p>
+<p>{{(html .Name)}}</p>
+-- data/empty.json --
+{}
+-- data/truthy.json --
+{"Name":"a<b&c"}
