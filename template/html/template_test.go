@@ -699,3 +699,22 @@ func TestFunctionsReturningAReflectValueMatchStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestTemplateCallInATagIsRefused states that the engine refuses a
+// {{template}} call in a tag, whose attributes html/template would add,
+// naming the template, rather than dropping it or failing obscurely.
+func TestTemplateCallInATagIsRefused(t *testing.T) {
+	for _, src := range []string{
+		`{{define "attrs"}} hidden{{end}}<input {{template "attrs"}}>`,
+		`{{define "attrs"}} hidden{{end}}<input value='x'{{template "attrs"}}>`,
+		`{{define "attrs"}} hidden{{end}}<input {{if .}}{{template "attrs"}}{{end}}>`,
+	} {
+		want := executeStdlib(t, src, true)
+		tmpl := Must(New("test").Parse(src))
+		var sb strings.Builder
+		err := tmpl.Execute(&sb, true)
+		if err == nil || !strings.Contains(err.Error(), `{{template "attrs"}} in a tag is not supported`) {
+			t.Errorf("Execute(%q) error = %v, want the call refused (html/template writes %q)", src, err, want)
+		}
+	}
+}
