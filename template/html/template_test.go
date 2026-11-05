@@ -680,3 +680,22 @@ func isStdlibType(v any) bool {
 	}
 	return false
 }
+
+// TestFunctionsReturningAReflectValueMatchStdlib states that the value a
+// function returns in a reflect.Value, as index and slice do, is the
+// pipeline's value, so a field of it can be taken.
+func TestFunctionsReturningAReflectValueMatchStdlib(t *testing.T) {
+	type tag struct{ Name string }
+	for _, src := range []string{
+		`<title>{{(index . 0).Name}}</title>`,
+		`<p>{{with .}}{{(index . 0).Name}}{{end}}</p>`,
+		`<p>{{range slice . 1}}{{.Name}}{{end}}</p>`,
+		`<p title="{{(index . 1).Name}}">{{index . 0}}</p>`,
+	} {
+		data := []tag{{"v1"}, {"v2"}}
+		want := executeStdlib(t, src, data)
+		if got := executeShim(t, src, data); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
+		}
+	}
+}

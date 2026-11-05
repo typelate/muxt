@@ -795,6 +795,11 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode,
 	if err != nil {
 		return missingVal, s.errorf("error calling %s: %w", name, err)
 	}
+	if result.Type() == reflectValueType {
+		// A function returning a reflect.Value, as index and slice do,
+		// returns the value it holds, as in text/template.
+		result = result.Interface().(reflect.Value)
+	}
 	return result, nil
 }
 
