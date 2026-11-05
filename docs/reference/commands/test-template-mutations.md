@@ -169,7 +169,7 @@ Each listed mutant needs a test that renders its branch. A stronger assertion in
 
 ### How the pre-pass works
 
-The pre-pass runs after planning and before the baseline, and only when there is a mutant to run. It runs your tests one extra time, unmutated, with muxt's own template engine in place of `html/template`. The engine records each template block the tests execute. The kill runs that follow use the real `html/template`, so the engine never decides whether a mutant is killed.
+The pre-pass runs after the baseline passes, and only when there is a mutant to run, so a failing baseline stops the run before the engine is tried. It runs your tests one extra time, unmutated, with muxt's own template engine in place of `html/template`. The engine records each template block the tests execute. The kill runs that follow use the real `html/template`, so the engine never decides whether a mutant is killed.
 
 The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=<scratch>/overlay.json` with your `go test` flags. Before it runs, muxt writes these under its scratch directory for the run:
 
@@ -179,6 +179,8 @@ The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=
 Your `go.mod` and `go.sum` are never written. `-mod=mod` lets the go command add the sums muxt's requirements need to the copy. The go command takes muxt from the module cache, where `go install` or `go get` left it, and fetches it from the module proxy otherwise. With `-v`, the [timing](#timing) preamble names the module the engine came from, as in `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`, and adds `, not your go.mod's v0.22.0` when the copy overrode your version. muxt removes the scratch directory when the run ends.
 
 A development build of muxt has no published version. A build of a commit with no uncommitted changes requires the pseudo-version of that commit, which the go command can fetch once the commit is pushed. Any other development build stops the pre-pass with `muxt is a modified development build; set MUXT_MODULE_DIR to its source directory`, and coverage is unknown. Set `MUXT_MODULE_DIR` to the directory of muxt's source, and the copy replaces `github.com/typelate/muxt` with it. muxt's own tests do this with the repository, so they fetch nothing.
+
+Each test binary that runs the engine writes its profile, `<pid>.cov`, as it starts, before it renders anything. A profile with no blocks is a test binary that executed no template, and every mutant it would have reached is unreached. No profile at all means no test binary ran the engine, and coverage is unknown.
 
 No package is added under GOROOT, so vet runs in the pre-pass as in your normal test run. The `-v` flag lets a test binary that stopped recording coverage say so in its output.
 
@@ -201,13 +203,13 @@ The command exits non-zero when:
 
 ## Timing
 
-The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline run, stderr reports the baseline duration, the [coverage pre-pass](#coverage-pre-pass) duration when the pre-pass ran, and an estimate for the rest of the run. The pre-pass is one more run of the suite, and the estimate leaves it out because it has already finished:
+The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline and the [coverage pre-pass](#coverage-pre-pass), stderr reports the baseline duration, the pre-pass duration when the pre-pass ran, and an estimate for the rest of the run. The pre-pass is one more run of the suite, and the estimate leaves it out because it has already finished:
 
 ```text
 20 mutants across 6 templates (complexity 10), baseline 1.9s, coverage pre-pass 2.4s, estimated 38s
 ```
 
-With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`.
+With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`. A development build that `MUXT_MODULE_DIR` replaces has no version to name, so the note is `engine github.com/typelate/muxt => <dir>`.
 
 Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took. With `--workers` above 1 templates finish in whatever order their last mutant does.
 
@@ -307,12 +309,17 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
 - **Development builds.** A muxt built from uncommitted changes, or without version control information, has no version to require. Coverage is unknown until `MUXT_MODULE_DIR` names its source directory; see [How the pre-pass works](#how-the-pre-pass-works).
 - **Another muxt version in your `go.mod`.** The copy requires the CLI's version in place of yours, so the pre-pass builds the engine of the muxt you ran. `-v` says so in the preamble. When another requirement of yours needs a newer muxt, minimal version selection keeps the newer one, and the engine is that version's, not the CLI's.
 - **Workspaces.** In workspace mode (a `go.work` in use), the go command refuses `-modfile`, so the probe fails, the warning says `go.work is in use`, and coverage is unknown. muxt does not set `GOWORK=off`, because your tests would then build against a different set of modules than the baseline and the kill runs. Set `GOWORK=off` yourself if your module builds without the workspace.
-- **Vendored modules.** `-mod=mod` ignores `vendor/`, so the pre-pass builds your dependencies from the module cache, downloading them when they are not there. The baseline and the kill runs still use `vendor/`.
+- **Shared module versions.** The pre-pass builds your tests against the copy's module graph, not yours. `-mod=mod` ignores `vendor/`, so your dependencies come from the module cache, downloaded when they are not there. And since the copy requires muxt, the go command selects the highest version any module requires, so a module you share with muxt, such as `golang.org/x/net`, can be built at a newer version than your `go.mod` requires. When any is, the run warns once, naming each module and both versions, and still uses the coverage:
+
+  ```text
+  warning: the coverage pre-pass selected newer versions of modules your go.mod requires: golang.org/x/net v0.30.0 → v0.62.0; tests exercising them may take other paths
+  ```
+
+  The baseline and the kill runs build with your `go.mod` and `vendor/` as written.
 - **Offline or without a proxy.** The first pre-pass in a module may need modules your build never did: muxt and its requirements, such as `golang.org/x/net`. Without a module proxy (`GOPROXY=off`) or a network, and with those modules not in the module cache, `go test` cannot set up. Coverage is then unknown, and the warning quotes the go command's reason, for example `module lookup disabled by GOPROXY=off`. A proxy without a reachable checksum database fails the same way, because the sums of muxt's requirements cannot be verified; whether to set `GONOSUMDB` or `GOSUMDB=off` is your call.
 - **An older `go` line.** The pre-pass compiles your module at muxt's go line when yours is lower. The go command raises the `go` line in the copy of your `go.mod`, because muxt's module needs it. Your packages then compile at that language version in the pre-pass, and the pre-pass coverage decides which mutants are skipped as unreached. The newer version can change what your code does:
   - When your `go` line is below `go 1.22`, your loops share one variable across iterations. In the pre-pass each iteration gets its own, so a closure that captures the loop variable can see a different value than in your normal run.
   - The `GODEBUG` defaults follow the `go` line.
-  - Modules you share with muxt, such as `golang.org/x/net`, `golang.org/x/tools` and the modules they require, may be selected at newer versions, because the copy requires muxt and the go command selects the highest version any module requires.
 
   The run then warns once and still uses the coverage:
 
@@ -329,6 +336,8 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
 
   The baseline still decides whether the tests pass. [reference_test_template_mutations_engine_gap.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_engine_gap.txt)
 - **Known engine gaps.** The shim declares every identifier of `html/template`, and three of them differ from the standard library's because the shim's types are the engine's. `Template.Tree` holds a `*template.Tree` of `github.com/typelate/muxt/template`, not a `*parse.Tree`. `AddParseTree` takes that tree, not a `*parse.Tree`. `Error.Node` holds a value with only a `String` method, not a `parse.Node`. Code that uses any of them does not build under the engine, so the pre-pass reports coverage unknown for that run.
+- **No test binary ran the engine.** Coverage is known only from a profile, so when no test binary writes one, the warning is `warning: template coverage unknown: no test binary ran the templates (no coverage profile was written)` and every mutant runs. That happens when the packages have no `_test.go` files, when `-exec` runs the test binaries somewhere their profiles do not reach, and when the tests render through a server binary of their own, built without the overlay, and the test binary does not link `html/template` itself. A test binary that does link it, and renders nothing in its own process, writes an empty profile, so every mutant reads as unreached and is skipped. [reference_test_template_mutations_no_test_files.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_no_test_files.txt), [reference_test_template_mutations_never_rendered.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_never_rendered.txt)
+- **One parse name, several packages.** Profiles are unioned by the name a template's text was parsed under, a file's base name, across every test binary, so a block reached in one package's `index.gohtml` also counts as reached in another package's `index.gohtml`. The error only goes one way: such a mutant is run instead of skipped.
 - **Coverage export is disabled.** A test binary that cannot write its coverage prints `muxt: template coverage export disabled:` and the reason. The pre-pass reads that as coverage unknown, not as templates no test reached.
 - **Downloaded toolchains.** When the `go` toolchain in use was downloaded for a `toolchain` line in `go.mod`, its GOROOT is in the module cache, and the go command refuses overlays there, so coverage is unknown. Set `GOTOOLCHAIN=local` to use the installed toolchain, or install the toolchain outside the module cache.
 - **A `-coverpkg` that covers `html/template`.** Coverage instrumentation reads the packages it instruments from disk, which would undo the overlay. So muxt refuses a `-coverpkg` after `--` that takes in `html/template`, and it does so before anything runs. The refused values are `html/template` itself, `std`, `all`, and any `...` pattern that matches `html/template`. A `-coverpkg` of your own packages, such as `-coverpkg=./...`, works.
