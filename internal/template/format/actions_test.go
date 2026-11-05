@@ -4,6 +4,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 	texttemplate "text/template"
 	textparse "text/template/parse"
@@ -19,7 +20,9 @@ import (
 // delimiters kept, redundant parentheses dropped, and complex or
 // author-broken pipelines laid out one stage or argument per line. Each
 // row is checked for idempotence, for parse-tree equality between input
-// and output (actionShapes), and with the rendering oracle.
+// and output (actionShapes, and text/template's trees where no
+// parentheses go), and with the rendering oracle, which runs input and
+// output through html/template and text/template (renderingProblem).
 func TestActionFormat(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
@@ -90,6 +93,15 @@ func TestActionFormat(t *testing.T) {
 		{name: "comment untouched", src: "<p>{{/*  c  */}}{{- /* d */ -}}</p>"},
 		{name: "custom delimiters", src: "<p>[[ .X ]]</p>", want: "<p>[[.X]]</p>", left: "[[", right: "]]"},
 		{name: "custom delimiters with trim", src: "<p>[[-  .X  -]]</p>", want: "<p>[[- .X -]]</p>", left: "[[", right: "]]"},
+		// html/template checks predefined escapers only in a plain
+		// action without declarations (escapeAction), and not inside
+		// parentheses: there they stay, elsewhere they go.
+		{name: "an escaper call heading an action", src: `<p>{{ (html .X) | printf "%s" }}</p>`, want: `<p>{{(html .X) | printf "%s"}}</p>`},
+		{name: "an escaper call in an unquoted attribute", src: `<a title={{ (html .X) }}>x</a>`, want: `<a title={{(html .X)}}>x</a>`},
+		{name: "an escaper call not last fails as written", src: `<p>{{ html .X | printf "%s" }}</p>`, want: `<p>{{html .X | printf "%s"}}</p>`},
+		{name: "an escaper call heading an if", src: `{{if (html .X)}}y{{end}}`, want: `{{if html .X}}y{{end}}`},
+		{name: "an escaper call heading a declaration", src: `{{$x := (html .X)}}{{$x}}`, want: `{{$x := html .X}}{{$x}}`},
+		{name: "an escaper call in doubled argument parentheses", src: `{{printf "%s" ((html .X))}}`, want: `{{printf "%s" (html .X)}}`},
 		{name: "in an attribute value", src: "<a href=\"{{ .X }}\" {{ if .A }}id=\"a\"{{ end }}>x</a>", want: "<a href=\"{{.X}}\" {{if .A}}id=\"a\"{{end}}>x</a>"},
 		{name: "in pre", src: "<pre>  {{ .X }}\n</pre>", want: "<pre>  {{.X}}\n</pre>"},
 		{name: "in raw text", src: "<script>var x = {{ .X }};</script><title>{{ .X }}</title>", want: "<script>var x = {{.X}};</script><title>{{.X}}</title>"},
@@ -296,14 +308,15 @@ func TestActionFormat(t *testing.T) {
 			if !slices.Equal(in, out) {
 				t.Errorf("parse trees differ\n input: %q\noutput: %q", in, out)
 			}
-			if in, out := textTrees(t, tt.src, left, right), textTrees(t, got, left, right); !maps.Equal(in, out) {
-				t.Errorf("text/template trees differ\n input: %q\noutput: %q", in, out)
-			}
-			if tt.left != "" {
-				return // the oracle renders with the default delimiters
+			// The formatter only drops parentheses; where it drops
+			// none, the standard parser's trees must match as they are.
+			if strings.Count(tt.src, "(") == strings.Count(got, "(") {
+				if in, out := textTrees(t, tt.src, left, right), textTrees(t, got, left, right); !maps.Equal(in, out) {
+					t.Errorf("text/template trees differ\n input: %q\noutput: %q", in, out)
+				}
 			}
 			for _, dot := range actionDots() {
-				if p := fuzzRenderingProblem(tt.src, got, "", rendering.Body, dot); p != "" {
+				if p := renderingProblem(tt.src, got, "", rendering.Body, dot, oracleDelims{left: left, right: right}); p != "" {
 					t.Error(p)
 				}
 			}
@@ -313,9 +326,7 @@ func TestActionFormat(t *testing.T) {
 
 // textTrees parses src with text/template and returns each template's
 // tree as text/template prints it, with its text emptied (the formatter
-// reindents it) and after inlining the parentheses the formatter drops
-// (inlineHeadParens), so a source and its output compare equal under the
-// standard parser too.
+// reindents it).
 func textTrees(t *testing.T, src, left, right string) map[string]string {
 	t.Helper()
 	tmpl, err := texttemplate.New("t.gohtml").Delims(left, right).Parse(src)
@@ -327,17 +338,14 @@ func textTrees(t *testing.T, src, left, right string) map[string]string {
 		if tm.Tree == nil {
 			continue
 		}
-		inlineHeadParens(tm.Tree.Root)
+		emptyText(tm.Tree.Root)
 		trees[tm.Name()] = tm.Tree.Root.String()
 	}
 	return trees
 }
 
-// inlineHeadParens rewrites the pipelines under n as the formatter
-// prints them: a first command that is one parenthesized pipeline
-// without declarations is replaced by that pipeline's commands. It
-// empties text nodes on the way.
-func inlineHeadParens(n textparse.Node) {
+// emptyText empties the text nodes under n.
+func emptyText(n textparse.Node) {
 	switch n := n.(type) {
 	case *textparse.TextNode:
 		n.Text = nil
@@ -346,43 +354,17 @@ func inlineHeadParens(n textparse.Node) {
 			return
 		}
 		for _, c := range n.Nodes {
-			inlineHeadParens(c)
+			emptyText(c)
 		}
-	case *textparse.ActionNode:
-		inlineHeadParens(n.Pipe)
 	case *textparse.IfNode:
-		inlineBranch(&n.BranchNode)
+		emptyText(n.List)
+		emptyText(n.ElseList)
 	case *textparse.RangeNode:
-		inlineBranch(&n.BranchNode)
+		emptyText(n.List)
+		emptyText(n.ElseList)
 	case *textparse.WithNode:
-		inlineBranch(&n.BranchNode)
-	case *textparse.TemplateNode:
-		if n.Pipe != nil {
-			inlineHeadParens(n.Pipe)
-		}
-	case *textparse.PipeNode:
-		for len(n.Cmds) > 0 && len(n.Cmds[0].Args) == 1 {
-			inner, ok := n.Cmds[0].Args[0].(*textparse.PipeNode)
-			if !ok || len(inner.Decl) > 0 || len(inner.Cmds) == 0 {
-				break
-			}
-			n.Cmds = append(slices.Clone(inner.Cmds), n.Cmds[1:]...)
-		}
-		for _, c := range n.Cmds {
-			for _, arg := range c.Args {
-				inlineHeadParens(arg)
-			}
-		}
-	case *textparse.ChainNode:
-		inlineHeadParens(n.Node)
-	}
-}
-
-func inlineBranch(b *textparse.BranchNode) {
-	inlineHeadParens(b.Pipe)
-	inlineHeadParens(b.List)
-	if b.ElseList != nil {
-		inlineHeadParens(b.ElseList)
+		emptyText(n.List)
+		emptyText(n.ElseList)
 	}
 }
 

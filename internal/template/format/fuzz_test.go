@@ -1,13 +1,17 @@
 package format
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	htmltemplate "html/template"
 	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	texttemplate "text/template"
+	textparse "text/template/parse"
 
 	"golang.org/x/tools/txtar"
 
@@ -189,29 +193,117 @@ func addFixtureSeeds(f *testing.F) {
 }
 
 // fuzzRenderingProblem describes how output renders unlike input
-// through callerSrc ("" for the top level) with dot, or returns "".
-// Inputs that do not execute, or whose page the oracle cannot read, are
-// not checked.
+// through callerSrc ("" for the top level) with dot, or returns "", with
+// the default delimiters (renderingProblem).
 func fuzzRenderingProblem(input, output, callerSrc string, ctx rendering.Context, dot map[string]any) string {
-	want, err := render(input, callerSrc, dot)
-	if err != nil {
-		return ""
-	}
-	if _, err := rendering.Tokens(want, ctx, nil); err != nil {
-		return "" // the oracle cannot read the input's page (e.g. parsers disagree on a tag)
-	}
-	got, err := render(output, renamedCaller(callerSrc, output), dot)
-	if err != nil {
-		return fmt.Sprintf("output does not execute with %v: %v\ninput:  %q\noutput: %q", dot, err, input, output)
-	}
-	diff, err := rendering.Diff(want, got, ctx, nil)
-	if err != nil {
-		return fmt.Sprintf("rendering.Diff with %v: %v\ninput:  %q\noutput: %q", dot, err, input, output)
-	}
-	if diff != "" {
-		return fmt.Sprintf("rendering changed with %v: %s\ninput:  %q\noutput: %q\ninput rendered:  %q\noutput rendered: %q", dot, diff, input, output, want, got)
+	return renderingProblem(input, output, callerSrc, ctx, dot, oracleDelims{left: "{{", right: "}}"})
+}
+
+// oracleDelims are the action delimiters the oracle parses with.
+type oracleDelims struct{ left, right string }
+
+// renderingProblem describes how output runs unlike input through
+// callerSrc ("" for the top level) with dot, or returns "". It runs both
+// through each oracleEngines engine, independently of the formatter:
+// input fails exactly when output does, with the same kind of error
+// (renderErrorKind); when both render, the pages read alike
+// (rendering.Diff), unless the oracle cannot read the input's page
+// (e.g. parsers disagree on a tag).
+func renderingProblem(input, output, callerSrc string, ctx rendering.Context, dot map[string]any, d oracleDelims) string {
+	for _, e := range oracleEngines() {
+		want, inErr := e.render(input, callerSrc, d, dot)
+		got, outErr := e.render(output, renamedCaller(callerSrc, output), d, dot)
+		switch {
+		case inErr != nil && outErr != nil:
+			if in, out := renderErrorKind(inErr), renderErrorKind(outErr); in != out {
+				return fmt.Sprintf("%s: input fails with %s, output with %s, with %v\ninput error:  %v\noutput error: %v\ninput:  %q\noutput: %q", e.name, in, out, dot, inErr, outErr, input, output)
+			}
+			continue
+		case inErr != nil:
+			return fmt.Sprintf("%s: output executes with %v where input fails: %v\ninput:  %q\noutput: %q", e.name, dot, inErr, input, output)
+		case outErr != nil:
+			return fmt.Sprintf("%s: output does not execute with %v: %v\ninput:  %q\noutput: %q", e.name, dot, outErr, input, output)
+		}
+		if _, err := rendering.Tokens(want, ctx, nil); err != nil {
+			continue
+		}
+		diff, err := rendering.Diff(want, got, ctx, nil)
+		if err != nil {
+			return fmt.Sprintf("%s: rendering.Diff with %v: %v\ninput:  %q\noutput: %q", e.name, dot, err, input, output)
+		}
+		if diff != "" {
+			return fmt.Sprintf("%s: rendering changed with %v: %s\ninput:  %q\noutput: %q\ninput rendered:  %q\noutput rendered: %q", e.name, dot, diff, input, output, want, got)
+		}
 	}
 	return ""
+}
+
+// oracleEngine runs a template source, with callerSrc beside it when it
+// is not "" (then the caller runs, else the source).
+type oracleEngine struct {
+	name   string
+	render func(src, callerSrc string, d oracleDelims, dot map[string]any) (string, error)
+}
+
+// oracleEngines returns html/template, which checks escaper use and
+// contexts, and text/template, which runs each action as parsed with no
+// escaping in between.
+func oracleEngines() []oracleEngine {
+	return []oracleEngine{
+		{name: "html/template", render: func(src, callerSrc string, d oracleDelims, dot map[string]any) (string, error) {
+			tmpl, err := htmltemplate.New("input.gohtml").Delims(d.left, d.right).Parse(src)
+			if err != nil {
+				return "", fmt.Errorf("%w: %w", errOracleParse, err)
+			}
+			if callerSrc != "" {
+				if tmpl, err = tmpl.New("caller").Parse(callerSrc); err != nil {
+					return "", fmt.Errorf("%w: caller: %w", errOracleParse, err)
+				}
+			} else if tmpl.Tree == nil || textparse.IsEmptyTree(tmpl.Tree.Root) {
+				return "", nil
+			}
+			var buf bytes.Buffer
+			err = tmpl.Execute(&buf, dot)
+			return buf.String(), err
+		}},
+		{name: "text/template", render: func(src, callerSrc string, d oracleDelims, dot map[string]any) (string, error) {
+			tmpl, err := texttemplate.New("input.gohtml").Delims(d.left, d.right).Parse(src)
+			if err != nil {
+				return "", fmt.Errorf("%w: %w", errOracleParse, err)
+			}
+			if callerSrc != "" {
+				if tmpl, err = tmpl.New("caller").Parse(callerSrc); err != nil {
+					return "", fmt.Errorf("%w: caller: %w", errOracleParse, err)
+				}
+			} else if tmpl.Tree == nil || textparse.IsEmptyTree(tmpl.Tree.Root) {
+				return "", nil
+			}
+			var buf bytes.Buffer
+			err = tmpl.Execute(&buf, dot)
+			return buf.String(), err
+		}},
+	}
+}
+
+// errOracleParse marks an oracle engine's parse failure.
+var errOracleParse = errors.New("parse")
+
+// renderErrorKind names the kind of err an oracle engine returned: an
+// html/template error by its ErrorCode, a parse failure, or an
+// execution error.
+func renderErrorKind(err error) string {
+	var htmlErr *htmltemplate.Error
+	var execErr texttemplate.ExecError
+	switch {
+	case errors.As(err, &htmlErr):
+		return fmt.Sprintf("html/template ErrorCode %d", htmlErr.ErrorCode)
+	case errors.Is(err, errOracleParse):
+		return "a parse error"
+	case errors.As(err, &execErr):
+		return "an execution error"
+	default:
+		return "an error"
+	}
 }
 
 // unresolvedCalls returns the names src calls with {{template}} that no

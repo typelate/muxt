@@ -22,10 +22,11 @@ var errActionUnread = errors.New("format: an action could not be read for printi
 // actionShapes describes, in source order, every action-bearing node of
 // root as its parse tree has it, positions and spacing aside: kind,
 // trim markers, names, declarations, commands and their arguments, with
-// literals as written. The parentheses printPipe drops (commands)
-// are dropped here too, so a source and its formatted output have the
-// same shapes. Each name is written as rename returns it, when rename is
-// not nil. It is independent of the printer: it reads the tree only.
+// literals as written. The parentheses the printer drops (commands,
+// actionCommands) are dropped here too, so a source and its formatted
+// output have the same shapes. Each name is written as rename returns
+// it, when rename is not nil. It is independent of the printer: it reads
+// the tree only.
 func actionShapes(root *template.ListNode, rename func(string) string) []string {
 	if rename == nil {
 		rename = func(name string) string { return name }
@@ -38,7 +39,7 @@ func actionShapes(root *template.ListNode, rename func(string) string) []string 
 		case *template.ActionNode:
 			b.WriteString("action")
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
-			shapePipe(&b, n.Pipe)
+			shapePipe(&b, n.Pipe, actionCommands(n.Pipe))
 		case *template.IfNode:
 			shapeBranch(&b, "if", &n.BranchNode)
 		case *template.WithNode:
@@ -49,12 +50,12 @@ func actionShapes(root *template.ListNode, rename func(string) string) []string 
 			b.WriteString("template " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
 			if n.Pipe != nil {
-				shapePipe(&b, n.Pipe)
+				shapePipe(&b, n.Pipe, commands(n.Pipe))
 			}
 		case *template.BlockNode:
 			b.WriteString("block " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
-			shapePipe(&b, n.Pipe)
+			shapePipe(&b, n.Pipe, commands(n.Pipe))
 		case *template.DefineNode:
 			b.WriteString("define " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
@@ -131,7 +132,7 @@ func shapeBranch(b *strings.Builder, keyword string, n *template.BranchNode) {
 		b.WriteString(" else")
 	}
 	shapeTrims(b, n.StartTrimLeft, n.StartTrimRight, n.ElseTrimLeft, n.ElseTrimRight, n.EndTrimLeft, n.EndTrimRight)
-	shapePipe(b, n.Pipe)
+	shapePipe(b, n.Pipe, commands(n.Pipe))
 }
 
 func shapeTrims(b *strings.Builder, trims ...bool) {
@@ -146,7 +147,9 @@ func shapeTrims(b *strings.Builder, trims ...bool) {
 	b.WriteString("]")
 }
 
-func shapePipe(b *strings.Builder, p *template.PipeNode) {
+// shapePipe describes p with cmds, its commands as the formatter prints
+// them (commands, actionCommands).
+func shapePipe(b *strings.Builder, p *template.PipeNode, cmds []*template.CommandNode) {
 	b.WriteString(" pipe(")
 	for _, v := range p.Decl {
 		b.WriteString("decl " + strings.Join(v.Ident, ".") + " ")
@@ -154,7 +157,7 @@ func shapePipe(b *strings.Builder, p *template.PipeNode) {
 	if len(p.Decl) > 0 && p.IsAssign {
 		b.WriteString("assign ")
 	}
-	for _, c := range commands(p) {
+	for _, c := range cmds {
 		b.WriteString(" cmd(")
 		for _, arg := range c.Args {
 			shapeArg(b, arg)
@@ -167,7 +170,7 @@ func shapePipe(b *strings.Builder, p *template.PipeNode) {
 func shapeArg(b *strings.Builder, n template.Node) {
 	switch n := n.(type) {
 	case *template.PipeNode:
-		shapePipe(b, n)
+		shapePipe(b, n, commands(n))
 	case *template.ChainNode:
 		b.WriteString(" chain(")
 		shapeArg(b, n.Node)
@@ -207,14 +210,33 @@ func shapeArg(b *strings.Builder, n template.Node) {
 //   - a later stage in parentheses refuses the piped value (notAFunction)
 //     that a bare command takes as its last argument;
 //   - a parenthesized pipeline with a field chain, (index .M "k").Name;
-//   - one that declares a variable, ($y := .X);
-//   - one that calls the html or urlquery escaper, which html/template
-//     allows only as a pipeline's last command (callsPredefinedEscaper).
+//   - one that declares a variable, ($y := .X).
+//
+// A plain action's pipeline keeps one more kind (actionCommands).
 func commands(pl *template.PipeNode) []*template.CommandNode {
+	return inlineHead(pl, func(*template.PipeNode) bool { return false })
+}
+
+// actionCommands returns the commands of a plain action's pipeline, pl,
+// as the formatter prints them: as commands does, except that when pl
+// declares nothing a parenthesized first command that calls the html or
+// urlquery escaper stays (callsPredefinedEscaper). That pipeline is the
+// only one html/template checks for those escapers (escapeAction).
+func actionCommands(pl *template.PipeNode) []*template.CommandNode {
+	if len(pl.Decl) > 0 {
+		return commands(pl)
+	}
+	return inlineHead(pl, callsPredefinedEscaper)
+}
+
+// inlineHead flattens pl's parenthesized first command as commands
+// describes, stopping at a pipeline keep reports must stay in
+// parentheses.
+func inlineHead(pl *template.PipeNode, keep func(*template.PipeNode) bool) []*template.CommandNode {
 	cmds := pl.Commands
 	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
 		inner, ok := cmds[0].Args[0].(*template.PipeNode)
-		if !ok || len(inner.Decl) > 0 || len(inner.Commands) == 0 || callsPredefinedEscaper(inner) {
+		if !ok || len(inner.Decl) > 0 || keep(inner) {
 			break
 		}
 		cmds = append(slices.Clone(inner.Commands), cmds[1:]...)
@@ -223,10 +245,11 @@ func commands(pl *template.PipeNode) []*template.CommandNode {
 }
 
 // callsPredefinedEscaper reports whether a command of pl calls html or
-// urlquery. html/template allows those escapers only as the last command
-// of a pipeline and does not look inside a parenthesized pipeline, so
-// flattening one into the outer pipeline would make html/template reject
-// a template it accepted as written.
+// urlquery. In a plain action without declarations, html/template allows
+// those escapers only as the last command of the pipeline and does not
+// look inside a parenthesized pipeline, so flattening one into the
+// action's pipeline would make html/template reject a template it
+// accepted as written.
 func callsPredefinedEscaper(pl *template.PipeNode) bool {
 	for _, cmd := range pl.Commands {
 		if len(cmd.Args) == 0 {
@@ -517,8 +540,11 @@ func (e *emitter) printToken(tok *actionToken, left, right, indent string, lineS
 	if tok.pipe != nil && tok.head != "" {
 		p.b.WriteByte(' ')
 	}
-	if tok.pipe != nil {
-		p.pipe(tok.pipe, 0)
+	switch {
+	case tok.pipe != nil && tok.head == "":
+		p.pipe(tok.pipe, actionCommands(tok.pipe), 0)
+	case tok.pipe != nil:
+		p.pipe(tok.pipe, commands(tok.pipe), 0)
 	}
 	if strings.Contains(p.b.String(), "\n") {
 		p.newline(0)
@@ -556,10 +582,10 @@ func (p *actionPrinter) between(a, b template.Node) string {
 }
 
 // pipe prints pl, whose first line is at level: its declarations, then
-// its commands, one per line one level deeper when it splits. It
-// reports whether pl split: its stages or the arguments of one of its
-// commands.
-func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
+// cmds, its commands as printed (commands, actionCommands), one per line
+// one level deeper when it splits. It reports whether pl split: its
+// stages or the arguments of one of its commands.
+func (p *actionPrinter) pipe(pl *template.PipeNode, cmds []*template.CommandNode, level int) bool {
 	for i, v := range pl.Decl {
 		if i > 0 {
 			p.b.WriteString(", ")
@@ -573,7 +599,6 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
 			p.b.WriteString(" := ")
 		}
 	}
-	cmds := commands(pl)
 	split, splitArgs := p.stagesSplit(cmds), false
 	for i, c := range cmds {
 		switch {
@@ -596,9 +621,9 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, level int) bool {
 }
 
 // stagesSplit reports whether a pipeline's stages, cmds (commands), go
-// one per line: it has four
-// or more (when splitting is automatic), the source breaks between two
-// of them, or it has two or more and one command's arguments split.
+// one per line: it has four or more (when splitting is automatic), the
+// source breaks between two of them, or it has two or more and one
+// command's arguments split.
 func (p *actionPrinter) stagesSplit(cmds []*template.CommandNode) bool {
 	if p.auto && len(cmds) >= 4 {
 		return true
@@ -679,7 +704,7 @@ func (p *actionPrinter) operand(n template.Node, level int) {
 	switch n := n.(type) {
 	case *template.PipeNode:
 		p.b.WriteByte('(')
-		if p.pipe(n, level) {
+		if p.pipe(n, commands(n), level) {
 			p.newline(level)
 		}
 		p.b.WriteByte(')')

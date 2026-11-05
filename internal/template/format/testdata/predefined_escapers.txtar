@@ -1,18 +1,27 @@
-Parentheses around a pipeline that calls html or urlquery stay. html/template
-allows those escapers only as the last command of a pipeline and does not look
-inside a parenthesized one, so flattening it would make html/template reject
-the template (PR #208 review). A parenthesized first command that calls
-neither is still flattened.
+Parentheses around a first command that calls html or urlquery stay in a
+plain action without declarations. html/template checks only that pipeline
+for predefined escapers, allows them only as its last command, and does not
+look inside a parenthesized one, so flattening it would make html/template
+reject the template (PR #208 review). Elsewhere (a branch header, a
+declaration, an argument) html/template does not check, and the
+parentheses go as they do around any other call. A parenthesized first
+command that calls neither is flattened too.
 -- input.gohtml --
 <p>{{ (html .Name) | printf "%s" }}</p>
 <a href="/q?{{ (urlquery .Name) | printf "q=%s" }}">x</a>
 <p>{{ (printf "%s" .Name) | html }}</p>
 <p>{{ (html .Name) }}</p>
+<p>{{if (html .Name)}}y{{end}}</p>
+<p>{{$x := (html .Name)}}{{$x}}</p>
+<p>{{printf "%s" ((html .Name))}}</p>
 -- format.gohtml --
 <p>{{(html .Name) | printf "%s"}}</p>
 <a href="/q?{{(urlquery .Name) | printf "q=%s"}}">x</a>
 <p>{{printf "%s" .Name | html}}</p>
 <p>{{(html .Name)}}</p>
+<p>{{if html .Name}}y{{end}}</p>
+<p>{{$x := html .Name}}{{$x}}</p>
+<p>{{printf "%s" (html .Name)}}</p>
 -- data/empty.json --
 {}
 -- data/truthy.json --
