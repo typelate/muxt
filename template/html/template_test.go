@@ -586,8 +586,16 @@ func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
 		element      string
 		stdlibRefuse bool
 	}{
-		{"script", true}, {"style", true}, {"textarea", true}, {"title", true},
-		{"xmp", false}, {"iframe", false}, {"noembed", false}, {"noframes", false}, {"noscript", false}, {"plaintext", false},
+		{"script", true},
+		{"style", true},
+		{"textarea", true},
+		{"title", true},
+		{"xmp", false},
+		{"iframe", false},
+		{"noembed", false},
+		{"noframes", false},
+		{"noscript", false},
+		{"plaintext", false},
 	} {
 		for _, src := range []string{
 			`{{define "a"}}<` + tt.element + `>{{end}}{{template "a"}}{{.}}`,
@@ -611,4 +619,64 @@ func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestActionsInAttributeControlStructuresAreEscaped states that output
+// in a quoted attribute value is escaped for the value under if, with and
+// range as it is outside them, whatever its type, and that a template
+// called there cannot end the value: html/template escapes it or refuses
+// the template.
+func TestActionsInAttributeControlStructuresAreEscaped(t *testing.T) {
+	const breakOut = `" onmouseover="alert(1)`
+	type data struct {
+		X, Y any
+	}
+	values := []any{
+		breakOut,
+		stdtemplate.HTML(breakOut),
+		stdtemplate.HTMLAttr(breakOut),
+		stdtemplate.URL(breakOut),
+		HTML(breakOut),
+		HTMLAttr(breakOut),
+	}
+	for _, src := range []string{
+		`<a title="{{if .X}}{{.Y}}{{end}}">x</a>`,
+		`<a title='{{if .X}}{{.Y}}{{end}}'>x</a>`,
+		`<a title="{{with .Y}}{{.}}{{end}}">x</a>`,
+		`<a title="{{range $i := 1}}{{$.Y}}{{end}}">x</a>`,
+		`<a title="p {{if .X}}q {{.Y}} r{{else}}s{{end}} t">x</a>`,
+		`<a title="{{if .X}}{{template "s" .Y}}{{end}}">x</a>{{define "s"}}{{.}}{{end}}`,
+	} {
+		for _, y := range values {
+			d := data{X: true, Y: y}
+			var stdlib strings.Builder
+			stdErr := stdtemplate.Must(stdtemplate.New("test").Parse(src)).Execute(&stdlib, d)
+			got := executeShim(t, src, d)
+			if strings.Contains(got, `onmouseover="`) || strings.Contains(got, `onmouseover='`) {
+				t.Errorf("shim output for %q with %T = %q: the value ends the attribute", src, y, got)
+			}
+			if stdErr == nil && isStdlibType(y) && got != stdlib.String() {
+				t.Errorf("shim output for %q with %T = %q, want stdlib's %q", src, y, got, stdlib.String())
+			}
+		}
+	}
+	for _, src := range []string{
+		`<a title="{{if .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}" onmouseover="alert(1){{end}}`,
+		`<a title="{{with .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}<b title="y">{{end}}`,
+	} {
+		got := executeShim(t, src, data{X: true})
+		if strings.Contains(got, `onmouseover="`) || strings.Contains(got, `title="y"`) {
+			t.Errorf("shim output for %q = %q: the called template ends the attribute", src, got)
+		}
+	}
+}
+
+// isStdlibType reports whether v is a plain string or one of
+// html/template's content types, whose output the shim must match.
+func isStdlibType(v any) bool {
+	switch v.(type) {
+	case string, stdtemplate.HTML, stdtemplate.HTMLAttr, stdtemplate.URL:
+		return true
+	}
+	return false
 }
