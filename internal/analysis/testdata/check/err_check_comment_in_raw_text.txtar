@@ -1,0 +1,28 @@
+A comment in <xmp>, whose content browsers show as raw text and
+html/template reads as HTML: html/template strips the comment browsers show.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<xmp>a<!-- c -->b</xmp>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:25: html/template strips this comment, but browsers read <xmp> content as raw text and keep it
+

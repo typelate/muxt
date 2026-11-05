@@ -18,7 +18,7 @@ exec go build -o build ./cmd
 {{end}}
 
 {{define "GET /form" }}
-	<form action"=/form" method="POST"></form>
+	<form action="/form" method="POST"></form>
 {{end}}
 
 -- go.mod --

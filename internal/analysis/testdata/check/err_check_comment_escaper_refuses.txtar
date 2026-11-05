@@ -1,0 +1,28 @@
+A template html/template refuses to execute: the escaper reads a <
+in the attribute names of the tag an {{if}} opens.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<li{{if true}} title="a" <!x>{{end}}>a</li>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:19: html/template refuses this template: "<" in attribute name: " <!x>"
+

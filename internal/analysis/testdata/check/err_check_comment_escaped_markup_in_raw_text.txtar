@@ -1,0 +1,28 @@
+A <! in <xmp>, whose content browsers show as raw text and html/template
+reads as HTML: html/template escapes it, so browsers show "&lt;".
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<xmp><!x></xmp>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:24: html/template escapes this "<!" as "&lt;", but browsers read <xmp> content as raw text and show the "&lt;"
+

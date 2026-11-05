@@ -70,7 +70,7 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 			errs = append(errs, err)
 		}
 		if !lt.Text {
-			errs = append(errs, reportHTMLComments(logger, lt.Set)...)
+			errs = append(errs, reportHTMLComments(logger, lt)...)
 		}
 
 		for _, position := range lt.NonLiteralCalls {
@@ -140,40 +140,58 @@ func reportDefinitionErrors(logger *log.Logger, variable source.Variable) error 
 	return err
 }
 
-// reportHTMLComments logs, for every template in an html/template set,
-// the comments and markup html/template writes as text a browser shows
-// (see htmlanalysis.CheckComments), and returns one error per diagnostic.
-func reportHTMLComments(logger *log.Logger, ts *html.Template) []error {
-	var positions []token.Position
-	messages := make(map[token.Position]string)
-	for _, t := range ts.Templates() {
-		if t.Tree == nil {
-			continue
+// reportHTMLComments logs where html/template writes the templates of an
+// html/template set otherwise than a browser reads them, and the errors
+// html/template refuses the templates the calls execute with (see
+// htmlanalysis.CheckComments). It returns one error per diagnostic.
+func reportHTMLComments(logger *log.Logger, variable source.Variable) []error {
+	trees := make(map[string]*template.Tree)
+	for _, t := range variable.Set.Templates() {
+		if t.Tree != nil {
+			trees[t.Name()] = t.Tree
 		}
-		for _, d := range htmlanalysis.CheckComments(t.Tree) {
-			at := t.Tree.PositionAt(d.Pos)
-			position := token.Position{
-				Filename: cmp.Or(t.Tree.Filepath, at.ParseName),
+	}
+	var roots []string
+	for _, c := range variable.Calls {
+		roots = append(roots, c.Template)
+	}
+	diags, err := htmlanalysis.CheckComments(trees, roots)
+	if err != nil {
+		logger.Println(err)
+		logger.Println()
+		return []error{err}
+	}
+	type report struct {
+		position token.Position
+		message  string
+	}
+	reports := make([]report, 0, len(diags))
+	for _, d := range diags {
+		at := d.Tree.PositionAt(d.Pos)
+		reports = append(reports, report{
+			position: token.Position{
+				Filename: cmp.Or(d.Tree.Filepath, at.ParseName),
 				Offset:   int(d.Pos),
 				Line:     at.Line,
 				Column:   at.Column,
-			}
-			if _, seen := messages[position]; seen {
-				continue
-			}
-			messages[position] = d.Message
-			positions = append(positions, position)
-		}
+			},
+			message: d.Message,
+		})
 	}
-	slices.SortFunc(positions, func(a, b token.Position) int {
-		return cmp.Or(strings.Compare(a.Filename, b.Filename), cmp.Compare(a.Offset, b.Offset))
+	slices.SortFunc(reports, func(a, b report) int {
+		return cmp.Or(
+			strings.Compare(a.position.Filename, b.position.Filename),
+			cmp.Compare(a.position.Offset, b.position.Offset),
+			strings.Compare(a.message, b.message),
+		)
 	})
-	errs := make([]error, 0, len(positions))
-	for _, position := range positions {
-		logger.Printf("%s: %s", position, messages[position])
-		errs = append(errs, errors.New(messages[position]))
+	reports = slices.CompactFunc(reports, func(a, b report) bool { return a == b })
+	errs := make([]error, 0, len(reports))
+	for _, r := range reports {
+		logger.Printf("%s: %s", r.position, r.message)
+		errs = append(errs, errors.New(r.message))
 	}
-	if len(positions) > 0 {
+	if len(reports) > 0 {
 		logger.Println()
 	}
 	return errs

@@ -1,0 +1,28 @@
+A <!-- in <title> content: html/template escapes it there, so browsers
+show the comment as text.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<title>Todo<!-- draft --></title>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:30: html/template writes this <!-- as text inside <title>; browsers show it
+

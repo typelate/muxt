@@ -2,17 +2,27 @@
 # start a tag is text, and a tag with an action or comment in its tag name
 # or attribute names is text with actions: muxt generates and checks the
 # template, and reports errors in those actions where html/template would,
-# along with each "<!" or "<?" html/template escapes as text.
+# along with each "<!" or "<?" html/template escapes as text. Some markup
+# html/template parses and then refuses to execute; a template nothing
+# executes holds it, and muxt check --allow-unused parses it and lists it.
+# Routed, it type checks, and check reports only the refusal.
 
 muxt generate --use-receiver-type=T
 stdout 'wrote template_routes.go: 1 route'
-muxt check
+muxt check --allow-unused
 stdout 'ok: 1 template'
-! stderr .
+cmpenv stderr want-unused.txt
 
 cp bad-template.gohtml template.gohtml
 ! muxt check
 cmpenv stderr want-err.txt
+
+# Routed, the refused markup type checks: html/template's refusal is the
+# only error.
+cp routed-refused template.gohtml
+muxt generate --use-receiver-type=T
+! muxt check
+cmpenv stderr want-refused.txt
 
 -- template.gohtml --
 {{define "GET / Index()"}}
@@ -24,6 +34,8 @@ cmpenv stderr want-err.txt
 <div data-{{.Result.Name}}="x">attribute name</div>
 <div {{/* c */}} class="a">comment in tag</div>
 <div class="b" {{- /* why */ -}}>trimmed comment in tag</div>
+{{end}}
+{{define "refused"}}
 <p>unclosed end tag</p
 {{if .Result.N}}<!-- {{end}} -->
 <!-- {{if .Result.N}} -->x{{end}}
@@ -43,6 +55,33 @@ cmpenv stderr want-err.txt
 <p>a <!x {{.Result.Bogus}}> b</p>
 {{if .Result.N}}<!{{end}}>
 {{end}}
+-- want-unused.txt --
+Unused templates (allowed by --allow-unused):
+  - $WORK/template.gohtml:18:22: "raw text"
+  - $WORK/template.gohtml:11:21: "refused"
+-- routed-refused --
+{{define "GET / Index()"}}
+<p>1 < 2</p>
+<p>I <3 templates</p>
+<p>back <- here</p>
+<{{.Result.Tag}}>tag</{{.Result.Tag}}>
+<h{{.Result.N}}>heading</h{{.Result.N}}>
+<div data-{{.Result.Name}}="x">attribute name</div>
+<div {{/* c */}} class="a">comment in tag</div>
+<div class="b" {{- /* why */ -}}>trimmed comment in tag</div>
+{{end}}
+{{define "GET /refused Index()"}}
+<p>unclosed end tag</p
+{{if .Result.N}}<!-- {{end}} -->
+<!-- {{if .Result.N}} -->x{{end}}
+{{if .Result.N}}<!--{{else}}-->{{end}}
+{{template "raw text" .Result}}
+{{end}}
+{{define "raw text"}}<script>{{/* c */}}var n = {{.N}};</script
+{{end}}
+-- want-refused.txt --
+$WORK/template.gohtml:11:34: html/template refuses this template: "<" in attribute name: "<!-- "
+
 -- want-err.txt --
 $WORK/template.gohtml:6:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 $WORK/template.gohtml:7:6: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->

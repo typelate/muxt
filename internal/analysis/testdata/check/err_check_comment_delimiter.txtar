@@ -1,0 +1,28 @@
+A comment browsers end at --!> while html/template strips through the
+next -->, hiding the markup between.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<p><!-- draft --!><b>shown by browsers</b>--></p>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:22: browsers end this comment at the "--!>" at 1:33 but html/template strips through the "-->" at 1:61, hiding the markup between
+

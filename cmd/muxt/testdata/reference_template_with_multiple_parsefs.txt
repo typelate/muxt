@@ -26,7 +26,7 @@ checking endpoint POST /form
 {{end}}
 
 {{define "GET /form" }}
-	<form action"=/form" method="POST"></form>
+	<form action="/form" method="POST"></form>
 {{end}}
 
 -- go.mod --

@@ -1,0 +1,28 @@
+A <! that starts no comment or doctype: html/template escapes it, so
+browsers show the bogus comment as text.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "index"}}<p><![if !IE]>shown</p>{{end}}
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+index.gohtml:1:22: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+
