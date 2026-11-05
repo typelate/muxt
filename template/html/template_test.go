@@ -482,3 +482,21 @@ func TestControlStructureAgainstANameMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestActionAfterAClosingQuoteMatchesStdlib states that an action written
+// right after an attribute's closing quote is in attribute position, not
+// part of the attribute's value.
+func TestActionAfterAClosingQuoteMatchesStdlib(t *testing.T) {
+	for _, src := range []string{
+		`<ul id="i-{{.}}"{{if .}} hidden{{end}} role="alert">x</ul>`,
+		`<ul id="x"{{if not .}} hidden{{end}}>x</ul>`,
+		`<ul id="i"{{with .}} title="{{.}}"{{end}}>x</ul>`,
+	} {
+		for _, data := range []string{"e", ""} {
+			want := executeStdlib(t, src, data)
+			if got := executeShim(t, src, data); got != want {
+				t.Errorf("shim output for %q with %q = %q, want stdlib's %q", src, data, got, want)
+			}
+		}
+	}
+}

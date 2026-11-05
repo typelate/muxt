@@ -244,13 +244,27 @@ func (t *Tree) htmlParseAttribute(nameToken lex.Token) (*HTMLAttributeNode, erro
 	attr.HasValue = true
 
 	// ParseTree value parts (may be multiple tokens with template actions interleaved).
+	var quote byte // the quote a quoted value opened with
+	closed := false
 	for {
 		token := t.next()
 		switch token.Type {
 		case lex.TokenTypeHTMLAttrValue:
+			v := token.Value
+			if len(attr.Value) == 0 && (strings.HasPrefix(v, `"`) || strings.HasPrefix(v, "'")) {
+				quote = v[0]
+				v = v[1:]
+			}
+			closed = quote != 0 && strings.HasSuffix(v, string(quote))
 			attr.Value = append(attr.Value, t.newText(token.Pos, token.End, token.Value))
 			attr.end = token.End
 		case lex.TokenTypeLeftDelim:
+			if closed {
+				// An action after the closing quote is in attribute
+				// position (class="x"{{if .Y}} hidden{{end}}).
+				t.backup()
+				return attr, nil
+			}
 			// Check if this is {{end}} or {{else}} — if so, it terminates
 			// a control structure body, not the attribute value.
 			next := t.nextNonSpace()
