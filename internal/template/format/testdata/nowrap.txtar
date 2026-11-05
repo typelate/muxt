@@ -1,0 +1,37 @@
+white-space: nowrap collapses runs of white space exactly like normal; it
+only stops wrapping. Per CSS Text 3 (https://www.w3.org/TR/css-text-3/#white-space-property),
+only pre, pre-wrap and break-spaces preserve spaces and pre-line preserves
+line breaks, so a define body called under nowrap is re-indented. The
+two-keyword form (collapse nowrap) means the same.
+-- input.gohtml --
+<style>main p { white-space: nowrap; } main li { white-space: collapse nowrap; }</style>
+{{define "GET /x X()"}}{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+<main>
+<p>x</p>
+<p>a
+     b</p>
+<ul>
+<li>c
+  d</li>
+</ul>
+</main>
+</body>
+{{end}}
+-- format.gohtml --
+<style>main p { white-space: nowrap; } main li { white-space: collapse nowrap; }</style>
+{{define "GET /x X()"}}{{template "p" .}}{{end}}
+{{define "p"}}
+<body>
+	<main>
+		<p>x</p>
+		<p>a
+			b</p>
+		<ul>
+			<li>c
+				d</li>
+		</ul>
+	</main>
+</body>
+{{end}}
