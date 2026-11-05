@@ -327,4 +327,9 @@ func TestCheckComments_stopsAtFirstWrite(t *testing.T) {
 	if got := checkComments(t, `<p>{{range 1000000000}}<!x>{{end}}</p>`, []string{"test.gohtml"}); len(got) != 1 {
 		t.Errorf("CheckComments = %q, want the escaped <!", got)
 	}
+	// A loop before the template's first output would run in full: the
+	// oracle writes a space first so the failing writer stops it too.
+	if got := checkComments(t, `{{range 1000000000}}{{end}}<p><!x></p>`, []string{"test.gohtml"}); len(got) != 1 {
+		t.Errorf("CheckComments = %q, want the escaped <! after a loop with no output", got)
+	}
 }

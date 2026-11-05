@@ -229,7 +229,7 @@ func (o *escapeOracle) parse(templates map[string]*template.Tree) error {
 		}
 		parsedTree := pt.Copy()
 		parsedTree.Name = name
-		pt = parsedTree.Copy()
+		pt = writingFirst(parsedTree.Copy())
 		if _, err := o.set.AddParseTree(name, pt); err != nil {
 			return fmt.Errorf("html/template cannot add %q: %w", name, err)
 		}
@@ -334,11 +334,25 @@ func (o *escapeOracle) endsInTextAfter(name, text string) bool {
 	return !refused
 }
 
+// writingFirst puts a one-space text node at the start of tree, so that
+// executing it writes before any other node runs: the failing writer then
+// stops a loop that comes before the template's first output. The node is
+// not in the oracle's snapshot, so the comparison never sees it, and a
+// space at the start of text changes nothing the escaper decides.
+func writingFirst(tree *parse.Tree) *parse.Tree {
+	if tree.Root == nil {
+		return tree
+	}
+	first := &parse.TextNode{NodeType: parse.NodeText, Text: []byte(" ")}
+	tree.Root.Nodes = append([]parse.Node{first}, tree.Root.Nodes...)
+	return tree
+}
+
 // parsedSet returns a new html/template set of the templates as parsed.
 func (o *escapeOracle) parsedSet() (*htmltemplate.Template, bool) {
 	set := htmltemplate.New("")
 	for _, name := range slices.Sorted(maps.Keys(o.stdlib)) {
-		if _, err := set.AddParseTree(name, o.stdlib[name].parsed.Copy()); err != nil {
+		if _, err := set.AddParseTree(name, writingFirst(o.stdlib[name].parsed.Copy())); err != nil {
 			return nil, false // parse added the same trees to the oracle's set
 		}
 	}
