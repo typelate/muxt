@@ -769,3 +769,119 @@ func TestRangeInAnAttributeBranchMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestActionsInATagMatchStdlib states that an action in a start tag is
+// escaped for where it stands, as in html/template: an action that
+// writes an attribute name writes ZgotmplZ unless its value is letters
+// and digits naming a plain attribute, so data cannot name an event
+// handler or write a value, and an action that writes nothing in an
+// unquoted value writes ZgotmplZ, under a control structure too, so the
+// value cannot take the next attribute for itself. This holds in a tag
+// the parser leaves as text, such as <p {{.Y}}=v>. The spaces between
+// attributes are compared collapsed.
+func TestActionsInATagMatchStdlib(t *testing.T) {
+	collapse := func(s string) string {
+		return strings.ReplaceAll(strings.Join(strings.Fields(s), " "), " >", ">")
+	}
+	type data struct {
+		X    bool
+		Y, Z any
+		L    []string
+	}
+	const handler = `onclick=alert(1)`
+	values := []data{
+		{X: true, Y: ``, Z: handler},
+		{X: true, Y: `a b`, Z: `z`},
+		{X: false, Y: `y`, Z: handler},
+		{X: true, Y: `y`, Z: `z`, L: []string{``, ``}},
+		{X: true, Y: handler, Z: `z`},
+		{X: true, Y: `x ` + handler, Z: `z`},
+		{X: true, Y: `javascript:alert(1)`, Z: `z`},
+		{X: true, Y: `title`, Z: `z`},
+		{X: true, Y: `onclick`, Z: `z`},
+		{X: true, Y: `HREF`, Z: `z`},
+		{X: true, Y: `Hidden`, Z: `z`},
+		{X: true, Y: nil, Z: `z`},
+		{X: true, Y: stdtemplate.HTMLAttr(`title="t"`), Z: `z`},
+	}
+	for _, src := range []string{
+		// An action that writes nothing in an unquoted value.
+		`<a title={{.Y}} class="{{.Z}}">t</a>`,
+		`<a title={{if .X}}{{.Y}}{{end}} class="{{.Z}}">t</a>`,
+		`<a title={{with .Y}}{{.}}{{end}} class="{{.Z}}">t</a>`,
+		`<a title={{range .L}}{{.}}{{end}} class="{{.Z}}">t</a>`,
+		`<a title={{if .X}}{{.Y}}{{else}}n{{end}} class="{{.Z}}">t</a>`,
+		`<a title=a{{if .X}}{{.Y}}{{end}} class="{{.Z}}">t</a>`,
+		`<a title={{if .X}}{{.Y}}{{end}}b class="{{.Z}}">t</a>`,
+		`<a title={{if .X}}{{.Y}}{{end}}>t</a>`,
+		`<p title='{{if .X}}{{.Y}}{{end}}' class="{{.Z}}">t</p>`,
+		// An action that writes an attribute name.
+		`<p {{.Y}}>t</p>`,
+		`<p {{.Y}} class="{{.Z}}">t</p>`,
+		`<p {{if .X}}{{.Y}}{{end}}>t</p>`,
+		// The same in a tag the parser leaves as text.
+		`<p {{.Y}}=v>t</p>`,
+		`<p data-{{.Y}}=v>t</p>`,
+		`<p {{.Y}}=v class={{.Z}}>t</p>`,
+		`<p {{.Y}}=v class={{if .X}}{{.Z}}{{end}} id=i>t</p>`,
+		`<p {{.Y}}=v class="{{.Z}}" id='{{.Z}}'>t</p>`,
+		`<p id=i {{.Y}} {{.Z}}=1 hidden>t</p>`,
+		`<p {{.Y}}=v {{if .X}}lang=en{{else}}lang=fr{{end}}>t</p>`,
+		`</p {{.Y}}=v>{{.Z}}`,
+	} {
+		for _, d := range values {
+			var stdlib strings.Builder
+			if err := stdtemplate.Must(stdtemplate.New("test").Parse(src)).Execute(&stdlib, d); err != nil {
+				t.Fatalf("html/template refuses %q: %v", src, err)
+			}
+			want := collapse(stdlib.String())
+			if got := collapse(executeShim(t, src, d)); got != want {
+				t.Errorf("shim output for %q with %+v = %q, want stdlib's %q", src, d, got, want)
+			}
+		}
+	}
+}
+
+// TestNilInterfaceMatchesStdlib states that an action whose value is a
+// nil interface writes nothing in HTML text and in an attribute value,
+// as in html/template.
+func TestNilInterfaceMatchesStdlib(t *testing.T) {
+	type data struct{ Y any }
+	for _, src := range []string{
+		`<p>{{.Y}}</p>`,
+		`<p title="{{.Y}}">x</p>`,
+		`<p title="{{if true}}{{.Y}}{{end}}">x</p>`,
+		`<p title={{.Y}}>x</p>`,
+	} {
+		want := executeStdlib(t, src, data{})
+		if got := executeShim(t, src, data{}); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
+		}
+	}
+}
+
+// TestActionInATagTheEngineCannotFollowIsRefused states that an action
+// in a tag the parser leaves as text fails to execute where the engine
+// cannot tell what it writes: after branches that end in different
+// places, where html/template refuses the template.
+func TestActionInATagTheEngineCannotFollowIsRefused(t *testing.T) {
+	type data struct {
+		X    bool
+		Y, Z string
+	}
+	for _, src := range []string{
+		`<p {{.Y}}=v {{if .X}}title={{end}}{{.Z}}>t</p>`,
+		`<p {{.Y}}=v {{range .Y}}title="{{end}}{{.Z}}>t</p>`,
+		`<p {{.Y}}=v title=a"{{.Z}}>t</p>`,
+	} {
+		d := data{X: true, Y: "y", Z: "onclick=alert(1)"}
+		if err := stdtemplate.Must(stdtemplate.New("test").Parse(src)).Execute(io.Discard, d); err == nil {
+			t.Fatalf("html/template executes %q", src)
+		}
+		tmpl := Must(New("test").Parse(src))
+		var sb strings.Builder
+		if err := tmpl.Execute(&sb, d); err == nil {
+			t.Errorf("shim executes %q: %q", src, sb.String())
+		}
+	}
+}

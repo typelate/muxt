@@ -883,6 +883,23 @@ func printableValue(v reflect.Value) any {
 
 var stringerType = reflect.TypeFor[fmt.Stringer]()
 
+// htmlActionText is the text an action with the value v writes in HTML,
+// before escaping, with the trust of v: nothing for a nil interface,
+// which html/template skips, and "<no value>" for no value at all.
+func (s *state) htmlActionText(v reflect.Value) (string, Trust, error) {
+	if !v.IsValid() {
+		return "<no value>", TrustNone, nil
+	}
+	if v.Kind() == reflect.Interface && v.IsNil() {
+		return "", TrustNone, nil
+	}
+	iface := printableValue(v)
+	if iface == nil {
+		return "", TrustNone, s.errorf("can't print %s of type %s", v, v.Type())
+	}
+	return fmt.Sprint(iface), s.trustOf(v), nil
+}
+
 // Variable management
 
 func (s *state) push(name string, value reflect.Value) {
@@ -998,22 +1015,12 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 			}
 			attrs = append(attrs, attr)
 		case *ActionNode:
-			// Action in attribute position — evaluate and treat result as attribute text.
-			a.count.Add(1)
-			val, err := s.evalPipeline(dot, a.Pipe)
+			attr, ok, err := s.evalAttrNameAction(dot, a)
 			if err != nil {
 				return nil, err
 			}
-			if !val.IsValid() {
-				continue
-			}
-			iface := printableValue(val)
-			if iface == nil {
-				return nil, s.errorf("can't print %s of type %s", val, val.Type())
-			}
-			text := fmt.Sprint(iface)
-			if text != "" {
-				attrs = append(attrs, sourceAttr{Attribute: html.Attribute{Val: text}})
+			if ok {
+				attrs = append(attrs, attr)
 			}
 		case *IfNode:
 			branch, err := s.walkHTMLAttrBranch(dot, &a.BranchNode, "if")
@@ -1064,6 +1071,27 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		s.markup.leaveOpen(n)
 	}
 	return n, nil
+}
+
+// evalAttrNameAction evaluates an action that stands where an attribute
+// does, as in <p {{.Name}}>: its output is an attribute name, filtered as
+// html/template filters it, so that data cannot name an event handler or
+// write a value. It reports false for an action that writes nothing, a
+// variable declaration.
+func (s *state) evalAttrNameAction(dot reflect.Value, action *ActionNode) (sourceAttr, bool, error) {
+	action.count.Add(1)
+	val, err := s.evalPipeline(dot, action.Pipe)
+	if err != nil {
+		return sourceAttr{}, false, err
+	}
+	if len(action.Pipe.Decl) > 0 {
+		return sourceAttr{}, false, nil
+	}
+	text, trust, err := s.htmlActionText(val)
+	if err != nil {
+		return sourceAttr{}, false, err
+	}
+	return sourceAttr{Attribute: html.Attribute{Key: htmlNameFilter(text, trust)}}, true, nil
 }
 
 func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (sourceAttr, error) {
@@ -1146,12 +1174,10 @@ func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote by
 				raw.WriteString(escapeAttrText("<no value>", quote))
 				continue
 			}
-			iface := printableValue(value)
-			if iface == nil {
-				return s.errorf("can't print %s of type %s", value, value.Type())
+			text, trust, err := s.htmlActionText(value)
+			if err != nil {
+				return err
 			}
-			trust := s.trustOf(value)
-			text := fmt.Sprint(iface)
 			text, _ = escapeAction(text, vn.HTMLContext, trust)
 			val.WriteString(text)
 			raw.WriteString(escapeAttrText(text, quote))
@@ -1182,11 +1208,22 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	if len(action.Pipe.Decl) > 0 {
 		return nil, nil
 	}
+	if ctx := action.HTMLContext; ctx != nil && ctx.State == "tag" {
+		return s.walkHTMLTagAction(val, ctx)
+	}
 	if !val.IsValid() {
 		return []*html.Node{{
 			Type: html.TextNode,
 			Data: "<no value>",
 		}}, nil
+	}
+	inScript := action.HTMLContext != nil && action.HTMLContext.State == "text" && action.HTMLContext.Element == "script"
+	if val.Kind() == reflect.Interface && val.IsNil() && !inScript {
+		// html/template skips a nil interface.
+		if s.attrSource != nil {
+			return []*html.Node{{Type: html.TextNode}}, nil
+		}
+		return nil, nil
 	}
 	iface := printableValue(val)
 	if iface == nil {
@@ -1212,6 +1249,11 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	text := fmt.Sprint(iface)
 	text, raw := escapeAction(text, action.HTMLContext, trust)
 	if text == "" {
+		if s.attrSource != nil {
+			// In an attribute value an action that writes nothing is
+			// still written: an unquoted value must not end there.
+			return []*html.Node{{Type: html.TextNode}}, nil
+		}
 		return nil, nil
 	}
 	nodeType := html.TextNode
@@ -1222,6 +1264,25 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 		Type: nodeType,
 		Data: text,
 	}}, nil
+}
+
+// walkHTMLTagAction writes the value of an action in a tag the parser
+// left as text, which the engine writes as it is: the value is escaped
+// for where in the tag the action stands, an attribute name or a value.
+func (s *state) walkHTMLTagAction(val reflect.Value, ctx *HTMLContext) ([]*html.Node, error) {
+	text, trust, err := s.htmlActionText(val)
+	if err != nil {
+		return nil, err
+	}
+	switch ctx.tag {
+	case tagAttrName:
+		text = htmlNameFilter(text, trust)
+	case tagValue:
+		text = escapeAttrText(escapeAttrValue(text, ctx, trust), ctx.quote)
+	default:
+		return nil, s.errorf("an action in a tag that muxt's template engine cannot follow")
+	}
+	return []*html.Node{{Type: html.RawNode, Data: text}}, nil
 }
 
 func (s *state) walkHTMLIf(dot reflect.Value, n *IfNode) ([]*html.Node, error) {
@@ -1423,6 +1484,9 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 
 func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.Node, error) {
 	t.count.Add(1)
+	if t.HTMLContext != nil && t.HTMLContext.State == "tag" {
+		return nil, errTemplateInTag(s, t)
+	}
 	if s.depth >= maxExecDepth {
 		return nil, s.errorf("exceeded maximum template depth (%d)", maxExecDepth)
 	}
@@ -1720,25 +1784,12 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAtt
 			}
 			result = append(result, attrs...)
 		case *ActionNode:
-			// Action in attribute list context
-			n.count.Add(1)
-			val, err := s.evalPipeline(dot, n.Pipe)
+			attr, ok, err := s.evalAttrNameAction(dot, n)
 			if err != nil {
 				return nil, err
 			}
-			if len(n.Pipe.Decl) > 0 {
-				continue
-			}
-			if !val.IsValid() {
-				continue
-			}
-			iface := printableValue(val)
-			if iface == nil {
-				return nil, s.errorf("can't print %s of type %s", val, val.Type())
-			}
-			text := fmt.Sprint(iface)
-			if text != "" {
-				result = append(result, sourceAttr{Attribute: html.Attribute{Val: text}})
+			if ok {
+				result = append(result, attr)
 			}
 		case *TemplateNode:
 			return nil, errTemplateInTag(s, n)

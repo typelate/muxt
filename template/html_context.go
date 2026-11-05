@@ -8,7 +8,9 @@ import (
 // HTMLContext represents the escaping context at a template action node.
 // This mirrors the key fields of html/template's context type.
 type HTMLContext struct {
-	State   string // "text", "attr", "comment"
+	// State is "text", "attr", "comment", or "tag" for an action in a
+	// tag the parser left as text, such as <p {{.Name}}=v>.
+	State   string
 	Element string // element name (e.g., "script", "style", "p") or ""
 	Attr    string // attribute name (e.g., "href", "onclick", "class") or ""
 	// JSContext is set when State is "text" and Element is "script". It is
@@ -19,6 +21,12 @@ type HTMLContext struct {
 	// A ${...} interpolation inside a template literal is an expression
 	// position, so it reports "expr", not "tpl".
 	JSContext string
+
+	// For State "tag": where in the tag the action stands, and the
+	// quote of the attribute value it is in (0 for an unquoted value).
+	// Attr is then the leading text of that value's attribute name.
+	tag   tagPart
+	quote byte
 }
 
 // AnnotateHTMLContexts walks the tree and sets HTMLContext on each ActionNode
@@ -34,14 +42,10 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 	switch n := n.(type) {
 	case *ListNode:
 		if n != nil {
-			for _, child := range n.Nodes {
-				annotateContexts(child, parentElement, parentAttr, inComment, jsCtx)
-			}
+			annotateSiblings(n.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
 		}
 	case *HTMLDocumentFragmentNode:
-		for _, child := range n.Children {
-			annotateContexts(child, "", "", false, "")
-		}
+		annotateSiblings(n.Children, "", "", false, "", tagScan{})
 	case *HTMLElementNode:
 		for _, attr := range n.Attr {
 			annotateContexts(attr, n.TagName, "", false, "")
@@ -50,9 +54,7 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 			annotateScriptChildren(n.Children)
 			return
 		}
-		for _, child := range n.Children {
-			annotateContexts(child, n.TagName, "", false, "")
-		}
+		annotateSiblings(n.Children, n.TagName, "", false, "", tagScan{})
 	case *HTMLAttributeNode:
 		attrName := ""
 		if len(n.Key) > 0 {
@@ -105,17 +107,75 @@ func annotateContexts(n Node, parentElement, parentAttr string, inComment bool, 
 		annotateBranch(&n.BranchNode, parentElement, parentAttr, inComment, jsCtx)
 	case *DefineNode:
 		if n.Body != nil {
-			for _, child := range n.Body.Nodes {
-				annotateContexts(child, parentElement, parentAttr, inComment, jsCtx)
-			}
+			annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
 		}
 	case *BlockNode:
 		if n.Body != nil {
-			for _, child := range n.Body.Nodes {
-				annotateContexts(child, parentElement, parentAttr, inComment, jsCtx)
-			}
+			annotateSiblings(n.Body.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{})
 		}
 	}
+}
+
+// annotateSiblings annotates nodes, which follow one another in the
+// source, and returns the tag scan after them. It follows the text among
+// them from the scan t, so that an action in a tag the parser left as
+// text gets the context of where in the tag it stands. Text in an
+// attribute value, in a comment, or in an element whose content is not
+// HTML text is not followed.
+func annotateSiblings(nodes []Node, parentElement, parentAttr string, inComment bool, jsCtx string, t tagScan) tagScan {
+	if parentAttr != "" || inComment || changesTextContext(parentElement) {
+		for _, n := range nodes {
+			annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+		}
+		return t
+	}
+	branch := func(b *BranchNode, isRange bool) tagScan {
+		body, otherwise := t, t
+		if b.List != nil {
+			body = annotateSiblings(b.List.Nodes, parentElement, parentAttr, inComment, jsCtx, t)
+			if isRange && body != t {
+				// A later iteration starts where the first ended, so
+				// the body's actions have no one context.
+				annotateSiblings(b.List.Nodes, parentElement, parentAttr, inComment, jsCtx, tagScan{part: tagUnknown})
+				body = tagScan{part: tagUnknown}
+			}
+		}
+		if b.ElseList != nil {
+			otherwise = annotateSiblings(b.ElseList.Nodes, parentElement, parentAttr, inComment, jsCtx, t)
+		}
+		return body.join(otherwise)
+	}
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *TextNode:
+			t = t.text(string(n.Text))
+		case *ActionNode:
+			if t.part == tagNone || len(n.Pipe.Decl) > 0 {
+				annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+				continue
+			}
+			var at tagScan
+			at, t = t.action()
+			n.HTMLContext = at.context()
+		case *TemplateNode:
+			if t.part == tagNone {
+				annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+				continue
+			}
+			var at tagScan
+			at, t = t.action()
+			n.HTMLContext = at.context()
+		case *IfNode:
+			t = branch(&n.BranchNode, false)
+		case *WithNode:
+			t = branch(&n.BranchNode, false)
+		case *RangeNode:
+			t = branch(&n.BranchNode, true)
+		default:
+			annotateContexts(n, parentElement, parentAttr, inComment, jsCtx)
+		}
+	}
+	return t
 }
 
 func annotateBranch(n *BranchNode, parentElement, parentAttr string, inComment bool, jsCtx string) {

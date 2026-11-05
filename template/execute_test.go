@@ -1306,12 +1306,12 @@ func TestHTMLNoValueMagicStringInAttrValue(t *testing.T) {
 }
 
 func TestHTMLNoValueMagicStringInAttrAction(t *testing.T) {
-	// An action in attribute position that evaluates to literally "<no value>"
-	// should produce output, not be silently suppressed by matching a magic string.
-	// The value will be HTML-escaped in the output.
+	// An action in attribute position writes an attribute name. A value
+	// that is literally "<no value>" names no attribute, so it is
+	// ZgotmplZ, as in html/template: not dropped by matching a magic
+	// string, and not written as it is.
 	result := execHTML(t, "test", `<div {{.}}>x</div>`, "<no value>")
-	assert.Contains(t, result, "no value", "literal '<no value>' string should not be dropped")
-	assert.NotEqual(t, "<div>x</div>", result, "attribute should not be silently dropped")
+	assert.Equal(t, "<div ZgotmplZ>x</div>", result)
 }
 
 // --- Issue L4: isJSEventAttr overly broad ---
