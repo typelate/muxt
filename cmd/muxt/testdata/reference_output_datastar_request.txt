@@ -2,20 +2,22 @@
 # request carries "Datastar-Request: true" (every Datastar @get/@post/...
 # action sends it). A plain GET route can branch on it: a fragment for an
 # action, the full page for a direct visit, with Vary so caches keep both.
-# Without the flag the method does not exist.
+# Without the flag the method does not exist, and an SSE route's data
+# does not have it either.
 
 muxt generate --use-receiver-type=Server
-! grep 'DatastarRequest' template_routes.go
 ! muxt check
-stderr 'DatastarRequest'
+stderr 'DatastarRequest not found on TemplateData'
 
 muxt generate --output-datastar --use-receiver-type=Server
 muxt check
 
-grep 'func \(data \*TemplateData\[R, T\]\) DatastarRequest\(\) bool' template_routes.go
-! grep 'func \(m \*SSETemplateData\[R, T\]\) DatastarRequest' template_routes.go
-
 exec go test -race -count=1
+
+cp sse-template template.gohtml
+muxt generate --output-datastar --use-receiver-type=Server
+! muxt check
+stderr 'DatastarRequest not found on SSETemplateData'
 
 -- template.gohtml --
 {{- define "GET /list List(ctx)" -}}
@@ -31,6 +33,10 @@ exec go test -race -count=1
 
 {{- define "list" -}}
 <ul id="list">{{ range . }}<li>{{ . }}</li>{{ end }}</ul>
+{{- end -}}
+-- sse-template --
+{{- define "GET /stream sse(Stream(ctx, execute))" -}}
+{{- if .DatastarRequest -}}<li>{{ .Result }}</li>{{- end -}}
 {{- end -}}
 -- go.mod --
 module server
@@ -53,6 +59,8 @@ var templates = template.Must(template.ParseFS(templatesFS, "*"))
 type Server struct{}
 
 func (Server) List(context.Context) []string { return []string{"one", "two"} }
+
+func (Server) Stream(_ context.Context, send func(string) error) { _ = send("one") }
 -- server_test.go --
 package server
 
