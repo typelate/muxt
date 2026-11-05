@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // Comment diagnostic codes.
