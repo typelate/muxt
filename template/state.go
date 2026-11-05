@@ -27,6 +27,7 @@ type state struct {
 	finder     TreeFinder
 	missingKey MissingKeyMode
 	trust      TrustFunc
+	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
 }
 
 // trustOf reports the Trust classification for a value, returning
@@ -64,7 +65,7 @@ func (s *state) executeHTML(dot reflect.Value, frag *HTMLDocumentFragmentNode) e
 	if err != nil {
 		return err
 	}
-	return render(s.wr, doc)
+	return render(s.wr, doc, s.markup)
 }
 
 // executeHTMLList handles a ListNode that contains HTML nodes directly
@@ -83,7 +84,7 @@ func (s *state) executeHTMLList(dot reflect.Value, list *ListNode) error {
 	for _, n := range nodes {
 		doc.AppendChild(n)
 	}
-	return render(s.wr, doc)
+	return render(s.wr, doc, s.markup)
 }
 
 // rootHasHTMLNodes reports whether a ListNode contains any HTML-specific
@@ -1041,6 +1042,11 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		return nil, err
 	}
 	elem.closeCount.Add(1)
+	if !elem.Closed && !elem.Void && !elem.Misnested {
+		// html/template writes no end tag the source does not, as when
+		// one template opens <main> and another closes it.
+		s.markup.leaveOpen(n)
+	}
 	return n, nil
 }
 
@@ -1402,6 +1408,7 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 		funcs:  s.funcs,
 		finder: s.finder,
 		trust:  s.trust,
+		markup: s.markup,
 		vars:   []variable{{"$", newDot}},
 	}
 	s.cp.Init(tree)

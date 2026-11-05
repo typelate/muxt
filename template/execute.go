@@ -118,6 +118,7 @@ func ExecuteTemplate(w io.Writer, tree *Tree, data any, opts ...Option) error {
 	}
 	s := &state{
 		wr:         w,
+		markup:     new(markup),
 		tree:       tree,
 		cp:         cfg.cp,
 		funcs:      cfg.funcs,

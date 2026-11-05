@@ -7,20 +7,41 @@ import (
 	"golang.org/x/net/html"
 )
 
+// markup records what a template's source writes that an html.Node
+// cannot hold, so that render can write it as html/template would. A nil
+// *markup records nothing.
+type markup struct {
+	open map[*html.Node]bool // elements whose source writes no end tag
+}
+
+// leaveOpen records that the source writes no end tag for n.
+func (m *markup) leaveOpen(n *html.Node) {
+	if m == nil {
+		return
+	}
+	if m.open == nil {
+		m.open = make(map[*html.Node]bool)
+	}
+	m.open[n] = true
+}
+
 // render writes the HTML representation of the node tree to w.
 // It matches html/template's output format:
 //   - Void elements use <br> not <br/>
 //   - Attributes with empty values are rendered bare (e.g., disabled not disabled="")
 //   - Text content and attribute values are properly escaped
-func render(w io.Writer, n *html.Node) error {
-	return renderNode(w, n)
+//   - An element m says the source leaves open has no end tag
+func render(w io.Writer, n *html.Node, m *markup) error {
+	return renderer{m}.node(w, n)
 }
 
-func renderNode(w io.Writer, n *html.Node) error {
+type renderer struct{ m *markup }
+
+func (r renderer) node(w io.Writer, n *html.Node) error {
 	switch n.Type {
 	case html.DocumentNode:
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if err := renderNode(w, c); err != nil {
+			if err := r.node(w, c); err != nil {
 				return err
 			}
 		}
@@ -31,7 +52,7 @@ func renderNode(w io.Writer, n *html.Node) error {
 		return err
 
 	case html.ElementNode:
-		return renderElement(w, n)
+		return r.element(w, n)
 
 	case html.CommentNode:
 		if _, err := io.WriteString(w, "<!--"); err != nil {
@@ -62,7 +83,7 @@ func renderNode(w io.Writer, n *html.Node) error {
 	}
 }
 
-func renderElement(w io.Writer, n *html.Node) error {
+func (r renderer) element(w io.Writer, n *html.Node) error {
 	if _, err := io.WriteString(w, "<"); err != nil {
 		return err
 	}
@@ -90,11 +111,14 @@ func renderElement(w io.Writer, n *html.Node) error {
 			}
 			continue
 		}
-		if err := renderNode(w, c); err != nil {
+		if err := r.node(w, c); err != nil {
 			return err
 		}
 	}
 
+	if r.m != nil && r.m.open[n] {
+		return nil
+	}
 	if _, err := io.WriteString(w, "</"); err != nil {
 		return err
 	}

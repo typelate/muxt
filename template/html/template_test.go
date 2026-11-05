@@ -519,3 +519,21 @@ func TestTrimMarkersInElementsMatchStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestElementsLeftOpenMatchStdlib states that the engine writes no end
+// tag the source does not: an element left open, as when one template
+// opens <main> and another closes it, or closed by its parent's end tag.
+func TestElementsLeftOpenMatchStdlib(t *testing.T) {
+	for _, src := range []string{
+		`<main>`,
+		`{{define "head"}}<div class="page"><main>{{end}}{{define "foot"}}</main></div>{{end}}{{template "head"}}<h1>{{.}}</h1>{{template "foot"}}`,
+		`<ul><li>a<li>{{.}}</ul>`,
+		`<p>a<p>{{.}}`,
+		`{{if .}}<div class="a">{{else}}<div class="b">{{end}}x</div>`,
+	} {
+		want := executeStdlib(t, src, "x")
+		if got := executeShim(t, src, "x"); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
+		}
+	}
+}
