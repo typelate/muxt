@@ -512,6 +512,13 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 	case *IdentifierNode:
 		return s.evalFunction(dot, n, cmd, cmd.Args, final)
 	case *PipeNode:
+		if len(cmd.Args) > 1 || final.IsValid() {
+			// Name the stage as text/template does (its commands, without the
+			// parentheses) rather than by source span.
+			var stage strings.Builder
+			n.writeTo(&stage)
+			return missingVal, s.errorf("can't give argument to non-function %s", stage.String())
+		}
 		return s.evalPipeline(dot, n)
 	case *VariableNode:
 		return s.evalVariableNode(dot, n, cmd.Args, final)

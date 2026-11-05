@@ -57,6 +57,9 @@ func TestActionFormat(t *testing.T) {
 		// argument to non-function" in text/template; bare, the piped
 		// value is printf's last argument.
 		{name: "parens of a later stage with arguments are kept", src: `<p>{{.X | (printf "%s" .A)}}</p>`},
+		// Given an argument, head parentheses are the same refusal;
+		// inlined, the argument would become printf's.
+		{name: "head parens given an argument are kept", src: `<p>{{(printf "%s" .A) .X}}</p>`},
 		{name: "parens of arguments of a call are kept", src: "<p>{{if and (eq .A true) (not .B)}}x{{end}}</p>"},
 		// Declared inside, a variable is the parenthesized pipeline's.
 		{name: "parens with a declaration are kept", src: "<p>{{($y := .X)}}</p>"},

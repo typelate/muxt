@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	htmltemplate "html/template"
+	"io"
 	"strings"
 	"testing"
+	texttemplate "text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1390,5 +1392,39 @@ func TestAndOrValueSelection(t *testing.T) {
 		{`{{"x" | and 1}}`, "x"}, // piped: and(1, "x"), both truthy -> last
 	} {
 		assert.Equal(t, tc.want, execText(t, "v", tc.tmpl, nil), tc.tmpl)
+	}
+}
+
+// TestErrorArgumentToParenthesizedStage pins text/template's refusal to pipe a
+// value into, or pass an argument to, a parenthesized pipeline stage: exec.go
+// evalCommand rejects a *parse.PipeNode first word given arguments or a final
+// value with "can't give argument to non-function". The engine must refuse it
+// too, with the same message, rather than drop the value and render the
+// parenthesized pipeline.
+func TestErrorArgumentToParenthesizedStage(t *testing.T) {
+	data := struct{ X, A string }{X: "x", A: "a"}
+	for _, tmpl := range []string{
+		`{{.X | (printf "%s" .A)}}`,
+		`{{(printf "%s" .A) .X}}`,
+	} {
+		t.Run(tmpl, func(t *testing.T) {
+			stdlibErr := texttemplate.Must(texttemplate.New("test").Parse(tmpl)).Execute(io.Discard, data)
+			require.Error(t, stdlibErr, "text/template")
+			htmlErr := htmltemplate.Must(htmltemplate.New("test").Parse(tmpl)).Execute(io.Discard, data)
+			require.Error(t, htmlErr, "html/template")
+
+			// text/template prefixes "template: NAME:LINE:COL: executing ... at <...>: ".
+			_, want, ok := strings.Cut(stdlibErr.Error(), ">: ")
+			require.True(t, ok, "text/template error shape: %v", stdlibErr)
+			require.Contains(t, want, `can't give argument to non-function`)
+			assert.ErrorContains(t, htmlErr, want, "html/template")
+
+			err := execTextErr(t, "test", tmpl, data)
+			require.Error(t, err, "engine text")
+			assert.Equal(t, want, err.Error(), "engine text")
+			err = execHTMLErr(t, "test", tmpl, data)
+			require.Error(t, err, "engine html")
+			assert.Equal(t, want, err.Error(), "engine html")
+		})
 	}
 }
