@@ -214,7 +214,7 @@ func shapeArg(b *strings.Builder, n template.Node) {
 //
 // A plain action's pipeline keeps one more kind (actionCommands).
 func commands(pl *template.PipeNode) []*template.CommandNode {
-	return inlineHead(pl, func(*template.PipeNode) bool { return false })
+	return pl.HeadCommands()
 }
 
 // actionCommands returns the commands of a plain action's pipeline, pl,
@@ -229,9 +229,9 @@ func actionCommands(pl *template.PipeNode) []*template.CommandNode {
 	return inlineHead(pl, callsPredefinedEscaper)
 }
 
-// inlineHead flattens pl's parenthesized first command as commands
-// describes, stopping at a pipeline keep reports must stay in
-// parentheses.
+// inlineHead flattens pl's parenthesized first command as
+// [template.PipeNode.HeadCommands] does, stopping at a pipeline keep
+// reports must stay in parentheses.
 func inlineHead(pl *template.PipeNode, keep func(*template.PipeNode) bool) []*template.CommandNode {
 	cmds := pl.Commands
 	for len(cmds) > 0 && len(cmds[0].Args) == 1 {

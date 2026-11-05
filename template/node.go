@@ -1,6 +1,7 @@
 package template
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -125,6 +126,31 @@ func (p *PipeNode) Start() lex.Pos { return p.start }
 func (p *PipeNode) End() lex.Pos   { return p.end }
 func (p *PipeNode) String() string { return p.tr.src(p.start, p.End()) }
 func (p *PipeNode) tree() *Tree    { return p.tr }
+
+// HeadCommands returns p's commands as text/template evaluates them: when
+// the first command is a whole parenthesized pipeline that declares no
+// variables, with no arguments after it, that pipeline's commands take
+// its place, repeatedly. {{if (and .A .B)}} runs as {{if and .A .B}} and
+// {{template "x" (.)}} as {{template "x" .}}, since evaluating such a
+// command evaluates the inner pipeline and goes on with its value.
+//
+// Parentheses anywhere else are kept, because the evaluator treats them
+// differently: an argument, (.X) in {{print (.X)}}; a later stage,
+// {{.X | (print)}}; one followed by a field chain, {{(.X).Y}}; and one
+// that declares a variable, {{($y := .X)}}. p's declarations do not
+// matter. HeadCommands does not modify p; when it replaces nothing the
+// result is p.Commands itself.
+func (p *PipeNode) HeadCommands() []*CommandNode {
+	cmds := p.Commands
+	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
+		inner, ok := cmds[0].Args[0].(*PipeNode)
+		if !ok || len(inner.Decl) > 0 {
+			break
+		}
+		cmds = append(slices.Clone(inner.Commands), cmds[1:]...)
+	}
+	return cmds
+}
 
 func (p *PipeNode) writeTo(sb *strings.Builder) {
 	if len(p.Decl) > 0 {
