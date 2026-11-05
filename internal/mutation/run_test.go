@@ -170,25 +170,29 @@ func TestRunPlanRunsThePrePassAfterTheBaseline(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, p := runnerFixture(t, tt.kills)
 			var ran []string
-			report, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
-				ran = append(ran, "baseline")
-				return "", nil
-			}, func(context.Context) error {
-				ran = append(ran, "pre-pass")
-				// What cover does once findUnreached has found every
-				// mutant unreached, or none.
-				p.coverage = coverage{}
-				if !tt.reached {
-					for i := range p.mutants {
-						p.unreached = append(p.unreached, UnreachedMutant{mutantIndex: i})
+			report, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, suite{
+				baseline: func(context.Context) (string, error) {
+					ran = append(ran, "baseline")
+					return "", nil
+				},
+				prePass: func(context.Context) error {
+					ran = append(ran, "pre-pass")
+					// What cover does once findUnreached has found every
+					// mutant unreached, or none.
+					p.coverage = coverage{}
+					if !tt.reached {
+						for i := range p.mutants {
+							p.unreached = append(p.unreached, UnreachedMutant{mutantIndex: i})
+						}
+						p.skipUnreached()
 					}
-					p.skipUnreached()
-				}
-				return nil
-			}, func(context.Context, string) (Status, []string, error) {
-				ran = append(ran, "mutant")
-				return StatusKilled, nil, nil
-			}, nil)
+					return nil
+				},
+				verdict: func(context.Context, string) (Status, []string, error) {
+					ran = append(ran, "mutant")
+					return StatusKilled, nil, nil
+				},
+			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, ran, "what ran, in order")
 			assert.Equal(t, tt.skipped, report.Skipped, "skipped")
@@ -203,11 +207,15 @@ func TestRunPlanStopsWhenThePrePassIsInterrupted(t *testing.T) {
 	t.Parallel()
 	_, p := runnerFixture(t, []bool{true})
 	_, verdict := neverRun(t)
-	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
-		return "", nil
-	}, func(context.Context) error {
-		return context.Canceled
-	}, verdict, nil)
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, suite{
+		baseline: func(context.Context) (string, error) {
+			return "", nil
+		},
+		prePass: func(context.Context) error {
+			return context.Canceled
+		},
+		verdict: verdict,
+	})
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -219,7 +227,7 @@ func TestRunPlanDryRun(t *testing.T) {
 	baseline, verdict := neverRun(t)
 
 	var status strings.Builder
-	report, err := runPlan(t.Context(), p, Configuration{DryRun: true}, t.TempDir(), &status, baseline, noPrePass(t), verdict, nil)
+	report, err := runPlan(t.Context(), p, Configuration{DryRun: true}, t.TempDir(), &status, suite{baseline: baseline, prePass: noPrePass(t), verdict: verdict})
 	require.NoError(t, err)
 	assert.True(t, report.DryRun, "the report says it was a dry run")
 	assert.Empty(t, status.String(), "status")
@@ -234,9 +242,13 @@ func TestRunPlanStopsWhenTheBaselineFails(t *testing.T) {
 	_, verdict := neverRun(t)
 	failed := exitStatusOne(t)
 
-	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
-		return "--- FAIL: TestIndex (0.00s)\n", failed
-	}, noPrePass(t), verdict, nil)
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, suite{
+		baseline: func(context.Context) (string, error) {
+			return "--- FAIL: TestIndex (0.00s)\n", failed
+		},
+		prePass: noPrePass(t),
+		verdict: verdict,
+	})
 
 	baselineErr, ok := errors.AsType[*BaselineFailedError](err)
 	require.True(t, ok, "runPlan = %v, want a failing baseline", err)
@@ -252,9 +264,13 @@ func TestRunPlanStopsWhenTheSuiteCannotRun(t *testing.T) {
 	_, verdict := neverRun(t)
 	cannotRun := errors.New("go: no such tool")
 
-	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, func(context.Context) (string, error) {
-		return "", cannotRun
-	}, noPrePass(t), verdict, nil)
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), nil, suite{
+		baseline: func(context.Context) (string, error) {
+			return "", cannotRun
+		},
+		prePass: noPrePass(t),
+		verdict: verdict,
+	})
 
 	require.ErrorIs(t, err, cannotRun, "runPlan: the error go gave")
 	assert.NotErrorAs(t, err, new(*BaselineFailedError), "a command that could not run is not a failing baseline")
@@ -273,18 +289,21 @@ func TestRunPlanStopsWhenCancelled(t *testing.T) {
 		mu       sync.Mutex
 		overlays []string
 	)
-	_, err := runPlan(ctx, p, Configuration{Workers: 2}, t.TempDir(), nil, func(context.Context) (string, error) {
-		return "", nil
-	}, nil, func(ctx context.Context, overlay string) (Status, []string, error) {
-		mu.Lock()
-		overlays = append(overlays, overlay)
-		if len(overlays) == 2 {
-			cancel()
-		}
-		mu.Unlock()
-		<-ctx.Done()
-		return "", nil, ctx.Err()
-	}, nil)
+	_, err := runPlan(ctx, p, Configuration{Workers: 2}, t.TempDir(), nil, suite{
+		baseline: func(context.Context) (string, error) {
+			return "", nil
+		},
+		verdict: func(ctx context.Context, overlay string) (Status, []string, error) {
+			mu.Lock()
+			overlays = append(overlays, overlay)
+			if len(overlays) == 2 {
+				cancel()
+			}
+			mu.Unlock()
+			<-ctx.Done()
+			return "", nil, ctx.Err()
+		},
+	})
 
 	require.ErrorIs(t, err, context.Canceled, "runPlan after cancelling")
 	assert.Len(t, overlays, 2, "mutants started: none after the context was cancelled")
@@ -302,14 +321,17 @@ func TestRunPlanReportsWhatTheSuiteSaid(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true, false, true})
 
 	var status strings.Builder
-	got, err := runPlan(t.Context(), p, Configuration{Verbose: true}, t.TempDir(), &status, func(context.Context) (string, error) {
-		return "", nil
-	}, nil, func(_ context.Context, overlay string) (Status, []string, error) {
-		if strings.Contains(readMutated(t, overlay), "K") {
-			return StatusKilled, nil, nil
-		}
-		return StatusMissed, nil, nil
-	}, nil)
+	got, err := runPlan(t.Context(), p, Configuration{Verbose: true}, t.TempDir(), &status, suite{
+		baseline: func(context.Context) (string, error) {
+			return "", nil
+		},
+		verdict: func(_ context.Context, overlay string) (Status, []string, error) {
+			if strings.Contains(readMutated(t, overlay), "K") {
+				return StatusKilled, nil, nil
+			}
+			return StatusMissed, nil, nil
+		},
+	})
 	require.NoError(t, err)
 	assert.Equal(t, 2, got.Killed, "killed")
 	assert.Equal(t, 1, got.Missed, "missed")
@@ -336,14 +358,17 @@ func TestRunPlanProgressWithoutVerbose(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, p := runnerFixture(t, []bool{true, false, true})
 			var status strings.Builder
-			_, err := runPlan(t.Context(), p, tt.config, t.TempDir(), &status, func(context.Context) (string, error) {
-				return "", nil
-			}, nil, func(_ context.Context, overlay string) (Status, []string, error) {
-				if strings.Contains(readMutated(t, overlay), "K") {
-					return StatusKilled, nil, nil
-				}
-				return StatusMissed, nil, nil
-			}, nil)
+			_, err := runPlan(t.Context(), p, tt.config, t.TempDir(), &status, suite{
+				baseline: func(context.Context) (string, error) {
+					return "", nil
+				},
+				verdict: func(_ context.Context, overlay string) (Status, []string, error) {
+					if strings.Contains(readMutated(t, overlay), "K") {
+						return StatusKilled, nil, nil
+					}
+					return StatusMissed, nil, nil
+				},
+			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.lines, strings.Count(strings.TrimSpace(status.String()), "\n")+1, "status lines:\n%s", status.String())
 			if tt.config.Progress {

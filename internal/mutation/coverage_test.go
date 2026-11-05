@@ -544,11 +544,14 @@ func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
 	_, p := runnerFixture(t, []bool{true})
 	p.prePass = 2 * time.Second
 	var status strings.Builder
-	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), &status, func(context.Context) (string, error) {
-		return "", nil
-	}, nil, func(context.Context, string) (Status, []string, error) {
-		return StatusKilled, nil, nil
-	}, nil)
+	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), &status, suite{
+		baseline: func(context.Context) (string, error) {
+			return "", nil
+		},
+		verdict: func(context.Context, string) (Status, []string, error) {
+			return StatusKilled, nil, nil
+		},
+	})
 	require.NoError(t, err)
 	first, _, _ := strings.Cut(status.String(), "\n")
 	assert.Contains(t, first, ", coverage pre-pass 2s, ", "preamble %q", first)
@@ -562,11 +565,14 @@ func TestRunPlanPreambleNamesTheEngine(t *testing.T) {
 		p.prePass = 2 * time.Second
 		p.engine = "engine github.com/typelate/muxt@v0.19.0"
 		var status strings.Builder
-		_, err := runPlan(t.Context(), p, Configuration{Verbose: verbose}, t.TempDir(), &status, func(context.Context) (string, error) {
-			return "", nil
-		}, nil, func(context.Context, string) (Status, []string, error) {
-			return StatusKilled, nil, nil
-		}, nil)
+		_, err := runPlan(t.Context(), p, Configuration{Verbose: verbose}, t.TempDir(), &status, suite{
+			baseline: func(context.Context) (string, error) {
+				return "", nil
+			},
+			verdict: func(context.Context, string) (Status, []string, error) {
+				return StatusKilled, nil, nil
+			},
+		})
 		require.NoError(t, err)
 		first, _, _ := strings.Cut(status.String(), "\n")
 		if verbose {
@@ -691,14 +697,17 @@ func TestRunPlanSkipsUnreachedMutants(t *testing.T) {
 				mu   sync.Mutex
 				runs int
 			)
-			report, err := runPlan(t.Context(), p, config, t.TempDir(), nil, func(context.Context) (string, error) {
-				return "", nil
-			}, nil, func(context.Context, string) (Status, []string, error) {
-				mu.Lock()
-				defer mu.Unlock()
-				runs++
-				return StatusKilled, nil, nil
-			}, nil)
+			report, err := runPlan(t.Context(), p, config, t.TempDir(), nil, suite{
+				baseline: func(context.Context) (string, error) {
+					return "", nil
+				},
+				verdict: func(context.Context, string) (Status, []string, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					runs++
+					return StatusKilled, nil, nil
+				},
+			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.runs, runs, "mutant runs")
 			assert.Equal(t, tt.skipped, report.Skipped, "skipped")

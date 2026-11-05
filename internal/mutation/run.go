@@ -170,22 +170,38 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 		p.engine = engine
 		return nil
 	}
-	return runPlan(ctx, p, config, scratch, status, tester.baseline, prePass, tester.verdict, tester.recheck)
+	return runPlan(ctx, p, config, scratch, status, suite{
+		baseline: tester.baseline,
+		prePass:  prePass,
+		verdict:  tester.verdict,
+		recheck:  tester.recheck,
+	})
+}
+
+// suite is how runPlan runs the tests: baseline runs them unmutated,
+// prePass runs the coverage pre-pass, verdict runs them against a mutant's
+// overlay, and recheck reruns the tests that failed against one. prePass
+// and recheck may be nil.
+type suite struct {
+	baseline func(context.Context) (string, error)
+	prePass  func(context.Context) error
+	verdict  func(ctx context.Context, overlay string) (Status, []string, error)
+	recheck  func(ctx context.Context, overlay string, failed []string) (Status, error)
 }
 
 // runPlan runs an enumerated plan: the suite once unmutated, then the
 // coverage pre-pass, and then each mutant against its own overlay, which
 // it writes under scratch and removes.
 //
-// Running the suite arrives as baseline, prePass and verdict rather than
-// being built here, because it is the slow part of a run and everything
-// this decides -- what a failing baseline means, what the preamble says,
-// what a dry run returns -- is then worth stating without it. prePass
-// runs only after the baseline passes, and only when a mutant is left to
-// run: a failing baseline stops the run before the engine is tried, and
-// the pre-pass is worth a run of the suite only when there is a mutant
-// for it to skip. It records what it learns in p; nil means none.
-func runPlan(ctx context.Context, p *plan, config Configuration, scratch string, status io.Writer, baseline func(context.Context) (string, error), prePass func(context.Context) error, verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
+// Running the suite arrives as s rather than being built here, because
+// it is the slow part of a run and everything this decides -- what a
+// failing baseline means, what the preamble says, what a dry run
+// returns -- is then worth stating without it. s.prePass runs only after
+// the baseline passes, and only when a mutant is left to run: a failing
+// baseline stops the run before the engine is tried, and the pre-pass is
+// worth a run of the suite only when there is a mutant for it to skip. It
+// records what it learns in p; nil means none.
+func runPlan(ctx context.Context, p *plan, config Configuration, scratch string, status io.Writer, s suite) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -204,7 +220,7 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 	}
 
 	started := time.Now()
-	if out, err := baseline(ctx); err != nil {
+	if out, err := s.baseline(ctx); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
@@ -217,8 +233,8 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 	}
 	took := time.Since(started)
 
-	if prePass != nil && p.runnable() > 0 {
-		if err := prePass(ctx); err != nil {
+	if s.prePass != nil && p.runnable() > 0 {
+		if err := s.prePass(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -259,8 +275,8 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 
 	runner := &mutantRunner{
 		plan:      p,
-		test:      verdict,
-		recheck:   recheck,
+		test:      s.verdict,
+		recheck:   s.recheck,
 		scratch:   mutants,
 		progress:  progress,
 		templates: templates,
