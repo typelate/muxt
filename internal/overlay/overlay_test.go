@@ -247,6 +247,96 @@ func TestGoLinesSeesARaise(t *testing.T) {
 	}
 }
 
+// TestUpgradesSeesARaise states that Upgrades reads what the go command
+// did to the modfile copy: a target requiring an older golang.org/x/net
+// than muxt does has it raised to muxt's in the copy once go test has
+// built a package that imports html/template. go list does not write the
+// raise; go test does.
+func TestUpgradesSeesARaise(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go test with the modfile copy")
+	}
+	realGOROOT(t)
+	target := writeTarget(t, map[string]string{
+		"go.mod":    "module example.com/target\n\ngo 1.27\n\nrequire golang.org/x/net v0.30.0\n",
+		"a.go":      "package a\n\nimport \"html/template\"\n\nvar T = template.New(\"a\")\n",
+		"a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) { _ = T }\n",
+	})
+	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if got, err := files.Upgrades(); err != nil || len(got) != 0 {
+		t.Fatalf("Upgrades before go runs = %v, %v; want none", got, err)
+	}
+	if out, err := goCommand(target, "test", "-count=1", "-mod=mod", "-modfile="+files.ModFile, "-overlay="+files.Overlay, "./..."); err != nil {
+		t.Fatalf("go test: %v\n%s", err, out)
+	}
+	got, err := files.Upgrades()
+	if err != nil {
+		t.Fatalf("Upgrades: %v", err)
+	}
+	if len(got) != 1 || got[0].Path != "golang.org/x/net" || got[0].From != "v0.30.0" || got[0].To == "v0.30.0" {
+		t.Errorf("Upgrades = %+v; want golang.org/x/net raised from v0.30.0", got)
+	}
+}
+
+// TestUpgrades states which requirements Upgrades reports: the ones both
+// go.mod files have, raised in the copy, in the target's order, and never
+// muxt's own, which the copy sets.
+func TestUpgrades(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		target, copy string
+		want         []overlay.Upgrade
+	}{
+		{
+			name:   "none raised",
+			target: "module m\n\ngo 1.27\n\nrequire example.com/a v1.0.0\n",
+			copy:   "module m\n\ngo 1.27\n\nrequire example.com/a v1.0.0\n",
+		},
+		{
+			name:   "raised, in the target's order",
+			target: "module m\n\ngo 1.27\n\nrequire (\n\texample.com/b v1.0.0\n\texample.com/a v1.0.0\n\texample.com/c v1.2.0\n)\n",
+			copy:   "module m\n\ngo 1.27\n\nrequire (\n\texample.com/a v1.1.0\n\texample.com/b v2.0.0+incompatible\n\texample.com/c v1.2.0\n)\n",
+			want: []overlay.Upgrade{
+				{Path: "example.com/b", From: "v1.0.0", To: "v2.0.0+incompatible"},
+				{Path: "example.com/a", From: "v1.0.0", To: "v1.1.0"},
+			},
+		},
+		{
+			name:   "an indirect requirement",
+			target: "module m\n\ngo 1.27\n\nrequire example.com/a v1.0.0 // indirect\n",
+			copy:   "module m\n\ngo 1.27\n\nrequire example.com/a v1.0.1 // indirect\n",
+			want:   []overlay.Upgrade{{Path: "example.com/a", From: "v1.0.0", To: "v1.0.1"}},
+		},
+		{
+			name:   "only in the copy",
+			target: "module m\n\ngo 1.27\n",
+			copy:   "module m\n\ngo 1.27\n\nrequire example.com/a v1.0.0\n",
+		},
+		{
+			name:   "muxt's own requirement",
+			target: "module m\n\ngo 1.27\n\nrequire github.com/typelate/muxt v0.18.0\n",
+			copy:   "module m\n\ngo 1.27\n\nrequire github.com/typelate/muxt v0.19.0\n",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			files := overlay.Files{Target: filepath.Join(dir, "target.mod"), ModFile: filepath.Join(dir, "copy.mod")}
+			writeFile(t, files.Target, tt.target)
+			writeFile(t, files.ModFile, tt.copy)
+			got, err := files.Upgrades()
+			if err != nil {
+				t.Fatalf("Upgrades: %v", err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Upgrades = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGOROOT(t *testing.T) {
 	want := realGOROOT(t)
 	got, err := overlay.GOROOT(context.Background(), overlay.Toolchain{})

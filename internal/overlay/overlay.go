@@ -148,6 +148,59 @@ func (f Files) GoLines() (target, used string, err error) {
 	return target, used, nil
 }
 
+// Upgrade is a module the test target's go.mod requires that the modfile
+// copy requires at a newer version.
+type Upgrade struct {
+	Path, From, To string
+}
+
+// Upgrades returns the modules the test target's go.mod requires that the
+// modfile copy, as it is now, requires at a newer version, in the
+// target's order. Module requirements meet in the copy: the go command
+// raises the target's to the versions Module needs, and the pre-pass then
+// builds the target's tests against those. Module itself is left out;
+// the copy requires it at the version Write chose.
+func (f Files) Upgrades() ([]Upgrade, error) {
+	target, err := requires(f.Target)
+	if err != nil {
+		return nil, err
+	}
+	used, err := requires(f.ModFile)
+	if err != nil {
+		return nil, err
+	}
+	versions := make(map[string]string, len(used))
+	for _, r := range used {
+		versions[r.Path] = r.Version
+	}
+	var upgrades []Upgrade
+	for _, r := range target {
+		to, ok := versions[r.Path]
+		if r.Path == Module || !ok || semver.Compare(to, r.Version) <= 0 {
+			continue
+		}
+		upgrades = append(upgrades, Upgrade{Path: r.Path, From: r.Version, To: to})
+	}
+	return upgrades, nil
+}
+
+// requires is the modules a go.mod requires, in its order.
+func requires(goModPath string) ([]module.Version, error) {
+	b, err := os.ReadFile(goModPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading the requirements: %w", err)
+	}
+	f, err := modfile.ParseLax(goModPath, b, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reading the requirements: %w", err)
+	}
+	mods := make([]module.Version, len(f.Require))
+	for i, r := range f.Require {
+		mods[i] = r.Mod
+	}
+	return mods, nil
+}
+
 // goLine is the version of a go.mod's go directive, "" when it has none.
 func goLine(goModPath string) (string, error) {
 	b, err := os.ReadFile(goModPath)

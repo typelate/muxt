@@ -89,6 +89,34 @@ func TestTemplateCoverageWarnsOfARaisedGoLine(t *testing.T) {
 	assert.Equal(t, "warning: template coverage was computed at go 1.27 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
 }
 
+// TestTemplateCoverageWarnsOfNewerSharedModules states that a pre-pass in
+// which the go command raised a module both the engine and the test
+// target require, here golang.org/x/net in muxt's own go.mod, warns once,
+// naming the module and both versions, and still uses the coverage.
+func TestTemplateCoverageWarnsOfNewerSharedModules(t *testing.T) {
+	realGOROOT(t)
+	run := func(_ context.Context, engine overlay.Files, coverDir string) (*goTestOutput, error) {
+		b, err := os.ReadFile(engine.ModFile)
+		require.NoError(t, err)
+		var raised []string
+		for line := range strings.Lines(string(b)) {
+			if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == "golang.org/x/net" {
+				line = strings.Replace(line, fields[1], "v0.999.0", 1)
+			}
+			raised = append(raised, line)
+		}
+		require.NoError(t, os.WriteFile(engine.ModFile, []byte(strings.Join(raised, "")), 0o644))
+		writeFiles(t, coverDir, map[string]string{"1.cov": "mode: set\npage:1.1,1.8 1 1\n"})
+		return testOutput("ok  \tserver\t0.1s\n"), nil
+	}
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
+	require.NoError(t, err)
+	assert.NotNil(t, got, "the coverage is used")
+	w := warnings.String()
+	assert.Regexp(t, `^warning: the coverage pre-pass selected newer versions of modules your go.mod requires: golang.org/x/net v\S+ → v0.999.0; tests exercising them may take other paths\n$`, w, "warnings")
+}
+
 // TestTemplateCoverageOffline runs the pre-pass where the go command can
 // fetch nothing: the engine's golang.org/x/net is not in the module cache
 // and GOPROXY=off. The warning quotes the go command's reason, not a

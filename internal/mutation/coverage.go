@@ -100,6 +100,7 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 		return coverageUnknown(warn, err.Error()), engineNote(engine), nil
 	}
 	warnRaisedGoLine(warn, engine)
+	warnUpgrades(warn, engine)
 	return cov, engineNote(engine), nil
 }
 
@@ -137,6 +138,31 @@ func warnRaisedGoLine(warn io.Writer, engine overlay.Files) {
 	case used != target:
 		_, _ = fmt.Fprintf(warn, "warning: template coverage was computed at go %s (your go.mod says go %s): branches that depend on the older language semantics may be reported unreached\n", used, target)
 	}
+}
+
+// warnUpgrades writes one warning when the go command selected, in the
+// modfile copy, newer versions of modules the test target's go.mod
+// requires, because the engine requires them too: the pre-pass then ran
+// the tests against code they are not built with elsewhere, and a branch
+// the older version takes would read as unreached. The coverage is still
+// used.
+func warnUpgrades(warn io.Writer, engine overlay.Files) {
+	if warn == nil {
+		return
+	}
+	upgrades, err := engine.Upgrades()
+	if err != nil {
+		_, _ = fmt.Fprintf(warn, "warning: cannot tell which module versions template coverage was computed with: %v\n", err)
+		return
+	}
+	if len(upgrades) == 0 {
+		return
+	}
+	raised := make([]string, len(upgrades))
+	for i, u := range upgrades {
+		raised[i] = u.Path + " " + u.From + " → " + u.To
+	}
+	_, _ = fmt.Fprintf(warn, "warning: the coverage pre-pass selected newer versions of modules your go.mod requires: %s; tests exercising them may take other paths\n", strings.Join(raised, ", "))
 }
 
 // engineFailure is why coverage is unknown when the tests fail, or do not
