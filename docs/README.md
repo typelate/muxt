@@ -45,6 +45,7 @@ The [README](../README.md) introduces muxt.
 - [Templates Variable](reference/templates-variable.md): how muxt finds templates
 - [Type Checking](reference/type-checking.md): what `muxt check` verifies and what it cannot
 - [Package Layout](reference/package-layout.md)
+- [Template Engine](reference/template-engine.md): the public `template` packages, versioned with the CLI
 - [Known Issues](reference/known-issues.md)
 
 ## Explanation
