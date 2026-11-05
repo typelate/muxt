@@ -647,7 +647,11 @@ func (l *Scanner) htmlStartTagAt(i int) (isTag bool, textEnd int, name string) {
 		return false, l.htmlDegradedTagEnd(at, depth), name
 	}
 	if strings.HasPrefix(s[j:], ld) {
-		return degrade(j)
+		// An action against the name is in the name (<h{{.N}}>),
+		// unless it opens a list of attributes.
+		if !l.htmlActionOpensAttrs(j) {
+			return degrade(j)
+		}
 	}
 	skipSpace := func(k int) int {
 		for k < len(s) && isSpace(rune(s[k])) {
@@ -719,7 +723,7 @@ func (l *Scanner) htmlStartTagAt(i int) (isTag bool, textEnd int, name string) {
 				// An action written against the name is in the name,
 				// unless it ends the control structure the attribute
 				// is in ({{if .X}}hidden{{end}}).
-				if kind, _ := l.htmlActionAt(j); kind != htmlActionEnd && kind != htmlActionElse {
+				if kind, _ := l.htmlActionAt(j); kind != htmlActionEnd && kind != htmlActionElse && !l.htmlActionOpensAttrs(j) {
 					return degrade(j)
 				}
 				continue
@@ -839,6 +843,21 @@ const (
 	htmlActionEnd     // {{end}}
 	htmlActionDefine  // {{define}}
 )
+
+// htmlActionOpensAttrs reports whether the action at l.input[i], written
+// against a tag or attribute name, opens a control structure whose body
+// starts with a space: html/template reads that body as more attributes
+// (<li{{if .X}} hidden{{end}}>, formnovalidate{{if .X}} disabled{{end}}),
+// not as more of the name.
+func (l *Scanner) htmlActionOpensAttrs(i int) bool {
+	kind, end := l.htmlActionAt(i)
+	if kind != htmlActionOpen || end < 0 || end >= len(l.input) || !isSpace(rune(l.input[end])) {
+		return false
+	}
+	// A right trim marker removes the space.
+	body := l.input[i : end-len(l.Options.RightDelim)]
+	return len(body) < 2 || !hasRightTrimMarker(body[len(body)-2:])
+}
 
 // htmlActionAt classifies the template action whose left delimiter is at
 // l.input[i] and returns the offset just past its right delimiter, or -1
