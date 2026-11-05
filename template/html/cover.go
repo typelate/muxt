@@ -29,6 +29,13 @@ const CoverDisabledMarker = "muxt: template coverage export disabled:"
 // is this package's only mutable state. The environment can be read only
 // once per process, as there is no exit hook in which to flush a profile
 // collected in memory, so the export appends as it goes instead.
+//
+// It is package-level state against the "avoid package-level state" rule
+// of CLAUDE.md, knowingly: when this package stands in for html/template,
+// the user's code calls html/template's API and nothing else, so there is
+// no constructor or option through which an export could be passed, and
+// the environment variable, read once here, is the opt-in. Tests replace
+// it through useCoverExport, which is why it is a variable.
 var processCover = coverExportFor(os.Getenv(CoverEnv), os.Stderr)
 
 // coverExport appends the blocks of executed template nodes to a cover

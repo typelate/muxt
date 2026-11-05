@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"os"
 	"os/exec"
 	"regexp"
@@ -136,28 +137,84 @@ func (t goTest) coverage(ctx context.Context, engine overlay.Files, coverDir str
 // binary's and is kept.
 func withoutCoverFlags(args []string) []string {
 	kept := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "-args" || arg == "--args" {
-			return append(kept, args[i:]...)
-		}
-		name, _, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-		if !strings.HasPrefix(arg, "-") {
-			kept = append(kept, arg)
+	for f := range goTestFlags(args) {
+		switch f.name {
+		case "cover", "covermode", "coverprofile", "coverpkg":
 			continue
 		}
-		switch name {
-		case "cover":
-			continue
-		case "covermode", "coverprofile", "coverpkg":
-			if !hasValue && i+1 < len(args) {
-				i++
-			}
-			continue
-		}
-		kept = append(kept, arg)
+		kept = append(kept, f.args...)
 	}
 	return kept
+}
+
+// goTestFlag is one step of a walk over the caller's go test arguments.
+type goTestFlag struct {
+	// name is the flag's name without its dashes, "" for an argument
+	// that is not a flag, and "args" for the -args that hands the rest
+	// to the test binary.
+	name string
+
+	// value is the flag's value, after its = or, for a flag that takes
+	// one, the next argument; hasValue says whether it has one.
+	value    string
+	hasValue bool
+
+	// args are the arguments the step spans: the flag and its value, or
+	// for -args, everything from it on.
+	args []string
+}
+
+// takesValue reports whether a go test or build flag takes a value,
+// which without an = is the next argument. Any other flag, the test
+// binary's own among them, is read as one that takes none, as go test
+// reads a flag it does not know.
+func takesValue(name string) bool {
+	switch name {
+	case "asmflags", "bench", "benchtime", "blockprofile", "blockprofilerate",
+		"buildmode", "compiler", "count", "covermode", "coverpkg",
+		"coverprofile", "cpu", "cpuprofile", "exec", "fuzz",
+		"fuzzminimizetime", "fuzztime", "gccgoflags", "gcflags",
+		"installsuffix", "ldflags", "list", "memprofile", "memprofilerate",
+		"mod", "modfile", "mutexprofile", "mutexprofilefraction", "o",
+		"outputdir", "overlay", "p", "parallel", "pgo", "pkgdir",
+		"run", "shuffle", "skip", "tags", "timeout", "toolexec",
+		"trace", "vet":
+		return true
+	}
+	return false
+}
+
+// goTestFlags walks the caller's go test arguments as go test reads them,
+// one flag, with its value, at a time. It stops at -args, whose arguments
+// belong to the test binary, and yields them as one last step.
+func goTestFlags(args []string) iter.Seq[goTestFlag] {
+	return func(yield func(goTestFlag) bool) {
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if arg == "-args" || arg == "--args" {
+				yield(goTestFlag{name: "args", args: args[i:]})
+				return
+			}
+			if !strings.HasPrefix(arg, "-") {
+				// A value of a flag it did not know to take one, such
+				// as a test binary's own.
+				if !yield(goTestFlag{args: args[i : i+1]}) {
+					return
+				}
+				continue
+			}
+			name, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+			end := i + 1
+			if !hasValue && takesValue(name) && end < len(args) {
+				value, hasValue = args[end], true
+				end++
+			}
+			if !yield(goTestFlag{name: name, value: value, hasValue: hasValue, args: args[i:end]}) {
+				return
+			}
+			i = end - 1
+		}
+	}
 }
 
 // mutantOutputLimit is how much of one mutant's go test output is kept:
@@ -197,12 +254,8 @@ func onlyTests(names []string) *regexp.Regexp {
 
 // hasRunFlag reports whether the caller's go test flags select tests.
 func hasRunFlag(args []string) bool {
-	for _, arg := range args {
-		if arg == "-args" || arg == "--args" {
-			return false
-		}
-		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-		if strings.HasPrefix(arg, "-") && name == "run" {
+	for f := range goTestFlags(args) {
+		if f.name == "run" {
 			return true
 		}
 	}
@@ -460,18 +513,10 @@ func (o *goTestOutput) String() string {
 // instrumentation reads the packages it instruments from disk, which
 // would undo it.
 func CheckGoTestArgs(args []string) error {
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "-args" || arg == "--args" {
-			// Everything after -args belongs to the test binary.
-			return nil
-		}
-		if !strings.HasPrefix(arg, "-") {
-			// A flag's value, such as the pattern after -run.
-			continue
-		}
-		name, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-		switch name {
+	// The walk ends at -args: everything after it belongs to the test
+	// binary.
+	for f := range goTestFlags(args) {
+		switch name := f.name; name {
 		case "overlay":
 			return errors.New("go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant")
 		case "json":
@@ -479,11 +524,7 @@ func CheckGoTestArgs(args []string) error {
 		case "mod", "modfile":
 			return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/muxt, muxt's template engine, in a copy of go.mod", name)
 		case "coverpkg":
-			if !hasValue && i+1 < len(args) {
-				i++
-				value = args[i]
-			}
-			if pattern, ok := coversHTMLTemplate(value); ok {
+			if pattern, ok := coversHTMLTemplate(f.value); ok {
 				return fmt.Errorf("go test flag -coverpkg cannot cover html/template (%q does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead", pattern)
 			}
 		}

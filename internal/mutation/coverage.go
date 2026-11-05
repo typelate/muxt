@@ -52,7 +52,13 @@ func (c Configuration) toolchain(dir string) overlay.Toolchain {
 // that fail under the engine: kill runs use the real html/template, and
 // the baseline, which has passed by then, is what says the tests pass.
 func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string, run coverageRun, warn io.Writer) (coverage, string, error) {
-	if err := overlay.Probe(ctx, tc); err != nil {
+	// The toolchain is asked for its GOROOT and the target's go.mod once,
+	// for both the probe and the files.
+	target, err := overlay.Resolve(ctx, tc)
+	if err == nil {
+		err = overlay.Probe(ctx, target)
+	}
+	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, "", ctxErr
 		}
@@ -68,11 +74,8 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 	if err := os.MkdirAll(coverDir, 0o700); err != nil {
 		return nil, "", err
 	}
-	engine, err := overlay.Write(ctx, tc, dir)
+	engine, err := overlay.Write(target, dir)
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, "", ctxErr
-		}
 		return coverageUnknown(warn, err.Error()), "", nil
 	}
 
@@ -107,12 +110,17 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 // engineNote says which github.com/typelate/muxt the pre-pass built the
 // engine from, for the verbose preamble: the version the modfile copy
 // requires, the directory replacing it, and the test target's own
-// requirement when the copy overrode it.
+// requirement when the copy overrode it. A placeholder version, which a
+// development build of muxt is required at, says nothing, so it is left
+// out.
 func engineNote(engine overlay.Files) string {
 	if engine.Version == "" {
 		return "engine from this module"
 	}
-	note := "engine " + overlay.Module + "@" + engine.Version
+	note := "engine " + overlay.Module
+	if engine.Version != overlay.PlaceholderVersion {
+		note += "@" + engine.Version
+	}
 	if engine.ModuleDir != "" {
 		note += " => " + engine.ModuleDir
 	}

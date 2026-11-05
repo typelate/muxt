@@ -361,3 +361,87 @@ func TestRepeating(t *testing.T) {
 		})
 	}
 }
+
+// TestGoTestFlags states how the caller's go test arguments are walked:
+// a flag's name without its dashes, its value inline or as the next
+// argument when it is a flag that takes one, an argument that is no flag
+// with no name, and everything from -args on as one last step.
+func TestGoTestFlags(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want []goTestFlag
+	}{
+		{name: "none"},
+		{
+			name: "a boolean flag",
+			args: []string{"-v", "--short"},
+			want: []goTestFlag{{name: "v", args: []string{"-v"}}, {name: "short", args: []string{"--short"}}},
+		},
+		{
+			name: "a value after =",
+			args: []string{"-run=TestA", "-overlay="},
+			want: []goTestFlag{
+				{name: "run", value: "TestA", hasValue: true, args: []string{"-run=TestA"}},
+				{name: "overlay", hasValue: true, args: []string{"-overlay="}},
+			},
+		},
+		{
+			name: "a value as the next argument",
+			args: []string{"-coverpkg", "./...", "--covermode", "set"},
+			want: []goTestFlag{
+				{name: "coverpkg", value: "./...", hasValue: true, args: []string{"-coverpkg", "./..."}},
+				{name: "covermode", value: "set", hasValue: true, args: []string{"--covermode", "set"}},
+			},
+		},
+		{
+			name: "a value that looks like a flag",
+			args: []string{"-run", "-json"},
+			want: []goTestFlag{{name: "run", value: "-json", hasValue: true, args: []string{"-run", "-json"}}},
+		},
+		{
+			name: "a flag that takes a value, last",
+			args: []string{"-run"},
+			want: []goTestFlag{{name: "run", args: []string{"-run"}}},
+		},
+		{
+			name: "a boolean flag does not take the next argument",
+			args: []string{"-cover", "-short"},
+			want: []goTestFlag{{name: "cover", args: []string{"-cover"}}, {name: "short", args: []string{"-short"}}},
+		},
+		{
+			name: "a test binary's own flag and an argument that is no flag",
+			args: []string{"-update", "golden"},
+			want: []goTestFlag{{name: "update", args: []string{"-update"}}, {args: []string{"golden"}}},
+		},
+		{
+			name: "the test binary's arguments",
+			args: []string{"-v", "-args", "-overlay=o.json", "x"},
+			want: []goTestFlag{{name: "v", args: []string{"-v"}}, {name: "args", args: []string{"-args", "-overlay=o.json", "x"}}},
+		},
+		{
+			name: "the test binary's arguments with two dashes",
+			args: []string{"--args", "-json"},
+			want: []goTestFlag{{name: "args", args: []string{"--args", "-json"}}},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []goTestFlag
+			for f := range goTestFlags(tt.args) {
+				got = append(got, f)
+			}
+			assert.Equal(t, tt.want, got, "goTestFlags(%q)", tt.args)
+		})
+	}
+}
+
+// TestGoTestFlagsStopsWhenAsked states that the walk ends when the loop
+// over it does.
+func TestGoTestFlagsStopsWhenAsked(t *testing.T) {
+	n := 0
+	for range goTestFlags([]string{"-v", "-short", "-run=x"}) {
+		n++
+		break
+	}
+	assert.Equal(t, 1, n, "steps")
+}

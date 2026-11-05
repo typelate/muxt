@@ -578,8 +578,9 @@ func TestPlanReportsUnreachedMutants(t *testing.T) {
 			if tt.variables != nil {
 				config.TemplatesVariables = tt.variables
 			}
-			p, err := newPlan(t.Context(), config, dir, tt.coverage)
+			p, err := newPlan(t.Context(), config, dir)
 			require.NoError(t, err)
+			p.cover(tt.coverage, 0)
 			assert.Equal(t, tt.want, unreachedMutants(p), "unreached mutants")
 			assert.Equal(t, tt.known, p.report().CoverageKnown, "coverage known")
 		})

@@ -21,6 +21,25 @@ const (
 	targetGoSum = "example.com/dep v1.0.0/go.mod h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
 )
 
+// writeEngine resolves the toolchain and writes the engine's files, as
+// a caller of Write does.
+func writeEngine(ctx context.Context, tc overlay.Toolchain, scratchDir string) (overlay.Files, error) {
+	target, err := overlay.Resolve(ctx, tc)
+	if err != nil {
+		return overlay.Files{}, err
+	}
+	return overlay.Write(target, scratchDir)
+}
+
+// probe resolves the toolchain and probes it, as a caller of Probe does.
+func probe(ctx context.Context, tc overlay.Toolchain) error {
+	target, err := overlay.Resolve(ctx, tc)
+	if err != nil {
+		return err
+	}
+	return overlay.Probe(ctx, target)
+}
+
 // writeTarget writes a test target module and returns its directory.
 func writeTarget(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -40,7 +59,7 @@ func TestWriteShimOverlay(t *testing.T) {
 	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
 	scratch := t.TempDir()
 
-	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
+	files, err := writeEngine(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -94,7 +113,7 @@ func TestWriteCopiesGoSum(t *testing.T) {
 			target := writeTarget(t, targetFiles)
 			scratch := t.TempDir()
 
-			files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
+			files, err := writeEngine(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
 			if err != nil {
 				t.Fatalf("Write: %v", err)
 			}
@@ -133,7 +152,7 @@ func TestWriteModuleDir(t *testing.T) {
 		{name: "a relative directory", tc: overlay.Toolchain{Dir: target, ModuleDir: "muxt"}, want: filepath.Join(target, "muxt")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			files, err := overlay.Write(context.Background(), tt.tc, t.TempDir())
+			files, err := writeEngine(context.Background(), tt.tc, t.TempDir())
 			if err != nil {
 				t.Fatalf("Write: %v", err)
 			}
@@ -154,11 +173,11 @@ func TestWriteNeedsAVersion(t *testing.T) {
 	realGOROOT(t)
 	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
 	env := slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "MUXT_MODULE_DIR=") })
-	_, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, Env: env}, t.TempDir())
+	_, err := writeEngine(context.Background(), overlay.Toolchain{Dir: target, Env: env}, t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "set MUXT_MODULE_DIR to its source directory") {
 		t.Errorf("Write: error = %v, want one saying to set MUXT_MODULE_DIR", err)
 	}
-	if err := overlay.Probe(context.Background(), overlay.Toolchain{Dir: target, Env: env}); err == nil || !strings.Contains(err.Error(), "MUXT_MODULE_DIR") {
+	if err := probe(context.Background(), overlay.Toolchain{Dir: target, Env: env}); err == nil || !strings.Contains(err.Error(), "MUXT_MODULE_DIR") {
 		t.Errorf("Probe: error = %v, want one saying to set MUXT_MODULE_DIR", err)
 	}
 }
@@ -169,7 +188,7 @@ func TestWriteNeedsAModule(t *testing.T) {
 	realGOROOT(t)
 	dir := t.TempDir()
 	tc := overlay.Toolchain{Dir: dir, Env: append(os.Environ(), "GO111MODULE=on", "GOWORK=off")}
-	if _, err := overlay.Write(context.Background(), tc, t.TempDir()); err == nil || !strings.Contains(err.Error(), "go.mod") {
+	if _, err := writeEngine(context.Background(), tc, t.TempDir()); err == nil || !strings.Contains(err.Error(), "go.mod") {
 		t.Errorf("Write outside a module: error = %v, want one naming go.mod", err)
 	}
 }
@@ -199,7 +218,7 @@ func TestOverlayBuildsFixture(t *testing.T) {
 		t.Fatalf("the fixture's test fails without the overlay, but not for the engine's absence: %v\n%s", err, out)
 	}
 
-	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: fixture, ModuleDir: muxtDir(t)}, t.TempDir())
+	files, err := writeEngine(context.Background(), overlay.Toolchain{Dir: fixture, ModuleDir: muxtDir(t)}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -231,7 +250,7 @@ func TestGoLinesSeesARaise(t *testing.T) {
 	}
 	realGOROOT(t)
 	target := writeTarget(t, map[string]string{"go.mod": "module example.com/target\n\ngo 1.22\n", "a.go": "package a\n"})
-	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
+	files, err := writeEngine(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -262,7 +281,7 @@ func TestUpgradesSeesARaise(t *testing.T) {
 		"a.go":      "package a\n\nimport \"html/template\"\n\nvar T = template.New(\"a\")\n",
 		"a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) { _ = T }\n",
 	})
-	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
+	files, err := writeEngine(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -361,7 +380,7 @@ func TestProbe(t *testing.T) {
 		"muxt itself": {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := overlay.Probe(context.Background(), tc); err != nil {
+			if err := probe(context.Background(), tc); err != nil {
 				t.Fatalf("Probe: %v", err)
 			}
 		})
@@ -396,7 +415,7 @@ func TestProbeReportsARefusedOverlay(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			goBin := fakeGo(t, t.TempDir(), t.TempDir(), "echo '"+tt.stderr+"' >&2; exit 1")
-			err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"})
+			err := probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"})
 			if err == nil {
 				t.Fatal("Probe succeeded against a go command that refuses the overlay")
 			}
@@ -418,7 +437,7 @@ func TestProbeReportsAnIgnoredOverlay(t *testing.T) {
 	goroot := t.TempDir()
 	goBin := fakeGo(t, goroot, t.TempDir(), `echo template.go`)
 
-	if err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"}); err == nil {
+	if err := probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"}); err == nil {
 		t.Fatal("Probe succeeded though go list did not see the probe file")
 	}
 }
@@ -463,10 +482,10 @@ func TestGOROOTUnderGOMODCACHE(t *testing.T) {
 	if _, err := overlay.GOROOT(ctx, overlay.Toolchain{Go: goBin}); err == nil || !strings.Contains(err.Error(), "GOMODCACHE") {
 		t.Errorf("GOROOT error = %v, want one naming GOMODCACHE", err)
 	}
-	if _, err := overlay.Write(ctx, overlay.Toolchain{Go: goBin}, t.TempDir()); err == nil {
+	if _, err := writeEngine(ctx, overlay.Toolchain{Go: goBin}, t.TempDir()); err == nil {
 		t.Error("Write succeeded with GOROOT under GOMODCACHE")
 	}
-	if err := overlay.Probe(ctx, overlay.Toolchain{Go: goBin}); err == nil {
+	if err := probe(ctx, overlay.Toolchain{Go: goBin}); err == nil {
 		t.Error("Probe succeeded with GOROOT under GOMODCACHE")
 	}
 }

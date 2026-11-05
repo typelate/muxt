@@ -439,13 +439,16 @@ func TestCoverageArgs(t *testing.T) {
 		"go test arguments of the pre-pass")
 }
 
-// TestNewPlanHoldsTheCoverage states that the profile reaches the plan.
+// TestNewPlanHoldsTheCoverage states that the profile reaches the plan:
+// planning knows no coverage, and cover gives it what the pre-pass saw.
 func TestNewPlanHoldsTheCoverage(t *testing.T) {
 	t.Parallel()
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo})
 	cov := coverage{"greeting": {{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 8}: {}}}
-	p, err := newPlan(t.Context(), greetingConfig(), dir, cov)
+	p, err := newPlan(t.Context(), greetingConfig(), dir)
 	require.NoError(t, err)
+	assert.Nil(t, p.coverage, "coverage before the pre-pass")
+	p.cover(cov, 0)
 	assert.Equal(t, cov, p.coverage, "plan coverage")
 }
 
@@ -521,7 +524,9 @@ func TestCoverageSeesADisabledExport(t *testing.T) {
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
 	config := greetingConfig()
 	scratch := t.TempDir()
-	engine, err := overlay.Write(t.Context(), config.toolchain(dir), scratch)
+	target, err := overlay.Resolve(t.Context(), config.toolchain(dir))
+	require.NoError(t, err)
+	engine, err := overlay.Write(target, scratch)
 	require.NoError(t, err)
 	coverDir := filepath.Join(scratch, "profiles")
 	require.NoError(t, os.Mkdir(coverDir, 0o500))
@@ -581,6 +586,7 @@ func TestEngineNote(t *testing.T) {
 		{overlay.Files{}, "engine from this module"},
 		{overlay.Files{Version: "v0.19.0"}, "engine github.com/typelate/muxt@v0.19.0"},
 		{overlay.Files{Version: "v0.19.0", ModuleDir: "/src/muxt"}, "engine github.com/typelate/muxt@v0.19.0 => /src/muxt"},
+		{overlay.Files{Version: overlay.PlaceholderVersion, ModuleDir: "/src/muxt"}, "engine github.com/typelate/muxt => /src/muxt"},
 		{overlay.Files{Version: "v0.19.0", TargetVersion: "v0.18.0"}, "engine github.com/typelate/muxt@v0.19.0, not your go.mod's v0.18.0"},
 	} {
 		assert.Equal(t, tt.want, engineNote(tt.files), "engineNote(%+v)", tt.files)
@@ -678,8 +684,9 @@ func TestRunPlanSkipsUnreachedMutants(t *testing.T) {
 			dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo})
 			config := greetingConfig()
 			config.IncludeUncoveredNodes = tt.include
-			p, err := newPlan(t.Context(), config, dir, tt.coverage)
+			p, err := newPlan(t.Context(), config, dir)
 			require.NoError(t, err)
+			p.cover(tt.coverage, 0)
 			var (
 				mu   sync.Mutex
 				runs int

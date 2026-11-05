@@ -216,7 +216,7 @@ func (s selector) choose(scopes []scope, trims []trim) selection {
 	return chosen
 }
 
-func newPlan(ctx context.Context, config Configuration, workingDirectory string, cov coverage) (*plan, error) {
+func newPlan(ctx context.Context, config Configuration, workingDirectory string) (*plan, error) {
 	in, err := loadInput(workingDirectory, config, config.env)
 	if err != nil {
 		return nil, err
@@ -246,12 +246,7 @@ func newPlan(ctx context.Context, config Configuration, workingDirectory string,
 			return nil, err
 		}
 	}
-	p, err := planFrom(config, in, before, diffError)
-	if err != nil {
-		return nil, err
-	}
-	p.cover(cov, 0)
-	return p, nil
+	return planFrom(config, in, before, diffError)
 }
 
 // cover records what the coverage pre-pass saw the tests execute, nil

@@ -88,7 +88,11 @@ func TestC(t *testing.T) {
 	if err := os.Mkdir(coverDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	engine, err := overlay.Write(t.Context(), overlay.Toolchain{Dir: module, Env: goEnv(), ModuleDir: muxtDir(t)}, filepath.Join(scratch, "engine"))
+	target, err := overlay.Resolve(t.Context(), overlay.Toolchain{Dir: module, Env: goEnv(), ModuleDir: muxtDir(t)})
+	if err != nil {
+		t.Fatalf("overlay.Resolve: %v", err)
+	}
+	engine, err := overlay.Write(target, filepath.Join(scratch, "engine"))
 	if err != nil {
 		t.Fatalf("overlay.Write: %v", err)
 	}

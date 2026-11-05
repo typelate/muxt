@@ -115,12 +115,12 @@ func TestNewPlanIncludesTestCallersWhenAsked(t *testing.T) {
 			"func TestGreeting(t *testing.T) {\n\tif err := templates.ExecuteTemplate(io.Discard, \"greeting\", Greeting{Name: \"World\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n",
 	})
 
-	_, err := newPlan(t.Context(), greetingConfig(), dir, nil)
+	_, err := newPlan(t.Context(), greetingConfig(), dir)
 	require.ErrorAs(t, err, new(*NoCallSitesError), "newPlan: the only call site is in a test")
 
 	config := greetingConfig()
 	config.IncludeTests = true
-	p, err := newPlan(t.Context(), config, dir, nil)
+	p, err := newPlan(t.Context(), config, dir)
 	require.NoError(t, err)
 	require.Len(t, p.mutants, 1, "the one action")
 	m := p.mutants[0]

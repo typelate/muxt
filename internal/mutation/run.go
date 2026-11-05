@@ -155,7 +155,7 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 	}
 	defer func() { _ = os.RemoveAll(scratch) }()
 
-	p, err := newPlan(ctx, config, workingDirectory, nil)
+	p, err := newPlan(ctx, config, workingDirectory)
 	if err != nil {
 		return nil, err
 	}

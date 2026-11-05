@@ -36,9 +36,9 @@ const Module = "github.com/typelate/muxt"
 // needs one.
 const ModuleDirEnv = "MUXT_MODULE_DIR"
 
-// placeholderVersion is the version Module is required at when a module
+// PlaceholderVersion is the version Module is required at when a module
 // directory replaces it and muxt's own version is unknown.
-const placeholderVersion = "v0.0.0-00010101000000-000000000000"
+const PlaceholderVersion = "v0.0.0-00010101000000-000000000000"
 
 // shim is html/template's API forwarded to Module's template/html, which
 // the overlay puts in place of html/template's own files.
@@ -215,6 +215,40 @@ func goLine(goModPath string) (string, error) {
 	return "", nil
 }
 
+// Target is a test target as its toolchain resolves it: the GOROOT whose
+// html/template the overlay replaces, the go.mod the modfile copies, and
+// how the copy requires Module. Resolve makes one, and Probe and Write
+// share it, so the go command is asked once.
+type Target struct {
+	tc     Toolchain
+	goroot string
+	goMod  string
+	req    requirement
+}
+
+// Resolve asks the toolchain for its GOROOT and the test target's go.mod,
+// and decides how the modfile copy requires Module.
+//
+// The test target's go.mod is the one go env GOMOD names in the
+// toolchain's directory. When it is Module's own, the copy requires
+// nothing. Otherwise, a muxt whose version is unknown, or a build with
+// uncommitted changes, is an error unless a module directory is named.
+func Resolve(ctx context.Context, tc Toolchain) (Target, error) {
+	goroot, err := GOROOT(ctx, tc)
+	if err != nil {
+		return Target{}, err
+	}
+	targetMod, err := goMod(ctx, tc)
+	if err != nil {
+		return Target{}, err
+	}
+	req, err := requirementFor(tc, targetMod)
+	if err != nil {
+		return Target{}, err
+	}
+	return Target{tc: tc, goroot: goroot, goMod: targetMod, req: req}, nil
+}
+
 // Write writes under scratchDir the files go test needs to build the test
 // target with muxt's template engine in place of html/template:
 //
@@ -224,29 +258,12 @@ func goLine(goModPath string) (string, error) {
 //     $GOROOT/src/html/template, as listed on disk now, and adds the shim
 //     there;
 //   - go.mod and go.sum: copies of the test target's, with Module required
-//     at the version of this muxt, and replaced by the toolchain's module
-//     directory when it names one.
+//     as target says.
 //
 // The overlay names files by their paths under scratchDir as given, so
 // scratchDir should be absolute; the caller removes it.
-//
-// The test target's go.mod is the one go env GOMOD names in the
-// toolchain's directory. When it is Module's own, the copy requires
-// nothing. Otherwise, a muxt whose version is unknown, or a build with
-// uncommitted changes, is an error unless a module directory is named.
-func Write(ctx context.Context, tc Toolchain, scratchDir string) (Files, error) {
-	goroot, err := GOROOT(ctx, tc)
-	if err != nil {
-		return Files{}, err
-	}
-	targetMod, err := goMod(ctx, tc)
-	if err != nil {
-		return Files{}, err
-	}
-	req, err := requirementFor(tc, targetMod)
-	if err != nil {
-		return Files{}, err
-	}
+func Write(target Target, scratchDir string) (Files, error) {
+	goroot, targetMod, req := target.goroot, target.goMod, target.req
 	stdDir := filepath.Join(goroot, "src", "html", "template")
 	replace, err := deleteStd(stdDir)
 	if err != nil {
@@ -329,7 +346,7 @@ func requirementFor(tc Toolchain, targetMod string) (requirement, error) {
 		return requirement{Version: version}, err
 	}
 	if err != nil {
-		version = placeholderVersion
+		version = PlaceholderVersion
 	}
 	return requirement{Version: version, Dir: dir}, nil
 }
@@ -499,19 +516,8 @@ const probeFile = "muxt_overlay_probe.go"
 // go list whether the package has it. The go command fetches Module if it
 // must. An error means the engine cannot replace html/template with this
 // toolchain, in this module, or with this muxt.
-func Probe(ctx context.Context, tc Toolchain) (err error) {
-	goroot, err := GOROOT(ctx, tc)
-	if err != nil {
-		return err
-	}
-	targetMod, err := goMod(ctx, tc)
-	if err != nil {
-		return err
-	}
-	req, err := requirementFor(tc, targetMod)
-	if err != nil {
-		return err
-	}
+func Probe(ctx context.Context, target Target) (err error) {
+	tc, goroot, targetMod, req := target.tc, target.goroot, target.goMod, target.req
 	dir, err := os.MkdirTemp("", "muxt-overlay-probe-")
 	if err != nil {
 		return fmt.Errorf("making the overlay probe's directory: %w", err)
