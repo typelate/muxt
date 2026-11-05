@@ -934,7 +934,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 	case *TextNode:
 		n.count.Add(1)
 		nodeType := html.TextNode
-		if n.Verbatim {
+		if n.Verbatim || s.markup != nil {
 			nodeType = html.RawNode
 		}
 		tn := &html.Node{
@@ -1501,7 +1501,10 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 			tn.count.Add(1)
 			if len(text) > 0 {
 				nodeType := html.TextNode
-				if tn.Verbatim {
+				if tn.Verbatim || s.markup != nil {
+					// Rendered, the template's own text is written as
+					// it is, entities and all, as html/template writes
+					// it.
 					nodeType = html.RawNode
 				}
 				hn := &html.Node{
