@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // TestDefineNames pins how the formatter writes the name literals of

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // withTestEdits seeds the emitter with edits, as a formatter bug might.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // subDefinition is where {{define "sub"}}{{.}}{{end}} sits in a template

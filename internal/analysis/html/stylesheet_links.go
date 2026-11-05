@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // StaticAssets is a URL prefix whose files are read from Files.

@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template/html"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"

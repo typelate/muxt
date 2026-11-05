@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format"
+	"github.com/typelate/muxt/template"
 )
 
 func TestSource(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"io"
 	"regexp"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 
 	"github.com/typelate/muxt/internal/check"
 

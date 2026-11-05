@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // Selector is a compiled selector. The zero value is not usable; obtain one

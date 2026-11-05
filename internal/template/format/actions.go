@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // errActionChanged is the error Source returns when its output does not

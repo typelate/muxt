@@ -11,11 +11,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/overlay"
 )
 
 // This file holds what more than one test needs: a module on disk, a git
@@ -30,11 +32,25 @@ import (
 
 // goEnv is the environment a test's go command runs in: the process's own,
 // without any workspace the caller happens to be in, since a module a test
-// wrote is not part of it.
+// wrote is not part of it, and with this repository as the muxt the
+// coverage pre-pass requires.
 //
 // It is passed to the code under test rather than set on the process, so
 // that tests writing modules can still run in parallel.
-func goEnv() []string { return append(os.Environ(), "GOWORK=off") }
+func goEnv() []string {
+	return append(os.Environ(), "GOWORK=off", overlay.ModuleDirEnv+"="+muxtDir())
+}
+
+// muxtDir is this repository's directory, which replaces
+// github.com/typelate/muxt in the coverage pre-pass's modfile so that
+// nothing is fetched.
+var muxtDir = sync.OnceValue(func() string {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/typelate/muxt").Output()
+	if err != nil {
+		panic("go list -m github.com/typelate/muxt: " + err.Error())
+	}
+	return strings.TrimSpace(string(out))
+})
 
 // module writes a Go module into a temporary directory and returns it.
 func module(t *testing.T, files map[string]string) string {
@@ -53,7 +69,9 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
-const goMod = "module server\n\ngo 1.24\n"
+// goMod is at muxt's go line, so the coverage
+// pre-pass compiles the module as written and warns of no raised go line.
+const goMod = "module server\n\ngo 1.27\n"
 
 // greetingGo holds its template as a raw string literal.
 const greetingGo = `package server

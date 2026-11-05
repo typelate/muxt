@@ -11,7 +11,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // analyzeModule writes files into a temp module, loads it, and returns every

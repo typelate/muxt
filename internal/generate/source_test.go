@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"testing"
 
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template/html"
 
 	"github.com/typelate/muxt/internal/fake"
 	"github.com/typelate/muxt/internal/source"

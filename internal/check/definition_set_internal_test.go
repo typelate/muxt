@@ -6,8 +6,8 @@ import (
 	"testing"
 	"text/template"
 
-	muxttemplate "github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	muxttemplate "github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // defineTree parses {{define "a"}}body{{end}} and returns the tree for

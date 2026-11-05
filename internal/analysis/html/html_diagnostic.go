@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 type Severity = template.Severity

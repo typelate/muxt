@@ -3,7 +3,7 @@ package mutation
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

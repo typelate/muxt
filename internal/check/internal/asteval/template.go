@@ -17,8 +17,8 @@ import (
 	"unicode"
 
 	"github.com/typelate/muxt/internal/check/internal/astgen"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // TemplateMetadata accumulates metadata during template evaluation.

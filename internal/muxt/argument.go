@@ -3,7 +3,7 @@ package muxt
 import (
 	"go/types"
 
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template/html"
 
 	"github.com/typelate/muxt/internal/source"
 )

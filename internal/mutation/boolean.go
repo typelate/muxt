@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // OperatorCondition forces one condition of a boolean decision, leaving

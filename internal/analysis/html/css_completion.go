@@ -7,8 +7,8 @@ import (
 
 	"github.com/typelate/muxt/internal/css/csstree"
 	"github.com/typelate/muxt/internal/css/csstree/definitionsyntax"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // CSSCompletion is what may be typed at a position in a style attribute or

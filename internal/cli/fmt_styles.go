@@ -8,7 +8,7 @@ import (
 	htmlanalysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // formatStyles is the author CSS muxt fmt classifies files with: the

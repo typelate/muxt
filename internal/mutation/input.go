@@ -1,7 +1,7 @@
 package mutation
 
 import (
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 
 	"github.com/typelate/muxt/internal/check"
 	"golang.org/x/tools/go/packages"

@@ -21,6 +21,12 @@ cmp stdout want-tagged.txt
 ! muxt test-template-mutations --seed 1 -- -overlay=mine.json
 stderr 'go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant'
 
+# -mod and -modfile are refused too: the coverage pre-pass sets both, to
+# require github.com/typelate/muxt, muxt's template engine, in a copy of
+# go.mod.
+! muxt test-template-mutations --seed 1 -- -modfile=alt.mod
+stderr 'go test flag -modfile cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile'
+
 -- go.mod --
 module server
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // gap is the whitespace between two consecutive items of a child list

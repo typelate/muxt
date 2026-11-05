@@ -5,8 +5,8 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // styleSource is where CSS text came from: a template or a stylesheet file.

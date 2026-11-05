@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // KeepNames sets which names keep their spellings: a template name

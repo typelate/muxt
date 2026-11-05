@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"go/types"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // ParseTrees parses template text into the trees it defines, the way

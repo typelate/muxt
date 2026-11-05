@@ -4,7 +4,7 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // DirectiveError is a muxt:fmt comment the formatter cannot apply. The

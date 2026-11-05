@@ -3,8 +3,8 @@ package selectors_test
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/selectors"
+	"github.com/typelate/muxt/template"
 )
 
 func TestSelectorMatch_CompoundAndList(t *testing.T) {

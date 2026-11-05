@@ -9,9 +9,9 @@ import (
 	texttemplate "text/template"
 	textparse "text/template/parse"
 
-	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // TestActionFormat pins how the formatter prints action interiors (spec

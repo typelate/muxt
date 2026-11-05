@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // CheckCSS runs every CSS check over the templates trees and the

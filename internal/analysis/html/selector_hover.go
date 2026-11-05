@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
 	"github.com/typelate/muxt/internal/template/selectors"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // Specificity is a selector's specificity: its ID, class, and type

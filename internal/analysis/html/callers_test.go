@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 func TestCallers(t *testing.T) {

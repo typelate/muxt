@@ -17,8 +17,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/typelate/muxt/internal/check"
-	htt "github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	htt "github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 	"golang.org/x/tools/go/packages"
 )
 

@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"go/token"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // ParseNodePosition returns the source position of node within tree as a

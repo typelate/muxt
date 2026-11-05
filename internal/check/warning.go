@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // structFieldHasNonil reports whether the named field of t (a struct, or a

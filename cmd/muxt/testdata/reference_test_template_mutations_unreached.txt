@@ -1,5 +1,6 @@
-# The tests run once before planning, with muxt's own template engine in
-# place of html/template, to learn which template actions they execute.
+# The tests run once after planning and before the baseline, with muxt's
+# own template engine in place of html/template, to learn which template
+# actions they execute.
 #
 # The test below renders the page for a guest only, so nothing it runs
 # reaches the {{.Secret}} inside {{if .Admin}}. That mutant is skipped
@@ -18,7 +19,7 @@ cmp stdout want.txt
 -- go.mod --
 module server
 
-go 1.24
+go 1.27
 -- templates.gohtml --
 {{define "page"}}Hello, {{.Name}}!{{if .Admin}} {{.Secret}}{{end}}{{end}}
 -- template.go --

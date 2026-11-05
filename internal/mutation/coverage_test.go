@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/overlay"
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template/html"
 )
 
 // loudTest renders the greeting loud from a second package, so its test
@@ -52,7 +53,7 @@ func TestTemplateCoverageOverAModule(t *testing.T) {
 	tester := config.goTest(dir)
 
 	var warnings strings.Builder
-	got, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
+	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
 	require.NoError(t, err)
 	require.NotNil(t, got, "coverage is known; warnings:\n%s", warnings.String())
 	assert.Empty(t, warnings.String(), "warnings")
@@ -61,7 +62,7 @@ func TestTemplateCoverageOverAModule(t *testing.T) {
 	assert.NotContains(t, greeting, coverBlock{StartLine: 1, StartCol: 30, EndLine: 1, EndCol: 34}, "no test renders the greeting loud: %v", got)
 
 	writeFiles(t, dir, map[string]string{"loud/loud_test.go": loudTest})
-	got, err = templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
+	got, _, err = templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
 	require.NoError(t, err)
 	require.NotNil(t, got, "coverage is known; warnings:\n%s", warnings.String())
 	greeting = got["greeting"]
@@ -69,20 +70,76 @@ func TestTemplateCoverageOverAModule(t *testing.T) {
 	assert.Contains(t, greeting, coverBlock{StartLine: 1, StartCol: 30, EndLine: 1, EndCol: 34}, "reached by the loud package: %v", got)
 }
 
+// TestTemplateCoverageWarnsOfARaisedGoLine runs the pre-pass over a module
+// at go 1.24: the engine needs go 1.27, so the go command raises the
+// modfile copy's go line and compiles the module at that language
+// version. The pre-pass says so once and still uses the coverage.
+func TestTemplateCoverageWarnsOfARaisedGoLine(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs test binaries with html/template overlaid")
+	}
+	t.Parallel()
+	dir := module(t, map[string]string{"go.mod": "module server\n\ngo 1.24\n", "template.go": greetingGo, "render_test.go": greetingTest})
+	config := greetingConfig()
+
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), config.goTest(dir).coverage, &warnings)
+	require.NoError(t, err)
+	assert.NotNil(t, got, "the coverage is used; warnings:\n%s", warnings.String())
+	assert.Equal(t, "warning: template coverage was computed at go 1.27 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
+}
+
+// TestTemplateCoverageOffline runs the pre-pass where the go command can
+// fetch nothing: the engine's golang.org/x/net is not in the module cache
+// and GOPROXY=off. The warning quotes the go command's reason, not a
+// download line, and names no engine gap, since none is to blame.
+func TestTemplateCoverageOffline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go test with html/template overlaid")
+	}
+	t.Parallel()
+	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
+	config := greetingConfig()
+	tester := config.goTest(dir)
+	tester.env = append(slices.Clip(tester.env), "GOPROXY=off", "GOMODCACHE="+t.TempDir())
+
+	var warnings strings.Builder
+	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), tester.coverage, &warnings)
+	require.NoError(t, err, "the run goes on")
+	assert.Nil(t, got, "coverage is unknown")
+	w := warnings.String()
+	assert.True(t, strings.HasPrefix(w, "warning: template coverage unknown: "), "warning %q", w)
+	assert.Contains(t, w, "GOPROXY=off", "the go command's reason")
+	assert.NotContains(t, w, "go: downloading", "warning")
+	assert.NotContains(t, w, "known gaps", "warning")
+}
+
+// TestFirstErrorSkipsDownloads states that a module download line is
+// progress, not the error.
+func TestFirstErrorSkipsDownloads(t *testing.T) {
+	out := "go: downloading golang.org/x/net v0.62.0\ngo: golang.org/x/net@v0.62.0: module lookup disabled by GOPROXY=off\n"
+	assert.Equal(t, "go: golang.org/x/net@v0.62.0: module lookup disabled by GOPROXY=off", firstError(out, exitError(t, 1)))
+}
+
 // TestTemplateCoverageRunsTheEngineOverlay states what the pre-pass hands
-// go test: the engine overlay, written under the run's scratch directory,
-// and an empty directory for the profiles, under it too.
+// go test: the engine's overlay, modfile and module, written under the
+// run's scratch directory, and an empty directory for the profiles, under
+// it too.
 func TestTemplateCoverageRunsTheEngineOverlay(t *testing.T) {
 	realGOROOT(t)
 	scratch := t.TempDir()
 	runs := 0
-	run := func(_ context.Context, overlayPath, coverDir string) (*goTestOutput, error) {
+	var ran overlay.Files
+	run := func(_ context.Context, engine overlay.Files, coverDir string) (*goTestOutput, error) {
 		runs++
-		assert.True(t, filepath.IsAbs(overlayPath), "overlay %s is absolute", overlayPath)
-		assert.True(t, under(scratch, overlayPath), "overlay %s is under the scratch directory %s", overlayPath, scratch)
+		ran = engine
+		for _, p := range []string{engine.Overlay, engine.ModFile} {
+			assert.True(t, filepath.IsAbs(p), "%s is absolute", p)
+			assert.True(t, under(scratch, p), "%s is under the scratch directory %s", p, scratch)
+			_, err := os.Stat(p)
+			assert.NoError(t, err, "%s is written before go test runs", p)
+		}
 		assert.True(t, under(scratch, coverDir), "cover directory %s is under the scratch directory %s", coverDir, scratch)
-		_, err := os.Stat(overlayPath)
-		assert.NoError(t, err, "the overlay is written before go test runs")
 		entries, err := os.ReadDir(coverDir)
 		assert.NoError(t, err, "the cover directory exists")
 		assert.Empty(t, entries, "the cover directory starts empty")
@@ -93,9 +150,11 @@ func TestTemplateCoverageRunsTheEngineOverlay(t *testing.T) {
 		return testOutput("ok  \tserver\t0.1s\n"), nil
 	}
 	var warnings strings.Builder
-	got, err := templateCoverage(t.Context(), overlay.Toolchain{}, scratch, run, &warnings)
+	got, engine, err := templateCoverage(t.Context(), overlay.Toolchain{}, scratch, run, &warnings)
 	require.NoError(t, err)
 	assert.Equal(t, 1, runs, "go test runs once")
+	assert.Equal(t, "engine from this module", engine, "muxt's own module requires no engine")
+	assert.Empty(t, ran.Version, "the modfile copy of muxt's own go.mod requires nothing")
 	assert.Empty(t, warnings.String(), "warnings")
 	assert.Equal(t, coverage{
 		"page": {
@@ -110,10 +169,10 @@ func TestTemplateCoverageRunsTheEngineOverlay(t *testing.T) {
 // template leave a known, empty coverage: nothing is reached.
 func TestTemplateCoverageReachingNothing(t *testing.T) {
 	realGOROOT(t)
-	run := func(context.Context, string, string) (*goTestOutput, error) {
+	run := func(context.Context, overlay.Files, string) (*goTestOutput, error) {
 		return testOutput("ok  \tserver\t0.1s\n"), nil
 	}
-	got, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, nil)
+	got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, got, "coverage is known")
 	assert.Empty(t, got, "nothing is reached")
@@ -155,7 +214,7 @@ func TestTemplateCoverageUnknown(t *testing.T) {
 			} else {
 				realGOROOT(t)
 			}
-			run := func(_ context.Context, _, coverDir string) (*goTestOutput, error) {
+			run := func(_ context.Context, _ overlay.Files, coverDir string) (*goTestOutput, error) {
 				if tt.toolchain != nil {
 					t.Error("go test ran though the probe failed")
 				}
@@ -163,7 +222,7 @@ func TestTemplateCoverageUnknown(t *testing.T) {
 				return testOutput(tt.out), tt.err
 			}
 			var warnings strings.Builder
-			got, err := templateCoverage(t.Context(), tc, t.TempDir(), run, &warnings)
+			got, _, err := templateCoverage(t.Context(), tc, t.TempDir(), run, &warnings)
 			require.NoError(t, err)
 			assert.Nil(t, got, "coverage is unknown")
 			lines := strings.Split(strings.TrimRight(warnings.String(), "\n"), "\n")
@@ -198,12 +257,12 @@ func TestTemplateCoverageFailingUnderTheEngine(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			realGOROOT(t)
-			run := func(_ context.Context, _, coverDir string) (*goTestOutput, error) {
+			run := func(_ context.Context, _ overlay.Files, coverDir string) (*goTestOutput, error) {
 				writeFiles(t, coverDir, map[string]string{"1.cov": "mode: set\npage:1.1,1.8 1 1\n"})
 				return testOutput(tt.out), exitError(t, 1)
 			}
 			var warnings strings.Builder
-			got, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
+			got, _, err := templateCoverage(t.Context(), overlay.Toolchain{}, t.TempDir(), run, &warnings)
 			require.NoError(t, err, "the run goes on")
 			assert.Nil(t, got, "coverage is unknown")
 			want := "warning: template coverage unknown: tests fail under muxt's template engine (coverage pre-pass): " + tt.first +
@@ -256,11 +315,11 @@ func TestRunGoesOnWhenTheEngineDoesNotBuild(t *testing.T) {
 func TestTemplateCoverageStopsWhenCancelled(t *testing.T) {
 	realGOROOT(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	run := func(context.Context, string, string) (*goTestOutput, error) {
+	run := func(context.Context, overlay.Files, string) (*goTestOutput, error) {
 		cancel()
 		return testOutput(""), context.Canceled
 	}
-	_, err := templateCoverage(ctx, overlay.Toolchain{}, t.TempDir(), run, nil)
+	_, _, err := templateCoverage(ctx, overlay.Toolchain{}, t.TempDir(), run, nil)
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -324,9 +383,10 @@ func TestWithoutCoverFlags(t *testing.T) {
 
 func TestCoverageArgs(t *testing.T) {
 	test := goTest{packages: []string{"./..."}, extra: []string{"-short"}}
+	engine := overlay.Files{Overlay: "/s/overlay.json", ModFile: "/s/go.mod"}
 	assert.Equal(t,
-		[]string{"test", "-count=1", "-v", "-vet=off", "-overlay=/s/overlay.json", "./...", "-short"},
-		test.args(coverageFlags("/s/overlay.json")...),
+		[]string{"test", "-count=1", "-v", "-mod=mod", "-modfile=/s/go.mod", "-overlay=/s/overlay.json", "./...", "-short"},
+		test.args(coverageFlags(engine)...),
 		"go test arguments of the pre-pass")
 }
 
@@ -357,8 +417,8 @@ func exitError(t *testing.T, code int) error {
 	return err
 }
 
-// refusingToolchain is a go command that reports a GOROOT and refuses any
-// overlay of it.
+// refusingToolchain is a go command that reports a GOROOT and a go.mod and
+// refuses any overlay of the GOROOT.
 func refusingToolchain(t *testing.T) overlay.Toolchain {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -366,15 +426,17 @@ func refusingToolchain(t *testing.T) overlay.Toolchain {
 	}
 	goroot := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(goroot, "src", "html", "template"), 0o755))
+	goModPath := filepath.Join(t.TempDir(), "go.mod")
+	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o644))
 	script := `#!/bin/sh
 case "$1" in
-env) printf '%s\n%s\n' '` + goroot + `' '` + t.TempDir() + `' ;;
+env) if [ "$2" = GOMOD ]; then echo '` + goModPath + `'; else printf '%s\n%s\n' '` + goroot + `' '` + t.TempDir() + `'; fi ;;
 *) echo "go: overlay contains a replacement for GOROOT" >&2; exit 1 ;;
 esac
 `
 	goBin := filepath.Join(t.TempDir(), "go")
 	require.NoError(t, os.WriteFile(goBin, []byte(script), 0o755))
-	return overlay.Toolchain{Go: goBin}
+	return overlay.Toolchain{Go: goBin, ModuleDir: muxtDir()}
 }
 
 // realGOROOT skips the test when there is no html/template source to
@@ -410,13 +472,13 @@ func TestCoverageSeesADisabledExport(t *testing.T) {
 	dir := module(t, map[string]string{"go.mod": goMod, "template.go": greetingGo, "render_test.go": greetingTest})
 	config := greetingConfig()
 	scratch := t.TempDir()
-	overlayPath, err := overlay.Write(t.Context(), config.toolchain(dir), scratch)
+	engine, err := overlay.Write(t.Context(), config.toolchain(dir), scratch)
 	require.NoError(t, err)
 	coverDir := filepath.Join(scratch, "profiles")
 	require.NoError(t, os.Mkdir(coverDir, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(coverDir, 0o700) })
 
-	out, err := config.goTest(dir).coverage(t.Context(), overlayPath, coverDir)
+	out, err := config.goTest(dir).coverage(t.Context(), engine, coverDir)
 	require.NoError(t, err, "the tests pass whatever the export does:\n%s", out.String())
 	assert.True(t, strings.HasPrefix(out.coverDisabled, html.CoverDisabledMarker), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
 }
@@ -436,6 +498,44 @@ func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
 	require.NoError(t, err)
 	first, _, _ := strings.Cut(status.String(), "\n")
 	assert.Contains(t, first, ", coverage pre-pass 2s, ", "preamble %q", first)
+}
+
+// TestRunPlanPreambleNamesTheEngine states that a verbose preamble says
+// which muxt the pre-pass built the engine from, and a quiet one does not.
+func TestRunPlanPreambleNamesTheEngine(t *testing.T) {
+	for _, verbose := range []bool{false, true} {
+		_, p := runnerFixture(t, []bool{true})
+		p.prePass = 2 * time.Second
+		p.engine = "engine github.com/typelate/muxt@v0.19.0"
+		var status strings.Builder
+		_, err := runPlan(t.Context(), p, Configuration{Verbose: verbose}, t.TempDir(), &status, func(context.Context) (string, error) {
+			return "", nil
+		}, func(context.Context, string) (Status, []string, error) {
+			return StatusKilled, nil, nil
+		}, nil)
+		require.NoError(t, err)
+		first, _, _ := strings.Cut(status.String(), "\n")
+		if verbose {
+			assert.Contains(t, first, ", coverage pre-pass 2s (engine github.com/typelate/muxt@v0.19.0), ", "verbose preamble %q", first)
+		} else {
+			assert.Contains(t, first, ", coverage pre-pass 2s, ", "preamble %q", first)
+		}
+	}
+}
+
+// TestEngineNote states how the preamble names the engine's module.
+func TestEngineNote(t *testing.T) {
+	for _, tt := range []struct {
+		files overlay.Files
+		want  string
+	}{
+		{overlay.Files{}, "engine from this module"},
+		{overlay.Files{Version: "v0.19.0"}, "engine github.com/typelate/muxt@v0.19.0"},
+		{overlay.Files{Version: "v0.19.0", ModuleDir: "/src/muxt"}, "engine github.com/typelate/muxt@v0.19.0 => /src/muxt"},
+		{overlay.Files{Version: "v0.19.0", TargetVersion: "v0.18.0"}, "engine github.com/typelate/muxt@v0.19.0, not your go.mod's v0.18.0"},
+	} {
+		assert.Equal(t, tt.want, engineNote(tt.files), "engineNote(%+v)", tt.files)
+	}
 }
 
 // slowTest takes longer than a plan does, so a run that runs the tests

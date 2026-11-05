@@ -3,7 +3,7 @@ package analysis
 import (
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // Formatting-marker boundaries (WHATWG §13.2.4.3): the active

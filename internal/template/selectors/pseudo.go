@@ -3,7 +3,7 @@ package selectors
 import (
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // maybePseudo is an interactive/runtime pseudo-class (:hover, :checked, ...)

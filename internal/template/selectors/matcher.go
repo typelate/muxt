@@ -3,7 +3,7 @@ package selectors
 import (
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // selectorList is a comma-separated group of selectors; an element matches

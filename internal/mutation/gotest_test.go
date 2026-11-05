@@ -21,6 +21,18 @@ func TestCheckGoTestArgsSaysWhyCoverpkgIsRefused(t *testing.T) {
 	assert.Contains(t, err.Error(), "std")
 }
 
+// TestCheckGoTestArgsSaysWhyModFlagsAreRefused states that -mod and
+// -modfile are refused for the pre-pass's sake, which sets both.
+func TestCheckGoTestArgsSaysWhyModFlagsAreRefused(t *testing.T) {
+	for _, flag := range []string{"-mod=vendor", "-modfile=alt.mod"} {
+		err := CheckGoTestArgs([]string{flag})
+		require.Error(t, err, "CheckGoTestArgs(%q)", flag)
+		name, _, _ := strings.Cut(flag, "=")
+		assert.Contains(t, err.Error(), "go test flag "+name+" cannot be passed through", "CheckGoTestArgs(%q)", flag)
+		assert.Contains(t, err.Error(), "coverage pre-pass", "CheckGoTestArgs(%q)", flag)
+	}
+}
+
 func TestCheckGoTestArgs(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -49,6 +61,13 @@ func TestCheckGoTestArgs(t *testing.T) {
 		{name: "coverpkg of another package named template", args: []string{"-coverpkg=example.com/html/template"}},
 		{name: "html/template as another flag's value", args: []string{"-run", "html/template"}},
 		{name: "a coverpkg flag for the test binary", args: []string{"-args", "-coverpkg=std"}},
+		{name: "modfile with a value", args: []string{"-modfile=alt.mod"}, refused: true},
+		{name: "modfile with two dashes", args: []string{"--modfile=alt.mod"}, refused: true},
+		{name: "modfile with its value as the next argument", args: []string{"-modfile", "alt.mod"}, refused: true},
+		{name: "mod", args: []string{"-mod=vendor"}, refused: true},
+		{name: "mod with its value as the next argument", args: []string{"-mod", "readonly"}, refused: true},
+		{name: "modcacherw, which only starts with mod", args: []string{"-modcacherw"}},
+		{name: "a modfile flag for the test binary", args: []string{"-args", "-modfile=alt.mod"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := CheckGoTestArgs(tt.args)

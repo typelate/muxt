@@ -162,11 +162,12 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 	// worth a run of the suite only when there is a mutant to run.
 	if !config.DryRun && p.runnable() > 0 {
 		started := time.Now()
-		cov, err := templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
+		cov, engine, err := templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
 		if err != nil {
 			return nil, err
 		}
 		p.cover(cov, time.Since(started))
+		p.engine = engine
 	}
 	return runPlan(ctx, p, config, scratch, status, tester.baseline, tester.verdict, tester.recheck)
 }
@@ -220,6 +221,10 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 		prePass := ""
 		if p.prePass > 0 {
 			prePass = ", coverage pre-pass " + roundDuration(p.prePass)
+			if config.Verbose && p.engine != "" {
+				// Which engine the coverage came from.
+				prePass += " (" + p.engine + ")"
+			}
 		}
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s%s, estimated %s\n",
 			report.Total, pluralize(report.Total, "mutant"),

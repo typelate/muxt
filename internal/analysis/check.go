@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/html"
 
 	"github.com/typelate/muxt/internal/check"
 

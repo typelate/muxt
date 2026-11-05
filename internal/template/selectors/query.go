@@ -3,7 +3,7 @@ package selectors
 import (
 	"iter"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // QuerySelectorAll returns an iterator over the descendant elements of root

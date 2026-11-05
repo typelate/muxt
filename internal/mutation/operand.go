@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // OperatorOperands varies the leaf operands of one action together,

@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // checkPrintf validates a literal printf format string against the types of

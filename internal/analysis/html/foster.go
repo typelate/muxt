@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // WHATWG §13.2.6.4.9: content allowed inside table-context elements

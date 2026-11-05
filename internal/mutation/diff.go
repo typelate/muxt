@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // revision is what the templates looked like at an earlier commit: the

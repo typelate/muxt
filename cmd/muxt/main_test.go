@@ -70,6 +70,13 @@ func Test(t *testing.T) {
 	// workspace; a GOWORK from the invoking environment must not leak
 	// into their package loading.
 	t.Setenv("GOWORK", "off")
+	// The coverage pre-pass of test-template-mutations requires
+	// github.com/typelate/muxt; this repository replaces it, so that the
+	// scripts fetch nothing and a test binary, which has no version to
+	// require, can run it.
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/typelate/muxt").Output()
+	require.NoError(t, err)
+	t.Setenv("MUXT_MODULE_DIR", strings.TrimSpace(string(out)))
 	e := script.NewEngine()
 	e.Quiet = true
 	e.Cmds = scripttest.DefaultCmds()

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 func TestParseNodePosition(t *testing.T) {

@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // Option configures the formatter.

@@ -14,7 +14,7 @@ import (
 
 	"github.com/typelate/muxt/internal/check/internal/asteval"
 	"github.com/typelate/muxt/internal/check/internal/astgen"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 type pendingCall struct {

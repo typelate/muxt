@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/internal/template"
 	"github.com/typelate/muxt/internal/template/selectors"
+	"github.com/typelate/muxt/template"
 )
 
 // Display is the class of an element's outer display type: only the

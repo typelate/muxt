@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 
 	"github.com/typelate/muxt/internal/check"
 
@@ -70,6 +70,10 @@ type plan struct {
 	// prePass is how long the coverage pre-pass took, zero when it did
 	// not run.
 	prePass time.Duration
+
+	// engine says which muxt module the coverage pre-pass built the
+	// template engine from, empty when it ran no go test.
+	engine string
 }
 
 // candidate is a runnable mutant in an html/template set, with the name

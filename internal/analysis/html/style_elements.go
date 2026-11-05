@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // CheckStyleElements reports what browsers drop in the <style> elements of

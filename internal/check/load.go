@@ -12,8 +12,8 @@ import (
 
 	"github.com/typelate/muxt/internal/check/internal/asteval"
 	"github.com/typelate/muxt/internal/check/internal/astgen"
-	"github.com/typelate/muxt/internal/template"
-	htttemplate "github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template"
+	htttemplate "github.com/typelate/muxt/template/html"
 )
 
 // LoadTemplates resolves the construction chain of the package-level

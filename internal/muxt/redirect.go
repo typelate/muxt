@@ -3,8 +3,8 @@ package muxt
 import (
 	"slices"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/html"
 )
 
 // analyzeRedirectCalls sets canRedirect on each definition.

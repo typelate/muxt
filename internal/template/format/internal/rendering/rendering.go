@@ -16,8 +16,8 @@ import (
 	"golang.org/x/net/html/atom"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // Context is the element a rendered fragment is parsed in.

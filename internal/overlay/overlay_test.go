@@ -4,105 +4,246 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/typelate/muxt/internal/overlay"
 )
 
-func TestWriteOverlay(t *testing.T) {
-	ctx := context.Background()
+// targetModule is a test target's go.mod and go.sum, which Write copies.
+const (
+	targetGoMod = "module example.com/target\n\ngo 1.27\n"
+	targetGoSum = "example.com/dep v1.0.0/go.mod h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+)
+
+// writeTarget writes a test target module and returns its directory.
+func writeTarget(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		writeFile(t, filepath.Join(dir, name), content)
+	}
+	return dir
+}
+
+// TestWriteShimOverlay states the overlay Write writes: html/template's
+// own files deleted and the shim added in their place, backed by a copy
+// of the shim under the scratch directory.
+func TestWriteShimOverlay(t *testing.T) {
 	goroot := realGOROOT(t)
 	stdDir := filepath.Join(goroot, "src", "html", "template")
+	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
 	scratch := t.TempDir()
 
-	jsonPath, err := overlay.Write(ctx, overlay.Toolchain{}, scratch)
+	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	b, err := os.ReadFile(jsonPath)
-	if err != nil {
-		t.Fatal(err)
+	if want := filepath.Join(scratch, "overlay.json"); files.Overlay != want {
+		t.Errorf("Overlay = %q, want %q", files.Overlay, want)
 	}
 	var got struct{ Replace map[string]string }
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatalf("overlay JSON %s: %v", jsonPath, err)
+	if err := json.Unmarshal([]byte(readFile(t, files.Overlay)), &got); err != nil {
+		t.Fatalf("overlay JSON %s: %v", files.Overlay, err)
 	}
 
-	for key := range got.Replace {
-		if rel, err := filepath.Rel(stdDir, key); err != nil || !filepath.IsLocal(rel) {
-			t.Errorf("overlay replaces %s, outside %s", key, stdDir)
+	shim := filepath.Join(scratch, "html-template", "muxt_shim.go")
+	want := map[string]string{filepath.Join(stdDir, "muxt_shim.go"): shim}
+	for _, name := range stdSourceFiles(t, stdDir) {
+		want[filepath.Join(stdDir, name)] = "" // deleted
+	}
+	for key, backing := range got.Replace {
+		if w, ok := want[key]; !ok {
+			t.Errorf("overlay replaces %s, which is neither html/template's nor the shim", key)
+		} else if backing != w {
+			t.Errorf("overlay backs %s with %q, want %q", key, backing, w)
 		}
 	}
+	for key := range want {
+		if _, ok := got.Replace[key]; !ok {
+			t.Errorf("overlay leaves out %s", key)
+		}
+	}
+	if b := readFile(t, shim); b != string(overlay.Shim) {
+		t.Errorf("the shim at %s is not the embedded one:\n%s", shim, b)
+	}
+}
 
-	engine := overlay.Engine()
-	entries, err := os.ReadDir(stdDir)
-	if err != nil {
+// TestWriteCopiesGoSum states that the modfile copy has the test
+// target's go.sum beside it, and that neither of the target's files
+// changes.
+func TestWriteCopiesGoSum(t *testing.T) {
+	realGOROOT(t)
+	for _, tt := range []struct {
+		name  string
+		goSum bool
+	}{
+		{name: "with a go.sum", goSum: true},
+		{name: "without a go.sum"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			targetFiles := map[string]string{"go.mod": targetGoMod}
+			if tt.goSum {
+				targetFiles["go.sum"] = targetGoSum
+			}
+			target := writeTarget(t, targetFiles)
+			scratch := t.TempDir()
+
+			files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, scratch)
+			if err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			if want := filepath.Join(scratch, "go.mod"); files.ModFile != want {
+				t.Errorf("ModFile = %q, want %q", files.ModFile, want)
+			}
+			sum, err := os.ReadFile(filepath.Join(scratch, "go.sum"))
+			switch {
+			case tt.goSum && err != nil:
+				t.Errorf("the target's go.sum is not copied: %v", err)
+			case tt.goSum && string(sum) != targetGoSum:
+				t.Errorf("go.sum = %q, want the target's %q", sum, targetGoSum)
+			case !tt.goSum && err == nil && len(sum) > 0:
+				t.Errorf("go.sum = %q, want none or empty", sum)
+			}
+			if b := readFile(t, filepath.Join(target, "go.mod")); b != targetGoMod {
+				t.Errorf("the target's go.mod changed:\n%s", b)
+			}
+		})
+	}
+}
+
+// TestWriteModuleDir states where the module directory that replaces
+// muxt comes from: the toolchain's field, else MUXT_MODULE_DIR in its
+// environment, a relative one resolved against the toolchain's directory.
+func TestWriteModuleDir(t *testing.T) {
+	realGOROOT(t)
+	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
+	for _, tt := range []struct {
+		name string
+		tc   overlay.Toolchain
+		want string
+	}{
+		{name: "the field", tc: overlay.Toolchain{Dir: target, ModuleDir: "/src/muxt", Env: append(os.Environ(), "MUXT_MODULE_DIR=/elsewhere")}, want: "/src/muxt"},
+		{name: "the environment", tc: overlay.Toolchain{Dir: target, Env: append(os.Environ(), "MUXT_MODULE_DIR=/src/muxt")}, want: "/src/muxt"},
+		{name: "a relative directory", tc: overlay.Toolchain{Dir: target, ModuleDir: "muxt"}, want: filepath.Join(target, "muxt")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			files, err := overlay.Write(context.Background(), tt.tc, t.TempDir())
+			if err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			if files.ModuleDir != tt.want {
+				t.Errorf("ModuleDir = %q, want %q", files.ModuleDir, tt.want)
+			}
+			if !strings.Contains(readFile(t, files.ModFile), "replace github.com/typelate/muxt => "+tt.want) {
+				t.Errorf("modfile does not replace muxt with %s:\n%s", tt.want, readFile(t, files.ModFile))
+			}
+		})
+	}
+}
+
+// TestWriteNeedsAVersion states that a muxt without a version to require,
+// as a test binary is, cannot write the modfile without a module
+// directory, and says how to give it one.
+func TestWriteNeedsAVersion(t *testing.T) {
+	realGOROOT(t)
+	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
+	env := slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "MUXT_MODULE_DIR=") })
+	_, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, Env: env}, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "set MUXT_MODULE_DIR to its source directory") {
+		t.Errorf("Write: error = %v, want one saying to set MUXT_MODULE_DIR", err)
+	}
+	if err := overlay.Probe(context.Background(), overlay.Toolchain{Dir: target, Env: env}); err == nil || !strings.Contains(err.Error(), "MUXT_MODULE_DIR") {
+		t.Errorf("Probe: error = %v, want one saying to set MUXT_MODULE_DIR", err)
+	}
+}
+
+// TestWriteNeedsAModule states that a target outside any module is an
+// error: there is no go.mod to add the engine to.
+func TestWriteNeedsAModule(t *testing.T) {
+	realGOROOT(t)
+	dir := t.TempDir()
+	tc := overlay.Toolchain{Dir: dir, Env: append(os.Environ(), "GO111MODULE=on", "GOWORK=off")}
+	if _, err := overlay.Write(context.Background(), tc, t.TempDir()); err == nil || !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("Write outside a module: error = %v, want one naming go.mod", err)
+	}
+}
+
+// TestOverlayBuildsFixture runs the fixture module's test, which passes
+// only when html/template is the shim and the engine behind it is
+// github.com/typelate/muxt/template, which the modfile requires and
+// replaces with this repository: it fails without the overlay, and passes
+// with it, vet on and -cover set, leaving the fixture's go.mod and go.sum
+// as they were. The fixture is at muxt's go line, so the modfile copy
+// keeps it.
+func TestOverlayBuildsFixture(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds html/template from the overlaid engine with the go command")
+	}
+	realGOROOT(t)
+	fixture := t.TempDir()
+	if err := os.CopyFS(fixture, os.DirFS(filepath.Join("testdata", "fixture"))); err != nil {
 		t.Fatal(err)
 	}
-	var deletes int
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		key := filepath.Join(stdDir, name)
-		backing, ok := got.Replace[key]
-		if !ok {
-			t.Errorf("overlay leaves %s in place", key)
-			continue
-		}
-		if _, err := fs.Stat(engine, name); err == nil {
-			continue // the engine's file of the same name takes its place
-		}
-		if backing != "" {
-			t.Errorf("overlay backs %s with %q, want \"\" (deleted)", key, backing)
-		}
-		deletes++
-	}
-	if deletes == 0 {
-		t.Errorf("overlay deletes none of %s", stdDir)
+	goMod := readFile(t, filepath.Join(fixture, "go.mod"))
+	goSum := readFile(t, filepath.Join(fixture, "go.sum"))
+
+	if out, err := goCommand(fixture, "test", "-count=1", "."); err == nil {
+		t.Fatalf("the fixture's test passes with the real html/template; it must not:\n%s", out)
+	} else if !strings.Contains(out, "html/template is not the overlaid engine") {
+		t.Fatalf("the fixture's test fails without the overlay, but not for the engine's absence: %v\n%s", err, out)
 	}
 
-	var adds int
-	err = fs.WalkDir(engine, ".", func(name string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		adds++
-		key := filepath.Join(stdDir, filepath.FromSlash(name))
-		backing := got.Replace[key]
-		if backing == "" {
-			t.Errorf("overlay does not add %s", key)
-			return nil
-		}
-		if rel, err := filepath.Rel(scratch, backing); err != nil || !filepath.IsLocal(rel) {
-			t.Errorf("overlay backs %s with %s, outside the scratch dir %s", key, backing, scratch)
-		}
-		want, err := fs.ReadFile(engine, name)
-		if err != nil {
-			return err
-		}
-		have, err := os.ReadFile(backing)
-		if err != nil {
-			t.Errorf("backing file of %s: %v", key, err)
-			return nil
-		}
-		if !bytes.Equal(have, want) {
-			t.Errorf("backing file %s differs from the engine's %s", backing, name)
-		}
-		return nil
-	})
+	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: fixture, ModuleDir: muxtDir(t)}, t.TempDir())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Write: %v", err)
 	}
-	if adds == 0 {
-		t.Fatal("the engine has no files")
+	out, err := goCommand(fixture, "test", "-count=1", "-cover", "-mod=mod", "-modfile="+files.ModFile, "-overlay="+files.Overlay, ".")
+	if err != nil {
+		t.Fatalf("go test with the overlay: %v\n%s", err, out)
+	}
+	if got := readFile(t, filepath.Join(fixture, "go.mod")); got != goMod {
+		t.Errorf("the fixture's go.mod changed:\n%s", got)
+	}
+	if got := readFile(t, filepath.Join(fixture, "go.sum")); got != goSum {
+		t.Errorf("the fixture's go.sum changed:\n%s", got)
+	}
+	target, used, err := files.GoLines()
+	if err != nil {
+		t.Fatalf("GoLines: %v", err)
+	}
+	if target != "1.27" || used != target {
+		t.Errorf("GoLines = %q, %q; want the fixture's go 1.27 kept in the modfile", target, used)
+	}
+}
+
+// TestGoLinesSeesARaise states that GoLines reads the test target's go
+// line and the modfile copy's as the go command left it: a target below
+// muxt's go line is raised to it in the copy.
+func TestGoLinesSeesARaise(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go list with the modfile copy")
+	}
+	realGOROOT(t)
+	target := writeTarget(t, map[string]string{"go.mod": "module example.com/target\n\ngo 1.22\n", "a.go": "package a\n"})
+	files, err := overlay.Write(context.Background(), overlay.Toolchain{Dir: target, ModuleDir: muxtDir(t)}, t.TempDir())
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if out, err := goCommand(target, "list", "-mod=mod", "-modfile="+files.ModFile, "-overlay="+files.Overlay, "html/template"); err != nil {
+		t.Fatalf("go list: %v\n%s", err, out)
+	}
+	before, after, err := files.GoLines()
+	if err != nil {
+		t.Fatalf("GoLines: %v", err)
+	}
+	if before != "1.22" || after == "1.22" {
+		t.Errorf("GoLines = %q, %q; want 1.22 raised in the copy", before, after)
 	}
 }
 
@@ -117,28 +258,69 @@ func TestGOROOT(t *testing.T) {
 	}
 }
 
+// TestProbe probes a module that requires muxt, replaced with this
+// repository, and muxt itself, which requires nothing.
 func TestProbe(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list with a GOROOT overlay")
 	}
 	realGOROOT(t)
-	if err := overlay.Probe(context.Background(), overlay.Toolchain{}); err != nil {
-		t.Fatalf("Probe: %v", err)
+	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
+	for name, tc := range map[string]overlay.Toolchain{
+		"a module":    {Dir: target, Env: append(os.Environ(), "GOWORK=off", "MUXT_MODULE_DIR="+muxtDir(t))},
+		"muxt itself": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := overlay.Probe(context.Background(), tc); err != nil {
+				t.Fatalf("Probe: %v", err)
+			}
+		})
 	}
 }
 
+// TestProbeReportsARefusedOverlay states that a refusal carries the go
+// command's own reason, with advice only where it fits that reason.
 func TestProbeReportsARefusedOverlay(t *testing.T) {
-	goroot := t.TempDir()
-	goBin := fakeGo(t, goroot, t.TempDir(), `echo "go: overlay contains a replacement for GOROOT" >&2; exit 1`)
-
-	err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin})
-	if err == nil {
-		t.Fatal("Probe succeeded against a go command that refuses the overlay")
-	}
-	for _, want := range []string{"overlay", "html/template", "go: overlay contains a replacement for GOROOT", "GOTOOLCHAIN=local"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("Probe error %q does not mention %q", err, want)
-		}
+	for _, tt := range []struct {
+		name, stderr string
+		want         []string
+		not          []string
+	}{
+		{
+			name:   "an overlay refused",
+			stderr: "go: overlay contains a replacement for GOROOT",
+			want:   []string{"refuses an overlay", "html/template", "go: overlay contains a replacement for GOROOT"},
+			not:    []string{"GOTOOLCHAIN=local", "go.work"},
+		},
+		{
+			name:   "a toolchain in the module cache",
+			stderr: "go: overlay contains a replacement for /m/golang.org/toolchain@v0.0.1-go1.27.0/src/html/template/a.go; Files beneath GOMODCACHE must not be replaced",
+			want:   []string{"refuses an overlay", "Files beneath GOMODCACHE must not be replaced", "(try GOTOOLCHAIN=local)"},
+		},
+		{
+			name:   "a workspace",
+			stderr: "go: -modfile cannot be used in workspace mode",
+			want:   []string{"go.work is in use", "go: -modfile cannot be used in workspace mode"},
+			not:    []string{"GOTOOLCHAIN=local"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			goBin := fakeGo(t, t.TempDir(), t.TempDir(), "echo '"+tt.stderr+"' >&2; exit 1")
+			err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"})
+			if err == nil {
+				t.Fatal("Probe succeeded against a go command that refuses the overlay")
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("Probe error %q does not say %q", err, want)
+				}
+			}
+			for _, not := range tt.not {
+				if strings.Contains(err.Error(), not) {
+					t.Errorf("Probe error %q says %q", err, not)
+				}
+			}
+		})
 	}
 }
 
@@ -146,7 +328,7 @@ func TestProbeReportsAnIgnoredOverlay(t *testing.T) {
 	goroot := t.TempDir()
 	goBin := fakeGo(t, goroot, t.TempDir(), `echo template.go`)
 
-	if err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin}); err == nil {
+	if err := overlay.Probe(context.Background(), overlay.Toolchain{Go: goBin, ModuleDir: "/src/muxt"}); err == nil {
 		t.Fatal("Probe succeeded though go list did not see the probe file")
 	}
 }
@@ -199,22 +381,6 @@ func TestGOROOTUnderGOMODCACHE(t *testing.T) {
 	}
 }
 
-func TestOverlayBuildsFixture(t *testing.T) {
-	if testing.Short() {
-		t.Skip("builds html/template from the overlaid engine with the go command")
-	}
-	realGOROOT(t)
-	jsonPath, err := overlay.Write(context.Background(), overlay.Toolchain{}, t.TempDir())
-	if err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	fixture, err := filepath.Abs(filepath.Join("testdata", "fixture"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	runGo(t, fixture, "test", "-count=1", "-vet=off", "-overlay="+jsonPath, ".")
-}
-
 // realGOROOT is go env GOROOT, skipping the test when there is no
 // html/template source to overlay.
 func realGOROOT(t *testing.T) string {
@@ -233,22 +399,19 @@ func realGOROOT(t *testing.T) string {
 	return goroot
 }
 
-// fakeGo writes a go command that reports goroot and modcache for go env
-// and runs list for go list.
+// fakeGo writes a go command that reports goroot, modcache and a go.mod
+// for go env and runs list for go list.
 func fakeGo(t *testing.T, goroot, modcache, list string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake go command is a shell script")
 	}
-	if err := os.MkdirAll(filepath.Join(goroot, "src", "html", "template"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(goroot, "src", "html", "template", "template.go"), []byte("package template\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(goroot, "src", "html", "template", "template.go"), "package template\n")
+	goMod := filepath.Join(t.TempDir(), "go.mod")
+	writeFile(t, goMod, targetGoMod)
 	script := `#!/bin/sh
 case "$1" in
-env) printf '%s\n%s\n' '` + goroot + `' '` + modcache + `' ;;
+env) if [ "$2" = GOMOD ]; then echo '` + goMod + `'; else printf '%s\n%s\n' '` + goroot + `' '` + modcache + `'; fi ;;
 list) ` + list + ` ;;
 *) exit 2 ;;
 esac
@@ -260,15 +423,61 @@ esac
 	return goBin
 }
 
-func runGo(t *testing.T, dir string, args ...string) {
-	t.Helper()
+// goCommand runs the go command in dir with the local toolchain and no
+// workspace, and returns what it printed.
+func goCommand(dir string, args ...string) (string, error) {
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS="+os.Getenv("GOFLAGS"), "PWD="+dir)
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "PWD="+dir)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, out.Bytes())
+	err := cmd.Run()
+	return out.String(), err
+}
+
+// stdSourceFiles lists the non-test Go files in dir on disk.
+func stdSourceFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// muxtDir is this repository's directory, which replaces
+// github.com/typelate/muxt in a test's modfile so that nothing is fetched.
+func muxtDir(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/typelate/muxt").Output()
+	if err != nil {
+		t.Fatalf("go list -m github.com/typelate/muxt: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func readFile(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func writeFile(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

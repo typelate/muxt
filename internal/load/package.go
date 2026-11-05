@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/astgen"
-	html "github.com/typelate/muxt/internal/template/html"
+	html "github.com/typelate/muxt/template/html"
 )
 
 func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {

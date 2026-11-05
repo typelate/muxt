@@ -3,7 +3,7 @@ package analysis
 import (
 	"iter"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // Modality describes how control flow qualifies an ancestor

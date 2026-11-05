@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // CheckCustomProperties reports var() references without a fallback to

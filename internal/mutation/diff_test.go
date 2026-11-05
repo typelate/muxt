@@ -264,7 +264,7 @@ func TestNewPlanWithDiff(t *testing.T) {
 			name: "a workspace the caller names",
 			change: func(r *repo) {
 				editTemplate(r)
-				r.write(map[string]string{"go.work": "go 1.24\n\nuse ./web\n"})
+				r.write(map[string]string{"go.work": "go 1.27\n\nuse ./web\n"})
 			},
 			// The working tree loads within the workspace; the copy of the
 			// revision sits outside it and loads as the module it is.

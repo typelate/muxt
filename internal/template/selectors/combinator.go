@@ -1,6 +1,6 @@
 package selectors
 
-import "github.com/typelate/muxt/internal/template"
+import "github.com/typelate/muxt/template"
 
 // combinator joins two selectors by a structural relationship.
 type combinator byte

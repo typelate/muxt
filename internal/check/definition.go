@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // Ported from upstream typelate/check v0.8.3 definition.go (eda3f3e..0f33449).

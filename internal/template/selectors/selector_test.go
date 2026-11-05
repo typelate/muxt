@@ -3,9 +3,9 @@ package selectors_test
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
 	"github.com/typelate/muxt/internal/template/selectors"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // parseHTML parses HTML+template source into a tree with HTML contexts annotated.

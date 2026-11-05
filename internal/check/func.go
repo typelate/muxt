@@ -5,7 +5,7 @@ import (
 	"go/types"
 	"maps"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 type Functions map[string]*types.Signature

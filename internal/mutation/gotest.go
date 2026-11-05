@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/internal/overlay"
+	"github.com/typelate/muxt/template/html"
 )
 
 // goTest runs the project's tests, optionally with extra flags.
@@ -97,16 +98,17 @@ func (t goTest) baseline(ctx context.Context) (string, error) {
 // failure shows the end of that.
 const coverageOutputLimit = 1 << 20
 
-// coverageFlags are the go test flags of the coverage pre-pass.
-//
-// The engine adds packages under GOROOT that have no directory on disk,
-// which vet cannot read, hence -vet=off. -v is required: see coverage.
-func coverageFlags(overlay string) []string {
-	return []string{"-v", "-vet=off", "-overlay=" + overlay}
+// coverageFlags are the go test flags of the coverage pre-pass: the
+// overlay putting the shim in place of html/template, and the modfile
+// requiring github.com/typelate/muxt, which the shim imports. -mod=mod
+// lets the go command add the sums muxt's requirements need to the
+// modfile's go.sum, never the test target's. -v is required: see coverage.
+func coverageFlags(engine overlay.Files) []string {
+	return []string{"-v", "-mod=mod", "-modfile=" + engine.ModFile, "-overlay=" + engine.Overlay}
 }
 
-// coverage runs the tests once, unmutated, with overlay laying muxt's
-// template engine over html/template and coverDir, named by
+// coverage runs the tests once, unmutated, with engine's files laying
+// muxt's template engine over html/template and coverDir, named by
 // html.CoverEnv, receiving the template blocks each test binary executes.
 //
 // It leaves out the caller's Go coverage flags; see withoutCoverFlags.
@@ -115,21 +117,21 @@ func coverageFlags(overlay string) []string {
 // passing package's test binary wrote, and a binary whose export failed
 // says so only on its stderr, with html.CoverDisabledMarker. Without -v a
 // broken export would read as templates no test reached.
-func (t goTest) coverage(ctx context.Context, overlay, coverDir string) (*goTestOutput, error) {
+func (t goTest) coverage(ctx context.Context, engine overlay.Files, coverDir string) (*goTestOutput, error) {
 	env := t.env
 	if env == nil {
 		env = os.Environ()
 	}
 	t.env = append(slices.Clip(env), html.CoverEnv+"="+coverDir)
 	t.extra = withoutCoverFlags(t.extra)
-	return t.run(ctx, coverageOutputLimit, coverageFlags(overlay)...)
+	return t.run(ctx, coverageOutputLimit, coverageFlags(engine)...)
 }
 
 // withoutCoverFlags is the caller's go test flags less the ones for Go
 // coverage, which the pre-pass must not pass on: -coverprofile would be
-// written once by it and again by the baseline, and -coverpkg or -cover
-// would instrument the engine's packages, which have no directory on
-// disk. The baseline and the kill runs keep them. A flag's value as the
+// written once by it and again by the baseline, and the others would only
+// slow it, since what it records is the engine's template coverage, not
+// Go's. The baseline and the kill runs keep them. A flag's value as the
 // next argument goes with it; everything from -args on is the test
 // binary's and is kept.
 func withoutCoverFlags(args []string) []string {
@@ -274,9 +276,12 @@ type goTestOutput struct {
 	overflow bool
 
 	// testFailed is set by a "--- FAIL" line or a package's "FAIL" result
-	// line, couldNotRun by a package that did not build or set up.
+	// line, couldNotRun by a package that did not build or set up, and
+	// setupFailed by one that did not set up: the go command could not
+	// load what it needs, such as a module it may not download.
 	testFailed  bool
 	couldNotRun bool
+	setupFailed bool
 
 	// failed holds the top level name of each test a "--- FAIL" line
 	// named, once each, in the order they were printed.
@@ -397,6 +402,7 @@ func (o *goTestOutput) mark(line string) {
 	case strings.HasPrefix(line, "FAIL\t"):
 		if strings.HasSuffix(line, "[build failed]") || strings.HasSuffix(line, "[setup failed]") {
 			o.couldNotRun = true
+			o.setupFailed = o.setupFailed || strings.HasSuffix(line, "[setup failed]")
 		} else if strings.Count(line, "\t") >= 2 {
 			o.testFailed = true
 			o.unnamed = o.unnamed || !o.named
@@ -443,10 +449,16 @@ func (o *goTestOutput) String() string {
 // says a test failed; the JSON stream has none of those lines, so every
 // failing mutant would be read as a run that could not happen.
 //
+// -mod and -modfile are refused because the coverage pre-pass sets both:
+// -modfile names a copy of go.mod that requires github.com/typelate/muxt,
+// whose template/html the html/template shim forwards to, and -mod=mod
+// lets the go command complete that copy's go.sum.
+//
 // -coverpkg is refused when it covers html/template, by name, by a pattern
 // matching it, or as std or all: the coverage pre-pass replaces that
-// package with muxt's template engine, whose files have no directory on
-// disk for coverage instrumentation to work from.
+// package with muxt's template engine through the overlay, and coverage
+// instrumentation reads the packages it instruments from disk, which
+// would undo it.
 func CheckGoTestArgs(args []string) error {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -464,6 +476,8 @@ func CheckGoTestArgs(args []string) error {
 			return errors.New("go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant")
 		case "json":
 			return errors.New("go test flag -json cannot be passed through: muxt reads go test's text output to tell a failed test from a failed build")
+		case "mod", "modfile":
+			return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/muxt, muxt's template engine, in a copy of go.mod", name)
 		case "coverpkg":
 			if !hasValue && i+1 < len(args) {
 				i++

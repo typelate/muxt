@@ -8,7 +8,7 @@ import (
 	"go/types"
 	"slices"
 
-	"github.com/typelate/muxt/internal/template/html"
+	"github.com/typelate/muxt/template/html"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"

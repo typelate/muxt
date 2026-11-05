@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // ErrorType classifies the failure a *Error reports. It lets tools such as

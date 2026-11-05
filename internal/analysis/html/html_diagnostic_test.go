@@ -3,8 +3,8 @@ package analysis
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 func TestCheckStructure(t *testing.T) {

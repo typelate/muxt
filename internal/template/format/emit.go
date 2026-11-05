@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // emitter reindents a template (v2 spec §3 items 1–6, 8, 9). It writes

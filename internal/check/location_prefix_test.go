@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // TestErrorLocationPrefix states the location and context an error is

@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/typelate/muxt/internal/template"
-	"github.com/typelate/muxt/internal/template/lex"
+	"github.com/typelate/muxt/template"
+	"github.com/typelate/muxt/template/lex"
 )
 
 // pathTo parses input and returns the path to the index-th (0-based)

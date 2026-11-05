@@ -3,7 +3,7 @@ package analysis
 import (
 	"fmt"
 
-	"github.com/typelate/muxt/internal/template"
+	"github.com/typelate/muxt/template"
 )
 
 // Callers walks the AST rooted at tree and returns all TemplateNode call sites
