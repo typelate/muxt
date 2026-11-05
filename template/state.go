@@ -28,6 +28,7 @@ type state struct {
 	missingKey MissingKeyMode
 	trust      TrustFunc
 	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
+	attrValue  bool    // walking a control structure in an attribute value
 }
 
 // trustOf reports the Trust classification for a value, returning
@@ -971,6 +972,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		DataAtom: htmlAtom(elem.TagName),
 	}
 	// Process attributes.
+	var attrs []sourceAttr
 	for _, attrNode := range elem.Attr {
 		switch a := attrNode.(type) {
 		case *HTMLAttributeNode:
@@ -979,7 +981,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 			if err != nil {
 				return nil, err
 			}
-			n.Attr = append(n.Attr, attr)
+			attrs = append(attrs, attr)
 		case *ActionNode:
 			// Action in attribute position — evaluate and treat result as attribute text.
 			val, err := s.evalPipeline(dot, a.Pipe)
@@ -995,30 +997,34 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 			}
 			text := fmt.Sprint(iface)
 			if text != "" {
-				n.Attr = append(n.Attr, html.Attribute{Val: text})
+				attrs = append(attrs, sourceAttr{Attribute: html.Attribute{Val: text}})
 			}
 		case *IfNode:
-			attrs, err := s.walkHTMLAttrBranch(dot, &a.BranchNode, "if")
+			branch, err := s.walkHTMLAttrBranch(dot, &a.BranchNode, "if")
 			if err != nil {
 				return nil, err
 			}
-			n.Attr = append(n.Attr, attrs...)
+			attrs = append(attrs, branch...)
 		case *RangeNode:
-			attrs, err := s.walkHTMLAttrRange(dot, a)
+			each, err := s.walkHTMLAttrRange(dot, a)
 			if err != nil {
 				return nil, err
 			}
-			n.Attr = append(n.Attr, attrs...)
+			attrs = append(attrs, each...)
 		case *WithNode:
-			attrs, err := s.walkHTMLAttrBranch(dot, &a.BranchNode, "with")
+			branch, err := s.walkHTMLAttrBranch(dot, &a.BranchNode, "with")
 			if err != nil {
 				return nil, err
 			}
-			n.Attr = append(n.Attr, attrs...)
+			attrs = append(attrs, branch...)
 		default:
 			return nil, s.errorf("unsupported attribute node type: %T", attrNode)
 		}
 	}
+	for _, a := range attrs {
+		n.Attr = append(n.Attr, a.Attribute)
+	}
+	s.markup.setAttrs(n, attrs)
 	elem.attrCount.Add(1)
 	// Process children.
 	nodes, err := s.walkHTMLNodes(dot, elem.Children, false, false)
@@ -1042,7 +1048,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 	return n, nil
 }
 
-func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (html.Attribute, error) {
+func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (sourceAttr, error) {
 	ns := attr.Namespace
 
 	// Reject dynamic attribute names. Allowing actions in attribute-name
@@ -1052,7 +1058,7 @@ func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (h
 	// statically known attribute name.
 	for _, k := range attr.Key {
 		if _, ok := k.(*TextNode); !ok {
-			return html.Attribute{}, s.errorf("dynamic attribute names are not permitted (template action found in attribute name)")
+			return sourceAttr{}, s.errorf("dynamic attribute names are not permitted (template action found in attribute name)")
 		}
 	}
 
@@ -1066,57 +1072,82 @@ func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (h
 
 	key := keyBuf.String()
 	if err := validateAttrName(key); err != nil {
-		return html.Attribute{}, s.errorf("invalid attribute name %q: %v", key, err)
+		return sourceAttr{}, s.errorf("invalid attribute name %q: %v", key, err)
 	}
 
 	if !attr.HasValue {
-		return html.Attribute{Namespace: ns, Key: key}, nil
+		return sourceAttr{Attribute: html.Attribute{Namespace: ns, Key: key}}, nil
 	}
 
-	// Evaluate value, stripping surrounding quotes from the overall value.
-	var valParts []string
-	if err := s.evalHTMLAttrValueNodes(dot, attr.Value, &valParts); err != nil {
-		return html.Attribute{}, err
+	// The value's first text says whether it is quoted, and with what.
+	var quote byte
+	if len(attr.Value) > 0 {
+		if tn, ok := attr.Value[0].(*TextNode); ok && len(tn.Text) > 0 && (tn.Text[0] == '"' || tn.Text[0] == '\'') {
+			quote = tn.Text[0]
+		}
 	}
-	valStr := strings.Join(valParts, "")
-	valStr = stripAttrQuotes(valStr)
-
-	return html.Attribute{Namespace: ns, Key: key, Val: valStr}, nil
+	var val, raw strings.Builder
+	if err := s.evalHTMLAttrValueNodes(dot, attr.Value, quote, &val, &raw); err != nil {
+		return sourceAttr{}, err
+	}
+	valStr, rawStr := val.String(), raw.String()
+	if quote != 0 {
+		valStr, rawStr = unquoteAttr(valStr, quote), unquoteAttr(rawStr, quote)
+	}
+	return sourceAttr{
+		Attribute: html.Attribute{Namespace: ns, Key: key, Val: valStr},
+		syntax:    &attrSyntax{quote: quote, raw: rawStr},
+	}, nil
 }
 
-// evalHTMLAttrValueNodes evaluates a slice of AST nodes that appear inside an
-// HTML attribute value and appends the resulting text to valParts. Control
-// structures (if, with, range) are supported by walking them with the HTML
-// node dispatcher and extracting text from the resulting html.Node slice.
-func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, valParts *[]string) error {
+// unquoteAttr removes the quotes around an attribute value's text.
+func unquoteAttr(s string, quote byte) string {
+	s = strings.TrimPrefix(s, string(quote))
+	return strings.TrimSuffix(s, string(quote))
+}
+
+// evalHTMLAttrValueNodes evaluates the AST nodes of an HTML attribute
+// value, writing to val the value's text and to raw the value as
+// html/template writes it between quote (0 for none): static text as the
+// source has it, and each action's output escaped for the quote. Control
+// structures (if, with, range) are walked with the HTML node dispatcher
+// and the text taken from the resulting html.Node slice.
+func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote byte, val, raw *strings.Builder) error {
 	for _, v := range nodes {
 		switch vn := v.(type) {
 		case *TextNode:
-			*valParts = append(*valParts, string(vn.Text))
+			val.Write(vn.Text)
+			raw.Write(vn.Text)
 		case *ActionNode:
-			val, err := s.evalPipeline(dot, vn.Pipe)
+			value, err := s.evalPipeline(dot, vn.Pipe)
 			if err != nil {
 				return err
 			}
-			if !val.IsValid() {
-				*valParts = append(*valParts, "<no value>")
+			if !value.IsValid() {
+				val.WriteString("<no value>")
+				raw.WriteString(escapeAttrText("<no value>", quote))
 				continue
 			}
-			iface := printableValue(val)
+			iface := printableValue(value)
 			if iface == nil {
-				return s.errorf("can't print %s of type %s", val, val.Type())
+				return s.errorf("can't print %s of type %s", value, value.Type())
 			}
-			trust := s.trustOf(val)
+			trust := s.trustOf(value)
 			text := fmt.Sprint(iface)
 			text, _ = escapeAction(text, vn.HTMLContext, trust)
-			*valParts = append(*valParts, text)
+			val.WriteString(text)
+			raw.WriteString(escapeAttrText(text, quote))
 		case *IfNode, *WithNode, *RangeNode:
+			inValue := s.attrValue
+			s.attrValue = true
 			htmlNodes, err := s.walkHTMLNode(dot, vn)
+			s.attrValue = inValue
 			if err != nil {
 				return err
 			}
 			for _, hn := range htmlNodes {
-				*valParts = append(*valParts, htmlNodeText(hn))
+				val.WriteString(htmlNodeText(hn))
+				raw.WriteString(rawAttrText(hn, quote))
 			}
 		}
 	}
@@ -1394,14 +1425,15 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	// Execute the template into a buffer and parse the result as HTML? No —
 	// we walk the sub-template's tree and collect html.Nodes.
 	newState := &state{
-		tree:   tree,
-		cp:     s.cp,
-		depth:  s.depth + 1,
-		funcs:  s.funcs,
-		finder: s.finder,
-		trust:  s.trust,
-		markup: s.markup,
-		vars:   []variable{{"$", newDot}},
+		tree:      tree,
+		cp:        s.cp,
+		depth:     s.depth + 1,
+		funcs:     s.funcs,
+		finder:    s.finder,
+		trust:     s.trust,
+		markup:    s.markup,
+		attrValue: s.attrValue,
+		vars:      []variable{{"$", newDot}},
 	}
 	s.cp.Init(tree)
 	root := tree.Root
@@ -1459,7 +1491,9 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 			tn.count.Add(1)
 			if len(text) > 0 {
 				nodeType := html.TextNode
-				if tn.Verbatim {
+				if tn.Verbatim || s.attrValue {
+					// In an attribute value, a raw node marks the
+					// source's own text (see rawAttrText).
 					nodeType = html.RawNode
 				}
 				result = append(result, &html.Node{
@@ -1483,7 +1517,7 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 }
 
 // Attribute-position branch helpers for if/with inside element attributes.
-func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name string) ([]html.Attribute, error) {
+func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name string) ([]sourceAttr, error) {
 	branch.openCount.Add(1)
 	pipe, err := s.evalPipeline(dot, branch.Pipe)
 	if err != nil {
@@ -1493,7 +1527,7 @@ func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name s
 	if !ok {
 		return nil, s.errorf("if/with can't use %v", pipe)
 	}
-	var attrs []html.Attribute
+	var attrs []sourceAttr
 	if truth {
 		newDot := dot
 		if name == "with" {
@@ -1511,7 +1545,7 @@ func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name s
 	return attrs, nil
 }
 
-func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]html.Attribute, error) {
+func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr, error) {
 	r.BranchNode.openCount.Add(1)
 	val, err := s.evalPipeline(dot, r.Pipe)
 	if err != nil {
@@ -1519,7 +1553,7 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]html.Attri
 	}
 	val, _ = indirect(val)
 	mark := len(s.vars)
-	var result []html.Attribute
+	var result []sourceAttr
 	oneIteration := func(index, elem reflect.Value) error {
 		if len(r.Pipe.Decl) > 0 {
 			if r.Pipe.IsAssign {
@@ -1633,8 +1667,8 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]html.Attri
 	return nil, nil
 }
 
-func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]html.Attribute, error) {
-	var result []html.Attribute
+func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAttr, error) {
+	var result []sourceAttr
 	for _, node := range list.Nodes {
 		switch n := node.(type) {
 		case *HTMLAttributeNode:
@@ -1673,7 +1707,7 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]html.Attr
 			}
 			text := fmt.Sprint(iface)
 			if text != "" {
-				result = append(result, html.Attribute{Val: text})
+				result = append(result, sourceAttr{Attribute: html.Attribute{Val: text}})
 			}
 		case *TextNode:
 			// Whitespace between attributes — ignore.
@@ -1686,12 +1720,29 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]html.Attr
 // this returns Data directly. For element nodes, it recursively extracts text
 // from children, avoiding the bug where hn.Data would return the tag name.
 func htmlNodeText(n *html.Node) string {
-	if n.Type == html.TextNode {
+	if n.Type == html.TextNode || n.Type == html.RawNode {
 		return n.Data
 	}
 	var buf strings.Builder
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		buf.WriteString(htmlNodeText(c))
+	}
+	return buf.String()
+}
+
+// rawAttrText is the text of an html.Node from an attribute value as
+// html/template writes it between quote: a raw node, the source's own
+// text, as it is, and other text escaped for the quote.
+func rawAttrText(n *html.Node, quote byte) string {
+	switch n.Type {
+	case html.RawNode:
+		return n.Data
+	case html.TextNode:
+		return escapeAttrText(n.Data, quote)
+	}
+	var buf strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		buf.WriteString(rawAttrText(c, quote))
 	}
 	return buf.String()
 }
@@ -1728,18 +1779,6 @@ func (s *state) writeError(err error) ExecError {
 }
 
 var reflectValueType = reflect.TypeFor[reflect.Value]()
-
-// stripAttrQuotes removes surrounding single or double quotes from an attribute value text.
-// The HTML parser stores attribute value text with the surrounding quotes;
-// we need to strip them for the html.Attribute.Val field.
-func stripAttrQuotes(s string) string {
-	if len(s) >= 2 {
-		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
-			return s[1 : len(s)-1]
-		}
-	}
-	return s
-}
 
 // validateArg converts an argument value for a function call.
 // If the parameter type is reflect.Value, wrap the arg.

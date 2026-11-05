@@ -205,10 +205,10 @@ func TestAutoEscape(t *testing.T) {
 					want:     `<div class="&#34; onclick=&#34;alert(1)">x</div>`,
 				},
 				{
-					name:     "unquoted attr gets quoted on output",
+					name:     "unquoted attr escapes what would end the value",
 					template: `<div class={{.}}>x</div>`,
 					data:     `foo onclick=alert(1)`,
-					want:     `<div class="foo onclick=alert(1)">x</div>`,
+					want:     `<div class=foo&#32;onclick&#61;alert(1)>x</div>`,
 				},
 			},
 		},

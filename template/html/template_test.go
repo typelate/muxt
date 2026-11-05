@@ -537,3 +537,37 @@ func TestElementsLeftOpenMatchStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestAttributeSyntaxMatchesStdlib states that the engine writes an
+// attribute as its source does: in the source's quotes, or none, with an
+// empty value kept, the source's own text as it is, and each action's
+// output escaped as html/template escapes it there.
+func TestAttributeSyntaxMatchesStdlib(t *testing.T) {
+	for _, src := range []string{
+		`<script src='/static/lib/htmx.js' defer></script>`,
+		`<ul id='brokers'>x</ul>`,
+		`<meta name="htmx-config" content='{"code":"204","swap":false}'>`,
+		`<select hx-vals='{"@action": "refresh"}'></select>`,
+		`<input value="">`,
+		`<input value=''>`,
+		`<input value>`,
+		`<a title=x>x</a>`,
+		`<a title="a&amp;b {{.}}">x</a>`,
+		`<a title="{{.}}">x</a>`,
+		`<a title='{{.}}'>x</a>`,
+		`<a title={{.}}>x</a>`,
+		`<a title='p {{.}} q'>x</a>`,
+		`<a title="it's {{.}}">x</a>`,
+		`<a title='{"a": 1} {{.}}'>x</a>`,
+		`<a aria-label="{{if .}}Show{{else}}Hide{{end}} {{.}}">x</a>`,
+		`<a aria-label='{{range $i := 3}}{{if $i}}, {{end}}{{$}}{{end}}'>x</a>`,
+		`<a title="{{.}}" class='c' data-x=y hidden>x</a>`,
+	} {
+		for _, data := range []string{`a&b'c"d e<f>+g`, ""} {
+			want := executeStdlib(t, src, data)
+			if got := executeShim(t, src, data); got != want {
+				t.Errorf("shim output for %q with %q = %q, want stdlib's %q", src, data, got, want)
+			}
+		}
+	}
+}
