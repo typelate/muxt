@@ -741,3 +741,31 @@ func TestTemplateTextIsWrittenAsItIs(t *testing.T) {
 		}
 	}
 }
+
+// TestRangeInAnAttributeBranchMatchesStdlib states that a {{range}} in
+// an {{if}} or {{with}} in a start tag adds its attributes, as in
+// html/template, rather than being dropped. The spaces between
+// attributes are compared collapsed: the engine writes one, and
+// html/template writes the source's.
+func TestRangeInAnAttributeBranchMatchesStdlib(t *testing.T) {
+	collapse := func(s string) string {
+		return strings.ReplaceAll(strings.Join(strings.Fields(s), " "), " >", ">")
+	}
+	type data struct {
+		X     bool
+		Attrs []string
+	}
+	for _, src := range []string{
+		`<p {{if .X}}{{range .Attrs}} data-a{{end}}{{end}}>x</p>`,
+		`<p {{if .X}}{{range .Attrs}} data-a="{{.}}"{{end}}{{end}}>x</p>`,
+		`<p {{if .X}}{{range $i, $a := .Attrs}}{{if $i}} title="{{$a}}"{{end}}{{end}}{{end}}>x</p>`,
+		`<p {{with .Attrs}}{{range .}} data-{{.}}="1"{{end}}{{end}}>x</p>`,
+	} {
+		for _, d := range []data{{X: true, Attrs: []string{"hidden", "inert"}}, {}} {
+			want := collapse(executeStdlib(t, src, d))
+			if got := collapse(executeShim(t, src, d)); got != want {
+				t.Errorf("shim output for %q with %+v = %q, want stdlib's %q", src, d, got, want)
+			}
+		}
+	}
+}
