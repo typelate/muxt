@@ -130,15 +130,17 @@ const DefaultMaxCases = 8
 // Run mutates every action the configuration selects and reports which
 // variations the tests catch.
 //
-// Once the run is planned, and when it has a mutant to run, the tests run
-// once with muxt's template engine in place of html/template, to learn
-// which template blocks they execute; a dry run skips this. Tests that fail there leave coverage unknown, with
-// a warning, and the run goes on.
+// Once the run is planned, the tests run once unmutated, the baseline,
+// and a failing baseline stops the run. Then, when it has a mutant to
+// run, they run once more with muxt's template engine in place of
+// html/template, to learn which template blocks they execute. Tests that
+// fail there leave coverage unknown, with a warning, and the run goes on.
+// A dry run does neither.
 //
-// status receives a warning line when that template coverage is unknown,
-// the preamble once the baseline has run, and when the configuration is
-// verbose a line per mutant as it completes, and when it is verbose or
-// Progress a line per template as it completes; it may be nil.
+// status receives the warning lines of that coverage pre-pass, the
+// preamble once both have run, and when the configuration is verbose a
+// line per mutant as it completes, and when it is verbose or Progress a
+// line per template as it completes; it may be nil.
 //
 // When ctx is done the go test runs in flight are interrupted, the
 // temporary files the run wrote are removed, and Run returns ctx's error.
@@ -158,29 +160,32 @@ func Run(ctx context.Context, config Configuration, workingDirectory string, sta
 		return nil, err
 	}
 	tester := config.goTest(workingDirectory)
-	// The pre-pass runs the tests, which a dry run never does, and is
-	// worth a run of the suite only when there is a mutant to run.
-	if !config.DryRun && p.runnable() > 0 {
+	prePass := func(ctx context.Context) error {
 		started := time.Now()
 		cov, engine, err := templateCoverage(ctx, config.toolchain(workingDirectory), scratch, tester.coverage, status)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		p.cover(cov, time.Since(started))
 		p.engine = engine
+		return nil
 	}
-	return runPlan(ctx, p, config, scratch, status, tester.baseline, tester.verdict, tester.recheck)
+	return runPlan(ctx, p, config, scratch, status, tester.baseline, prePass, tester.verdict, tester.recheck)
 }
 
-// runPlan runs an enumerated plan: the suite once unmutated, and then each
-// mutant against its own overlay, which it writes under scratch and
-// removes.
+// runPlan runs an enumerated plan: the suite once unmutated, then the
+// coverage pre-pass, and then each mutant against its own overlay, which
+// it writes under scratch and removes.
 //
-// Running the suite arrives as baseline and verdict rather than being
-// built here, because it is the slow part of a run and everything this
-// decides -- what a failing baseline means, what the preamble says, what
-// a dry run returns -- is then worth stating without it.
-func runPlan(ctx context.Context, p *plan, config Configuration, scratch string, status io.Writer, baseline func(context.Context) (string, error), verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
+// Running the suite arrives as baseline, prePass and verdict rather than
+// being built here, because it is the slow part of a run and everything
+// this decides -- what a failing baseline means, what the preamble says,
+// what a dry run returns -- is then worth stating without it. prePass
+// runs only after the baseline passes, and only when a mutant is left to
+// run: a failing baseline stops the run before the engine is tried, and
+// the pre-pass is worth a run of the suite only when there is a mutant
+// for it to skip. It records what it learns in p; nil means none.
+func runPlan(ctx context.Context, p *plan, config Configuration, scratch string, status io.Writer, baseline func(context.Context) (string, error), prePass func(context.Context) error, verdict func(ctx context.Context, overlay string) (Status, []string, error), recheck func(ctx context.Context, overlay string, failed []string) (Status, error)) (*Report, error) {
 	var progress io.Writer
 	if config.Verbose {
 		progress = status
@@ -191,9 +196,9 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 		templates = status
 	}
 
-	report := p.report()
-	report.Verbose = config.Verbose
 	if config.DryRun {
+		report := p.report()
+		report.Verbose = config.Verbose
 		report.DryRun = true
 		return report, nil
 	}
@@ -211,6 +216,17 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 		return nil, &BaselineFailedError{Output: out}
 	}
 	took := time.Since(started)
+
+	if prePass != nil && p.runnable() > 0 {
+		if err := prePass(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	// The report is made once the pre-pass has said which mutants it
+	// skips.
+	report := p.report()
+	report.Verbose = config.Verbose
 	report.Baseline = BaselineResult{Passed: true, Seconds: took.Seconds()}
 	workers := max(config.Workers, 1)
 	clock := &estimate{perMutant: took, remaining: p.runnable(), workers: workers}
@@ -218,18 +234,18 @@ func runPlan(ctx context.Context, p *plan, config Configuration, scratch string,
 	if status != nil {
 		// The coverage pre-pass is one more run of the suite, already
 		// done, which the estimate leaves out.
-		prePass := ""
+		note := ""
 		if p.prePass > 0 {
-			prePass = ", coverage pre-pass " + roundDuration(p.prePass)
+			note = ", coverage pre-pass " + roundDuration(p.prePass)
 			if config.Verbose && p.engine != "" {
 				// Which engine the coverage came from.
-				prePass += " (" + p.engine + ")"
+				note += " (" + p.engine + ")"
 			}
 		}
 		_, _ = fmt.Fprintf(status, "%d %s across %d %s (complexity %d), baseline %s%s, estimated %s\n",
 			report.Total, pluralize(report.Total, "mutant"),
 			report.Templates, pluralize(report.Templates, "template"),
-			report.Complexity, roundDuration(took), prePass, clock.left())
+			report.Complexity, roundDuration(took), note, clock.left())
 	}
 	reportTrims(progress, report.Trimmed)
 

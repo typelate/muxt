@@ -1,5 +1,5 @@
-# The tests run once after planning and before the baseline, with muxt's
-# own template engine in place of html/template, to learn which template
+# Once the baseline passes, the tests run one more time, with muxt's own
+# template engine in place of html/template, to learn which template
 # actions they execute.
 #
 # The test below renders the page for a guest only, so nothing it runs

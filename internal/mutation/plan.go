@@ -257,8 +257,9 @@ func newPlan(ctx context.Context, config Configuration, workingDirectory string,
 // cover records what the coverage pre-pass saw the tests execute, nil
 // when it is unknown, and how long it took, and finds the mutants it
 // shows no test reaches, which it skips unless the run includes them. It
-// comes after planning, so that a run with nothing to mutate, or one that
-// cannot plan at all, never waits for the pre-pass.
+// comes after planning and after the baseline, so that a run with nothing
+// to mutate, one that cannot plan at all, or one whose tests fail
+// unmutated, never waits for the pre-pass.
 func (p *plan) cover(cov coverage, took time.Duration) {
 	p.coverage = cov
 	p.prePass = took

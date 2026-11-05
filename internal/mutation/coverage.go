@@ -50,7 +50,7 @@ func (c Configuration) toolchain(dir string) overlay.Toolchain {
 // the engine, a test binary that stopped exporting -- writes one warning
 // line to warn and returns nil coverage, and the run goes on. So do tests
 // that fail under the engine: kill runs use the real html/template, and
-// the baseline after this is what says whether the tests pass.
+// the baseline, which has passed by then, is what says the tests pass.
 func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string, run coverageRun, warn io.Writer) (coverage, string, error) {
 	if err := overlay.Probe(ctx, tc); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -87,8 +87,8 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 		return coverageUnknown(warn, "go test with muxt's template engine in place of html/template did not run: "+firstError(out.String(), err)), engineNote(engine), nil
 	case err != nil && isTestFailure(err) && (out.testFailed || out.couldNotRun):
 		// Kill runs use the real html/template, so this says nothing
-		// about the verdicts; whether the tests pass is the baseline's
-		// to say.
+		// about the verdicts; the baseline, which passed, said the tests
+		// pass.
 		return coverageUnknown(warn, engineFailure(out, err)), engineNote(engine), nil
 	case err != nil:
 		return coverageUnknown(warn, "go test with muxt's template engine in place of html/template did not run: "+firstError(out.String(), err)), engineNote(engine), nil

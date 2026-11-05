@@ -513,7 +513,7 @@ func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
 	var status strings.Builder
 	_, err := runPlan(t.Context(), p, Configuration{}, t.TempDir(), &status, func(context.Context) (string, error) {
 		return "", nil
-	}, func(context.Context, string) (Status, []string, error) {
+	}, nil, func(context.Context, string) (Status, []string, error) {
 		return StatusKilled, nil, nil
 	}, nil)
 	require.NoError(t, err)
@@ -531,7 +531,7 @@ func TestRunPlanPreambleNamesTheEngine(t *testing.T) {
 		var status strings.Builder
 		_, err := runPlan(t.Context(), p, Configuration{Verbose: verbose}, t.TempDir(), &status, func(context.Context) (string, error) {
 			return "", nil
-		}, func(context.Context, string) (Status, []string, error) {
+		}, nil, func(context.Context, string) (Status, []string, error) {
 			return StatusKilled, nil, nil
 		}, nil)
 		require.NoError(t, err)
@@ -658,7 +658,7 @@ func TestRunPlanSkipsUnreachedMutants(t *testing.T) {
 			)
 			report, err := runPlan(t.Context(), p, config, t.TempDir(), nil, func(context.Context) (string, error) {
 				return "", nil
-			}, func(context.Context, string) (Status, []string, error) {
+			}, nil, func(context.Context, string) (Status, []string, error) {
 				mu.Lock()
 				defer mu.Unlock()
 				runs++
