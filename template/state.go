@@ -1713,6 +1713,12 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAtt
 				return nil, err
 			}
 			result = append(result, attrs...)
+		case *RangeNode:
+			attrs, err := s.walkHTMLAttrRange(dot, n)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, attrs...)
 		case *ActionNode:
 			// Action in attribute list context
 			n.count.Add(1)
