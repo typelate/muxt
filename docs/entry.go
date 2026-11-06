@@ -5,21 +5,24 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"strings"
 )
 
 //go:embed README.md all:examples reference how-to tutorials explanation
 var files embed.FS
 
-// Entry is one embedded file, named by its repo-relative path.
+// Entry is one embedded file or directory, named by its repo-relative path.
 type Entry struct {
 	// Path is the repo-relative path, such as "docs/reference/cli.md".
 	Path string
+	// Dir reports whether Path names a directory.
+	Dir bool
 }
 
-// Resolve returns the embedded file named by arg. arg may carry a #fragment,
-// a leading "./", a trailing "/", or a leading "docs/"; the returned Path
-// always starts with "docs/".
+// Resolve returns the embedded file or directory named by arg. arg may carry a
+// #fragment, a leading "./", a trailing "/", or a leading "docs/"; the returned
+// Path always starts with "docs/".
 func Resolve(arg string) (Entry, error) {
 	rel, _, _ := strings.Cut(arg, "#")
 	rel = strings.TrimPrefix(rel, "./")
@@ -29,16 +32,45 @@ func Resolve(arg string) (Entry, error) {
 	if err != nil {
 		return Entry{}, fmt.Errorf("unknown documentation path %q: %w", arg, err)
 	}
-	if info.IsDir() {
-		return Entry{}, fmt.Errorf("documentation path %q is a directory", arg)
+	return Entry{Path: "docs/" + rel, Dir: info.IsDir()}, nil
+}
+
+// Files returns the repo-relative path of every file under dir, sorted.
+func Files(dir Entry) ([]string, error) {
+	var paths []string
+	err := fs.WalkDir(files, strings.TrimPrefix(dir.Path, "docs/"), func(name string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			paths = append(paths, "docs/"+name)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing %s: %w", dir.Path, err)
 	}
-	return Entry{Path: "docs/" + rel}, nil
+	slices.Sort(paths)
+	return paths, nil
 }
 
 // Render returns a markdown file's content verbatim. Any other file is
-// returned under its path line in a code fence. ref is reserved for rewriting
+// returned under its path line in a code fence. A directory is returned as
+// the path of each file under it, one per line. ref is reserved for rewriting
 // links to the build's version and is not used yet.
 func (e Entry) Render(ref string) ([]byte, error) {
+	if e.Dir {
+		paths, err := Files(e)
+		if err != nil {
+			return nil, err
+		}
+		var b strings.Builder
+		for _, p := range paths {
+			b.WriteString(p)
+			b.WriteString("\n")
+		}
+		return []byte(b.String()), nil
+	}
 	content, err := files.ReadFile(strings.TrimPrefix(e.Path, "docs/"))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", e.Path, err)

@@ -34,3 +34,7 @@ muxt documentation docs/examples/simple/main.go
 stdout '^docs/examples/simple/main\.go$'
 stdout '^```go$'
 stdout '^package main$'
+
+muxt documentation docs/how-to
+stdout '^docs/how-to/template-functions\.md$'
+! stdout '^docs/reference/'
