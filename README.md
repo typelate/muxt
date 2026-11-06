@@ -1,8 +1,8 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt)
 
-Muxt is a command-line tool that generates `net/http` handlers from `html/template` names and type-checks your templates against the Go data they render. Two commands do most of the work: `generate` and `check`.
+Muxt generates `net/http` handlers from `html/template` names and type-checks the templates against the Go data they render. It targets web apps that ship as one Go binary serving hypermedia from the standard library, with fixi, htmx, or Datastar added where the front end needs interaction.
 
-A template name defines the contract between the hypermedia and the `http.Handler`:
+A template name is the contract between the HTML and the `http.Handler`:
 
 ```gotmpl
 {{define "GET /article/{id} GetArticle(ctx, id)"}}
@@ -14,11 +14,7 @@ A template name defines the contract between the hypermedia and the `http.Handle
 func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 ```
 
-`muxt generate` reads the name and writes an `http.Handler` that calls your method.
-
-`muxt check` type-checks a template against the data it receives. It checks each `ExecuteTemplate` call on the templates variable whose template name is a literal string and whose data has a statically known type. Generated handlers meet both conditions. Rename a field and the template that still uses it fails a static `muxt check`.
-
-Muxt is built for web apps that ship as a single Go binary serving hypermedia from the standard library, with fixi, htmx, or Datastar added when the front end needs more interaction. It supplies the statically type-checked coupling between your Go code and HTML templates that the standard library leaves out.
+`muxt generate` reads the name and writes an `http.Handler` that calls your method. `muxt check` type-checks each template against the data it receives, so renaming a field fails the check in every template that still uses it. It covers `ExecuteTemplate` calls on the templates variable with a literal template name and a statically known data type, which generated handlers always satisfy.
 
 ## Install
 
@@ -26,56 +22,40 @@ Muxt is built for web apps that ship as a single Go binary serving hypermedia fr
 go get -tool github.com/typelate/muxt
 ```
 
-Then call it from a directive with `//go:generate go tool muxt generate`, or from a shell with `go tool muxt check`. The tool version is recorded in `go.mod`, so everyone who builds the project runs the same muxt.
+Call it from a directive, `//go:generate go tool muxt generate`, or from a shell, `go tool muxt check`. `go.mod` records the version, so everyone who builds the project runs the same muxt. For a binary on your `PATH`, use `go install github.com/typelate/muxt@latest`.
 
-To install a single binary on your `PATH`, use `go install github.com/typelate/muxt@latest`.
+Commands read the package in the working directory; run them there or pass `-C <dir>` (`go tool muxt -C ./web check`). [Troubleshooting](docs/reference/cli.md#troubleshooting) lists the error a directory with no Go package gives. muxt loads packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT`.
 
-`muxt check` and the other commands read the package in the working directory. Run them from the package directory, or pass `-C <dir>` (`go tool muxt -C ./web check`). [Troubleshooting](docs/reference/cli.md#troubleshooting) lists the error a directory with no Go package gives.
+Start with the [Quick Start](docs/tutorials/quick-start.md).
 
-muxt loads Go packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT` from its environment.
-
-## Template Name Syntax
-
-This is what muxt uses to map `Go` `<->` `HTML`.
-
-Standard `http.ServeMux` pattern, optionally with a status code and method call:
+## Template names
 
 ```
 [METHOD ][HOST]/[PATH][ HTTP_STATUS][ CALL]
 ```
 
-Example: `"POST /user/{id} 201 CreateUser(ctx, id, form)"`
-
-Supported parameters: `ctx`, `request`, `response`, path params, `form` (URL-encoded body), `multipart` (file uploads, including `*multipart.FileHeader` fields), `body` (raw `io.Reader`), `unmarshalJSON(body)` (JSON request bodies), `execute` (render callback), and `lastEventID`. Returns and errors flow through `TemplateData[R, T]`. Status codes can come from the template name, return values, or error types.
-
-Wrapping the call changes the response representation: `sse(Stream(ctx, execute))` streams Server-Sent Events and `marshalJSON(GetUser(ctx))` responds `application/json`. Generate flags select a frontend library per package — `--output-htmx` adds HX* helper methods to `TemplateData`, and `--output-datastar` frames SSE events with Datastar's patch-elements protocol.
-
-`TemplateRoutePaths` extends type safety to URLs: `{{$.Path.GetArticle 42}}` instead of hardcoded `href="/article/42"`. `{{$.Route.GetArticle 42}}` also carries the HTTP method. Change a route's wildcards and `muxt check` reports each template that still passes the old arguments; Go callers fail to compile.
+`POST /user/{id} 201 CreateUser(ctx, id, form)` is a standard `http.ServeMux` pattern plus an optional status code and method call. [Template Name Syntax](docs/reference/template-names.md) is the full grammar; [Call Parameters](docs/reference/call-parameters.md) and [Call Results](docs/reference/call-results.md) cover arguments and returns. `TemplateRoutePaths` type-checks URLs too: write `{{$.Path.GetArticle 42}}` instead of `href="/article/42"`.
 
 ## Examples
 
-- **[Local example](./docs/examples/simple/)**: complete application with tests
-- **[Sortable Example](https://github.com/typelate/sortable-example)**: HTMX-enabled table row sorting
-- **[HTMX Template](https://github.com/typelate/htmx-template)**: full HTMX integration patterns
+- [Local example](./docs/examples/simple/): an application with tests
+- [Sortable Example](https://github.com/typelate/sortable-example): htmx table row sorting
+- [HTMX Template](https://github.com/typelate/htmx-template): htmx integration patterns
 
-The [command tests](./cmd/muxt/testdata) double as readable examples of every feature.
+The [command tests](./cmd/muxt/testdata) show every feature.
 
 ## Commands
 
 - `muxt generate`: generate `http.Handler` glue (writes `template_routes.go`)
-- `muxt check`: type-check templates without generating (use in CI or editor save hooks)
+- `muxt check`: type-check templates without generating (for CI or editor save hooks)
 - `muxt list-template-calls` / `muxt list-template-callers`: explore call sites and callers
 - `muxt test-template-mutations`: vary each template action and report the ones no test catches
-- `muxt explore-module` / `muxt generate-fake-server`: survey muxt packages and spin up a fake server to poke at routes
+- `muxt explore-module` / `muxt generate-fake-server`: survey muxt packages; serve a fake server to poke at routes
 - `muxt documentation [path]`: print these docs and the example apps from the installed binary; `--query` searches them
 
 ## Documentation
 
-- **[Quick Start](docs/tutorials/quick-start.md)**: your first Muxt server
-- **[Reference](docs/reference/)**: CLI, syntax, parameters, type checking
-- **[Explanation](docs/explanation/)**: design philosophy, patterns, decisions
-
-See the [full documentation index](docs/).
+The [documentation index](docs/) lists tutorials, how-to guides, reference, and explanation.
 
 ### Go Standard Library
 
