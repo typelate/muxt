@@ -4,7 +4,7 @@ The principles that decide what muxt does and does not do. [Motivation](motivati
 
 ## Impose no dependencies on users
 
-Generated code imports only the standard library, plus the types your methods take and return. A dependency costs something on every upgrade.
+Generated code imports only the standard library, plus the types your methods take and return. Every dependency costs something on every upgrade.
 
 ## Generate simple, readable code
 
@@ -16,11 +16,11 @@ Generated code lives in the same package as your templates and helpers. When a g
 
 ## Collaboration, not isolation
 
-The model is templates plus Go methods. Anyone on the team can review and refactor either, so nobody has to be the person who understands the framework.
+The model is templates plus Go methods. Anyone on the team can review and refactor either, so no one person has to understand the framework.
 
 ## Enable ruthless refactoring
 
-Rename a result field and `muxt check` names the templates that still use it. Change a parameter list and `muxt generate` reports the template name whose call no longer matches. Edit the template and refresh ([hot reload with Air](../tutorials/hot-reload-with-air.md)).
+Rename a result field and `muxt check` names the templates that still use it. Change a parameter list and `muxt generate` reports the template name whose call no longer matches. Edit a template and refresh to see it ([hot reload with Air](../tutorials/hot-reload-with-air.md)).
 
 ## Keep the complexity budget small
 
