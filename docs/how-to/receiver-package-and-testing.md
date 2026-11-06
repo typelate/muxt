@@ -56,7 +56,7 @@ Where the fake sits decides what a test covers:
 
 | Fake | Covers | Use for |
 |------|--------|---------|
-| `RoutesReceiver` | wiring and template branches, driven by canned results | rendering states: empty list, error, populated |
+| `RoutesReceiver`, the interface `muxt generate` writes for the methods the routes call | wiring and template branches, driven by canned results | rendering states: empty list, error, populated |
 | Service interfaces on `Server` | receiver methods and domain errors | most suites |
 | The services' own collaborators, such as a sqlc `Querier` | whole call paths | end-to-end paths, paired with real query tests |
 
