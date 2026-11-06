@@ -1,8 +1,8 @@
 # Template Comments
 
-Disable template code with `{{/* */}}`, never with `<!-- -->`.
+`{{/* */}}` disables template code; `<!-- -->` does not.
 
-A Go template comment is removed when the template is parsed, so nothing inside it runs or reaches the response. It may span lines, and `{{- /* c */ -}}` trims the whitespace around it as well:
+The parser removes a Go template comment, so nothing inside it runs or reaches the response. It may span lines, and `{{- /* c */ -}}` trims the whitespace around it as well:
 
 ```gotmpl
 {{/*
