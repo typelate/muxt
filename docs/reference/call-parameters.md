@@ -119,7 +119,11 @@ A method that takes `response` owns the status code, the redirect and the header
 
 So every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id renders its error page at 200, not 400.
 
-The method sets the status with `response.WriteHeader(code)` and redirects with `http.Redirect(response, request, url, code)`. The template output follows whatever the method already wrote, because the buffer is written after the method returns.
+To keep the right status on such a route, the method does three things itself:
+
+- Choose the code for each error it can produce and call `response.WriteHeader(code)` before it returns.
+- To redirect, call `http.Redirect(response, request, url, code)` and return.
+- Expect its template output to follow whatever it wrote, because the buffer is written after the method returns.
 
 ```go
 func (s *Server) GetUser(ctx context.Context, response http.ResponseWriter, id int) (User, error) {
@@ -133,7 +137,7 @@ func (s *Server) GetUser(ctx context.Context, response http.ResponseWriter, id i
 
 `.Header` in the template still works, because it writes to the response header map. A template that calls `.StatusCode` or one of the `.Redirect*` methods on such a route fails `generate` and `check` with an error that names the template and the method ([err_redirect_with_response_argument.txt](../../cmd/muxt/testdata/err_redirect_with_response_argument.txt)).
 
-To set a status or redirect from the template instead, drop the argument ([domain error status codes](../how-to/domain-error-status-codes.md)).
+To set the status from the template instead, drop the argument and use `.StatusCode` or `.Redirect*`, which muxt applies ([domain error status codes](../how-to/domain-error-status-codes.md)).
 
 [reference_response_argument_warning.txt](../../cmd/muxt/testdata/reference_response_argument_warning.txt) · [reference_header_with_response_argument.txt](../../cmd/muxt/testdata/reference_header_with_response_argument.txt) · [internal/generate/html.go](../../internal/generate/html.go) (`writeHeadersAndStatusCode`)
 
