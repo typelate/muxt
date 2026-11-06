@@ -1,6 +1,6 @@
 # How to keep permissions in one place
 
-A permission rule shows up twice in a web app: the server refuses the action, and the page hides the button for it. When the two copies drift, users see buttons that fail, or the server lets through a request the page never offered. Write the rule once as a Go function, call it where the action is enforced, and call the same function where the template reads it.
+Write each permission rule once as a Go function, call it where the server enforces the action, and call the same function where the template hides the button. Two copies drift: users see buttons that fail, or the server lets through a request the page never offered.
 
 `viewer(ctx)` stands for your session lookup. It returns the signed-in `User`, the zero `User` when nobody is signed in.
 
@@ -81,7 +81,7 @@ func (s *Server) GetDocument(ctx context.Context, id int) (DocumentPage, error) 
 {{- end}}
 ```
 
-A field suits a page about one record: the method already has the record and the viewer, and a test of the method can assert `CanEdit` without rendering anything.
+Use a field for a page about one record: the method already has the record and the viewer, and a test can assert `CanEdit` without rendering.
 
 ## Or show it through a TemplateData method
 
