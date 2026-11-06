@@ -63,7 +63,7 @@ func (s *Server) Count(execute func(int) error) error {
 | `(T, bool)`, `error` alone, or a `T` implementing `error` | generation error |
 
 - The template body still executes, so `.StatusCode` and `.Header` calls reach the JSON response. Its output is discarded on success.
-- On a method error the rendered output is sent as `text/html` with status 500.
+- On a method error the rendered output is sent as `text/html` with status 500. Render JSON in the `{{if .Err}}` branch if you need JSON errors.
 - A marshal failure responds 500 with the status text.
 - A `response` argument inside the wrapper fails generation.
 
@@ -87,7 +87,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Header key value` | the data, for chaining |
 | `.Redirect url code` | the data and an error when `code` is outside 300 to 399 |
 | `.RedirectMultipleChoices url`, `.RedirectMovedPermanently url`, `.RedirectFound url`, `.RedirectSeeOther url` | `.Redirect` with 300, 301, 302, or 303 |
-| `.String` | `""`: a stray `{{.}}` and a chained setter such as `{{.Header "HX-Trigger" "saved"}}` print nothing. |
+| `.String` | `""`: a stray `{{.}}` and a chained setter such as `{{.Header "HX-Trigger" "saved"}}` print nothing. Print `{{.Result}}` for the value |
 
 ```gotmpl
 {{define "GET /profile Profile(ctx)"}}{{if .Request.Header.Get "HX-Request"}}{{.Result.Name}}{{else}}<html>...</html>{{end}}{{end}}
@@ -135,7 +135,7 @@ An error's own `StatusCode` method is consulted only for a method that returns j
 
 ### When status and redirect handling is generated
 
-Every route that does not take a [`response`](call-parameters.md#routes-that-take-response) argument gets the status selection above, whatever its template contains. The redirect handling is separate: the `if td.redirectURL != ""` block calls `http.Redirect` with the selected status, and muxt writes it only when the template can set a redirect.
+Every route that does not take a [`response`](call-parameters.md#routes-that-take-response) argument gets the status selection above, whatever its template contains. The redirect handling is separate: the `if td.redirectURL != ""` block calls `http.Redirect` with the selected status, and muxt writes it only when it finds a reason to think the template can set a redirect.
 
 muxt reads the route's template body, not the call in its name, and follows `{{template}}` and `{{block}}` invocations into the templates they name, including ones invoked without a dot. A route gets the redirect block when any command in that tree does one of these:
 
