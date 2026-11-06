@@ -1,6 +1,6 @@
 # How to keep permissions in one place
 
-Write each permission rule once as a Go function, call it where the server enforces the action, and call the same function where the template hides the button. Two copies drift: users see buttons that fail, or the server lets through a request the page never offered.
+A permission rule appears twice in a web app: the server refuses the action, and the page hides the button for it. The two copies drift: users see buttons that fail, or the server lets through a request the page never offered. Write the rule once as a Go function, call it where the server enforces the action, and call the same function where the template hides the button.
 
 `viewer(ctx)` stands for your session lookup. It returns the signed-in `User`, the zero `User` when nobody is signed in.
 
