@@ -2,11 +2,11 @@
 
 A handler's response body is its contract. The form `action`, input `name`, `hx-target` and `href` decide the next request, so tests assert on them.
 
-[domtest](https://github.com/typelate/dom/tree/main/domtest) parses an `*http.Response` into a queryable DOM, so a test asks for `form input[name="todo"]` instead of running `strings.Contains` over the body. A substring check still passes when the input leaves the form or loses its `name`; the selector does not.
+[domtest](https://github.com/typelate/dom/tree/main/domtest) parses an `*http.Response` into a queryable DOM, so a test asks for `form input[name="todo"]` instead of running `strings.Contains` over the body. `domtest.ParseResponseDocument(t, res)` returns a document with `QuerySelector`; [Find untested template behavior](../tutorials/find-untested-template-behavior.md) uses it. A substring check still passes when the input leaves the form or loses its `name`; the selector does not.
 
 ## What muxt contributes
 
-The generated code makes the whole route stack drivable in process:
+Generated code lets a test drive the whole route stack in process:
 
 | Generated symbol | Use in a test |
 |---|---|
@@ -16,13 +16,9 @@ The generated code makes the whole route stack drivable in process:
 
 [Structure a project for testing](../how-to/receiver-package-and-testing.md) covers the layout and which layer to fake.
 
-## What domtest contributes
-
-`domtest.ParseResponseDocument(t, res)` returns a document with `QuerySelector`; [Find untested template behavior](../tutorials/find-untested-template-behavior.md) walks through one.
-
 ## Fragments need the element they swap into
 
-HTML parsing is context-sensitive, so the fragment parser takes the parent element the response lands in: `domtest.ParseResponseDocumentFragment(t, res, atom.Tbody)`. A `<tr>` parsed under `atom.Body` is discarded; under `atom.Tbody` it is a row. A fragment that vanishes here would not have landed in the page either ([simple example test](../examples/simple/template_routes_test.go)).
+HTML parsing is context-sensitive, so the fragment parser takes the parent element the response lands in: `domtest.ParseResponseDocumentFragment(t, res, atom.Tbody)`. A `<tr>` parsed under `atom.Body` is discarded; under `atom.Tbody` it is a row. A fragment that vanishes in the test would not have landed in the page either ([simple example test](../examples/simple/template_routes_test.go)).
 
 ## htmx and Datastar widen the API
 
@@ -53,4 +49,4 @@ htmx and Datastar write the interaction graph into attributes: which element iss
 
 ## Where it stops
 
-A sweep proves the graph is wired, not that htmx or Datastar behaves: domtest does not run JavaScript. Use a browser ([chromedp](https://github.com/chromedp/chromedp)) only for behavior that belongs to the browser.
+A sweep proves the graph is wired, not that htmx or Datastar behaves, because domtest does not run JavaScript. Reach for a browser ([chromedp](https://github.com/chromedp/chromedp)) only for behavior that belongs to the browser.
