@@ -30,7 +30,7 @@ Fifty routes means fifty near-copies. [sqlc](https://sqlc.dev) showed the patter
 
 ## Why not reflection
 
-The first version was a [reflection-based handler](https://github.com/typelate/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go). [Reflection is never clear](https://youtu.be/PAAkCSZUG1c?si=gT_ga16SMOKNshqp&t=922), and debugging it meant holding the runtime's behavior in your head. [Decision 2](decisions/00002_use_code_generation_instead_of_reflection.md) records the switch.
+The first version used a [reflection-based handler](https://github.com/typelate/muxt/blob/33f2eb69d84d6bf2c2ad87c5ddfee9fb2e0fea31/handler.go). [Reflection is never clear](https://youtu.be/PAAkCSZUG1c?si=gT_ga16SMOKNshqp&t=922), and debugging it meant tracing the runtime's behavior in your head. [Decision 2](decisions/00002_use_code_generation_instead_of_reflection.md) records the switch.
 
 ## Why not an LLM
 
