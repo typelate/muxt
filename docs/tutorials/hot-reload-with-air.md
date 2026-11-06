@@ -1,8 +1,8 @@
 # Hot Reload with Air
 
-A saved `.gohtml` needs `muxt generate`, a build, and a restart. [Air](https://github.com/air-verse/air) runs that loop from one config file.
+After you save a `.gohtml` file, `muxt generate`, a build, and a restart must run before the page changes. [Air](https://github.com/air-verse/air) runs that loop from one config file.
 
-Prerequisites: [Air](https://github.com/air-verse/air#installation) and a `go:generate` directive that runs `muxt generate`.
+Prerequisites: [Air](https://github.com/air-verse/air#installation) and the project from the [Quick Start](quick-start.md), through step 4. Its `go:generate` directive runs `muxt generate`.
 
 ## Step 1: Create .air.toml
 
@@ -22,7 +22,7 @@ tmp_dir = "tmp"
   clear_on_rebuild = true
 ```
 
-`pre_cmd` regenerates before every build. `exclude_regex` stops the generated files from triggering a second rebuild. It matches `template_routes.go` in any package.
+`pre_cmd` regenerates before every build. `exclude_regex` keeps the generated file from triggering a second rebuild; it matches `template_routes.go` in any package.
 
 ## Step 2: Run
 
@@ -30,11 +30,11 @@ tmp_dir = "tmp"
 air
 ```
 
-Save a `.gohtml` file. Air regenerates, rebuilds, restarts, and the next refresh serves the new markup. A bad template name fails in `pre_cmd` and the muxt error names the file.
+Edit and save `index.gohtml`. Air regenerates, rebuilds, and restarts, and the next refresh serves the new markup. A bad template name fails in `pre_cmd`, and the muxt error names the file.
 
-## Step 3 (optional): Browser reload
+## Step 3: Reload the browser
 
-Air's [proxy](https://github.com/air-verse/air#proxy-reload-the-browser-automatically) injects a reload script:
+Air's [proxy](https://github.com/air-verse/air#proxy-reload-the-browser-automatically) injects a reload script. Append to `.air.toml`:
 
 ```toml
 [proxy]
@@ -43,7 +43,7 @@ Air's [proxy](https://github.com/air-verse/air#proxy-reload-the-browser-automati
   app_port = 8080
 ```
 
-Browse to the proxy port.
+Stop Air with Ctrl-C and run `air` again. Browse to <http://localhost:8090>, edit `index.gohtml`, and the page reloads on save.
 
 ## Edge cases
 
