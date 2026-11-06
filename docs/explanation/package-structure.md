@@ -1,6 +1,6 @@
 # Package Structure
 
-[Templates Variable](../reference/templates-variable.md) is the specification; [Package Layout](../reference/package-layout.md) shows a full package.
+This page explains why muxt reads the templates variable from a package-level declaration and how go:embed and glob rules decide where template files live. [Templates Variable](../reference/templates-variable.md) is the specification; [Package Layout](../reference/package-layout.md) shows a full package.
 
 ## Why package-level
 
