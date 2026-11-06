@@ -1,6 +1,6 @@
 # Muxt Documentation
 
-The [README](../README.md) introduces muxt.
+Start with the [README](../README.md) if you have not met muxt.
 
 ## Reading order
 
@@ -12,9 +12,9 @@ The [README](../README.md) introduces muxt.
 ## Tutorials
 
 - [Quick Start](tutorials/quick-start.md)
-- [Find Untested Template Behavior](tutorials/find-untested-template-behavior.md)
+- [Find Untested Template Behavior](tutorials/find-untested-template-behavior.md): mutation testing
 - [Add Logging](tutorials/add-logging.md): a `*slog.Logger` for generated handlers
-- [Hot Reload with Air](tutorials/hot-reload-with-air.md)
+- [Hot Reload with Air](tutorials/hot-reload-with-air.md): regenerate on save
 
 ## How-to guides
 
@@ -26,7 +26,7 @@ The [README](../README.md) introduces muxt.
 - [Keep permissions in one place](how-to/permissions-in-one-place.md): enforce in the method or middleware, show through a field or a TemplateData method
 - [Map domain errors to status codes](how-to/domain-error-status-codes.md)
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
-- [Add custom template functions](how-to/template-functions.md)
+- [Add custom template functions](how-to/template-functions.md): register `Funcs` so `muxt check` sees them
 - [Keep part of a template as written](how-to/keep-template-formatting.md): `muxt:fmt` directives
 
 ## Reference
@@ -48,17 +48,17 @@ The [README](../README.md) introduces muxt.
 - [Templates Variable](reference/templates-variable.md): how muxt finds templates
 - [Type Checking](reference/type-checking.md): what `muxt check` verifies and what it cannot
 - [Template Comments](reference/template-comments.md): which comments reach the response, and why to use `{{/* */}}`
-- [Package Layout](reference/package-layout.md)
+- [Package Layout](reference/package-layout.md): a full package
 - [Template Engine](reference/template-engine.md): the public `template` packages, versioned with the CLI
-- [Known Issues](reference/known-issues.md)
+- [Known Issues](reference/known-issues.md): generation errors and their fixes
 
 ## Explanation
 
 - [Manifesto](explanation/manifesto.md): the principles
 - [Motivation](explanation/motivation.md): why muxt exists
-- [HTML is the API](explanation/html-is-the-api.md)
+- [HTML is the API](explanation/html-is-the-api.md): why tests assert on markup
 - [Package Structure](explanation/package-structure.md): why the templates variable and `embed` shape the package
-- [Decisions](explanation/decisions/)
+- [Decisions](explanation/decisions/): numbered records
 
 ## Examples
 
