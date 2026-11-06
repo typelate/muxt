@@ -33,7 +33,7 @@ The package directory defaults to the working directory and is resolved like `-C
 
 - `-overlay`: muxt delivers each mutant through its own overlay.
 - `-json`: muxt reads `go test`'s text output to tell a failed test from a failed build, and the JSON stream has none of those lines.
-- `-mod` and `-modfile`: the [coverage pre-pass](#how-the-pre-pass-works) sets both.
+- `-mod` and `-modfile`: the [coverage pre-pass](#how-the-pre-pass-works), an extra unmutated run that records which template blocks the tests execute, sets both.
 - A `-coverpkg` that would cover `html/template` ([why](#template-coverage)).
 
 Bound each mutant's run with `go test`'s own `-timeout`, for example `-- -timeout=2m`.
@@ -220,7 +220,7 @@ Progress goes to stderr only, so `--format json` on stdout stays machine-readabl
 [ 2/6] templates.gohtml "footer": 3 mutants, 2 killed, 0 missed, 1 skipped, 1.1s
 ```
 
-`missed` counts `MISS` results, as the summary line does. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else; use a terminal or `-v` to see a long run is alive.
+`missed` counts `MISS` results, as the summary line does. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else, so a log stays short; on a terminal or with `-v`, the line per template is what to tail to see a long run is alive.
 
 With `-v` each mutant also prints its duration and the time left:
 
@@ -363,4 +363,4 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
 - **Dry runs.** `--dry-run` runs no tests, with or without `--diff`, so it skips the pre-pass. It lists every mutant and never reports one as unreached.
 - **Cost.** No flag turns the pre-pass off. It costs one extra run of the suite, plus a one-time build of the engine and of the `html/template` shim, which later runs take from the build cache. The [timing](#timing) preamble reports its duration.
 
-See also [muxt check](check.md) and [muxt list-template-callers](list-template-callers.md), which lists the call sites traversal starts from.
+See also [muxt check](check.md), which type-checks templates without running them, and [muxt list-template-callers](list-template-callers.md), which lists the call sites traversal starts from.
