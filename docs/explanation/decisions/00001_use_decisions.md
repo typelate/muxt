@@ -14,4 +14,4 @@ Decided
 
 ## Consequences
 
-Some decisions will be documented long after the code they describe, which means git history spelunking.
+Some decisions will be documented long after the code they describe, so readers will have to search git history.
