@@ -8,8 +8,6 @@ Generated validation for a bound `<input>` ([form structs](call-parameters.md#fo
 template "age-field": validation attribute min on input "age" must be a literal; got the template action {{.MinAge}} — use a constant, or drop the template struct tag
 ```
 
-Use a constant, or drop the `template` tag from that field.
-
 [reference_validation_min_max.txt](../../cmd/muxt/testdata/reference_validation_min_max.txt) · [reference_validation_pattern.txt](../../cmd/muxt/testdata/reference_validation_pattern.txt)
 
 ## TemplateRoutePaths method names must be exportable
