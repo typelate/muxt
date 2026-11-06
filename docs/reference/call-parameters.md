@@ -1,6 +1,6 @@
 # Call Parameters
 
-Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and receiver method calls are allowed; anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
+Call arguments bind request data to method parameters by position; parameter names do not matter. Only the names below, the route's path wildcards, and receiver method calls are allowed. Anything else fails generation with `unknown argument NAME; did you mean X?` or `unknown argument NAME; expected one of: ...` ([err_unknown_argument_with_suggestion.txt](../../cmd/muxt/testdata/err_unknown_argument_with_suggestion.txt)).
 
 ```gotmpl
 {{define "POST /user/{id} UpdateUser(ctx, id, form)"}}{{end}}
@@ -117,13 +117,9 @@ A call that reads the body twice, such as `(form, body)` or `(body, unmarshalJSO
 
 A method that takes `response` owns the status code, the redirect and the headers it sets itself. The generated handler runs the method, executes the template into a buffer, and writes the buffer to `response` with `WriteTo`. It never calls `WriteHeader`, and it sets no `Content-Type` or `Content-Length` on that route. Generate [warns](commands/generate.md#warnings) about each such route.
 
-The consequence is that every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id therefore renders its error page at 200 rather than 400.
+So every status source in [Status Code Control](call-results.md#status-code-control) is skipped. Unless the method called `response.WriteHeader` before it returned, `net/http` sends 200, including when an argument failed to parse (the method does not run and `.Err` holds the parse error) and when the method returned an error. A bad id renders its error page at 200, not 400.
 
-To keep the right status on such a route, the method has to do three things itself:
-
-- Call `response.WriteHeader(code)` before it returns, choosing the code for each error it can produce.
-- Call `http.Redirect(response, request, url, code)` to redirect, and return before the template is expected to render anything meaningful.
-- Expect its template output to follow whatever it already wrote, since the buffer is written after the method returns.
+The method sets the status with `response.WriteHeader(code)` and redirects with `http.Redirect(response, request, url, code)`. The template output follows whatever the method already wrote, because the buffer is written after the method returns.
 
 ```go
 func (s *Server) GetUser(ctx context.Context, response http.ResponseWriter, id int) (User, error) {
@@ -137,7 +133,7 @@ func (s *Server) GetUser(ctx context.Context, response http.ResponseWriter, id i
 
 `.Header` in the template still works, because it writes to the response header map. A template that calls `.StatusCode` or one of the `.Redirect*` methods on such a route fails `generate` and `check` with an error that names the template and the method ([err_redirect_with_response_argument.txt](../../cmd/muxt/testdata/err_redirect_with_response_argument.txt)).
 
-If the only reason to take `response` was to set a status or a redirect, drop the argument instead. Set the status from the template with `.StatusCode` or `.Redirect*` ([domain error status codes](../how-to/domain-error-status-codes.md)), and muxt applies it.
+To set a status or redirect from the template instead, drop the argument ([domain error status codes](../how-to/domain-error-status-codes.md)).
 
 [reference_response_argument_warning.txt](../../cmd/muxt/testdata/reference_response_argument_warning.txt) · [reference_header_with_response_argument.txt](../../cmd/muxt/testdata/reference_header_with_response_argument.txt) · [internal/generate/html.go](../../internal/generate/html.go) (`writeHeadersAndStatusCode`)
 
@@ -166,7 +162,7 @@ func (s Server) Clock(ctx context.Context, lastEventID string, execute func(time
 }
 ```
 
-Return when `ctx` is done or `execute` returns an error: the client is gone, the template failed, or the write failed.
+The method must return when `ctx` is done or `execute` returns an error: the client is gone, the template failed, or the write failed.
 
 | Rule | Detail |
 |---|---|
