@@ -38,7 +38,7 @@ A path that is a file is formatted whatever its extension. A path that is a dire
 | Status | When |
 |---|---|
 | `0` | Every file was read, parsed and formatted. |
-| `1` | A file could not be read or parsed, a file's Go package loaded with errors, a `muxt:fmt` comment is not valid, standard input could not be read, the command line is wrong (`-w` with no path), or `-l` or `-d` found a file that would change. |
+| `1` | A file could not be read or parsed, a file's Go package loaded with errors, a [`muxt:fmt`](../../how-to/keep-template-formatting.md) comment is not valid, standard input could not be read, the command line is wrong (`-w` with no path), or `-l` or `-d` found a file that would change. |
 
 A problem with one file is printed on stderr and the other files are still formatted. A template that does not parse is reported as `file:line:col: message` and left unchanged ([err_fmt_parse.txt](../../../cmd/muxt/testdata/err_fmt_parse.txt)). A path that does not exist is reported as the error opening it ([err_fmt_missing_file.txt](../../../cmd/muxt/testdata/err_fmt_missing_file.txt)).
 
@@ -158,7 +158,7 @@ When `muxt fmt` cannot be sure a change is invisible, it leaves the whole elemen
 
 A list of siblings is treated as a unit in one respect. When any gap in it is left as written because `muxt fmt` is unsure about white-space (unknown CSS, an unresolved caller), every gap in that list is left as written, including trimmed ones, and so is everything inside it. A `pre`, `script`, custom element or SVG does not do this: such an element is an island, and its siblings are still re-indented. A branch of `{{if}}`, `{{with}}` or `{{range}}` whose body is left as written keeps its own keyword lines (the opener, `{{else}}` and `{{end}}`) as written too. That freeze reaches outward through any enclosing branch bodies, keyword lines included, and stops at the nearest element, `{{block}}` body or define body, where the frozen branch is an island and its siblings are still re-indented. An unsure element that spans several lines freezes its list wherever it starts on a line.
 
-Unresolvable stylesheets are an example ([reference_static_files_fmt_unresolved.txt](../../../cmd/muxt/testdata/reference_static_files_fmt_unresolved.txt)).
+When `muxt fmt` cannot tell whether whitespace matters, it does not format that part. Unresolvable stylesheets are an example ([reference_static_files_fmt_unresolved.txt](../../../cmd/muxt/testdata/reference_static_files_fmt_unresolved.txt)).
 
 ## Where CSS comes from
 
