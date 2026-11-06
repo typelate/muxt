@@ -13,6 +13,11 @@ Aliases: `docs`, `d`.
 | `muxt documentation` | The path of every embedded file, one per line. |
 | `muxt documentation <path>` | The file's content. A markdown page prints verbatim; any other file prints under its path line in a code fence. |
 | `muxt documentation <directory>` | The path of each file under the directory, one per line. |
+| `muxt documentation --query <text>` | Every line that holds the text, as `path:line: text`. |
+
+## Search
+
+`--query <text>` (`-q`) prints every line of the embedded docs that holds the text, ignoring case, as `path:line: text`. The text is matched literally, not as a pattern, so `muxt documentation -q ExecuteTemplate` finds the same lines as `muxt documentation -q executetemplate`. Add a path after the flag to search only under that file or directory.
 
 ## Paths
 

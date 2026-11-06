@@ -30,6 +30,13 @@ func TestSourceRef(t *testing.T) {
 	}
 }
 
+func TestDocumentationQueryPrintsMatchingLines(t *testing.T) {
+	var stdout bytes.Buffer
+	err := commands(t.TempDir(), []string{"documentation", "--query", "ExecuteTemplate"}, func(string) string { return "" }, func() (string, bool) { return "", false }, strings.NewReader(""), &stdout, io.Discard, runners{})
+	require.NoError(t, err, "muxt documentation --query ExecuteTemplate")
+	assert.Regexp(t, `(?m)^docs/[^:]+:\d+: .*ExecuteTemplate`, stdout.String(), "muxt documentation --query ExecuteTemplate")
+}
+
 func TestDocumentationLinksLeavingDocsNameTheBuildVersion(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

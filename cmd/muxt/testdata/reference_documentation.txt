@@ -42,3 +42,9 @@ stderr 'did you mean: docs/reference/template-names\.md'
 muxt documentation docs/reference/commands/check.md
 stdout '\(docs/reference/type-checking\.md#preconditions\)'
 stdout 'https://github.com/typelate/muxt/blob/[^/]+/cmd/muxt/testdata/err_check_before_generate\.txt'
+
+muxt documentation --query ExecuteTemplate
+stdout '^docs/reference/[^:]+\.md:[0-9]+: .*ExecuteTemplate'
+
+muxt d -q executetemplate
+stdout '^docs/reference/[^:]+\.md:[0-9]+: .*ExecuteTemplate'

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"regexp"
 
 	"github.com/spf13/cobra"
@@ -34,8 +35,10 @@ func sourceRef(version string) string {
 // documentationCommand prints the docs embedded in the binary, so a project
 // that has only the installed muxt can read the rules without its source.
 // Links that leave docs point to the source of the build's version on GitHub.
+// With --query it prints the lines that hold the query instead.
 func documentationCommand(version func() (string, bool)) *cobra.Command {
-	return &cobra.Command{
+	var query string
+	c := &cobra.Command{
 		Use:     documentationCommandName + " [path]",
 		Aliases: []string{"docs", "d"},
 		Short:   "Print muxt's documentation by path (no path lists every file)",
@@ -50,6 +53,18 @@ func documentationCommand(version func() (string, bool)) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if cmd.Flags().Changed("query") {
+				matches, err := docs.Search(entry, query)
+				if err != nil {
+					return err
+				}
+				for _, m := range matches {
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s:%d: %s\n", m.Path, m.Line, m.Text); err != nil {
+						return fmt.Errorf("writing match: %w", err)
+					}
+				}
+				return nil
+			}
 			v, _ := version()
 			content, err := entry.Render(sourceRef(v))
 			if err != nil {
@@ -59,4 +74,6 @@ func documentationCommand(version func() (string, bool)) *cobra.Command {
 			return err
 		},
 	}
+	c.Flags().StringVarP(&query, "query", "q", "", "print the lines that hold this text, as path:line: text")
+	return c
 }
