@@ -18,7 +18,7 @@ internal/hypertext/
     └── dashboard.gohtml  child: allowed
 ```
 
-An `internal/templates/` directory beside `internal/hypertext/` is out of reach.
+An `internal/templates/` directory beside `internal/hypertext/` cannot be embedded from it.
 
 ## Globs are per depth
 
