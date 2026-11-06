@@ -1,0 +1,8 @@
+# Each command's --help prints its summary and names its full reference
+
+muxt check --help
+stdout '^Type-checks each template against the data type'
+stdout '^Full reference: muxt documentation docs/reference/commands/check\.md$'
+
+muxt fmt --help
+stdout '^Full reference: muxt documentation docs/reference/commands/fmt\.md$'

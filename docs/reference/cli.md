@@ -20,6 +20,8 @@
 
 `check`, `list-template-calls`, `list-template-callers` and `test-template-mutations` take one optional `[package-dir]`, resolved like `-C`. Import paths and `...` patterns are rejected.
 
+Each command's `--help` shows its summary and the line naming its full reference page.
+
 `muxt` with no subcommand prints the package's routes and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods:
 
 ```text

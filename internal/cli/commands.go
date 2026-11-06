@@ -124,6 +124,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 		testTemplateMutationsCommand(workingDirectory, run.mutations),
 		documentationCommand(version),
 	)
+	describe(rootCmd)
 
 	// Ensure all flag sets route their output (including deprecation warnings) to stderr
 	for _, cmd := range rootCmd.Commands() {
