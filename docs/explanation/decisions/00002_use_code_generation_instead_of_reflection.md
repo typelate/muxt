@@ -16,6 +16,6 @@ Decided
 
 [jba/templatecheck](https://github.com/jba/templatecheck) no longer fits, so muxt needs its own template checker.
 
-Code that generates code can be harder to read than reflection, so muxt itself becomes harder to iterate on.
+Code that generates code can be harder to read than reflection, so muxt itself is harder to change.
 
 Testing muxt requires running `go test` or `go build` on generated output; testing an `http.Handler` directly is not enough.
