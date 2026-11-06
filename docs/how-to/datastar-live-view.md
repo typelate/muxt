@@ -1,6 +1,6 @@
 # How to build a Datastar live view
 
-Generate with `--output-datastar`. Server-Sent Events routes then emit Datastar patch events. The [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search) examples cover every section below except [the toast](#append-a-toast-with-a-second-callback), which is the first example of the patch setters, and `.DatastarRequest`.
+Generate with `--output-datastar`; Server-Sent Events routes then emit Datastar patch events. Working code for most sections below is in [datastar-counter](../examples/datastar-counter), [datastar-todo](../examples/datastar-todo), and [datastar-search](../examples/datastar-search).
 
 ## Patch elements
 
@@ -19,7 +19,7 @@ Datastar morphs the element by id.
 
 ## Append a toast with a second callback
 
-A route can patch more than one part of the page. Each `sse`-prefixed callback renders its own template, so a save can append the new row and then a toast:
+To patch more than one part of the page, pass several `sse` callbacks; each renders its own template. This save appends the new row, then a toast:
 
 ```gotmpl
 {{define "POST /items sse(Save(ctx, form, sseRow, sseToast))"}}{{end}}
@@ -44,7 +44,7 @@ func (s *Server) Save(ctx context.Context, form ItemForm, sseRow func(Item) erro
 }
 ```
 
-This is the first example of the patch setters. A new row and a toast have no element of their own on the page yet, so matching by id has nothing to morph. `.Selector` names the element to patch and `.Mode "append"` adds the fragment as its last child. Both print nothing. The page holds the empty containers:
+A new row and a toast have no element on the page yet, so matching by id has nothing to morph. `.Selector` names the element to patch and `.Mode "append"` adds the fragment as its last child. Both print nothing. The page holds the empty containers:
 
 ```html
 <ul id="items"></ul>
@@ -85,7 +85,7 @@ Inbound, the `signals` argument binds the posted body on non-GET routes ([argume
 
 ## Serve a fragment and a full page from one GET route
 
-A route does not have to stream. Datastar patches a `text/html` response by element id, so a plain GET route can answer an `@get` action with a fragment and a direct visit with the whole page. `.DatastarRequest` is true when the request carries `Datastar-Request: true`, which every Datastar action sends:
+A route need not stream. Datastar patches a `text/html` response by element id, so a plain GET route can answer an `@get` action with a fragment and a direct visit with the whole page. `.DatastarRequest` is true when the request carries `Datastar-Request: true`, which every Datastar action sends:
 
 ```gotmpl
 {{define "GET /list List(ctx)"}}
