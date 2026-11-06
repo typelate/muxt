@@ -17,13 +17,11 @@ Aliases: `docs`, `d`.
 
 ## Search
 
-`--query <text>` (`-q`) prints every line of the embedded docs that holds the text, ignoring case, as `path:line: text`. The text is matched literally, not as a pattern, so `muxt documentation -q ExecuteTemplate` finds the same lines as `muxt documentation -q executetemplate`. A path after the flag narrows the search to that file or directory, so `muxt documentation --query htmx docs/how-to` prints only matches under `docs/how-to/`.
+`--query <text>` (`-q`) prints every line of the embedded docs that holds the text, ignoring case, as `path:line: text`. The text is matched literally, not as a pattern, so `-q ExecuteTemplate` and `-q executetemplate` find the same lines. A path after the flag narrows the search to that file or directory, so `muxt documentation --query htmx docs/how-to` prints only matches under `docs/how-to/`.
 
 ## Paths
 
-A path is a file's or directory's repo-relative path, such as `docs/reference/template-names.md`. The `docs/` prefix may be left off, and a leading `./`, a trailing `/`, or a `#fragment` is ignored, so `reference/template-names.md#route-names` also prints the page.
-
-With no argument the path is the directory `docs`, so the command prints the path of every embedded file, one per line. A directory path, such as `docs/how-to`, prints the path of each file under it, one per line.
+A path is a file's or directory's repo-relative path, such as `docs/reference/template-names.md`. The `docs/` prefix is optional, and a leading `./`, a trailing `/`, or a `#fragment` is ignored, so `reference/template-names.md#route-names` also prints the page.
 
 Links to other pages are printed as repo-relative paths that `muxt documentation` accepts, so a link such as `../type-checking.md#preconditions` prints as `docs/reference/type-checking.md#preconditions`. A link that leaves docs/ is printed as a GitHub URL for the version this muxt was built from: a release tag, the commit of a development build, or `main` when neither applies.
 
