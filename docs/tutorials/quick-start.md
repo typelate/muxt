@@ -130,10 +130,25 @@ go generate && go tool muxt check && go run .
 
 Open <http://localhost:8080>, type a number, click Show. The `GET /number` handler in `template_routes.go` has the same shape as the `GET /` handler.
 
-## Edge cases
+## Step 7: Call a method
 
-- **A binary install.** A binary installed with `go install github.com/typelate/muxt@latest` also works, but it can fall behind the project and then fails with errors such as `unknown command`.
-- **Another directory.** Run `go tool muxt check` from the package directory, or pass `-C <dir>`.
+Routes so far read `.Request` because none calls a method. Name one in the template and the template reads its result as `.Result` ([call results](../reference/call-results.md)). Append to `index.gohtml`:
+
+```gotmpl
+{{define "GET /square/{n} Square(ctx, n)"}}{{.Result}}{{end}}
+```
+
+Add a `Server` type with the method to `main.go`, pass a `Server{}` to `TemplateRoutes` in place of `nil`, and add `--use-receiver-type=Server` to the directive. Without the flag muxt gives `n` the type `string` and `Square` returns `any`, so the `int` method below no longer satisfies `RoutesReceiver`:
+
+```go
+//go:generate go tool muxt generate --use-receiver-type=Server
+
+type Server struct{}
+
+func (Server) Square(ctx context.Context, n int) int { return n * n }
+```
+
+Add `"context"` to the imports, change the call to `TemplateRoutes(mux, Server{})`, and run the three commands from step 4. <http://localhost:8080/square/7> renders 49. Run `go tool muxt check` from the package directory, or pass `-C <dir>` from elsewhere.
 
 ## Next
 
