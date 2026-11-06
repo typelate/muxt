@@ -1,6 +1,6 @@
 # How to map domain errors to HTTP status codes
 
-A returned error responds 500, and its methods are consulted only for a method that returns just an error whose declared type has `StatusCode() int` ([status codes](../reference/call-results.md#status-code-control)). A `(T, error)` method, the usual shape for a lookup, always responds 500 unless the template sets another code. To respond 404 for a missing record, give the error a `StatusCode() int` method and apply it from the template.
+To respond 404 for a missing record, give the error a `StatusCode() int` method and apply it from the template. muxt consults `StatusCode` itself only for a method that returns just an error whose declared type has it ([status codes](../reference/call-results.md#status-code-control)); a `(T, error)` method, the usual shape for a lookup, responds 500 unless the template sets another code.
 
 Define the error in the package that holds the templates so the services it wraps stay HTTP-free. `database` and `security` stand for your own packages.
 
@@ -49,8 +49,8 @@ func (data *TemplateData[R, T]) ErrorStatusCode() *TemplateData[R, T] {
 {{end}}
 ```
 
-Keep `Error()` text user-facing and the wrapped cause for logs and `errors.Is`.
+`Error()` text is shown to the user; the wrapped cause is for logs and `errors.Is`.
 
 ## Edge cases
 
-- **Routes that take `response`.** This works only on routes whose method does not take `response`. When it does, muxt writes the template buffer without applying any status code, so a missing record renders at 200 and `ErrorStatusCode` is silently ignored. See [routes that take `response`](../reference/call-parameters.md#routes-that-take-response).
+- **Routes that take `response`.** The template approach works only on routes whose method does not take `response`. When it does, muxt writes the template buffer without applying any status code, so a missing record renders at 200 and `ErrorStatusCode` is silently ignored. See [routes that take `response`](../reference/call-parameters.md#routes-that-take-response).
