@@ -1,6 +1,6 @@
 # How to serve full pages and fragments from one route
 
-One URL often needs three responses: the whole page for a direct visit, the main content for an htmx link that swaps `#main`, and only the results list when a search box swaps `#results`. Write one route template that picks among layout partials instead of three routes. The examples use `--output-htmx` ([flags](../reference/cli.md#flags)) for the `.HX*` readers. `ListArticles` and its result stand for your own method and type.
+One URL often needs three responses: the whole page for a direct visit, the main content for an htmx link that swaps `#main`, and only the results list when a search box swaps `#results`. Write one route template that picks among layout partials instead of three routes. The snippets below assume `--output-htmx` ([flags](../reference/cli.md#flags)) for the `.HX*` readers, as in the [htmx-counter example](../examples/htmx-counter/README.md). `ListArticles` and its result stand for your own method and type.
 
 ## Split the page into partials
 
