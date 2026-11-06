@@ -29,3 +29,8 @@ stdout '^# muxt check'
 
 muxt documentation docs/README.md
 stdout '^# Muxt Documentation$'
+
+muxt documentation docs/examples/simple/main.go
+stdout '^docs/examples/simple/main\.go$'
+stdout '^```go$'
+stdout '^package main$'

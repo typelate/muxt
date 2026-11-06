@@ -20,7 +20,7 @@ A path is a page's repo-relative path, such as `docs/reference/template-names.md
 
 Links inside a page are relative to the page's own directory. They are not URLs; resolve them from there and pass the result to `muxt documentation`.
 
-`docs/README.md` is the top-level page and is embedded like the others. `docs/examples` is not embedded.
+`docs/README.md` is the top-level page and is embedded like the others. Example files under `docs/examples` print inside a code fence under their path, so `muxt documentation docs/examples/simple/main.go` prints the path, then the file in a `go` fence.
 
 ## Edge cases
 
