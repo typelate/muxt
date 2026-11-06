@@ -1,8 +1,8 @@
 # Keep part of a template as written
 
-`muxt fmt` only changes the indentation of existing lines, and leaves alone anything it is unsure about, so most templates need nothing. Use a `muxt:fmt` comment when you want a region left exactly as you wrote it, such as a hand-aligned block.
+To leave a region exactly as you wrote it, such as a hand-aligned block, put a `muxt:fmt` comment before it. `muxt fmt` only re-indents existing lines and skips anything it is unsure about, so most templates need no comment.
 
-There are three directives. Each is a template comment containing only the directive. Trim markers are allowed: `{{- /* muxt:fmt off */ -}}`.
+Three directives exist. Each is a template comment containing only the directive; trim markers are allowed: `{{- /* muxt:fmt off */ -}}`.
 
 ## Keep a region
 
