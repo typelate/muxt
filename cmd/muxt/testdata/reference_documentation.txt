@@ -38,3 +38,6 @@ stderr 'did you mean: docs/reference/cli\.md'
 
 ! muxt documentation template-names
 stderr 'did you mean: docs/reference/template-names\.md'
+
+muxt documentation docs/reference/commands/check.md
+stdout '\(docs/reference/type-checking\.md#preconditions\)'

@@ -20,7 +20,7 @@ A path is a file's or directory's repo-relative path, such as `docs/reference/te
 
 With no argument the path is the directory `docs`, so the command prints the path of every embedded file, one per line. A directory path, such as `docs/how-to`, prints the path of each file under it, one per line.
 
-Links inside a page are relative to the page's own directory. They are not URLs; resolve them from there and pass the result to `muxt documentation`.
+Links to other pages are printed as repo-relative paths that `muxt documentation` accepts, so a link such as `../type-checking.md#preconditions` prints as `docs/reference/type-checking.md#preconditions`.
 
 `docs/README.md` is the top-level page and is embedded like the others. Example files under `docs/examples` print inside a code fence under their path, so `muxt documentation docs/examples/simple/main.go` prints the path, then the file in a `go` fence.
 

@@ -159,10 +159,10 @@ func Files(dir Entry) ([]string, error) {
 	return paths, nil
 }
 
-// Render returns a markdown file's content verbatim. Any other file is
-// returned under its path line in a code fence. A directory is returned as
-// the path of each file under it, one per line. ref is reserved for rewriting
-// links to the build's version and is not used yet.
+// Render returns a markdown file's content with its links rewritten by
+// RewriteLinks. Any other file is returned under its path line in a code
+// fence. A directory is returned as the path of each file under it, one per
+// line. ref is passed to RewriteLinks.
 func (e Entry) Render(ref string) ([]byte, error) {
 	if e.Dir {
 		paths, err := Files(e)
@@ -181,7 +181,7 @@ func (e Entry) Render(ref string) ([]byte, error) {
 		return nil, fmt.Errorf("reading %s: %w", e.Path, err)
 	}
 	if path.Ext(e.Path) == ".md" {
-		return content, nil
+		return RewriteLinks(e.Path, content, ref), nil
 	}
 	return fenced(e.Path, content), nil
 }
