@@ -10,7 +10,7 @@ muxt fmt -w .
 muxt fmt [flags] [path ...]
 ```
 
-`muxt fmt` changes only the leading whitespace of existing lines, strips trailing whitespace, and collapses runs of blank lines to one. Outside template actions it never joins or splits a line, never edits a token, and leaves what it is unsure about exactly as written, whole element at a time. Inside an action, which never renders, it prints the action in one canonical form; see [Actions](#actions).
+`muxt fmt` changes only the leading whitespace of existing lines, strips trailing whitespace, and collapses runs of blank lines to one. Outside template actions it never joins or splits a line and never edits a token. It leaves what it is unsure about as written, a whole element at a time. Inside an action, which never renders, it prints the action in one canonical form ([Actions](#actions)).
 
 Like `gofmt`, it has no formatting options. Indentation is one tab per level. The flags only say where the result goes.
 
@@ -44,11 +44,11 @@ A problem with one file is printed on stderr and the other files are still forma
 
 ## What it changes
 
-`muxt fmt` is a reindenter. Every line that exists in the source still exists in the output, with the same text after its indentation, except inside actions ([Actions](#actions)). The one thing that changes is how much whitespace comes before that text. The whitespace after it is removed.
+Every line in the source is still in the output with the same text after its indentation, except inside actions ([Actions](#actions)). Only the whitespace before that text changes, and the whitespace after it is removed.
 
-The safety rule, in terms of what a reader of the page could notice: whitespace between two pieces of content can change in amount, never in whether it exists and never in kind. A gap with no whitespace stays empty. A gap with spaces and no line break stays a gap with no line break. A gap with a line break keeps at least one line break. So a space the browser shows between two words is still there, and two inline elements that touch still touch. `fmt` checks this against the HTML parser's own tree, so a gap is judged by the element the browser puts it in, not by where it sits in the source ([reference_fmt_write.txt](../../../cmd/muxt/testdata/reference_fmt_write.txt)).
+The safety rule, in terms of what a reader of the page could notice: whitespace between two pieces of content can change in amount, never in whether it exists and never in kind. A gap with no whitespace stays empty. A gap with spaces and no line break stays a gap with no line break. A gap with a line break keeps at least one line break. A space the browser shows between two words is still there, and two inline elements that touch still touch. `fmt` checks this against the HTML parser's own tree, so a gap is judged by the element the browser puts it in, not by where it sits in the source ([reference_fmt_write.txt](../../../cmd/muxt/testdata/reference_fmt_write.txt)).
 
-Beyond that:
+Also:
 
 - Spaces inside a line are left as written, and prose is never re-wrapped. There is no line width.
 - Trailing whitespace is stripped only where the run is one `fmt` may re-indent; inside text it leaves as written it stays.
@@ -77,7 +77,18 @@ Actions are the one place `muxt fmt` edits tokens. Text inside `{{` and `}}` is 
 What is normalized:
 
 - Spacing. No space next to the delimiters, one space between words, ` | ` between pipeline stages, and `$i, $v := ` in declarations: `{{ range $i,$v:=.Items }}` becomes `{{range $i, $v := .Items}}`, and `{{end }}`, `{{ else }}` and `{{ break }}` become `{{end}}`, `{{else}}` and `{{break}}`.
-- Parentheses are dropped unless they are needed. `gofmt` strips them only in `if`, `for` and `switch` headers and where they are doubled; `muxt fmt` also drops them around the head of any pipeline, in declarations and calls included. Parentheses around the whole first command of a pipeline, with nothing piped into it, go whatever they hold: `{{if (and (eq .A 1) (not .B))}}` becomes `{{if and (eq .A 1) (not .B)}}`, `{{(index .M "k")}}` becomes `{{index .M "k"}}`, `{{range (slice .L 1)}}` becomes `{{range slice .L 1}}`, `{{$x := (len .X)}}` becomes `{{$x := len .X}}`, `{{template "a" (printf "%s" .X)}}` becomes `{{template "a" printf "%s" .X}}`, and `{{((.X))}}` becomes `{{.X}}`. Everywhere else they stay, because there they change how the template runs: an argument (`printf "%s" (.X)`, `eq .A (1)`, `printf "%v" (nil)`, the inner parentheses of `and (eq .A 1) (not .B)`), a later stage (`.X | (len)`, `.X | (printf "%s" .A)`), a pipeline followed by a field (`(index .M "k").Name`), one that declares a variable (`($y := .X)`), and, in a plain action without declarations, one that calls `html` or `urlquery` (`{{(html .X) | printf "%s"}}`): `html/template` checks only that pipeline for those escapers, allows them only as its last command, and does not look for them inside parentheses, so `{{if (html .X)}}` still becomes `{{if html .X}}`. A bare constant argument takes the parameter's type while `(1)` is an `int`; `(nil)` as an argument is an error while bare `nil` is a nil value; `(.X)` unwraps an `any` that holds nil; and a parenthesized later stage refuses the piped value, so `.X | (printf "%s" .A)` is an error where `.X | printf "%s" .A` is not. Parentheses are never added.
+- Parentheses are dropped unless they are needed. `gofmt` strips them only in `if`, `for` and `switch` headers and where they are doubled; `muxt fmt` also drops them around the head of any pipeline, in declarations and calls included. Parentheses around the whole first command of a pipeline, with nothing piped into it, go whatever they hold:
+
+  | Before | After |
+  |---|---|
+  | `{{if (and (eq .A 1) (not .B))}}` | `{{if and (eq .A 1) (not .B)}}` |
+  | `{{(index .M "k")}}` | `{{index .M "k"}}` |
+  | `{{range (slice .L 1)}}` | `{{range slice .L 1}}` |
+  | `{{$x := (len .X)}}` | `{{$x := len .X}}` |
+  | `{{template "a" (printf "%s" .X)}}` | `{{template "a" printf "%s" .X}}` |
+  | `{{((.X))}}` | `{{.X}}` |
+
+  Everywhere else they stay, because there they change how the template runs: an argument (`printf "%s" (.X)`, `eq .A (1)`, `printf "%v" (nil)`, the inner parentheses of `and (eq .A 1) (not .B)`), a later stage (`.X | (len)`, `.X | (printf "%s" .A)`), a pipeline followed by a field (`(index .M "k").Name`), one that declares a variable (`($y := .X)`), and, in a plain action without declarations, one that calls `html` or `urlquery` (`{{(html .X) | printf "%s"}}`). `html/template` checks only that pipeline for those escapers, allows them only as its last command, and does not look inside parentheses, so `{{if (html .X)}}` still becomes `{{if html .X}}`. The differences: a bare constant argument takes the parameter's type while `(1)` is an `int`; `(nil)` as an argument is an error while bare `nil` is a nil value; `(.X)` unwraps an `any` that holds nil; a parenthesized later stage refuses the piped value, so `.X | (printf "%s" .A)` is an error where `.X | printf "%s" .A` is not. Parentheses are never added.
 - Line breaks. A pipeline the source breaks between stages is printed one stage per line with the `|` leading each continuation line, and a command the source breaks between arguments is printed one argument per line, wherever the action is. An action that starts its line (only whitespace before it) is also split when it is complex: a pipeline with four or more stages, or a command with three or more parenthesized arguments. An action inside a start tag or in the middle of text stays on one line unless you broke it. Each continuation line is one tab deeper than the line the action starts on. When a command's arguments split in a pipeline of two or more stages, the stages split too, and the arguments go one level deeper than the stage lines, so a `|` line never reads as an argument. A parenthesized pipeline that itself splits recurses one level deeper and closes with `)` on its own line at the argument's indentation. Whenever an action spans lines, its closing delimiter goes on a line of its own at the indentation of the line the action starts on. Any other line break inside an action is dropped, so a short action that spans lines becomes one line.
 
 ```gohtml
@@ -133,7 +144,7 @@ The generated routes file names each route template too, and Go code that calls 
 
 ## What is left as written
 
-When `muxt fmt` cannot be sure a change is invisible, it leaves the whole element as written: the opening line, the body and the closing line. The closing tag of its parent still lands at the parent's depth, and its siblings are still re-indented. These are the cases:
+When `muxt fmt` cannot be sure a change is invisible, it leaves the whole element as written: opening line, body and closing line. The parent's closing tag still lands at the parent's depth, and the siblings are still re-indented. The cases:
 
 - Text of `script`, `style`, `textarea`, `title`, `pre`, `iframe`, `noembed`, `noframes`, `noscript`, `listing`, `xmp`, `plaintext` and other raw text elements. Every byte after `>` up to the closing tag counts, including a line break the parser drops.
 - Any element whose computed `white-space` preserves whitespace (`pre`, `pre-wrap`, `break-spaces`), and everything inside it. Under `pre-line` the whitespace is re-indented but the number of line breaks is kept exactly.
@@ -147,7 +158,7 @@ When `muxt fmt` cannot be sure a change is invisible, it leaves the whole elemen
 
 A list of siblings is treated as a unit in one respect. When any gap in it is left as written because `muxt fmt` is unsure about white-space (unknown CSS, an unresolved caller), every gap in that list is left as written, including trimmed ones, and so is everything inside it. A `pre`, `script`, custom element or SVG does not do this: such an element is an island, and its siblings are still re-indented. A branch of `{{if}}`, `{{with}}` or `{{range}}` whose body is left as written keeps its own keyword lines (the opener, `{{else}}` and `{{end}}`) as written too. That freeze reaches outward through any enclosing branch bodies, keyword lines included, and stops at the nearest element, `{{block}}` body or define body, where the frozen branch is an island and its siblings are still re-indented. An unsure element that spans several lines freezes its list wherever it starts on a line.
 
-When `muxt fmt` cannot tell whether whitespace matters, it does not format that part ([reference_static_files_fmt_unresolved.txt](../../../cmd/muxt/testdata/reference_static_files_fmt_unresolved.txt)).
+Unresolvable stylesheets are an example ([reference_static_files_fmt_unresolved.txt](../../../cmd/muxt/testdata/reference_static_files_fmt_unresolved.txt)).
 
 ## Where CSS comes from
 
@@ -179,7 +190,7 @@ A `{{define}}` body is formatted according to where it is called. For each `{{te
 
 The limits:
 
-- A define that is a route (its name is an HTTP pattern), a define nothing calls, and a define called only from another Go package are all assumed to be called from collapsing contexts. If you call one from `<pre>` somewhere `fmt` cannot see, re-indenting it can change what the browser shows. Mark such a define with a `muxt:fmt` directive.
+- A define that is a route (its name is an HTTP pattern), a define nothing calls, and a define called only from another Go package are assumed to be called from collapsing contexts. If one is called from `<pre>` somewhere `fmt` cannot see, re-indenting it can change what the browser shows; mark it with a `muxt:fmt` directive.
 - A `{{template}}` call whose define `fmt` cannot find (it lives in a file not in the run) in `<head>` or in a table section is assumed to emit what belongs there only when every element that could own the text that follows collapses whitespace. Otherwise the call is treated as possibly writing text, and the surrounding gaps are left as written.
 
 ## Generated files
@@ -188,21 +199,17 @@ When walking a directory, `muxt fmt` skips a file whose first non-blank line is 
 
 ## Migrating a project
 
-`muxt fmt` can only trust CSS it can read. A project that serves its stylesheets by hand (an `http.FileServerFS` registered on the mux beside `TemplateRoutes`) hides them from `fmt`: every `<link rel="stylesheet">` is a sheet it cannot resolve, so author CSS is unknown and every element is possibly restyled. All of the file's markup is left as written.
-
-To fix that, let `muxt generate` serve the directory:
+A project that serves its stylesheets by hand (an `http.FileServerFS` registered on the mux beside `TemplateRoutes`) hides them from `fmt`: no `<link rel="stylesheet">` resolves, so author CSS is unknown and all of the file's markup is left as written. Let `muxt generate` serve the directory instead:
 
 ```bash
 muxt generate --input-static-assets-directory=assets --output-static-assets-path=/static
 ```
 
-Then remove the hand-written file server for that directory and link the sheets under the new path, as `{{.Path.ReadStatic}}app.css` or written out as `/static/app.css`. The generated file's header records both flags, and `fmt` reads them back. See [Static assets](generate.md#static-assets). Run `muxt fmt -l .` before and after: files that were unchanged because their CSS was unknown now get formatted.
+Remove the hand-written file server for that directory and link the sheets under the new path, as `{{.Path.ReadStatic}}app.css` or `/static/app.css`. The generated file's header records both flags, and `fmt` reads them back ([Static assets](generate.md#static-assets)). Run `muxt fmt -l .` before and after: files left alone because their CSS was unknown now get formatted.
 
 ## Limits
 
 - CSS is read per package. When the page shell that holds the `<link>` lives in another Go package, the templates of this package see no author CSS beyond their own `<style>` elements.
-- A define that is a route, is never called, or is called only from another package is assumed to be called from a collapsing context.
-- Prose is never re-wrapped. There is no line width.
 - **Standard input has no package.** It belongs to no Go package, even when `muxt fmt` runs in a package directory: an editor pipes a buffer from wherever it runs, so the package there may not be the buffer's ([reference_fmt_stdin_package.txt](../../../cmd/muxt/testdata/reference_fmt_stdin_package.txt)).
 - **Raw strings that span lines.** An action holding a raw string literal that spans lines is left as written whole, opening line included.
 - **Names that differ only in spacing.** Two defines whose names differ only in spacing are left as written.
