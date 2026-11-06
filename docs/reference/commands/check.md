@@ -22,7 +22,7 @@ Run `generate` first: `check` reads receiver types from the generated file and r
 
 What fails: [Type Checking](../type-checking.md#what-is-checked).
 
-In an `html/template` set, check also fails where `html/template` writes the templates differently from how a browser reads them, each at its `file:line:col`. Check runs the standard library's `html/template` escaper over the same sources to find these, so what it reports is what `html/template` does:
+In an `html/template` set, `check` also fails, at `file:line:col`, where `html/template` writes the templates differently from how a browser reads them. It runs the standard library's `html/template` escaper over the same sources, so what it reports is what `html/template` does:
 
 - a `<!--` inside `<title>` or `<textarea>`: those elements hold text, not markup, so the page shows the comment;
 - a `<!` that starts no comment or doctype (`<![if !IE]>`, `<!x>`), or a `<?`: `html/template` escapes the `<`, so the page shows the text;
@@ -32,7 +32,7 @@ In an `html/template` set, check also fails where `html/template` writes the tem
 
 A partial is checked as it renders in text: in the element a `{{template}}` call in text is in, or at the top level when nothing calls it. One only called inside `<script>`, `<style>` or an attribute value is escaped there and not checked; one called inside `<title>` or `<textarea>` is checked for `<!--`.
 
-Comments in text, actions inside them (`<!-- {{.X}} -->`), and comments in attribute values, `<script>` and `<style>` pass ([err_check_html_comments.txt](../../../cmd/muxt/testdata/err_check_html_comments.txt), [reference_check_html_comments.txt](../../../cmd/muxt/testdata/reference_check_html_comments.txt)). Use `{{/* */}}` for a comment that must not reach the page.
+Comments in text, actions inside them (`<!-- {{.X}} -->`), and comments in attribute values, `<script>` and `<style>` pass ([err_check_html_comments.txt](../../../cmd/muxt/testdata/err_check_html_comments.txt), [reference_check_html_comments.txt](../../../cmd/muxt/testdata/reference_check_html_comments.txt)). For a comment that must not reach the page, use `{{/* */}}`.
 
 `--allow-unused` lists templates nothing renders under `Unused templates (allowed by --allow-unused):` and does not fail on them. Use it for templates rendered some other way check cannot see, such as through `templates.Lookup(name).Execute`, a clone of the set, or code in another package the set is passed to. Type errors, and route templates with no generated handler, still fail ([err_check_with_unused_template.txt](../../../cmd/muxt/testdata/err_check_with_unused_template.txt)).
 
