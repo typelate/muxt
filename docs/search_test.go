@@ -66,6 +66,62 @@ func TestSearch(t *testing.T) {
 	}
 }
 
+func TestSearchUnder(t *testing.T) {
+	for _, tt := range []struct {
+		arg        string
+		query      string
+		wantPrefix string
+		wantPath   string
+	}{
+		{arg: "docs/how-to", query: "htmx", wantPrefix: "docs/how-to/"},
+		{arg: "docs/reference/commands", query: "muxt check", wantPrefix: "docs/reference/commands/"},
+		{arg: "docs/reference/commands/check.md", query: "muxt check", wantPath: "docs/reference/commands/check.md"},
+	} {
+		entry, err := docs.Resolve(tt.arg)
+		if err != nil {
+			t.Fatalf("Resolve(%q) error = %v", tt.arg, err)
+		}
+		matches, err := docs.Search(entry, tt.query)
+		if err != nil {
+			t.Fatalf("Search(%q, %q) error = %v", tt.arg, tt.query, err)
+		}
+		if len(matches) == 0 {
+			t.Fatalf("Search(%q, %q) returned no matches, want at least one", tt.arg, tt.query)
+		}
+		for i, m := range matches {
+			if tt.wantPrefix != "" && !strings.HasPrefix(m.Path, tt.wantPrefix) {
+				t.Errorf("Search(%q, %q)[%d].Path = %q, want a path starting with %q", tt.arg, tt.query, i, m.Path, tt.wantPrefix)
+			}
+			if tt.wantPath != "" && m.Path != tt.wantPath {
+				t.Errorf("Search(%q, %q)[%d].Path = %q, want %q", tt.arg, tt.query, i, m.Path, tt.wantPath)
+			}
+		}
+	}
+}
+
+func TestSearchUnderRootHasMoreMatches(t *testing.T) {
+	const query = "htmx"
+	root, err := docs.Resolve("")
+	if err != nil {
+		t.Fatalf("Resolve(%q) error = %v", "", err)
+	}
+	how, err := docs.Resolve("docs/how-to")
+	if err != nil {
+		t.Fatalf("Resolve(%q) error = %v", "docs/how-to", err)
+	}
+	all, err := docs.Search(root, query)
+	if err != nil {
+		t.Fatalf("Search(root, %q) error = %v", query, err)
+	}
+	under, err := docs.Search(how, query)
+	if err != nil {
+		t.Fatalf("Search(%q, %q) error = %v", "docs/how-to", query, err)
+	}
+	if len(all) <= len(under) {
+		t.Errorf("Search(root, %q) has %d matches, want more than the %d under docs/how-to", query, len(all), len(under))
+	}
+}
+
 func TestSearchIgnoresCase(t *testing.T) {
 	root, err := docs.Resolve("")
 	if err != nil {

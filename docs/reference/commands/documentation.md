@@ -17,7 +17,7 @@ Aliases: `docs`, `d`.
 
 ## Search
 
-`--query <text>` (`-q`) prints every line of the embedded docs that holds the text, ignoring case, as `path:line: text`. The text is matched literally, not as a pattern, so `muxt documentation -q ExecuteTemplate` finds the same lines as `muxt documentation -q executetemplate`. Add a path after the flag to search only under that file or directory.
+`--query <text>` (`-q`) prints every line of the embedded docs that holds the text, ignoring case, as `path:line: text`. The text is matched literally, not as a pattern, so `muxt documentation -q ExecuteTemplate` finds the same lines as `muxt documentation -q executetemplate`. A path after the flag narrows the search to that file or directory, so `muxt documentation --query htmx docs/how-to` prints only matches under `docs/how-to/`.
 
 ## Paths
 

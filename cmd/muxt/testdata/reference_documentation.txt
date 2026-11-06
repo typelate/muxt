@@ -48,3 +48,11 @@ stdout '^docs/reference/[^:]+\.md:[0-9]+: .*ExecuteTemplate'
 
 muxt d -q executetemplate
 stdout '^docs/reference/[^:]+\.md:[0-9]+: .*ExecuteTemplate'
+
+muxt documentation --query htmx docs/how-to
+stdout '^docs/how-to/'
+! stdout '^docs/reference/'
+
+muxt documentation -q 'muxt check' docs/reference/commands/check.md
+stdout '^docs/reference/commands/check\.md:[0-9]+: '
+! stdout '^docs/reference/commands/generate\.md'
