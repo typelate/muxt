@@ -1293,6 +1293,11 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	}
 	text := fmt.Sprint(iface)
 	text, raw := escapeAction(text, action.HTMLContext, trust)
+	if s.escapableText && !s.rawText {
+		// In textarea and title even trusted HTML is text, and is
+		// escaped when rendered, as html/template escapes it.
+		raw = false
+	}
 	if text == "" {
 		if s.attrSource != nil {
 			// In an attribute value an action that writes nothing is

@@ -1014,3 +1014,25 @@ func TestTextThatStartsNoTagMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// TestTrustedHTMLInTitleAndTextareaMatchesStdlib states that a value
+// trusted as HTML is escaped in title and textarea, where it is text, as
+// in html/template: it cannot end the element, and in SVG, where a
+// browser reads title as markup, it writes no element.
+func TestTrustedHTMLInTitleAndTextareaMatchesStdlib(t *testing.T) {
+	type data struct{ H stdtemplate.HTML }
+	d := data{H: `</textarea></title><img src=x onerror=alert(1)>`}
+	for _, src := range []string{
+		`<textarea>{{.H}}</textarea>`,
+		`<title>{{.H}}</title>`,
+		`<textarea>{{if true}}{{.H}}{{end}}</textarea>`,
+		`<svg><title>{{.H}}</title></svg>`,
+		`{{define "t"}}{{.H}}{{end}}<textarea>{{template "t" .}}</textarea>`,
+		`<p>{{.H}}</p>`,
+	} {
+		want := executeStdlib(t, src, d)
+		if got := executeShim(t, src, d); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
+		}
+	}
+}
