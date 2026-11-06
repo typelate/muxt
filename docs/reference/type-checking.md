@@ -1,17 +1,15 @@
 # Type Checking
 
-[`muxt check`](commands/check.md) uses muxt's own checker (`internal/check`, derived from typelate/check and htt).
+[`muxt check`](commands/check.md) resolves each action in a template against the Go type the template receives.
 
 ## Preconditions
 
-An `ExecuteTemplate` call is checked when its template name is a literal and its data argument has a statically known type.
+An `ExecuteTemplate` call is checked when its template name is a literal and its data argument has a statically known type. Generated handlers meet both conditions, so every route template is checked.
 
 ```go
 templates.ExecuteTemplate(w, "user-profile", data) // checked
 templates.ExecuteTemplate(w, name, data)           // not checked: name is not a literal
 ```
-
-Generated handlers meet both conditions, so every route template is checked.
 
 A call whose name is not a literal, such as one in a `render(w, name, data)` helper, is skipped, and check says so on stderr, once per call site, so the templates it renders are not silently unchecked. The count is in the summary ([reference_check_non_literal_template_name.txt](../../cmd/muxt/testdata/reference_check_non_literal_template_name.txt)):
 
@@ -20,7 +18,17 @@ A call whose name is not a literal, such as one in a `render(w, name, data)` hel
 ok: 4 templates, 1 call site skipped
 ```
 
-A literal name with a typed value at each call site is checked against that type, as is a route template with a call, which the generated handler renders.
+To check what a helper like that renders, call `ExecuteTemplate` with a literal name and a typed value at each call site, or make the page a route template with a call, so the generated handler renders it:
+
+```go
+// not checked
+func renderTemplate(w http.ResponseWriter, name string, data any) error {
+	return templates.ExecuteTemplate(w, name, data)
+}
+
+// checked against PageData
+err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
+```
 
 ## What is checked
 
@@ -82,3 +90,5 @@ Check also fails on:
 | Anything after the initializer (`init`, a later `templates = ...`) | Not evaluated. Only the variable's initializer expression is read; a `Funcs`/`ParseFS` chain in `init` leaves `muxt check` reporting `ok: 0 templates` and `muxt generate` writing 0 routes. |
 | GoLand `gotype` comments | Not read. |
 | Go compile errors | Not reported: a package that does not build can pass `muxt check`. Run `go vet`. |
+
+The checker is muxt's own (`internal/check`, derived from typelate/check and htt).
