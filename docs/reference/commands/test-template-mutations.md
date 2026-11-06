@@ -19,7 +19,7 @@ template.go:20:9 ExecuteTemplate "greeting" (dot: server.Greeting)
 3 mutants, 2 killed, 1 missed, 0 skipped
 ```
 
-The [tutorial](../../tutorials/find-untested-template-behavior.md) turns a miss into an assertion.
+Tutorial: [turn a miss into an assertion](../../tutorials/find-untested-template-behavior.md).
 
 ## Usage
 
@@ -34,9 +34,9 @@ The package directory defaults to the working directory and is resolved like `-C
 - `-overlay`: muxt delivers each mutant through its own overlay.
 - `-json`: muxt reads `go test`'s text output to tell a failed test from a failed build, and the JSON stream has none of those lines.
 - `-mod` and `-modfile`: the [coverage pre-pass](#how-the-pre-pass-works) sets both.
-- A `-coverpkg` that would cover `html/template`; the [coverage pre-pass limitations](#template-coverage) explain why.
+- A `-coverpkg` that would cover `html/template` ([why](#template-coverage)).
 
-To bound each mutant's run, pass `go test`'s own `-timeout`, for example `-- -timeout=2m`.
+Bound each mutant's run with `go test`'s own `-timeout`, for example `-- -timeout=2m`.
 
 ```bash
 muxt test-template-mutations --template-pattern '^GET /users' --run TestUsers ./web -- -tags=integration -race
@@ -69,7 +69,7 @@ Traversal starts at each `ExecuteTemplate` call that meets the [type-checking pr
 - Templates written as Go string literals are mutated too. Positions are reported in the `.go` file. [reference_test_template_mutations_string_literal.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_string_literal.txt)
 - Templates parsed with custom `Delims` are mutated like any other. [reference_test_template_mutations_custom_delimiters.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_custom_delimiters.txt)
 
-Mutants reach the build through `go test -overlay`, which also reaches `//go:embed` content, so the working tree is never written to.
+Mutants reach the build through `go test -overlay`, which also reaches `//go:embed` content, so muxt never writes to the working tree.
 
 ## Operators
 
@@ -134,7 +134,7 @@ Comparisons, calls and multi-command pipelines fall back to `operands`. [referen
 
 ### Flaky kills
 
-Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU. A test can fail from that contention alone, which would count as a kill. So once all mutants have run, each `KILL` is repeated, one at a time with nothing else running, against the same mutant and running only the tests that failed. If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`, and counted on the summary line, which gains `N flaky` only when there is one:
+Mutants run with `--workers` above 1 share whatever the tests share: a port, a file, the CPU, and a test can fail from that contention alone. Once all mutants have run, muxt repeats each `KILL` alone, against the same mutant, running only the tests that failed. If they fail again it stays a `KILL`. If they pass it becomes `FLAKY`, listed without `-v` like a `MISS`; the summary line gains `N flaky` only when there is one:
 
 ```text
     FLAKY 1:39 if-true (TestGreeting failed beside other mutants, passed when run alone)
@@ -142,13 +142,13 @@ Mutants run with `--workers` above 1 share whatever the tests share: a port, a f
 3 mutants, 1 killed, 1 flaky, 1 missed, 0 skipped
 ```
 
-A flaky mutant is unknown, not caught, so close the gap by making the suite tolerate `--workers`, or run with `--workers 1`. It does not fail the exit status. With one worker nothing is repeated.
+A flaky mutant is unknown, not caught. Make the suite tolerate `--workers`, or run with `--workers 1`, where nothing is repeated. `FLAKY` does not fail the exit status.
 
-The repeat is serial on purpose, since contention is what it checks for, and it costs up to one more run of the suite per kill. On a suite that kills most mutants it takes back much of what `--workers` saved. On a terminal, or with `-v`, each repeat writes a line: `[recheck 3/12] templates.gohtml "page" 1:39 if-true: killed`. The template lines written while the mutants run count kills as `(unconfirmed)` for the same reason.
+The repeat is serial because contention is what it checks for. It costs up to one more run of the suite per kill, which on a suite that kills most mutants takes back much of what `--workers` saved. On a terminal, or with `-v`, each repeat writes a line: `[recheck 3/12] templates.gohtml "page" 1:39 if-true: killed`. The template lines written while the mutants run count kills as `(unconfirmed)` for the same reason.
 
 ## Coverage pre-pass
 
-muxt skips the mutants that no test reaches, because no test could kill them. A mutant is unreached when no test executes the template action it is in. muxt reports it as a `SKIP` with the reason `no test reaches it` and counts it among the skipped mutants, so it does not fail the run. The summary line gains `N unreached` when there is at least one. With `-v`, muxt also lists the unreached mutants after the templates:
+A mutant is unreached when no test executes the template action it is in, so no test could kill it. muxt reports it as a `SKIP` with the reason `no test reaches it`, which does not fail the run. The summary line gains `N unreached` when there is at least one. With `-v`, muxt also lists the unreached mutants after the templates:
 
 ```text
     SKIP 1:49 action-zero (no test reaches it)
@@ -159,9 +159,9 @@ no test reaches 1 mutant:
 4 mutants, 2 killed, 1 missed, 1 skipped, 1 unreached
 ```
 
-Each listed mutant needs a test that renders its branch. A stronger assertion in the existing tests cannot catch it. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
+Each listed mutant needs a test that renders its branch; a stronger assertion in the existing tests cannot catch it. [reference_test_template_mutations_unreached.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_unreached.txt)
 
-`--include-uncovered-nodes` runs the unreached mutants instead of skipping them. Each one is almost certainly a `MISS`, and a miss fails the run. muxt still lists them under `no test reaches`, so you can tell which misses are untested branches, and the summary marks them `(run)`:
+`--include-uncovered-nodes` runs the unreached mutants instead. Each is almost certainly a `MISS`, and a miss fails the run. muxt still lists them under `no test reaches` to tell untested branches from weak assertions, and the summary marks them `(run)`:
 
 ```text
 4 mutants, 2 killed, 2 missed, 0 skipped, 1 unreached (run)
@@ -171,28 +171,28 @@ Each listed mutant needs a test that renders its branch. A stronger assertion in
 
 ### How the pre-pass works
 
-The pre-pass runs after the baseline passes, and only when there is a mutant to run, so a failing baseline stops the run before the engine is tried. It runs your tests one extra time, unmutated, with muxt's own template engine in place of `html/template`. The engine records each template block the tests execute. The kill runs that follow use the real `html/template`, so the engine never decides whether a mutant is killed.
+The pre-pass runs after the baseline passes, and only when there is a mutant to run, so a failing baseline stops the run before the engine is tried. It runs your tests one extra time, unmutated, with muxt's own template engine in place of `html/template`; the engine records each template block the tests execute. The kill runs use the real `html/template`, so the engine never decides whether a mutant is killed.
 
-The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=<scratch>/overlay.json` with your `go test` flags. Before it runs, muxt writes these under its scratch directory for the run:
+The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=<scratch>/overlay.json` with your `go test` flags. Before it runs, muxt writes to its scratch directory:
 
 - `html-template/muxt_shim.go`: a shim of `html/template` that aliases each of its types to, and forwards each of its functions and constants to, [`github.com/typelate/muxt/template/html`](../template-engine.md). `FuncMap` stays `text/template`'s. The overlay deletes the real files of GOROOT's `html/template` and puts the shim in their place.
 - `go.mod` and `go.sum`: copies of yours, with `github.com/typelate/muxt` required at the version of the muxt you ran. When your `go.mod` already requires muxt, as a [`tool` dependency](../../tutorials/quick-start.md) does, the copy keeps your version when it is the same and uses the CLI's when it is not. In muxt's own repository the copy requires nothing, since the engine is already there.
 
-Your `go.mod` and `go.sum` are never written. `-mod=mod` lets the go command add the sums muxt's requirements need to the copy. The go command takes muxt from the module cache, where `go install` or `go get` left it, and fetches it from the module proxy otherwise. With `-v`, the [timing](#timing) preamble names the module the engine came from, as in `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`, and adds `, not your go.mod's v0.22.0` when the copy overrode your version. muxt removes the scratch directory when the run ends.
+muxt never writes your `go.mod` or `go.sum`. `-mod=mod` lets the go command add the sums muxt's requirements need to the copy. The go command takes muxt from the module cache, where `go install` or `go get` left it, and fetches it from the module proxy otherwise. With `-v`, the [timing](#timing) preamble names the module the engine came from, as in `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`, and adds `, not your go.mod's v0.22.0` when the copy overrode your version. muxt removes the scratch directory when the run ends.
 
 A development build of muxt has no published version. A build of a commit with no uncommitted changes requires the pseudo-version of that commit, which the go command can fetch once the commit is pushed. Any other development build stops the pre-pass with `muxt is a modified development build; set MUXT_MODULE_DIR to its source directory`, and coverage is unknown. Set `MUXT_MODULE_DIR` to the directory of muxt's source, and the copy replaces `github.com/typelate/muxt` with it. muxt's own tests do this with the repository, so they fetch nothing.
 
 Each test binary that runs the engine writes its profile, `<pid>.cov`, as it starts, before it renders anything. A profile with no blocks is a test binary that executed no template, and every mutant it would have reached is unreached. No profile at all means no test binary ran the engine, and coverage is unknown.
 
-No package is added under GOROOT, so vet runs in the pre-pass as in your normal test run. The `-v` flag lets a test binary that stopped recording coverage say so in its output.
+The overlay adds no package under GOROOT, so vet runs in the pre-pass as in your normal test run. `-v` lets a test binary that stopped recording coverage say so in its output.
 
-The pre-pass never fails the run. When it cannot tell which actions the tests reach, it writes a warning and the run goes on without it. [Template coverage](#template-coverage) under Limitations lists when that happens, along with the other edge cases.
+The pre-pass never fails the run. When it cannot tell which actions the tests reach, it warns and the run goes on without it; [Template coverage](#template-coverage) lists when.
 
 ## Exit status
 
 The command exits non-zero when:
 
-- any mutant is a `MISS`. A `FLAKY` one does not fail the run. The report is written first, and stderr ends with `Error: N mutants missed`. A skipped mutant does not fail the run, even when it is unreached, and `--dry-run` does not fail either.
+- any mutant is a `MISS`. The report is written first, and stderr ends with `Error: N mutants missed`. `FLAKY` and `SKIP` (unreached included) do not fail the run, and neither does `--dry-run`.
   [reference_test_template_mutations_go_test_flags.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_go_test_flags.txt)
 - the baseline (unmutated) test run fails. Nothing is mutated.
   [err_test_template_mutations_baseline_fails.txt](../../../cmd/muxt/testdata/err_test_template_mutations_baseline_fails.txt)
@@ -205,7 +205,7 @@ The command exits non-zero when:
 
 ## Timing
 
-The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline and the [coverage pre-pass](#coverage-pre-pass), stderr reports the baseline duration, the pre-pass duration when the pre-pass ran, and an estimate for the rest of the run. The pre-pass is one more run of the suite, and the estimate leaves it out because it has already finished:
+The preamble counts mutants, templates and total complexity (per template, one plus one per `if`, `range` and `with`, plus one per `and` or `or` command in their pipelines, summed). After the baseline and the [coverage pre-pass](#coverage-pre-pass), stderr reports the baseline duration, the pre-pass duration when it ran, and an estimate for the rest of the run, which leaves out the finished pre-pass:
 
 ```text
 20 mutants across 6 templates (complexity 10), baseline 1.9s, coverage pre-pass 2.4s, estimated 38s
@@ -213,13 +213,14 @@ The preamble counts mutants, templates and total complexity (per template, one p
 
 With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/muxt@v0.23.0)`. A development build that `MUXT_MODULE_DIR` replaces has no version to name, so the note is `engine github.com/typelate/muxt => <dir>`.
 
-Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took..
+Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took.
+
 ```text
 [ 1/6] templates.gohtml "greeting": 8 mutants, 7 killed, 1 missed, 3.2s
 [ 2/6] templates.gohtml "footer": 3 mutants, 2 killed, 0 missed, 1 skipped, 1.1s
 ```
 
-`missed` counts `MISS` results, as the summary line does. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else, so a log stays short; the line per template is what to tail to see a long run is alive.
+`missed` counts `MISS` results, as the summary line does. A skipped count appears only when there is one. Piped without `-v`, stderr carries the preamble and nothing else; use a terminal or `-v` to see a long run is alive.
 
 With `-v` each mutant also prints its duration and the time left:
 
@@ -345,12 +346,12 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
   ```
 
   The baseline still decides whether the tests pass. [reference_test_template_mutations_engine_gap.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_engine_gap.txt)
-- **Known engine gaps.** The shim declares every identifier of `html/template`, and three of them differ from the standard library's because the shim's types are the engine's. `Template.Tree` holds a `*template.Tree` of `github.com/typelate/muxt/template`, not a `*parse.Tree`. `AddParseTree` takes that tree, not a `*parse.Tree`. `Error.Node` holds a value with only a `String` method, not a `parse.Node`. Code that uses any of them does not build under the engine, so the pre-pass reports coverage unknown for that run.
+- **Known engine gaps.** Three identifiers of the shim differ from `html/template`'s because its types are the engine's. `Template.Tree` holds a `*template.Tree` of `github.com/typelate/muxt/template`, not a `*parse.Tree`. `AddParseTree` takes that tree. `Error.Node` holds a value with only a `String` method, not a `parse.Node`. Code that uses any of them does not build under the engine, so coverage is unknown for that run.
 - **A `{{template}}` call in a tag.** A template that adds attributes, called in a tag, as in `<input name='q'{{template "field-invalid" .}}>`, renders under `html/template`, but the engine parses the called template as HTML content, not as attributes, so executing the call fails with `{{template "field-invalid"}} in a tag is not supported by muxt's template engine`. A test that renders it fails under the engine, and coverage is unknown for that run. Writing the attributes in the tag, under an `{{if}}`, works.
 - **No test binary ran the engine.** Coverage is known only from a profile, so when no test binary writes one, the warning is `warning: template coverage unknown: no test binary ran the templates (no coverage profile was written)` and every mutant runs. That happens when no package under test has a `_test.go` file (a package without tests next to a tested sibling gets unreached, not the warning, because the sibling's binary wrote a profile), when `-exec` runs the test binaries somewhere their profiles do not reach, and when the tests render through a server binary of their own, built without the overlay, and the test binary does not link `html/template` itself. A test binary that does link it, and renders nothing in its own process, writes an empty profile, so every mutant reads as unreached and is skipped. [reference_test_template_mutations_no_test_files.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_no_test_files.txt), [reference_test_template_mutations_never_rendered.txt](../../../cmd/muxt/testdata/reference_test_template_mutations_never_rendered.txt)
 - **One parse name, several packages.** Profiles are unioned by the name a template's text was parsed under, a file's base name, across every test binary, so a block reached in one package's `index.gohtml` also counts as reached in another package's `index.gohtml`. The error only goes one way: such a mutant is run instead of skipped.
 - **Coverage export is disabled.** A test binary that cannot write its coverage prints `muxt: template coverage export disabled:` and the reason. The pre-pass reads that as coverage unknown, not as templates no test reached.
-- **Downloaded toolchains.** When the `go` toolchain in use was downloaded for a `toolchain` line in `go.mod`, its GOROOT is in the module cache, and the go command refuses overlays there, so coverage is unknown. Set `GOTOOLCHAIN=local` to use the installed toolchain, or install the toolchain outside the module cache.
+- **Downloaded toolchains.** A toolchain downloaded for a `toolchain` line in `go.mod` has its GOROOT in the module cache, where the go command refuses overlays, so coverage is unknown. Set `GOTOOLCHAIN=local` to use the installed toolchain, or install the toolchain outside the module cache.
 - **A `-coverpkg` that covers `html/template`.** Coverage instrumentation reads the packages it instruments from disk, which would undo the overlay. So muxt refuses a `-coverpkg` after `--` that takes in `html/template`, and it does so before anything runs. The refused values are `html/template` itself, `std`, `all`, and any `...` pattern that matches `html/template`. A `-coverpkg` of your own packages, such as `-coverpkg=./...`, works.
 
   ```text
@@ -360,6 +361,6 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
   [err_test_template_mutations_coverpkg_refused.txt](../../../cmd/muxt/testdata/err_test_template_mutations_coverpkg_refused.txt)
 - **Coverage flags.** The pre-pass leaves out your `-cover`, `-covermode`, `-coverprofile` and `-coverpkg` flags, so only the baseline writes a coverage profile.
 - **Dry runs.** `--dry-run` runs no tests, with or without `--diff`, so it skips the pre-pass. It lists every mutant and never reports one as unreached.
-- **Cost.** No flag turns the pre-pass off. It costs one extra run of the suite, plus a one-time build of the engine and of the `html/template` shim, which later runs take from the build cache. The [timing](#timing) preamble reports how long the pre-pass took.
+- **Cost.** No flag turns the pre-pass off. It costs one extra run of the suite, plus a one-time build of the engine and of the `html/template` shim, which later runs take from the build cache. The [timing](#timing) preamble reports its duration.
 
-Related: [muxt check](check.md) type-checks templates without running them; [muxt list-template-callers](list-template-callers.md) lists the call sites traversal starts from.
+See also [muxt check](check.md) and [muxt list-template-callers](list-template-callers.md), which lists the call sites traversal starts from.
