@@ -3,36 +3,25 @@
 Prints the reference, how-to, tutorial, and explanation pages embedded in the binary, so the rules are readable without the muxt source.
 
 ```bash
-muxt documentation [topic]
+muxt documentation [path]
 ```
 
-Alias: `docs`.
+Aliases: `docs`, `d`.
 
 | Invocation | Output |
 |---|---|
 | `muxt documentation` | An index: one `topic-id — title` line per page, grouped by section. |
-| `muxt documentation <topic>` | The page's markdown, verbatim. |
+| `muxt documentation <path>` | The page's markdown, verbatim. |
 | `muxt documentation --format json` | The index as `[{"id", "title", "section"}]`. |
 
-## Topic IDs
+## Paths
 
-A topic ID is the page's path under `docs/` without `.md`. Pages under `reference/` drop that prefix.
+A path is a page's repo-relative path, such as `docs/reference/template-names.md`. Only the exact path resolves. The index still prints topic IDs, so build the path from an ID: a `reference` page is `docs/reference/<id>.md`, and any other page is `docs/<id>.md`.
 
-| Section | Example ID |
-|---|---|
-| `reference` | `template-names`, `call-parameters`, `commands/generate` |
-| `how-to` | `how-to/template-functions` |
-| `tutorials` | `tutorials/quick-start` |
-| `explanation` | `explanation/manifesto`, `explanation/decisions/00002_use_code_generation_instead_of_reflection` |
-
-`reference/template-names` and `template-names.md` also resolve, as does a final path segment that names exactly one topic (`check` for `commands/check`, `quick-start` for `tutorials/quick-start`).
-
-Links inside a page are relative to the muxt repository's `docs/` directory. They are not URLs; resolve them to another topic ID.
-
-An unknown topic exits 1 and lists up to five topics whose ID contains the input (or one of its words).
+Links inside a page are relative to the page's own directory. They are not URLs; resolve them from there and pass the result to `muxt documentation`.
 
 `docs/examples` is not embedded.
 
 ## Edge cases
 
-- **Ambiguous segments.** A final path segment that names more than one topic is an unknown topic.
+- **Topic IDs.** `muxt documentation template-names` and the other ID forms no longer print a page; they fail as unknown paths. This is a breaking change from earlier versions.

@@ -4,16 +4,9 @@ package docs
 
 import (
 	"bufio"
-	"embed"
-	"fmt"
 	"io/fs"
-	"path"
-	"slices"
 	"strings"
 )
-
-//go:embed reference how-to tutorials explanation
-var files embed.FS
 
 // Topic is one embedded markdown page.
 type Topic struct {
@@ -65,61 +58,4 @@ func title(p string) string {
 		}
 	}
 	return p
-}
-
-// matches reports whether id contains want, or want contains id, or id contains
-// any 3+ letter word of want.
-func matches(id, want string) bool {
-	if want == "" {
-		return false
-	}
-	if strings.Contains(id, want) || strings.Contains(want, id) {
-		return true
-	}
-	for _, word := range strings.FieldsFunc(want, func(r rune) bool { return r == '-' || r == '/' || r == '_' }) {
-		if len(word) >= 3 && strings.Contains(id, word) {
-			return true
-		}
-	}
-	return false
-}
-
-// Find returns the topic named id. A "reference/" prefix and ".md" suffix are
-// accepted, as is a final path segment that names one topic (check for
-// commands/check). For an unknown id the error names the closest topics.
-func Find(id string) (Topic, []Topic, error) {
-	topics := Topics()
-	want := strings.TrimSuffix(strings.TrimPrefix(id, "docs/"), ".md")
-	want = strings.TrimPrefix(want, "reference/")
-	for _, t := range topics {
-		if t.ID == want {
-			return t, nil, nil
-		}
-	}
-	// A final path segment that names exactly one topic resolves to it.
-	var bySegment []Topic
-	for _, t := range topics {
-		if path.Base(t.ID) == want {
-			bySegment = append(bySegment, t)
-		}
-	}
-	if len(bySegment) == 1 {
-		return bySegment[0], nil, nil
-	}
-	var near []Topic
-	for _, t := range topics {
-		if matches(t.ID, want) {
-			near = append(near, t)
-		}
-	}
-	slices.SortStableFunc(near, func(a, b Topic) int { return len(a.ID) - len(b.ID) })
-	near = near[:min(len(near), 5)]
-	if len(near) == 0 {
-		return Topic{}, nil, fmt.Errorf("unknown documentation topic %q; run `muxt documentation` to list topics", id)
-	}
-	ids := make([]string, len(near))
-	for i, t := range near {
-		ids[i] = t.ID
-	}
-	return Topic{}, near, fmt.Errorf("unknown documentation topic %q; did you mean: %s", id, strings.Join(ids, ", "))
 }

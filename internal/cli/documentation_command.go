@@ -16,9 +16,9 @@ const documentationCommandName = "documentation"
 // that has only the installed muxt can read the rules without its source.
 func documentationCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     documentationCommandName + " [topic]",
-		Aliases: []string{"docs"},
-		Short:   "Print muxt's documentation (no topic lists them)",
+		Use:     documentationCommandName + " [path]",
+		Aliases: []string{"docs", "d"},
+		Short:   "Print muxt's documentation (no path lists the topics)",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -29,11 +29,11 @@ func documentationCommand() *cobra.Command {
 			if len(args) == 0 {
 				return writeDocumentationIndex(cmd, out)
 			}
-			topic, _, err := docs.Find(args[0])
+			entry, err := docs.Resolve(args[0])
 			if err != nil {
 				return err
 			}
-			content, err := topic.Content()
+			content, err := entry.Render("")
 			if err != nil {
 				return err
 			}
