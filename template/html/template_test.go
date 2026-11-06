@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	nethtml "golang.org/x/net/html"
 )
 
 // executeStdlib parses and executes src with the standard library's
@@ -866,64 +868,137 @@ func TestNilInterfaceMatchesStdlib(t *testing.T) {
 	}
 }
 
-// TestActionInATagTheEngineCannotFollowIsRefused states that an action
-// in a tag the parser leaves as text fails to execute where the engine
-// cannot tell what it writes: after branches that end in different
-// places, where html/template refuses the template.
-func TestActionInATagTheEngineCannotFollowIsRefused(t *testing.T) {
+// TestDataCannotWriteAttributesOrTags states that an action's output is
+// never read as an attribute or a tag where the engine writes a tag as
+// text: the engine follows the text it writes, through branches, loops
+// and called templates, and escapes each action for where its output
+// lands, or fails. The output is parsed as a browser parses it, and no
+// element may have an attribute or a name that only the data holds.
+// html/template refuses some of these templates and escapes the rest.
+func TestDataCannotWriteAttributesOrTags(t *testing.T) {
 	type data struct {
 		X    bool
 		Y, Z string
 		L    []string
 	}
+	values := []data{
+		{X: true, Y: "y", Z: "x onpwn=1", L: []string{"a", "b"}},
+		{X: false, Y: "y", Z: "x onpwn=1", L: []string{"a"}},
+		{X: true, Y: "y", Z: "pwn src=x onpwn=1", L: []string{"a", "b"}},
+		{X: true, Y: "click", Z: "pwn()", L: []string{"a"}},
+		{X: true, Y: "pwn", Z: "onpwn=1"},
+		{X: true, Y: "pwn onpwn=1", Z: `" onpwn="1`},
+	}
 	for _, src := range []string{
+		// Branches that end in different parts of a tag.
 		`<p {{.Y}}=v {{if .X}}title={{end}}{{.Z}}>t</p>`,
-		`<p {{.Y}}=v {{range .Y}}title="{{end}}{{.Z}}>t</p>`,
+		`<p {{.Y}}=v {{if .X}}title="{{end}}{{.Z}}">t</p>`,
 		`<p {{.Y}}=v title=a"{{.Z}}>t</p>`,
+		`<p {{.Y}}=v {{range .L}}a={{end}}{{.Z}}>t</p>`,
 		// A break or continue leaves the loop inside the tag.
 		`{{range .L}}<p {{$.Y}}=v {{break}}>{{end}}{{$.Z}}<b>end</b>`,
 		`{{range .L}}<p {{$.Y}}=v a={{if $.X}}{{break}}{{end}}x>{{end}}{{$.Z}}<b>end</b>`,
 		`{{range .L}}{{$.Z}}<p {{$.Y}}=v a={{if $.X}}{{continue}}{{end}}x>{{end}}<b>end</b>`,
+		// A template or block that ends in a tag, or stands in one.
+		`{{define "a"}}<p {{.Y}}=v {{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`{{block "a" .}}<p {{.Y}}=v {{end}}{{.Z}}><b>end</b>`,
+		`{{define "a"}}<div><p {{.Y}}=v {{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`{{define "a"}}<div><p {{.Y}}=v a={{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`{{define "a"}}<div><span><p {{.Y}}=v {{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`{{define "a"}}<div>x <{{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
+		`<p {{.Y}}=v {{block "a" .}}{{.Z}}{{end}}>t</p>`,
+		`<p {{.Y}}=v a={{block "a" .}}{{.Z}}{{end}}>t</p>`,
+		`<p {{.Y}}=v {{if .X}}{{block "a" .}}{{.Z}}{{end}}{{end}}>t</p>`,
+		`{{define "t"}}{{.Z}}{{end}}<p {{.Y}}=v {{template "t" .}}>t</p>`,
+		// A "<" before an action, with and without trim markers.
+		`<{{.Y}} {{.Z}}><b>end</b>`,
+		`</{{.Y}} {{.Z}}><b>end</b>`,
+		`<{{block "a" .}}{{.Z}}{{end}}><b>end</b>`,
+		`{{define "t"}}{{.Z}}{{end}}<{{block "u" .}}{{template "t" .}}{{end}}><b>end</b>`,
+		`a < {{- .Z}}><b>end</b>`,
+		"a <\n\t{{- .Z}}><b>end</b>",
+		`a < {{- if .X}}{{.Z}}{{end}}><b>end</b>`,
+		`a <{{- /* c */ -}} {{.Z}}><b>end</b>`,
+		`{{if .X}}<{{end}}{{.Z}}><b>end</b>`,
+		`<{{if .X}}p{{end}} {{.Z}}><b>end</b>`,
+		// Elements whose text html/template reads as HTML text.
+		`<noscript><p {{.Y}}=v {{.Z}}</noscript><b>end</b>`,
+		`<iframe><p {{.Y}}=v {{.Z}}></iframe><b>end</b>`,
 	} {
-		d := data{X: true, Y: "y", Z: "x onclick=alert(1)", L: []string{"a", "b"}}
-		if err := stdtemplate.Must(stdtemplate.New("test").Parse(src)).Execute(io.Discard, d); err == nil {
-			t.Fatalf("html/template executes %q", src)
-		}
-		tmpl := Must(New("test").Parse(src))
-		var sb strings.Builder
-		if err := tmpl.Execute(&sb, d); err == nil {
-			t.Errorf("shim executes %q: %q", src, sb.String())
+		for _, d := range values {
+			tmpl, err := New("test").Parse(src)
+			if err != nil {
+				continue // refused when parsed
+			}
+			var sb strings.Builder
+			if err := tmpl.Execute(&sb, d); err != nil {
+				continue // refused when executed
+			}
+			if what := writtenByData(t, sb.String()); what != "" {
+				t.Errorf("shim output for %q with %+v = %q: data writes %s", src, d, sb.String(), what)
+			}
 		}
 	}
 }
 
-// TestDataCannotWriteAttributesAfterATagTheEngineCannotFollow states
-// that where the engine cannot tell that an action is in a tag, it
-// fails rather than escape the action as HTML text, which would let
-// data add an attribute: after a template that ends in a tag, where
-// html/template escapes the action as a name, after a "<" that an
-// action follows, which html/template escapes, and in a noscript
-// element, which html/template refuses.
-func TestDataCannotWriteAttributesAfterATagTheEngineCannotFollow(t *testing.T) {
-	type data struct{ Y, Z string }
-	d := data{Y: "p", Z: "x onclick=alert(1)"}
+// writtenByData parses output as a browser does and names an element or
+// attribute the test's payloads would write: an element named pwn, an
+// attribute named onpwn or src, or an event handler holding pwn()
+// unquoted.
+func writtenByData(t *testing.T, output string) string {
+	t.Helper()
+	doc, err := nethtml.Parse(strings.NewReader(output))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found string
+	var visit func(n *nethtml.Node)
+	visit = func(n *nethtml.Node) {
+		if n.Type == nethtml.ElementNode {
+			if n.Data == "pwn" {
+				found = "the element <pwn>"
+			}
+			for _, a := range n.Attr {
+				switch {
+				case a.Key == "onpwn" || a.Key == "src":
+					found = "the attribute " + a.Key
+				case strings.HasPrefix(a.Key, "on") && strings.HasPrefix(strings.TrimSpace(a.Val), "pwn()"):
+					found = "the event handler " + a.Key + "=" + a.Val
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			visit(c)
+		}
+	}
+	visit(doc)
+	return found
+}
+
+// TestTextThatStartsNoTagMatchesStdlib states that a '<' in template
+// text that starts no tag is written "&lt;", as in html/template, so
+// ordinary text with a '<' renders and what follows it is text.
+func TestTextThatStartsNoTagMatchesStdlib(t *testing.T) {
+	type data struct {
+		N    int
+		A, B string
+	}
+	d := data{N: 5, A: "1", B: "img src=x onpwn=1"}
 	for _, src := range []string{
-		`{{define "a"}}<p {{.Y}}=v {{end}}{{template "a" .}}{{.Z}}><b>end</b>`,
-		`{{block "a" .}}<p {{.Y}}=v {{end}}{{.Z}}><b>end</b>`,
-		`<{{.Y}} {{.Z}}><b>end</b>`,
-		`</{{.Y}} {{.Z}}><b>end</b>`,
-		`<noscript><p {{.Y}}=v {{.Z}}</noscript><b>end</b>`,
+		`x <{{.N}} items`,
+		`{{.A}}<{{.B}}`,
+		`{{.A}} < {{.B}}`,
+		`{{.A}} <= {{.B}}`,
+		`a < {{- .B}}`,
+		`<div>a <{{.B}}</div>`,
+		`<{{.B}}>`,
+		`</{{.B}}>`,
+		`<h{{.N}} class="c">t</h{{.N}}>`,
+		`<p>1 < 2 and <b>bold</b></p>`,
 	} {
-		tmpl, err := New("test").Parse(src)
-		if err != nil {
-			continue // refused when parsed
-		}
-		var sb strings.Builder
-		if err := tmpl.Execute(&sb, d); err != nil {
-			continue
-		}
-		if got := sb.String(); strings.Contains(got, " onclick=alert(1)") {
-			t.Errorf("shim output for %q = %q: data writes an attribute", src, got)
+		want := executeStdlib(t, src, d)
+		if got := executeShim(t, src, d); got != want {
+			t.Errorf("shim output for %q = %q, want stdlib's %q", src, got, want)
 		}
 	}
 }

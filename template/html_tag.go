@@ -15,59 +15,80 @@ const (
 	tagUnknown                    // in markup the scan cannot follow
 )
 
-// tagScan follows the template's own text through a tag the parser left
-// as text, such as <p {{.Name}}=v> or <p data-{{.Name}}=v>, as
-// html/template's escaper follows every tag. The engine writes such a
-// tag as text, so an action in it must be escaped for where it stands:
-// as an attribute name, or as an attribute value between the value's
-// quotes.
+// tagScan follows the template's own text, as it is written, through a
+// tag the parser left as text, such as <p {{.Name}}=v> or
+// <p data-{{.Name}}=v>, with the transitions of html/template's
+// escaper. The engine writes such a tag as text, so an action in it
+// must be escaped for where it stands: as an attribute name, or as an
+// attribute value between the value's quotes. html/template follows
+// the template's source and refuses one whose branches end in
+// different places; the engine follows what is written, branch by
+// branch and through called templates.
 type tagScan struct {
 	part    tagPart
 	element string // the tag's name, lowercased
 	attr    string // the attribute name's leading text, lowercased; "" when an action starts the name
 	quote   byte   // for tagValue: '"', '\'', or 0 for an unquoted value
-	// open, for tagNone, is a "<" or "</" the text ended with: what
-	// follows it may be the name of a tag.
-	open string
 }
 
 const tagSpace = " \t\n\f\r"
 
 // text returns the scan after the template text s.
 func (t tagScan) text(s string) tagScan {
-	if t.part == tagNone && t.open != "" {
-		s, t.open = t.open+s, ""
-	}
-	for len(s) > 0 && t.part != tagUnknown {
-		t, s = t.step(s)
-	}
+	_, t = t.write(s)
 	return t
 }
 
-// step consumes the start of s, which is not empty, and returns the scan
-// after it with the rest of s. It follows html/template's transitions
-// for text, a tag, an attribute name and an attribute value.
+// write returns the template text s as html/template writes it, with
+// the scan after it: outside a tag, a '<' that starts no tag, comment
+// or doctype is written "&lt;", so that what follows it, an action's
+// output above all, is text and not a tag's name.
+func (t tagScan) write(s string) (string, tagScan) {
+	var out strings.Builder
+	for len(s) > 0 && t.part != tagUnknown {
+		if t.part != tagNone {
+			after, rest := t.step(s)
+			out.WriteString(s[:len(s)-len(rest)])
+			t, s = after, rest
+			continue
+		}
+		i := strings.IndexByte(s, '<')
+		if i < 0 {
+			break
+		}
+		out.WriteString(s[:i])
+		s = s[i:]
+		name := strings.TrimPrefix(s[1:], "/")
+		switch n := tagNameLen(name); {
+		case n > 0:
+			end := len(s) - len(name) + n
+			out.WriteString(s[:end])
+			t, s = tagScan{part: tagStart, element: strings.ToLower(name[:n])}, s[end:]
+		case strings.HasPrefix(s, "<!--"):
+			end := len(s)
+			if j := strings.Index(s, "-->"); j >= 0 {
+				end = j + len("-->")
+			}
+			out.WriteString(s[:end])
+			s = s[end:]
+		case len(s) >= len("<!doctype") && strings.EqualFold(s[:len("<!doctype")], "<!doctype"):
+			out.WriteString(s[:1])
+			s = s[1:]
+		default:
+			out.WriteString("&lt;")
+			s = s[1:]
+		}
+	}
+	out.WriteString(s)
+	return out.String(), t
+}
+
+// step consumes the start of s, which is not empty, in a tag, and
+// returns the scan after it with the rest of s. It follows
+// html/template's transitions for a tag, an attribute name and an
+// attribute value.
 func (t tagScan) step(s string) (tagScan, string) {
 	switch t.part {
-	case tagNone:
-		for {
-			i := strings.IndexByte(s, '<')
-			if i < 0 {
-				return t, ""
-			}
-			if rest := s[i:]; rest == "<" || rest == "</" {
-				t.open = rest
-				return t, ""
-			}
-			s = s[i+1:]
-			name := s
-			if name[0] == '/' {
-				name = name[1:]
-			}
-			if n := tagNameLen(name); n > 0 {
-				return tagScan{part: tagStart, element: strings.ToLower(name[:n])}, name[n:]
-			}
-		}
 	case tagStart:
 		s = strings.TrimLeft(s, tagSpace)
 		if s == "" {
@@ -149,41 +170,12 @@ func (t tagScan) step(s string) (tagScan, string) {
 // a name, and an action after a '=' writes an unquoted value.
 func (t tagScan) action() (at, after tagScan) {
 	switch t.part {
-	case tagNone:
-		if t.open != "" {
-			// The action would name the tag, as in <{{.Name}}>.
-			t = tagScan{part: tagUnknown}
-		}
 	case tagStart, tagAfterName:
 		t.part, t.attr = tagAttrName, ""
 	case tagBeforeValue:
 		t.part, t.quote = tagValue, 0
 	}
 	return t, t
-}
-
-// join returns the scan after a control structure whose branches end in
-// a and b, tagUnknown when they end in different places.
-func (a tagScan) join(b tagScan) tagScan {
-	if a == b {
-		return a
-	}
-	a, _ = a.action()
-	b, _ = b.action()
-	if a == b {
-		return a
-	}
-	return tagScan{part: tagUnknown}
-}
-
-// context is the HTMLContext of an action or template call at t, which
-// is in a tag.
-func (t tagScan) context() *HTMLContext {
-	ctx := &HTMLContext{State: "tag", Element: t.element, tag: t.part}
-	if t.part == tagValue {
-		ctx.Attr, ctx.quote = valueAttr(t.attr), t.quote
-	}
-	return ctx
 }
 
 // valueAttr is an attribute whose values are escaped as html/template
@@ -305,4 +297,15 @@ func plainAttr(name string) bool {
 		return false
 	}
 	return !strings.Contains(name, "src") && !strings.Contains(name, "uri") && !strings.Contains(name, "url")
+}
+
+// holdsHTMLText reports whether html/template reads the text in the
+// named element as HTML text, where a '<' may start a tag: not in
+// script, style, textarea or title.
+func holdsHTMLText(element string) bool {
+	switch strings.ToLower(element) {
+	case "script", "style", "textarea", "title":
+		return false
+	}
+	return true
 }

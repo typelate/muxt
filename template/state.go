@@ -32,6 +32,36 @@ type state struct {
 	// walked, holds the text nodes made from the template's own text,
 	// which alone are written as they are; nil otherwise.
 	attrSource map[*html.Node]bool
+	// scan follows the template text written so far through tags the
+	// parser left as text, shared with the templates called; rawText
+	// is set where text is not HTML text and is not followed: in
+	// script, style, textarea and title, and in a template called from
+	// an attribute value.
+	scan    *tagScan
+	rawText bool
+}
+
+// tagAt returns the scan of the text written so far, or nil where text
+// is not followed: where the template's text is escaped when rendered,
+// not written as it is, in an attribute value, and in raw text.
+func (s *state) tagAt() *tagScan {
+	if s.markup == nil || s.rawText || s.attrSource != nil {
+		return nil
+	}
+	if s.scan == nil {
+		s.scan = new(tagScan)
+	}
+	return s.scan
+}
+
+// writeText returns the template text as html/template writes it: where
+// text is followed, a '<' that starts no tag is escaped, so that an
+// action after it cannot name a tag.
+func (s *state) writeText(text string) string {
+	if at := s.tagAt(); at != nil {
+		text, *at = at.write(text)
+	}
+	return text
 }
 
 // trustOf reports the Trust classification for a value, returning
@@ -963,7 +993,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 		}
 		tn := &html.Node{
 			Type: nodeType,
-			Data: string(n.Text),
+			Data: s.writeText(string(n.Text)),
 		}
 		return []*html.Node{tn}, nil
 	case *ActionNode:
@@ -997,6 +1027,9 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 }
 
 func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html.Node, error) {
+	if at := s.tagAt(); at != nil && at.part != tagNone {
+		return nil, s.errorf("<%s> in a tag that muxt's template engine cannot follow", elem.TagName)
+	}
 	elem.openCount.Add(1)
 	n := &html.Node{
 		Type:     html.ElementNode,
@@ -1052,7 +1085,10 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 	s.markup.setAttrs(n, attrs)
 	elem.attrCount.Add(1)
 	// Process children.
+	outer := s.rawText
+	s.rawText = outer || !holdsHTMLText(elem.TagName)
 	nodes, err := s.walkHTMLNodes(dot, elem.Children, false, false)
+	s.rawText = outer
 	for _, cn := range nodes {
 		n.AppendChild(cn)
 	}
@@ -1069,6 +1105,8 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		// html/template writes no end tag the source does not, as when
 		// one template opens <main> and another closes it.
 		s.markup.leaveOpen(n)
+	} else if at := s.tagAt(); at != nil && at.part != tagNone {
+		return nil, s.errorf("</%s> in a tag that muxt's template engine cannot follow", elem.TagName)
 	}
 	return n, nil
 }
@@ -1208,8 +1246,8 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	if len(action.Pipe.Decl) > 0 {
 		return nil, nil
 	}
-	if ctx := action.HTMLContext; ctx != nil && ctx.State == "tag" {
-		return s.walkHTMLTagAction(val, ctx)
+	if at := s.tagAt(); at != nil && at.part != tagNone {
+		return s.walkHTMLTagAction(val, at)
 	}
 	if !val.IsValid() {
 		return []*html.Node{{
@@ -1268,17 +1306,23 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 
 // walkHTMLTagAction writes the value of an action in a tag the parser
 // left as text, which the engine writes as it is: the value is escaped
-// for where in the tag the action stands, an attribute name or a value.
-func (s *state) walkHTMLTagAction(val reflect.Value, ctx *HTMLContext) ([]*html.Node, error) {
+// for where in the tag the action stands, scan, an attribute name or a
+// value. The scan follows the text as it is written, through control
+// structures and called templates, so it is where the action's output
+// lands whatever branch was taken.
+func (s *state) walkHTMLTagAction(val reflect.Value, scan *tagScan) ([]*html.Node, error) {
 	text, trust, err := s.htmlActionText(val)
 	if err != nil {
 		return nil, err
 	}
-	switch ctx.tag {
+	var at tagScan
+	at, *scan = scan.action()
+	switch at.part {
 	case tagAttrName:
 		text = htmlNameFilter(text, trust)
 	case tagValue:
-		text = escapeAttrText(escapeAttrValue(text, ctx, trust), ctx.quote)
+		ctx := &HTMLContext{State: "attr", Element: at.element, Attr: valueAttr(at.attr)}
+		text = escapeAttrText(escapeAttrValue(text, ctx, trust), at.quote)
 	default:
 		return nil, s.errorf("an action in a tag that muxt's template engine cannot follow")
 	}
@@ -1484,9 +1528,6 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 
 func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.Node, error) {
 	t.count.Add(1)
-	if t.HTMLContext != nil && t.HTMLContext.State == "tag" {
-		return nil, errTemplateInTag(s, t)
-	}
 	if s.depth >= maxExecDepth {
 		return nil, s.errorf("exceeded maximum template depth (%d)", maxExecDepth)
 	}
@@ -1496,11 +1537,6 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	tree, ok := s.finder.FindTree(t.Name)
 	if !ok {
 		return nil, s.errorf("template %q not defined", t.Name)
-	}
-	if tree.Root != nil && tree.Root.endsInTag {
-		// What follows the call would be written in that tag, and the
-		// engine escapes it as HTML text.
-		return nil, s.errorf("template %q ends in a tag, which muxt's template engine cannot follow", t.Name)
 	}
 	newDot := dot
 	if t.Pipe != nil {
@@ -1521,6 +1557,10 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 		trust:  s.trust,
 		markup: s.markup,
 		vars:   []variable{{"$", newDot}},
+		// The called template's text carries on where this one's
+		// stands; in an attribute value it is escaped whole.
+		scan:    s.tagAt(),
+		rawText: s.rawText || s.attrSource != nil,
 	}
 	s.cp.Init(tree)
 	root := tree.Root
@@ -1586,7 +1626,7 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 				}
 				hn := &html.Node{
 					Type: nodeType,
-					Data: text,
+					Data: s.writeText(text),
 				}
 				if s.attrSource != nil {
 					s.attrSource[hn] = true

@@ -31,8 +31,8 @@ func TestTagScan(t *testing.T) {
 		{text: `<p =v`, want: tagScan{part: tagUnknown}},
 		{text: `<p id=a"b`, want: tagScan{part: tagUnknown}},
 		{text: `<script>`, want: tagScan{part: tagUnknown}},
-		{text: `a <`, want: tagScan{open: "<"}},
-		{text: `a </`, want: tagScan{open: "</"}},
+		{text: `a <`, want: tagScan{}},
+		{text: `a </`, want: tagScan{}},
 	} {
 		if got := (tagScan{}).text(tt.text); got != tt.want {
 			t.Errorf("tagScan{}.text(%q) = %+v, want %+v", tt.text, got, tt.want)
@@ -87,17 +87,25 @@ func TestHTMLNameFilter(t *testing.T) {
 	}
 }
 
-func TestTagScanAcrossTexts(t *testing.T) {
-	// A "<" at the end of one text and a name at the start of the next
-	// are a tag; an action after the "<" would name the tag.
-	if got, want := (tagScan{}).text(`a <`).text(`p id`), (tagScan{part: tagAttrName, element: "p", attr: "id"}); got != want {
-		t.Errorf(`text("a <").text("p id") = %+v, want %+v`, got, want)
-	}
-	if got, want := (tagScan{}).text(`a <`).text(` b`), (tagScan{}); got != want {
-		t.Errorf(`text("a <").text(" b") = %+v, want %+v`, got, want)
-	}
-	if at, _ := (tagScan{}).text(`a <`).action(); at.part != tagUnknown {
-		t.Errorf(`text("a <").action() = %+v, want tagUnknown`, at)
+func TestTagScanWrite(t *testing.T) {
+	for _, tt := range []struct {
+		text, want string
+	}{
+		{text: `a b`, want: `a b`},
+		{text: `<p id=i>x</p>`, want: `<p id=i>x</p>`},
+		{text: `<p title="a<b">`, want: `<p title="a<b">`},
+		{text: `<!-- a < b -->`, want: `<!-- a < b -->`},
+		{text: `<!DOCTYPE html>`, want: `<!DOCTYPE html>`},
+		{text: `a < b`, want: `a &lt; b`},
+		{text: `a <`, want: `a &lt;`},
+		{text: `a </`, want: `a &lt;/`},
+		{text: `1<2 <b>`, want: `1&lt;2 <b>`},
+		{text: `<<p>`, want: `&lt;<p>`},
+		{text: `<?x`, want: `&lt;?x`},
+	} {
+		if got, _ := (tagScan{}).write(tt.text); got != tt.want {
+			t.Errorf("tagScan{}.write(%q) = %q, want %q", tt.text, got, tt.want)
+		}
 	}
 }
 
