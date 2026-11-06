@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"cmp"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -20,10 +21,29 @@ type Entry struct {
 	Dir bool
 }
 
+// NotFoundError reports that a documentation path names no embedded file or
+// directory. Near holds up to five repo-relative paths, closest first.
+type NotFoundError struct {
+	// Arg is the path argument as given.
+	Arg string
+	// Near holds the repo-relative paths closest to Arg, closest first.
+	Near []string
+}
+
+// Error names Arg and the closest paths, or says how to list every path when
+// no path is close.
+func (e *NotFoundError) Error() string {
+	if len(e.Near) == 0 {
+		return fmt.Sprintf("unknown documentation path %q; run muxt documentation to list every path", e.Arg)
+	}
+	return fmt.Sprintf("unknown documentation path %q; did you mean: %s", e.Arg, strings.Join(e.Near, ", "))
+}
+
 // Resolve returns the embedded file or directory named by arg. arg may carry a
 // #fragment, a leading "./", a trailing "/", or a leading "docs/". The empty
 // argument and "docs" name the root directory, whose Path is "docs". Any other
-// returned Path starts with "docs/".
+// returned Path starts with "docs/". A path that names nothing returns a
+// *NotFoundError.
 func Resolve(arg string) (Entry, error) {
 	rel, _, _ := strings.Cut(arg, "#")
 	rel = strings.TrimPrefix(rel, "./")
@@ -34,9 +54,81 @@ func Resolve(arg string) (Entry, error) {
 	}
 	info, err := fs.Stat(files, rel)
 	if err != nil {
-		return Entry{}, fmt.Errorf("unknown documentation path %q: %w", arg, err)
+		near, nearErr := nearPaths(rel)
+		if nearErr != nil {
+			return Entry{}, fmt.Errorf("finding paths near %q: %w", arg, nearErr)
+		}
+		return Entry{}, &NotFoundError{Arg: arg, Near: near}
 	}
 	return Entry{Path: "docs/" + rel, Dir: info.IsDir()}, nil
+}
+
+// nearPaths returns up to five paths from the root directory closest to rel,
+// closest first. A path is close when its edit distance to rel, measured
+// against its path without the "docs/" prefix or its base name without
+// extension, is at most a third of rel's length (minimum 2). A path whose base
+// name without extension equals rel's is always included.
+func nearPaths(rel string) ([]string, error) {
+	all, err := Files(Entry{Path: "docs", Dir: true})
+	if err != nil {
+		return nil, err
+	}
+	limit := max(len(rel)/3, 2)
+	argName := baseName(rel)
+	var near []candidate
+	for _, p := range all {
+		dist := min(editDistance(rel, strings.TrimPrefix(p, "docs/")), editDistance(rel, baseName(p)))
+		if dist <= limit || baseName(p) == argName {
+			near = append(near, candidate{path: p, dist: dist})
+		}
+	}
+	slices.SortFunc(near, func(a, b candidate) int {
+		if c := cmp.Compare(a.dist, b.dist); c != 0 {
+			return c
+		}
+		return strings.Compare(a.path, b.path)
+	})
+	near = near[:min(len(near), 5)]
+	paths := make([]string, len(near))
+	for i, c := range near {
+		paths[i] = c.path
+	}
+	return paths, nil
+}
+
+// candidate is a file path with its edit distance to a documentation path
+// argument.
+type candidate struct {
+	path string
+	dist int
+}
+
+// baseName returns the last element of p without its extension.
+func baseName(p string) string {
+	return strings.TrimSuffix(path.Base(p), path.Ext(p))
+}
+
+// editDistance returns the Levenshtein distance between a and b: the fewest
+// single-rune insertions, deletions, and substitutions that turn a into b.
+func editDistance(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		cur := make([]int, len(rb)+1)
+		cur[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(rb)]
 }
 
 // embedName returns the name of p within the embedded file system, which is

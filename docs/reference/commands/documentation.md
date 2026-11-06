@@ -27,3 +27,4 @@ Links inside a page are relative to the page's own directory. They are not URLs;
 ## Edge cases
 
 - **Breaking change.** Names such as `template-names` no longer print a page; they fail as unknown paths. The `--format` flag is gone.
+- **Unknown path.** A path that names no file or directory fails. The error lists up to five of the closest paths, such as `did you mean: docs/reference/cli.md`, or says to run `muxt documentation` to list every path when none is close.

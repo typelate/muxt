@@ -1,6 +1,7 @@
 package docs_test
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -182,6 +183,56 @@ func TestRenderDirectory(t *testing.T) {
 			if !slices.Contains(lines, wantLine) {
 				t.Errorf("Resolve(%q).Render() does not contain line %q", tt.arg, wantLine)
 			}
+		}
+	}
+}
+
+func TestResolveUnknown(t *testing.T) {
+	for _, tt := range []struct {
+		arg          string
+		wantContains string
+		wantExact    string
+	}{
+		{
+			arg:          "docs/reference/clii.md",
+			wantContains: "did you mean: docs/reference/cli.md",
+		},
+		{
+			arg:          "template-names",
+			wantContains: "docs/reference/template-names.md",
+		},
+		{
+			arg:          "check",
+			wantContains: "docs/reference/commands/check.md",
+		},
+		{
+			arg:          "how-to/template-function.md",
+			wantContains: "docs/how-to/template-functions.md",
+		},
+		{
+			arg:       "zzzqqq",
+			wantExact: `unknown documentation path "zzzqqq"; run muxt documentation to list every path`,
+		},
+	} {
+		_, err := docs.Resolve(tt.arg)
+		if err == nil {
+			t.Errorf("Resolve(%q) error = nil, want an error", tt.arg)
+			continue
+		}
+		var notFound *docs.NotFoundError
+		if !errors.As(err, &notFound) {
+			t.Errorf("Resolve(%q) error = %v, want a *docs.NotFoundError", tt.arg, err)
+			continue
+		}
+		if notFound.Arg != tt.arg {
+			t.Errorf("Resolve(%q) NotFoundError.Arg = %q, want %q", tt.arg, notFound.Arg, tt.arg)
+		}
+		got := err.Error()
+		if tt.wantExact != "" && got != tt.wantExact {
+			t.Errorf("Resolve(%q) error = %q, want %q", tt.arg, got, tt.wantExact)
+		}
+		if tt.wantContains != "" && !strings.Contains(got, tt.wantContains) {
+			t.Errorf("Resolve(%q) error = %q, want it to contain %q", tt.arg, got, tt.wantContains)
 		}
 	}
 }

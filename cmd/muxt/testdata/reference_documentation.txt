@@ -32,3 +32,9 @@ stdout '^package main$'
 muxt documentation docs/how-to
 stdout '^docs/how-to/template-functions\.md$'
 ! stdout '^docs/reference/'
+
+! muxt documentation docs/reference/clii.md
+stderr 'did you mean: docs/reference/cli\.md'
+
+! muxt documentation template-names
+stderr 'did you mean: docs/reference/template-names\.md'
