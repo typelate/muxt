@@ -924,6 +924,11 @@ func TestDataCannotWriteAttributesOrTags(t *testing.T) {
 		// Elements whose text html/template reads as HTML text.
 		`<noscript><p {{.Y}}=v {{.Z}}</noscript><b>end</b>`,
 		`<iframe><p {{.Y}}=v {{.Z}}></iframe><b>end</b>`,
+		// A browser reads title and textarea in SVG and MathML as markup.
+		`<svg><title><p {{.Z}}</title></svg><b>end</b>`,
+		`<math><title><p {{.Z}}</title></math><b>end</b>`,
+		`<svg><textarea><p {{.Z}}</textarea></svg><b>end</b>`,
+		`{{define "t"}}<p {{.Z}}{{end}}<svg><title>{{template "t" .}}</title></svg><b>end</b>`,
 	} {
 		for _, d := range values {
 			tmpl, err := New("test").Parse(src)
@@ -995,6 +1000,13 @@ func TestTextThatStartsNoTagMatchesStdlib(t *testing.T) {
 		`</{{.B}}>`,
 		`<h{{.N}} class="c">t</h{{.N}}>`,
 		`<p>1 < 2 and <b>bold</b></p>`,
+		`</style>{{.A}}`,
+		`</script>{{.A}}`,
+		`<div></style>{{.A}}</div>`,
+		`<div></script></div>{{.A}}`,
+		`<title>a<b {{.A}}</title>`,
+		`<textarea><p {{.A}}=v</textarea>`,
+		`<svg><title><p {{.B}}</title></svg>`,
 	} {
 		want := executeStdlib(t, src, d)
 		if got := executeShim(t, src, d); got != want {

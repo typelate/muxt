@@ -27,6 +27,7 @@ const (
 type tagScan struct {
 	part    tagPart
 	element string // the tag's name, lowercased
+	end     bool   // the tag is an end tag
 	attr    string // the attribute name's leading text, lowercased; "" when an action starts the name
 	quote   byte   // for tagValue: '"', '\'', or 0 for an unquoted value
 }
@@ -58,12 +59,12 @@ func (t tagScan) write(s string) (string, tagScan) {
 		}
 		out.WriteString(s[:i])
 		s = s[i:]
-		name := strings.TrimPrefix(s[1:], "/")
+		name, endTag := strings.CutPrefix(s[1:], "/")
 		switch n := tagNameLen(name); {
 		case n > 0:
 			end := len(s) - len(name) + n
 			out.WriteString(s[:end])
-			t, s = tagScan{part: tagStart, element: strings.ToLower(name[:n])}, s[end:]
+			t, s = tagScan{part: tagStart, element: strings.ToLower(name[:n]), end: endTag}, s[end:]
 		case strings.HasPrefix(s, "<!--"):
 			end := len(s)
 			if j := strings.Index(s, "-->"); j >= 0 {
@@ -95,7 +96,7 @@ func (t tagScan) step(s string) (tagScan, string) {
 			return t, ""
 		}
 		if s[0] == '>' {
-			if isRawTextElement(t.element) {
+			if isRawTextElement(t.element) && !t.end {
 				// What follows is script or style, not HTML text.
 				return tagScan{part: tagUnknown}, ""
 			}
@@ -127,7 +128,7 @@ func (t tagScan) step(s string) (tagScan, string) {
 		}
 		if s[0] != '=' {
 			// A valueless attribute: the tag's end or the next name.
-			return tagScan{part: tagStart, element: t.element}, s
+			return tagScan{part: tagStart, element: t.element, end: t.end}, s
 		}
 		t.part = tagBeforeValue
 		return t, s[1:]
@@ -142,7 +143,7 @@ func (t tagScan) step(s string) (tagScan, string) {
 		}
 		return t, s
 	case tagValue:
-		after := tagScan{part: tagStart, element: t.element}
+		after := tagScan{part: tagStart, element: t.element, end: t.end}
 		if t.quote != 0 {
 			i := strings.IndexByte(s, t.quote)
 			if i < 0 {
@@ -299,13 +300,14 @@ func plainAttr(name string) bool {
 	return !strings.Contains(name, "src") && !strings.Contains(name, "uri") && !strings.Contains(name, "url")
 }
 
-// holdsHTMLText reports whether html/template reads the text in the
-// named element as HTML text, where a '<' may start a tag: not in
-// script, style, textarea or title.
-func holdsHTMLText(element string) bool {
+// holdsEscapableText reports whether html/template reads the text in
+// the named element, textarea or title, as text in which a '<' starts
+// no tag, and writes each one "&lt;". A browser reads it so in HTML,
+// but as markup in SVG and MathML.
+func holdsEscapableText(element string) bool {
 	switch strings.ToLower(element) {
-	case "script", "style", "textarea", "title":
-		return false
+	case "textarea", "title":
+		return true
 	}
-	return true
+	return false
 }

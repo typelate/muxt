@@ -33,19 +33,21 @@ type state struct {
 	// which alone are written as they are; nil otherwise.
 	attrSource map[*html.Node]bool
 	// scan follows the template text written so far through tags the
-	// parser left as text, shared with the templates called; rawText
-	// is set where text is not HTML text and is not followed: in
-	// script, style, textarea and title, and in a template called from
-	// an attribute value.
-	scan    *tagScan
-	rawText bool
+	// parser left as text, shared with the templates called. rawText
+	// is set where text is written as it is and not followed: in
+	// script and style, and in a template called from an attribute
+	// value. escapableText is set in textarea and title, where each
+	// '<' of the text is escaped and nothing is followed.
+	scan          *tagScan
+	rawText       bool
+	escapableText bool
 }
 
 // tagAt returns the scan of the text written so far, or nil where text
 // is not followed: where the template's text is escaped when rendered,
 // not written as it is, in an attribute value, and in raw text.
 func (s *state) tagAt() *tagScan {
-	if s.markup == nil || s.rawText || s.attrSource != nil {
+	if s.markup == nil || s.rawText || s.escapableText || s.attrSource != nil {
 		return nil
 	}
 	if s.scan == nil {
@@ -60,6 +62,10 @@ func (s *state) tagAt() *tagScan {
 func (s *state) writeText(text string) string {
 	if at := s.tagAt(); at != nil {
 		text, *at = at.write(text)
+		return text
+	}
+	if s.escapableText && s.markup != nil && !s.rawText && s.attrSource == nil {
+		return strings.ReplaceAll(text, "<", "&lt;")
 	}
 	return text
 }
@@ -1085,10 +1091,11 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 	s.markup.setAttrs(n, attrs)
 	elem.attrCount.Add(1)
 	// Process children.
-	outer := s.rawText
-	s.rawText = outer || !holdsHTMLText(elem.TagName)
+	rawText, escapableText := s.rawText, s.escapableText
+	s.rawText = rawText || isRawTextElement(strings.ToLower(elem.TagName))
+	s.escapableText = escapableText || holdsEscapableText(elem.TagName)
 	nodes, err := s.walkHTMLNodes(dot, elem.Children, false, false)
-	s.rawText = outer
+	s.rawText, s.escapableText = rawText, escapableText
 	for _, cn := range nodes {
 		n.AppendChild(cn)
 	}
@@ -1559,8 +1566,9 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 		vars:   []variable{{"$", newDot}},
 		// The called template's text carries on where this one's
 		// stands; in an attribute value it is escaped whole.
-		scan:    s.tagAt(),
-		rawText: s.rawText || s.attrSource != nil,
+		scan:          s.tagAt(),
+		rawText:       s.rawText || s.attrSource != nil,
+		escapableText: s.escapableText,
 	}
 	s.cp.Init(tree)
 	root := tree.Root
