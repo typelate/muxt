@@ -1,6 +1,6 @@
 # Muxt Documentation
 
-Start with the [README](../README.md) if you have not met muxt.
+These pages document muxt in four kinds: tutorials, how-to guides, reference and explanation. Start with the [README](../README.md) if you have not met muxt.
 
 ## Reading order
 
