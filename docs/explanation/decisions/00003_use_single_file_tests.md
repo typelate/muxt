@@ -14,7 +14,7 @@ Decided
 
 ## Consequences
 
-Tests may take longer to run, so they need to run in parallel.
+Command tests run longer, so they run in parallel.
 
 Changing generated signatures and identifiers gets cheaper, so code importing them can break without notice.
 
