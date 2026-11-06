@@ -13,6 +13,48 @@ import (
 	"github.com/typelate/muxt/docs"
 )
 
+func TestRootHelp(t *testing.T) {
+	run := func(t *testing.T, args ...string) string {
+		t.Helper()
+		var stdout bytes.Buffer
+		err := commands(t.TempDir(), args, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, io.Discard, runners{})
+		require.NoError(t, err, "muxt %v", args)
+		return stdout.String()
+	}
+
+	out := run(t, "--help")
+	for _, want := range []string{
+		"muxt generates net/http handlers from Go HTML templates.",
+		"\n  muxt generate",
+		"\n  muxt check",
+		"\n  muxt fmt",
+		"\n  muxt test-template-mutations",
+		"\n  muxt documentation",
+		"\n  muxt documentation docs/README.md",
+		"\n  muxt documentation --query ",
+	} {
+		assert.Contains(t, out, want, "muxt --help")
+	}
+
+	prev := -1
+	for _, want := range []string{
+		"muxt generates net/http handlers from Go HTML templates.",
+		"\n  muxt generate",
+		"\n  muxt check",
+		"\n  muxt fmt",
+		"\n  muxt test-template-mutations",
+		"\n  muxt documentation",
+		"\n  muxt documentation docs/README.md",
+		"\n  muxt documentation --query ",
+	} {
+		i := strings.Index(out, want)
+		assert.Greaterf(t, i, prev, "muxt --help: index of %q = %d, want after %d", want, i, prev)
+		prev = i
+	}
+
+	assert.Equal(t, out, run(t, "help"), "muxt help")
+}
+
 func TestCommandHelpNamesReference(t *testing.T) {
 	// These commands keep their own long description, so their help is not
 	// the reference summary.

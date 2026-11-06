@@ -6,3 +6,9 @@ stdout '^Full reference: muxt documentation docs/reference/commands/check\.md$'
 
 muxt fmt --help
 stdout '^Full reference: muxt documentation docs/reference/commands/fmt\.md$'
+
+# muxt --help says what muxt does and where its documentation is
+
+muxt --help
+stdout '^muxt generates net/http handlers from Go HTML templates\.'
+stdout '^  muxt documentation --query '

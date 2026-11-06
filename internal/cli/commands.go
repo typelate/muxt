@@ -69,6 +69,21 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 	rootCmd := &cobra.Command{
 		Use:   "muxt [command]",
 		Short: `Generate HTTP Endpoints from HTML Templates`,
+		Long: `muxt generates net/http handlers from Go HTML templates. A template whose name is a route, such as "GET /articles/{id} Article(ctx, id)", becomes a handler that calls Article on your receiver and renders the template with the result.
+
+With no command, muxt lists the routes of the package in the working directory.
+
+The usual order:
+  muxt generate                  write template_routes.go from the templates
+  muxt check                     type-check each template against its data
+  muxt fmt                       re-indent the templates
+  muxt test-template-mutations   find template behavior no test checks
+
+The documentation for this version is in the binary:
+  muxt documentation                            list every page and example file
+  muxt documentation docs/README.md             where to start
+  muxt documentation docs/reference/cli.md      print a page
+  muxt documentation --query "status code"      search every page`,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			if changeDir == "" {
 				return nil
