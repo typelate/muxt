@@ -15,7 +15,7 @@
 | [`generate-fake-server`](commands/generate-fake-server.md) | | Write a fake server for browsing routes. |
 | [`test-template-mutations`](commands/test-template-mutations.md) | `mut`, `m` | Report template actions no test catches. |
 | [`version`](commands/version.md) | `v` | Print the version. |
-| [`documentation`](commands/documentation.md) | `docs` | Print the embedded documentation pages. |
+| [`documentation`](commands/documentation.md) | `docs`, `d` | Print an embedded documentation page or example file by path, list a directory, or search with `--query`. |
 | `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |
 
 `check`, `list-template-calls`, `list-template-callers` and `test-template-mutations` take one optional `[package-dir]`, resolved like `-C`. Import paths and `...` patterns are rejected.

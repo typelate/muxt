@@ -1,6 +1,6 @@
 # muxt documentation
 
-Prints the reference, how-to, tutorial, and explanation pages embedded in the binary, so the rules are readable without the muxt source.
+Prints the documentation pages and example apps embedded in the binary, by path, so the docs for the version you run are readable without the muxt source or a network.
 
 ```bash
 muxt documentation [path]
@@ -11,7 +11,7 @@ Aliases: `docs`, `d`.
 | Invocation | Output |
 |---|---|
 | `muxt documentation` | The path of every embedded file, one per line. |
-| `muxt documentation <path>` | The file's content. A markdown page prints verbatim; any other file prints under its path line in a code fence. |
+| `muxt documentation <path>` | The file's content. A markdown page prints with its links rewritten (see [Paths](#paths)); any other file prints under its path line in a code fence. |
 | `muxt documentation <directory>` | The path of each file under the directory, one per line. |
 | `muxt documentation --query <text>` | Every line that holds the text, as `path:line: text`. |
 
