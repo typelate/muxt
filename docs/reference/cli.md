@@ -52,7 +52,7 @@ muxt -C ./web generate --use-receiver-type=Server
 
 | Flag | Default | Description |
 |---|---|---|
-| `--output-file` | `template_routes.go` | Where the template route handlers should be written. |
+| `--output-file` | `template_routes.go` | Path of the generated routes file. |
 | `--output-routes-func` | `TemplateRoutes` | Function that registers handlers on an `*http.ServeMux`. |
 | `--output-receiver-interface` | `RoutesReceiver` | Interface listing the methods the routes call. |
 | `--output-template-data-type` | `TemplateData` | Type passed to route templates. |
