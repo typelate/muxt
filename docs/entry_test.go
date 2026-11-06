@@ -38,6 +38,11 @@ func TestResolve(t *testing.T) {
 			wantPath:    "docs/reference/template-names.md",
 			wantHeading: "# Template Name Syntax\n",
 		},
+		{
+			arg:         "docs/README.md",
+			wantPath:    "docs/README.md",
+			wantHeading: "# Muxt Documentation\n",
+		},
 	} {
 		entry, err := docs.Resolve(tt.arg)
 		if err != nil {

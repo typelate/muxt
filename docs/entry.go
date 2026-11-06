@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-//go:embed reference how-to tutorials explanation
+//go:embed README.md reference how-to tutorials explanation
 var files embed.FS
 
 // Entry is one embedded file, named by its repo-relative path.

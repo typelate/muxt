@@ -26,3 +26,6 @@ stdout 'documentation'
 
 muxt documentation docs/reference/commands/check.md
 stdout '^# muxt check'
+
+muxt documentation docs/README.md
+stdout '^# Muxt Documentation$'
