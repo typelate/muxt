@@ -16,13 +16,14 @@ type Entry struct {
 	Path string
 }
 
-// Resolve returns the embedded file named by arg. For now arg must be the
-// exact repo-relative path of a file under docs/.
+// Resolve returns the embedded file named by arg. arg may carry a #fragment,
+// a leading "./", a trailing "/", or a leading "docs/"; the returned Path
+// always starts with "docs/".
 func Resolve(arg string) (Entry, error) {
-	rel, ok := strings.CutPrefix(arg, "docs/")
-	if !ok {
-		return Entry{}, fmt.Errorf("unknown documentation path %q", arg)
-	}
+	rel, _, _ := strings.Cut(arg, "#")
+	rel = strings.TrimPrefix(rel, "./")
+	rel = strings.TrimSuffix(rel, "/")
+	rel = strings.TrimPrefix(rel, "docs/")
 	info, err := fs.Stat(files, rel)
 	if err != nil {
 		return Entry{}, fmt.Errorf("unknown documentation path %q: %w", arg, err)
@@ -30,7 +31,7 @@ func Resolve(arg string) (Entry, error) {
 	if info.IsDir() {
 		return Entry{}, fmt.Errorf("documentation path %q is a directory", arg)
 	}
-	return Entry{Path: arg}, nil
+	return Entry{Path: "docs/" + rel}, nil
 }
 
 // Render returns the file's content verbatim. ref is reserved for rewriting

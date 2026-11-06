@@ -18,6 +18,26 @@ func TestResolve(t *testing.T) {
 			wantPath:    "docs/reference/template-names.md",
 			wantHeading: "# Template Name Syntax\n",
 		},
+		{
+			arg:         "./docs/reference/template-names.md",
+			wantPath:    "docs/reference/template-names.md",
+			wantHeading: "# Template Name Syntax\n",
+		},
+		{
+			arg:         "reference/template-names.md",
+			wantPath:    "docs/reference/template-names.md",
+			wantHeading: "# Template Name Syntax\n",
+		},
+		{
+			arg:         "docs/reference/template-names.md#route-names",
+			wantPath:    "docs/reference/template-names.md",
+			wantHeading: "# Template Name Syntax\n",
+		},
+		{
+			arg:         "docs/reference/template-names.md/",
+			wantPath:    "docs/reference/template-names.md",
+			wantHeading: "# Template Name Syntax\n",
+		},
 	} {
 		entry, err := docs.Resolve(tt.arg)
 		if err != nil {

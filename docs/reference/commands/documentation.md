@@ -16,7 +16,7 @@ Aliases: `docs`, `d`.
 
 ## Paths
 
-A path is a page's repo-relative path, such as `docs/reference/template-names.md`. Only the exact path resolves. The index still prints topic IDs, so build the path from an ID: a `reference` page is `docs/reference/<id>.md`, and any other page is `docs/<id>.md`.
+A path is a page's repo-relative path, such as `docs/reference/template-names.md`. The `docs/` prefix may be left off, and a leading `./`, a trailing `/`, or a `#fragment` is ignored, so `reference/template-names.md#route-names` also prints the page. The index still prints topic IDs, so build the path from an ID: a `reference` page is `docs/reference/<id>.md`, and any other page is `docs/<id>.md`.
 
 Links inside a page are relative to the page's own directory. They are not URLs; resolve them from there and pass the result to `muxt documentation`.
 

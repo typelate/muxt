@@ -11,6 +11,9 @@ stdout 'relative to the muxt repository'
 muxt documentation docs/reference/template-names.md
 stdout '^# Template Name Syntax$'
 
+muxt documentation reference/template-names.md
+stdout '^# Template Name Syntax$'
+
 muxt documentation docs/reference/commands/generate.md
 stdout '^# muxt generate'
 
