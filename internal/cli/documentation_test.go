@@ -37,6 +37,37 @@ func TestDocumentationQueryPrintsMatchingLines(t *testing.T) {
 	assert.Regexp(t, `(?m)^docs/[^:]+:\d+: .*ExecuteTemplate`, stdout.String(), "muxt documentation --query ExecuteTemplate")
 }
 
+func TestDocumentationQueryFailsWhenNothingMatches(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "no line holds the text",
+			args: []string{"documentation", "--query", "zzzqqq"},
+			want: `no match for "zzzqqq" under docs`,
+		},
+		{
+			name: "no line under the path holds the text",
+			args: []string{"documentation", "--query", "zzzqqq", "docs/how-to"},
+			want: `no match for "zzzqqq" under docs/how-to`,
+		},
+		{
+			name: "empty text",
+			args: []string{"documentation", "--query", ""},
+			want: `--query needs text to search for`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			err := commands(t.TempDir(), tt.args, func(string) string { return "" }, func() (string, bool) { return "", false }, strings.NewReader(""), &stdout, io.Discard, runners{})
+			require.EqualError(t, err, tt.want, "muxt %s", strings.Join(tt.args, " "))
+			assert.Empty(t, stdout.String(), "muxt %s", strings.Join(tt.args, " "))
+		})
+	}
+}
+
 func TestDocumentationLinksLeavingDocsNameTheBuildVersion(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

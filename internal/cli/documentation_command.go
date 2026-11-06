@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -54,9 +55,15 @@ func documentationCommand(version func() (string, bool)) *cobra.Command {
 				return err
 			}
 			if cmd.Flags().Changed("query") {
+				if query == "" {
+					return errors.New("--query needs text to search for")
+				}
 				matches, err := docs.Search(entry, query)
 				if err != nil {
 					return err
+				}
+				if len(matches) == 0 {
+					return fmt.Errorf("no match for %q under %s", query, entry.Path)
 				}
 				for _, m := range matches {
 					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s:%d: %s\n", m.Path, m.Line, m.Text); err != nil {
