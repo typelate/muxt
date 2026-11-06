@@ -1,6 +1,6 @@
 # How to serve full pages and fragments from one route
 
-One URL often needs three responses: the whole page for a direct visit, the main content for an htmx link that swaps `#main`, and only the results list when a search box swaps `#results`. Write one route template that picks among layout partials, rather than three routes. The examples use `--output-htmx` ([flags](../reference/cli.md#flags)) for the `.HX*` readers. `ListArticles` and its result stand for your own method and type.
+One URL often needs three responses: the whole page for a direct visit, the main content for an htmx link that swaps `#main`, and only the results list when a search box swaps `#results`. Write one route template that picks among layout partials instead of three routes. The examples use `--output-htmx` ([flags](../reference/cli.md#flags)) for the `.HX*` readers. `ListArticles` and its result stand for your own method and type.
 
 ## Split the page into partials
 
@@ -54,7 +54,7 @@ Each partial takes the route's `TemplateData`, so every one of them can call `.P
 
 ## Skip the branch with hx-select
 
-When rendering the whole page every time is cheap enough, leave the route template unbranched and let the client pick the part it wants:
+When rendering the whole page on every request is cheap, leave the route template unbranched and let the client pick the part it wants:
 
 ```html
 <a href="/articles" hx-get="/articles" hx-target="#main" hx-select="#main" hx-swap="outerHTML" hx-push-url="true">Articles</a>
