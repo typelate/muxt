@@ -31,7 +31,7 @@ hypertext.TemplateRoutes(mux, hypertext.Server{Database: queries, Users: users})
 
 ## Test through the generated routes
 
-Register the routes on a fresh mux per test and drive it with `httptest`. An in-memory sqlite database (`modernc.org/sqlite`) keeps tests hermetic. The route `POST /incidents 201 CreateIncident(ctx, form)` sets the status in its name:
+Register the routes on a fresh mux per test and drive it with `httptest`. An in-memory sqlite database (`modernc.org/sqlite`) keeps the test hermetic. The route `POST /incidents 201 CreateIncident(ctx, form)` sets the status in its name:
 
 ```go
 func TestCreateIncident(t *testing.T) {
@@ -52,7 +52,7 @@ func TestCreateIncident(t *testing.T) {
 
 ## Choose what to fake
 
-Where the fake sits decides how much each test covers:
+Where the fake sits decides what a test covers:
 
 | Fake | Covers | Use for |
 |------|--------|---------|
