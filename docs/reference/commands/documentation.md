@@ -29,6 +29,5 @@ Links to other pages are printed as repo-relative paths that `muxt documentation
 
 ## Edge cases
 
-- **Breaking change.** Names such as `template-names` no longer print a page; they fail as unknown paths. The `--format` flag is gone.
 - **No match.** A query that matches no line fails with `no match for "<text>" under <path>`, such as `no match for "muxt rocks" under docs`, and prints nothing to stdout. An empty `--query ""` fails with `--query needs text to search for`.
 - **Unknown path.** A path that names no file or directory fails. The error lists up to five of the closest paths, such as `did you mean: docs/reference/cli.md`, or says to run `muxt documentation` to list every path when none is close.
