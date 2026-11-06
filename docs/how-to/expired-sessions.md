@@ -43,7 +43,8 @@ func requireSession(store *sessions.Store) func(http.Handler) http.Handler {
 }
 ```
 
-The login routes and static assets are exempt, or the login page could not load its own stylesheet. `GET /static/` is the pattern `--output-static-assets-path=/static` registers ([static assets](../reference/commands/generate.md#static-assets)). 
+The login routes and static assets are exempt, or the login page could not load its own stylesheet. `GET /static/` is the pattern `--output-static-assets-path=/static` registers ([static assets](../reference/commands/generate.md#static-assets)).
+
 ## Answer an htmx request with HX-Redirect
 
 ```go
