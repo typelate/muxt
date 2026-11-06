@@ -14,7 +14,7 @@ Decided
 
 ## Consequences
 
-Command tests run longer, so they run in parallel.
+Command tests run in parallel, one script per subtest.
 
 Changing generated signatures and identifiers gets cheaper, so code importing them can break without notice.
 
