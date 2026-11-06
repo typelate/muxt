@@ -1,6 +1,6 @@
 # How to handle expired sessions in htmx requests
 
-When a session expires, the next htmx request must not get the login page back. A redirect to `/login` is followed inside the XMLHttpRequest, so htmx receives a 200 login page and swaps it into whatever small element asked, leaving a page inside the page. Detect htmx requests in middleware and answer them in a way htmx acts on. Keep background polling from extending the session, and show a lock dialog when it ends.
+Goal: an htmx request after the session expires must not get the login page back. A redirect to `/login` is followed inside the XMLHttpRequest, so htmx receives a 200 login page and swaps it into the small element that asked, leaving a page inside the page. Detect htmx requests in middleware and answer them in a way htmx acts on. Keep background polling from extending the session, and show a lock dialog when it ends.
 
 `sessions` stands for your session package: `Lookup` finds the request's session, `Touch` extends its expiry and returns the session with the new `ExpiresAt`, which is when it ends.
 
@@ -43,8 +43,7 @@ func requireSession(store *sessions.Store) func(http.Handler) http.Handler {
 }
 ```
 
-The login routes and static assets are exempt, or the login page could not load its own stylesheet. `GET /static/` is the pattern `--output-static-assets-path=/static` registers ([static assets](../reference/commands/generate.md#static-assets)). Matching on `r.Pattern` names each route the way its template does.
-
+The login routes and static assets are exempt, or the login page could not load its own stylesheet. `GET /static/` is the pattern `--output-static-assets-path=/static` registers ([static assets](../reference/commands/generate.md#static-assets)). 
 ## Answer an htmx request with HX-Redirect
 
 ```go
@@ -76,7 +75,7 @@ func nextPath(r *http.Request) string {
 
 htmx 2 reads `HX-Redirect` before it looks at the status code, sets `location.href`, and swaps nothing, so the 401 still navigates the whole tab. `next` comes from `HX-Current-URL`, the page htmx was on, not from the fragment URL it requested.
 
-`HX-Refresh: true` in place of `HX-Redirect` reloads the page instead. The reload is a plain request that the `default` case answers with a 303 to the login page, with `next` set to the page URL. That costs a round trip and needs no `HX-Current-URL`.
+`HX-Refresh: true` in place of `HX-Redirect` reloads the page instead. The reload is a plain request that the `default` case answers with a 303 to the login page, with `next` set to the page URL. That costs a round trip but needs no `HX-Current-URL`.
 
 ## Or show a lock dialog on 401
 
@@ -103,7 +102,7 @@ Put both in the layout so every page has them.
 
 ## Keep polling from extending the session
 
-A poll that counts as activity keeps the session alive for as long as the tab is open. Mark background requests and skip `Touch` for them, as the middleware above does. A polling element that is not user activity sends the header with `hx-headers`:
+A poll that counts as activity keeps the session alive for as long as the tab is open. The middleware above skips `Touch` for requests marked as background; a polling element sends the mark with `hx-headers`:
 
 ```html
 <section hx-get="/notifications" hx-trigger="every 30s" hx-headers='{"X-Background": "true"}'></section>
