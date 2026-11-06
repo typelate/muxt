@@ -1,10 +1,8 @@
 # Find Untested Template Behavior
 
-`muxt test-template-mutations` ([reference](../reference/commands/test-template-mutations.md)) reports the template actions no test depends on. This tutorial turns one miss into an assertion.
+`muxt test-template-mutations` ([reference](../reference/commands/test-template-mutations.md)) reports the template actions no test depends on. You run it on an example app, then write the test that closes one miss.
 
-Prerequisites: `muxt` installed and a checkout of this repository for the example.
-
-> Needs muxt v0.21.0-dev.2 or later: `go install github.com/typelate/muxt@v0.21.0-dev.2`.
+Prerequisite: a checkout of this repository. The commands run muxt from the checkout with `go run`, so nothing is installed.
 
 ## Step 1: Confirm the example passes
 
@@ -16,7 +14,7 @@ go test ./...
 ## Step 2: Run the mutations
 
 ```bash
-muxt test-template-mutations --seed 1
+go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -33,7 +31,7 @@ template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[ma
 20 mutants, 0 killed, 20 missed, 0 skipped
 ```
 
-Twenty changes to the rendered HTML pass every test. `--seed 1` makes the run reproducible.
+Twenty changes to the rendered HTML pass every test. `--seed 1` makes the run reproducible. The command exits non-zero while any mutant is missed.
 
 ## Step 3: Read one miss
 
@@ -41,7 +39,7 @@ Twenty changes to the rendered HTML pass every test. `--seed 1` makes the run re
 MISS 17:2 template-drop
 ```
 
-Line 17 of `template.gohtml` is `{{template "count" .Result}}`. `template-drop` renders that partial as nothing, and every test still passes: nothing asserts on something only that partial produces.
+Line 17 of `template.gohtml` is `{{template "count" .Result}}`. `template-drop` renders that partial as nothing, and every test still passes, so no test asserts on anything only that partial produces.
 
 ## Step 4: Write the test
 
@@ -75,7 +73,7 @@ func TestCounterPage(t *testing.T) {
 ```
 
 ```bash
-go test ./... && muxt test-template-mutations --seed 1
+go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -92,7 +90,7 @@ This one missed:
 MISS 62:19 action-zero
 ```
 
-Line 62, in the `count` partial, is `<div id='count'>{{.}}</div>`. `action-zero` renders `{{.}}` as `0`, the `int64` zero. The fixture starts at zero and asserts `"0"`, so the test cannot see the change. Replace the `TemplateRoutes` line with:
+Line 62, in the `count` partial, is `<div id='count'>{{.}}</div>`. `action-zero` renders `{{.}}` as `0`, the `int64` zero. The counter starts at zero and the test asserts `"0"`, so it cannot see the change. In `counter_page_test.go`, replace the `TemplateRoutes` line with:
 
 ```go
 	srv := new(Server)
@@ -107,7 +105,7 @@ and change the assertion to:
 ```
 
 ```bash
-go test ./... && muxt test-template-mutations --seed 1
+go test ./... && go run github.com/typelate/muxt test-template-mutations --seed 1
 ```
 
 ```text
@@ -116,13 +114,13 @@ go test ./... && muxt test-template-mutations --seed 1
 
 ## Step 6: Work through the rest
 
-Narrow the run to one template while you add assertions:
+Narrow the run to one template and read the remaining misses:
 
 ```bash
-muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
+go run github.com/typelate/muxt test-template-mutations --template-pattern '^POST /count$' --seed 1 -v
 ```
 
-The operator names the missing assertion:
+Each operator names the assertion that kills its mutant:
 
 | Operator | What to assert |
 |----------|----------------|
@@ -134,7 +132,7 @@ The operator names the missing assertion:
 | `template-drop` | something only that partial produces |
 | `operands` | that input specifically |
 
-Not every miss needs a test. For CI, the [reference](../reference/commands/test-template-mutations.md) covers `--diff` and `--workers`, and [Timing](../reference/commands/test-template-mutations.md#timing) covers the progress lines of a long run.
+Write an assertion for each miss whose behavior matters to you; not every miss needs a test. For CI, the [reference](../reference/commands/test-template-mutations.md) covers `--diff` and `--workers`, and [Timing](../reference/commands/test-template-mutations.md#timing) covers the progress lines of a long run.
 
 ## Next
 
