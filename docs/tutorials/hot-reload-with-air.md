@@ -13,7 +13,7 @@ tmp_dir = "tmp"
 [build]
   pre_cmd = ["go generate ./..."]
   cmd = "go build -o ./tmp/app ."
-  bin = "./tmp/app"
+  entrypoint = ["./tmp/app"]
   include_ext = ["go", "gohtml", "css", "js"]
   exclude_regex = ["_test\\.go$", "template_routes(_gen)?\\.go$"]
   exclude_dir = ["tmp"]
@@ -22,7 +22,7 @@ tmp_dir = "tmp"
   clear_on_rebuild = true
 ```
 
-`pre_cmd` regenerates before every build. `exclude_regex` keeps the generated file from triggering a second rebuild; it matches `template_routes.go` in any package.
+`pre_cmd` regenerates before every build. `entrypoint` replaces the deprecated `bin` key. `exclude_regex` keeps the generated file from triggering a second rebuild; it matches `template_routes.go` in any package, the `<name>_template_routes_gen.go` files of `--output-multiple-files`, and any `--output-file` name ending in `template_routes.go`.
 
 ## Step 2: Run
 
@@ -44,7 +44,3 @@ Air's [proxy](https://github.com/air-verse/air#proxy-reload-the-browser-automati
 ```
 
 Stop Air with Ctrl-C and run `air` again. Browse to <http://localhost:8090>, edit `index.gohtml`, and the page reloads on save.
-
-## Edge cases
-
-- **Other generated file names.** `exclude_regex` also matches the `<name>_template_routes_gen.go` files of `--output-multiple-files`, and any `--output-file` name ending in `template_routes.go`.
