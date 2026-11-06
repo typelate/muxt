@@ -20,19 +20,7 @@ A call whose name is not a literal, such as one in a `render(w, name, data)` hel
 ok: 4 templates, 1 call site skipped
 ```
 
-To check the templates a call like that renders, call `ExecuteTemplate` with a literal name and a typed value at each call site:
-
-```go
-// not checked
-func renderTemplate(w http.ResponseWriter, name string, data any) error {
-	return templates.ExecuteTemplate(w, name, data)
-}
-
-// checked against PageData
-err := templates.ExecuteTemplate(w, "page", PageData{Title: "Home"})
-```
-
-Alternatively, make the page a route template with a call, so the generated handler renders it.
+A literal name with a typed value at each call site is checked against that type, as is a route template with a call, which the generated handler renders.
 
 ## What is checked
 
