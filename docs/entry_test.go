@@ -109,34 +109,57 @@ func TestRenderFile(t *testing.T) {
 
 func TestRenderDirectory(t *testing.T) {
 	for _, tt := range []struct {
-		arg      string
-		wantDir  string
-		wantLine string
+		arg       string
+		wantDir   string
+		wantLines []string
 	}{
 		{
-			arg:      "docs/how-to",
-			wantDir:  "docs/how-to",
-			wantLine: "docs/how-to/template-functions.md",
+			arg:       "docs/how-to",
+			wantDir:   "docs/how-to",
+			wantLines: []string{"docs/how-to/template-functions.md"},
 		},
 		{
-			arg:      "how-to/",
-			wantDir:  "docs/how-to",
-			wantLine: "docs/how-to/template-functions.md",
+			arg:       "how-to/",
+			wantDir:   "docs/how-to",
+			wantLines: []string{"docs/how-to/template-functions.md"},
 		},
 		{
-			arg:      "docs/examples/simple",
-			wantDir:  "docs/examples/simple",
-			wantLine: "docs/examples/simple/main.go",
+			arg:       "docs/examples/simple",
+			wantDir:   "docs/examples/simple",
+			wantLines: []string{"docs/examples/simple/main.go"},
 		},
 		{
-			arg:      "docs/reference",
-			wantDir:  "docs/reference",
-			wantLine: "docs/reference/commands/check.md",
+			arg:       "docs/reference",
+			wantDir:   "docs/reference",
+			wantLines: []string{"docs/reference/commands/check.md"},
+		},
+		{
+			arg:       "",
+			wantDir:   "docs",
+			wantLines: []string{"docs/README.md", "docs/reference/cli.md", "docs/examples/simple/main.go"},
+		},
+		{
+			arg:       "docs",
+			wantDir:   "docs",
+			wantLines: []string{"docs/README.md", "docs/reference/cli.md", "docs/examples/simple/main.go"},
+		},
+		{
+			arg:       "docs/",
+			wantDir:   "docs",
+			wantLines: []string{"docs/README.md", "docs/reference/cli.md", "docs/examples/simple/main.go"},
+		},
+		{
+			arg:       "./docs",
+			wantDir:   "docs",
+			wantLines: []string{"docs/README.md", "docs/reference/cli.md", "docs/examples/simple/main.go"},
 		},
 	} {
 		entry, err := docs.Resolve(tt.arg)
 		if err != nil {
 			t.Fatalf("Resolve(%q) error = %v", tt.arg, err)
+		}
+		if entry.Path != tt.wantDir || !entry.Dir {
+			t.Errorf("Resolve(%q) = %+v, want directory %q", tt.arg, entry, tt.wantDir)
 		}
 		content, err := entry.Render("main")
 		if err != nil {
@@ -155,8 +178,10 @@ func TestRenderDirectory(t *testing.T) {
 		if !slices.IsSorted(lines) {
 			t.Errorf("Resolve(%q).Render() lines are not sorted: %q", tt.arg, lines)
 		}
-		if !slices.Contains(lines, tt.wantLine) {
-			t.Errorf("Resolve(%q).Render() does not contain line %q", tt.arg, tt.wantLine)
+		for _, wantLine := range tt.wantLines {
+			if !slices.Contains(lines, wantLine) {
+				t.Errorf("Resolve(%q).Render() does not contain line %q", tt.arg, wantLine)
+			}
 		}
 	}
 }

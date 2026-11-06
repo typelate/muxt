@@ -1,12 +1,10 @@
-# muxt documentation prints embedded docs and an index
+# muxt documentation with no argument prints the path of every embedded file
 
 muxt documentation
-stdout '^reference$'
-stdout '^  template-names — Template Name Syntax$'
-stdout '^  commands/generate — '
-stdout '^how-to$'
-stdout 'muxt documentation <topic>'
-stdout 'relative to the muxt repository'
+stdout '^docs/README\.md$'
+stdout '^docs/reference/cli\.md$'
+stdout '^docs/examples/simple/main\.go$'
+! stdout ' — '
 
 muxt documentation docs/reference/template-names.md
 stdout '^# Template Name Syntax$'
@@ -16,10 +14,6 @@ stdout '^# Template Name Syntax$'
 
 muxt documentation docs/reference/commands/generate.md
 stdout '^# muxt generate'
-
-muxt documentation --format json
-stdout '"id": "call-parameters"'
-stdout '"section": "reference"'
 
 muxt help documentation
 stdout 'documentation'

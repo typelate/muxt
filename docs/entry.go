@@ -21,13 +21,17 @@ type Entry struct {
 }
 
 // Resolve returns the embedded file or directory named by arg. arg may carry a
-// #fragment, a leading "./", a trailing "/", or a leading "docs/"; the returned
-// Path always starts with "docs/".
+// #fragment, a leading "./", a trailing "/", or a leading "docs/". The empty
+// argument and "docs" name the root directory, whose Path is "docs". Any other
+// returned Path starts with "docs/".
 func Resolve(arg string) (Entry, error) {
 	rel, _, _ := strings.Cut(arg, "#")
 	rel = strings.TrimPrefix(rel, "./")
 	rel = strings.TrimSuffix(rel, "/")
 	rel = strings.TrimPrefix(rel, "docs/")
+	if rel == "" || rel == "docs" {
+		return Entry{Path: "docs", Dir: true}, nil
+	}
 	info, err := fs.Stat(files, rel)
 	if err != nil {
 		return Entry{}, fmt.Errorf("unknown documentation path %q: %w", arg, err)
@@ -35,10 +39,19 @@ func Resolve(arg string) (Entry, error) {
 	return Entry{Path: "docs/" + rel, Dir: info.IsDir()}, nil
 }
 
+// embedName returns the name of p within the embedded file system, which is
+// rooted at docs/. The root directory is ".".
+func embedName(p string) string {
+	if p == "docs" {
+		return "."
+	}
+	return strings.TrimPrefix(p, "docs/")
+}
+
 // Files returns the repo-relative path of every file under dir, sorted.
 func Files(dir Entry) ([]string, error) {
 	var paths []string
-	err := fs.WalkDir(files, strings.TrimPrefix(dir.Path, "docs/"), func(name string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(files, embedName(dir.Path), func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
