@@ -140,7 +140,7 @@ func TestRewriteSignalsArguments(t *testing.T) {
 	} {
 		t.Run(tt.expr, func(t *testing.T) {
 			call := mustParseCall(t, tt.expr)
-			rewritten := rewriteSignalsArguments(call, tt.segments)
+			rewritten := rewriteSignalsArguments(call, tt.segments, nil)
 			assert.Equal(t, tt.rewritten, rewritten, "rewriteSignalsArguments(%q)", tt.expr)
 			assert.Equal(t, tt.want, astgen.Format(call), "rewriteSignalsArguments(%q) rewrote to", tt.expr)
 		})

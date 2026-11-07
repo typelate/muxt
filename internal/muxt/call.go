@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"net/http"
 	"slices"
 
 	"github.com/typelate/muxt/template/html"
@@ -193,10 +194,14 @@ func hydrateCallArgument(def *Definition, call *ast.CallExpr, paramType types.Ty
 		// The decode target is the method parameter's type; any type
 		// encoding/json can unmarshal into is permitted, so there is
 		// no assignability constraint to check here.
+		// A signals argument on GET or HEAD reads the datastar query
+		// parameter: those requests have no body.
+		method := def.HTTPMethod()
 		return Argument{
-			Identifier: TemplateNameScopeIdentifierRequestBody,
-			Type:       ArgumentTypeRequestBodyJSON,
-			paramType:  paramType,
+			Identifier:       TemplateNameScopeIdentifierRequestBody,
+			Type:             ArgumentTypeRequestBodyJSON,
+			paramType:        paramType,
+			signalsFromQuery: def.signalsWrappers[call] && (method == http.MethodGet || method == http.MethodHead),
 		}, nil
 	}
 	sig, isMethod, args, err := resolveCall(def, call, pkg, receiver, checker)

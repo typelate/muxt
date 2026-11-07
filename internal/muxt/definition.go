@@ -162,6 +162,10 @@ type Definition struct {
 	usesSignals     bool
 	signalsCallback string
 
+	// signalsWrappers holds the unmarshalJSON(body) calls rewritten from a
+	// signals argument, as opposed to written out.
+	signalsWrappers map[*ast.CallExpr]bool
+
 	// spans records the byte offsets of the matched name segments and
 	// handlerOffset the offset of the trimmed handler expression, so
 	// errors can point at the failing part of the name. namePosition is
