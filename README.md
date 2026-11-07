@@ -14,7 +14,9 @@ A template name is the contract between the HTML and the `http.Handler`:
 func (s Server) GetArticle(ctx context.Context, id int) (Article, error) { ... }
 ```
 
-`muxt generate` reads the name and writes an `http.Handler` that calls your method. With `--use-receiver-type=Server` (`//go:generate go tool muxt generate --use-receiver-type=Server`) it reads the method's real signature, so `id` parses to an `int`; without the flag `id` is a `string` and `.Result` is `any`, and `muxt check` fails with `field or method Title not found on any`. `muxt check` type-checks each template against the data it receives, so renaming a field fails the check in every template that still uses it. It covers `ExecuteTemplate` calls on the [templates variable](docs/reference/templates-variable.md), the package-level `*template.Template` variable muxt reads (default name `templates`), with a literal template name and a statically known data type, which generated handlers always satisfy.
+`muxt generate` reads the name and writes an `http.Handler` that calls your method. Give it the receiver type, `//go:generate go tool muxt generate --use-receiver-type=Server`, and it reads the method's signature, so `id` arrives as an `int` and `.Result` is an `Article`. Without the flag `id` is a `string` and `.Result` is `any`.
+
+`muxt check` type-checks each template against the data it receives, so renaming a field fails the check in every template that still uses it. It covers `ExecuteTemplate` calls on the [templates variable](docs/reference/templates-variable.md) (the package-level `*template.Template`, named `templates` by default) with a literal template name and a statically known data type, which generated handlers always satisfy.
 
 ## Install
 
