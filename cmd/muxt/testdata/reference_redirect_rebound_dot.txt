@@ -1,0 +1,35 @@
+# Inside a with or a range dot is the selected value, so .Redirect there names
+# a field of that value and the route gets no redirect block. $.Redirect is the
+# TemplateData wherever it is written, so it does.
+
+muxt generate
+! grep 'redirectURL != ""' template_routes.go
+
+cp root.gohtml template.gohtml
+muxt generate
+grep 'redirectURL != ""' template_routes.go
+
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- go.mod --
+module example.com
+
+go 1.25
+-- template.gohtml --
+{{define "GET / 200"}}{{with .Result}}{{.Redirect}}{{end}}{{range .Result.Items}}{{.Redirect}}{{end}}{{end}}
+-- root.gohtml --
+{{define "GET / 200"}}{{range .Result.Items}}{{$.Redirect "/x"}}{{end}}{{end}}

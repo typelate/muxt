@@ -27,11 +27,9 @@ func analyzeRedirectCalls(ts *html.Template, defs []Definition) {
 // commands, and nothing would notice when they stopped.
 //
 // dotIsTemplateData says whether the dot in force where a command sits is
-// still the TemplateData the handler passed in. It is passed to visit
-// rather than acted on here, because the two callers want different
-// things from it: the redirect analysis is deliberately conservative and
-// ignores it, while a diagnostic must not claim a method belongs to
-// TemplateData when the dot has been rebound.
+// still the TemplateData the handler passed in: a with or a range rebinds
+// it, unless the with selects dot or the root, and a {{template}} call
+// passes it along only as its whole argument.
 //
 // visited stops a template that reaches itself.
 func walkTemplateCommands(node template.Node, ts *html.Template, visited map[string]bool, dotIsTemplateData bool, visit func(*template.CommandNode, bool) bool) bool {
@@ -57,9 +55,10 @@ func (w *commandWalker) node(node template.Node, dot bool) bool {
 		// An if does not rebind dot, in either branch.
 		return w.branch(&n.BranchNode, dot, dot)
 	case *template.WithNode:
-		// Inside the body dot is whatever the with selected; the else
+		// Inside the body dot is whatever the with selected, which is
+		// still TemplateData for {{with .}} and {{with $}}; the else
 		// branch runs with the dot the with was written under.
-		return w.branch(&n.BranchNode, false, dot)
+		return w.branch(&n.BranchNode, dot && selectsTemplateData(n.Pipe, dot), dot)
 	case *template.RangeNode:
 		// Inside the body dot is one element of what was ranged over.
 		return w.branch(&n.BranchNode, false, dot)
@@ -145,36 +144,45 @@ func (w *commandWalker) template(name string, pipe *template.PipeNode, dot bool)
 // clause, with argument pipe, invokes runs with the same dot the
 // invocation was written under.
 //
-// Only {{template "x" .}} does. Written without an argument the called
-// template runs with no dot at all, and any other argument is a value
-// selected out of the current one.
+// Only {{template "x" .}} and {{template "x" $}} do. Written without an
+// argument the called template runs with no dot at all, and any other
+// argument is a value selected out of the current one.
 func passesDotAlong(pipe *template.PipeNode, dotIsTemplateData bool) bool {
-	if !dotIsTemplateData || pipe == nil {
+	return selectsTemplateData(pipe, dotIsTemplateData)
+}
+
+// selectsTemplateData reports whether pipe is dot, while dot is
+// TemplateData, or the root variable, which always is.
+func selectsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
+	if pipe == nil {
 		return false
 	}
 	cmds := pipe.HeadCommands()
-	if len(cmds) != 1 {
+	if len(cmds) != 1 || len(cmds[0].Args) != 1 {
 		return false
 	}
-	cmd := cmds[0]
-	if len(cmd.Args) != 1 {
-		return false
+	switch arg := cmds[0].Args[0].(type) {
+	case *template.DotNode:
+		return dotIsTemplateData
+	case *template.VariableNode:
+		return len(arg.Ident) == 1 && arg.Ident[0] == "$"
 	}
-	_, isDot := cmd.Args[0].(*template.DotNode)
-	return isDot
+	return false
 }
 
 // canTemplateRedirect reports whether a template, or one it calls, can reach
 // the Redirect method.
 //
-// It is deliberately conservative: passing TemplateData to a function, or
-// calling a method that is not known to be safe, counts, and it does not
-// care whether dot has been rebound. Emitting the redirect block for a
-// template that never redirects costs nothing, and omitting it for one
-// that does is the bug this guards.
+// A field on dot counts only where dot is still TemplateData: inside a
+// with or a range, .Redirect names a field of whatever was selected. The
+// root, $, is always TemplateData. It is otherwise conservative: passing
+// TemplateData to a function, holding it in a variable, or calling a
+// method that is not known to be safe, counts. Emitting the redirect block
+// for a template that never redirects costs nothing, and omitting it for
+// one that does is the bug this guards.
 func canTemplateRedirect(node template.Node, ts *html.Template, visited map[string]bool) bool {
-	return walkTemplateCommands(node, ts, visited, true, func(cmd *template.CommandNode, _ bool) bool {
-		return containsRedirectCall(cmd) || callsMethodOnTemplateData(cmd)
+	return walkTemplateCommands(node, ts, visited, true, func(cmd *template.CommandNode, dot bool) bool {
+		return containsRedirectCall(cmd, dot) || callsMethodOnTemplateData(cmd, dot)
 	})
 }
 
@@ -189,17 +197,18 @@ func isRedirectMethod(methodName string) bool {
 }
 
 // containsRedirectCall reports whether a command names a redirect method in a
-// field, chain or variable ($.Redirect, $d.Redirect), wherever dot or the
-// variable points. A parenthesised pipeline in a chain is its own command to
-// the walker, so it is not looked into here.
-func containsRedirectCall(cmd *template.CommandNode) bool {
+// field of dot, while dot is TemplateData, or in a chain or variable
+// ($.Redirect, $d.Redirect), wherever the variable points. A parenthesised
+// pipeline in a chain is its own command to the walker, so it is not looked
+// into here.
+func containsRedirectCall(cmd *template.CommandNode, dot bool) bool {
 	if cmd == nil {
 		return false
 	}
 	return slices.ContainsFunc(cmd.Args, func(arg template.Node) bool {
 		switch a := arg.(type) {
 		case *template.FieldNode:
-			return slices.ContainsFunc(a.Ident, isRedirectMethod)
+			return dot && slices.ContainsFunc(a.Ident, isRedirectMethod)
 		case *template.ChainNode:
 			return slices.ContainsFunc(a.Field, isRedirectMethod)
 		case *template.VariableNode:
@@ -210,31 +219,34 @@ func containsRedirectCall(cmd *template.CommandNode) bool {
 }
 
 // callsMethodOnTemplateData reports whether a command may call a TemplateData
-// method that is not known to be safe: by naming one on dot or on a variable,
-// which may hold dot ({{$d := .}}), or by handing a function dot, a variable
-// or a chain, which it might call methods on.
-func callsMethodOnTemplateData(cmd *template.CommandNode) bool {
+// method that is not known to be safe: by naming one on dot, while dot is
+// TemplateData, or on a variable, which may hold dot ({{$d := .}}), or by
+// handing a function dot, a variable or a chain, which it might call
+// methods on.
+func callsMethodOnTemplateData(cmd *template.CommandNode, dot bool) bool {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return false
 	}
-	if _, isFunctionCall := cmd.Args[0].(*template.IdentifierNode); isFunctionCall && slices.ContainsFunc(cmd.Args[1:], mayHoldTemplateData) {
+	if _, isFunctionCall := cmd.Args[0].(*template.IdentifierNode); isFunctionCall && slices.ContainsFunc(cmd.Args[1:], func(arg template.Node) bool { return mayHoldTemplateData(arg, dot) }) {
 		return true
 	}
-	return slices.ContainsFunc(cmd.Args, hasUnsafeField)
+	return slices.ContainsFunc(cmd.Args, func(arg template.Node) bool { return hasUnsafeField(arg, dot) })
 }
 
-func mayHoldTemplateData(arg template.Node) bool {
+func mayHoldTemplateData(arg template.Node, dot bool) bool {
 	switch arg.(type) {
-	case *template.DotNode, *template.ChainNode, *template.VariableNode:
+	case *template.DotNode:
+		return dot
+	case *template.ChainNode, *template.VariableNode:
 		return true
 	}
 	return false
 }
 
-func hasUnsafeField(arg template.Node) bool {
+func hasUnsafeField(arg template.Node, dot bool) bool {
 	switch a := arg.(type) {
 	case *template.FieldNode:
-		return !isSafeTemplateDataMethod(a.Ident[0])
+		return dot && !isSafeTemplateDataMethod(a.Ident[0])
 	case *template.VariableNode:
 		return len(a.Ident) > 1 && !isSafeTemplateDataMethod(a.Ident[1])
 	}

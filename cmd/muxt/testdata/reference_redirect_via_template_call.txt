@@ -1,8 +1,14 @@
-# verify redirect block is generated when template calls another template that redirects
+# A partial that calls Redirect redirects the route that invokes it with dot.
+# Invoked without an argument the partial runs with a nil dot, so its .Redirect
+# cannot run and the route gets no redirect block.
 
 muxt generate
 cat template_routes.go
 grep 'redirectURL != ""' template_routes.go
+
+cp dotless.gohtml template.gohtml
+muxt generate
+! grep 'redirectURL != ""' template_routes.go
 
 -- in.go --
 package main
@@ -25,5 +31,8 @@ module example.com
 
 go 1.25
 -- template.gohtml --
+{{define "GET / 200"}}{{template "redirect-helper" .}}{{end}}
+{{define "redirect-helper"}}{{.Redirect "/login" 302}}{{end}}
+-- dotless.gohtml --
 {{define "GET / 200"}}{{template "redirect-helper"}}{{end}}
 {{define "redirect-helper"}}{{.Redirect "/login" 302}}{{end}}

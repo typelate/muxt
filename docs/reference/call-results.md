@@ -137,13 +137,13 @@ An error's own `StatusCode` method is consulted only for a method that returns j
 
 Every route that does not take a [`response`](call-parameters.md#routes-that-take-response) argument gets the status selection above, whatever its template contains. The redirect handling is separate: the `if td.redirectURL != ""` block calls `http.Redirect` with the selected status, and muxt writes it only when it finds a reason to think the template can set a redirect.
 
-muxt reads the route's template body, not the call in its name, and follows `{{template}}` and `{{block}}` invocations into the templates they name, including ones invoked without a dot. A route gets the redirect block when any command in that tree does one of these:
+muxt reads the route's template body, not the call in its name, and follows `{{template}}` and `{{block}}` invocations into the templates they name. It tracks what dot is bound to: inside `{{with .Result}}` or `{{range .Result.Items}}` dot is the selected value, not the `TemplateData`, and a partial invoked as `{{template "x" .Result}}` or with no argument runs without it. `{{with .}}`, `{{with $}}` and `{{template "x" .}}` keep it. A route gets the redirect block when any command in that tree, where dot is the `TemplateData`, does one of these things:
 
-- Names `Redirect`, `RedirectMultipleChoices`, `RedirectMovedPermanently`, `RedirectFound` or `RedirectSeeOther` on dot, on a variable such as `$.Redirect`, or in a chain.
-- Selects a first field from dot or a variable that is not one of `Path`, `Result`, `Request`, `Receiver`, `Ok`, `Err`, `MuxtVersion`, `StatusCode` or `Header`. This includes any method you add to `TemplateData` ([extend TemplateData](../how-to/extend-template-data.md)) and any field read inside a `range` or `with` body, because muxt does not track what dot has been rebound to.
-- Passes dot, a variable or a chain to a function.
+- Names `Redirect`, `RedirectMultipleChoices`, `RedirectMovedPermanently`, `RedirectFound` or `RedirectSeeOther` on dot, or anywhere on the root `$`, a variable, or a chain.
+- Selects a first field from dot or a variable that is not one of `Path`, `Result`, `Request`, `Receiver`, `Ok`, `Err`, `MuxtVersion`, `StatusCode` or `Header`. This includes any method you add to `TemplateData` ([extend TemplateData](../how-to/extend-template-data.md)), which may redirect, and the pipeline of the `range` or `with` itself.
+- Passes dot, `$`, a variable or a chain to a function.
 
-A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, gets no redirect block. The scan errs toward emitting the block, because an unneeded block is harmless and a missing one would drop a redirect. The receiver method never receives the `TemplateData`, so a route that redirects from Go code takes `response` and calls `http.Redirect` itself.
+A template that only reads the safe names, such as `{{.Result.Name}}{{.Err}}`, or that names `.Redirect` only where dot has been rebound ([reference_redirect_rebound_dot.txt](../../cmd/muxt/testdata/reference_redirect_rebound_dot.txt)), gets no redirect block and its handler never calls `http.Redirect`. Where it cannot tell, the scan emits the block: a variable may hold the `TemplateData` (`{{$d := .}}`), and so may a chain, and an unneeded block is harmless while a missing one would drop a redirect. The receiver method never receives the `TemplateData`, so a route that redirects from Go code takes `response` and calls `http.Redirect` itself.
 
 [internal/muxt/redirect.go](../../internal/muxt/redirect.go) · [internal/generate/handler_statements.go](../../internal/generate/handler_statements.go)
 

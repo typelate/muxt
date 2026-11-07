@@ -35,12 +35,28 @@ func TestContainsRedirectCall(t *testing.T) {
 		{template: `{{"literal"}}`},
 	} {
 		t.Run(tt.template, func(t *testing.T) {
-			assert.Equal(t, tt.want, containsRedirectCall(firstCommand(t, tt.template)), "containsRedirectCall(%s)", tt.template)
+			assert.Equal(t, tt.want, containsRedirectCall(firstCommand(t, tt.template), true), "containsRedirectCall(%s, true)", tt.template)
+		})
+	}
+
+	// Where dot is not TemplateData, a redirect named on it is a field of
+	// something else; one named on the root or a variable still counts.
+	for _, tt := range []struct {
+		template string
+		want     bool
+	}{
+		{template: `{{.Redirect "/x"}}`},
+		{template: `{{.Header.Redirect "/x"}}`},
+		{template: `{{$.Redirect "/x"}}`, want: true},
+		{template: `{{(.A).Redirect}}`, want: true},
+	} {
+		t.Run("rebound "+tt.template, func(t *testing.T) {
+			assert.Equal(t, tt.want, containsRedirectCall(firstCommand(t, tt.template), false), "containsRedirectCall(%s, false)", tt.template)
 		})
 	}
 
 	t.Run("no command", func(t *testing.T) {
-		assert.False(t, containsRedirectCall(nil), "containsRedirectCall(nil)")
+		assert.False(t, containsRedirectCall(nil, true), "containsRedirectCall(nil, true)")
 	})
 }
 
@@ -66,12 +82,28 @@ func TestCallsMethodOnTemplateData(t *testing.T) {
 		{name: "root alone", template: `{{$}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, callsMethodOnTemplateData(firstCommand(t, tt.template)), "callsMethodOnTemplateData(%s)", tt.template)
+			assert.Equal(t, tt.want, callsMethodOnTemplateData(firstCommand(t, tt.template), true), "callsMethodOnTemplateData(%s, true)", tt.template)
+		})
+	}
+
+	for _, tt := range []struct {
+		name     string
+		template string
+		want     bool
+	}{
+		{name: "unknown method on a rebound dot", template: `{{.Name}}`},
+		{name: "rebound dot passed to a function", template: `{{printf "%v" .}}`},
+		{name: "unknown field of a rebound dot passed to a function", template: `{{printf "%v" .Name}}`},
+		{name: "unknown method from root under a rebound dot", template: `{{$.Name}}`, want: true},
+		{name: "root passed to a function under a rebound dot", template: `{{printf "%v" $}}`, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, callsMethodOnTemplateData(firstCommand(t, tt.template), false), "callsMethodOnTemplateData(%s, false)", tt.template)
 		})
 	}
 
 	t.Run("no command", func(t *testing.T) {
-		assert.False(t, callsMethodOnTemplateData(nil), "callsMethodOnTemplateData(nil)")
+		assert.False(t, callsMethodOnTemplateData(nil, true), "callsMethodOnTemplateData(nil, true)")
 	})
 }
 
