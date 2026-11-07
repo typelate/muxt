@@ -1,0 +1,55 @@
+muxt generate
+
+muxt check
+
+exec go test ./...
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"strings"
+)
+
+//go:embed *.gohtml
+var files embed.FS
+
+var funcs = template.FuncMap{"upper": strings.ToUpper}
+
+var templates = template.Must(template.New("").Funcs(funcs).ParseFS(files, "*"))
+
+func hello() string { return "hello" }
+
+type Server struct{}
+-- index.gohtml --
+{{define "GET / hello()"}}{{upper .Result}}{{end}}
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body, err := io.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "HELLO") {
+		t.Errorf("got %q", body)
+	}
+}

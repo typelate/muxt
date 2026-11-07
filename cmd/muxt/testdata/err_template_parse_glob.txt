@@ -1,0 +1,21 @@
+# ParseGlob reads the file system at run time, which muxt cannot follow. The
+# error names the supported alternative.
+
+! muxt generate
+stderr 'unsupported function ParseGlob: use ParseFS with an embed.FS'
+
+! muxt check
+stderr 'unsupported function ParseGlob: use ParseFS with an embed.FS'
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import "html/template"
+
+var templates = template.Must(template.ParseGlob("*.gohtml"))
+-- index.gohtml --
+{{define "GET /"}}hi{{end}}

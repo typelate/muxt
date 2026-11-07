@@ -339,7 +339,7 @@ func TestEvaluateTemplateSelector(t *testing.T) {
 	t.Run("Func wrong parameter kind", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		_, err := evalTemplates(t, dir, "templatesWrongArg", "missing_func.gohtml", "greet.gohtml")
-		require.ErrorContains(t, err, `expected a template.FuncMap composite literal got wrong`)
+		require.ErrorContains(t, err, `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one (got wrong)`)
 	})
 	t.Run("Func wrong too many args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
