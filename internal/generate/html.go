@@ -29,7 +29,7 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 	resultType := def.ResultType()
 	execHasArg := def.Arguments[execIdx].CallbackHasArg()
 
-	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
+	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType, true)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func newExecuteHTMLTemplateHandler(file *File, config RoutesFileConfiguration, d
 func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, statusCodeIdent string, respond ...ast.Stmt) (*ast.FuncLit, error) {
 	callFun := callFuncExpression(def)
 	resultType := def.ResultType()
-	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType)
+	handlerFunc, call, err := initHandlerScope(file, config, def, resultDataIdent, receiverInterfaceName, bufIdent, resultType, false)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,14 @@ func newResultHTMLTemplateHandler(file *File, config RoutesFileConfiguration, de
 	return writeHeadersAndStatusCode(file, handlerFunc, def, statusCodeIdent, bufIdent, resultDataIdent)
 }
 
-func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType source.Type) (*ast.FuncLit, *ast.CallExpr, error) {
+func httpErrorBlock(file *File, message ast.Expr, status int) *ast.BlockStmt {
+	return &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ExprStmt{X: astgen.HTTPErrorCall(file, ast.NewIdent(muxt.TemplateNameScopeIdentifierHTTPResponse), message, status)},
+		&ast.ReturnStmt{},
+	}}
+}
+
+func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Definition, resultDataIdent string, receiverInterfaceName string, bufIdent string, resultType source.Type, failFast bool) (*ast.FuncLit, *ast.CallExpr, error) {
 	typeExpr, err := file.TypeExpr(resultType)
 	if err != nil {
 		return nil, nil, err
@@ -133,11 +140,23 @@ func initHandlerScope(file *File, config RoutesFileConfiguration, def muxt.Defin
 	// Parsing rewrites the call's arguments to the locals it declares,
 	// so it works on a copy and the definition stays as resolved.
 	call := def.CallExpression()
-	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, file, def.Arguments, resultDataIdent, config, call, func(s string) *ast.BlockStmt {
+	validationFailureBlock := func(s string) *ast.BlockStmt {
 		errBlock := appendTemplateDataError(file, resultDataIdent, astgen.ErrorsNew(file, astgen.String(s)))
 		errBlock.List = append(errBlock.List, assignTemplateDataErrStatusCode(file, resultDataIdent, http.StatusBadRequest))
 		return errBlock
-	}, nil); err != nil {
+	}
+	var parseErrBlock func() *ast.BlockStmt
+	if failFast {
+		// An execute route renders nothing on a parse failure, so the
+		// error goes in the body, as for a form ParseForm rejects.
+		parseErrBlock = func() *ast.BlockStmt {
+			return httpErrorBlock(file, astgen.CallError(errIdent), http.StatusBadRequest)
+		}
+		validationFailureBlock = func(s string) *ast.BlockStmt {
+			return httpErrorBlock(file, astgen.String(s), http.StatusBadRequest)
+		}
+	}
+	if handlerFunc.Body.List, err = appendParseArgumentStatements(handlerFunc.Body.List, file, def.Arguments, resultDataIdent, config, call, validationFailureBlock, parseErrBlock); err != nil {
 		return nil, nil, err
 	}
 

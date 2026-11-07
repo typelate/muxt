@@ -1,0 +1,92 @@
+# A typed form field or path value that fails to parse on an execute route or
+# an sse route answers 400 with the parse error as a text/plain body, as a
+# url-encoded form that request.ParseForm rejects does.
+
+muxt generate --use-receiver-type=Server
+muxt check
+
+exec go test -race -count=1
+
+-- template.gohtml --
+{{- define "POST /allocations CreateAllocation(form, execute)" -}}hours: {{- .Result -}}{{- end -}}
+{{- define "GET /allocations/{id} ShowAllocation(id, execute)" -}}id: {{- .Result -}}{{- end -}}
+{{- define "POST /events sse(Stream(ctx, form, execute))" -}}hours: {{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- server.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type AllocationForm struct {
+	Person string `name:"person"`
+	Hours  int    `name:"hours"`
+}
+
+type Server struct{}
+
+func (Server) CreateAllocation(f AllocationForm, execute func(data int) error) error {
+	return execute(f.Hours)
+}
+
+func (Server) ShowAllocation(id int, execute func(data int) error) error {
+	return execute(id)
+}
+
+func (Server) Stream(_ context.Context, f AllocationForm, execute func(data int) error) error {
+	return execute(f.Hours)
+}
+-- server_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func TestParseErrorBody(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		method string
+		target string
+		form   url.Values
+	}{
+		{name: "execute form field", method: http.MethodPost, target: "/allocations", form: url.Values{"hours": {"abc"}}},
+		{name: "execute path value", method: http.MethodGet, target: "/allocations/abc"},
+		{name: "sse form field", method: http.MethodPost, target: "/events", form: url.Values{"hours": {"abc"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			TemplateRoutes(mux, Server{})
+			req := httptest.NewRequest(tt.method, tt.target, strings.NewReader(tt.form.Encode()))
+			if tt.form != nil {
+				req.Header.Set("content-type", "application/x-www-form-urlencoded")
+			}
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+			if ct := rec.Header().Get("content-type"); !strings.HasPrefix(ct, "text/plain") {
+				t.Errorf("content-type = %q, want text/plain", ct)
+			}
+			if body := rec.Body.String(); !strings.Contains(body, `strconv.Atoi: parsing "abc"`) {
+				t.Errorf("body = %q, want the strconv parse error naming the bad value", body)
+			}
+		})
+	}
+}
