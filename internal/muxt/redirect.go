@@ -27,20 +27,24 @@ func analyzeRedirectCalls(ts *html.Template, defs []Definition) {
 // commands, and nothing would notice when they stopped.
 //
 // dotIsTemplateData says whether the dot in force where a command sits is
-// still the TemplateData the handler passed in: a with or a range rebinds
-// it, unless the with selects dot or the root, and a {{template}} call
-// passes it along only as its whole argument.
+// still the TemplateData the handler passed in. A range rebinds it. A with
+// and a {{template}} call bind it to what their pipeline selects, and
+// keepsDot says whether that is the TemplateData: the redirect analysis
+// answers yes whenever it may be, so that no redirect is missed, while a
+// diagnostic answers yes only when it provably is, so that it never claims
+// a method belongs to TemplateData when the dot has been rebound.
 //
 // visited stops a template that reaches itself.
-func walkTemplateCommands(node template.Node, ts *html.Template, visited map[string]bool, dotIsTemplateData bool, visit func(*template.CommandNode, bool) bool) bool {
-	w := commandWalker{ts: ts, visited: visited, visit: visit}
+func walkTemplateCommands(node template.Node, ts *html.Template, visited map[string]bool, dotIsTemplateData bool, keepsDot func(*template.PipeNode, bool) bool, visit func(*template.CommandNode, bool) bool) bool {
+	w := commandWalker{ts: ts, visited: visited, keepsDot: keepsDot, visit: visit}
 	return w.node(node, dotIsTemplateData)
 }
 
 type commandWalker struct {
-	ts      *html.Template
-	visited map[string]bool
-	visit   func(*template.CommandNode, bool) bool
+	ts       *html.Template
+	visited  map[string]bool
+	keepsDot func(*template.PipeNode, bool) bool
+	visit    func(*template.CommandNode, bool) bool
 }
 
 func (w *commandWalker) node(node template.Node, dot bool) bool {
@@ -55,10 +59,9 @@ func (w *commandWalker) node(node template.Node, dot bool) bool {
 		// An if does not rebind dot, in either branch.
 		return w.branch(&n.BranchNode, dot, dot)
 	case *template.WithNode:
-		// Inside the body dot is whatever the with selected, which is
-		// still TemplateData for {{with .}} and {{with $}}; the else
+		// Inside the body dot is whatever the with selected; the else
 		// branch runs with the dot the with was written under.
-		return w.branch(&n.BranchNode, dot && selectsTemplateData(n.Pipe, dot), dot)
+		return w.branch(&n.BranchNode, w.keepsDot(n.Pipe, dot), dot)
 	case *template.RangeNode:
 		// Inside the body dot is one element of what was ranged over.
 		return w.branch(&n.BranchNode, false, dot)
@@ -137,37 +140,44 @@ func (w *commandWalker) template(name string, pipe *template.PipeNode, dot bool)
 	if called == nil || called.Tree == nil {
 		return false
 	}
-	return w.node(called.Tree.Root, passesDotAlong(pipe, dot))
+	// Written without an argument the called template runs with no dot
+	// at all.
+	return w.node(called.Tree.Root, pipe != nil && w.keepsDot(pipe, dot))
 }
 
-// passesDotAlong reports whether the template a {{template}} or {{block}}
-// clause, with argument pipe, invokes runs with the same dot the
-// invocation was written under.
-//
-// Only {{template "x" .}} and {{template "x" $}} do. Written without an
-// argument the called template runs with no dot at all, and any other
-// argument is a value selected out of the current one.
-func passesDotAlong(pipe *template.PipeNode, dotIsTemplateData bool) bool {
-	return selectsTemplateData(pipe, dotIsTemplateData)
-}
-
-// selectsTemplateData reports whether pipe is dot, while dot is
-// TemplateData, or the root variable, which always is.
-func selectsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
+// mayBeTemplateData reports whether the value pipe selects may be the
+// TemplateData the handler passed in: dot while dot still is, the root $,
+// any other variable, which may hold dot, a method of TemplateData that
+// returns it or that muxt does not know, a chain, a function call, or a
+// pipeline of more than one command. A field that is known to select
+// something else, such as .Result, and a literal are not.
+func mayBeTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
 	if pipe == nil {
 		return false
 	}
 	cmds := pipe.HeadCommands()
-	if len(cmds) != 1 || len(cmds[0].Args) != 1 {
-		return false
+	if len(cmds) != 1 || len(cmds[0].Args) == 0 {
+		return len(cmds) > 1
 	}
 	switch arg := cmds[0].Args[0].(type) {
 	case *template.DotNode:
 		return dotIsTemplateData
+	case *template.FieldNode:
+		return dotIsTemplateData && !selectsOutOfTemplateData(arg.Ident[0])
 	case *template.VariableNode:
-		return len(arg.Ident) == 1 && arg.Ident[0] == "$"
+		return len(arg.Ident) == 1 || !selectsOutOfTemplateData(arg.Ident[1]) || arg.Ident[0] != "$"
+	case *template.PipeNode:
+		return mayBeTemplateData(arg, dotIsTemplateData)
+	case *template.StringNode, *template.NumberNode, *template.BoolNode, *template.NilNode:
+		return false
 	}
-	return false
+	return true
+}
+
+// selectsOutOfTemplateData reports whether a TemplateData method returns
+// something other than the TemplateData itself.
+func selectsOutOfTemplateData(methodName string) bool {
+	return isSafeTemplateDataMethod(methodName) && !returnsTemplateData(methodName)
 }
 
 // canTemplateRedirect reports whether a template, or one it calls, can reach
@@ -181,7 +191,7 @@ func selectsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
 // for a template that never redirects costs nothing, and omitting it for
 // one that does is the bug this guards.
 func canTemplateRedirect(node template.Node, ts *html.Template, visited map[string]bool) bool {
-	return walkTemplateCommands(node, ts, visited, true, func(cmd *template.CommandNode, dot bool) bool {
+	return walkTemplateCommands(node, ts, visited, true, mayBeTemplateData, func(cmd *template.CommandNode, dot bool) bool {
 		return containsRedirectCall(cmd, dot) || callsMethodOnTemplateData(cmd, dot)
 	})
 }

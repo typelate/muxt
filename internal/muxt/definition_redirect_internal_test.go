@@ -138,6 +138,15 @@ func TestCanTemplateRedirect(t *testing.T) {
 		{name: "inside a with that selects the root", template: `{{with $}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "in the else of a with", template: `{{with .Result}}x{{else}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "in the pipeline of a with", template: `{{with .Redirect "/x"}}x{{end}}`, want: true},
+		{name: "inside a with over a variable that may hold dot", template: `{{$d := .}}{{with $d}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over a method that returns TemplateData", template: `{{with .StatusCode 200}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over Header, which returns TemplateData", template: `{{with .Header "k" "v"}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over an unknown method, which may return TemplateData", template: `{{with .Name}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over a piped value", template: `{{with .Result | printf "%v"}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over a chain", template: `{{with (.Result).Items}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "inside a with over a safe field", template: `{{with .Path}}{{.Redirect "/x"}}{{end}}`},
+		{name: "inside a with over a literal", template: `{{with "x"}}{{.Redirect "/x"}}{{end}}`},
+		{name: "inside a with that declares a variable from dot", template: `{{with $d := .}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "dot handed to a function", template: `{{printf "%v" .}}`, want: true},
 		{name: "a rebound dot handed to a function", template: `{{range .Result.Items}}{{printf "%v" .}}{{end}}`},
 		{name: "the root handed to a function inside a range", template: `{{range .Result.Items}}{{printf "%v" $}}{{end}}`, want: true},
@@ -180,6 +189,20 @@ func TestCanTemplateRedirectFollowsTemplateCalls(t *testing.T) {
 		{
 			name: "a partial that redirects, handed something other than dot",
 			set:  `{{define "page"}}{{template "part" .Result}}{{end}}{{define "part"}}{{.Redirect "/x"}}{{end}}`,
+		},
+		{
+			name: "a partial that redirects, handed a variable that may hold dot",
+			set:  `{{define "page"}}{{$d := .}}{{template "part" $d}}{{end}}{{define "part"}}{{.Redirect "/x"}}{{end}}`,
+			want: true,
+		},
+		{
+			name: "a partial that redirects, handed a method that returns TemplateData",
+			set:  `{{define "page"}}{{template "part" (.StatusCode 200)}}{{end}}{{define "part"}}{{.Redirect "/x"}}{{end}}`,
+			want: true,
+		},
+		{
+			name: "a partial that redirects, handed a safe field",
+			set:  `{{define "page"}}{{template "part" .Path}}{{end}}{{define "part"}}{{.Redirect "/x"}}{{end}}`,
 		},
 		{
 			name: "a partial that redirects from the root, handed something other than dot",

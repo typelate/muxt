@@ -76,7 +76,7 @@ func (e *ResponseWriterTemplateStateError) Error() string {
 // that only has an effect through the response muxt would write.
 func findResponseStateCall(node template.Node, ts *html.Template) (string, bool) {
 	var found string
-	walkTemplateCommands(node, ts, make(map[string]bool), true, func(cmd *template.CommandNode, dotIsTemplateData bool) bool {
+	walkTemplateCommands(node, ts, make(map[string]bool), true, pipeIsTemplateData, func(cmd *template.CommandNode, dotIsTemplateData bool) bool {
 		method, ok := responseStateCallInCommand(cmd, dotIsTemplateData)
 		if ok {
 			found = method
