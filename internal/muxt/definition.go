@@ -141,6 +141,10 @@ type Definition struct {
 
 	identifier string
 
+	// subtreeName is whether identifier ends the path in "Subtree",
+	// because the exact pattern without the trailing slash is also a route.
+	subtreeName bool
+
 	resultStatusCode ResultStatusCode
 
 	hasResponseWriterArg bool
