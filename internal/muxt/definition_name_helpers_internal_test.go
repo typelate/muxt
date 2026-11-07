@@ -79,23 +79,23 @@ func TestMethodNameCollisionErrorMultiLineError(t *testing.T) {
 		{
 			name:      "both locations",
 			locations: [2]string{"a.gohtml:1:2", "b.gohtml:3:4"},
-			want: `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"
-a.gohtml:1:2: "list" is defined here
-b.gohtml:3:4: "List" is defined here`,
+			want: `TemplateRoutePaths method name collision: templates "GET /a list()" and "GET /b List()" both produce method "List"; fix it
+a.gohtml:1:2: "GET /a list()" is defined here
+b.gohtml:3:4: "GET /b List()" is defined here`,
 		},
 		{
 			name:      "second location only",
 			locations: [2]string{"", "b.gohtml:3:4"},
-			want: `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"
-b.gohtml:3:4: "List" is defined here`,
+			want: `TemplateRoutePaths method name collision: templates "GET /a list()" and "GET /b List()" both produce method "List"; fix it
+b.gohtml:3:4: "GET /b List()" is defined here`,
 		},
 		{
 			name: "no locations",
-			want: `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`,
+			want: `TemplateRoutePaths method name collision: templates "GET /a list()" and "GET /b List()" both produce method "List"; fix it`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := &MethodNameCollisionError{Method: "List", Handlers: [2]string{"list", "List"}, Locations: tt.locations}
+			err := &MethodNameCollisionError{Method: "List", Templates: [2]string{"GET /a list()", "GET /b List()"}, Fix: "fix it", Locations: tt.locations}
 			assert.Equal(t, tt.want, err.MultiLineError(), "MultiLineError()")
 		})
 	}

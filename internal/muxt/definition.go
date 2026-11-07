@@ -141,6 +141,10 @@ type Definition struct {
 
 	identifier string
 
+	// subtreeName is whether identifier ends the path in "Subtree",
+	// because the exact pattern without the trailing slash is also a route.
+	subtreeName bool
+
 	resultStatusCode ResultStatusCode
 
 	hasResponseWriterArg bool
@@ -161,6 +165,10 @@ type Definition struct {
 
 	usesSignals     bool
 	signalsCallback string
+
+	// signalsWrappers holds the unmarshalJSON(body) calls rewritten from a
+	// signals argument, as opposed to written out.
+	signalsWrappers map[*ast.CallExpr]bool
 
 	// spans records the byte offsets of the matched name segments and
 	// handlerOffset the offset of the trimmed handler expression, so

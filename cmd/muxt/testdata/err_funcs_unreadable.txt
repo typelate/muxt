@@ -1,0 +1,25 @@
+# A FuncMap muxt cannot read statically names what muxt can read.
+
+! muxt generate
+stderr 'Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one'
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var files embed.FS
+
+func build() template.FuncMap { return template.FuncMap{} }
+
+var templates = template.Must(template.New("").Funcs(build()).ParseFS(files, "*"))
+-- index.gohtml --
+{{define "GET /"}}hi{{end}}

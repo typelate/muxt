@@ -102,7 +102,13 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 		ts := html.Must(html.New("").Parse(`{{define "GET /items list(ctx)"}}{{end}}{{define "GET /items/{id} List(ctx, id)"}}{{end}}`))
 		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
-		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"`)
+		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `TemplateRoutePaths method name collision: templates "GET /items list(ctx)" and "GET /items/{id} List(ctx, id)" both produce method "List"; rename one receiver method`)
+	})
+	t.Run("when routes calling the same method derive the same route name", func(t *testing.T) {
+		ts := html.Must(html.New("").Parse(`{{define "GET /a-b F(ctx)"}}{{end}}{{define "GET /a/b F(ctx)"}}{{end}}`))
+		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
+		require.NoError(t, err)
+		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `templates "GET /a-b F(ctx)" and "GET /a/b F(ctx)" both produce method "ReadABCallingF"; give one route a call to a different method, or change a path`)
 	})
 	t.Run("when a handler identifier cannot be exported", func(t *testing.T) {
 		// 一覧 (Japanese "list") has no uppercase form, so no exported
@@ -110,7 +116,7 @@ func TestCheckPathMethodCollisions(t *testing.T) {
 		ts := html.Must(html.New("").Parse(`{{define "GET /items 一覧(ctx)"}}{{end}}`))
 		defs, err := muxt.Definitions(source.Variable{Name: "ts", Set: ts})
 		require.NoError(t, err)
-		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `cannot export identifier "一覧" for TemplateRoutePaths method: first character '一' has no uppercase form`)
+		require.ErrorContains(t, muxt.CheckPathMethodCollisions(defs), `cannot export identifier "一覧" for TemplateRoutePaths method: first character '一' has no uppercase form; rename the receiver method to start with a letter that has an uppercase form`)
 	})
 	t.Run("when handlers produce distinct method names", func(t *testing.T) {
 		ts := html.Must(html.New("").Parse(`{{define "GET /items List(ctx)"}}{{end}}{{define "GET /items/{id} Show(ctx, id)"}}{{end}}`))

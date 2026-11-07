@@ -119,7 +119,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 				t, err := ts.Parse(sl)
 				return t, lDelim, rDelim, err
 			case "Funcs", "Functions":
-				if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, call, fm, funcTypeMaps); err != nil {
+				if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, files, call, fm, funcTypeMaps); err != nil {
 					return nil, lDelim, rDelim, err
 				}
 				sigs := make(map[string]*types.Signature)
@@ -128,7 +128,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 				}
 				return ts.Functions(sigs), lDelim, rDelim, nil
 			case "Option":
-				list, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+				list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 				if err != nil {
 					return nil, lDelim, rDelim, err
 				}
@@ -141,7 +141,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 				if len(call.Args) != 2 {
 					return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly two string literal arguments"))
 				}
-				list, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+				list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 				if err != nil {
 					return nil, lDelim, rDelim, err
 				}
@@ -160,7 +160,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if len(call.Args) != 1 {
 				return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
 			}
-			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 			if err != nil {
 				return nil, lDelim, rDelim, err
 			}
@@ -179,7 +179,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			t, err := parseFiles(nil, isTextTemplatePkgIdent(typesInfo, x), fm, meta, lDelim, rDelim, filePaths...)
 			return t, lDelim, rDelim, err
 		default:
-			return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported function %s", sel.Sel.Name))
+			return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name)))
 		}
 	case *ast.CallExpr:
 		up, upLDelim, upRDelim, err := EvaluateTemplateSelector(ts, pkg, typesInfo, sel.X, workingDirectory, templatesVariable, lDelim, rDelim, fileSet, files, embeddedPaths, funcTypeMaps, fm, meta)
@@ -191,7 +191,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if len(call.Args) != 2 {
 				return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly two string literal arguments"))
 			}
-			list, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+			list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 			if err != nil {
 				return nil, upLDelim, upRDelim, err
 			}
@@ -211,7 +211,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			if len(call.Args) != 1 {
 				return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
 			}
-			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 			if err != nil {
 				return nil, upLDelim, upRDelim, err
 			}
@@ -236,7 +236,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			t, err := parseFiles(up, false, fm, meta, upLDelim, upRDelim, filePaths...)
 			return t, upLDelim, upRDelim, err
 		case "Option":
-			list, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args)
+			list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
 			if err != nil {
 				return nil, upLDelim, upRDelim, err
 			}
@@ -246,7 +246,7 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			}
 			return t, upLDelim, upRDelim, nil
 		case "Funcs", "Functions":
-			if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, call, fm, funcTypeMaps); err != nil {
+			if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, files, call, fm, funcTypeMaps); err != nil {
 				return nil, upLDelim, upRDelim, err
 			}
 			sigs := make(map[string]*types.Signature)
@@ -472,14 +472,28 @@ func builtins() map[string]any {
 	}
 }
 
-func evaluateFuncMap(workingDirectory string, typesInfo *types.Info, pkg *types.Package, fileSet *token.FileSet, call *ast.CallExpr, fm map[string]any, funcTypesMap TemplateFunctions) error {
+// unreadableFuncsMessage is the error for a Funcs argument muxt cannot trace
+// to a template.FuncMap literal. It opens with the method name, so it is not
+// written as an error string literal.
+const unreadableFuncsMessage = "Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one"
+
+// unsupportedFunctionHint names the supported alternative for template
+// package functions muxt cannot evaluate.
+func unsupportedFunctionHint(name string) string {
+	if name == "ParseGlob" {
+		return ": use ParseFS with an embed.FS"
+	}
+	return ""
+}
+
+func evaluateFuncMap(workingDirectory string, typesInfo *types.Info, pkg *types.Package, fileSet *token.FileSet, files []*ast.File, call *ast.CallExpr, fm map[string]any, funcTypesMap TemplateFunctions) error {
 	if len(call.Args) != 1 {
 		return wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly 1 template.FuncMap composite literal argument"))
 	}
 	arg := call.Args[0]
-	lit, ok := arg.(*ast.CompositeLit)
+	lit, ok := resolvePackageLevel(files, arg).(*ast.CompositeLit)
 	if !ok {
-		return wrapWithFilename(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("expected a template.FuncMap composite literal got %s", astgen.Format(arg)))
+		return wrapWithFilename(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("%s (got %s)", unreadableFuncsMessage, astgen.Format(arg)))
 	}
 	if typesInfo != nil {
 		litType := typesInfo.TypeOf(lit)
@@ -540,7 +554,7 @@ func evaluateCallParseFilesArgs(workingDirectory string, fileSet *token.FileSet,
 	if err != nil {
 		return nil, err
 	}
-	templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, call.Args[1:])
+	templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args[1:])
 	if err != nil {
 		return nil, err
 	}

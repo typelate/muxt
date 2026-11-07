@@ -13,15 +13,15 @@ var templates = template.Must(template.ParseFS(templateFS, "*.gohtml"))
 
 ## Supported initializers
 
-The initializer may use only these calls, and every string argument must be a literal:
+The initializer may use only these calls. Every string argument is a literal, or the name of a package-level `const` or `var` whose initializer is a literal ([reference_template_pattern_constant.txt](../../cmd/muxt/testdata/reference_template_pattern_constant.txt)):
 
 | Call | Constraint |
 |------|------------|
 | `template.Must`, `template.New`, `template.ParseFS` | package functions |
 | `.ParseFS`, `.Parse`, `.New`, `.Delims`, `.Option` | chained on the result |
-| `.Funcs` | argument is an inline `template.FuncMap{...}` literal; each value is an expression that type-checks to a func |
+| `.Funcs` | argument is a `template.FuncMap{...}` literal, or the name of a package-level `var` or `const` holding one ([reference_funcs_variable.txt](../../cmd/muxt/testdata/reference_funcs_variable.txt)); each value is an expression that type-checks to a func |
 
-The `ParseFS` filesystem must be an `embed.FS` variable. A non-literal string fails with `expected string literal got NAME`, a non-literal `Funcs` argument with `expected a template.FuncMap composite literal got NAME`, and any other call with `unsupported function NAME` or `unsupported method NAME`.
+The `ParseFS` filesystem must be an `embed.FS` variable. A string argument muxt cannot read, such as a function result, fails with `expected string literal got NAME`. A `Funcs` argument it cannot read, such as a function result or a map built in `init`, fails with `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one` ([err_funcs_unreadable.txt](../../cmd/muxt/testdata/err_funcs_unreadable.txt)). `ParseGlob` fails with `unsupported function ParseGlob: use ParseFS with an embed.FS` ([err_template_parse_glob.txt](../../cmd/muxt/testdata/err_template_parse_glob.txt)), and any other call with `unsupported function NAME` or `unsupported method NAME`.
 
 ```go
 //go:embed *.gohtml pages/*.gohtml

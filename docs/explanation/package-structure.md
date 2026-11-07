@@ -35,5 +35,4 @@ A bare directory name, `//go:embed templates`, embeds the tree recursively, but 
 
 ## Edge cases
 
-- **`Funcs` needs a literal.** muxt reads `Funcs` statically too, so it needs a literal `template.FuncMap`.
 - **Templates need not be files.** `template.New("GET / List()").Parse(...)` works ([reference_import_with_v2_module.txt](../../cmd/muxt/testdata/reference_import_with_v2_module.txt)).

@@ -13,6 +13,10 @@ type Argument struct {
 	Type       ArgumentType
 	paramType  types.Type
 
+	// signalsFromQuery is set on a JSON argument that is a signals
+	// argument of a GET or HEAD route.
+	signalsFromQuery bool
+
 	template *html.Template
 
 	// sig, args, and isMethod describe a nested call argument
@@ -125,6 +129,11 @@ func (a Argument) CallbackResultType() source.Type { return source.NewType(a.cal
 // CallbackHasArg reports whether a validated render-callback argument's
 // callback takes the template data argument (func(T) error vs func() error).
 func (a Argument) CallbackHasArg() bool { return a.callbackHasArg }
+
+// SignalsFromQuery reports whether a JSON argument is a signals argument on
+// a GET or HEAD route, which Datastar sends in the datastar query parameter
+// rather than the request body.
+func (a Argument) SignalsFromQuery() bool { return a.signalsFromQuery }
 
 // FormFields returns the field bindings of a form or multipart argument in
 // struct mode, or nil when the parameter receives the raw request value.

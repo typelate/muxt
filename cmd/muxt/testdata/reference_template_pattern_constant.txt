@@ -1,0 +1,59 @@
+# A package-level const, or a var with a string literal initializer, is read
+# where muxt wants a string: the ParseFS pattern and the name given to New.
+
+muxt generate
+
+muxt check
+
+exec go test ./...
+
+-- go.mod --
+module server
+
+go 1.22
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var files embed.FS
+
+const pattern = "*.gohtml"
+
+var name = "site"
+
+var templates = template.Must(template.New(name).ParseFS(files, pattern))
+
+func hello() string { return "hello" }
+
+type Server struct{}
+-- index.gohtml --
+{{define "GET / hello()"}}{{.Result}}{{end}}
+-- template_test.go --
+package server
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func Test(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body, err := io.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "hello") {
+		t.Errorf("got %q", body)
+	}
+}

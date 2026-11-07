@@ -1,12 +1,18 @@
-# Without a call, GET /static and GET /static/ both name ReadStatic.
+# Two call-less routes that derive the same name fail with a message that names
+# both templates and says how to fix it. GET /a-b and GET /a/b both read
+# ReadAB; a call, or a different path, makes the names differ.
 
 ! muxt generate
-stderr 'collision'
-stderr 'ReadStatic'
+cmpenv stderr want-err.txt
 
+-- want-err.txt --
+Error:
+TemplateRoutePaths method name collision: templates "GET /a-b" and "GET /a/b" both produce method "ReadAB"; give one route a call to a different method, or change a path so the names derived from the routes differ
+$WORK/template.gohtml:1:11: "GET /a-b" is defined here
+$WORK/template.gohtml:2:11: "GET /a/b" is defined here
 -- template.gohtml --
-{{define "GET /static"}}a{{end}}
-{{define "GET /static/"}}b{{end}}
+{{define "GET /a-b"}}a{{end}}
+{{define "GET /a/b"}}b{{end}}
 -- go.mod --
 module server
 
