@@ -26,7 +26,7 @@ go get -tool github.com/typelate/muxt
 
 Call it from a directive, `//go:generate go tool muxt generate`, or from a shell, `go tool muxt check`. `go.mod` records the version, so everyone who builds the project runs the same muxt. For a binary on your `PATH`, use `go install github.com/typelate/muxt@latest`.
 
-Commands read the package in the working directory; run them there or pass `-C <dir>` (`go tool muxt -C ./web check`). [Troubleshooting](docs/reference/cli.md#troubleshooting) lists the error a directory with no Go package gives. muxt loads packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT`.
+Commands read the package in the working directory; run them there or pass `-C <dir>` (`go tool muxt -C ./web check`). muxt loads packages the way the `go` command does, so it inherits `GOWORK`, `GOFLAGS`, and `GOROOT`.
 
 Start with the [Quick Start](docs/tutorials/quick-start.md).
 
