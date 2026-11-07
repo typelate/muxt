@@ -76,7 +76,7 @@ With no command, muxt lists the routes of the package in the working directory.
 The usual order:
   muxt generate                  write template_routes.go from the templates
   muxt check                     type-check each template against its data
-  muxt fmt                       re-indent the templates
+  muxt fmt -w .                  re-indent the templates in place
   muxt test-template-mutations   find template behavior no test checks
 
 The documentation for this version is in the binary:
@@ -154,13 +154,21 @@ The documentation for this version is in the binary:
 
 // versionArgs turns a command line asking for --version into the version
 // command's, so both print the same thing. Whatever else the line says is
-// ignored, except -v/--verbose, which the version command understands.
+// ignored, except -v/--verbose, which the version command understands. The
+// value of a --query flag is text to search for, so a --version there is
+// not a request for the version.
 func versionArgs(args []string) []string {
-	var asked, verbose bool
+	var asked, verbose, query bool
 	for _, a := range args {
+		if query {
+			query = false
+			continue
+		}
 		switch a {
 		case "--":
 			return versionLine(asked, verbose, args)
+		case "--query", "-q":
+			query = true
 		case "--version":
 			asked = true
 		case "-v", "--verbose":

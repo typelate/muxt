@@ -60,3 +60,10 @@ stderr 'no match for "zzzqqq" under docs'
 muxt documentation -q 'muxt check' docs/reference/commands/check.md
 stdout '^docs/reference/commands/check\.md:[0-9]+: '
 ! stdout '^docs/reference/commands/generate\.md'
+
+# --version as the text of --query is searched for, not the version.
+muxt documentation --query --version
+stdout '^docs/reference/cli\.md:[0-9]+: .*--version'
+! stdout '^v[0-9]'
+muxt d -q --version
+stdout '^docs/reference/cli\.md:[0-9]+: .*--version'

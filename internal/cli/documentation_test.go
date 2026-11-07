@@ -93,3 +93,23 @@ func TestDocumentationLinksLeavingDocsNameTheBuildVersion(t *testing.T) {
 		})
 	}
 }
+
+// TestDocumentationQueryForVersionSearches states that --version given as
+// the text of --query is searched for, not taken as a request for the
+// version, in both spellings of the flag.
+func TestDocumentationQueryForVersionSearches(t *testing.T) {
+	for _, args := range [][]string{
+		{"documentation", "--query", "--version"},
+		{"d", "-q", "--version"},
+	} {
+		var stdout, stderr bytes.Buffer
+		err := commands(t.TempDir(), args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &stdout, &stderr, runners{})
+		if err != nil {
+			t.Errorf("commands(%q) error = %v", args, err)
+			continue
+		}
+		if got := stdout.String(); strings.HasPrefix(got, "v1.2.3") || !strings.Contains(got, "--version") {
+			t.Errorf("commands(%q) printed %q, want lines holding --version", args, got)
+		}
+	}
+}

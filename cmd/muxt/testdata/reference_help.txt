@@ -12,3 +12,4 @@ stdout '^Full reference: muxt documentation docs/reference/commands/fmt\.md$'
 muxt --help
 stdout '^muxt generates net/http handlers from Go HTML templates\.'
 stdout '^  muxt documentation --query '
+stdout '^  muxt fmt -w \.'
