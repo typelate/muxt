@@ -196,6 +196,37 @@ func TestCalculateIdentifiers(t *testing.T) {
 			},
 		},
 		{
+			Name: "subtree pattern named like the exact pattern",
+			In:   []string{"GET /static", "GET /static/"},
+			Expected: []string{
+				"ReadStatic",
+				"ReadStaticSubtree",
+			},
+		},
+		{
+			Name: "subtree pattern with a path parameter named like the exact pattern",
+			In:   []string{"GET /users/{id}", "GET /users/{id}/"},
+			Expected: []string{
+				"ReadUsersByID",
+				"ReadUsersSubtreeByID",
+			},
+		},
+		{
+			Name: "subtree pattern alone keeps the plain name",
+			In:   []string{"GET /static/"},
+			Expected: []string{
+				"ReadStatic",
+			},
+		},
+		{
+			Name: "subtree pattern and exact pattern calling the same function",
+			In:   []string{"GET /docs Page()", "GET /docs/ Page()"},
+			Expected: []string{
+				"ReadDocsCallingPage",
+				"ReadDocsSubtreeCallingPage",
+			},
+		},
+		{
 			Name: "no-function before first occurrence, then duplicate",
 			In: []string{
 				"GET /",

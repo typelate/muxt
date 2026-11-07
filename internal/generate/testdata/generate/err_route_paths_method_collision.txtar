@@ -36,6 +36,6 @@ Command line: muxt generate
 -- server.go --
 package server
 -- want/error.txt --
-TemplateRoutePaths method name collision: handlers "list" and "List" both produce method "List"
-index.gohtml:1:11: "list" is defined here
-index.gohtml:2:11: "List" is defined here
+TemplateRoutePaths method name collision: templates "GET /a list()" and "GET /b List()" both produce method "List"; rename one receiver method so the exported names differ by more than the case of the first letter, leading underscores, or characters that drop out
+index.gohtml:1:11: "GET /a list()" is defined here
+index.gohtml:2:11: "GET /b List()" is defined here

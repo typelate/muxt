@@ -1,0 +1,41 @@
+# GET /static and GET /static/ are distinct ServeMux patterns, so their
+# TemplateRoutePaths methods have distinct names: the subtree pattern, the one
+# with the trailing slash, ends its name in Subtree when the exact pattern is
+# also a route. Alone, GET /static/ is ReadStatic.
+
+muxt generate
+exec go test ./...
+
+-- template.gohtml --
+{{define "GET /static"}}exact{{end}}
+{{define "GET /static/"}}subtree{{end}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+-- template_test.go --
+package server
+
+import "testing"
+
+func TestRoutePaths(t *testing.T) {
+	var paths TemplateRoutePaths
+	if got, want := paths.ReadStatic(), "/static"; got != want {
+		t.Errorf("ReadStatic() = %q, want %q", got, want)
+	}
+	if got, want := paths.ReadStaticSubtree(), "/static/"; got != want {
+		t.Errorf("ReadStaticSubtree() = %q, want %q", got, want)
+	}
+}
