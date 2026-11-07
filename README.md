@@ -1,6 +1,6 @@
 # Muxt [![Go Reference](https://pkg.go.dev/badge/github.com/typelate/muxt.svg)](https://pkg.go.dev/github.com/typelate/muxt)
 
-Muxt generates `net/http` handlers from `html/template` names and type-checks the templates against the Go data they render. It targets web apps that ship as one Go binary serving hypermedia from the standard library, with fixi, htmx, or Datastar added where the front end needs interaction.
+Muxt generates `net/http` handlers from `html/template` names and type-checks the templates against the Go data they render. It targets web apps that ship as one Go binary serving hypermedia from the standard library with standard hypermedia controls (forms or anchor tags), fixi, htmx, or Datastar.
 
 A template name is the contract between the HTML and the `http.Handler`:
 
