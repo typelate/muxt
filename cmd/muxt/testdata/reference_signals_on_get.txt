@@ -1,0 +1,74 @@
+# Datastar sends a GET request's signals in the datastar query parameter (JSON,
+# URL-encoded), since a GET request has no body. Under --output-datastar the
+# signals argument on a GET route reads that parameter and unmarshals it into
+# the parameter's type; an absent or malformed parameter answers 400, as a
+# malformed body does on other methods.
+
+muxt generate --output-datastar --use-receiver-type=Server
+muxt check
+
+exec go test -count=1
+
+-- template.gohtml --
+{{- define "GET /count Count(ctx, signals)" -}}{{- .Result -}}{{- end -}}
+-- go.mod --
+module server
+
+go 1.24
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type Signals struct {
+	Count int `json:"count"`
+}
+
+type Server struct{}
+
+func (Server) Count(_ context.Context, signals Signals) (int, error) { return signals.Count, nil }
+-- template_test.go --
+package server
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+)
+
+func TestSignalsOnGet(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	for _, tt := range []struct {
+		name     string
+		query    string
+		wantCode int
+		wantBody string
+	}{
+		{name: "valid", query: "?datastar=" + url.QueryEscape(`{"count":2}`), wantCode: http.StatusOK, wantBody: "2"},
+		{name: "absent", query: "", wantCode: http.StatusBadRequest},
+		{name: "malformed", query: "?datastar=" + url.QueryEscape("not-json"), wantCode: http.StatusBadRequest},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/count"+tt.query, nil))
+			if rec.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantCode)
+			}
+			if tt.wantBody != "" && rec.Body.String() != tt.wantBody {
+				t.Errorf("body = %q, want %q", rec.Body.String(), tt.wantBody)
+			}
+		})
+	}
+}

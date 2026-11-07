@@ -15,7 +15,7 @@ func TestRewrittenArgumentsKeepTheirPositions(t *testing.T) {
 	t.Run("signals", func(t *testing.T) {
 		call := mustParseCall(t, `F(ctx, signals)`)
 		written := call.Args[1]
-		require.True(t, rewriteSignalsArguments(call, nil), "rewriteSignalsArguments()")
+		require.True(t, rewriteSignalsArguments(call, nil, nil), "rewriteSignalsArguments()")
 		rewritten, ok := call.Args[1].(*ast.CallExpr)
 		require.True(t, ok, "signals is rewritten to a call, got %T", call.Args[1])
 		assert.Equal(t, written.Pos(), rewritten.Pos(), "Pos() of the rewritten signals")

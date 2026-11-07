@@ -46,7 +46,8 @@ func parseHandler(fileSet *token.FileSet, def *Definition, segments []Segment) e
 		return errAt(call, "unexpected ellipsis")
 	}
 
-	def.usesSignals = rewriteSignalsArguments(call, segments)
+	def.signalsWrappers = make(map[*ast.CallExpr]bool)
+	def.usesSignals = rewriteSignalsArguments(call, segments, def.signalsWrappers)
 	def.signalsCallback = firstSignalsCallback(def, call)
 	if err := checkArguments(argumentScope(segments), call, def.Representation == RepresentationSSE); err != nil {
 		return err

@@ -62,8 +62,10 @@ func checkBodyWrapperArguments(name string, call *ast.CallExpr) error {
 // unmarshalJSON(body): Datastar sends the page's signal state as the JSON
 // request body, so the sugar and the explicit spelling bind identically. A
 // path wildcard named signals keeps its path-value meaning. It reports
-// whether anything was rewritten.
-func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
+// whether anything was rewritten. Each wrapper it writes is added to
+// wrappers when that is not nil, so the caller can tell the sugar from an
+// explicit unmarshalJSON(body).
+func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment, wrappers map[*ast.CallExpr]bool) bool {
 	if hasPathParameter(segments, TemplateNameScopeIdentifierSignals) {
 		return false
 	}
@@ -74,16 +76,20 @@ func rewriteSignalsArguments(call *ast.CallExpr, segments []Segment) bool {
 			if arg.Name == TemplateNameScopeIdentifierSignals {
 				// The call spans what was written, so an error about
 				// it marks signals.
-				call.Args[i] = &ast.CallExpr{
+				wrapper := &ast.CallExpr{
 					Fun:    &ast.Ident{NamePos: arg.Pos(), Name: callWrapperUnmarshalJSON},
 					Lparen: arg.Pos(),
 					Args:   []ast.Expr{&ast.Ident{NamePos: arg.Pos(), Name: TemplateNameScopeIdentifierRequestBody}},
 					Rparen: arg.End() - 1,
 				}
+				call.Args[i] = wrapper
+				if wrappers != nil {
+					wrappers[wrapper] = true
+				}
 				rewritten = true
 			}
 		case *ast.CallExpr:
-			if rewriteSignalsArguments(arg, segments) {
+			if rewriteSignalsArguments(arg, segments, wrappers) {
 				rewritten = true
 			}
 		}

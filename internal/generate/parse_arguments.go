@@ -193,7 +193,7 @@ func (p argumentParser) appendNestedCalls(statements []ast.Stmt, args []muxt.Arg
 }
 
 func (p argumentParser) appendBodyJSON(statements []ast.Stmt, call *ast.CallExpr, i int, argument muxt.Argument) ([]ast.Stmt, error) {
-	decode, err := decodeJSONBodyStatements(p.file, bodyValueIdent, argument.ParamType(), p.parseErrBlock)
+	decode, err := decodeJSONBodyStatements(p.file, bodyValueIdent, argument.ParamType(), argument.SignalsFromQuery(), p.parseErrBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -496,19 +496,41 @@ func callReceiverMethod(rdIdent string, dataVar ast.Expr, shape muxt.ResultShape
 	}
 }
 
+// datastarQueryParameter is the query parameter Datastar sends the signals
+// of a GET request in.
+const datastarQueryParameter = "datastar"
+
 // decodeJSONBodyStatements declares valueIdent with the parameter type and
 // decodes the JSON request body into it:
 //
 //	var bodyValue T
 //	if err := json.NewDecoder(request.Body).Decode(&bodyValue); err != nil { <parseErrBlock> }
-func decodeJSONBodyStatements(file *File, valueIdent string, paramType source.Type, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
+//
+// When fromQuery is set, the source is the datastar query parameter, which
+// is where Datastar puts the signals of a GET request:
+//
+//	json.NewDecoder(strings.NewReader(request.URL.Query().Get("datastar")))
+func decodeJSONBodyStatements(file *File, valueIdent string, paramType source.Type, fromQuery bool, parseErrBlock func() *ast.BlockStmt) ([]ast.Stmt, error) {
 	declare, err := typedVar(file, valueIdent, paramType, nil)
 	if err != nil {
 		return nil, err
 	}
+	var reader ast.Expr = requestField("Body")
+	if fromQuery {
+		reader = astgen.Call(file, "strings", "strings", "NewReader", &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X: &ast.CallExpr{Fun: &ast.SelectorExpr{
+					X:   requestField("URL"),
+					Sel: ast.NewIdent("Query"),
+				}},
+				Sel: ast.NewIdent("Get"),
+			},
+			Args: []ast.Expr{astgen.String(datastarQueryParameter)},
+		})
+	}
 	decode := &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
-			X:   astgen.Call(file, "json", "encoding/json", "NewDecoder", requestField("Body")),
+			X:   astgen.Call(file, "json", "encoding/json", "NewDecoder", reader),
 			Sel: ast.NewIdent("Decode"),
 		},
 		Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(valueIdent)}},

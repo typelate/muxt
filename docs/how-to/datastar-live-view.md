@@ -77,7 +77,7 @@ type Delta struct{ Delta string `json:"delta"` }
 
 The struct's `json` tags must match the page's `data-signals` keys. The wire format is asserted in [reference_output_datastar_signals_events.txt](../../cmd/muxt/testdata/reference_output_datastar_signals_events.txt).
 
-Inbound, the `signals` argument binds the posted body on non-GET routes ([arguments](../reference/call-parameters.md#arguments)):
+Inbound, the `signals` argument binds the posted body, or on a GET route the `datastar` query parameter ([arguments](../reference/call-parameters.md#arguments)):
 
 ```gotmpl
 {{define "POST /search sse(SearchProverbs(ctx, signals, sseResults))"}}{{end}}
