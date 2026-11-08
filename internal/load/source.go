@@ -26,6 +26,7 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 	result := source.Package{
 		Fset:  pkg.Fset,
 		Types: pkg.Types,
+		Files: pkg.Syntax,
 	}
 	for _, name := range variables {
 		variable, err := readVariable(pkg, name)

@@ -51,4 +51,4 @@ func (data *TemplateData[R, T]) ErrorStatusCode() *TemplateData[R, T] {
 
 Keep `Error()` text user-facing and the wrapped cause for logs and `errors.Is`.
 
-The template approach works only on routes whose method does not take `response`. When it does, muxt writes the template buffer without applying any status code, so a missing record renders at 200 and `ErrorStatusCode` is silently ignored. See [routes that take `response`](../reference/call-parameters.md#routes-that-take-response).
+The template approach works only on routes whose method does not take `response`. When it does, muxt writes the template buffer without applying any status code, so a missing record would render at 200. `generate` and `check` warn when the template calls `ErrorStatusCode` (or any `TemplateData` method of yours that reaches `.StatusCode` or `.Redirect*`) on such a route. Either call `response.WriteHeader` in the receiver method, or drop `response` from the route. See [routes that take `response`](../reference/call-parameters.md#routes-that-take-response).

@@ -14,6 +14,7 @@
 package source
 
 import (
+	"go/ast"
 	"go/token"
 	"go/types"
 
@@ -30,6 +31,11 @@ type Package struct {
 	// Types is the package: the one declaring the templates variables,
 	// whose package-scope functions a template name may call.
 	Types *types.Package
+
+	// Files are the package's parsed Go files, which hold the bodies of
+	// methods a template calls, such as ones added to the generated
+	// TemplateData type. It is empty for a Package built without syntax.
+	Files []*ast.File
 
 	// Variables are the templates variables that were asked for, in the
 	// order they were named.

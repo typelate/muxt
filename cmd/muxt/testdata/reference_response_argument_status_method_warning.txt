@@ -1,0 +1,106 @@
+# A route that takes `response` gets no status code or redirect from muxt, so
+# muxt rejects a template calling the built-in .StatusCode or .Redirect* there.
+# A method you wrote on TemplateData is another matter: muxt cannot know what
+# it does. When its body reaches .StatusCode or .Redirect* on its receiver,
+# directly or through another TemplateData method of yours, generate and check
+# warn instead of failing, once per route.
+#
+# Only a call made on the TemplateData itself counts. .CanEdit does not set
+# the status, so it stays silent; so does the same call under {{range}}, where
+# dot is an item, and the same template on a route without `response`, where
+# muxt does write the status.
+
+muxt generate --use-receiver-type=T
+stdout 'warning: GET /missing/\{id\} calls \.ErrorStatusCode, which sets the status through \.StatusCode; on a route that takes response the receiver method must call response\.WriteHeader, or drop response'
+stdout 'warning: GET /moved calls \.MovedElsewhere, which sets the status through \.RedirectSeeOther; on a route that takes response the receiver method must call http\.Redirect, or drop response'
+! stdout 'GET /list calls'
+! stdout 'GET /plain calls'
+! stdout 'GET /quiet calls'
+exec go vet .
+
+# muxt check prints the same warnings and still passes.
+muxt check
+stderr 'warning: GET /missing/\{id\} calls \.ErrorStatusCode, which sets the status through \.StatusCode; on a route that takes response the receiver method must call response\.WriteHeader, or drop response'
+stderr 'warning: GET /moved calls \.MovedElsewhere'
+! stderr 'GET /list calls'
+! stderr 'GET /plain calls'
+! stderr 'GET /quiet calls'
+
+# The environment variable that silences the response warning silences this.
+env MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
+muxt generate --use-receiver-type=T
+! stdout 'calls \.'
+
+-- go.mod --
+module server
+
+go 1.24
+-- template.gohtml --
+{{- define "GET /missing/{id} Find(ctx, id, response)" -}}
+	{{- .ErrorStatusCode -}}
+{{- end -}}
+
+{{- define "GET /moved Moved(ctx, response)" -}}
+	{{- .MovedElsewhere -}}
+{{- end -}}
+
+{{- define "GET /list List(ctx, response)" -}}
+	{{- range .Result.Items -}}{{- .ErrorStatusCode -}}{{- end -}}
+{{- end -}}
+
+{{- define "GET /plain Plain(ctx)" -}}
+	{{- .ErrorStatusCode -}}
+{{- end -}}
+
+{{- define "GET /quiet Quiet(ctx, response)" -}}
+	{{- .CanEdit -}}
+{{- end -}}
+-- template.go --
+package server
+
+import (
+	"context"
+	"embed"
+	"html/template"
+	"net/http"
+)
+
+//go:embed *.gohtml
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "*"))
+
+type T struct{}
+
+type Item struct{}
+
+func (Item) ErrorStatusCode() string { return "" }
+
+type Page struct{ Items []Item }
+
+func (T) Find(ctx context.Context, id string, response http.ResponseWriter) string { return id }
+func (T) Moved(ctx context.Context, response http.ResponseWriter) string           { return "" }
+func (T) List(ctx context.Context, response http.ResponseWriter) Page              { return Page{} }
+func (T) Plain(ctx context.Context) string                                         { return "" }
+func (T) Quiet(ctx context.Context, response http.ResponseWriter) string           { return "" }
+-- template_data.go --
+package server
+
+func (data *TemplateData[R, T]) ErrorStatusCode() string {
+	data.StatusCode(404)
+	return ""
+}
+
+func (data *TemplateData[R, T]) MovedElsewhere() string {
+	return data.sendAway("/elsewhere")
+}
+
+func (data *TemplateData[R, T]) sendAway(url string) string {
+	data.RedirectSeeOther(url)
+	return ""
+}
+
+func (data *TemplateData[R, T]) CanEdit() bool {
+	data.Header("X-Checked", "yes")
+	return true
+}

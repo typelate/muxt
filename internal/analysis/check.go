@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/token"
 	"go/types"
 	"log"
@@ -68,6 +69,8 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 
 		if err := reportDefinitionErrors(logger, lt); err != nil {
 			errs = append(errs, err)
+		} else {
+			warnResponseStatusMethods(logger, pkg.Files, lt)
 		}
 		if !lt.Text {
 			errs = append(errs, reportHTMLComments(logger, lt)...)
@@ -120,6 +123,24 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 		return result, fmt.Errorf("1 error")
 	default:
 		return result, fmt.Errorf("%d errors", len(errs))
+	}
+}
+
+// generatedTemplateDataType is the name of the type generate gives
+// TemplateData unless --output-template-data-type renames it; check reads no
+// flags, so it looks for the default.
+const generatedTemplateDataType = "TemplateData"
+
+// warnResponseStatusMethods logs the routes that take response whose
+// templates call a method of the package's own that sets the status, which
+// no handler on such a route reads.
+func warnResponseStatusMethods(logger *log.Logger, files []*ast.File, variable source.Variable) {
+	defs, err := muxt.Definitions(variable)
+	if err != nil {
+		return
+	}
+	for _, warning := range muxt.ResponseStatusWarnings(defs, files, generatedTemplateDataType) {
+		logger.Print(warning)
 	}
 }
 

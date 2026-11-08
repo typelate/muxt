@@ -172,6 +172,11 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		return nil, err
 	}
 	logResolutionNotes(groups.all, config, logger)
+	if logger != nil && !config.SilenceHTTPResponseWarning {
+		for _, warning := range muxt.ResponseStatusWarnings(groups.all, pkg.Files, config.TemplateDataType) {
+			logger.Print(warning)
+		}
+	}
 	if config.StaticAssetsDirectory != "" {
 		if err := checkStaticAssetsDirectory(config.OutputDirectory(wd), config, groups.all); err != nil {
 			return nil, err
