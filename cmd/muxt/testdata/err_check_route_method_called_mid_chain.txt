@@ -30,7 +30,7 @@ type T struct{}
 
 func (T) GetUser(id int) int { return id }
 -- want-err.txt --
-$WORK/template_routes.go:42:13 ExecuteTemplate "GET /user/{id} GetUser(id)" *TemplateData[RoutesReceiver, int]
+$WORK/template_routes.go:44:13 ExecuteTemplate "GET /user/{id} GetUser(id)" *TemplateData[RoutesReceiver, int]
 $WORK/t.gohtml:1:48: executing "GET /user/{id} GetUser(id)" at <.Route.GetUser.Method>: wrong number of args expected 1 but got 0
 
   signature: GetUser(idPathParam int) TemplateRoute

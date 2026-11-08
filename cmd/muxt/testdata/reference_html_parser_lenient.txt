@@ -88,7 +88,7 @@ $WORK/template.gohtml:7:6: html/template escapes this "<?", so browsers show it 
 $WORK/template.gohtml:8:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 $WORK/template.gohtml:9:17: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 
-$WORK/template_routes.go:35:13 ExecuteTemplate "GET / Index()" *TemplateData[RoutesReceiver, Data]
+$WORK/template_routes.go:37:13 ExecuteTemplate "GET / Index()" *TemplateData[RoutesReceiver, Data]
 $WORK/template.gohtml:3:11: executing "GET / Index()" at <.Result.Missing>: field or method Missing not found on Data
 $WORK/template.gohtml:4:12: executing "GET / Index()" at <.Result.Nope>: field or method Nope not found on Data
 $WORK/template.gohtml:5:20: executing "GET / Index()" at <.Result.Gone>: field or method Gone not found on Data
