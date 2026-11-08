@@ -73,10 +73,19 @@ staticAssets, err := fs.Sub(templateRoutesStaticAssets, "assets")
 if err != nil {
 	panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 }
-mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
+mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	name := path.Clean(request.URL.Path)
+	if _, err := fs.ReadDir(staticAssets, name); err == nil {
+		if _, err := fs.Stat(staticAssets, path.Join(name, "index.html")); err != nil {
+			http.NotFound(response, request)
+			return
+		}
+	}
+	http.FileServerFS(staticAssets).ServeHTTP(response, request)
+})))
 ```
 
-The pattern is always `GET`, and the path gets a trailing `/`.
+The pattern is always `GET`, and the path gets a trailing `/`. A request for a directory, the static assets path itself or a subdirectory, is a 404 unless the directory holds an `index.html`, which is served as `http.FileServerFS` serves it; the files are never listed ([reference_static_assets_no_listing.txt](../../../cmd/muxt/testdata/reference_static_assets_no_listing.txt)).
 
 `TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)).
 
@@ -99,7 +108,6 @@ The generated file's [header](#files) records both flags, which is why a project
 - **Registration order.** The mux serves the most specific pattern whatever the registration order. Registering a pattern a template also declares panics.
 - **SSE route logging.** SSE routes log only errors: a failed render and a method error (`sse handler returned an error`). Without the `logger` parameter, those errors go to `slog.ErrorContext` on the default logger.
 - **Names starting with `.` or `_`.** `go:embed` leaves them out, so those files are not served from the static assets directory.
-- **Directory listings.** A request for the static assets path itself, or for one of its subdirectories, gets a directory listing, because `http.FileServerFS` serves one for a directory with no `index.html`.
 - **Static assets with `pathsPrefix` or `middleware`.** The static assets pattern and the prefix `http.StripPrefix` strips are both joined onto `pathsPrefix`, and `middleware` wraps the static assets handler like any other ([reference_static_assets_path_prefix.txt](../../../cmd/muxt/testdata/reference_static_assets_path_prefix.txt)).
 
 ## Warnings

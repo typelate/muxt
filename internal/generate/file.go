@@ -131,6 +131,7 @@ var generatedLocalIdentifiers = []string{
 	fileHeadersIdent,
 	contentTypeIdent,
 	staticAssetsIdent,
+	staticAssetsNameIdent,
 	muxt.TemplateNameScopeIdentifierHTTPRequest,
 	muxt.TemplateNameScopeIdentifierHTTPResponse,
 	muxt.TemplateNameScopeIdentifierContext,

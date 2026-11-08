@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"io/fs"
 	"net/http"
@@ -24,6 +25,10 @@ const (
 	// staticAssetsIdent is the local the routes function holds the
 	// embedded directory's sub file system in.
 	staticAssetsIdent = "staticAssets"
+
+	// staticAssetsNameIdent is the local the static assets handler holds
+	// the cleaned request path in.
+	staticAssetsNameIdent = "name"
 
 	staticAssetsVariableSuffix = "StaticAssets"
 )
@@ -174,9 +179,9 @@ func staticAssetsDecl(file *File, config RoutesFileConfiguration) *ast.GenDecl {
 //	if err != nil {
 //		panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 //	}
-//	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
+//	mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(...)))
 //
-// fs.Sub fails only for a path fs.ValidPath rejects, which muxt generate
+// where the handler is staticAssetsHandler. fs.Sub fails only for a path fs.ValidPath rejects, which muxt generate
 // checked, so the panic is unreachable and the routes function keeps its
 // signature. Under a path prefix the pattern's path and the stripped
 // prefix are both joined onto it, and with a middleware parameter the
@@ -192,7 +197,7 @@ func staticAssetsStatements(file *File, config RoutesFileConfiguration) []ast.St
 		stripped = concatenation(prefixedPath(file, ast.NewIdent(pathPrefixPathsStructFieldName), prefix)...)
 	}
 	var handler ast.Expr = astgen.Call(file, "http", "net/http", "StripPrefix", stripped,
-		astgen.Call(file, "http", "net/http", "FileServerFS", ast.NewIdent(staticAssetsIdent)))
+		staticAssetsHandler(file))
 	if config.Middleware {
 		handler = &ast.CallExpr{Fun: ast.NewIdent(middlewareParamName), Args: []ast.Expr{handler}}
 	}
@@ -213,6 +218,41 @@ func staticAssetsStatements(file *File, config RoutesFileConfiguration) []ast.St
 			Args: []ast.Expr{pattern, handler},
 		}},
 	}
+}
+
+// staticAssetsHandler is http.FileServerFS that answers 404 for a
+// directory with no index.html instead of listing it:
+//
+//	http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+//		name := path.Clean(request.URL.Path)
+//		if _, err := fs.ReadDir(staticAssets, name); err == nil {
+//			if _, err := fs.Stat(staticAssets, path.Join(name, "index.html")); err != nil {
+//				http.NotFound(response, request)
+//				return
+//			}
+//		}
+//		http.FileServerFS(staticAssets).ServeHTTP(response, request)
+//	})
+//
+// The request path has the prefix stripped, so the assets directory
+// itself is "" and path.Clean makes it ".". A path fs.ReadDir rejects is left
+// to the file server.
+func staticAssetsHandler(file *File) ast.Expr {
+	src := fmt.Sprintf(`%[1]s.HandlerFunc(func(response %[1]s.ResponseWriter, request *%[1]s.Request) {
+	%[5]s := %[2]s.Clean(request.URL.Path)
+	if _, err := %[3]s.ReadDir(%[4]s, %[5]s); err == nil {
+		if _, err := %[3]s.Stat(%[4]s, %[2]s.Join(%[5]s, "index.html")); err != nil {
+			%[1]s.NotFound(response, request)
+			return
+		}
+	}
+	%[1]s.FileServerFS(%[4]s).ServeHTTP(response, request)
+})`, file.Import("http", "net/http"), file.Import("path", "path"), file.Import("fs", "io/fs"), staticAssetsIdent, staticAssetsNameIdent)
+	handler, err := parser.ParseExpr(src)
+	if err != nil && file.err == nil {
+		file.err = fmt.Errorf("generate: static assets handler: %w", err)
+	}
+	return handler
 }
 
 // staticAssetsPathMethods declare the route builder and path methods for
