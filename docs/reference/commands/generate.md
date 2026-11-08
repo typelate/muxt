@@ -74,7 +74,14 @@ if err != nil {
 	panic(fmt.Errorf("muxt: static assets directory %q: %w", "assets", err))
 }
 mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-	name := path.Clean(request.URL.Path)
+	name := strings.TrimPrefix(path.Clean("/"+request.URL.Path), "/")
+	if name == "" {
+		name = "."
+	}
+	if !fs.ValidPath(name) {
+		http.NotFound(response, request)
+		return
+	}
 	if _, err := fs.ReadDir(staticAssets, name); err == nil {
 		if _, err := fs.Stat(staticAssets, path.Join(name, "index.html")); err != nil {
 			http.NotFound(response, request)
