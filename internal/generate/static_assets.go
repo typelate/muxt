@@ -224,7 +224,14 @@ func staticAssetsStatements(file *File, config RoutesFileConfiguration) []ast.St
 // directory with no index.html instead of listing it:
 //
 //	http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-//		name := path.Clean(request.URL.Path)
+//		name := strings.TrimPrefix(path.Clean("/"+request.URL.Path), "/")
+//		if name == "" {
+//			name = "."
+//		}
+//		if !fs.ValidPath(name) {
+//			http.NotFound(response, request)
+//			return
+//		}
 //		if _, err := fs.ReadDir(staticAssets, name); err == nil {
 //			if _, err := fs.Stat(staticAssets, path.Join(name, "index.html")); err != nil {
 //				http.NotFound(response, request)
@@ -235,11 +242,19 @@ func staticAssetsStatements(file *File, config RoutesFileConfiguration) []ast.St
 //	})
 //
 // The request path has the prefix stripped, so the assets directory
-// itself is "" and path.Clean makes it ".". A path fs.ReadDir rejects is left
-// to the file server.
+// itself is "". The name is cleaned as http.FileServerFS cleans it, with a
+// leading slash, so the two never read different paths, and a name the
+// file system rejects is a 404 rather than the file server's choice.
 func staticAssetsHandler(file *File) ast.Expr {
 	src := fmt.Sprintf(`%[1]s.HandlerFunc(func(response %[1]s.ResponseWriter, request *%[1]s.Request) {
-	%[5]s := %[2]s.Clean(request.URL.Path)
+	%[5]s := %[6]s.TrimPrefix(%[2]s.Clean("/"+request.URL.Path), "/")
+	if %[5]s == "" {
+		%[5]s = "."
+	}
+	if !%[3]s.ValidPath(%[5]s) {
+		%[1]s.NotFound(response, request)
+		return
+	}
 	if _, err := %[3]s.ReadDir(%[4]s, %[5]s); err == nil {
 		if _, err := %[3]s.Stat(%[4]s, %[2]s.Join(%[5]s, "index.html")); err != nil {
 			%[1]s.NotFound(response, request)
@@ -247,7 +262,7 @@ func staticAssetsHandler(file *File) ast.Expr {
 		}
 	}
 	%[1]s.FileServerFS(%[4]s).ServeHTTP(response, request)
-})`, file.Import("http", "net/http"), file.Import("path", "path"), file.Import("fs", "io/fs"), staticAssetsIdent, staticAssetsNameIdent)
+})`, file.Import("http", "net/http"), file.Import("path", "path"), file.Import("fs", "io/fs"), staticAssetsIdent, staticAssetsNameIdent, file.Import("strings", "strings"))
 	handler, err := parser.ParseExpr(src)
 	if err != nil && file.err == nil {
 		file.err = fmt.Errorf("generate: static assets handler: %w", err)

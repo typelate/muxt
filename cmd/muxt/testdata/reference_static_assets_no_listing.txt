@@ -40,6 +40,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,18 @@ func TestStaticAssetsNoListing(t *testing.T) {
 	mux := http.NewServeMux()
 	TemplateRoutes(mux, Server{})
 
+	// ServeMux redirects a path it would clean, so these never reach the
+	// handler through it; mounted another way they must not read a
+	// different directory than the file server would.
+	for _, raw := range []string{"/static//plain/", "/static/./plain/", "/static/../static/plain/"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/static/plain/", nil)
+		req.URL.Path = raw
+		mux.ServeHTTP(rec, req)
+		if rec.Code == http.StatusOK || strings.Contains(rec.Body.String(), "<pre>") {
+			t.Errorf("GET %s status = %d body = %q, want no listing", raw, rec.Code, rec.Body.String())
+		}
+	}
 	for _, tt := range []struct {
 		path   string
 		status int
@@ -64,6 +77,9 @@ func TestStaticAssetsNoListing(t *testing.T) {
 		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
 		if rec.Code != tt.status {
 			t.Errorf("GET %s status = %d, want %d", tt.path, rec.Code, tt.status)
+		}
+		if strings.Contains(rec.Body.String(), "<pre>") {
+			t.Errorf("GET %s body is a directory listing: %q", tt.path, rec.Body.String())
 		}
 		if tt.body != "" && rec.Body.String() != tt.body {
 			t.Errorf("GET %s body = %q, want %q", tt.path, rec.Body.String(), tt.body)
