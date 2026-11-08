@@ -33,7 +33,7 @@ Each partial takes the route's `TemplateData`, so every one of them can call `.P
 
 ```gotmpl
 {{define "GET /articles ListArticles(ctx, form)"}}
-{{- .Header "Vary" "HX-Request, HX-Target" -}}
+{{- .Vary "HX-Request" "HX-Target" -}}
 {{- if and .HXRequest (not .HXHistoryRestoreRequest) -}}
 	{{- if eq .HXTargetElementID "results"}}{{template "article-results" .}}
 	{{- else}}{{template "articles-main" .}}{{end -}}
@@ -66,8 +66,7 @@ When rendering the whole page on every request is cheap, leave the route templat
 
 - **History restore.** When the user goes back to a URL that `hx-push-url` added and htmx has no snapshot of it, htmx requests that URL with `HX-Request: true` and `HX-History-Restore-Request: true`, without `HX-Target`, and puts the response in place of the whole body. A fragment there would replace the page, which is why the route template guards on `not .HXHistoryRestoreRequest`.
 - **Headers are client input.** The `.HX*` readers cannot tell a user from a script that sets the same headers, so never decide access on them.
-- **`Vary` is set, not added.** `.Header` calls `Header().Set`, so a later `.Header "Vary"` in a partial replaces this one rather than adding to it ([call results](../reference/call-results.md#templatedata)). Set it once, in the route template.
 
 ## Datastar
 
-A Datastar action sends `Datastar-Request: true`. With `--output-datastar`, branch on `{{if .DatastarRequest}}` and set `Vary` to `Datastar-Request` the same way; [Datastar live view](datastar-live-view.md) covers routes that answer Datastar actions.
+A Datastar action sends `Datastar-Request: true`. With `--output-datastar`, branch on `{{if .DatastarRequest}}` and add `Datastar-Request` to `Vary` with `.Vary` the same way; [Datastar live view](datastar-live-view.md) covers routes that answer Datastar actions.

@@ -89,7 +89,7 @@ A route need not stream. Datastar patches a `text/html` response by element id, 
 
 ```gotmpl
 {{define "GET /list List(ctx)"}}
-{{- with .Header "Vary" "Datastar-Request"}}
+{{- with .Vary "Datastar-Request"}}
 {{- if .DatastarRequest}}{{template "list" .Result}}
 {{- else}}<!DOCTYPE html><html lang="en"><body>{{template "list" .Result}}</body></html>{{end}}
 {{- end}}

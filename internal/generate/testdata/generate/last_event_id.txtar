@@ -49,7 +49,9 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -138,6 +140,17 @@ func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {
 
 func (data *TemplateData[R, T]) Header(key, value string) *TemplateData[R, T] {
 	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *TemplateData[R, T]) Vary(headers ...string) *TemplateData[R, T] {
+	for _, name := range headers {
+		if !slices.ContainsFunc(data.response.Header().Values("Vary"), func(value string) bool {
+			return strings.EqualFold(value, name)
+		}) {
+			data.response.Header().Add("Vary", name)
+		}
+	}
 	return data
 }
 

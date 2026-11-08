@@ -179,7 +179,7 @@ func pipeIsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
 // returnsTemplateData reports whether a TemplateData method returns the
 // TemplateData it was called on, so that a call can be chained on it.
 func returnsTemplateData(methodName string) bool {
-	return methodName == "Header" || writesResponseState(methodName)
+	return methodName == "Header" || methodName == "Vary" || writesResponseState(methodName)
 }
 
 // writesResponseState reports whether a TemplateData method records something

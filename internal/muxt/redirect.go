@@ -268,7 +268,7 @@ func hasUnsafeField(arg template.Node, dot bool) bool {
 // not on TemplateData, so only the first identifier of a chain matters.
 func isSafeTemplateDataMethod(methodName string) bool {
 	switch methodName {
-	case "Path", "Result", "Request", "Receiver", "Ok", "Err", "MuxtVersion", "StatusCode", "Header":
+	case "Path", "Result", "Request", "Receiver", "Ok", "Err", "MuxtVersion", "StatusCode", "Header", "Vary":
 		return true
 	}
 	return false

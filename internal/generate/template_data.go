@@ -245,6 +245,57 @@ func templateDataHeaderMethod(typeIdent string) *ast.FuncDecl {
 	)
 }
 
+// templateDataVaryMethod declares .Vary(headers ...string), which adds each
+// name to the Vary response header unless a value already names it.
+// .Header "Vary" replaces the list, so templates that each depend on a
+// different request header use .Vary instead.
+func templateDataVaryMethod(file *File, typeIdent string) *ast.FuncDecl {
+	const (
+		headersIdent = "headers"
+		nameIdent    = "name"
+		valueIdent   = "value"
+		vary         = "Vary"
+	)
+	responseVaryHeader := func(method string, args ...ast.Expr) *ast.CallExpr {
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.CallExpr{Fun: &ast.SelectorExpr{X: selector(templateDataReceiverName, "response"), Sel: ast.NewIdent("Header")}},
+				Sel: ast.NewIdent(method),
+			},
+			Args: args,
+		}
+	}
+	named := &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params:  fieldList([]*ast.Field{param(ast.NewIdent("string"), valueIdent)}),
+			Results: fieldList(results(ast.NewIdent("bool"))),
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			returnExprs(astgen.Call(file, "", "strings", "EqualFold", ast.NewIdent(valueIdent), ast.NewIdent(nameIdent))),
+		}},
+	}
+	return dataMethod(typeIdent, vary,
+		[]*ast.Field{param(&ast.Ellipsis{Elt: ast.NewIdent("string")}, headersIdent)},
+		results(genericPointer(typeIdent)),
+		&ast.RangeStmt{
+			Key:   ast.NewIdent("_"),
+			Value: ast.NewIdent(nameIdent),
+			Tok:   token.DEFINE,
+			X:     ast.NewIdent(headersIdent),
+			Body: &ast.BlockStmt{List: []ast.Stmt{
+				&ast.IfStmt{
+					Cond: &ast.UnaryExpr{Op: token.NOT, X: astgen.Call(file, "", "slices", "ContainsFunc",
+						responseVaryHeader("Values", astgen.String(vary)), named)},
+					Body: &ast.BlockStmt{List: []ast.Stmt{
+						&ast.ExprStmt{X: responseVaryHeader("Add", astgen.String(vary), ast.NewIdent(nameIdent))},
+					}},
+				},
+			}},
+		},
+		returnExprs(ast.NewIdent(templateDataReceiverName)),
+	)
+}
+
 func responseHeader() *ast.CallExpr {
 	return &ast.CallExpr{Fun: selector(muxt.TemplateNameScopeIdentifierHTTPResponse, "Header")}
 }
@@ -365,6 +416,7 @@ func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 		templateDataRequestMethod(file, config.TemplateDataType),
 		templateDataStatusCodeMethod(config.TemplateDataType),
 		templateDataHeaderMethod(config.TemplateDataType),
+		templateDataVaryMethod(file, config.TemplateDataType),
 		templateDataOkay(config.TemplateDataType),
 		templateDataError(file, config.TemplateDataType),
 		templateDataReceiver(config.TemplateDataType),

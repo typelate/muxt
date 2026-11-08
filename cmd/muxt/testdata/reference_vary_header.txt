@@ -1,0 +1,57 @@
+# .Vary adds names to the Vary response header instead of replacing it, so a
+# page and a partial it calls can each name the request headers they read.
+# .Header "Vary" would keep only the last value. A name already present is not
+# added twice, whatever its case.
+
+muxt generate
+grep 'func.*\) Vary\(' template_routes.go
+
+muxt check
+exec go test -v
+
+-- go.mod --
+module example.com
+
+go 1.25
+-- in.go --
+package main
+
+func main() {}
+-- template.go --
+package main
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed template.gohtml
+var templatesDir embed.FS
+
+var templates = template.Must(template.ParseFS(templatesDir, "template.gohtml"))
+-- template.gohtml --
+{{define "GET / 200"}}{{.Vary "HX-Request"}}{{template "partial" .}}<main>page</main>{{end}}
+{{define "partial"}}{{.Vary "HX-Target" "hx-request"}}<p>partial</p>{{end}}
+-- template_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"testing"
+)
+
+func TestVary(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, nil)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	got := slices.Clone(rec.Header().Values("Vary"))
+	slices.Sort(got)
+	if want := []string{"HX-Request", "HX-Target"}; !slices.Equal(got, want) {
+		t.Errorf("Vary = %q, want %q", got, want)
+	}
+}

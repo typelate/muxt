@@ -141,6 +141,8 @@ func TestCanTemplateRedirect(t *testing.T) {
 		{name: "inside a with over a variable that may hold dot", template: `{{$d := .}}{{with $d}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "inside a with over a method that returns TemplateData", template: `{{with .StatusCode 200}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "inside a with over Header, which returns TemplateData", template: `{{with .Header "k" "v"}}{{.Redirect "/x"}}{{end}}`, want: true},
+		{name: "Vary does not redirect", template: `{{.Vary "HX-Request"}}`},
+		{name: "inside a with over Vary, which returns TemplateData", template: `{{with .Vary "k"}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "inside a with over an unknown method, which may return TemplateData", template: `{{with .Name}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "inside a with over a piped value", template: `{{with .Result | printf "%v"}}{{.Redirect "/x"}}{{end}}`, want: true},
 		{name: "inside a with over a chain", template: `{{with (.Result).Items}}{{.Redirect "/x"}}{{end}}`, want: true},

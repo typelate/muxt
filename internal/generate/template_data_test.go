@@ -32,6 +32,20 @@ func TestTemplateDataMethods(t *testing.T) {
 			want: "func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {\n\tdata.statusCode = statusCode\n\treturn data\n}",
 		},
 		{
+			name: "vary",
+			decl: templateDataVaryMethod(file, "TemplateData"),
+			want: "func (data *TemplateData[R, T]) Vary(headers ...string) *TemplateData[R, T] {\n" +
+				"\tfor _, name := range headers {\n" +
+				"\t\tif !slices.ContainsFunc(data.response.Header().Values(\"Vary\"), func(value string) bool {\n" +
+				"\t\t\treturn strings.EqualFold(value, name)\n" +
+				"\t\t}) {\n" +
+				"\t\t\tdata.response.Header().Add(\"Vary\", name)\n" +
+				"\t\t}\n" +
+				"\t}\n" +
+				"\treturn data\n" +
+				"}",
+		},
+		{
 			name: "header setter",
 			decl: htmxHeaderSetterMethod("TemplateData", "HXTrigger", "HX-Trigger", "eventName"),
 			want: "func (data *TemplateData[R, T]) HXTrigger(eventName string) *TemplateData[R, T] {\n\treturn data.Header(\"HX-Trigger\", eventName)\n}",
