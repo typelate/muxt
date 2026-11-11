@@ -61,11 +61,55 @@ func (f *File) KeyFor(dir string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-// Entry holds the generate flags of one package directory. A nil field is
-// absent from the file, so the flag's default applies.
+// Entry holds the generate flags of one package directory. JSON keys are the
+// flag names without "--". A nil field is absent from the file, so the flag's
+// default applies. Fields follow the order `muxt generate --help` lists flags;
+// verbose is not configuration and has no field.
 type Entry struct {
-	UseReceiverType  *string `json:"use-receiver-type,omitempty"`
+	// InputStaticAssetsDirectory is --input-static-assets-directory.
+	InputStaticAssetsDirectory *string `json:"input-static-assets-directory,omitempty"`
+	// OutputDatastar is --output-datastar.
+	OutputDatastar *bool `json:"output-datastar,omitempty"`
+	// OutputExportedDefaultIdentifiers is --output-exported-default-identifiers.
+	OutputExportedDefaultIdentifiers *bool `json:"output-exported-default-identifiers,omitempty"`
+	// OutputFile is --output-file.
+	OutputFile *string `json:"output-file,omitempty"`
+	// OutputHTMX is --output-htmx.
+	OutputHTMX *bool `json:"output-htmx,omitempty"`
+	// OutputMultipartMaxMemory is --output-multipart-max-memory, in the form the flag accepts, such as "64MB".
+	OutputMultipartMaxMemory *string `json:"output-multipart-max-memory,omitempty"`
+	// OutputMultipleFiles is --output-multiple-files.
+	OutputMultipleFiles *bool `json:"output-multiple-files,omitempty"`
+	// OutputMuxtVersion is --output-muxt-version.
+	OutputMuxtVersion *bool `json:"output-muxt-version,omitempty"`
+	// OutputReceiverInterface is --output-receiver-interface.
+	OutputReceiverInterface *string `json:"output-receiver-interface,omitempty"`
+	// OutputRoutesFunc is --output-routes-func.
 	OutputRoutesFunc *string `json:"output-routes-func,omitempty"`
+	// OutputRoutesFuncWithLoggerParam is --output-routes-func-with-logger-param.
+	OutputRoutesFuncWithLoggerParam *bool `json:"output-routes-func-with-logger-param,omitempty"`
+	// OutputRoutesFuncWithMiddlewareParam is --output-routes-func-with-middleware-param.
+	OutputRoutesFuncWithMiddlewareParam *bool `json:"output-routes-func-with-middleware-param,omitempty"`
+	// OutputRoutesFuncWithPathPrefixParam is --output-routes-func-with-path-prefix-param.
+	OutputRoutesFuncWithPathPrefixParam *bool `json:"output-routes-func-with-path-prefix-param,omitempty"`
+	// OutputSSETemplateDataType is --output-sse-template-data-type.
+	OutputSSETemplateDataType *string `json:"output-sse-template-data-type,omitempty"`
+	// OutputStaticAssetsPath is --output-static-assets-path.
+	OutputStaticAssetsPath *string `json:"output-static-assets-path,omitempty"`
+	// OutputTemplateDataType is --output-template-data-type.
+	OutputTemplateDataType *string `json:"output-template-data-type,omitempty"`
+	// OutputTemplateRouteBuilderType is --output-template-route-builder-type.
+	OutputTemplateRouteBuilderType *string `json:"output-template-route-builder-type,omitempty"`
+	// OutputTemplateRoutePathsType is --output-template-route-paths-type.
+	OutputTemplateRoutePathsType *string `json:"output-template-route-paths-type,omitempty"`
+	// OutputTemplateRouteType is --output-template-route-type.
+	OutputTemplateRouteType *string `json:"output-template-route-type,omitempty"`
+	// UseReceiverType is --use-receiver-type.
+	UseReceiverType *string `json:"use-receiver-type,omitempty"`
+	// UseReceiverTypePackage is --use-receiver-type-package.
+	UseReceiverTypePackage *string `json:"use-receiver-type-package,omitempty"`
+	// UseTemplatesVariable is --use-templates-variable.
+	UseTemplatesVariable []string `json:"use-templates-variable,omitempty"`
 }
 
 // Read reads the muxt.json at path. A missing file is an error that matches

@@ -1,18 +1,148 @@
 package cli
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/muxtjson"
 )
+
+// TestEveryGenerateFlagHasMuxtJSONKey states that the generate flags, minus
+// deprecated ones and verbose, are the keys a muxt.json entry accepts. A flag
+// without a key cannot be set from muxt.json, and a key without a flag is read
+// into nothing. The flag set is built the way the generate command builds it.
+func TestEveryGenerateFlagHasMuxtJSONKey(t *testing.T) {
+	var config generate.RoutesFileConfiguration
+	var deprecatedTemplatesVar string
+	flags := pflag.NewFlagSet("generate", pflag.ContinueOnError)
+	addGenerateFlags(flags, &config, &deprecatedTemplatesVar)
+
+	var flagNames []string
+	flags.VisitAll(func(f *pflag.Flag) {
+		if f.Deprecated == "" && f.Name != "verbose" {
+			flagNames = append(flagNames, f.Name)
+		}
+	})
+	keys := muxtJSONEntryKeys()
+
+	assert.Empty(t, namesNotIn(flagNames, keys), "generate flags with no muxt.json key")
+	assert.Empty(t, namesNotIn(keys, flagNames), "muxt.json keys with no generate flag")
+}
+
+// muxtJSONEntryKeys returns the json key of each field of muxtjson.Entry.
+func muxtJSONEntryKeys() []string {
+	var keys []string
+	entry := reflect.TypeFor[muxtjson.Entry]()
+	for i := range entry.NumField() {
+		name, _, _ := strings.Cut(entry.Field(i).Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			keys = append(keys, name)
+		}
+	}
+	return keys
+}
+
+// namesNotIn returns the names in a that are not in b, sorted.
+func namesNotIn(a, b []string) []string {
+	var missing []string
+	for _, name := range a {
+		if !slices.Contains(b, name) {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+// TestMuxtJSONEntryAcceptsEveryGenerateFlag states that a muxt.json entry
+// holding one generate flag's key, with no flags on the command line, gives
+// the same configuration as that flag alone on the command line. Each row
+// is one flag given both ways in a directory with no other configuration.
+// Static assets flags must be given together, so their rows hold both keys.
+func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		args  string
+		entry map[string]any
+	}{
+		{name: "use-templates-variable", args: "--use-templates-variable data", entry: map[string]any{"use-templates-variable": []string{"data"}}},
+		{name: "use-receiver-type", args: "--use-receiver-type Server", entry: map[string]any{"use-receiver-type": "Server"}},
+		{name: "use-receiver-type-package", args: "--use-receiver-type-package example.com/pkg", entry: map[string]any{"use-receiver-type-package": "example.com/pkg"}},
+		{name: "output-file", args: "--output-file routes_gen.go", entry: map[string]any{"output-file": "routes_gen.go"}},
+		{name: "output-receiver-interface", args: "--output-receiver-interface Receiver", entry: map[string]any{"output-receiver-interface": "Receiver"}},
+		{name: "output-routes-func", args: "--output-routes-func Routes", entry: map[string]any{"output-routes-func": "Routes"}},
+		{name: "output-template-data-type", args: "--output-template-data-type Data", entry: map[string]any{"output-template-data-type": "Data"}},
+		{name: "output-sse-template-data-type", args: "--output-sse-template-data-type SSEData", entry: map[string]any{"output-sse-template-data-type": "SSEData"}},
+		{name: "output-template-route-paths-type", args: "--output-template-route-paths-type Paths", entry: map[string]any{"output-template-route-paths-type": "Paths"}},
+		{name: "output-template-route-type", args: "--output-template-route-type Route", entry: map[string]any{"output-template-route-type": "Route"}},
+		{name: "output-template-route-builder-type", args: "--output-template-route-builder-type RouteBuilder", entry: map[string]any{"output-template-route-builder-type": "RouteBuilder"}},
+		{name: "output-routes-func-with-logger-param", args: "--output-routes-func-with-logger-param", entry: map[string]any{"output-routes-func-with-logger-param": true}},
+		{name: "output-routes-func-with-path-prefix-param", args: "--output-routes-func-with-path-prefix-param", entry: map[string]any{"output-routes-func-with-path-prefix-param": true}},
+		{name: "output-routes-func-with-middleware-param", args: "--output-routes-func-with-middleware-param", entry: map[string]any{"output-routes-func-with-middleware-param": true}},
+		{name: "output-multiple-files", args: "--output-multiple-files", entry: map[string]any{"output-multiple-files": true}},
+		{name: "output-htmx", args: "--output-htmx", entry: map[string]any{"output-htmx": true}},
+		{name: "output-datastar", args: "--output-datastar", entry: map[string]any{"output-datastar": true}},
+		{name: "output-exported-default-identifiers", args: "--output-exported-default-identifiers=false", entry: map[string]any{"output-exported-default-identifiers": false}},
+		{name: "output-multipart-max-memory", args: "--output-multipart-max-memory 64MB", entry: map[string]any{"output-multipart-max-memory": "64MB"}},
+		{name: "output-muxt-version", args: "--output-muxt-version=false", entry: map[string]any{"output-muxt-version": false}},
+		{name: "input-static-assets-directory", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input-static-assets-directory": "assets", "output-static-assets-path": "/static"}},
+		{name: "output-static-assets-path", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input-static-assets-directory": "assets", "output-static-assets-path": "/static"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			want := generateConfigurationOf(t, dir, "generate "+tt.args)
+
+			file, err := json.Marshal(map[string]any{"packages": map[string]any{".": tt.entry}})
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), file, 0o644))
+			got := generateConfigurationOf(t, dir, "generate")
+
+			assert.Equal(t, want, got, "entry %s: Config = %+v, want %+v", tt.name, got, want)
+		})
+	}
+}
+
+// TestMuxtJSONEntryNameSurvivesUnexportedDefaults states that an entry's
+// explicit routes function name is kept when the entry turns off exported
+// default identifiers. Those defaults rename every name not given explicitly,
+// so the entry must mark its name as given to keep it.
+func TestMuxtJSONEntryNameSurvivesUnexportedDefaults(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"output-exported-default-identifiers": false, "output-routes-func": "Mount"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
+
+	got := generateConfigurationOf(t, dir, "generate")
+
+	assert.Equal(t, "Mount", got.RoutesFunction, "routes function")
+}
+
+// generateConfigurationOf runs a generate command line in dir and returns the
+// configuration of the one job it is handed. Nothing is loaded.
+func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.RoutesFileConfiguration {
+	t.Helper()
+	var jobs []generateJob
+	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, got []generateJob) error {
+			jobs = got
+			return nil
+		},
+	})
+	require.NoError(t, err, "running %q", commandLine)
+	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
+	return jobs[0].Config
+}
 
 // TestGenerateWithMuxtJSONEntry states that a muxt.json entry for the working
 // directory configures a flagless muxt generate there. Nothing is loaded: the
