@@ -40,3 +40,12 @@ todos.json
 dist/
 
 *.vsix
+
+# Review drafts and the quiz log; never committed
+docs/drafts/
+
+# Agent working files: plans, review sheets, local builds
+/PLAN.md
+/TARGET.md
+/REVIEW.md
+/bin/
