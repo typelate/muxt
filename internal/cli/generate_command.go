@@ -40,7 +40,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 			// the usage text would only bury the error that says why.
 			cmd.SilenceUsage = true
 			if !generateFlagGiven(cmd.Flags()) {
-				entry, found, err := readMuxtJSONEntry(*workingDirectory, ".")
+				key, entry, found, err := readMuxtJSONEntry(*workingDirectory)
 				if err != nil {
 					return err
 				}
@@ -49,7 +49,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 					if err != nil {
 						return err
 					}
-					return run(cmd, []generateJob{{Key: ".", Dir: *workingDirectory, Config: entryConfig}})
+					return run(cmd, []generateJob{{Key: key, Dir: *workingDirectory, Config: entryConfig}})
 				}
 			}
 			if err := finalizeGenerate(&config, cmd.Flags(), deprecatedTemplatesVar, *workingDirectory, getEnv, version); err != nil {

@@ -1,10 +1,7 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 
 	"github.com/spf13/pflag"
 
@@ -24,18 +21,23 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 	return given
 }
 
-// readMuxtJSONEntry returns the entry for key in the muxt.json of dir. found is
-// false when dir has no muxt.json or the file has no entry for key.
-func readMuxtJSONEntry(dir, key string) (entry muxtjson.Entry, found bool, err error) {
-	f, err := muxtjson.Read(filepath.Join(dir, muxtjson.FileName))
-	if errors.Is(err, fs.ErrNotExist) {
-		return muxtjson.Entry{}, false, nil
-	}
+// readMuxtJSONEntry returns the key and entry for wd in the nearest muxt.json
+// at or above wd. found is false when no muxt.json is found or the file has no
+// entry for the key.
+func readMuxtJSONEntry(wd string) (key string, entry muxtjson.Entry, found bool, err error) {
+	f, found, err := muxtjson.Find(wd)
 	if err != nil {
-		return muxtjson.Entry{}, false, fmt.Errorf("reading muxt.json entry %q: %w", key, err)
+		return "", muxtjson.Entry{}, false, fmt.Errorf("finding muxt.json for %s: %w", wd, err)
+	}
+	if !found {
+		return "", muxtjson.Entry{}, false, nil
+	}
+	key, err = f.KeyFor(wd)
+	if err != nil {
+		return "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
 	}
 	entry, found = f.Packages[key]
-	return entry, found, nil
+	return key, entry, found, nil
 }
 
 // entryConfiguration maps the muxt.json entry for a directory onto the flag

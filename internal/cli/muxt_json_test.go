@@ -42,3 +42,28 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
 	assert.Equal(t, defaults, jobs[0].Config, "generate job config")
 }
+
+// TestGenerateWithMuxtJSONInParentDirectory states that a flagless muxt generate
+// in a sub-directory uses the entry keyed by that directory's path relative to
+// the muxt.json found in a parent. Nothing is loaded: the generate runner
+// records the job it is handed.
+func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
+
+	var jobs []generateJob
+	err := commands(workspace, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, got []generateJob) error {
+			jobs = got
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
+	assert.Equal(t, "workspace", jobs[0].Key, "generate job key")
+	assert.Equal(t, workspace, jobs[0].Dir, "generate job dir")
+	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "generate job receiver type")
+}
