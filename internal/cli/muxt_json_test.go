@@ -218,6 +218,26 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsUnknownMuxtJSONKey states that a muxt.json entry key no
+// generate flag reads fails a flagless muxt generate, naming the key, its
+// entry, and the file. The runner is not called.
+func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"nope": true}}}`
+	path := filepath.Join(dir, muxtjson.FileName)
+	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var unknown *muxtjson.UnknownKeyError
+	require.ErrorAs(t, err, &unknown, "error %v", err)
+	assert.Equal(t, path, unknown.Path, "path")
+	assert.Equal(t, `packages["."]`, unknown.Where, "where")
+	assert.Equal(t, "nope", unknown.Key, "key")
+	assert.Equal(t, path+`: packages["."]: unknown key "nope"`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {

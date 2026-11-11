@@ -8,8 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
 )
 
 // FileName is the name of the configuration file muxt looks for.
@@ -129,8 +133,43 @@ func Read(path string) (*File, error) {
 		}
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	if err := checkKeys(path, data); err != nil {
+		return nil, err
+	}
 	f.Dir = filepath.Dir(path)
 	return &f, nil
+}
+
+// checkKeys returns a *UnknownKeyError for the first entry key, in sorted
+// order, that Entry has no field for. json.Unmarshal drops unknown keys without
+// a word, so the keys are read again here.
+func checkKeys(path string, data []byte) error {
+	var raw struct {
+		Packages map[string]map[string]json.RawMessage `json:"packages"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	known := entryKeys()
+	for _, dir := range slices.Sorted(maps.Keys(raw.Packages)) {
+		for _, key := range slices.Sorted(maps.Keys(raw.Packages[dir])) {
+			if !slices.Contains(known, key) {
+				return &UnknownKeyError{Path: path, Where: fmt.Sprintf("packages[%q]", dir), Key: key}
+			}
+		}
+	}
+	return nil
+}
+
+// entryKeys returns the json key of each Entry field: the keys an entry accepts.
+func entryKeys() []string {
+	var keys []string
+	entry := reflect.TypeFor[Entry]()
+	for i := range entry.NumField() {
+		name, _, _ := strings.Cut(entry.Field(i).Tag.Get("json"), ",")
+		keys = append(keys, name)
+	}
+	return keys
 }
 
 // position returns the 1-based line and column of the byte before offset. The
