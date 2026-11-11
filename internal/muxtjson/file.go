@@ -22,7 +22,11 @@ type File struct {
 }
 
 // Find reads the first muxt.json found walking up from wd, starting at wd
-// itself. found is false when no directory up to the filesystem root has one.
+// itself. The walk stops at the module root: the first directory holding a
+// go.mod is checked for muxt.json and no directory above it is. A muxt.json
+// above the module belongs to another project, so it is not read. When no
+// go.mod is found on the way up, the walk goes to the filesystem root. found is
+// false when the walk ends without a muxt.json.
 func Find(wd string) (f *File, found bool, err error) {
 	dir, err := filepath.Abs(wd)
 	if err != nil {
@@ -35,6 +39,9 @@ func Find(wd string) (f *File, found bool, err error) {
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, false, err
+		}
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return nil, false, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
