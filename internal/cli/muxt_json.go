@@ -27,7 +27,9 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 func readMuxtJSONEntry(wd string) (key string, entry muxtjson.Entry, found bool, err error) {
 	f, found, err := muxtjson.Find(wd)
 	if err != nil {
-		return "", muxtjson.Entry{}, false, fmt.Errorf("finding muxt.json for %s: %w", wd, err)
+		// Find's errors already name the file, and a *muxtjson.ParseError
+		// must reach the caller as it is.
+		return "", muxtjson.Entry{}, false, err
 	}
 	if !found {
 		return "", muxtjson.Entry{}, false, nil

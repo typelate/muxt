@@ -198,6 +198,40 @@ func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
 	assert.Equal(t, "", jobs[0].Config.ReceiverType, "generate job receiver type")
 }
 
+// TestGenerateRejectsMalformedMuxtJSON states that a muxt.json that is not
+// valid JSON fails a flagless muxt generate at the byte the parser rejects,
+// naming the file and the line and column. The runner is not called.
+func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
+	dir := t.TempDir()
+	const file = "{\n  \"packages\": {\n    \".\": x\n  }\n}\n"
+	path := filepath.Join(dir, muxtjson.FileName)
+	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var parseErr *muxtjson.ParseError
+	require.ErrorAs(t, err, &parseErr, "error %v", err)
+	assert.Equal(t, path, parseErr.Path, "path")
+	assert.Equal(t, 3, parseErr.Line, "line")
+	assert.Equal(t, 10, parseErr.Col, "column")
+	assert.Equal(t, path+":3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
+// generateFailureOf runs a flagless muxt generate in dir. It returns whether
+// the generate runner was called and the error the command failed with.
+func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
+	t.Helper()
+	err = commands(dir, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, _ []generateJob) error {
+			called = true
+			return nil
+		},
+	})
+	require.Error(t, err, "muxt generate in %s", dir)
+	return called, err
+}
+
 // TestGenerateWithMuxtJSONInParentDirectory states that a flagless muxt generate
 // in a sub-directory uses the entry keyed by that directory's path relative to
 // the muxt.json found in a parent. Nothing is loaded: the generate runner

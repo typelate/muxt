@@ -3,6 +3,7 @@
 package muxtjson
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -121,8 +122,21 @@ func Read(path string) (*File, error) {
 	}
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
+		var syntax *json.SyntaxError
+		if errors.As(err, &syntax) {
+			line, col := position(data, syntax.Offset)
+			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
+		}
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	f.Dir = filepath.Dir(path)
 	return &f, nil
+}
+
+// position returns the 1-based line and column of the byte before offset. The
+// json package reports an offset one past the byte it rejected.
+func position(data []byte, offset int64) (line, col int) {
+	pos := max(int(offset)-1, 0)
+	before := data[:pos]
+	return 1 + bytes.Count(before, []byte{'\n'}), pos - bytes.LastIndexByte(before, '\n')
 }
