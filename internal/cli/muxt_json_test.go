@@ -367,11 +367,88 @@ func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	assert.Equal(t, "T1", config.ReceiverType, "receiver type from flags")
 }
 
+// TestGenerateRejectsFlagsForConfiguredDirectory states that a generate flag
+// given where muxt.json has an entry for the working directory fails, telling
+// the person to configure the directory in the file. The flag names are the
+// ones given, sorted. The runner is not called.
+func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {"workspace": {}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOfLine(t, workspace, "generate --output-htmx")
+
+	var configured *muxtjson.ConfiguredDirectoryError
+	require.ErrorAs(t, err, &configured, "error %v", err)
+	assert.Equal(t, filepath.Join("..", muxtjson.FileName), configured.Path, "path")
+	assert.Equal(t, []string{"output-htmx"}, configured.Flags, "flags")
+	assert.Equal(t, "configure generate with fields in ../muxt.json instead of flags", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
+// TestGenerateVerboseGeneratesFromConfiguredDirectory states that -v with no
+// other generate flag, in a directory its muxt.json entry configures, generates
+// from that entry. Verbose is not a generate setting, so it does not reject the
+// entry. The runner records the job it is handed.
+func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"use-receiver-type": "Server"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	var jobs []generateJob
+	err := commands(dir, strings.Fields("generate -v"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, got []generateJob) error {
+			jobs = got
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
+	assert.Equal(t, ".", jobs[0].Key, "generate job key")
+	assert.Equal(t, dir, jobs[0].Dir, "generate job dir")
+	assert.Equal(t, "Server", jobs[0].Config.ReceiverType, "generate job receiver type")
+}
+
+// TestGenerateChangeDirectorySelectsMuxtJSONEntry states that muxt -C workspace
+// generate, run from the directory holding a muxt.json with entries for the
+// directory and for workspace, generates only the workspace entry. -C is not a
+// generate flag, so it does not reject the entries. The runner records the job
+// it is handed.
+func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {".": {"use-receiver-type": "Root"}, "workspace": {"use-receiver-type": "T1"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+
+	var jobs []generateJob
+	err := commands(parent, strings.Fields("-C workspace generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, got []generateJob) error {
+			jobs = got
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
+	assert.Equal(t, "workspace", jobs[0].Key, "generate job key")
+	assert.Equal(t, workspace, jobs[0].Dir, "generate job dir")
+	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "generate job receiver type")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
 	t.Helper()
-	err = commands(dir, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+	return generateFailureOfLine(t, dir, "generate")
+}
+
+// generateFailureOfLine runs a muxt command line in dir and returns whether the
+// generate runner was called and the error the command failed with.
+func generateFailureOfLine(t *testing.T, dir, commandLine string) (called bool, err error) {
+	t.Helper()
+	err = commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 		generate: func(_ *cobra.Command, _ []generateJob) error {
 			called = true
 			return nil

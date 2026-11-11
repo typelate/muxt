@@ -74,6 +74,20 @@ func (e *InvalidEntryError) Unwrap() error {
 	return e.Err
 }
 
+// ConfiguredDirectoryError reports generate flags given in a directory whose
+// muxt.json entry already configures it. Path is the file, relative to the
+// working directory. Flags are the flag names given, sorted, without "--".
+type ConfiguredDirectoryError struct {
+	Path  string
+	Flags []string
+}
+
+// Error returns the path the person should configure the directory in, on one
+// line.
+func (e *ConfiguredDirectoryError) Error() string {
+	return fmt.Sprintf("configure generate with fields in %s instead of flags", e.Path)
+}
+
 // DeprecatedKeyError reports a key in a muxt.json entry that is an old flag
 // name. Replacement is the key to write instead. Where names the entry.
 type DeprecatedKeyError struct {

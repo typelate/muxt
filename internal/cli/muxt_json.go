@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/spf13/pflag"
 
@@ -9,16 +10,38 @@ import (
 	"github.com/typelate/muxt/internal/muxtjson"
 )
 
-// generateFlagGiven reports whether a generate flag was passed. The root
-// flags -C and -v do not configure a run, so they do not count.
-func generateFlagGiven(flags *pflag.FlagSet) bool {
-	given := false
+// givenGenerateFlags returns the sorted names of the generate flags passed.
+// The root flags -C and -v do not configure a run, so they do not count.
+func givenGenerateFlags(flags *pflag.FlagSet) []string {
+	var given []string
 	flags.Visit(func(f *pflag.Flag) {
 		if f.Name != "change-directory" && f.Name != "verbose" {
-			given = true
+			given = append(given, f.Name)
 		}
 	})
+	slices.Sort(given)
 	return given
+}
+
+// lookupMuxtJSONEntry returns the nearest muxt.json at or above wd, the key
+// for wd in it, and that key's entry. f is nil when no muxt.json is found. found
+// is false when the file has no entry under key, which is not an error here.
+func lookupMuxtJSONEntry(wd string) (f *muxtjson.File, key string, entry muxtjson.Entry, found bool, err error) {
+	f, found, err = muxtjson.Find(wd, deprecatedMuxtJSONKeys())
+	if err != nil {
+		// Find's errors already name the file, and a *muxtjson.ParseError
+		// must reach the caller as it is.
+		return nil, "", muxtjson.Entry{}, false, err
+	}
+	if !found {
+		return nil, "", muxtjson.Entry{}, false, nil
+	}
+	key, err = f.KeyFor(wd)
+	if err != nil {
+		return nil, "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
+	}
+	entry, found = f.Packages[key]
+	return f, key, entry, found, nil
 }
 
 // readMuxtJSONEntry returns the file, key and entry for wd in the nearest
@@ -26,26 +49,27 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 // is false when no muxt.json is found, or when wd is the file's own directory
 // and the file has no entry for it. Any other wd without an entry is an error.
 func readMuxtJSONEntry(wd string) (file, key string, entry muxtjson.Entry, found bool, err error) {
-	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
-	if err != nil {
-		// Find's errors already name the file, and a *muxtjson.ParseError
-		// must reach the caller as it is.
+	f, key, entry, found, err := lookupMuxtJSONEntry(wd)
+	if err != nil || f == nil {
 		return "", "", muxtjson.Entry{}, false, err
 	}
-	if !found {
-		return "", "", muxtjson.Entry{}, false, nil
-	}
-	key, err = f.KeyFor(wd)
-	if err != nil {
-		return "", "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
-	}
-	entry, found = f.Packages[key]
 	// The directory holding the file may go without an entry, as it always
 	// has. Any other directory below the file needs one to be generated.
 	if !found && key != "." {
 		return "", "", muxtjson.Entry{}, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
 	}
 	return f.Name, key, entry, found, nil
+}
+
+// rejectConfiguredDirectory returns a *muxtjson.ConfiguredDirectoryError when
+// the muxt.json for wd has an entry for it, since that entry configures the
+// directory and flags would be a second source for the same fields.
+func rejectConfiguredDirectory(wd string, flagNames []string) error {
+	f, _, _, found, err := lookupMuxtJSONEntry(wd)
+	if err != nil || !found {
+		return err
+	}
+	return &muxtjson.ConfiguredDirectoryError{Path: f.Name, Flags: flagNames}
 }
 
 // entryField ties one muxt.json key to the flag and configuration field it
