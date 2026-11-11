@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/mutation"
 )
 
@@ -30,7 +29,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
 		routes:    runRoutes,
 		check:     runCheck,
-		generate:  runGenerate,
+		generate:  generateRunner(loadFromGoCommand),
 		callers:   runTemplateCallers,
 		calls:     runTemplateCalls,
 		mutations: runTemplateMutations,
@@ -51,7 +50,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 type runners struct {
 	routes    func(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error
 	check     func(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error
-	generate  func(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error
+	generate  func(cmd *cobra.Command, jobs []generateJob) error
 	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
 	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error

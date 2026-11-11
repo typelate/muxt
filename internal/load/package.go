@@ -24,14 +24,20 @@ func Packages(wd string, morePatterns ...string) (*token.FileSet, []*packages.Pa
 // PackagesWithEnv is Packages with the environment the go command
 // runs in. A nil env is the process's own.
 func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
-	// The standard library packages beside the working directory's are the
+	return PackagesInDirectories(wd, env, []string{wd}, morePatterns...)
+}
+
+// PackagesInDirectories runs the go command once, in root, for every
+// directory in dirs, so a run over several packages pays for one load. The
+// result holds the packages of all of them, found by directory as with
+// PackagesWithEnv.
+func PackagesInDirectories(root string, env []string, dirs []string, morePatterns ...string) (*token.FileSet, []*packages.Package, error) {
+	// The standard library packages beside the packages' own are the
 	// ones a route argument can bind to when the package does not import them:
 	// encoding/json is reached through html/template's imports, but not
 	// through text/template's, and unmarshalJSON(body) for a method that is
 	// not defined yet needs json.RawMessage.
-	patterns := []string{
-		wd, "encoding", "encoding/json", "fmt", "net/http",
-	}
+	patterns := append(slices.Clone(dirs), "encoding", "encoding/json", "fmt", "net/http")
 	for _, pat := range morePatterns {
 		if pat != "" {
 			patterns = append(patterns, pat)
@@ -41,11 +47,11 @@ func PackagesWithEnv(wd string, env []string, morePatterns ...string) (*token.Fi
 	pl, err := packages.Load(&packages.Config{
 		Fset: fileSet,
 		Mode: packages.NeedModule | packages.NeedTypesInfo | packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedEmbedPatterns | packages.NeedEmbedFiles | packages.NeedImports,
-		Dir:  wd,
+		Dir:  root,
 		Env:  env,
 	}, patterns...)
 	if err != nil {
-		return nil, nil, loadFailedError(wd, env, err)
+		return nil, nil, loadFailedError(root, env, err)
 	}
 	return fileSet, pl, err
 }

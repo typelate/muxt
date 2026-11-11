@@ -25,7 +25,7 @@ import (
 // the response argument when set to a true value.
 const envSilenceHTTPResponseWarning = "MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT"
 
-func generateCommand(workingDirectory *string, getEnv func(string) string, version func() (string, bool), run func(*cobra.Command, string, generate.RoutesFileConfiguration) error) *cobra.Command {
+func generateCommand(workingDirectory *string, getEnv func(string) string, version func() (string, bool), run func(*cobra.Command, []generateJob) error) *cobra.Command {
 	var (
 		config                 generate.RoutesFileConfiguration
 		deprecatedTemplatesVar string
@@ -39,33 +39,44 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 			// The flags parsed, so what follows rejects their values, and
 			// the usage text would only bury the error that says why.
 			cmd.SilenceUsage = true
-			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := finalizeGenerate(&config, cmd.Flags(), deprecatedTemplatesVar, *workingDirectory, getEnv, version); err != nil {
 				return err
 			}
-			config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
-			if err := checkExplicitNames(cmd.Flags()); err != nil {
-				return err
-			}
-			// Validation sees the names the run will generate, so a name
-			// that collides with a default or derived one is caught here.
-			applyDefaults(&config, cmd.Flags())
-			if err := validateGenerateConfiguration(config); err != nil {
-				return err
-			}
-			if v, ok := version(); ok && config.OutputMuxtVersion {
-				stable, err := header.Stable(v, filepath.Join(*workingDirectory, config.OutputFileName))
-				if err != nil {
-					return err
-				}
-				config.MuxtVersion = stable
-			}
-			return run(cmd, *workingDirectory, config)
+			return run(cmd, []generateJob{{Dir: *workingDirectory, Config: config}})
 		},
 	}
 
 	addGenerateFlags(cmd.Flags(), &config, &deprecatedTemplatesVar)
 
 	return cmd
+}
+
+// finalizeGenerate turns flag values into the configuration a run writes
+// with, so every source of a configuration meets the same rules. flags stays
+// a *pflag.FlagSet, not a "was it given" func, because checkExplicitNames
+// also reads the given value to tell an empty one from an absent one.
+func finalizeGenerate(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet, deprecatedTemplatesVar, dir string, getEnv func(string) string, version func() (string, bool)) error {
+	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+		return err
+	}
+	config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
+	if err := checkExplicitNames(flags); err != nil {
+		return err
+	}
+	// Validation sees the names the run will generate, so a name
+	// that collides with a default or derived one is caught here.
+	applyDefaults(config, flags)
+	if err := validateGenerateConfiguration(*config); err != nil {
+		return err
+	}
+	if v, ok := version(); ok && config.OutputMuxtVersion {
+		stable, err := header.Stable(v, filepath.Join(dir, config.OutputFileName))
+		if err != nil {
+			return err
+		}
+		config.MuxtVersion = stable
+	}
+	return nil
 }
 
 // explicitNameFlags are the flags that name a generated file or identifier,

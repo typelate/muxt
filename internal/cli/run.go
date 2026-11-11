@@ -12,10 +12,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
-	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -156,43 +154,6 @@ func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configu
 	// Like go test, the command fails once the report is out when a
 	// mutant was missed.
 	return report.Err()
-}
-
-func runGenerate(cmd *cobra.Command, wd string, config generate.RoutesFileConfiguration) error {
-	if err := requireDirectory(cmd.Name(), wd); err != nil {
-		return err
-	}
-	stdout := cmd.OutOrStdout()
-	_, pl, err := load.Packages(wd, config.ReceiverPackage)
-	if err != nil {
-		return err
-	}
-	stderr := log.New(cmd.ErrOrStderr(), "", 0)
-	warnPartialAST(stderr, pl)
-	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(wd), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
-	if err != nil {
-		printMultiLineError(cmd, err)
-		return err
-	}
-	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
-	if err != nil {
-		printMultiLineError(cmd, err)
-		return err
-	}
-	files, err := generate.TemplateRoutesFiles(wd, config, pkg, defs, log.New(stdout, "", 0))
-	if err != nil {
-		printMultiLineError(cmd, err)
-		return err
-	}
-	owned, err := ownedGeneratedFiles(wd, config.RoutesFunction, stderr)
-	if err != nil {
-		return err
-	}
-	written, err := writeGeneratedFiles(stdout, files, config)
-	if err != nil {
-		return err
-	}
-	return removeOrphans(owned, written)
 }
 
 // isTerminal reports whether w is a character device such as a terminal.

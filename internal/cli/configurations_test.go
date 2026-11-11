@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
@@ -27,9 +28,14 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		return nil
 	}
 	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		routes:    func(_ *cobra.Command, _ string, c analysis.DefinitionsConfiguration) error { return record(c) },
-		check:     func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
-		generate:  func(_ *cobra.Command, _ string, c generate.RoutesFileConfiguration) error { return record(c) },
+		routes: func(_ *cobra.Command, _ string, c analysis.DefinitionsConfiguration) error { return record(c) },
+		check:  func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
+		generate: func(_ *cobra.Command, jobs []generateJob) error {
+			if len(jobs) != 1 {
+				return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
+			}
+			return record(jobs[0].Config)
+		},
 		callers:   func(_ *cobra.Command, _ string, c analysis.TemplateCallersConfiguration) error { return record(c) },
 		calls:     func(_ *cobra.Command, _ string, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
@@ -745,8 +751,13 @@ func TestChangeDirectory(t *testing.T) {
 				return nil
 			}
 			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-				check:     func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
-				generate:  func(_ *cobra.Command, wd string, _ generate.RoutesFileConfiguration) error { return record(wd) },
+				check: func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
+				generate: func(_ *cobra.Command, jobs []generateJob) error {
+					if len(jobs) != 1 {
+						return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
+					}
+					return record(jobs[0].Dir)
+				},
 				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
 			})
 			require.NoError(t, err)
