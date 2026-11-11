@@ -301,6 +301,28 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue states that a muxt.json
+// entry whose output-multipart-max-memory the flag cannot parse fails a
+// flagless muxt generate, naming the file once, the entry, and the key, then
+// the flag's own error. The runner is not called.
+func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"output-multipart-max-memory": "lots"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var flagCfg generate.RoutesFileConfiguration
+	flagErr := (&multipartMaxMemoryFlag{cfg: &flagCfg}).Set("lots")
+	require.Error(t, flagErr)
+	var invalid *muxtjson.InvalidEntryError
+	require.ErrorAs(t, err, &invalid, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, `packages["."]`, invalid.Where, "where")
+	assert.Equal(t, `muxt.json: packages["."]: output-multipart-max-memory: `+flagErr.Error(), err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // TestGenerateRejectsUncleanMuxtJSONKey states that a muxt.json packages key
 // not in clean form fails a muxt generate, even one with flags, naming the key
 // and its clean form. The runner is not called.
