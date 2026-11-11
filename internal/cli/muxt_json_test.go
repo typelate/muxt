@@ -321,6 +321,30 @@ func TestGenerateRejectsUncleanMuxtJSONKey(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsDirectoryWithoutMuxtJSONEntry states that a flagless muxt
+// generate in a directory below a muxt.json with no entry for it fails, naming
+// the file and the missing key. With a generate flag the same directory is
+// generated from the flags. The runner is not called for the failure.
+func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {".": {}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, workspace)
+
+	var missing *muxtjson.MissingEntryError
+	require.ErrorAs(t, err, &missing, "error %v", err)
+	assert.Equal(t, filepath.Join("..", muxtjson.FileName), missing.Path, "path")
+	assert.Equal(t, "workspace", missing.Key, "key")
+	assert.Equal(t, `../muxt.json: no packages entry "workspace"; add one to generate this directory`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+
+	config := generateConfigurationOf(t, workspace, "generate --use-receiver-type T1")
+	assert.Equal(t, "T1", config.ReceiverType, "receiver type from flags")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {

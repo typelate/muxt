@@ -23,7 +23,8 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 
 // readMuxtJSONEntry returns the file, key and entry for wd in the nearest
 // muxt.json at or above wd. file is the name the file's errors give it. found
-// is false when no muxt.json is found or the file has no entry for the key.
+// is false when no muxt.json is found, or when wd is the file's own directory
+// and the file has no entry for it. Any other wd without an entry is an error.
 func readMuxtJSONEntry(wd string) (file, key string, entry muxtjson.Entry, found bool, err error) {
 	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
@@ -39,6 +40,11 @@ func readMuxtJSONEntry(wd string) (file, key string, entry muxtjson.Entry, found
 		return "", "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
 	}
 	entry, found = f.Packages[key]
+	// The directory holding the file may go without an entry, as it always
+	// has. Any other directory below the file needs one to be generated.
+	if !found && key != "." {
+		return "", "", muxtjson.Entry{}, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
+	}
 	return f.Name, key, entry, found, nil
 }
 

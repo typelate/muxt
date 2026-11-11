@@ -44,6 +44,18 @@ func (e *KeyFormError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is not in clean form; write %q", e.Path, e.Key, e.Clean)
 }
 
+// MissingEntryError reports a directory below a muxt.json that the file has no
+// entry for, so a flagless muxt generate there has nothing to read. Key is the
+// packages key the directory would need.
+type MissingEntryError struct {
+	Path, Key string
+}
+
+// Error returns the path and the key to add on one line.
+func (e *MissingEntryError) Error() string {
+	return fmt.Sprintf("%s: no packages entry %q; add one to generate this directory", e.Path, e.Key)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.
