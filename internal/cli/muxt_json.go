@@ -21,25 +21,25 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 	return given
 }
 
-// readMuxtJSONEntry returns the key and entry for wd in the nearest muxt.json
-// at or above wd. found is false when no muxt.json is found or the file has no
-// entry for the key.
-func readMuxtJSONEntry(wd string) (key string, entry muxtjson.Entry, found bool, err error) {
+// readMuxtJSONEntry returns the file, key and entry for wd in the nearest
+// muxt.json at or above wd. file is the name the file's errors give it. found
+// is false when no muxt.json is found or the file has no entry for the key.
+func readMuxtJSONEntry(wd string) (file, key string, entry muxtjson.Entry, found bool, err error) {
 	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
 		// Find's errors already name the file, and a *muxtjson.ParseError
 		// must reach the caller as it is.
-		return "", muxtjson.Entry{}, false, err
+		return "", "", muxtjson.Entry{}, false, err
 	}
 	if !found {
-		return "", muxtjson.Entry{}, false, nil
+		return "", "", muxtjson.Entry{}, false, nil
 	}
 	key, err = f.KeyFor(wd)
 	if err != nil {
-		return "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
+		return "", "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
 	}
 	entry, found = f.Packages[key]
-	return key, entry, found, nil
+	return f.Name, key, entry, found, nil
 }
 
 // entryField ties one muxt.json key to the flag and configuration field it

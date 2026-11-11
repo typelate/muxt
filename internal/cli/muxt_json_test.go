@@ -281,6 +281,26 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsMuxtJSONEntryFlagConflict states that a muxt.json entry
+// whose values a generate flag rejects fails a flagless muxt generate with the
+// flag's own error under the entry's location. The runner is not called.
+func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"output-htmx": true, "output-datastar": true}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
+	var invalid *muxtjson.InvalidEntryError
+	require.ErrorAs(t, err, &invalid, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, `packages["."]`, invalid.Where, "where")
+	assert.EqualError(t, invalid.Err, flagMessage, "flag error")
+	assert.Equal(t, `muxt.json: packages["."]: `+flagMessage, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {

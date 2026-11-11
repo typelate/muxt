@@ -22,7 +22,12 @@ const FileName = "muxt.json"
 // File is a muxt.json. Dir is the directory holding the file, set by Read.
 // Packages is keyed by slash-separated directory, relative to Dir, such as ".".
 type File struct {
-	Dir      string           `json:"-"`
+	// Dir is the absolute directory holding the file, so package directories
+	// can be found from it.
+	Dir string `json:"-"`
+	// Name is the file's path relative to the working directory the search
+	// started from. Errors name the file this way.
+	Name     string           `json:"-"`
 	Packages map[string]Entry `json:"packages"`
 }
 
@@ -147,6 +152,7 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 		return nil, err
 	}
 	f.Dir = filepath.Dir(path)
+	f.Name = shown
 	return &f, nil
 }
 

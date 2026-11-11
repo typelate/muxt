@@ -32,6 +32,24 @@ func (e *UnknownKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
 }
 
+// InvalidEntryError reports a muxt.json entry whose values a generate flag
+// rejects, such as two frontends set at once. Err is the flag's own error, so
+// the message matches the one the command line gives. Where names the entry.
+type InvalidEntryError struct {
+	Path, Where string
+	Err         error
+}
+
+// Error returns the path, the entry, and the flag's error on one line.
+func (e *InvalidEntryError) Error() string {
+	return fmt.Sprintf("%s: %s: %v", e.Path, e.Where, e.Err)
+}
+
+// Unwrap returns the flag's error, so errors.Is and errors.As reach it.
+func (e *InvalidEntryError) Unwrap() error {
+	return e.Err
+}
+
 // DeprecatedKeyError reports a key in a muxt.json entry that is an old flag
 // name. Replacement is the key to write instead. Where names the entry.
 type DeprecatedKeyError struct {

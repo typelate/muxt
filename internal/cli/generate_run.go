@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"go/token"
 	"log"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // generateJob is one package directory and what to generate it with. Key is
@@ -27,14 +29,14 @@ type generateJob struct {
 // file. It reads the file itself, since nothing else needs it yet.
 func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]generateJob, error) {
 	if !generateFlagGiven(flags) {
-		key, entry, found, err := readMuxtJSONEntry(wd)
+		file, key, entry, found, err := readMuxtJSONEntry(wd)
 		if err != nil {
 			return nil, err
 		}
 		if found {
 			config, err := entryConfiguration(entry, wd, getEnv, version)
 			if err != nil {
-				return nil, err
+				return nil, &muxtjson.InvalidEntryError{Path: file, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 			}
 			return []generateJob{{Key: key, Dir: wd, Config: config}}, nil
 		}
