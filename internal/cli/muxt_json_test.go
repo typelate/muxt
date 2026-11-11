@@ -211,10 +211,32 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 
 	var parseErr *muxtjson.ParseError
 	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	assert.Equal(t, path, parseErr.Path, "path")
+	assert.Equal(t, muxtjson.FileName, parseErr.Path, "path")
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 10, parseErr.Col, "column")
-	assert.Equal(t, path+":3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
+	assert.Equal(t, "muxt.json:3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
+// TestGenerateRejectsMalformedMuxtJSONInParentDirectory states that a muxt.json
+// in the parent of the working directory that is not valid JSON fails a
+// flagless muxt generate, naming the file relative to the working directory.
+// The runner is not called.
+func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = "{\n  \"packages\": {\n    \"workspace\": x\n  }\n}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, workspace)
+
+	var parseErr *muxtjson.ParseError
+	require.ErrorAs(t, err, &parseErr, "error %v", err)
+	assert.Equal(t, filepath.Join("..", muxtjson.FileName), parseErr.Path, "path")
+	assert.Equal(t, 3, parseErr.Line, "line")
+	assert.Equal(t, 18, parseErr.Col, "column")
+	assert.Equal(t, "../muxt.json:3:18: invalid character 'x' looking for beginning of value", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -231,10 +253,10 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 
 	var unknown *muxtjson.UnknownKeyError
 	require.ErrorAs(t, err, &unknown, "error %v", err)
-	assert.Equal(t, path, unknown.Path, "path")
+	assert.Equal(t, muxtjson.FileName, unknown.Path, "path")
 	assert.Equal(t, `packages["."]`, unknown.Where, "where")
 	assert.Equal(t, "nope", unknown.Key, "key")
-	assert.Equal(t, path+`: packages["."]: unknown key "nope"`, err.Error(), "message")
+	assert.Equal(t, `muxt.json: packages["."]: unknown key "nope"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -251,11 +273,11 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 
 	var deprecated *muxtjson.DeprecatedKeyError
 	require.ErrorAs(t, err, &deprecated, "error %v", err)
-	assert.Equal(t, path, deprecated.Path, "path")
+	assert.Equal(t, muxtjson.FileName, deprecated.Path, "path")
 	assert.Equal(t, `packages["."]`, deprecated.Where, "where")
 	assert.Equal(t, "receiver-type", deprecated.Key, "key")
 	assert.Equal(t, "use-receiver-type", deprecated.Replacement, "replacement")
-	assert.Equal(t, path+`: packages["."]: key "receiver-type" is deprecated; write "use-receiver-type"`, err.Error(), "message")
+	assert.Equal(t, `muxt.json: packages["."]: key "receiver-type" is deprecated; write "use-receiver-type"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 

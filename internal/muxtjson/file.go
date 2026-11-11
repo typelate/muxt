@@ -34,12 +34,19 @@ type File struct {
 // false when the walk ends without a muxt.json. deprecated maps an old key to
 // its replacement, as Read takes it.
 func Find(wd string, deprecated map[string]string) (f *File, found bool, err error) {
-	dir, err := filepath.Abs(wd)
+	start, err := filepath.Abs(wd)
 	if err != nil {
 		return nil, false, fmt.Errorf("absolute path of %s: %w", wd, err)
 	}
+	dir := start
 	for {
-		f, err := Read(filepath.Join(dir, FileName), deprecated)
+		// Errors name the file relative to wd, the way the rest of muxt
+		// names paths, while Dir keeps the absolute directory.
+		shown, err := filepath.Rel(start, filepath.Join(dir, FileName))
+		if err != nil {
+			return nil, false, fmt.Errorf("path of %s from %s: %w", dir, start, err)
+		}
+		f, err := Read(filepath.Join(dir, FileName), shown, deprecated)
 		if err == nil {
 			return f, true, nil
 		}
@@ -118,23 +125,25 @@ type Entry struct {
 	UseTemplatesVariable []string `json:"use-templates-variable,omitempty"`
 }
 
-// Read reads the muxt.json at path. A missing file is an error that matches
+// Read reads the muxt.json at path. shown is the name its errors give the
+// file, relative to the working directory, so a message names the file the
+// way the person typed it. A missing file is an error that matches
 // fs.ErrNotExist.
-func Read(path string, deprecated map[string]string) (*File, error) {
+func Read(path, shown string, deprecated map[string]string) (*File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		return nil, fmt.Errorf("reading %s: %w", shown, err)
 	}
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) {
 			line, col := position(data, syntax.Offset)
-			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
+			return nil, &ParseError{Path: shown, Line: line, Col: col, Err: syntax}
 		}
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+		return nil, fmt.Errorf("parsing %s: %w", shown, err)
 	}
-	if err := checkKeys(path, data, deprecated); err != nil {
+	if err := checkKeys(shown, data, deprecated); err != nil {
 		return nil, err
 	}
 	f.Dir = filepath.Dir(path)
