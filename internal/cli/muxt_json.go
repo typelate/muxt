@@ -25,7 +25,7 @@ func generateFlagGiven(flags *pflag.FlagSet) bool {
 // at or above wd. found is false when no muxt.json is found or the file has no
 // entry for the key.
 func readMuxtJSONEntry(wd string) (key string, entry muxtjson.Entry, found bool, err error) {
-	f, found, err := muxtjson.Find(wd)
+	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
 		// Find's errors already name the file, and a *muxtjson.ParseError
 		// must reach the caller as it is.

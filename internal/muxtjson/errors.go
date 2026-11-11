@@ -31,3 +31,14 @@ type UnknownKeyError struct {
 func (e *UnknownKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
 }
+
+// DeprecatedKeyError reports a key in a muxt.json entry that is an old flag
+// name. Replacement is the key to write instead. Where names the entry.
+type DeprecatedKeyError struct {
+	Path, Where, Key, Replacement string
+}
+
+// Error returns the path, the entry, the key, and its replacement on one line.
+func (e *DeprecatedKeyError) Error() string {
+	return fmt.Sprintf("%s: %s: key %q is deprecated; write %q", e.Path, e.Where, e.Key, e.Replacement)
+}

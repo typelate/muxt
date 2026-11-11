@@ -73,6 +73,27 @@ This function also receives an argument with a type matching the name given by o
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
+// deprecatedMuxtJSONKeys maps each deprecated generate flag name to the flag
+// that replaces it, the keys a muxt.json entry must not use. It is built from
+// the same names the flags are registered with, so a flag marked deprecated
+// there has its row here.
+func deprecatedMuxtJSONKeys() map[string]string {
+	return map[string]string{
+		deprecatedTemplatesVariable:       useTemplatesVariable,
+		deprecatedReceiverType:            useReceiverType,
+		deprecatedReceiverTypePackage:     useReceiverTypePackage,
+		deprecatedReceiverInterface:       outputReceiverInterface,
+		deprecatedRoutesFunc:              outputRoutesFunc,
+		deprecatedTemplateDataType:        outputTemplateDataType,
+		deprecatedTemplateRoutePathsType:  outputTemplateRoutePathsType,
+		deprecatedLogger:                  outputRoutesFuncWithLoggerParam,
+		deprecatedPathPrefix:              outputRoutesFuncWithPathPrefix,
+		deprecatedFindTemplatesVariable:   useTemplatesVariable,
+		deprecatedFindReceiverType:        useReceiverType,
+		deprecatedFindReceiverTypePackage: useReceiverTypePackage,
+	}
+}
+
 const (
 	defaultTemplatesVariableName        = "templates"
 	defaultRoutesFunctionName           = generate.DefaultRoutesFunctionName

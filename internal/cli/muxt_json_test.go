@@ -238,6 +238,27 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsDeprecatedMuxtJSONKey states that a muxt.json entry key
+// that is a deprecated flag name fails a flagless muxt generate, naming the
+// key and the key to write instead. The runner is not called.
+func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {".": {"receiver-type": "Server"}}}`
+	path := filepath.Join(dir, muxtjson.FileName)
+	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var deprecated *muxtjson.DeprecatedKeyError
+	require.ErrorAs(t, err, &deprecated, "error %v", err)
+	assert.Equal(t, path, deprecated.Path, "path")
+	assert.Equal(t, `packages["."]`, deprecated.Where, "where")
+	assert.Equal(t, "receiver-type", deprecated.Key, "key")
+	assert.Equal(t, "use-receiver-type", deprecated.Replacement, "replacement")
+	assert.Equal(t, path+`: packages["."]: key "receiver-type" is deprecated; write "use-receiver-type"`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
