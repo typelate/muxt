@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -156,26 +157,32 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 	return &f, nil
 }
 
-// checkKeys returns a *DeprecatedKeyError or *UnknownKeyError for the first
-// entry key, in sorted order, that is an old flag name or that Entry has no
-// field for. json.Unmarshal drops unknown keys without a word, so the keys are
-// read again here.
-func checkKeys(path string, data []byte, deprecated map[string]string) error {
+// checkKeys returns a *KeyFormError for the first packages key, in sorted
+// order, that is not in clean form, or a *DeprecatedKeyError or
+// *UnknownKeyError for the first entry key that is an old flag name or that
+// Entry has no field for. json.Unmarshal drops unknown keys without a word, so
+// the keys are read again here.
+func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 	var raw struct {
 		Packages map[string]map[string]json.RawMessage `json:"packages"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
+		return fmt.Errorf("parsing %s: %w", shown, err)
 	}
 	known := entryKeys()
 	for _, dir := range slices.Sorted(maps.Keys(raw.Packages)) {
+		// Two spellings of one directory would be two entries, so each key
+		// is written in the form path.Clean gives it.
+		if clean := path.Clean(dir); clean != dir {
+			return &KeyFormError{Path: shown, Key: dir, Clean: clean}
+		}
 		where := fmt.Sprintf("packages[%q]", dir)
 		for _, key := range slices.Sorted(maps.Keys(raw.Packages[dir])) {
 			if replacement, ok := deprecated[key]; ok {
-				return &DeprecatedKeyError{Path: path, Where: where, Key: key, Replacement: replacement}
+				return &DeprecatedKeyError{Path: shown, Where: where, Key: key, Replacement: replacement}
 			}
 			if !slices.Contains(known, key) {
-				return &UnknownKeyError{Path: path, Where: where, Key: key}
+				return &UnknownKeyError{Path: shown, Where: where, Key: key}
 			}
 		}
 	}

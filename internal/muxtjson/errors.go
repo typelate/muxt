@@ -32,6 +32,18 @@ func (e *UnknownKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
 }
 
+// KeyFormError reports a packages key that is not in clean form, such as
+// "./workspace/". Clean is the form to write instead, so two spellings of one
+// directory cannot both be keys.
+type KeyFormError struct {
+	Path, Key, Clean string
+}
+
+// Error returns the path, the key, and its clean form on one line.
+func (e *KeyFormError) Error() string {
+	return fmt.Sprintf("%s: packages key %q is not in clean form; write %q", e.Path, e.Key, e.Clean)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

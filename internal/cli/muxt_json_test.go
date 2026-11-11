@@ -301,6 +301,26 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	assert.False(t, called, "generate runner called")
 }
 
+// TestGenerateRejectsUncleanMuxtJSONKey states that a muxt.json packages key
+// not in clean form fails a muxt generate, even one with flags, naming the key
+// and its clean form. The runner is not called.
+func TestGenerateRejectsUncleanMuxtJSONKey(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"packages": {"./workspace/": {}}}`
+	path := filepath.Join(dir, muxtjson.FileName)
+	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var keyForm *muxtjson.KeyFormError
+	require.ErrorAs(t, err, &keyForm, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, keyForm.Path, "path")
+	assert.Equal(t, "./workspace/", keyForm.Key, "key")
+	assert.Equal(t, "workspace", keyForm.Clean, "clean form")
+	assert.Equal(t, `muxt.json: packages key "./workspace/" is not in clean form; write "workspace"`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
