@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/generate"
@@ -18,6 +19,30 @@ type generateJob struct {
 	Key    string
 	Dir    string
 	Config generate.RoutesFileConfiguration
+}
+
+// generateJobs chooses what a generate run writes. With no generate flag given
+// and a muxt.json entry for wd, the entry configures the run; otherwise the
+// flags do. Flags win outright so a command line never half-merges with a
+// file. It reads the file itself, since nothing else needs it yet.
+func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]generateJob, error) {
+	if !generateFlagGiven(flags) {
+		key, entry, found, err := readMuxtJSONEntry(wd)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			config, err := entryConfiguration(entry, wd, getEnv, version)
+			if err != nil {
+				return nil, err
+			}
+			return []generateJob{{Key: key, Dir: wd, Config: config}}, nil
+		}
+	}
+	if err := finalizeGenerate(flagConfig, flags, deprecatedTemplatesVar, wd, getEnv, version); err != nil {
+		return nil, err
+	}
+	return []generateJob{{Dir: wd, Config: *flagConfig}}, nil
 }
 
 // packageLoader is the only way a run asks for packages, so one go command
