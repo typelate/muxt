@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/typelate/htt/template"
 
@@ -97,7 +98,13 @@ func resolveCall(def *Definition, call *ast.CallExpr, pkg source.Package, receiv
 // lookupCallee finds what fun names: a receiver method, else a package-scope
 // function, else a method synthesized from the call's arguments.
 func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg source.Package, receiver *types.Named, checker Checker) (types.Object, bool, error) {
-	if object, _, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name); object != nil {
+	object, index, _ := types.LookupFieldOrMethod(receiver, true, receiver.Obj().Pkg(), fun.Name)
+	if object == nil && index != nil {
+		// Go rejects the selector, so the receiver cannot be called this
+		// way; synthesizing a method would hide the ones that exist.
+		return nil, false, errAt(fun, "%s is ambiguous on %s: promoted by embedded fields %s", fun.Name, receiver.Obj().Name(), strings.Join(promotingFields(receiver, fun.Name), ", "))
+	}
+	if object != nil {
 		method, isMethod := object.(*types.Func)
 		if !isMethod {
 			// Synthesizing a method would collide with the field, and
@@ -123,6 +130,38 @@ func lookupCallee(def *Definition, call *ast.CallExpr, fun *ast.Ident, pkg sourc
 	receiver.AddMethod(method)
 	def.recordSynthesized(method, receiver)
 	return method, true, nil
+}
+
+// promotingFields names the embedded fields that each promote name to tp,
+// descending while a single field leads to them.
+func promotingFields(tp types.Type, name string) []string {
+	var names []string
+	for {
+		if pointer, ok := tp.Underlying().(*types.Pointer); ok {
+			tp = pointer.Elem()
+		}
+		structure, ok := tp.Underlying().(*types.Struct)
+		if !ok {
+			return names
+		}
+		var promoting []*types.Var
+		for field := range structure.Fields() {
+			if !field.Embedded() {
+				continue
+			}
+			if object, index, _ := types.LookupFieldOrMethod(field.Type(), true, field.Pkg(), name); object != nil || index != nil {
+				promoting = append(promoting, field)
+			}
+		}
+		if len(promoting) != 1 {
+			for _, field := range promoting {
+				names = append(names, field.Name())
+			}
+			return names
+		}
+		names = []string{promoting[0].Name()}
+		tp = promoting[0].Type()
+	}
 }
 
 // isSynthesized reports whether method is one lookupCallee added to the

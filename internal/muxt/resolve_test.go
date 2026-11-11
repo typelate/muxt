@@ -113,6 +113,29 @@ type Nested struct{ Users func() any }
 		}
 	})
 
+	t.Run("a method promoted by two embedded fields is ambiguous", func(t *testing.T) {
+		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
+
+type Workbench struct{}
+
+func (*Workbench) F() int { return 0 }
+
+type Other struct{}
+
+func (*Other) F() string { return "" }
+
+type T struct {
+	Workbench
+	Other
+}
+`})
+		src := source.Package{Fset: fake.FileSet, Types: pkg, Variables: []source.Variable{
+			variable("templates", `{{define "GET /workbench F()"}}{{end}}`),
+		}}
+		_, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), fake.NewChecker().Fake())
+		require.ErrorContains(t, err, "F is ambiguous on T: promoted by embedded fields Workbench, Other")
+	})
+
 	t.Run("an alias parameter type parses like the type it names", func(t *testing.T) {
 		pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": `package server
 
