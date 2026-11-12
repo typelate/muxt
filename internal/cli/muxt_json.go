@@ -67,60 +67,69 @@ type entryField struct {
 }
 
 // entryValue is the row for a key whose entry field is a pointer and whose
-// configuration field takes the value as it is.
-func entryValue[T any](name string, get func(muxtjson.Entry) *T, set func(*generate.RoutesFileConfiguration, T)) entryField {
-	return entryField{Name: name, Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
-		v := get(e)
-		if v == nil {
-			return false, nil
-		}
-		set(c, *v)
-		return true, nil
-	}}
+// configuration field, which field returns, takes the value as it is.
+func entryValue[T any](name string, get func(muxtjson.Entry) *T, field func(*generate.RoutesFileConfiguration) *T) entryField {
+	return entryField{
+		Name: name,
+		Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
+			v := get(e)
+			if v == nil {
+				return false, nil
+			}
+			*field(c) = *v
+			return true, nil
+		},
+	}
 }
 
 // entryFields lists a row for each muxt.json key. It is a function so no
 // package-level state holds the closures.
 func entryFields() []entryField {
 	return []entryField{
-		{Name: useTemplatesVariable, Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
-			if e.UseTemplatesVariable == nil {
-				return false, nil
-			}
-			c.TemplatesVariables = e.UseTemplatesVariable
-			return true, nil
-		}},
-		entryValue(useReceiverType, func(e muxtjson.Entry) *string { return e.UseReceiverType }, func(c *generate.RoutesFileConfiguration, v string) { c.ReceiverType = v }),
-		entryValue(useReceiverTypePackage, func(e muxtjson.Entry) *string { return e.UseReceiverTypePackage }, func(c *generate.RoutesFileConfiguration, v string) { c.ReceiverPackage = v }),
-		entryValue(outputFile, func(e muxtjson.Entry) *string { return e.OutputFile }, func(c *generate.RoutesFileConfiguration, v string) { c.OutputFileName = v }),
-		entryValue(outputReceiverInterface, func(e muxtjson.Entry) *string { return e.OutputReceiverInterface }, func(c *generate.RoutesFileConfiguration, v string) { c.ReceiverInterface = v }),
-		entryValue(outputRoutesFunc, func(e muxtjson.Entry) *string { return e.OutputRoutesFunc }, func(c *generate.RoutesFileConfiguration, v string) { c.RoutesFunction = v }),
-		entryValue(outputTemplateDataType, func(e muxtjson.Entry) *string { return e.OutputTemplateDataType }, func(c *generate.RoutesFileConfiguration, v string) { c.TemplateDataType = v }),
-		entryValue(outputSSETemplateDataType, func(e muxtjson.Entry) *string { return e.OutputSSETemplateDataType }, func(c *generate.RoutesFileConfiguration, v string) { c.SSETemplateDataType = v }),
-		entryValue(outputTemplateRoutePathsType, func(e muxtjson.Entry) *string { return e.OutputTemplateRoutePathsType }, func(c *generate.RoutesFileConfiguration, v string) { c.TemplateRoutePathsTypeName = v }),
-		entryValue(outputTemplateRouteType, func(e muxtjson.Entry) *string { return e.OutputTemplateRouteType }, func(c *generate.RoutesFileConfiguration, v string) { c.TemplateRouteTypeName = v }),
-		entryValue(outputTemplateRouteBuilderType, func(e muxtjson.Entry) *string { return e.OutputTemplateRouteBuilderType }, func(c *generate.RoutesFileConfiguration, v string) { c.TemplateRouteBuilderTypeName = v }),
-		entryValue(outputRoutesFuncWithLoggerParam, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithLoggerParam }, func(c *generate.RoutesFileConfiguration, v bool) { c.Logger = v }),
-		entryValue(outputRoutesFuncWithPathPrefix, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithPathPrefixParam }, func(c *generate.RoutesFileConfiguration, v bool) { c.PathPrefix = v }),
-		entryValue(outputRoutesFuncWithMiddlewareParam, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithMiddlewareParam }, func(c *generate.RoutesFileConfiguration, v bool) { c.Middleware = v }),
-		entryValue(outputMultipleFiles, func(e muxtjson.Entry) *bool { return e.OutputMultipleFiles }, func(c *generate.RoutesFileConfiguration, v bool) { c.OutputMultipleFiles = v }),
-		entryValue(outputHTMX, func(e muxtjson.Entry) *bool { return e.OutputHTMX }, func(c *generate.RoutesFileConfiguration, v bool) { c.OutputHTMX = v }),
-		entryValue(outputDatastar, func(e muxtjson.Entry) *bool { return e.OutputDatastar }, func(c *generate.RoutesFileConfiguration, v bool) { c.OutputDatastar = v }),
-		entryValue(outputExportedDefaultIdentifiers, func(e muxtjson.Entry) *bool { return e.OutputExportedDefaultIdentifiers }, func(c *generate.RoutesFileConfiguration, v bool) { c.OutputExportedDefaultIdentifiers = v }),
-		entryValue(outputMuxtVersion, func(e muxtjson.Entry) *bool { return e.OutputMuxtVersion }, func(c *generate.RoutesFileConfiguration, v bool) { c.OutputMuxtVersion = v }),
-		{Name: outputMultipartMaxMemory, Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
-			if e.OutputMultipartMaxMemory == nil {
-				return false, nil
-			}
-			// The flag's own parser turns "64MB" into bytes, so the entry and
-			// the command line accept the same values.
-			if err := (&multipartMaxMemoryFlag{cfg: c}).Set(*e.OutputMultipartMaxMemory); err != nil {
-				return false, fmt.Errorf("%s: %w", muxtJSONKey(outputMultipartMaxMemory), err)
-			}
-			return true, nil
-		}},
-		entryValue(inputStaticAssetsDirectory, func(e muxtjson.Entry) *string { return e.InputStaticAssetsDirectory }, func(c *generate.RoutesFileConfiguration, v string) { c.StaticAssetsDirectory = v }),
-		entryValue(outputStaticAssetsPath, func(e muxtjson.Entry) *string { return e.OutputStaticAssetsPath }, func(c *generate.RoutesFileConfiguration, v string) { c.StaticAssetsPath = v }),
+		{
+			Name: useTemplatesVariable,
+			Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
+				if e.UseTemplatesVariable == nil {
+					return false, nil
+				}
+				c.TemplatesVariables = e.UseTemplatesVariable
+				return true, nil
+			},
+		},
+		entryValue(useReceiverType, func(e muxtjson.Entry) *string { return e.UseReceiverType }, func(c *generate.RoutesFileConfiguration) *string { return &c.ReceiverType }),
+		entryValue(useReceiverTypePackage, func(e muxtjson.Entry) *string { return e.UseReceiverTypePackage }, func(c *generate.RoutesFileConfiguration) *string { return &c.ReceiverPackage }),
+		entryValue(outputFile, func(e muxtjson.Entry) *string { return e.OutputFile }, func(c *generate.RoutesFileConfiguration) *string { return &c.OutputFileName }),
+		entryValue(outputReceiverInterface, func(e muxtjson.Entry) *string { return e.OutputReceiverInterface }, func(c *generate.RoutesFileConfiguration) *string { return &c.ReceiverInterface }),
+		entryValue(outputRoutesFunc, func(e muxtjson.Entry) *string { return e.OutputRoutesFunc }, func(c *generate.RoutesFileConfiguration) *string { return &c.RoutesFunction }),
+		entryValue(outputTemplateDataType, func(e muxtjson.Entry) *string { return e.OutputTemplateDataType }, func(c *generate.RoutesFileConfiguration) *string { return &c.TemplateDataType }),
+		entryValue(outputSSETemplateDataType, func(e muxtjson.Entry) *string { return e.OutputSSETemplateDataType }, func(c *generate.RoutesFileConfiguration) *string { return &c.SSETemplateDataType }),
+		entryValue(outputTemplateRoutePathsType, func(e muxtjson.Entry) *string { return e.OutputTemplateRoutePathsType }, func(c *generate.RoutesFileConfiguration) *string { return &c.TemplateRoutePathsTypeName }),
+		entryValue(outputTemplateRouteType, func(e muxtjson.Entry) *string { return e.OutputTemplateRouteType }, func(c *generate.RoutesFileConfiguration) *string { return &c.TemplateRouteTypeName }),
+		entryValue(outputTemplateRouteBuilderType, func(e muxtjson.Entry) *string { return e.OutputTemplateRouteBuilderType }, func(c *generate.RoutesFileConfiguration) *string { return &c.TemplateRouteBuilderTypeName }),
+		entryValue(outputRoutesFuncWithLoggerParam, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithLoggerParam }, func(c *generate.RoutesFileConfiguration) *bool { return &c.Logger }),
+		entryValue(outputRoutesFuncWithPathPrefix, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithPathPrefixParam }, func(c *generate.RoutesFileConfiguration) *bool { return &c.PathPrefix }),
+		entryValue(outputRoutesFuncWithMiddlewareParam, func(e muxtjson.Entry) *bool { return e.OutputRoutesFuncWithMiddlewareParam }, func(c *generate.RoutesFileConfiguration) *bool { return &c.Middleware }),
+		entryValue(outputMultipleFiles, func(e muxtjson.Entry) *bool { return e.OutputMultipleFiles }, func(c *generate.RoutesFileConfiguration) *bool { return &c.OutputMultipleFiles }),
+		entryValue(outputHTMX, func(e muxtjson.Entry) *bool { return e.OutputHTMX }, func(c *generate.RoutesFileConfiguration) *bool { return &c.OutputHTMX }),
+		entryValue(outputDatastar, func(e muxtjson.Entry) *bool { return e.OutputDatastar }, func(c *generate.RoutesFileConfiguration) *bool { return &c.OutputDatastar }),
+		entryValue(outputExportedDefaultIdentifiers, func(e muxtjson.Entry) *bool { return e.OutputExportedDefaultIdentifiers }, func(c *generate.RoutesFileConfiguration) *bool { return &c.OutputExportedDefaultIdentifiers }),
+		entryValue(outputMuxtVersion, func(e muxtjson.Entry) *bool { return e.OutputMuxtVersion }, func(c *generate.RoutesFileConfiguration) *bool { return &c.OutputMuxtVersion }),
+		{
+			Name: outputMultipartMaxMemory,
+			Apply: func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (bool, error) {
+				if e.OutputMultipartMaxMemory == nil {
+					return false, nil
+				}
+				// The flag's own parser turns "64MB" into bytes, so the entry and
+				// the command line accept the same values.
+				if err := (&multipartMaxMemoryFlag{cfg: c}).Set(*e.OutputMultipartMaxMemory); err != nil {
+					return false, fmt.Errorf("%s: %w", muxtJSONKey(outputMultipartMaxMemory), err)
+				}
+				return true, nil
+			},
+		},
+		entryValue(inputStaticAssetsDirectory, func(e muxtjson.Entry) *string { return e.InputStaticAssetsDirectory }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsDirectory }),
+		entryValue(outputStaticAssetsPath, func(e muxtjson.Entry) *string { return e.OutputStaticAssetsPath }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsPath }),
 	}
 }
 
