@@ -62,7 +62,7 @@ template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: fie
 
 Check also fails on:
 
-- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)), except as noted under [edge cases](#edge-cases); [`--allow-unused`](commands/check.md) lists them without failing
+- a defined template nothing renders, by route or by `ExecuteTemplate` ([err_check_with_unused_template.txt](../../cmd/muxt/testdata/err_check_with_unused_template.txt)), except as noted under [edge cases](#edge-cases) and for templates from another package's files; [`--allow-unused`](commands/check.md) lists them without failing
 - content in a template file outside every `{{define}}` block; files holding only comments and whitespace are fine ([err_check_with_dead_code_outside_define.txt](../../cmd/muxt/testdata/err_check_with_dead_code_outside_define.txt))
 
 `printf`-family format verbs are verified against the argument types. With a string `Name`, `{{printf "%d" .Name}}` is an error.

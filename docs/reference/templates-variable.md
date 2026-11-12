@@ -21,7 +21,7 @@ The initializer may use only these calls. Every string argument is a literal, or
 | `.ParseFS`, `.Parse`, `.New`, `.Delims`, `.Option` | chained on the result |
 | `.Funcs` | argument is a `template.FuncMap{...}` literal, or the name of a package-level `var` or `const` holding one ([reference_funcs_variable.txt](../../cmd/muxt/testdata/reference_funcs_variable.txt)); each value is an expression that type-checks to a func |
 
-The `ParseFS` filesystem must be an `embed.FS` variable. A string argument muxt cannot read, such as a function result, fails with `expected string literal got NAME`. A `Funcs` argument it cannot read, such as a function result or a map built in `init`, fails with `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one` ([err_funcs_unreadable.txt](../../cmd/muxt/testdata/err_funcs_unreadable.txt)). `ParseGlob` fails with `unsupported function ParseGlob: use ParseFS with an embed.FS` ([err_template_parse_glob.txt](../../cmd/muxt/testdata/err_template_parse_glob.txt)), and any other call with `unsupported function NAME` or `unsupported method NAME`.
+The `ParseFS` filesystem must be an `embed.FS` variable of this package, or an exported one of another package of the same module (see [Sharing another package's files](#sharing-another-packages-files)). A string argument muxt cannot read, such as a function result, fails with `expected string literal got NAME`. A `Funcs` argument it cannot read, such as a function result or a map built in `init`, fails with `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one` ([err_funcs_unreadable.txt](../../cmd/muxt/testdata/err_funcs_unreadable.txt)). `ParseGlob` fails with `unsupported function ParseGlob: use ParseFS with an embed.FS` ([err_template_parse_glob.txt](../../cmd/muxt/testdata/err_template_parse_glob.txt)), and any other call with `unsupported function NAME` or `unsupported method NAME`.
 
 ```go
 //go:embed *.gohtml pages/*.gohtml
@@ -31,6 +31,24 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{"add": add
 ```
 
 [reference_template_with_multiple_parsefs.txt](../../cmd/muxt/testdata/reference_template_with_multiple_parsefs.txt)
+
+## Sharing another package's files
+
+```go
+var templates = template.Must(template.Must(template.New("").
+	Funcs(template.FuncMap{"upper": fragments.Upper}).
+	ParseFS(fragments.TemplateSource, "*.gohtml")).
+	ParseFS(templateSource, "*.gohtml"))
+```
+
+[howto_shared_template_fragments.txt](../../cmd/muxt/testdata/howto_shared_template_fragments.txt)
+
+- The other package's own `//go:embed` patterns decide which files exist.
+- A route template in a shared file is a route of every package that parses it.
+- A later definition of a name replaces an earlier one; bare `muxt` lists these under `Overrides:` ([cli](cli.md)).
+- Share functions by exporting them and naming each in a `FuncMap` literal. `Funcs(fragments.Funcs)` is an error that says so.
+- A variable that is unexported, not an `embed.FS`, or from another module is an error naming the rule ([reference_cross_package_embed_fs.txt](../../cmd/muxt/testdata/reference_cross_package_embed_fs.txt)).
+- [`muxt check`](commands/check.md) does not report a shared template as unused. Mutation testing does not mutate shared files.
 
 ## Multiple Template Variables
 
