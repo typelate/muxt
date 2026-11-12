@@ -411,6 +411,33 @@ func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 	assert.Equal(t, "Server", jobs[0].Config.ReceiverType, "generate job receiver type")
 }
 
+// TestGenerateVerboseSetsEveryEntryJob states that muxt generate -v in a
+// muxt.json directory with entries for "." and "workspace" hands the runner
+// jobs with verbose on, and that without -v they have it off. Verbose is a run
+// setting, so it comes from the command line and no entry sets it.
+func TestGenerateVerboseSetsEveryEntryJob(t *testing.T) {
+	for _, tc := range []struct {
+		commandLine string
+		want        bool
+	}{
+		{commandLine: "generate -v", want: true},
+		{commandLine: "generate", want: false},
+	} {
+		t.Run(tc.commandLine, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {".": {}, "workspace": {}}}`), 0o644))
+
+			jobs := generateJobsOf(t, dir, tc.commandLine)
+
+			require.Len(t, jobs, 2, "got %d generate jobs, want 2", len(jobs))
+			for _, job := range jobs {
+				assert.Equal(t, tc.want, job.Config.Verbose, "verbose of the %s job", job.Key)
+			}
+		})
+	}
+}
+
 // TestGenerateChangeDirectorySelectsMuxtJSONEntry states that muxt -C workspace
 // generate, run from the directory holding a muxt.json with entries for the
 // directory and for workspace, generates only the workspace entry. -C is not a

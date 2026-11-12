@@ -45,6 +45,11 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 			return nil, err
 		}
 		if found {
+			// Verbose is a run setting, never a muxt.json key, so every job
+			// takes it from the command line.
+			for i := range jobs {
+				jobs[i].Config.Verbose = flagConfig.Verbose
+			}
 			return jobs, nil
 		}
 	}
