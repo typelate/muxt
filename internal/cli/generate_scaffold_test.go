@@ -219,6 +219,26 @@ func declaredTypeNames(file *ast.File) []string {
 	return names
 }
 
+// TestGeneratePackageWritesFilesAndReportsThem states that muxt generate
+// package writes the Go file and an empty template file for the package, and
+// prints each path it wrote with the muxt.json entry, relative to the working
+// directory.
+func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
+
+	stdout, err := runCommand(t, root, "generate package workspace")
+
+	require.NoError(t, err)
+	assert.Equal(t, "wrote workspace/workspace.go\nwrote workspace/workspace.gohtml\nwrote muxt.json: packages[\"workspace\"]\n", stdout, "stdout")
+	html, err := os.ReadFile(filepath.Join(root, "workspace", "workspace.gohtml"))
+	require.NoError(t, err)
+	assert.Empty(t, html, "workspace.gohtml")
+	goSource, err := os.ReadFile(filepath.Join(root, "workspace", "workspace.go"))
+	require.NoError(t, err)
+	assert.Contains(t, string(goSource), "//go:embed *.gohtml", "workspace.go embeds the templates")
+}
+
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {

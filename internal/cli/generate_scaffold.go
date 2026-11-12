@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -31,7 +32,7 @@ func generatePackageCommand(workingDirectory *string, getEnv func(string) string
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			return scaffoldPackage(*workingDirectory, args[0], cmd.Flags(), &config, deprecatedTemplatesVar, getEnv, version)
+			return scaffoldPackage(cmd.OutOrStdout(), *workingDirectory, args[0], cmd.Flags(), &config, deprecatedTemplatesVar, getEnv, version)
 		},
 	}
 	addGenerateFlags(cmd.Flags(), &config, &deprecatedTemplatesVar)
@@ -41,7 +42,7 @@ func generatePackageCommand(workingDirectory *string, getEnv func(string) string
 // scaffoldPackage writes the package directory name and adds its entry to the
 // muxt.json above wd. Everything is checked before anything is written: the
 // merged entry must pass the validation generate applies to an entry.
-func scaffoldPackage(wd, name string, flags *pflag.FlagSet, config *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) error {
+func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, config *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) error {
 	if !token.IsIdentifier(name) {
 		return fmt.Errorf("package name %q must be a Go identifier", name)
 	}
@@ -95,11 +96,26 @@ func scaffoldPackage(wd, name string, flags *pflag.FlagSet, config *generate.Rou
 	if err != nil {
 		return err
 	}
+	// The embed in the Go file needs a match, so the template file exists
+	// even though it is empty.
+	written := []string{filepath.Join(name, filename), filepath.Join(name, name+".gohtml")}
 	if err := os.WriteFile(filepath.Join(dir, filename), src, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", filepath.Join(name, filename), err)
+		return fmt.Errorf("writing %s: %w", written[0], err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".gohtml"), nil, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", written[1], err)
 	}
 	f.Packages = candidate.Packages
-	return f.Save()
+	if err := f.Save(); err != nil {
+		return err
+	}
+	for _, path := range written {
+		if _, err := fmt.Fprintf(out, "wrote %s\n", path); err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(out, "wrote %s: packages[%q]\n", f.Name, key)
+	return err
 }
 
 // entryFromFlags returns the entry that records each generate flag given, under
