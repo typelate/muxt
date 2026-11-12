@@ -104,3 +104,28 @@ func TestGenerateDefinitionIsAliasOfDef(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "{{define \"GET /foo Index()\"}}{{end}}\n", string(got), "index.gohtml")
 }
+
+// TestGenerateDefRejectsNameThatIsNotARoute states that a name muxt would not
+// accept as a route template fails with the error muxt gives for it, and that
+// nothing is written.
+func TestGenerateDefRejectsNameThatIsNotARoute(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want string
+	}{
+		{name: "GET foo Index(", want: `"GET foo Index(" is not a route template name`},
+		{name: "header", want: `"header" is not a route template name`},
+		{name: "GET /foo Index(", want: "failed to parse handler expression: template_name.go:1:7: expected ')', found 'EOF'"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			_, _, err := runCommandArgs(dir, []string{"generate", "def", tt.name, "--output-file=index.gohtml"}, runners{})
+
+			require.EqualError(t, err, tt.want)
+			entries, readErr := os.ReadDir(dir)
+			require.NoError(t, readErr)
+			assert.Empty(t, entries, "nothing is written")
+		})
+	}
+}

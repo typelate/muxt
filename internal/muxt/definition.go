@@ -2,6 +2,7 @@ package muxt
 
 import (
 	"cmp"
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -482,4 +483,26 @@ func cloneCall(call *ast.CallExpr) *ast.CallExpr {
 		}
 	}
 	return &clone
+}
+
+// NotRouteNameError reports a template name that does not have the shape of a
+// route definition, so muxt would leave the template alone.
+type NotRouteNameError struct {
+	Name string
+}
+
+func (e *NotRouteNameError) Error() string {
+	return fmt.Sprintf("%q is not a route template name", e.Name)
+}
+
+// CheckDefinitionName reports whether name is a route template name muxt would
+// accept: nil when it is, a *NotRouteNameError when it has no route shape, and
+// otherwise the error muxt gives that malformed name. It resolves no call, so
+// it needs no package.
+func CheckDefinitionName(name string) error {
+	def, status, ok := splitDefinitionName(name)
+	if !ok {
+		return &NotRouteNameError{Name: name}
+	}
+	return def.finishNameError(def.parseParts(status), def.handlerSpan())
 }

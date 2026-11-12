@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/scaffold"
 )
 
@@ -36,6 +37,9 @@ func generateDefinitionCommand(workingDirectory *string) *cobra.Command {
 // reports it on stderr.
 func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string) error {
 	if err := checkTemplateFileName(templateFile); err != nil {
+		return err
+	}
+	if err := muxt.CheckDefinitionName(name); err != nil {
 		return err
 	}
 	path := filepath.Join(wd, templateFile)
