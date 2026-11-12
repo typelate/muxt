@@ -234,3 +234,14 @@ func TestGenerateDefOutputFragmentWritesAnEmptyDefine(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateDefRejectsFragmentWithDocument states that the two body flags
+// are mutually exclusive, and that nothing is written.
+func TestGenerateDefRejectsFragmentWithDocument(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--output-fragment", "--output-document"}, runners{})
+
+	require.EqualError(t, err, "--output-fragment and --output-document are mutually exclusive")
+	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
+}

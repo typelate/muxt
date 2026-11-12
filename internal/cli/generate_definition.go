@@ -32,6 +32,9 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			if fragment && document {
+				return fmt.Errorf("--%s and --%s are mutually exclusive", outputFragment, outputDocument)
+			}
 			body := scaffold.Fragment
 			if document {
 				body = scaffold.Document
