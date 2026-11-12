@@ -11,11 +11,12 @@ import (
 )
 
 // givenGenerateFlags returns the sorted names of the generate flags passed.
-// The root flags -C and -v do not configure a run, so they do not count.
+// The root flags -C, -v, --format and --version do not configure a run, so
+// they do not count.
 func givenGenerateFlags(flags *pflag.FlagSet) []string {
 	var given []string
 	flags.Visit(func(f *pflag.Flag) {
-		if f.Name != "change-directory" && f.Name != "verbose" {
+		if !slices.Contains([]string{"change-directory", "verbose", "format", "version"}, f.Name) {
 			given = append(given, f.Name)
 		}
 	})

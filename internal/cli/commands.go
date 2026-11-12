@@ -108,7 +108,7 @@ The documentation for this version is in the binary:
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			jobs, err := routesJobs(*workingDirectory, rootCommandConfig, getEnv)
+			jobs, err := routesJobs(*workingDirectory, cmd.Flags(), rootCommandConfig, getEnv)
 			if err != nil {
 				return err
 			}

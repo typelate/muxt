@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/load"
@@ -27,12 +28,35 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 	}
 }
 
-// routesJobs chooses what the route listing reads: the package in wd, with
-// the shared flags as given.
-func routesJobs(wd string, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
+// routesJobs chooses what the route listing reads, the way generateJobs
+// chooses what generate writes: with no shared flag given and a muxt.json
+// entry for wd, the entry decides; otherwise the flags do.
+func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
+	// A listing never writes a header, so it has no use for the version that
+	// would be recorded in one.
+	noVersion := func() (string, bool) { return "", false }
+	if flagNames := givenGenerateFlags(flags); len(flagNames) > 0 {
+		if err := rejectConfiguredDirectory(wd, flagNames); err != nil {
+			return nil, err
+		}
+	} else {
+		jobs, found, err := entryJobs(wd, getEnv, noVersion)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			listing := make([]routesJob, len(jobs))
+			for i, job := range jobs {
+				// Verbose is a run setting, never a muxt.json key.
+				job.Config.Verbose = flagConfig.Verbose
+				listing[i] = routesJob{job}
+			}
+			return listing, nil
+		}
+	}
 	// Only the three shared flags are read from the command line, so the
 	// rest of the configuration is what an empty entry gives.
-	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, func() (string, bool) { return "", false })
+	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, noVersion)
 	if err != nil {
 		return nil, err
 	}
