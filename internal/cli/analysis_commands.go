@@ -88,7 +88,7 @@ func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
 	return compiled, nil
 }
 
-func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error) *cobra.Command {
+func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
 		deprecatedTemplatesVar string
@@ -101,6 +101,7 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			flagNames := givenEntryFlags(cmd.Flags())
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -115,6 +116,13 @@ func listTemplateCallersCommand(wd *string, run func(*cobra.Command, string, ana
 			dir, err := packageDirectory(cmd.Name(), *wd, args)
 			if err != nil {
 				return err
+			}
+			job, found, err := entryJobFor(dir, flagNames, getEnv)
+			if err != nil {
+				return err
+			}
+			if found {
+				config.TemplatesVariables = job.Config.TemplatesVariables
 			}
 			return run(cmd, dir, config)
 		},

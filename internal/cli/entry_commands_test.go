@@ -29,8 +29,25 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 			got = c.TemplatesVariables
 			return nil
 		},
+		callers: func(_ *cobra.Command, _ string, c analysis.TemplateCallersConfiguration) error {
+			got = c.TemplatesVariables
+			return nil
+		},
 	})
 	return got, err
+}
+
+// TestCallersReadsMuxtJSONEntry states that muxt list-template-callers with no
+// flags in a directory a muxt.json entry configures lists the callers of the
+// templates variable that entry names.
+func TestCallersReadsMuxtJSONEntry(t *testing.T) {
+	dir := t.TempDir()
+	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
+
+	got, err := templatesVariablesOf(t, dir, "list-template-callers")
+
+	require.NoError(t, err, "muxt list-template-callers")
+	assert.Equal(t, []string{"pages"}, got, "templates variables")
 }
 
 // TestCallsReadsMuxtJSONEntry states that muxt list-template-calls with no flags
