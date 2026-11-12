@@ -106,16 +106,27 @@ func (r configurationReport) WriteTo(w io.Writer) (int64, error) {
 // listing ran with. Embedding the routes keeps their --format json members as
 // they were; Configuration is added after them. Text prints the section once,
 // before the first listing, so only that listing has printConfiguration set.
+//
+// Key is the packages key of the muxt.json entry when the run lists several
+// entries, so a reader can tell whose listing follows; it is absent otherwise.
 type routesListing struct {
 	*analysis.Routes
 	Configuration      configurationReport
+	Key                string `json:",omitzero"`
 	printConfiguration bool
 }
 
-// WriteTo writes the Configuration section when the listing is the first of
-// its package, then the routes.
+// WriteTo writes the entry's key when there is one and the Configuration
+// section, when the listing is the first of its package, then the routes.
 func (l routesListing) WriteTo(w io.Writer) (int64, error) {
 	var n int64
+	if l.printConfiguration && l.Key != "" {
+		written, err := fmt.Fprintln(w, l.Key)
+		n += int64(written)
+		if err != nil {
+			return n, err
+		}
+	}
 	if l.printConfiguration {
 		written, err := l.Configuration.WriteTo(w)
 		n += written

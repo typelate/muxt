@@ -124,6 +124,9 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			}
 			for n, result := range results {
 				listing := routesListing{Routes: result, Configuration: job.Report, printConfiguration: n == 0}
+				if len(jobs) > 1 {
+					listing.Key = job.Key
+				}
 				if err := writeResult(cmd, cmd.OutOrStdout(), listing); err != nil {
 					return err
 				}

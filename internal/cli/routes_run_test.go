@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -253,4 +254,84 @@ func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 
 	const want = "Configuration:\n  muxt.json packages[\".\"]:\n    \"use_receiver_type\": \"T1\"\n  muxt.json package_defaults:\n    \"output_htmx\": true\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
+}
+
+// TestRoutesListsEveryMuxtJSONEntryFromOneLoad states that bare muxt with no
+// flags in a muxt.json directory with entries for "." and "workspace" prints each
+// entry's key on its own line followed by that package's sections, from one
+// package load, in key order; and in import order when one package imports
+// another, so the imported one is listed first.
+func TestRoutesListsEveryMuxtJSONEntryFromOneLoad(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name    string
+		imports map[string][]string
+		order   []string
+	}{
+		{name: "key order", order: []string{".", "workspace"}},
+		{name: "import order", imports: map[string][]string{".": {"workspace"}}, order: []string{"workspace", "."}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, tt.imports)
+
+			stdout, loads, err := listWithLoader(t, dir)
+
+			require.NoError(t, err, "muxt")
+			assert.Equal(t, 1, loads, "package loads")
+			sections := map[string]string{".": "GET /Root RootPage()", "workspace": "GET /Space SpacePage()"}
+			var want []string
+			for _, key := range tt.order {
+				want = append(want, `\n*`+regexp.QuoteMeta(key)+`\nConfiguration:\n.*Template Routes:\n  - `+regexp.QuoteMeta(sections[key])+`\n.*Template Functions:\n`)
+			}
+			assert.Regexp(t, `(?s)\A`+strings.Join(want, "")+`\n*\z`, stdout, "stdout")
+		})
+	}
+}
+
+// TestRoutesListsOnlyTheEntriesAMuxtJSONHas states that bare muxt in the
+// directory of a muxt.json with no "." entry lists the entries it has, and that
+// one in a sub-directory prints that package's sections with no key line, the
+// Configuration section naming the file.
+func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{"workspace": "Space", "other": "Other"}, nil)
+
+	atTop, _, err := listWithLoader(t, dir)
+	require.NoError(t, err, "muxt at the top")
+	assert.Regexp(t, `\A(?s:other\nConfiguration:\n.*Template Routes:\n  - GET /Other OtherPage\(\)\n.*workspace\nConfiguration:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, atTop, "stdout at the top")
+	assert.NotContains(t, atTop, "\n.\n", "a key the file does not have")
+
+	below, _, err := listWithLoader(t, filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "muxt in workspace")
+	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json packages\["workspace"\]:\n    "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
+}
+
+// TestRoutesJSONNamesEachEntry states that with --format json a listing over
+// several entries gives each listing a Key member holding its packages key, and
+// a listing over one package has none.
+func TestRoutesJSONNamesEachEntry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	keysOf := func(t *testing.T, dir string) []string {
+		t.Helper()
+		stdout, _, err := listWithLoader(t, dir, "--format", "json")
+		require.NoError(t, err, "muxt --format json")
+		var keys []string
+		decoder := json.NewDecoder(strings.NewReader(stdout))
+		for decoder.More() {
+			var listing struct{ Key string }
+			require.NoError(t, decoder.Decode(&listing), "output:\n%s", stdout)
+			keys = append(keys, listing.Key)
+		}
+		return keys
+	}
+
+	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+	assert.Equal(t, []string{".", "workspace"}, keysOf(t, dir), "keys over two entries")
+	assert.Equal(t, []string{""}, keysOf(t, filepath.Join(dir, "workspace")), "keys over one package")
 }
