@@ -24,25 +24,14 @@ func TestMarkdownLinks(t *testing.T) {
 		t.Fatalf("Failed to resolve repo root: %v", err)
 	}
 
-	require.NoError(t, filepath.WalkDir(absRepo, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+	files, err := markdownFiles(absRepo)
+	require.NoError(t, err)
 
-		// Only check markdown files
-		if d.IsDir() {
-			return nil
-		}
-		switch ext := filepath.Ext(p); ext {
-		case ".md", ".txt":
-		default:
-			return nil
-		}
-
+	for _, p := range files {
 		content, err := os.ReadFile(p)
 		if err != nil {
 			t.Logf("Failed to read %s: %v", p, err)
-			return nil
+			continue
 		}
 
 		matches := linkPattern.FindAllStringSubmatch(string(content), -1)
@@ -87,11 +76,35 @@ func TestMarkdownLinks(t *testing.T) {
 				failures = append(failures, p+" -> "+linkPath)
 			}
 		}
-
-		return nil
-	}))
+	}
 
 	if len(failures) > 0 {
 		t.Errorf("Found %d broken links (see log output above for details)", len(failures))
 	}
+}
+
+// markdownFiles returns the .md and .txt files under root whose links
+// TestMarkdownLinks checks. It skips docs/drafts: that directory is gitignored
+// and holds review drafts that link to pages at the paths they will have once
+// written, so their links are broken until then.
+func markdownFiles(root string) ([]string, error) {
+	drafts := filepath.Join(root, "docs", "drafts")
+	var files []string
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p == drafts {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		switch filepath.Ext(p) {
+		case ".md", ".txt":
+			files = append(files, p)
+		}
+		return nil
+	})
+	return files, err
 }
