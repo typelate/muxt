@@ -121,11 +121,14 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
 
-	for _, commandLine := range []string{
-		"check --use-templates-variable=x",
-		"list-template-calls --use-templates-variable=x",
-		"list-template-callers --use-templates-variable=x",
+	for _, tt := range []struct {
+		commandLine, command string
+	}{
+		{"check --use-templates-variable=x", "check"},
+		{"list-template-calls --use-templates-variable=x", "list-template-calls"},
+		{"list-template-callers --use-templates-variable=x", "list-template-callers"},
 	} {
+		commandLine := tt.commandLine
 		t.Run(commandLine, func(t *testing.T) {
 			ran := false
 			err := commands(workspace, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
@@ -138,6 +141,7 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 			require.ErrorAs(t, err, &configured, "error %v", err)
 			assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
 			assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
+			assert.Equal(t, "configure "+tt.command+" with fields in ../muxt.json instead of flags", err.Error(), "message")
 			assert.False(t, ran, "the command ran")
 		})
 	}

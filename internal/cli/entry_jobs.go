@@ -86,12 +86,12 @@ func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
 // rejectConfiguredDirectory returns a *composite.ConfiguredDirectoryError when
 // the muxt.json for wd has an entry for it, since that entry configures the
 // directory and flags would be a second source for the same fields.
-func rejectConfiguredDirectory(wd string, flagNames []string) error {
+func rejectConfiguredDirectory(command, wd string, flagNames []string) error {
 	lookup, err := lookupMuxtJSONEntry(wd)
 	if err != nil || !lookup.HasEntry {
 		return err
 	}
-	return &composite.ConfiguredDirectoryError{Path: lookup.File.Name, Flags: flagNames}
+	return &composite.ConfiguredDirectoryError{Path: lookup.File.Name, Command: command, Flags: flagNames}
 }
 
 // entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
@@ -144,7 +144,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 // reads it, so a directory below a muxt.json with no entry for it is a
 // *composite.MissingEntryError, as it is for generate. The command takes only
 // the settings it has flags for from the job.
-func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
+func entryJobFor(command, dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
 	// A path that is not a directory has no entry. The command's runner is
 	// what says so, and a search for muxt.json under a file would fail first
 	// with a message about muxt.json.
@@ -152,7 +152,7 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 		return generateJob{}, false, nil
 	}
 	if len(flagNames) > 0 {
-		return generateJob{}, false, rejectConfiguredDirectory(dir, flagNames)
+		return generateJob{}, false, rejectConfiguredDirectory(command, dir, flagNames)
 	}
 	lookup, err := lookupMuxtJSONEntry(dir)
 	if err != nil || lookup.File == nil {

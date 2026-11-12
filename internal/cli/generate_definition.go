@@ -70,7 +70,7 @@ func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType strin
 	if flags.Changed(useReceiverType) {
 		given = append(given, useReceiverType)
 	}
-	job, found, err := entryJobFor(wd, given, getEnv)
+	job, found, err := entryJobFor(generateCommandName, wd, given, getEnv)
 	if err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}

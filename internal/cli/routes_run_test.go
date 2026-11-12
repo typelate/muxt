@@ -79,6 +79,7 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	require.ErrorAs(t, err, &configured, "error %v", err)
 	assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
 	assert.Equal(t, []string{"use-receiver-type", "use-templates-variable"}, configured.Flags, "flags")
+	assert.Equal(t, "configure muxt with fields in ../muxt.json instead of flags", err.Error(), "message")
 	assert.Empty(t, jobs, "jobs")
 }
 

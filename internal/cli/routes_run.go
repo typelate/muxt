@@ -47,7 +47,7 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
 	flagNames := givenGenerateFlags(flags)
 	if len(flagNames) > 0 {
-		if err := rejectConfiguredDirectory(wd, flagNames); err != nil {
+		if err := rejectConfiguredDirectory("muxt", wd, flagNames); err != nil {
 			return nil, err
 		}
 	} else {

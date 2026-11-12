@@ -34,7 +34,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(dir, flagNames, getEnv)
+			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
 			if err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(dir, flagNames, getEnv)
+			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
 			if err != nil {
 				return err
 			}
@@ -165,7 +165,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(dir, flagNames, getEnv)
+			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
 			if err != nil {
 				return err
 			}

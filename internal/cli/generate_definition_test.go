@@ -369,6 +369,7 @@ func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 
 	_, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
 	require.True(t, ok, "error is a *composite.ConfiguredDirectoryError: %v", err)
+	assert.Equal(t, "configure generate with fields in muxt.json instead of flags", err.Error(), "message")
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
 

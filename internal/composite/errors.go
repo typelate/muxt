@@ -126,16 +126,19 @@ func (e *InvalidEntryError) Unwrap() error {
 
 // ConfiguredDirectoryError reports generate flags given in a directory whose
 // muxt.json entry already configures it. Path is the file, relative to the
-// working directory. Flags are the flag names given, sorted, without "--".
+// working directory. Command is the word the person typed for the command that
+// was run, such as "check", so the message is about what they ran. Flags are the
+// flag names given, sorted, without "--".
 type ConfiguredDirectoryError struct {
-	Path  string
-	Flags []string
+	Path    string
+	Command string
+	Flags   []string
 }
 
-// Error returns the path the person should configure the directory in, on one
-// line.
+// Error returns the command and the path the person should configure the
+// directory in, on one line.
 func (e *ConfiguredDirectoryError) Error() string {
-	return fmt.Sprintf("configure generate with fields in %s instead of flags", e.Path)
+	return fmt.Sprintf("configure %s with fields in %s instead of flags", e.Command, e.Path)
 }
 
 // DeprecatedKeyError reports a key in a muxt.json entry that is an old flag
