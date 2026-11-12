@@ -1,0 +1,161 @@
+# Two sub-packages parse one package's embed.FS of template fragments. One
+# muxt generate at the top writes both, and each serves its page through the
+# shared layout.
+
+muxt generate
+! stdout .
+! stderr .
+exec go test ./...
+
+cd workspace
+muxt check
+cd ../billing
+muxt check
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"packages": {
+		"example.com/m/workspace": {
+			"use_receiver_type": "Server"
+		},
+		"example.com/m/billing": {
+			"use_receiver_type": "Server"
+		}
+	}
+}
+-- fragments/fragments.go --
+package fragments
+
+import (
+	"embed"
+	"strings"
+)
+
+//go:embed layout.gohtml
+var TemplateSource embed.FS
+
+func Upper(s string) string { return strings.ToUpper(s) }
+-- fragments/layout.gohtml --
+{{define "layout"}}<main data-layout="shared"><h1>{{upper .Title}}</h1>{{.Body}}</main>{{end}}
+-- workspace/workspace.go --
+package workspace
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	Funcs(template.FuncMap{"upper": fragments.Upper}).
+	ParseFS(fragments.TemplateSource, "*.gohtml")).
+	ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+type Page struct {
+	Title string
+	Body  string
+}
+
+func (Server) Show() Page { return Page{Title: "workspace", Body: "workspace-only text"} }
+-- workspace/page.gohtml --
+{{define "GET /{$} Show()"}}{{template "layout" .Result}}{{end}}
+-- workspace/workspace_test.go --
+package workspace
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestShow(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+		t.Errorf("GET / status = %d, want %d", got, want)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<main data-layout="shared">`, // only the shared layout writes this
+		"<h1>WORKSPACE</h1>", // the shared layout calls the shared Upper
+		"workspace-only text", // only this package's receiver writes this
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("GET / body = %q, want it to contain %q", body, want)
+		}
+	}
+}
+-- billing/billing.go --
+package billing
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	Funcs(template.FuncMap{"upper": fragments.Upper}).
+	ParseFS(fragments.TemplateSource, "*.gohtml")).
+	ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+type Page struct {
+	Title string
+	Body  string
+}
+
+func (Server) Show() Page { return Page{Title: "billing", Body: "billing-only text"} }
+-- billing/page.gohtml --
+{{define "GET /{$} Show()"}}{{template "layout" .Result}}{{end}}
+-- billing/billing_test.go --
+package billing
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestShow(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+		t.Errorf("GET / status = %d, want %d", got, want)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<main data-layout="shared">`, // only the shared layout writes this
+		"<h1>BILLING</h1>", // the shared layout calls the shared Upper
+		"billing-only text", // only this package's receiver writes this
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("GET / body = %q, want it to contain %q", body, want)
+		}
+	}
+}
