@@ -123,3 +123,19 @@ func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	require.NoError(t, err, "generate in workspace")
 	assert.Equal(t, "wrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
 }
+
+// TestGenerateMuxtJSONEntriesInImportOrder states that a muxt generate over
+// entries a and b, where a imports b, generates b first, though the keys sort
+// as a, b.
+func TestGenerateMuxtJSONEntriesInImportOrder(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{"a": "A", "b": "B"}, map[string][]string{"a": {"b"}})
+
+	stdout, _, err := generateWithLoader(t, dir)
+
+	require.NoError(t, err, "generate")
+	const want = "b\nwrote template_routes.go: 1 route\na\nwrote template_routes.go: 1 route\n"
+	assert.Equal(t, want, stdout, "stdout")
+}

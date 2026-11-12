@@ -211,3 +211,35 @@ func findType(pl []*packages.Package, packagePath, ident string) (*types.Named, 
 	}
 	return nil, notFoundErr
 }
+
+// Imports reports whether the package in dir imports the package in other,
+// directly or through the packages between them. A directory with no package
+// in pl imports nothing and is imported by nothing, and a package never
+// imports itself: the go command rejects an import cycle.
+func Imports(pl []*packages.Package, dir, other string) bool {
+	pkg, ok := packageInDirectory(pl, dir)
+	if !ok {
+		return false
+	}
+	target, ok := packageInDirectory(pl, other)
+	if !ok || target == pkg {
+		return false
+	}
+	seen := map[*packages.Package]bool{pkg: true}
+	var reaches func(from *packages.Package) bool
+	reaches = func(from *packages.Package) bool {
+		for _, imported := range from.Imports {
+			if imported == target {
+				return true
+			}
+			if !seen[imported] {
+				seen[imported] = true
+				if reaches(imported) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return reaches(pkg)
+}

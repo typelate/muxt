@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -115,8 +116,9 @@ func loadFromGoCommand(root string, dirs, patterns []string) (*token.FileSet, []
 	return load.PackagesInDirectories(root, nil, dirs, patterns...)
 }
 
-// generateRunner resolves every job from one load, then writes. Resolving
-// everything first means a failure in one job leaves no job's files written.
+// generateRunner generates jobs from one load, one directory at a time, a
+// package after the packages it imports. A job's files are all written before
+// the next job is resolved, so a failure leaves the earlier jobs written.
 func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJob) error {
 	return func(cmd *cobra.Command, jobs []generateJob) error {
 		if len(jobs) == 0 {
@@ -138,30 +140,41 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			return err
 		}
 		warnPartialAST(stderr, pl)
-		type resolved struct {
-			job   generateJob
-			files []generate.GeneratedFile
-		}
-		var all []resolved
-		for _, job := range jobs {
+		for _, job := range importOrder(pl, jobs) {
+			if len(jobs) > 1 {
+				// Several directories write to one stream, so each says
+				// whose lines follow.
+				_, _ = fmt.Fprintln(stdout, job.Key)
+			}
 			files, err := resolveJob(cmd, pl, job)
 			if err != nil {
 				return err
 			}
-			all = append(all, resolved{job: job, files: files})
-		}
-		for _, r := range all {
-			if len(jobs) > 1 {
-				// Several directories write to one stream, so each says
-				// whose lines follow.
-				_, _ = fmt.Fprintln(stdout, r.job.Key)
-			}
-			if err := writeJob(stdout, stderr, r.job, r.files); err != nil {
+			if err := writeJob(stdout, stderr, job, files); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
+}
+
+// importOrder returns jobs so that a job follows every job whose package it
+// imports, and jobs with no import between them keep their order. The go
+// command rejects import cycles, so there is always a job to take next.
+func importOrder(pl []*packages.Package, jobs []generateJob) []generateJob {
+	remaining := slices.Clone(jobs)
+	ordered := make([]generateJob, 0, len(jobs))
+	for len(remaining) > 0 {
+		next := slices.IndexFunc(remaining, func(job generateJob) bool {
+			return !slices.ContainsFunc(remaining, func(dependency generateJob) bool {
+				return load.Imports(pl, job.Config.OutputDirectory(job.Dir), dependency.Config.OutputDirectory(dependency.Dir))
+			})
+		})
+		next = max(next, 0)
+		ordered = append(ordered, remaining[next])
+		remaining = slices.Delete(remaining, next, next+1)
+	}
+	return ordered
 }
 
 // resolveJob returns the files job generates from the loaded packages pl. A
