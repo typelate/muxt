@@ -239,6 +239,43 @@ func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
 	assert.Contains(t, string(goSource), "//go:embed *.gohtml", "workspace.go embeds the templates")
 }
 
+// TestGeneratePackageRefusesExistingDirectory states that muxt generate package
+// fails, and changes nothing, when the directory it would create exists.
+func TestGeneratePackageRefusesExistingDirectory(t *testing.T) {
+	root := t.TempDir()
+	const existing = `{"packages": {}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "keep.txt"), []byte("keep"), 0o644))
+
+	_, err := runCommand(t, root, "generate package workspace")
+
+	require.EqualError(t, err, "workspace already exists; nothing was written")
+	entries, err := os.ReadDir(filepath.Join(root, "workspace"))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "workspace holds only keep.txt")
+	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}
+
+// TestGeneratePackageRejectsNameThatIsNotAnIdentifier states that a package
+// name with a path separator fails before anything is written.
+func TestGeneratePackageRejectsNameThatIsNotAnIdentifier(t *testing.T) {
+	root := t.TempDir()
+	const existing = `{"packages": {}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+
+	_, err := runCommand(t, root, "generate package a/b")
+
+	require.EqualError(t, err, `package name "a/b" must be a Go identifier`)
+	_, statErr := os.Stat(filepath.Join(root, "a"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
+	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}
+
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
