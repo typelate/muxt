@@ -41,32 +41,41 @@ type setting struct {
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
 func newConfigurationReport(f *muxtjson.File, key string, config generate.RoutesFileConfiguration) (configurationReport, error) {
-	entryGroup := settingGroup{}
-	var entry muxtjson.Entry
+	// The sources in the order a setting looks for its value: the entry
+	// itself, then package_defaults. A setting neither gives is a default.
+	var groups []settingGroup
+	var entries []muxtjson.Entry
 	if f != nil {
-		entryGroup.Source = fmt.Sprintf("%s packages[%q]", f.Name, key)
-		entry = f.Packages[key]
+		groups = append(groups,
+			settingGroup{Source: fmt.Sprintf("%s packages[%q]", f.Name, key)},
+			settingGroup{Source: f.Name + " package_defaults"},
+		)
+		entries = append(entries, f.Packages[key], f.Defaults)
 	}
-	defaults := settingGroup{Source: "defaults"}
+	groups = append(groups, settingGroup{Source: "defaults"})
+
 	// muxt generate --help lists flags by name, so the report does too.
 	fields := entryFields()
 	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
 	for _, field := range fields {
 		s := setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
-		// The entry's own keys are the ones Apply finds set; a scratch
-		// configuration takes what Apply writes.
-		given, err := field.Apply(new(generate.RoutesFileConfiguration), entry)
-		if err != nil {
-			return nil, fmt.Errorf("%s packages[%q]: %w", f.Name, key, err)
+		source := len(entries)
+		for i, entry := range entries {
+			// Apply writes into a scratch configuration; only whether the
+			// entry gave the key matters here.
+			given, err := field.Apply(new(generate.RoutesFileConfiguration), entry)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", groups[i].Source, err)
+			}
+			if given {
+				source = i
+				break
+			}
 		}
-		if given {
-			entryGroup.Settings = append(entryGroup.Settings, s)
-		} else {
-			defaults.Settings = append(defaults.Settings, s)
-		}
+		groups[source].Settings = append(groups[source].Settings, s)
 	}
 	var report configurationReport
-	for _, group := range []settingGroup{entryGroup, defaults} {
+	for _, group := range groups {
 		if len(group.Settings) > 0 {
 			report = append(report, group)
 		}

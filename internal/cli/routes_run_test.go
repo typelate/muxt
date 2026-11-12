@@ -240,3 +240,17 @@ func TestRoutesConfigurationDefaults(t *testing.T) {
 `
 	assert.Equal(t, want, text, "section")
 }
+
+// TestRoutesConfigurationGroupsPackageDefaults states that a setting that comes
+// from package_defaults is under the heading naming the file and package_defaults,
+// between the packages heading and defaults, and that a setting the entry sets
+// itself stays under the packages heading.
+func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
+	dir := t.TempDir()
+	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {".": {"use_receiver_type": "T1"}}}`)
+
+	text := reportOf(t, dir, "")
+
+	const want = "Configuration:\n  muxt.json packages[\".\"]:\n    \"use_receiver_type\": \"T1\"\n  muxt.json package_defaults:\n    \"output_htmx\": true\n  defaults:\n"
+	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
+}
