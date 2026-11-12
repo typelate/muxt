@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"golang.org/x/tools/txtar"
+
 	"github.com/typelate/muxt/internal/muxtjson"
 	"github.com/typelate/muxt/internal/scaffold"
 )
@@ -56,15 +58,14 @@ func TestGenerateDefAppendsDefineToTemplateFile(t *testing.T) {
 	}
 }
 
-// TestGenerateDefRequiresTemplateFileInWorkingDirectory states that
-// --output-file is required and must name a .gohtml file in the working
-// directory, and that nothing is written when it does not.
+// TestGenerateDefRequiresTemplateFileInWorkingDirectory states that a given
+// --output-file must name a .gohtml file in the working directory, and that
+// nothing is written when it does not.
 func TestGenerateDefRequiresTemplateFileInWorkingDirectory(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		args []string
 	}{
-		{name: "missing", args: []string{"generate", "def", "GET /foo Index()"}},
 		{name: "wrong extension", args: []string{"generate", "def", "GET /foo Index()", "--output-file=index.html"}},
 		{name: "path separator", args: []string{"generate", "def", "GET /foo Index()", "--output-file=sub/index.gohtml"}},
 		{name: "no stem", args: []string{"generate", "def", "GET /foo Index()", "--output-file=.gohtml"}},
@@ -79,6 +80,71 @@ func TestGenerateDefRequiresTemplateFileInWorkingDirectory(t *testing.T) {
 			entries, readErr := os.ReadDir(dir)
 			require.NoError(t, readErr)
 			assert.Empty(t, entries, "nothing is written")
+		})
+	}
+}
+
+// TestGenerateDefWithoutOutputFilePrintsArchive states that without
+// --output-file, muxt generate def prints a txtar archive of the template file
+// it would write, with the body the body flag chooses, and creates nothing.
+func TestGenerateDefWithoutOutputFilePrintsArchive(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "fragment", want: "-- index.gohtml --\n{{define \"GET /foo Index()\"}}{{end}}\n"},
+		{name: "document", args: []string{"--output-document"}, want: "-- index.gohtml --\n" + scaffold.Definition("GET /foo Index()", scaffold.Document) + "\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			args := append([]string{"generate", "def", "GET /foo Index()"}, tt.args...)
+
+			stdout, stderr, err := runCommandArgs(dir, args, runners{})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, stdout, "stdout")
+			assert.Empty(t, stderr, "stderr")
+			entries, readErr := os.ReadDir(dir)
+			require.NoError(t, readErr)
+			assert.Empty(t, entries, "nothing is written")
+		})
+	}
+}
+
+// TestGenerateDefWithoutOutputFilePrintsStubInArchive states that when the
+// receiver type lacks the route's method, the archive gains a .go section
+// holding the stub, and both sections are named for the route's identifier in
+// snake case.
+func TestGenerateDefWithoutOutputFilePrintsStubInArchive(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name  string
+		route string
+		base  string
+		stub  string
+	}{
+		{name: "one word method", route: "GET /foo Index()", base: "index", stub: "func (T) Index() any {\n\treturn nil\n}\n"},
+		{name: "multi-word method", route: "GET /foo ListArticles()", base: "list_articles", stub: "func (T) ListArticles() any {\n\treturn nil\n}\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := definitionModule(t, "", nil)
+
+			stdout, stderr, err := runCommandArgs(dir, []string{"generate", "def", tt.route, "--use-receiver-type=T"}, runners{load: loadFromGoCommand})
+
+			require.NoError(t, err)
+			want := "-- " + tt.base + ".gohtml --\n" + scaffold.Definition(tt.route, scaffold.Fragment) + "\n" +
+				"-- " + tt.base + ".go --\n" + tt.stub
+			assert.Equal(t, want, stdout, "stdout")
+			assert.Empty(t, stderr, "stderr")
+			archive := txtar.Parse([]byte(stdout))
+			var names []string
+			for _, f := range archive.Files {
+				names = append(names, f.Name)
+			}
+			assert.Equal(t, []string{tt.base + ".gohtml", tt.base + ".go"}, names, "archive file names")
 		})
 	}
 }

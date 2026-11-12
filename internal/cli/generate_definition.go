@@ -4,13 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ettle/strcase"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
@@ -87,10 +90,14 @@ func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType strin
 
 // scaffoldDefinition appends the define for name to templateFile in wd,
 // reports it on stderr, and prints the method stub, if any, to stdout.
-// Everything is checked before anything is written.
+// Everything is checked before anything is written. With no templateFile it
+// prints a txtar archive of the files it would write instead, and writes
+// nothing.
 func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body scaffold.Body, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
-	if err := checkTemplateFileName(templateFile); err != nil {
-		return err
+	if templateFile != "" {
+		if err := checkTemplateFileName(templateFile); err != nil {
+			return err
+		}
 	}
 	if err := muxt.CheckDefinitionName(name); err != nil {
 		return err
@@ -102,12 +109,16 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 			return err
 		}
 	}
+	define := scaffold.Definition(name, body)
+	if templateFile == "" {
+		return writeDefinitionArchive(cmd.OutOrStdout(), name, define, stub)
+	}
 	path := filepath.Join(wd, templateFile)
 	existing, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("reading %s: %w", templateFile, err)
 	}
-	content := scaffold.AppendDefinition(existing, scaffold.Definition(name, body))
+	content := scaffold.AppendDefinition(existing, define)
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", templateFile, err)
 	}
@@ -244,13 +255,45 @@ func relativeTo(dir, file string) string {
 	return file
 }
 
+// writeDefinitionArchive writes a txtar archive to w holding the template file
+// define would go in, and the method stub when there is one. The file names are
+// the route's identifier in snake case, so the person can place each section
+// where it belongs without renaming it.
+func writeDefinitionArchive(w io.Writer, name, define, stub string) error {
+	base, err := routeFileBase(name)
+	if err != nil {
+		return err
+	}
+	archive := &txtar.Archive{Files: []txtar.File{{Name: base + ".gohtml", Data: scaffold.AppendDefinition(nil, define)}}}
+	if stub != "" {
+		archive.Files = append(archive.Files, txtar.File{Name: base + ".go", Data: []byte(stub)})
+	}
+	_, err = w.Write(txtar.Format(archive))
+	return err
+}
+
+// routeFileBase returns the identifier muxt gives the route name, in snake case.
+// The identifier is the one muxt uses for the route's generated names, so it is
+// asked of muxt rather than derived from the name here.
+func routeFileBase(name string) (string, error) {
+	templates, err := html.New("").Parse(scaffold.Definition(name, scaffold.Fragment))
+	if err != nil {
+		return "", fmt.Errorf("parsing %q: %w", name, err)
+	}
+	defs, err := muxt.Definitions(source.Variable{Name: "probe", Set: templates})
+	if err != nil {
+		return "", err
+	}
+	if len(defs) != 1 {
+		return "", fmt.Errorf("%q is not one route definition", name)
+	}
+	return strcase.ToSnake(defs[0].Identifier()), nil
+}
+
 // checkTemplateFileName rejects an --output-file that is not a .gohtml file in
 // the working directory.
 func checkTemplateFileName(name string) error {
 	const extension = ".gohtml"
-	if name == "" {
-		return fmt.Errorf("--%s is required: the %s file to add the template to", outputFile, extension)
-	}
 	if strings.ContainsAny(name, `/\`) || filepath.Dir(name) != "." {
 		return fmt.Errorf("--%s must be a file name in the working directory: %s", outputFile, name)
 	}
