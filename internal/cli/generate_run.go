@@ -9,7 +9,6 @@ import (
 	"log"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -19,16 +18,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
-
-// generateJob is one package directory and what to generate it with. Key is
-// the packages key the configuration came from; it is empty when flags gave it.
-type generateJob struct {
-	Key    string
-	Dir    string
-	Config generate.RoutesFileConfiguration
-}
 
 // generateJobs chooses what a generate run writes. With no generate flag given
 // and a muxt.json entry for wd, the entry configures the run; otherwise the
@@ -57,94 +47,6 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 		return nil, err
 	}
 	return []generateJob{{Dir: wd, Config: *flagConfig}}, nil
-}
-
-// entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
-// In the file's own directory that is one job per entry, and every entry is
-// validated before any job is returned. In a sub-directory it is that
-// directory's entry alone. found is false when the flags decide the run. file
-// is the muxt.json the jobs came from, for a caller that says where each
-// setting came from.
-func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *muxtjson.File, jobs []generateJob, found bool, err error) {
-	lookup, err := lookupMuxtJSONEntry(wd)
-	if err != nil || lookup.File == nil {
-		return nil, nil, false, err
-	}
-	f, key := lookup.File, lookup.Key
-	ownKey, err := f.KeyFor(f.Dir)
-	if err != nil {
-		return nil, nil, false, fmt.Errorf("muxt.json entry for %s: %w", f.Dir, err)
-	}
-	keys := []string{key}
-	if key != ownKey {
-		if !lookup.HasEntry {
-			return nil, nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
-		}
-	} else {
-		if len(f.Packages) == 0 {
-			return nil, nil, false, nil
-		}
-		keys = f.Keys()
-	}
-	for _, k := range keys {
-		dir := f.DirOf(k)
-		if err := requireEntryDirectory(f, k, wd, dir); err != nil {
-			return nil, nil, false, err
-		}
-		entry, _ := f.Resolve(k)
-		config, err := entryConfiguration(entry, dir, getEnv, version)
-		if err != nil {
-			return nil, nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
-		}
-		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
-	}
-	return f, jobs, true, nil
-}
-
-// requireEntryDirectory returns a *muxtjson.MissingDirectoryError unless dir,
-// the directory of key in f, is a directory, and a
-// *muxtjson.OutsideDirectoryError when it is one that a symbolic link resolves
-// outside f's directory. wd is the working directory the errors name dir
-// relative to.
-func requireEntryDirectory(f *muxtjson.File, key, wd, dir string) error {
-	info, statErr := os.Stat(dir)
-	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
-		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
-	}
-	rel, err := filepath.Rel(wd, dir)
-	if err != nil {
-		return fmt.Errorf("directory of muxt.json entry %q from %s: %w", key, wd, err)
-	}
-	if statErr != nil || !info.IsDir() {
-		return &muxtjson.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
-	}
-	inside, err := resolvesInside(f.Dir, dir)
-	if err != nil {
-		return fmt.Errorf("muxt.json entry %q: %w", key, err)
-	}
-	if !inside {
-		return &muxtjson.OutsideDirectoryError{Path: f.Name, Key: key, Dir: rel}
-	}
-	return nil
-}
-
-// resolvesInside reports whether dir, with its symbolic links followed, is
-// base or below it, with base's links followed too. Both sides resolve because
-// the temporary directory of a test may itself sit behind a link.
-func resolvesInside(base, dir string) (bool, error) {
-	realBase, err := filepath.EvalSymlinks(base)
-	if err != nil {
-		return false, fmt.Errorf("resolving %s: %w", base, err)
-	}
-	realDir, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		return false, fmt.Errorf("resolving %s: %w", dir, err)
-	}
-	rel, err := filepath.Rel(realBase, realDir)
-	if err != nil {
-		return false, fmt.Errorf("directory %s from %s: %w", realDir, realBase, err)
-	}
-	return filepath.IsLocal(rel), nil
 }
 
 // packageLoader is the only way a run asks for packages, so one go command
