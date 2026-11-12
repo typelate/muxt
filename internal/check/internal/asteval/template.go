@@ -98,7 +98,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			// Variable receiver — apply method to existing template.
 			switch sel.Sel.Name {
 			case "ParseFS":
-				filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+				filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 				if err != nil {
 					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
@@ -169,7 +169,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			}
 			return chain.result(template.New[*types.Signature](templateNames[0]), chain.LeftDelim, chain.RightDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 			if err != nil {
 				return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 			}
@@ -227,7 +227,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			}
 			return chain.result(t, upLDelim, upRDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 			if err != nil {
 				return chain.result(nil, upLDelim, upRDelim, err)
 			}
@@ -547,11 +547,19 @@ func evaluateFuncMap(workingDirectory string, typesInfo *types.Info, pkg *types.
 	return nil
 }
 
-func evaluateCallParseFilesArgs(workingDirectory string, fileSet *token.FileSet, call *ast.CallExpr, files []*ast.File, embeddedPaths []string) ([]string, error) {
+// evaluateCallParseFilesArgs resolves the files a ParseFS call reads. Matched
+// paths are joined onto base, the directory the embedded paths are relative
+// to, which is not always the working directory used to render errors: it is
+// the package directory of whichever package declares the embed.FS variable.
+func evaluateCallParseFilesArgs(workingDirectory, base string, fileSet *token.FileSet, call *ast.CallExpr, files []*ast.File, embeddedPaths []string) ([]string, error) {
 	if len(call.Args) < 1 {
 		return nil, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("missing required arguments"))
 	}
-	matches, err := embedFSFilePaths(workingDirectory, fileSet, files, call.Args[0], embeddedPaths)
+	var decls []*ast.GenDecl
+	for _, decl := range astgen.IterateGenDecl(files, token.VAR) {
+		decls = append(decls, decl)
+	}
+	matches, err := embedFSFilePaths(workingDirectory, fileSet, decls, call.Args[0], embeddedPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -573,15 +581,19 @@ func evaluateCallParseFilesArgs(workingDirectory string, fileSet *token.FileSet,
 			break
 		}
 	}
-	return joinFilePaths(workingDirectory, filtered...), nil
+	return joinFilePaths(base, filtered...), nil
 }
 
-func embedFSFilePaths(dir string, fileSet *token.FileSet, files []*ast.File, exp ast.Expr, embeddedFiles []string) ([]string, error) {
+// embedFSFilePaths finds the //go:embed declaration of the variable exp names
+// among decls and returns the embedded files it matches. It takes the
+// declarations, not the files, so that it can read those of a package whose
+// files are not the ones being analyzed.
+func embedFSFilePaths(dir string, fileSet *token.FileSet, decls []*ast.GenDecl, exp ast.Expr, embeddedFiles []string) ([]string, error) {
 	varIdent, ok := exp.(*ast.Ident)
 	if !ok {
 		return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("first argument to ParseFS must be an identifier"))
 	}
-	for _, decl := range astgen.IterateGenDecl(files, token.VAR) {
+	for _, decl := range decls {
 		for _, s := range decl.Specs {
 			spec, ok := s.(*ast.ValueSpec)
 			if !ok || !slices.ContainsFunc(spec.Names, func(e *ast.Ident) bool { return e.Name == varIdent.Name }) {
