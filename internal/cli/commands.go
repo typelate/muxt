@@ -34,6 +34,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 		calls:     runTemplateCalls,
 		mutations: runTemplateMutations,
 		format:    runFormatCommand,
+		load:      loadFromGoCommand,
 	})
 }
 
@@ -55,6 +56,11 @@ type runners struct {
 	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
 	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
+
+	// load is how generate def asks for the package it adds a template to. A
+	// nil load skips the checks that need the package, so a test states what a
+	// command line writes without running the go command.
+	load packageLoader
 }
 
 func commands(wd string, args []string, getEnv func(string) string, version func() (string, bool), stdin io.Reader, stdout, stderr io.Writer, run runners) error {
@@ -131,7 +137,7 @@ The documentation for this version is in the binary:
 	rootCmd.SetErr(stderr)
 
 	rootCmd.AddCommand(
-		generateCommand(workingDirectory, getEnv, version, run.generate),
+		generateCommand(workingDirectory, getEnv, version, run.generate, run.load),
 		versionCommand(version),
 		checkCommand(workingDirectory, getEnv, run.check),
 		formatCommand(workingDirectory, run.format),

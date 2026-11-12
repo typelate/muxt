@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/typelate/muxt/internal/scaffold"
 )
 
 // runCommandArgs runs a muxt command with args in dir, which a template name
@@ -128,4 +131,68 @@ func TestGenerateDefRejectsNameThatIsNotARoute(t *testing.T) {
 			assert.Empty(t, entries, "nothing is written")
 		})
 	}
+}
+
+// definitionModule writes a module whose root package parses *.gohtml into
+// templates, with files beside it, and returns its directory.
+func definitionModule(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	writeTestFile(t, dir, "m.go", `package m
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+
+type T struct{}
+`)
+	for name, content := range files {
+		writeTestFile(t, dir, name, content)
+	}
+	return dir
+}
+
+// TestGenerateDefRefusesNameAlreadyDefined states that a name the package's
+// templates already define fails, naming the file and line relative to the
+// working directory, and that nothing is written.
+func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := definitionModule(t, map[string]string{
+		"index.gohtml": "{{define \"GET /bar Bar()\"}}{{end}}\n\n{{define \"GET /foo Index()\"}}{{end}}\n",
+	})
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=other.gohtml"}, runners{load: loadFromGoCommand})
+
+	require.EqualError(t, err, `template "GET /foo Index()" is already defined at index.gohtml:3`)
+	duplicate, ok := errors.AsType[*scaffold.DuplicateDefinitionError](err)
+	require.True(t, ok, "error is a *scaffold.DuplicateDefinitionError")
+	assert.Equal(t, scaffold.DuplicateDefinitionError{Name: "GET /foo Index()", File: "index.gohtml", Line: 3}, *duplicate)
+	assert.NoFileExists(t, filepath.Join(dir, "other.gohtml"))
+}
+
+// TestGenerateDefSaysWhenItCannotCheckForDuplicates states that a package with
+// no templates variable fails plainly instead of skipping the check, and that
+// nothing is written.
+func TestGenerateDefSaysWhenItCannotCheckForDuplicates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	writeTestFile(t, dir, "m.go", "package m\n")
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: loadFromGoCommand})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `cannot check whether "GET /foo Index()" is already defined`)
+	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
