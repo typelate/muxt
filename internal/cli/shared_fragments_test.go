@@ -350,6 +350,60 @@ var TemplateSource embed.FS
 	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
 
+// overriddenFooter is a module where the shared package defines "footer" with
+// a field the page's result does not have, and the package's own file, parsed
+// later in the chain, defines "footer" again without the error. With
+// sharedLast the chain parses the shared files after the package's own, so the
+// shared definition is the one kept.
+func overriddenFooter(t *testing.T, sharedLast bool) string {
+	t.Helper()
+	files := map[string]string{
+		"fragments/footer.gohtml": `{{define "footer"}}<footer>{{.Nope}}</footer>{{end}}`,
+		"workspace/page.gohtml": `{{define "GET /{$} Home()"}}{{template "layout" .}}{{template "footer" .}}{{end}}
+{{define "footer"}}<footer>{{.Result}}</footer>{{end}}`,
+	}
+	if sharedLast {
+		files["workspace/workspace.go"] = `package workspace
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	ParseFS(templateSource, "*.gohtml")).
+	ParseFS(fragments.TemplateSource, "*.gohtml"))
+
+type T struct{}
+
+func (T) Home() string { return "home" }
+`
+	}
+	return fragmentsModule(t, files)
+}
+
+// TestCheckTypeChecksTheOverridingDefinition states that a name defined in the
+// other package's file and again in the package's own file, parsed later, is
+// checked against the package's own definition: the shared one would fail.
+func TestCheckTypeChecksTheOverridingDefinition(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := overriddenFooter(t, false)
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.NoError(t, err, "check: %s", output)
+}
+
 // TestCheckNamesSharedFileRelativeToWorkingDirectory states that an error in a
 // shared file's template names the file relative to the directory muxt runs in,
 // with line and column, and that a template of the package's own file in the
