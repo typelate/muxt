@@ -217,6 +217,47 @@ func TestFmtWriteLeavesSharedFilesAlone(t *testing.T) {
 	assert.NotEqual(t, string(sharedBefore), string(sharedAfter), "the shared file, when fmt is told to format it")
 }
 
+// TestGenerateMultipleFilesNamesClashWithSharedFile states that with
+// --output-multiple-files a route in the other package's layout.gohtml and a
+// route in the package's own layout.gohtml, which would write the same
+// generated file, fail naming both template files.
+func TestGenerateMultipleFilesNamesClashWithSharedFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/layout.gohtml": `{{define "layout"}}<main>{{.}}</main>{{end}}{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+		"workspace/layout.gohtml": `{{define "GET /own OwnPage()"}}{{template "layout" .}}{{end}}`,
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate", "--output-multiple-files", "--use-receiver-type=T")
+
+	require.Error(t, err, "generate: %s", output)
+	assert.Contains(t, output, "layout_template_routes_gen.go would be written for both layout.gohtml and ../fragments/layout.gohtml; rename one template file", "generate output")
+}
+
+// TestGenerateMultipleFilesWritesOnlyInThePackage states that with
+// --output-multiple-files and no clash, the routes of a shared file are
+// written into the package's directory and nothing into the other package's.
+func TestGenerateMultipleFilesWritesOnlyInThePackage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+	})
+	before, err := os.ReadDir(filepath.Join(dir, "fragments"))
+	require.NoError(t, err, "ReadDir")
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate", "--output-multiple-files", "--use-receiver-type=T")
+
+	require.NoError(t, err, "generate: %s", output)
+	assert.FileExists(t, filepath.Join(dir, "workspace", "shared_template_routes_gen.go"), "generated file for the shared route")
+	after, err := os.ReadDir(filepath.Join(dir, "fragments"))
+	require.NoError(t, err, "ReadDir")
+	assert.Equal(t, before, after, "files in the fragments directory")
+}
+
 // TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
 // other package's directory its //go:embed pattern does not match is not
 // parsed, even when the ParseFS patterns would match it, so a template only

@@ -9,7 +9,6 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/ettle/strcase"
 
@@ -192,6 +191,9 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	topLevelRoutes := groups.all
 	if config.OutputMultipleFiles {
 		templateSourceFiles := slices.Sorted(maps.Keys(groups.byFile))
+		if err := checkGeneratedFileNames(wd, templateSourceFiles, pkg); err != nil {
+			return nil, err
+		}
 		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiverInterface, routesFunc)
 		if err != nil {
 			return files, err
@@ -442,8 +444,7 @@ func sourceFileRouteFunctionFiles(wd string, config RoutesFileConfiguration, tem
 		}
 
 		// sourceFile may be an absolute path, so only its base name is used.
-		baseFileName := strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile))
-		outputFileName := baseFileName + "_template_routes_gen.go"
+		outputFileName := generatedFileName(sourceFile)
 		outputFilePath := filepath.Join(wd, outputFileName)
 
 		content, err := formatFile(outputFilePath, perFileAST)
