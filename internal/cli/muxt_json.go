@@ -64,6 +64,8 @@ type entryField struct {
 	Name string
 	// Apply sets the field from e and reports whether e gave the key.
 	Apply func(c *generate.RoutesFileConfiguration, e muxtjson.Entry) (given bool, err error)
+	// Value returns what c holds for the key, in the form muxt.json writes it.
+	Value func(c generate.RoutesFileConfiguration) any
 }
 
 // entryValue is the row for a key whose entry field is a pointer and whose
@@ -79,6 +81,7 @@ func entryValue[T any](name string, get func(muxtjson.Entry) *T, field func(*gen
 			*field(c) = *v
 			return true, nil
 		},
+		Value: func(c generate.RoutesFileConfiguration) any { return *field(&c) },
 	}
 }
 
@@ -95,6 +98,7 @@ func entryFields() []entryField {
 				c.TemplatesVariables = e.UseTemplatesVariable
 				return true, nil
 			},
+			Value: func(c generate.RoutesFileConfiguration) any { return c.TemplatesVariables },
 		},
 		entryValue(useReceiverType, func(e muxtjson.Entry) *string { return e.UseReceiverType }, func(c *generate.RoutesFileConfiguration) *string { return &c.ReceiverType }),
 		entryValue(useReceiverTypePackage, func(e muxtjson.Entry) *string { return e.UseReceiverTypePackage }, func(c *generate.RoutesFileConfiguration) *string { return &c.ReceiverPackage }),
@@ -127,6 +131,9 @@ func entryFields() []entryField {
 				}
 				return true, nil
 			},
+			// The flag prints the size the run uses, 32 MiB when none was set,
+			// in a form its parser reads back.
+			Value: func(c generate.RoutesFileConfiguration) any { return (&multipartMaxMemoryFlag{cfg: &c}).String() },
 		},
 		entryValue(inputStaticAssetsDirectory, func(e muxtjson.Entry) *string { return e.InputStaticAssetsDirectory }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsDirectory }),
 		entryValue(outputStaticAssetsPath, func(e muxtjson.Entry) *string { return e.OutputStaticAssetsPath }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsPath }),

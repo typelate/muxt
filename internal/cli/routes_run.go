@@ -16,6 +16,13 @@ import (
 // directories, in the same order, resolved the same way.
 type routesJob struct {
 	generateJob
+	// Report is the Configuration section the listing starts with.
+	Report configurationReport
+}
+
+// newRoutesJob is the job for a generateJob, with the report of its configuration.
+func newRoutesJob(job generateJob) routesJob {
+	return routesJob{generateJob: job, Report: newConfigurationReport(job.Config)}
 }
 
 // definitions is the part of the job's configuration the listing resolves with.
@@ -49,7 +56,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 			for i, job := range jobs {
 				// Verbose is a run setting, never a muxt.json key.
 				job.Config.Verbose = flagConfig.Verbose
-				listing[i] = routesJob{job}
+				listing[i] = newRoutesJob(job)
 			}
 			return listing, nil
 		}
@@ -64,7 +71,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	config.ReceiverPackage = flagConfig.ReceiverPackage
 	config.ReceiverType = flagConfig.ReceiverType
 	config.TemplatesVariables = flagConfig.TemplatesVariables
-	return []routesJob{{generateJob{Dir: wd, Config: config}}}, nil
+	return []routesJob{newRoutesJob(generateJob{Dir: wd, Config: config})}, nil
 }
 
 // routesRunner lists jobs from one load, a package after the packages it
@@ -103,8 +110,9 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				printMultiLineError(cmd, err)
 				return err
 			}
-			for _, result := range results {
-				if err := writeResult(cmd, cmd.OutOrStdout(), result); err != nil {
+			for n, result := range results {
+				listing := routesListing{Routes: result, Configuration: job.Report, printConfiguration: n == 0}
+				if err := writeResult(cmd, cmd.OutOrStdout(), listing); err != nil {
 					return err
 				}
 			}

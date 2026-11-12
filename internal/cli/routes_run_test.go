@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/muxtjson"
@@ -98,4 +102,85 @@ func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	require.NoError(t, err, "with a flag")
 	require.Len(t, jobs, 1, "jobs with a flag")
 	assert.Equal(t, "T1", jobs[0].definitions().ReceiverType, "receiver type from the flag")
+}
+
+// reportOf returns the Configuration section text bare muxt prints for the
+// first job of commandLine run in wd.
+func reportOf(t *testing.T, wd, commandLine string) string {
+	t.Helper()
+	jobs, err := routesJobsOf(t, wd, commandLine)
+	require.NoError(t, err, "muxt %s", commandLine)
+	require.NotEmpty(t, jobs, "muxt %s jobs", commandLine)
+	var text strings.Builder
+	_, err = jobs[0].Report.WriteTo(&text)
+	require.NoError(t, err, "writing the section")
+	return text.String()
+}
+
+// TestRoutesConfigurationHasEverySettingOnce states that the Configuration
+// section holds each muxt.json entry key exactly once, as a line written the
+// way muxt.json writes it, whether the entry sets it or not.
+func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
+	dir := t.TempDir()
+	writeMuxtJSON(t, dir, `{"packages": {".": {"use_receiver_type": "Server"}}}`)
+
+	text := reportOf(t, dir, "")
+
+	assert.True(t, strings.HasPrefix(text, "Configuration:\n"), "section starts with its heading:\n%s", text)
+	for _, key := range muxtJSONEntryKeys() {
+		assert.Equal(t, 1, strings.Count(text, "\n    \""+key+"\": "), "lines for %q in:\n%s", key, text)
+	}
+}
+
+// listWithLoader runs bare muxt with args in dir with the real listing runner
+// and the go command, counting how often packages are loaded.
+func listWithLoader(t *testing.T, dir string, args ...string) (stdout string, loads int, err error) {
+	t.Helper()
+	counting := func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
+		loads++
+		return loadFromGoCommand(root, dirs, patterns)
+	}
+	var out bytes.Buffer
+	err = commands(dir, args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
+		routes: routesRunner(counting),
+	})
+	return out.String(), loads, err
+}
+
+// TestRoutesPrintsConfigurationBeforeRoutes states that bare muxt writes the
+// Configuration section before Template Routes, and with --format json adds a
+// Configuration member to the listing, keeping the members it had.
+func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{".": "Root"}, nil)
+
+	text, _, err := listWithLoader(t, dir)
+	require.NoError(t, err, "muxt")
+	assert.Regexp(t, `(?s)\AConfiguration:\n.*\n\n.*Template Routes:\n  - GET /Root RootPage\(\)\n`, text, "text output")
+
+	asJSON, _, err := listWithLoader(t, dir, "--format", "json")
+	require.NoError(t, err, "muxt --format json")
+	var listing struct {
+		Definitions   []struct{ String string }
+		Configuration []struct {
+			Source   string
+			Settings []struct {
+				Key   string
+				Value any
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal([]byte(asJSON), &listing), "output:\n%s", asJSON)
+	require.Len(t, listing.Definitions, 1, "definitions")
+	assert.Equal(t, "GET /Root RootPage()", listing.Definitions[0].String, "definition")
+	values := make(map[string]any)
+	for _, group := range listing.Configuration {
+		for _, s := range group.Settings {
+			values[s.Key] = s.Value
+		}
+	}
+	assert.Equal(t, "Root", values["use_receiver_type"], "use_receiver_type in the configuration")
+	assert.Len(t, values, len(muxtJSONEntryKeys()), "settings")
 }
