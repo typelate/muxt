@@ -136,7 +136,7 @@ The documentation for this version is in the binary:
 		checkCommand(workingDirectory, getEnv, run.check),
 		formatCommand(workingDirectory, run.format),
 		listTemplateCallersCommand(workingDirectory, run.callers),
-		listTemplateCallsCommand(workingDirectory, run.calls),
+		listTemplateCallsCommand(workingDirectory, getEnv, run.calls),
 		exploreModuleCommand(workingDirectory),
 		generateFakeServerCommand(workingDirectory),
 		testTemplateMutationsCommand(workingDirectory, run.mutations),
