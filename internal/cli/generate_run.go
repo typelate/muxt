@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -143,42 +144,59 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		}
 		var all []resolved
 		for _, job := range jobs {
-			config := job.Config
-			pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(job.Dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+			files, err := resolveJob(cmd, pl, job)
 			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, log.New(stdout, "", 0))
-			if err != nil {
-				printMultiLineError(cmd, err)
 				return err
 			}
 			all = append(all, resolved{job: job, files: files})
 		}
 		for _, r := range all {
-			owned, err := ownedGeneratedFiles(r.job.Dir, r.job.Config.RoutesFunction, stderr)
-			if err != nil {
-				return err
-			}
 			if len(jobs) > 1 {
 				// Several directories write to one stream, so each says
 				// whose lines follow.
 				_, _ = fmt.Fprintln(stdout, r.job.Key)
 			}
-			written, err := writeGeneratedFiles(stdout, r.files, r.job.Config)
-			if err != nil {
-				return err
-			}
-			if err := removeOrphans(owned, written); err != nil {
+			if err := writeJob(stdout, stderr, r.job, r.files); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
+}
+
+// resolveJob returns the files job generates from the loaded packages pl. A
+// failure that explains itself over several lines is printed before it is
+// returned.
+func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob) ([]generate.GeneratedFile, error) {
+	config := job.Config
+	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(job.Dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+	if err != nil {
+		printMultiLineError(cmd, err)
+		return nil, err
+	}
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
+	if err != nil {
+		printMultiLineError(cmd, err)
+		return nil, err
+	}
+	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, log.New(cmd.OutOrStdout(), "", 0))
+	if err != nil {
+		printMultiLineError(cmd, err)
+		return nil, err
+	}
+	return files, nil
+}
+
+// writeJob writes files to job's directory and removes the generated files of
+// an earlier run that files no longer holds.
+func writeJob(stdout io.Writer, stderr *log.Logger, job generateJob, files []generate.GeneratedFile) error {
+	owned, err := ownedGeneratedFiles(job.Dir, job.Config.RoutesFunction, stderr)
+	if err != nil {
+		return err
+	}
+	written, err := writeGeneratedFiles(stdout, files, job.Config)
+	if err != nil {
+		return err
+	}
+	return removeOrphans(owned, written)
 }
