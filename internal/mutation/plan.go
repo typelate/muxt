@@ -329,7 +329,13 @@ func planFrom(config Configuration, in input, before revision, diffError string)
 		}
 		parsedFrom.add(lt, index)
 
-		chosen := sel.choose(traverse(lt, index))
+		// A template from another package's files is walked, so a
+		// {{template}} action still type checks, but it is mutated only by
+		// the package that owns it: its tests are the ones that can kill it.
+		own := sel
+		matches := sel.include
+		own.include = func(name string) bool { return matches(name) && !variable.Definitions[name].Shared() }
+		chosen := own.choose(traverse(lt, index))
 		for _, sc := range chosen.mutate {
 			p.add(lt, sc, in.dir)
 		}

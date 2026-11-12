@@ -154,6 +154,30 @@ func TestGenerateNotesMissingMethodOfSharedRoute(t *testing.T) {
 	assert.Contains(t, output, "note: T does not define SharedPage() any", "generate output")
 }
 
+// TestMutationsSkipSharedFiles states that muxt test-template-mutations in a
+// package that parses the other package's files lists mutants of the
+// package's own templates and none in the other package's files, though the
+// package's templates call the shared one.
+func TestMutationsSkipSharedFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/layout.gohtml": `{{define "layout"}}{{if .Result}}<main>{{.Result}}</main>{{end}}{{end}}`,
+		"workspace/page.gohtml":   `{{define "GET /{$} Home()"}}{{if .Result}}{{template "layout" .}}{{end}}{{end}}`,
+	})
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "test-template-mutations", "--dry-run")
+
+	require.NoError(t, err, "test-template-mutations: %s", output)
+	assert.Contains(t, output, "page.gohtml", "mutants of the package's own file")
+	assert.NotContains(t, output, "layout.gohtml", "mutants of the shared file")
+	assert.NotContains(t, output, "fragments", "mutants of the shared file")
+}
+
 // TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
 // other package's directory its //go:embed pattern does not match is not
 // parsed, even when the ParseFS patterns would match it, so a template only
