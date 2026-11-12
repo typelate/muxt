@@ -227,7 +227,7 @@ func TestEvaluateTemplateSelector(t *testing.T) {
 	t.Run("call ParseFS with first arg non ident", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))
 		_, err := evalTemplates(t, dir, "templateParseFSFirstArgNonIdent", "index.gohtml")
-		require.ErrorContains(t, err, "template.go:54:53: first argument to ParseFS must be an identifier")
+		require.ErrorContains(t, err, `template.go:54:53: first argument to ParseFS must be an identifier or an exported variable of an imported package (got os.DirFS("."))`)
 	})
 	t.Run("call ParseFS with non string literal glob", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/templates.txtar"))

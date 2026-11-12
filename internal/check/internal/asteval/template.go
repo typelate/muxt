@@ -487,6 +487,11 @@ func builtins() map[string]any {
 // written as an error string literal.
 const unreadableFuncsMessage = "Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one"
 
+// firstArgumentToParseFSMessage is the error for a ParseFS first argument that
+// is neither a package-level variable nor a variable of an imported package.
+// It names both forms, so the caller sees the shared one.
+const firstArgumentToParseFSMessage = "first argument to ParseFS must be an identifier or an exported variable of an imported package"
+
 // unsupportedFunctionHint names the supported alternative for template
 // package functions muxt cannot evaluate.
 func unsupportedFunctionHint(name string) string {
@@ -615,7 +620,7 @@ func evaluateCallParseFilesArgs(scope Scope, call *ast.CallExpr) (paths []string
 func embedFSFilePaths(dir string, fileSet *token.FileSet, decls []*ast.GenDecl, exp ast.Expr, embeddedFiles []string) ([]string, error) {
 	varIdent, ok := exp.(*ast.Ident)
 	if !ok {
-		return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("first argument to ParseFS must be an identifier"))
+		return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("%s (got %s)", firstArgumentToParseFSMessage, astgen.Format(exp)))
 	}
 	for _, decl := range decls {
 		for _, s := range decl.Specs {

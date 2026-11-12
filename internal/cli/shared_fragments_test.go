@@ -305,6 +305,23 @@ var Other fs.FS = TemplateSource
 	assert.Contains(t, output, "workspace.go:14:10: fragments.Other is a io/fs.FS, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
 }
 
+// TestGenerateReportsSharedFSCall states that a ParseFS first argument that is
+// a call, not a variable, fails with the message that names the shared form
+// muxt reads.
+func TestGenerateReportsSharedFSCall(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"workspace/workspace.go": workspaceReadingFS("example.com/m/fragments", "fragments.FS()"),
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
+
+	require.Error(t, err, "generate: %s", output)
+	assert.Contains(t, output, "workspace.go:14:10: first argument to ParseFS must be an identifier or an exported variable of an imported package (got fragments.FS())", "generate output")
+}
+
 // TestGenerateReportsSharedFSFromOtherModule states that a ParseFS argument
 // naming a package of another module fails with muxt's message at the
 // argument's position. The other module is a replace target in the temp

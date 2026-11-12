@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+
+	"github.com/typelate/muxt/internal/check/internal/astgen"
 )
 
 // sharedFiles resolves arg, a pkg.Var selector, to the absolute paths of the
@@ -18,11 +20,11 @@ import (
 func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath string, err error) {
 	pkgIdent, ok := arg.X.(*ast.Ident)
 	if !ok {
-		return nil, "", wrapWithFilename(scope.Dir, scope.Fset, arg.Pos(), fmt.Errorf("first argument to ParseFS must be an identifier or an exported variable of an imported package"))
+		return nil, "", wrapWithFilename(scope.Dir, scope.Fset, arg.Pos(), fmt.Errorf("%s (got %s)", firstArgumentToParseFSMessage, astgen.Format(arg)))
 	}
 	pkgName, ok := scope.Info.Uses[pkgIdent].(*types.PkgName)
 	if !ok {
-		return nil, "", wrapWithFilename(scope.Dir, scope.Fset, arg.Pos(), fmt.Errorf("first argument to ParseFS must be an identifier or an exported variable of an imported package"))
+		return nil, "", wrapWithFilename(scope.Dir, scope.Fset, arg.Pos(), fmt.Errorf("%s (got %s)", firstArgumentToParseFSMessage, astgen.Format(arg)))
 	}
 	importPath = pkgName.Imported().Path()
 	other, ok := scope.Imports[importPath]
