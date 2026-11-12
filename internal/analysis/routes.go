@@ -35,11 +35,21 @@ type ReceiverMethod struct {
 	Signature string
 }
 
+// Override is a name the templates variable's chain defined in more than one
+// place, one of them in another package's files. Replaced and Kept are
+// file:line:col of the define clause the set dropped and the one it kept.
+type Override struct {
+	Name     string
+	Replaced string
+	Kept     string
+}
+
 type Routes struct {
 	Functions       []Function
 	Definitions     []Definition
 	Receiver        *types.Named
 	ReceiverMethods []ReceiverMethod
+	Overrides       []Override `json:",omitempty"`
 }
 
 func (result *Routes) WriteTo(w io.Writer) (int64, error) {
@@ -51,9 +61,16 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 	return io.Copy(w, &buf)
 }
 
+func sitePosition(base PathBase, site source.Site) string {
+	position := site.Position
+	position.Filename = base.Relative(position.Filename)
+	return position.String()
+}
+
 // NewRoutes lists each templates variable's route definitions and
-// functions, and the receiver's methods when a receiver type was named.
-func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
+// functions, and the receiver's methods when a receiver type was named. Files
+// in the overrides are named relative to base.
+func NewRoutes(pkg source.Package, receiver *types.Named, base PathBase) ([]*Routes, error) {
 	var results []*Routes
 
 	for _, tv := range pkg.Variables {
@@ -87,6 +104,13 @@ func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
 		result := Routes{
 			Functions:   funcList,
 			Definitions: defList,
+		}
+		for _, o := range tv.Overrides {
+			result.Overrides = append(result.Overrides, Override{
+				Name:     o.Name,
+				Replaced: sitePosition(base, o.Replaced),
+				Kept:     sitePosition(base, o.Kept),
+			})
 		}
 
 		if receiver != nil {

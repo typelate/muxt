@@ -57,6 +57,7 @@ func readVariable(pkg *packages.Package, name string, imports map[string]source.
 		Functions:   lt.Functions(),
 		Funcs:       lt.CollectedFunctions(),
 		Definitions: make(map[string]source.Definition),
+		Overrides:   lt.Overrides(),
 	}
 	for _, t := range ts.Templates() {
 		d, ok := lt.FindDefinition(t.Name())

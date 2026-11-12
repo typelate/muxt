@@ -40,6 +40,8 @@ Template Routes:
 Template Functions:
 ```
 
+When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: `- footer: ../fragments/layout.gohtml:3:9 replaced by page.gohtml:1:9`. Paths are relative to the working directory. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
+
 ## Flags
 
 `--use-*` flags name code muxt reads. `--output-*` flags shape code `generate` writes. Single-command flags (`--match`, `-o`, the mutation flags) are on that command's page.

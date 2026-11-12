@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	muxtsource "github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/template"
 	"github.com/typelate/muxt/template/lex"
 )
@@ -101,6 +102,32 @@ func newDefinitionSet(ordered []Definition) definitionSet {
 		set[def.Name] = def
 	}
 	return set
+}
+
+// overridesIn reports, in parse order, each definition of a name that replaced
+// an earlier one when either was written in another package's files. It
+// applies the rule newDefinitionSet does, so Kept is the definition the set
+// holds: a definition with an empty body leaves the earlier one in place and
+// replaces nothing. Two definitions both in the analyzed package are not an
+// override: the package wrote both.
+func overridesIn(ordered []Definition) []muxtsource.Override {
+	var overrides []muxtsource.Override
+	kept := make(map[string]Definition, len(ordered))
+	for _, def := range ordered {
+		prev, ok := kept[def.Name]
+		if ok && !displaces(prev, def) {
+			continue
+		}
+		if ok && (prev.Package != "" || def.Package != "") {
+			overrides = append(overrides, muxtsource.Override{
+				Name:     def.Name,
+				Replaced: muxtsource.Site{Package: prev.Package, Position: prev.Define.Position},
+				Kept:     muxtsource.Site{Package: def.Package, Position: def.Define.Position},
+			})
+		}
+		kept[def.Name] = def
+	}
+	return overrides
 }
 
 func (s definitionSet) FindDefinition(name string) (Definition, bool) {

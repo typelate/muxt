@@ -68,6 +68,12 @@ type Variable struct {
 	// template name. A template whose source is unknown has none.
 	Definitions map[string]Definition
 
+	// Overrides are the names the construction chain defined in more than
+	// one place, one of them in another package's files, in parse order.
+	// The set keeps one definition of a name, so the other is recorded here
+	// or nowhere.
+	Overrides []Override
+
 	// Calls are the variable's ExecuteTemplate calls with a string
 	// literal template name, in file order.
 	Calls []Call
@@ -117,6 +123,26 @@ type Definition struct {
 // files. It is what a consumer asks to leave a template alone that the
 // analyzed package does not own.
 func (d Definition) Shared() bool { return d.Package != "" }
+
+// Site is where one definition of an overridden name was written.
+type Site struct {
+	// Package is the import path of the package whose files held the
+	// definition, as Definition.Package.
+	Package string
+
+	// Position is the definition's define clause.
+	Position token.Position
+}
+
+// Override records a name defined twice across the chain where one
+// definition came from another package's files. Both are recorded because
+// the template set keeps only one of them.
+type Override struct {
+	Name string
+
+	// Replaced is the definition the set dropped, Kept the one it kept.
+	Replaced, Kept Site
+}
 
 // Span is a run of bytes in a file.
 type Span struct {

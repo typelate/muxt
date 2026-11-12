@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -402,6 +403,67 @@ func TestCheckTypeChecksTheOverridingDefinition(t *testing.T) {
 	output, err = runMuxt(t, workspace, "check")
 
 	require.NoError(t, err, "check: %s", output)
+}
+
+// TestRoutesListsOverriddenSharedNames states that the bare listing names, after
+// the Configuration section and before the routes, each name defined in a
+// shared file and again later in the chain, with both sites relative to the
+// working directory, and that it says which one the chain kept. With nothing
+// overridden the section is absent.
+func TestRoutesListsOverriddenSharedNames(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name       string
+		sharedLast bool
+		want       string
+	}{
+		{
+			name: "own file after the shared files",
+			want: "Overrides:\n  - footer: ../fragments/footer.gohtml:1:1 replaced by page.gohtml:2:1\n\nTemplate Routes:",
+		},
+		{
+			name:       "shared files after the own file",
+			sharedLast: true,
+			want:       "Overrides:\n  - footer: page.gohtml:2:1 replaced by ../fragments/footer.gohtml:1:1\n\nTemplate Routes:",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := overriddenFooter(t, tt.sharedLast)
+
+			output, err := runMuxt(t, filepath.Join(dir, "workspace"))
+
+			require.NoError(t, err, "muxt: %s", output)
+			assert.Contains(t, output, tt.want, "muxt output")
+			assert.Less(t, strings.Index(output, "Configuration:"), strings.Index(output, "Overrides:"), "Overrides come after Configuration")
+		})
+	}
+
+	t.Run("json", func(t *testing.T) {
+		dir := overriddenFooter(t, false)
+
+		output, err := runMuxt(t, filepath.Join(dir, "workspace"), "--format", "json")
+
+		require.NoError(t, err, "muxt: %s", output)
+		var listing struct {
+			Overrides []struct{ Name, Replaced, Kept string }
+		}
+		require.NoError(t, json.Unmarshal([]byte(output), &listing), "muxt output: %s", output)
+		require.Len(t, listing.Overrides, 1, "Overrides")
+		assert.Equal(t, "footer", listing.Overrides[0].Name, "Name")
+		assert.Equal(t, "../fragments/footer.gohtml:1:1", listing.Overrides[0].Replaced, "Replaced")
+		assert.Equal(t, "page.gohtml:2:1", listing.Overrides[0].Kept, "Kept")
+	})
+
+	t.Run("none", func(t *testing.T) {
+		dir := fragmentsModule(t, nil)
+
+		output, err := runMuxt(t, filepath.Join(dir, "workspace"))
+
+		require.NoError(t, err, "muxt: %s", output)
+		assert.NotContains(t, output, "Overrides", "muxt output")
+	})
 }
 
 // TestCheckNamesSharedFileRelativeToWorkingDirectory states that an error in a

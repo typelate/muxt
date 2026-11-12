@@ -11,6 +11,34 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
+// PathBase is the directory a run shows template paths relative to: the
+// working directory muxt started in, after -C.
+type PathBase struct {
+	// Dir is the working directory. Empty leaves every path as it is.
+	Dir string
+
+	// ModuleRoot bounds Dir: a path outside it stays absolute, so a file in
+	// the module cache does not become a chain of "..". Empty means Dir.
+	ModuleRoot string
+}
+
+// Relative returns path relative to the base, or path itself when it is not
+// absolute, the base is empty, or path is outside the module root.
+func (b PathBase) Relative(path string) string {
+	if b.Dir == "" || !filepath.IsAbs(path) {
+		return path
+	}
+	inside, err := filepath.Rel(cmp.Or(b.ModuleRoot, b.Dir), path)
+	if err != nil || strings.HasPrefix(inside, "..") {
+		return path
+	}
+	rel, err := filepath.Rel(b.Dir, path)
+	if err != nil {
+		return path
+	}
+	return rel
+}
+
 // relativePaths returns a logger that writes what logger would, with the path
 // of each template file in pkg shown relative to dir, so a run names own and
 // shared files from one base. A path outside root stays absolute: a file in
@@ -23,7 +51,7 @@ func relativePaths(logger *log.Logger, dir, root string, pkg source.Package) *lo
 	if dir == "" {
 		return logger
 	}
-	root = cmp.Or(root, dir)
+	base := PathBase{Dir: dir, ModuleRoot: root}
 	seen := make(map[string]bool)
 	var paths []string
 	for _, variable := range pkg.Variables {
@@ -40,15 +68,7 @@ func relativePaths(logger *log.Logger, dir, root string, pkg source.Package) *lo
 	slices.SortFunc(paths, func(a, b string) int { return cmp.Or(cmp.Compare(len(b), len(a)), strings.Compare(a, b)) })
 	var pairs []string
 	for _, path := range paths {
-		inside, err := filepath.Rel(root, path)
-		if err != nil || strings.HasPrefix(inside, "..") {
-			continue
-		}
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			continue
-		}
-		pairs = append(pairs, path, rel)
+		pairs = append(pairs, path, base.Relative(path))
 	}
 	return log.New(&replacingWriter{w: logger.Writer(), replacer: strings.NewReplacer(pairs...)}, logger.Prefix(), logger.Flags())
 }

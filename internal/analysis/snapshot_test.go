@@ -194,7 +194,7 @@ func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]strin
 			break
 		}
 		var results []*analysis.Routes
-		results, runErr = analysis.NewRoutes(pkg, receiver)
+		results, runErr = analysis.NewRoutes(pkg, receiver, analysis.PathBase{})
 		for _, result := range results {
 			writeTo(t, &stdout, result)
 		}

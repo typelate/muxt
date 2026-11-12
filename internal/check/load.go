@@ -92,13 +92,15 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[
 		merged[name] = sig
 	}
 
+	ordered := definitionsFor(pkg.Fset, meta.Sources)
 	result := &Templates{
+		overrides:   overridesIn(ordered),
 		pkg:         pkg,
 		variable:    variable,
 		templates:   ts,
 		functions:   merged,
 		collected:   collected,
-		definitions: newDefinitionSet(definitionsFor(pkg.Fset, meta.Sources)),
+		definitions: newDefinitionSet(ordered),
 	}
 	result.definitions.adoptTrees(result)
 	return result, nil
@@ -114,6 +116,13 @@ type Templates struct {
 	functions   Functions
 	collected   Functions
 	definitions definitionSet
+	overrides   []muxtsource.Override
+}
+
+// Overrides are the names the chain defined in more than one place where one
+// definition came from another package's files, in parse order.
+func (t *Templates) Overrides() []muxtsource.Override {
+	return t.overrides
 }
 
 // Set returns the evaluated template set; use its Names, Lookup, and

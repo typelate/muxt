@@ -28,7 +28,7 @@ func TestNewRoutesSkipsTemplatesWithoutATree(t *testing.T) {
 	ts := parseTemplates(t, `{{define "GET /a A()"}}a{{end}}`)
 	ts.New("GET /b B()") // declared, never parsed: no tree
 	pkg := source.Package{Variables: []source.Variable{{Name: "templates", Set: ts}}}
-	results, err := NewRoutes(pkg, nil)
+	results, err := NewRoutes(pkg, nil, PathBase{})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	require.Len(t, results[0].Definitions, 1)
