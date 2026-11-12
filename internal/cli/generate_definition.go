@@ -20,7 +20,10 @@ import (
 // to a template file of the package in the working directory. It never edits
 // Go source.
 func generateDefinitionCommand(workingDirectory *string, getEnv func(string) string, loadPackages packageLoader) *cobra.Command {
-	var templateFile string
+	var (
+		templateFile string
+		document     bool
+	)
 	cmd := &cobra.Command{
 		Use:     "def NAME",
 		Aliases: []string{"definition"},
@@ -28,16 +31,21 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			return scaffoldDefinition(cmd, *workingDirectory, args[0], templateFile, getEnv, loadPackages)
+			body := scaffold.Fragment
+			if document {
+				body = scaffold.Document
+			}
+			return scaffoldDefinition(cmd, *workingDirectory, args[0], templateFile, body, getEnv, loadPackages)
 		},
 	}
 	cmd.Flags().StringVar(&templateFile, outputFile, "", "the .gohtml file in the working directory to add the template to")
+	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
 }
 
 // scaffoldDefinition appends the define for name to templateFile in wd and
 // reports it on stderr. Everything is checked before anything is written.
-func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, getEnv func(string) string, loadPackages packageLoader) error {
+func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body scaffold.Body, getEnv func(string) string, loadPackages packageLoader) error {
 	if err := checkTemplateFileName(templateFile); err != nil {
 		return err
 	}
@@ -54,7 +62,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, getEn
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("reading %s: %w", templateFile, err)
 	}
-	content := scaffold.AppendDefinition(existing, scaffold.Definition(name))
+	content := scaffold.AppendDefinition(existing, scaffold.Definition(name, body))
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", templateFile, err)
 	}

@@ -26,3 +26,23 @@ func TestAppendDefinitionStartsDefineOnItsOwnLine(t *testing.T) {
 		})
 	}
 }
+
+// TestDefinitionDocumentHoldsAnHTMLDocument states the define for a full
+// page: the doctype, a head with a charset, a viewport and an empty title, and
+// an empty body, indented as muxt fmt leaves it.
+func TestDefinitionDocumentHoldsAnHTMLDocument(t *testing.T) {
+	const want = `{{define "GET /foo Index()"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title></title>
+</head>
+<body></body>
+</html>
+{{end}}`
+
+	got := Definition("GET /foo Index()", Document)
+
+	assert.Equal(t, want, got, "Definition(name, Document)")
+}

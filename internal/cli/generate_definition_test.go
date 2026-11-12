@@ -196,3 +196,17 @@ func TestGenerateDefSaysWhenItCannotCheckForDuplicates(t *testing.T) {
 	assert.Contains(t, err.Error(), `cannot check whether "GET /foo Index()" is already defined`)
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
+
+// TestGenerateDefOutputDocumentWritesAHTMLDocument states that
+// --output-document makes the define a full HTML document.
+func TestGenerateDefOutputDocumentWritesAHTMLDocument(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--output-document"}, runners{})
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
+	require.NoError(t, err)
+	assert.Equal(t, scaffold.Definition("GET /foo Index()", scaffold.Document)+"\n", string(got), "index.gohtml")
+	assert.Contains(t, string(got), "<!DOCTYPE html>\n<html lang=\"en\">", "index.gohtml holds a document")
+}

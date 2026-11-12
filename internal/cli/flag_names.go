@@ -11,6 +11,7 @@ const (
 	useReceiverType                     = "use-receiver-type"
 	useReceiverTypePackage              = "use-receiver-type-package"
 	outputFile                          = "output-file"
+	outputDocument                      = "output-document"
 	outputReceiverInterface             = "output-receiver-interface"
 	outputRoutesFunc                    = "output-routes-func"
 	outputTemplateDataType              = "output-template-data-type"
