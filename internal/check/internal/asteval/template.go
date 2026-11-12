@@ -55,6 +55,11 @@ type ParsedText struct {
 
 	// Options are the lexer options the text was parsed with.
 	Options lex.Options
+
+	// Package is the import path of the package whose files held the text,
+	// empty for the analyzed package and for Go string literals. It is how
+	// a definition is traced back to the package that owns it.
+	Package string
 }
 
 // recordParsedLiteral notes a Parse call whose argument is a string
@@ -105,7 +110,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 				if meta != nil {
 					meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 				}
-				t, err := parseFiles(chain.Templates, false, fm, meta, chain.LeftDelim, chain.RightDelim, filePaths...)
+				t, err := parseFiles(chain.Templates, false, fm, meta, "", chain.LeftDelim, chain.RightDelim, filePaths...)
 				return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 			case "Parse":
 				if len(call.Args) != 1 {
@@ -176,7 +181,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, chain.LeftDelim, chain.RightDelim, filePaths...)
+			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, "", chain.LeftDelim, chain.RightDelim, filePaths...)
 			return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 		default:
 			return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name))))
@@ -234,7 +239,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(up, false, fm, meta, upLDelim, upRDelim, filePaths...)
+			t, err := parseFiles(up, false, fm, meta, "", upLDelim, upRDelim, filePaths...)
 			return chain.result(t, upLDelim, upRDelim, err)
 		case "Option":
 			list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
@@ -360,7 +365,10 @@ func FindModificationReceiver(expr *ast.CallExpr, typesInfo *types.Info) types.O
 // parseFiles parses each file into t, as ParseFiles does. A nil t is
 // created from the first file's name, as a text/template set when text
 // is true.
-func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string]any, meta *TemplateMetadata, leftDelim, rightDelim string, filenames ...string) (*template.Template[*types.Signature], error) {
+//
+// pkgPath is the import path of the package whose files these are, recorded
+// on each ParsedText; empty means the analyzed package.
+func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string]any, meta *TemplateMetadata, pkgPath, leftDelim, rightDelim string, filenames ...string) (*template.Template[*types.Signature], error) {
 	if len(filenames) == 0 {
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
 	}
@@ -428,6 +436,7 @@ func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string
 		if meta != nil {
 			meta.Sources = append(meta.Sources, ParsedText{
 				RootName:   templateName,
+				Package:    pkgPath,
 				Filename:   absoluteFilename,
 				Text:       s,
 				LeftDelim:  leftDelim,

@@ -45,11 +45,15 @@ type resolvedTemplate struct {
 func definitionsFor(fset *token.FileSet, sources []asteval.ParsedText) []Definition {
 	var ordered []Definition
 	for _, src := range sources {
+		start := len(ordered)
 		if src.Literal != nil {
 			ordered = append(ordered, definitionsInLiteral(fset, src.Literal, src.RootName, src.Options)...)
-			continue
+		} else {
+			ordered = append(ordered, definitionsIn(src.RootName, src.Filename, src.Text, src.Options)...)
 		}
-		ordered = append(ordered, definitionsIn(src.RootName, src.Filename, src.Text, src.Options)...)
+		for i := start; i < len(ordered); i++ {
+			ordered[i].Package = src.Package
+		}
 	}
 	return ordered
 }

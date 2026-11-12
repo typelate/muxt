@@ -66,6 +66,10 @@ type Definition struct {
 	// know it is a reparse of the source the definition was written in.
 	Tree *template.Tree
 
+	// Package is the import path of the package whose files the
+	// definition was read from, empty for the analyzed package.
+	Package string
+
 	// blockPipeline is the pipeline a block clause passes to the
 	// template it defines, and is nil for every other definition. A
 	// block clause cannot be written without one, so its presence is
