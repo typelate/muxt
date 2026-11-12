@@ -54,7 +54,7 @@ type %s struct{}
 func (%s) %sPage() any { return nil }
 `, name, blank.String(), receiver, receiver, receiver))
 		writeTestFile(t, pkgDir, "page.gohtml", fmt.Sprintf(`{{define "GET /%s %sPage()"}}<p>{{.}}</p>{{end}}`, receiver, receiver))
-		entries[key] = fmt.Sprintf(`%q: {"use-receiver-type": %q}`, key, receiver)
+		entries[key] = fmt.Sprintf(`%q: {"use_receiver_type": %q}`, key, receiver)
 	}
 	var all []string
 	for _, e := range entries {
@@ -188,7 +188,7 @@ type A struct{}
 func (A) APage() any { return nil }
 `)
 	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
-	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"a": {"use-receiver-type": "Missing"}, "b": {"use-receiver-type": "B"}}}`)
+	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"a": {"use_receiver_type": "Missing"}, "b": {"use_receiver_type": "B"}}}`)
 
 	_, _, err := generateWithLoader(t, dir)
 

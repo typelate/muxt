@@ -32,7 +32,7 @@ func TestEveryGenerateFlagHasMuxtJSONKey(t *testing.T) {
 	var flagNames []string
 	flags.VisitAll(func(f *pflag.Flag) {
 		if f.Deprecated == "" && f.Name != "verbose" {
-			flagNames = append(flagNames, f.Name)
+			flagNames = append(flagNames, strings.ReplaceAll(f.Name, "-", "_"))
 		}
 	})
 	keys := muxtJSONEntryKeys()
@@ -77,28 +77,28 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 		args  string
 		entry map[string]any
 	}{
-		{name: "use-templates-variable", args: "--use-templates-variable data", entry: map[string]any{"use-templates-variable": []string{"data"}}},
-		{name: "use-receiver-type", args: "--use-receiver-type Server", entry: map[string]any{"use-receiver-type": "Server"}},
-		{name: "use-receiver-type-package", args: "--use-receiver-type-package example.com/pkg", entry: map[string]any{"use-receiver-type-package": "example.com/pkg"}},
-		{name: "output-file", args: "--output-file routes_gen.go", entry: map[string]any{"output-file": "routes_gen.go"}},
-		{name: "output-receiver-interface", args: "--output-receiver-interface Receiver", entry: map[string]any{"output-receiver-interface": "Receiver"}},
-		{name: "output-routes-func", args: "--output-routes-func Routes", entry: map[string]any{"output-routes-func": "Routes"}},
-		{name: "output-template-data-type", args: "--output-template-data-type Data", entry: map[string]any{"output-template-data-type": "Data"}},
-		{name: "output-sse-template-data-type", args: "--output-sse-template-data-type SSEData", entry: map[string]any{"output-sse-template-data-type": "SSEData"}},
-		{name: "output-template-route-paths-type", args: "--output-template-route-paths-type Paths", entry: map[string]any{"output-template-route-paths-type": "Paths"}},
-		{name: "output-template-route-type", args: "--output-template-route-type Route", entry: map[string]any{"output-template-route-type": "Route"}},
-		{name: "output-template-route-builder-type", args: "--output-template-route-builder-type RouteBuilder", entry: map[string]any{"output-template-route-builder-type": "RouteBuilder"}},
-		{name: "output-routes-func-with-logger-param", args: "--output-routes-func-with-logger-param", entry: map[string]any{"output-routes-func-with-logger-param": true}},
-		{name: "output-routes-func-with-path-prefix-param", args: "--output-routes-func-with-path-prefix-param", entry: map[string]any{"output-routes-func-with-path-prefix-param": true}},
-		{name: "output-routes-func-with-middleware-param", args: "--output-routes-func-with-middleware-param", entry: map[string]any{"output-routes-func-with-middleware-param": true}},
-		{name: "output-multiple-files", args: "--output-multiple-files", entry: map[string]any{"output-multiple-files": true}},
-		{name: "output-htmx", args: "--output-htmx", entry: map[string]any{"output-htmx": true}},
-		{name: "output-datastar", args: "--output-datastar", entry: map[string]any{"output-datastar": true}},
-		{name: "output-exported-default-identifiers", args: "--output-exported-default-identifiers=false", entry: map[string]any{"output-exported-default-identifiers": false}},
-		{name: "output-multipart-max-memory", args: "--output-multipart-max-memory 64MB", entry: map[string]any{"output-multipart-max-memory": "64MB"}},
-		{name: "output-muxt-version", args: "--output-muxt-version=false", entry: map[string]any{"output-muxt-version": false}},
-		{name: "input-static-assets-directory", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input-static-assets-directory": "assets", "output-static-assets-path": "/static"}},
-		{name: "output-static-assets-path", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input-static-assets-directory": "assets", "output-static-assets-path": "/static"}},
+		{name: "use_templates_variable", args: "--use-templates-variable data", entry: map[string]any{"use_templates_variable": []string{"data"}}},
+		{name: "use_receiver_type", args: "--use-receiver-type Server", entry: map[string]any{"use_receiver_type": "Server"}},
+		{name: "use_receiver_type_package", args: "--use-receiver-type-package example.com/pkg", entry: map[string]any{"use_receiver_type_package": "example.com/pkg"}},
+		{name: "output_file", args: "--output-file routes_gen.go", entry: map[string]any{"output_file": "routes_gen.go"}},
+		{name: "output_receiver_interface", args: "--output-receiver-interface Receiver", entry: map[string]any{"output_receiver_interface": "Receiver"}},
+		{name: "output_routes_func", args: "--output-routes-func Routes", entry: map[string]any{"output_routes_func": "Routes"}},
+		{name: "output_template_data_type", args: "--output-template-data-type Data", entry: map[string]any{"output_template_data_type": "Data"}},
+		{name: "output_sse_template_data_type", args: "--output-sse-template-data-type SSEData", entry: map[string]any{"output_sse_template_data_type": "SSEData"}},
+		{name: "output_template_route_paths_type", args: "--output-template-route-paths-type Paths", entry: map[string]any{"output_template_route_paths_type": "Paths"}},
+		{name: "output_template_route_type", args: "--output-template-route-type Route", entry: map[string]any{"output_template_route_type": "Route"}},
+		{name: "output_template_route_builder_type", args: "--output-template-route-builder-type RouteBuilder", entry: map[string]any{"output_template_route_builder_type": "RouteBuilder"}},
+		{name: "output_routes_func_with_logger_param", args: "--output-routes-func-with-logger-param", entry: map[string]any{"output_routes_func_with_logger_param": true}},
+		{name: "output_routes_func_with_path_prefix_param", args: "--output-routes-func-with-path-prefix-param", entry: map[string]any{"output_routes_func_with_path_prefix_param": true}},
+		{name: "output_routes_func_with_middleware_param", args: "--output-routes-func-with-middleware-param", entry: map[string]any{"output_routes_func_with_middleware_param": true}},
+		{name: "output_multiple_files", args: "--output-multiple-files", entry: map[string]any{"output_multiple_files": true}},
+		{name: "output_htmx", args: "--output-htmx", entry: map[string]any{"output_htmx": true}},
+		{name: "output_datastar", args: "--output-datastar", entry: map[string]any{"output_datastar": true}},
+		{name: "output_exported_default_identifiers", args: "--output-exported-default-identifiers=false", entry: map[string]any{"output_exported_default_identifiers": false}},
+		{name: "output_multipart_max_memory", args: "--output-multipart-max-memory 64MB", entry: map[string]any{"output_multipart_max_memory": "64MB"}},
+		{name: "output_muxt_version", args: "--output-muxt-version=false", entry: map[string]any{"output_muxt_version": false}},
+		{name: "input_static_assets_directory", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input_static_assets_directory": "assets", "output_static_assets_path": "/static"}},
+		{name: "output_static_assets_path", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input_static_assets_directory": "assets", "output_static_assets_path": "/static"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -120,7 +120,7 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 // so the entry must mark its name as given to keep it.
 func TestMuxtJSONEntryNameSurvivesUnexportedDefaults(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"output-exported-default-identifiers": false, "output-routes-func": "Mount"}}}`
+	const file = `{"packages": {".": {"output_exported_default_identifiers": false, "output_routes_func": "Mount"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
 	got := generateConfigurationOf(t, dir, "generate")
@@ -149,7 +149,7 @@ func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.Rou
 // generate runner records the job it is handed.
 func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"use-receiver-type": "Server", "output-routes-func": "templateRoutes"}}}`
+	const file = `{"packages": {".": {"use_receiver_type": "Server", "output_routes_func": "templateRoutes"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
 	// The defaults a flagless run gets with no muxt.json, and the same
@@ -182,7 +182,7 @@ func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
 	module := filepath.Join(parent, "module")
 	require.NoError(t, os.Mkdir(module, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(module, "go.mod"), []byte("module example.com/m\n"), 0o644))
-	const file = `{"packages": {"module": {"use-receiver-type": "T1"}}}`
+	const file = `{"packages": {"module": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
 
 	var jobs []generateJob
@@ -265,7 +265,7 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 // key and the key to write instead. The runner is not called.
 func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"receiver-type": "Server"}}}`
+	const file = `{"packages": {".": {"receiver_type": "Server"}}}`
 	path := filepath.Join(dir, muxtjson.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
 
@@ -275,10 +275,44 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 	require.ErrorAs(t, err, &deprecated, "error %v", err)
 	assert.Equal(t, muxtjson.FileName, deprecated.Path, "path")
 	assert.Equal(t, `packages["."]`, deprecated.Where, "where")
-	assert.Equal(t, "receiver-type", deprecated.Key, "key")
-	assert.Equal(t, "use-receiver-type", deprecated.Replacement, "replacement")
-	assert.Equal(t, `muxt.json: packages["."]: key "receiver-type" is deprecated; write "use-receiver-type"`, err.Error(), "message")
+	assert.Equal(t, "receiver_type", deprecated.Key, "key")
+	assert.Equal(t, "use_receiver_type", deprecated.Replacement, "replacement")
+	assert.Equal(t, `muxt.json: packages["."]: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
+}
+
+// TestGenerateMuxtJSONKeysUseUnderscores states that a muxt.json entry key is
+// the flag name without "--" with each "-" written as "_". A key with the
+// underscores reaches the generator. A key with dashes, which the underscore
+// form would accept, fails a flagless muxt generate naming the underscore form.
+func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
+	t.Run("underscored keys reach the generator", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"packages": {".": {"use_receiver_type": "Server", "output_routes_func": "Mount"}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		got := generateConfigurationOf(t, dir, "generate")
+
+		assert.Equal(t, "Server", got.ReceiverType, "receiver type")
+		assert.Equal(t, "Mount", got.RoutesFunction, "routes function")
+	})
+
+	t.Run("dashed key fails naming the underscore form", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"packages": {".": {"use-receiver-type": "Server"}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		called, err := generateFailureOf(t, dir)
+
+		var dashed *muxtjson.DashedKeyError
+		require.ErrorAs(t, err, &dashed, "error %v", err)
+		assert.Equal(t, muxtjson.FileName, dashed.Path, "path")
+		assert.Equal(t, `packages["."]`, dashed.Where, "where")
+		assert.Equal(t, "use-receiver-type", dashed.Key, "key")
+		assert.Equal(t, "use_receiver_type", dashed.Underscored, "underscored")
+		assert.Equal(t, `muxt.json: packages["."]: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.False(t, called, "generate runner called")
+	})
 }
 
 // TestGenerateRejectsMuxtJSONEntryFlagConflict states that a muxt.json entry
@@ -286,7 +320,7 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 // flag's own error under the entry's location. The runner is not called.
 func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"output-htmx": true, "output-datastar": true}}}`
+	const file = `{"packages": {".": {"output_htmx": true, "output_datastar": true}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -302,12 +336,12 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 }
 
 // TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue states that a muxt.json
-// entry whose output-multipart-max-memory the flag cannot parse fails a
+// entry whose output_multipart_max_memory the flag cannot parse fails a
 // flagless muxt generate, naming the file once, the entry, and the key, then
 // the flag's own error. The runner is not called.
 func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"output-multipart-max-memory": "lots"}}}`
+	const file = `{"packages": {".": {"output_multipart_max_memory": "lots"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -319,7 +353,7 @@ func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
 	assert.Equal(t, `packages["."]`, invalid.Where, "where")
-	assert.Equal(t, `muxt.json: packages["."]: output-multipart-max-memory: `+flagErr.Error(), err.Error(), "message")
+	assert.Equal(t, `muxt.json: packages["."]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -394,7 +428,7 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 // entry. The runner records the job it is handed.
 func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 	dir := t.TempDir()
-	const file = `{"packages": {".": {"use-receiver-type": "Server"}}}`
+	const file = `{"packages": {".": {"use_receiver_type": "Server"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	var jobs []generateJob
@@ -447,7 +481,7 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 	parent := t.TempDir()
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {".": {"use-receiver-type": "Root"}, "workspace": {"use-receiver-type": "T1"}}}`
+	const file = `{"packages": {".": {"use_receiver_type": "Root"}, "workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
 
 	var jobs []generateJob
@@ -471,7 +505,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 	dir := t.TempDir()
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}, ".": {"use-receiver-type": "Root"}}}`
+	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}, ".": {"use_receiver_type": "Root"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
@@ -491,7 +525,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
-	const file = `{"packages": {".": {"use-receiver-type": "Root"}, "workspace": {"output-htmx": true, "output-datastar": true}}}`
+	const file = `{"packages": {".": {"use_receiver_type": "Root"}, "workspace": {"output_htmx": true, "output_datastar": true}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -512,7 +546,7 @@ func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
 	dir := t.TempDir()
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}}}`
+	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
@@ -530,7 +564,7 @@ func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
 	dir := t.TempDir()
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {".": {"output-htmx": true, "output-datastar": true}, "workspace": {"use-receiver-type": "T1"}}}`
+	const file = `{"packages": {".": {"output_htmx": true, "output_datastar": true}, "workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, workspace, "generate")
@@ -558,7 +592,7 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setup(t, dir)
-			const file = `{"packages": {".": {"use-receiver-type": "Root"}, "gone": {"use-receiver-type": "T1"}}}`
+			const file = `{"packages": {".": {"use_receiver_type": "Root"}, "gone": {"use_receiver_type": "T1"}}}`
 			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
 			called, err := generateFailureOf(t, dir)
@@ -618,7 +652,7 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 	parent := t.TempDir()
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}}}`
+	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
 
 	var jobs []generateJob

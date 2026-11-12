@@ -92,54 +92,56 @@ func (f *File) DirOf(key string) string {
 }
 
 // Entry holds the generate flags of one package directory. JSON keys are the
-// flag names without "--". A nil field is absent from the file, so the flag's
-// default applies. Fields follow the order `muxt generate --help` lists flags;
-// verbose is not configuration and has no field.
+// flag names without "--", with each "-" written as "_": underscores keep a
+// key a single identifier-like word, and checkKeys rejects the dashed form so
+// a file has one spelling per key. A nil field is absent from the file, so the
+// flag's default applies. Fields follow the order `muxt generate --help` lists
+// flags; verbose is not configuration and has no field.
 type Entry struct {
 	// InputStaticAssetsDirectory is --input-static-assets-directory.
-	InputStaticAssetsDirectory *string `json:"input-static-assets-directory,omitempty"`
+	InputStaticAssetsDirectory *string `json:"input_static_assets_directory,omitempty"`
 	// OutputDatastar is --output-datastar.
-	OutputDatastar *bool `json:"output-datastar,omitempty"`
+	OutputDatastar *bool `json:"output_datastar,omitempty"`
 	// OutputExportedDefaultIdentifiers is --output-exported-default-identifiers.
-	OutputExportedDefaultIdentifiers *bool `json:"output-exported-default-identifiers,omitempty"`
+	OutputExportedDefaultIdentifiers *bool `json:"output_exported_default_identifiers,omitempty"`
 	// OutputFile is --output-file.
-	OutputFile *string `json:"output-file,omitempty"`
+	OutputFile *string `json:"output_file,omitempty"`
 	// OutputHTMX is --output-htmx.
-	OutputHTMX *bool `json:"output-htmx,omitempty"`
+	OutputHTMX *bool `json:"output_htmx,omitempty"`
 	// OutputMultipartMaxMemory is --output-multipart-max-memory, in the form the flag accepts, such as "64MB".
-	OutputMultipartMaxMemory *string `json:"output-multipart-max-memory,omitempty"`
+	OutputMultipartMaxMemory *string `json:"output_multipart_max_memory,omitempty"`
 	// OutputMultipleFiles is --output-multiple-files.
-	OutputMultipleFiles *bool `json:"output-multiple-files,omitempty"`
+	OutputMultipleFiles *bool `json:"output_multiple_files,omitempty"`
 	// OutputMuxtVersion is --output-muxt-version.
-	OutputMuxtVersion *bool `json:"output-muxt-version,omitempty"`
+	OutputMuxtVersion *bool `json:"output_muxt_version,omitempty"`
 	// OutputReceiverInterface is --output-receiver-interface.
-	OutputReceiverInterface *string `json:"output-receiver-interface,omitempty"`
+	OutputReceiverInterface *string `json:"output_receiver_interface,omitempty"`
 	// OutputRoutesFunc is --output-routes-func.
-	OutputRoutesFunc *string `json:"output-routes-func,omitempty"`
+	OutputRoutesFunc *string `json:"output_routes_func,omitempty"`
 	// OutputRoutesFuncWithLoggerParam is --output-routes-func-with-logger-param.
-	OutputRoutesFuncWithLoggerParam *bool `json:"output-routes-func-with-logger-param,omitempty"`
+	OutputRoutesFuncWithLoggerParam *bool `json:"output_routes_func_with_logger_param,omitempty"`
 	// OutputRoutesFuncWithMiddlewareParam is --output-routes-func-with-middleware-param.
-	OutputRoutesFuncWithMiddlewareParam *bool `json:"output-routes-func-with-middleware-param,omitempty"`
+	OutputRoutesFuncWithMiddlewareParam *bool `json:"output_routes_func_with_middleware_param,omitempty"`
 	// OutputRoutesFuncWithPathPrefixParam is --output-routes-func-with-path-prefix-param.
-	OutputRoutesFuncWithPathPrefixParam *bool `json:"output-routes-func-with-path-prefix-param,omitempty"`
+	OutputRoutesFuncWithPathPrefixParam *bool `json:"output_routes_func_with_path_prefix_param,omitempty"`
 	// OutputSSETemplateDataType is --output-sse-template-data-type.
-	OutputSSETemplateDataType *string `json:"output-sse-template-data-type,omitempty"`
+	OutputSSETemplateDataType *string `json:"output_sse_template_data_type,omitempty"`
 	// OutputStaticAssetsPath is --output-static-assets-path.
-	OutputStaticAssetsPath *string `json:"output-static-assets-path,omitempty"`
+	OutputStaticAssetsPath *string `json:"output_static_assets_path,omitempty"`
 	// OutputTemplateDataType is --output-template-data-type.
-	OutputTemplateDataType *string `json:"output-template-data-type,omitempty"`
+	OutputTemplateDataType *string `json:"output_template_data_type,omitempty"`
 	// OutputTemplateRouteBuilderType is --output-template-route-builder-type.
-	OutputTemplateRouteBuilderType *string `json:"output-template-route-builder-type,omitempty"`
+	OutputTemplateRouteBuilderType *string `json:"output_template_route_builder_type,omitempty"`
 	// OutputTemplateRoutePathsType is --output-template-route-paths-type.
-	OutputTemplateRoutePathsType *string `json:"output-template-route-paths-type,omitempty"`
+	OutputTemplateRoutePathsType *string `json:"output_template_route_paths_type,omitempty"`
 	// OutputTemplateRouteType is --output-template-route-type.
-	OutputTemplateRouteType *string `json:"output-template-route-type,omitempty"`
+	OutputTemplateRouteType *string `json:"output_template_route_type,omitempty"`
 	// UseReceiverType is --use-receiver-type.
-	UseReceiverType *string `json:"use-receiver-type,omitempty"`
+	UseReceiverType *string `json:"use_receiver_type,omitempty"`
 	// UseReceiverTypePackage is --use-receiver-type-package.
-	UseReceiverTypePackage *string `json:"use-receiver-type-package,omitempty"`
+	UseReceiverTypePackage *string `json:"use_receiver_type_package,omitempty"`
 	// UseTemplatesVariable is --use-templates-variable.
-	UseTemplatesVariable []string `json:"use-templates-variable,omitempty"`
+	UseTemplatesVariable []string `json:"use_templates_variable,omitempty"`
 }
 
 // Read reads the muxt.json at path. shown is the name its errors give the
@@ -170,9 +172,10 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 
 // checkKeys returns a *KeyFormError for the first packages key, in sorted
 // order, that is not in clean form, a *KeyOutsideError for one that leaves the
-// file's directory, or a *DeprecatedKeyError or
-// *UnknownKeyError for the first entry key that is an old flag name or that
-// Entry has no field for. json.Unmarshal drops unknown keys without a word, so
+// file's directory, or a *DeprecatedKeyError, a *DashedKeyError, or an
+// *UnknownKeyError for the first entry key that is an old flag name, is written
+// with dashes where the underscore form is a key, or that Entry has no field
+// for. json.Unmarshal drops unknown keys without a word, so
 // the keys are read again here.
 func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 	var raw struct {
@@ -198,9 +201,15 @@ func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 			if replacement, ok := deprecated[key]; ok {
 				return &DeprecatedKeyError{Path: shown, Where: where, Key: key, Replacement: replacement}
 			}
-			if !slices.Contains(known, key) {
-				return &UnknownKeyError{Path: shown, Where: where, Key: key}
+			if slices.Contains(known, key) {
+				continue
 			}
+			// The dashed spelling is named only when the underscore form is a
+			// key, so a typo with dashes still reads as an unknown key.
+			if underscored := strings.ReplaceAll(key, "-", "_"); slices.Contains(known, underscored) {
+				return &DashedKeyError{Path: shown, Where: where, Key: key, Underscored: underscored}
+			}
+			return &UnknownKeyError{Path: shown, Where: where, Key: key}
 		}
 	}
 	return nil

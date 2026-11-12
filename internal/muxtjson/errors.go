@@ -124,6 +124,20 @@ func (e *DeprecatedKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q is deprecated; write %q", e.Path, e.Where, e.Key, e.Replacement)
 }
 
+// DashedKeyError reports a key in a muxt.json entry written with dashes, such
+// as "use-receiver-type", where the same key with underscores is a known key.
+// Underscored is that key with underscores, the form to write instead. Where
+// names the entry.
+type DashedKeyError struct {
+	Path, Where, Key, Underscored string
+}
+
+// Error returns the path, the entry, the key, and its underscore form on one
+// line.
+func (e *DashedKeyError) Error() string {
+	return fmt.Sprintf("%s: %s: key %q is written with underscores; write %q", e.Path, e.Where, e.Key, e.Underscored)
+}
+
 // KeyOutsideError reports a packages key that names a directory outside the
 // one holding the muxt.json, such as "../other" or "/abs". A file checked into
 // a repository must not make muxt generate write elsewhere on the machine.

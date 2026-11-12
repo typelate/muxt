@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -73,24 +75,32 @@ This function also receives an argument with a type matching the name given by o
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )
 
-// deprecatedMuxtJSONKeys maps each deprecated generate flag name to the flag
-// that replaces it, the keys a muxt.json entry must not use. It is built from
-// the same names the flags are registered with, so a flag marked deprecated
-// there has its row here.
+// muxtJSONKey returns the muxt.json key for a generate flag name: the name
+// with each "-" written as "_". Keys use underscores so the file's spelling
+// matches the identifiers a Go developer already types, and the flag names stay
+// as the command line spells them.
+func muxtJSONKey(flag string) string {
+	return strings.ReplaceAll(flag, "-", "_")
+}
+
+// deprecatedMuxtJSONKeys maps each deprecated generate flag name, as a muxt.json
+// key, to the key that replaces it, the keys a muxt.json entry must not use. It
+// is built from the same names the flags are registered with, so a flag marked
+// deprecated there has its row here.
 func deprecatedMuxtJSONKeys() map[string]string {
 	return map[string]string{
-		deprecatedTemplatesVariable:       useTemplatesVariable,
-		deprecatedReceiverType:            useReceiverType,
-		deprecatedReceiverTypePackage:     useReceiverTypePackage,
-		deprecatedReceiverInterface:       outputReceiverInterface,
-		deprecatedRoutesFunc:              outputRoutesFunc,
-		deprecatedTemplateDataType:        outputTemplateDataType,
-		deprecatedTemplateRoutePathsType:  outputTemplateRoutePathsType,
-		deprecatedLogger:                  outputRoutesFuncWithLoggerParam,
-		deprecatedPathPrefix:              outputRoutesFuncWithPathPrefix,
-		deprecatedFindTemplatesVariable:   useTemplatesVariable,
-		deprecatedFindReceiverType:        useReceiverType,
-		deprecatedFindReceiverTypePackage: useReceiverTypePackage,
+		muxtJSONKey(deprecatedTemplatesVariable):       muxtJSONKey(useTemplatesVariable),
+		muxtJSONKey(deprecatedReceiverType):            muxtJSONKey(useReceiverType),
+		muxtJSONKey(deprecatedReceiverTypePackage):     muxtJSONKey(useReceiverTypePackage),
+		muxtJSONKey(deprecatedReceiverInterface):       muxtJSONKey(outputReceiverInterface),
+		muxtJSONKey(deprecatedRoutesFunc):              muxtJSONKey(outputRoutesFunc),
+		muxtJSONKey(deprecatedTemplateDataType):        muxtJSONKey(outputTemplateDataType),
+		muxtJSONKey(deprecatedTemplateRoutePathsType):  muxtJSONKey(outputTemplateRoutePathsType),
+		muxtJSONKey(deprecatedLogger):                  muxtJSONKey(outputRoutesFuncWithLoggerParam),
+		muxtJSONKey(deprecatedPathPrefix):              muxtJSONKey(outputRoutesFuncWithPathPrefix),
+		muxtJSONKey(deprecatedFindTemplatesVariable):   muxtJSONKey(useTemplatesVariable),
+		muxtJSONKey(deprecatedFindReceiverType):        muxtJSONKey(useReceiverType),
+		muxtJSONKey(deprecatedFindReceiverTypePackage): muxtJSONKey(useReceiverTypePackage),
 	}
 }
 
