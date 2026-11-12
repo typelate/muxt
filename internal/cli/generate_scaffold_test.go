@@ -34,3 +34,17 @@ func TestGenerateConfigWritesEmptyMuxtJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "{\n\t\"packages\": {}\n}\n", string(got), "muxt.json")
 }
+
+// TestGenerateConfigurationIsAliasOfConfig states that muxt generate
+// configuration does what muxt generate config does.
+func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
+	dir := t.TempDir()
+
+	stdout, err := runCommand(t, dir, "generate configuration")
+
+	require.NoError(t, err)
+	assert.Equal(t, "wrote muxt.json\n", stdout, "stdout")
+	got, err := os.ReadFile(filepath.Join(dir, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, "{\n\t\"packages\": {}\n}\n", string(got), "muxt.json")
+}

@@ -12,9 +12,10 @@ import (
 // that generate package and a flagless generate then add entries to.
 func generateConfigCommand(workingDirectory *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "config",
-		Short: "Write an empty muxt.json in the working directory",
-		Args:  cobra.NoArgs,
+		Use:     "config",
+		Aliases: []string{"configuration"},
+		Short:   "Write an empty muxt.json in the working directory",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 			if err := muxtjson.Create(*workingDirectory); err != nil {
