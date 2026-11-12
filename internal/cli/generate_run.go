@@ -66,17 +66,18 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 // is the muxt.json the jobs came from, for a caller that says where each
 // setting came from.
 func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *muxtjson.File, jobs []generateJob, found bool, err error) {
-	f, key, _, found, err := lookupMuxtJSONEntry(wd)
-	if err != nil || f == nil {
+	lookup, err := lookupMuxtJSONEntry(wd)
+	if err != nil || lookup.File == nil {
 		return nil, nil, false, err
 	}
+	f, key := lookup.File, lookup.Key
 	ownKey, err := f.KeyFor(f.Dir)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("muxt.json entry for %s: %w", f.Dir, err)
 	}
 	keys := []string{key}
 	if key != ownKey {
-		if !found {
+		if !lookup.HasEntry {
 			return nil, nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
 		}
 	} else {

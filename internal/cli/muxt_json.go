@@ -25,36 +25,46 @@ func givenGenerateFlags(flags *pflag.FlagSet) []string {
 	return given
 }
 
-// lookupMuxtJSONEntry returns the nearest muxt.json at or above wd, the key
-// for wd in it, and that key's entry. f is nil when no muxt.json is found. found
-// is false when the file has no entry under key, which is not an error here.
-func lookupMuxtJSONEntry(wd string) (f *muxtjson.File, key string, entry muxtjson.Entry, found bool, err error) {
-	f, found, err = muxtjson.Find(wd, deprecatedMuxtJSONKeys())
+// entryLookup is where a directory stands in the nearest muxt.json.
+type entryLookup struct {
+	// File is the muxt.json at or above the directory, nil when there is none.
+	File *muxtjson.File
+	// Key is the directory's packages key in File.
+	Key string
+	// HasEntry is false when File has no entry under Key, which is not an
+	// error here.
+	HasEntry bool
+}
+
+// lookupMuxtJSONEntry finds the nearest muxt.json at or above wd and the key
+// for wd in it.
+func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
+	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
 		// Find's errors already name the file, and a *muxtjson.ParseError
 		// must reach the caller as it is.
-		return nil, "", muxtjson.Entry{}, false, err
+		return entryLookup{}, err
 	}
 	if !found {
-		return nil, "", muxtjson.Entry{}, false, nil
+		return entryLookup{}, nil
 	}
-	key, err = f.KeyFor(wd)
+	key, err := f.KeyFor(wd)
 	if err != nil {
-		return nil, "", muxtjson.Entry{}, false, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
+		return entryLookup{}, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
 	}
-	entry, found = f.Packages[key]
-	return f, key, entry, found, nil
+	_, hasEntry := f.Packages[key]
+	return entryLookup{File: f, Key: key, HasEntry: hasEntry}, nil
 }
 
 // rejectConfiguredDirectory returns a *muxtjson.ConfiguredDirectoryError when
 // the muxt.json for wd has an entry for it, since that entry configures the
 // directory and flags would be a second source for the same fields.
 func rejectConfiguredDirectory(wd string, flagNames []string) error {
-	f, _, _, found, err := lookupMuxtJSONEntry(wd)
-	if err != nil || !found {
+	lookup, err := lookupMuxtJSONEntry(wd)
+	if err != nil || !lookup.HasEntry {
 		return err
 	}
-	return &muxtjson.ConfiguredDirectoryError{Path: f.Name, Flags: flagNames}
+	return &muxtjson.ConfiguredDirectoryError{Path: lookup.File.Name, Flags: flagNames}
 }
 
 // givenEntryFlags returns the sorted names of the flags passed that a muxt.json
@@ -91,8 +101,8 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 	if len(flagNames) > 0 {
 		return generateJob{}, false, rejectConfiguredDirectory(dir, flagNames)
 	}
-	f, key, _, _, err := lookupMuxtJSONEntry(dir)
-	if err != nil || f == nil {
+	lookup, err := lookupMuxtJSONEntry(dir)
+	if err != nil || lookup.File == nil {
 		return generateJob{}, false, err
 	}
 	// A command that reads a package writes no header, so the version that
@@ -105,7 +115,7 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 	// entryJobs returns every entry when dir is the file's own directory, so
 	// the job for dir is the one whose key is dir's.
 	for _, job := range jobs {
-		if job.Key == key {
+		if job.Key == lookup.Key {
 			return job, true, nil
 		}
 	}
