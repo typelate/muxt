@@ -102,3 +102,24 @@ func TestGenerateEveryMuxtJSONEntryLoadsOnce(t *testing.T) {
 		assert.Contains(t, string(got), method, "%s names the receiver method", path)
 	}
 }
+
+// TestGenerateEveryMuxtJSONEntryNamesEachDirectory states that a run over
+// several entries prints each entry's key before that directory's output,
+// and a run over one entry prints no key.
+func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+
+	stdout, _, err := generateWithLoader(t, dir)
+
+	require.NoError(t, err, "generate")
+	const want = ".\nwrote template_routes.go: 1 route\nworkspace\nwrote template_routes.go: 1 route\n"
+	assert.Equal(t, want, stdout, "stdout")
+
+	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"))
+
+	require.NoError(t, err, "generate in workspace")
+	assert.Equal(t, "wrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
+}

@@ -166,6 +166,11 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			if err != nil {
 				return err
 			}
+			if len(jobs) > 1 {
+				// Several directories write to one stream, so each says
+				// whose lines follow.
+				_, _ = fmt.Fprintln(stdout, r.job.Key)
+			}
 			written, err := writeGeneratedFiles(stdout, r.files, r.job.Config)
 			if err != nil {
 				return err
