@@ -227,15 +227,16 @@ func (T) Home() string { return "home" }
 }
 
 // workspaceReadingFS is the workspace package's source, with first as the
-// argument of the ParseFS that reads the other package's files.
-func workspaceReadingFS(first string) string {
+// argument of the ParseFS that reads the other package's files, and importPath
+// the package that argument's qualifier names.
+func workspaceReadingFS(importPath, first string) string {
 	return `package workspace
 
 import (
 	"embed"
 	"html/template"
 
-	"example.com/m/fragments"
+	"` + importPath + `"
 )
 
 //go:embed *.gohtml
@@ -266,7 +267,7 @@ import "embed"
 //go:embed *.gohtml
 var templateSource embed.FS
 `,
-		"workspace/workspace.go": workspaceReadingFS("fragments.templateSource"),
+		"workspace/workspace.go": workspaceReadingFS("example.com/m/fragments", "fragments.templateSource"),
 	})
 
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
@@ -295,11 +296,39 @@ var TemplateSource embed.FS
 
 var Other fs.FS = TemplateSource
 `,
-		"workspace/workspace.go": workspaceReadingFS("fragments.Other"),
+		"workspace/workspace.go": workspaceReadingFS("example.com/m/fragments", "fragments.Other"),
 	})
 
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
 
 	require.Error(t, err, "generate: %s", output)
 	assert.Contains(t, output, "workspace.go:14:10: fragments.Other is a io/fs.FS, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
+}
+
+// TestGenerateReportsSharedFSFromOtherModule states that a ParseFS argument
+// naming a package of another module fails with muxt's message at the
+// argument's position. The other module is a replace target in the temp
+// directory, so the test needs no network.
+func TestGenerateReportsSharedFSFromOtherModule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"go.mod":       "module example.com/m\n\ngo 1.24\n\nrequire example.org/other v0.0.0\n\nreplace example.org/other => ./other\n",
+		"other/go.mod": "module example.org/other\n\ngo 1.24\n",
+		"other/fragments/fragments.go": `package fragments
+
+import "embed"
+
+//go:embed *.gohtml
+var TemplateSource embed.FS
+`,
+		"other/fragments/layout.gohtml": `{{define "other"}}other{{end}}`,
+		"workspace/workspace.go":        workspaceReadingFS("example.org/other/fragments", "fragments.TemplateSource"),
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
+
+	require.Error(t, err, "generate: %s", output)
+	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }

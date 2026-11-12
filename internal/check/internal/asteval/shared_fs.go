@@ -27,7 +27,7 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	importPath = pkgName.Imported().Path()
 	other, ok := scope.Imports[importPath]
 	if !ok || other.ModulePath != scope.ModulePath {
-		return nil, "", wrapWithFilename(scope.Dir, scope.Fset, arg.Pos(), fmt.Errorf("package %s is not in this module (%s); a shared embed.FS must come from a package of this module", importPath, scope.ModulePath))
+		return nil, "", OtherModuleError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath, ThisModule: scope.ModulePath}
 	}
 	if !arg.Sel.IsExported() {
 		return nil, "", UnexportedSharedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}

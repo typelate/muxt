@@ -20,15 +20,15 @@ func namedType(path, name string) types.Type {
 	return types.NewNamed(types.NewTypeName(token.NoPos, pkg, name, nil), types.NewInterfaceType(nil, nil).Complete(), nil)
 }
 
-// sharedArgument parses a workspace file whose ParseFS first argument is the
-// selector fragments.name, and returns a scope that imports the fragments
-// package of module example.com/m, with the selector typed as typ, the way the
-// analyzed package's type information records it.
-func sharedArgument(t *testing.T, name string, typ types.Type) (Scope, *ast.SelectorExpr) {
+// sharedArgument parses a workspace file of module example.com/m whose ParseFS
+// first argument is the selector fragments.name, and returns a scope that
+// imports importPath, a package of modulePath, with the selector typed as typ,
+// the way the analyzed package's type information records it.
+func sharedArgument(t *testing.T, name string, typ types.Type, importPath, modulePath string) (Scope, *ast.SelectorExpr) {
 	t.Helper()
 	dir := filepath.FromSlash("/m/workspace")
 	fileSet := token.NewFileSet()
-	src := "package workspace\n\nimport \"example.com/m/fragments\"\n\nvar _ = fragments." + name + "\n"
+	src := "package workspace\n\nimport \"" + importPath + "\"\n\nvar _ = fragments." + name + "\n"
 	file, err := parser.ParseFile(fileSet, filepath.Join(dir, "workspace.go"), src, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func sharedArgument(t *testing.T, name string, typ types.Type) (Scope, *ast.Sele
 		return true
 	})
 	info := &types.Info{Uses: make(map[*ast.Ident]types.Object)}
-	pkg := types.NewPackage("example.com/m/fragments", "fragments")
+	pkg := types.NewPackage(importPath, "fragments")
 	info.Uses[selector.X.(*ast.Ident)] = types.NewPkgName(token.NoPos, nil, "fragments", pkg)
 	info.Uses[selector.Sel] = types.NewVar(token.NoPos, pkg, name, typ)
 	scope := Scope{
@@ -50,7 +50,7 @@ func sharedArgument(t *testing.T, name string, typ types.Type) (Scope, *ast.Sele
 		Dir:        dir,
 		ModulePath: "example.com/m",
 		Imports: map[string]source.EmbedPackage{
-			"example.com/m/fragments": {ImportPath: "example.com/m/fragments", ModulePath: "example.com/m", Dir: filepath.FromSlash("/m/fragments")},
+			importPath: {ImportPath: importPath, ModulePath: modulePath, Dir: filepath.FromSlash("/m/fragments")},
 		},
 	}
 	return scope, selector
@@ -60,7 +60,7 @@ func sharedArgument(t *testing.T, name string, typ types.Type) (Scope, *ast.Sele
 // unexported variable of another package fails with an UnexportedSharedFSError
 // that names the selector and the position of the argument.
 func TestSharedFilesUnexportedVariable(t *testing.T) {
-	scope, selector := sharedArgument(t, "templateSource", namedType("embed", "FS"))
+	scope, selector := sharedArgument(t, "templateSource", namedType("embed", "FS"), "example.com/m/fragments", "example.com/m")
 
 	_, _, err := sharedFiles(scope, selector)
 
@@ -84,7 +84,7 @@ func TestSharedFilesUnexportedVariable(t *testing.T) {
 // exported variable of another package whose type is not embed.FS fails with a
 // NotEmbedFSError that prints the type as go/types names it.
 func TestSharedFilesNotEmbedFSVariable(t *testing.T) {
-	scope, selector := sharedArgument(t, "Other", namedType("io/fs", "FS"))
+	scope, selector := sharedArgument(t, "Other", namedType("io/fs", "FS"), "example.com/m/fragments", "example.com/m")
 
 	_, _, err := sharedFiles(scope, selector)
 
@@ -98,5 +98,26 @@ func TestSharedFilesNotEmbedFSVariable(t *testing.T) {
 	}
 	if typed.Type != "io/fs.FS" {
 		t.Errorf("NotEmbedFSError.Type = %q, want io/fs.FS", typed.Type)
+	}
+}
+
+// TestSharedFilesOtherModuleError states that a ParseFS argument naming a
+// package outside the analyzed package's module fails with an OtherModuleError
+// that names both the import path and this module.
+func TestSharedFilesOtherModuleError(t *testing.T) {
+	scope, selector := sharedArgument(t, "TemplateSource", namedType("embed", "FS"), "example.org/other/fragments", "example.org/other")
+
+	_, _, err := sharedFiles(scope, selector)
+
+	var typed OtherModuleError
+	if !errors.As(err, &typed) {
+		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want OtherModuleError", err, err)
+	}
+	const want = "workspace.go:5:9: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module"
+	if got := err.Error(); got != want {
+		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
+	}
+	if typed.ImportPath != "example.org/other/fragments" || typed.ThisModule != "example.com/m" {
+		t.Errorf("OtherModuleError{ImportPath: %q, ThisModule: %q}, want example.org/other/fragments and example.com/m", typed.ImportPath, typed.ThisModule)
 	}
 }

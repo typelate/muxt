@@ -37,6 +37,25 @@ func (e UnexportedSharedFSError) Error() string {
 	return fmt.Sprintf("%s: %s.%s is unexported; ParseFS reads only an exported embed.FS variable of another package", e.Position, e.Package, e.Name)
 }
 
+// OtherModuleError is the error for a ParseFS argument whose package is outside
+// the analyzed package's module. Its files are not part of this module's build
+// as the embed patterns were written, so muxt does not read them.
+type OtherModuleError struct {
+	// Position is the argument, relative to the package directory.
+	Position token.Position
+
+	// ImportPath is the argument's package.
+	ImportPath string
+
+	// ThisModule is the analyzed package's module.
+	ThisModule string
+}
+
+// Error is one line: the position, what failed and how to fix it.
+func (e OtherModuleError) Error() string {
+	return fmt.Sprintf("%s: package %s is not in this module (%s); a shared embed.FS must come from a package of this module", e.Position, e.ImportPath, e.ThisModule)
+}
+
 // NotEmbedFSError is the error for a ParseFS argument that names an exported
 // variable of another package whose type is not embed.FS. Only an embed.FS
 // carries the files its //go:embed matched, so any other fs.FS is refused.
