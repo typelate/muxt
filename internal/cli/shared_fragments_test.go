@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -85,4 +86,26 @@ func TestGenerateReadsAnotherPackagesEmbedFS(t *testing.T) {
 
 	require.NoError(t, err, "generate: %s", output)
 	assert.FileExists(t, filepath.Join(dir, "workspace", "template_routes.go"))
+}
+
+// TestCheckFindsTemplateFromAnotherPackage states that a route template that
+// calls a template only the other package's file defines passes muxt check,
+// and the routes muxt generate wrote for it compile.
+func TestCheckFindsTemplateFromAnotherPackage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, nil)
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.NoError(t, err, "check: %s", output)
+	vet := exec.Command("go", "vet", "./...")
+	vet.Dir = dir
+	vet.Env = append(os.Environ(), "GOROOT=")
+	vetOutput, err := vet.CombinedOutput()
+	assert.NoError(t, err, "go vet: %s", vetOutput)
 }
