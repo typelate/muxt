@@ -33,22 +33,49 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 			return nil, err
 		}
 	} else {
-		file, key, entry, found, err := readMuxtJSONEntry(wd)
+		jobs, found, err := entryJobs(wd, getEnv, version)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			config, err := entryConfiguration(entry, wd, getEnv, version)
-			if err != nil {
-				return nil, &muxtjson.InvalidEntryError{Path: file, Where: fmt.Sprintf("packages[%q]", key), Err: err}
-			}
-			return []generateJob{{Key: key, Dir: wd, Config: config}}, nil
+			return jobs, nil
 		}
 	}
 	if err := finalizeGenerate(flagConfig, flags, deprecatedTemplatesVar, wd, getEnv, version); err != nil {
 		return nil, err
 	}
 	return []generateJob{{Dir: wd, Config: *flagConfig}}, nil
+}
+
+// entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
+// In the file's own directory that is one job per entry, and every entry is
+// validated before any job is returned. In a sub-directory it is that
+// directory's entry alone. found is false when the flags decide the run.
+func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (jobs []generateJob, found bool, err error) {
+	f, key, _, found, err := lookupMuxtJSONEntry(wd)
+	if err != nil || f == nil {
+		return nil, false, err
+	}
+	keys := []string{key}
+	if key != "." {
+		if !found {
+			return nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
+		}
+	} else {
+		if len(f.Packages) == 0 {
+			return nil, false, nil
+		}
+		keys = f.Keys()
+	}
+	for _, k := range keys {
+		dir := f.DirOf(k)
+		config, err := entryConfiguration(f.Packages[k], dir, getEnv, version)
+		if err != nil {
+			return nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
+		}
+		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
+	}
+	return jobs, true, nil
 }
 
 // packageLoader is the only way a run asks for packages, so one go command

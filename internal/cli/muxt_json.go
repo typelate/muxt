@@ -44,23 +44,6 @@ func lookupMuxtJSONEntry(wd string) (f *muxtjson.File, key string, entry muxtjso
 	return f, key, entry, found, nil
 }
 
-// readMuxtJSONEntry returns the file, key and entry for wd in the nearest
-// muxt.json at or above wd. file is the name the file's errors give it. found
-// is false when no muxt.json is found, or when wd is the file's own directory
-// and the file has no entry for it. Any other wd without an entry is an error.
-func readMuxtJSONEntry(wd string) (file, key string, entry muxtjson.Entry, found bool, err error) {
-	f, key, entry, found, err := lookupMuxtJSONEntry(wd)
-	if err != nil || f == nil {
-		return "", "", muxtjson.Entry{}, false, err
-	}
-	// The directory holding the file may go without an entry, as it always
-	// has. Any other directory below the file needs one to be generated.
-	if !found && key != "." {
-		return "", "", muxtjson.Entry{}, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
-	}
-	return f.Name, key, entry, found, nil
-}
-
 // rejectConfiguredDirectory returns a *muxtjson.ConfiguredDirectoryError when
 // the muxt.json for wd has an entry for it, since that entry configures the
 // directory and flags would be a second source for the same fields.

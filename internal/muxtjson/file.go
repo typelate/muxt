@@ -80,6 +80,17 @@ func (f *File) KeyFor(dir string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
+// Keys returns the packages keys sorted. Read rejects a key not in clean form,
+// so the keys are the ones a person wrote.
+func (f *File) Keys() []string {
+	return slices.Sorted(maps.Keys(f.Packages))
+}
+
+// DirOf returns the absolute directory of a packages key.
+func (f *File) DirOf(key string) string {
+	return filepath.Join(f.Dir, filepath.FromSlash(key))
+}
+
 // Entry holds the generate flags of one package directory. JSON keys are the
 // flag names without "--". A nil field is absent from the file, so the flag's
 // default applies. Fields follow the order `muxt generate --help` lists flags;

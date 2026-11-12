@@ -437,6 +437,98 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "generate job receiver type")
 }
 
+// TestGenerateEveryMuxtJSONEntry states that a flagless muxt generate in the
+// directory holding a muxt.json hands the generate runner one job per entry,
+// in key order, each configured by its own entry. Nothing is loaded.
+func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}, ".": {"use-receiver-type": "Root"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	jobs := generateJobsOf(t, dir, "generate")
+
+	require.Len(t, jobs, 2, "generate jobs")
+	assert.Equal(t, ".", jobs[0].Key, "first job key")
+	assert.Equal(t, dir, jobs[0].Dir, "first job dir")
+	assert.Equal(t, "Root", jobs[0].Config.ReceiverType, "first job receiver type")
+	assert.Equal(t, "workspace", jobs[1].Key, "second job key")
+	assert.Equal(t, workspace, jobs[1].Dir, "second job dir")
+	assert.Equal(t, "T1", jobs[1].Config.ReceiverType, "second job receiver type")
+}
+
+// TestGenerateEveryMuxtJSONEntryValidatesEachEntry states that a flagless muxt
+// generate in the muxt.json directory fails when any entry has values a flag
+// rejects, naming that entry, and the generate runner is not called.
+func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
+	const file = `{"packages": {".": {"use-receiver-type": "Root"}, "workspace": {"output-htmx": true, "output-datastar": true}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
+	var invalid *muxtjson.InvalidEntryError
+	require.ErrorAs(t, err, &invalid, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, `packages["workspace"]`, invalid.Where, "where")
+	assert.Equal(t, `muxt.json: packages["workspace"]: `+flagMessage, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
+// TestGenerateMuxtJSONWithOnlyWorkspaceEntry states that a muxt.json whose only
+// entry is workspace, run in the muxt.json directory, generates workspace alone:
+// the directory itself has no entry, so nothing is generated for it.
+func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {"workspace": {"use-receiver-type": "T1"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	jobs := generateJobsOf(t, dir, "generate")
+
+	require.Len(t, jobs, 1, "generate jobs")
+	assert.Equal(t, "workspace", jobs[0].Key, "job key")
+	assert.Equal(t, workspace, jobs[0].Dir, "job dir")
+	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "job receiver type")
+}
+
+// TestGenerateInSubdirectorySkipsOtherEntries states that a flagless muxt
+// generate in workspace, a sub-directory, generates only workspace's entry. An
+// invalid entry for the muxt.json directory does not fail that run.
+func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	const file = `{"packages": {".": {"output-htmx": true, "output-datastar": true}, "workspace": {"use-receiver-type": "T1"}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	jobs := generateJobsOf(t, workspace, "generate")
+
+	require.Len(t, jobs, 1, "generate jobs")
+	assert.Equal(t, "workspace", jobs[0].Key, "job key")
+	assert.Equal(t, workspace, jobs[0].Dir, "job dir")
+	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "job receiver type")
+}
+
+// generateJobsOf runs a generate command line in dir and returns the jobs the
+// generate runner is handed. Nothing is loaded.
+func generateJobsOf(t *testing.T, dir, commandLine string) []generateJob {
+	t.Helper()
+	var jobs []generateJob
+	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		generate: func(_ *cobra.Command, got []generateJob) error {
+			jobs = got
+			return nil
+		},
+	})
+	require.NoError(t, err, "running %q", commandLine)
+	return jobs
+}
+
 // generateFailureOf runs a flagless muxt generate in dir. It returns whether
 // the generate runner was called and the error the command failed with.
 func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
