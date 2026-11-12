@@ -201,3 +201,42 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
 }
+
+// TestRoutesConfigurationDefaults states that where no muxt.json is found the
+// section is the single heading defaults, holding every setting with the value
+// generate would use after defaulting, in the order muxt generate --help lists
+// the flags.
+func TestRoutesConfigurationDefaults(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+
+	text := reportOf(t, dir, "")
+
+	const want = `Configuration:
+  defaults:
+    "input_static_assets_directory": ""
+    "output_datastar": false
+    "output_exported_default_identifiers": true
+    "output_file": "template_routes.go"
+    "output_htmx": false
+    "output_multipart_max_memory": "32 MiB"
+    "output_multiple_files": false
+    "output_muxt_version": true
+    "output_receiver_interface": "RoutesReceiver"
+    "output_routes_func": "TemplateRoutes"
+    "output_routes_func_with_logger_param": false
+    "output_routes_func_with_middleware_param": false
+    "output_routes_func_with_path_prefix_param": false
+    "output_sse_template_data_type": "SSETemplateData"
+    "output_static_assets_path": ""
+    "output_template_data_type": "TemplateData"
+    "output_template_route_builder_type": "TemplateRouteBuilder"
+    "output_template_route_paths_type": "TemplateRoutePaths"
+    "output_template_route_type": "TemplateRoute"
+    "use_receiver_type": ""
+    "use_receiver_type_package": ""
+    "use_templates_variable": ["templates"]
+
+`
+	assert.Equal(t, want, text, "section")
+}

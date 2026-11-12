@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json/v2"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
@@ -46,7 +48,10 @@ func newConfigurationReport(f *muxtjson.File, key string, config generate.Routes
 		entry = f.Packages[key]
 	}
 	defaults := settingGroup{Source: "defaults"}
-	for _, field := range entryFields() {
+	// muxt generate --help lists flags by name, so the report does too.
+	fields := entryFields()
+	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
+	for _, field := range fields {
 		s := setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
 		// The entry's own keys are the ones Apply finds set; a scratch
 		// configuration takes what Apply writes.
