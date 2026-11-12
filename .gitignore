@@ -45,7 +45,7 @@ dist/
 docs/drafts/
 
 # Agent working files: plans, review sheets, local builds
-/PLAN.md
-/TARGET.md
-/REVIEW.md
+/PLAN*.md
+/TARGET*.md
+/REVIEW*.md
 /bin/
