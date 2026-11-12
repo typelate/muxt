@@ -173,6 +173,59 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 	assert.Equal(t, defaults, jobs[0].Config, "generate job config")
 }
 
+// TestGenerateAppliesPackageDefaults states that a package_defaults key an
+// entry leaves unset reaches that entry's configuration on a flagless muxt
+// generate. Nothing is loaded: the generate runner records the job it is handed.
+func TestGenerateAppliesPackageDefaults(t *testing.T) {
+	dir := t.TempDir()
+	const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+	jobs := generateJobsOf(t, dir, "generate")
+
+	require.Len(t, jobs, 1, "generate jobs")
+	assert.Equal(t, "T", jobs[0].Config.ReceiverType, "receiver type")
+}
+
+// TestGenerateEntryOverridesPackageDefaults states that a key an entry sets
+// itself wins over package_defaults on a flagless muxt generate. A string and
+// a boolean the entry sets replace the default. A list is replaced, not
+// extended, and a boolean the entry sets to false overrides a default of true.
+func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {"use_receiver_type": "Server"}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		jobs := generateJobsOf(t, dir, "generate")
+
+		require.Len(t, jobs, 1, "generate jobs")
+		assert.Equal(t, "Server", jobs[0].Config.ReceiverType, "receiver type")
+	})
+
+	t.Run("list is replaced", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"use_templates_variable": ["templates", "pages"]}, "packages": {".": {"use_templates_variable": ["admin"]}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		jobs := generateJobsOf(t, dir, "generate")
+
+		require.Len(t, jobs, 1, "generate jobs")
+		assert.Equal(t, []string{"admin"}, jobs[0].Config.TemplatesVariables, "templates variables")
+	})
+
+	t.Run("false overrides a default of true", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"output_routes_func_with_logger_param": true}, "packages": {".": {"output_routes_func_with_logger_param": false}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		jobs := generateJobsOf(t, dir, "generate")
+
+		require.Len(t, jobs, 1, "generate jobs")
+		assert.False(t, jobs[0].Config.Logger, "logger parameter")
+	})
+}
+
 // TestGenerateIgnoresMuxtJSONAboveModuleRoot states that a muxt.json in a
 // directory above the module root is not read: the walk stops at the directory
 // holding go.mod. Nothing is loaded: the generate runner records the job it is

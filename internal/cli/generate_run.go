@@ -84,7 +84,8 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 		if err := requireEntryDirectory(f, k, wd, dir); err != nil {
 			return nil, false, err
 		}
-		config, err := entryConfiguration(f.Packages[k], dir, getEnv, version)
+		entry, _ := f.Resolve(k)
+		config, err := entryConfiguration(entry, dir, getEnv, version)
 		if err != nil {
 			return nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
 		}

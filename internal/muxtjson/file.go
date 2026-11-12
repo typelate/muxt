@@ -28,8 +28,29 @@ type File struct {
 	Dir string `json:"-"`
 	// Name is the file's path relative to the working directory the search
 	// started from. Errors name the file this way.
-	Name     string           `json:"-"`
+	Name string `json:"-"`
+	// Defaults holds the keys every entry takes unless the entry sets them
+	// itself. It is a separate object so one shared value is written once.
+	Defaults Entry            `json:"package_defaults,omitzero"`
 	Packages map[string]Entry `json:"packages"`
+}
+
+// Resolve returns the entry for key with Defaults applied. A field the entry
+// leaves unset takes the default; a field the entry sets, even to false or an
+// empty list, is kept. found is false when f has no entry under key.
+func (f *File) Resolve(key string) (e Entry, found bool) {
+	e, found = f.Packages[key]
+	if !found {
+		return Entry{}, false
+	}
+	entry := reflect.ValueOf(&e).Elem()
+	defaults := reflect.ValueOf(f.Defaults)
+	for i := range entry.NumField() {
+		if entry.Field(i).IsZero() {
+			entry.Field(i).Set(defaults.Field(i))
+		}
+	}
+	return e, true
 }
 
 // Find reads the first muxt.json found walking up from wd, starting at wd
