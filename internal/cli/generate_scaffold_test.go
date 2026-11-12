@@ -98,6 +98,24 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 	})
 }
 
+// TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink states that muxt generate
+// config fails, and creates nothing at the link's target, when muxt.json is a
+// symbolic link to a file that does not exist.
+func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "elsewhere.json")
+	link := filepath.Join(dir, "muxt.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symbolic links unavailable: %v", err)
+	}
+
+	_, err := runCommand(t, dir, "generate config")
+
+	require.EqualError(t, err, "muxt.json already exists; nothing was written")
+	_, statErr := os.Lstat(target)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing is created at the link's target")
+}
+
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
