@@ -109,3 +109,29 @@ func TestCheckFindsTemplateFromAnotherPackage(t *testing.T) {
 	vetOutput, err := vet.CombinedOutput()
 	assert.NoError(t, err, "go vet: %s", vetOutput)
 }
+
+// TestGenerateIncludesRouteFromAnotherPackage states that a route template
+// defined in the other package's file is a route of the package that parses
+// it: its method is in that package's generated receiver interface, and
+// nothing is written into the other package's directory.
+func TestGenerateIncludesRouteFromAnotherPackage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+	})
+	fragments := filepath.Join(dir, "fragments")
+	before, err := os.ReadDir(fragments)
+	require.NoError(t, err, "ReadDir")
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate", "--use-receiver-type=T")
+
+	require.NoError(t, err, "generate: %s", output)
+	routes, err := os.ReadFile(filepath.Join(dir, "workspace", "template_routes.go"))
+	require.NoError(t, err, "routes file")
+	assert.Contains(t, string(routes), "SharedPage(", "the receiver interface names the shared route's method")
+	after, err := os.ReadDir(fragments)
+	require.NoError(t, err, "ReadDir")
+	assert.Equal(t, before, after, "files in the fragments directory")
+}
