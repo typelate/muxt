@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // runCommand runs a muxt command line in dir, with no configuration runners,
@@ -114,6 +117,44 @@ func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
 	require.EqualError(t, err, "muxt.json already exists; nothing was written")
 	_, statErr := os.Lstat(target)
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing is created at the link's target")
+}
+
+// TestGeneratePackageRecordsGivenFlags states that a generate flag given to
+// muxt generate package is recorded under its key, and a flag not given is not.
+func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
+
+	_, err := runCommand(t, root, "generate package workspace --output-htmx")
+
+	require.NoError(t, err)
+	var got muxtjson.File
+	data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &got))
+	entry := got.Packages["workspace"]
+	require.NotNil(t, entry.OutputHTMX, "output_htmx of packages[workspace]")
+	assert.True(t, *entry.OutputHTMX, "output_htmx of packages[workspace]")
+	assert.Nil(t, entry.OutputDatastar, "output_datastar of packages[workspace]")
+	assert.Nil(t, entry.OutputFile, "output_file of packages[workspace]")
+}
+
+// TestGeneratePackageRejectsInvalidEntryAndWritesNothing states that a merged
+// entry generate would reject fails the command, and that nothing is written:
+// not the directory, not muxt.json.
+func TestGeneratePackageRejectsInvalidEntryAndWritesNothing(t *testing.T) {
+	root := t.TempDir()
+	const existing = `{"packages": {}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+
+	_, err := runCommand(t, root, "generate package workspace --output-htmx --output-datastar")
+
+	require.Error(t, err)
+	_, statErr := os.Stat(filepath.Join(root, "workspace"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "workspace directory is not created")
+	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
 }
 
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
