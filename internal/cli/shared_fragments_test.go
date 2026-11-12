@@ -225,3 +225,52 @@ func (T) Home() string { return "home" }
 
 	require.NoError(t, err, "check: %s", output)
 }
+
+// workspaceReadingFS is the workspace package's source, with first as the
+// argument of the ParseFS that reads the other package's files.
+func workspaceReadingFS(first string) string {
+	return `package workspace
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	ParseFS(` + first + `, "*.gohtml")).
+	ParseFS(templateSource, "*.gohtml"))
+
+type T struct{}
+
+func (T) Home() string { return "home" }
+`
+}
+
+// TestGenerateReportsUnexportedSharedFS states that a ParseFS argument naming
+// an unexported variable of another package fails with muxt's own message, at
+// the argument's position, and not the go compiler's.
+func TestGenerateReportsUnexportedSharedFS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/fragments.go": `package fragments
+
+import "embed"
+
+//go:embed *.gohtml
+var templateSource embed.FS
+`,
+		"workspace/workspace.go": workspaceReadingFS("fragments.templateSource"),
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
+
+	require.Error(t, err, "generate: %s", output)
+	assert.Contains(t, output, "workspace.go:14:10: fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package", "generate output")
+}
