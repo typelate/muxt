@@ -184,3 +184,20 @@ func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
 	assert.Equal(t, "Root", values["use_receiver_type"], "use_receiver_type in the configuration")
 	assert.Len(t, values, len(muxtJSONEntryKeys()), "settings")
 }
+
+// TestRoutesConfigurationGroupsEntrySettings states that a setting the muxt.json
+// entry sets is under the heading naming the file, relative to the working
+// directory, and the entry's key, written as its muxt.json key and value, and
+// that the setting is not repeated under another heading.
+func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`)
+
+	text := reportOf(t, workspace, "")
+
+	const want = "Configuration:\n  ../muxt.json packages[\"workspace\"]:\n    \"use_receiver_type\": \"T1\"\n  defaults:\n"
+	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
+	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
+}

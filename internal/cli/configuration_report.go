@@ -8,6 +8,7 @@ import (
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // configurationReport is the Configuration section of the route listing: every
@@ -35,13 +36,37 @@ type setting struct {
 	Value any
 }
 
-// newConfigurationReport reports every setting of config.
-func newConfigurationReport(config generate.RoutesFileConfiguration) configurationReport {
-	group := settingGroup{Source: "defaults"}
-	for _, field := range entryFields() {
-		group.Settings = append(group.Settings, setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)})
+// newConfigurationReport reports every setting of config, which the entry for
+// key in f produced, under the source that gave it. f is nil when no entry did.
+func newConfigurationReport(f *muxtjson.File, key string, config generate.RoutesFileConfiguration) (configurationReport, error) {
+	entryGroup := settingGroup{}
+	var entry muxtjson.Entry
+	if f != nil {
+		entryGroup.Source = fmt.Sprintf("%s packages[%q]", f.Name, key)
+		entry = f.Packages[key]
 	}
-	return configurationReport{group}
+	defaults := settingGroup{Source: "defaults"}
+	for _, field := range entryFields() {
+		s := setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
+		// The entry's own keys are the ones Apply finds set; a scratch
+		// configuration takes what Apply writes.
+		given, err := field.Apply(new(generate.RoutesFileConfiguration), entry)
+		if err != nil {
+			return nil, fmt.Errorf("%s packages[%q]: %w", f.Name, key, err)
+		}
+		if given {
+			entryGroup.Settings = append(entryGroup.Settings, s)
+		} else {
+			defaults.Settings = append(defaults.Settings, s)
+		}
+	}
+	var report configurationReport
+	for _, group := range []settingGroup{entryGroup, defaults} {
+		if len(group.Settings) > 0 {
+			report = append(report, group)
+		}
+	}
+	return report, nil
 }
 
 // WriteTo writes the section as text: one heading per source, a line per

@@ -20,9 +20,15 @@ type routesJob struct {
 	Report configurationReport
 }
 
-// newRoutesJob is the job for a generateJob, with the report of its configuration.
-func newRoutesJob(job generateJob) routesJob {
-	return routesJob{generateJob: job, Report: newConfigurationReport(job.Config)}
+// newRoutesJob is the job for a generateJob, with the report of its
+// configuration. f is the muxt.json the job's entry came from, nil when flags
+// configured it.
+func newRoutesJob(f *muxtjson.File, job generateJob) (routesJob, error) {
+	report, err := newConfigurationReport(f, job.Key, job.Config)
+	if err != nil {
+		return routesJob{}, err
+	}
+	return routesJob{generateJob: job, Report: report}, nil
 }
 
 // definitions is the part of the job's configuration the listing resolves with.
@@ -47,7 +53,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 			return nil, err
 		}
 	} else {
-		_, jobs, found, err := entryJobs(wd, getEnv, noVersion)
+		f, jobs, found, err := entryJobs(wd, getEnv, noVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +62,9 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 			for i, job := range jobs {
 				// Verbose is a run setting, never a muxt.json key.
 				job.Config.Verbose = flagConfig.Verbose
-				listing[i] = newRoutesJob(job)
+				if listing[i], err = newRoutesJob(f, job); err != nil {
+					return nil, err
+				}
 			}
 			return listing, nil
 		}
@@ -71,7 +79,11 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	config.ReceiverPackage = flagConfig.ReceiverPackage
 	config.ReceiverType = flagConfig.ReceiverType
 	config.TemplatesVariables = flagConfig.TemplatesVariables
-	return []routesJob{newRoutesJob(generateJob{Dir: wd, Config: config})}, nil
+	job, err := newRoutesJob(nil, generateJob{Dir: wd, Config: config})
+	if err != nil {
+		return nil, err
+	}
+	return []routesJob{job}, nil
 }
 
 // routesRunner lists jobs from one load, a package after the packages it
