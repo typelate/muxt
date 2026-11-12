@@ -27,7 +27,7 @@ const (
 
 func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
-		routes:    runRoutes,
+		routes:    routesRunner(loadFromGoCommand),
 		check:     runCheck,
 		generate:  generateRunner(loadFromGoCommand),
 		callers:   runTemplateCallers,
@@ -48,7 +48,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 // loading anything. generate-fake-server and explore-module load packages
 // in their own RunE and have no runner yet.
 type runners struct {
-	routes    func(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error
+	routes    func(cmd *cobra.Command, jobs []routesJob) error
 	check     func(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error
 	generate  func(cmd *cobra.Command, jobs []generateJob) error
 	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
@@ -108,7 +108,11 @@ The documentation for this version is in the binary:
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			return run.routes(cmd, *workingDirectory, rootCommandConfig)
+			jobs, err := routesJobs(*workingDirectory, rootCommandConfig, getEnv)
+			if err != nil {
+				return err
+			}
+			return run.routes(cmd, jobs)
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")

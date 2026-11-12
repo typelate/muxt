@@ -22,33 +22,6 @@ import (
 // flags decide happens before a runner is called, in the command
 // constructors; only the --format a result is written in is read here.
 
-func runRoutes(cmd *cobra.Command, wd string, config analysis.DefinitionsConfiguration) error {
-	if err := requireDirectory(cmd.Name(), wd); err != nil {
-		return err
-	}
-	_, pl, err := load.Packages(wd, config.ReceiverPackage)
-	if err != nil {
-		return err
-	}
-	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-	pkg, receiver, err := load.PackageWithReceiver(wd, pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
-	if err != nil {
-		printMultiLineError(cmd, err)
-		return err
-	}
-	results, err := analysis.NewRoutes(pkg, receiver)
-	if err != nil {
-		printMultiLineError(cmd, err)
-		return err
-	}
-	for _, result := range results {
-		if err := writeResult(cmd, cmd.OutOrStdout(), result); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // requireDirectory says why a package directory cannot be read before the go
 // command is asked to load it, whose own message for a missing one is empty.
 func requireDirectory(command, dir string) error {

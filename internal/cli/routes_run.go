@@ -1,0 +1,90 @@
+package cli
+
+import (
+	"log"
+
+	"github.com/spf13/cobra"
+
+	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/load"
+	"github.com/typelate/muxt/internal/muxtjson"
+)
+
+// routesJob is one package directory the route listing reads. It is a
+// generateJob because the listing reads what generate reads: the same
+// directories, in the same order, resolved the same way.
+type routesJob struct {
+	generateJob
+}
+
+// definitions is the part of the job's configuration the listing resolves with.
+func (j routesJob) definitions() analysis.DefinitionsConfiguration {
+	return analysis.DefinitionsConfiguration{
+		Verbose:            j.Config.Verbose,
+		ReceiverPackage:    j.Config.ReceiverPackage,
+		ReceiverType:       j.Config.ReceiverType,
+		TemplatesVariables: j.Config.TemplatesVariables,
+	}
+}
+
+// routesJobs chooses what the route listing reads: the package in wd, with
+// the shared flags as given.
+func routesJobs(wd string, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
+	// Only the three shared flags are read from the command line, so the
+	// rest of the configuration is what an empty entry gives.
+	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, func() (string, bool) { return "", false })
+	if err != nil {
+		return nil, err
+	}
+	config.Verbose = flagConfig.Verbose
+	config.ReceiverPackage = flagConfig.ReceiverPackage
+	config.ReceiverType = flagConfig.ReceiverType
+	config.TemplatesVariables = flagConfig.TemplatesVariables
+	return []routesJob{{generateJob{Dir: wd, Config: config}}}, nil
+}
+
+// routesRunner lists jobs from one load, a package after the packages it
+// imports.
+func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) error {
+	return func(cmd *cobra.Command, jobs []routesJob) error {
+		if len(jobs) == 0 {
+			return nil
+		}
+		dirs := make([]string, 0, len(jobs))
+		outputDirs := make([]string, 0, len(jobs))
+		var patterns []string
+		for _, job := range jobs {
+			if err := requireDirectory(cmd.Name(), job.Dir); err != nil {
+				return err
+			}
+			dirs = append(dirs, job.Dir)
+			outputDirs = append(outputDirs, job.Config.OutputDirectory(job.Dir))
+			patterns = append(patterns, job.Config.ReceiverPackage)
+		}
+		_, pl, err := loadPackages(jobs[0].Dir, dirs, patterns)
+		if err != nil {
+			return err
+		}
+		warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
+		for _, i := range importOrder(pl, outputDirs) {
+			job := jobs[i]
+			config := job.definitions()
+			pkg, receiver, err := load.PackageWithReceiver(outputDirs[i], pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			results, err := analysis.NewRoutes(pkg, receiver)
+			if err != nil {
+				printMultiLineError(cmd, err)
+				return err
+			}
+			for _, result := range results {
+				if err := writeResult(cmd, cmd.OutOrStdout(), result); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+}

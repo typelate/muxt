@@ -28,8 +28,13 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		return nil
 	}
 	err := commands("/work", strings.Fields(commandLine), func(key string) string { return env[key] }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		routes: func(_ *cobra.Command, _ string, c analysis.DefinitionsConfiguration) error { return record(c) },
-		check:  func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
+		routes: func(_ *cobra.Command, jobs []routesJob) error {
+			if len(jobs) != 1 {
+				return fmt.Errorf("got %d route jobs, want 1", len(jobs))
+			}
+			return record(jobs[0].definitions())
+		},
+		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
 		generate: func(_ *cobra.Command, jobs []generateJob) error {
 			if len(jobs) != 1 {
 				return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
