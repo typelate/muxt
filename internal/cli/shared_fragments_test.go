@@ -178,3 +178,50 @@ func (T) Home() string { return "home" }
 	require.Error(t, err, "check: %s", output)
 	assert.Contains(t, output, `"draft"`, "check output")
 }
+
+// TestCheckFindsTemplateInOtherPackagesSubdirectory states that when the other
+// package embeds a subdirectory and the chain's ParseFS names a pattern in it,
+// a template defined there is found.
+func TestCheckFindsTemplateInOtherPackagesSubdirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/fragments.go": `package fragments
+
+import "embed"
+
+//go:embed *.gohtml partials/*.gohtml
+var TemplateSource embed.FS
+`,
+		"fragments/partials/nav.gohtml": `{{define "nav"}}<nav></nav>{{end}}`,
+		"workspace/page.gohtml":         `{{define "GET /{$} Home()"}}{{template "layout" .}}{{template "nav"}}{{end}}`,
+		"workspace/workspace.go": `package workspace
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*.gohtml", "partials/*.gohtml")).
+	ParseFS(templateSource, "*.gohtml"))
+
+type T struct{}
+
+func (T) Home() string { return "home" }
+`,
+	})
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.NoError(t, err, "check: %s", output)
+}
