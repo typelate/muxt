@@ -3,6 +3,9 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -69,7 +72,9 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		"\t\t\"admin\": {\n" +
 		"\t\t\t\"output_htmx\": true\n" +
 		"\t\t},\n" +
-		"\t\t\"workspace\": {}\n" +
+		"\t\t\"workspace\": {\n" +
+		"\t\t\t\"use_receiver_type\": \"T\"\n" +
+		"\t\t}\n" +
 		"\t}\n" +
 		"}\n"
 
@@ -97,7 +102,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		require.NoError(t, err)
 		got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 		require.NoError(t, err)
-		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"admin/workspace\": {}\n\t}\n}\n", string(got), "muxt.json")
+		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"admin/workspace\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n", string(got), "muxt.json")
 	})
 }
 
@@ -155,6 +160,63 @@ func TestGeneratePackageRejectsInvalidEntryAndWritesNothing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 	require.NoError(t, err)
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}
+
+// TestGeneratePackageDeclaresReceiverType states that the Go file of the new
+// package declares its package name and the receiver type: the given
+// --use-receiver-type, else package_defaults, else T. The entry records the
+// type unless package_defaults already supplies that same name.
+func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		defaults     string
+		commandLine  string
+		wantType     string
+		wantRecorded string
+	}{
+		{name: "default is T", defaults: `{}`, commandLine: "generate package workspace", wantType: "T", wantRecorded: "T"},
+		{name: "flag", defaults: `{}`, commandLine: "generate package workspace --use-receiver-type Server", wantType: "Server", wantRecorded: "Server"},
+		{name: "package_defaults", defaults: `{"package_defaults": {"use_receiver_type": "Admin"}}`, commandLine: "generate package workspace", wantType: "Admin", wantRecorded: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(tt.defaults), 0o644))
+
+			_, err := runCommand(t, root, tt.commandLine)
+
+			require.NoError(t, err)
+			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "workspace", "workspace.go"), nil, parser.AllErrors)
+			require.NoError(t, err, "workspace.go parses")
+			assert.Equal(t, "workspace", file.Name.Name, "package name")
+			assert.Contains(t, declaredTypeNames(file), tt.wantType, "receiver type")
+			var got muxtjson.File
+			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(data, &got))
+			recorded := got.Packages["workspace"].UseReceiverType
+			if tt.wantRecorded == "" {
+				assert.Nil(t, recorded, "use_receiver_type of packages[workspace]")
+			} else {
+				require.NotNil(t, recorded, "use_receiver_type of packages[workspace]")
+				assert.Equal(t, tt.wantRecorded, *recorded, "use_receiver_type of packages[workspace]")
+			}
+		})
+	}
+}
+
+// declaredTypeNames returns the names of the type declarations in file.
+func declaredTypeNames(file *ast.File) []string {
+	var names []string
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			names = append(names, spec.(*ast.TypeSpec).Name.Name)
+		}
+	}
+	return names
 }
 
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate

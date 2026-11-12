@@ -15,6 +15,7 @@ import (
 
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxtjson"
+	"github.com/typelate/muxt/internal/scaffold"
 )
 
 // generatePackageCommand is muxt generate package NAME: it creates ./NAME and
@@ -68,6 +69,16 @@ func scaffoldPackage(wd, name string, flags *pflag.FlagSet, config *generate.Rou
 	if err != nil {
 		return err
 	}
+	receiver := "T"
+	if f.Defaults.UseReceiverType != nil {
+		receiver = *f.Defaults.UseReceiverType
+	}
+	if flags.Changed(useReceiverType) {
+		receiver = config.ReceiverType
+	}
+	if f.Defaults.UseReceiverType == nil || *f.Defaults.UseReceiverType != receiver {
+		entry.UseReceiverType = &receiver
+	}
 	candidate := &muxtjson.File{Dir: f.Dir, Name: f.Name, Defaults: f.Defaults, Packages: maps.Clone(f.Packages)}
 	if candidate.Packages == nil {
 		candidate.Packages = map[string]muxtjson.Entry{}
@@ -79,6 +90,13 @@ func scaffoldPackage(wd, name string, flags *pflag.FlagSet, config *generate.Rou
 	}
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", name, err)
+	}
+	filename, src, err := scaffold.Package(scaffold.PackageSpec{Name: name, ReceiverType: receiver})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, filename), src, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", filepath.Join(name, filename), err)
 	}
 	f.Packages = candidate.Packages
 	return f.Save()
