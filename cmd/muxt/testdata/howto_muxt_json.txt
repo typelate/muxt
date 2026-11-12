@@ -1,0 +1,44 @@
+# Add a package to a muxt.json workspace: muxt generate config, muxt generate package,
+# muxt generate def, then muxt generate from the muxt.json directory.
+
+muxt generate config
+muxt generate package workspace
+
+# The route goes in a template file; the method stub the receiver lacks goes
+# to stdout, and the person appends it to the Go file.
+cd workspace
+muxt generate def 'GET /foo Index()' --output-file=index.gohtml
+cp stdout stub.txt
+cat workspace.go stub.txt
+cp stdout workspace.go
+cp ../workspace_test.txt workspace_test.go
+cd ..
+
+# With no flags, muxt generate writes every package the muxt.json lists.
+muxt generate
+exec go test ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- workspace_test.txt --
+package workspace
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestIndex(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/foo", nil))
+
+	if got, want := rec.Result().StatusCode, http.StatusNoContent; got != want {
+		t.Errorf("GET /foo status = %d, want %d", got, want)
+	}
+}
