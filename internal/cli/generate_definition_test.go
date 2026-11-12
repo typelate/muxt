@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/muxt/internal/muxtjson"
 	"github.com/typelate/muxt/internal/scaffold"
 )
 
@@ -134,11 +135,14 @@ func TestGenerateDefRejectsNameThatIsNotARoute(t *testing.T) {
 }
 
 // definitionModule writes a module whose root package parses *.gohtml into
-// templates, with files beside it, and returns its directory.
-func definitionModule(t *testing.T, files map[string]string) string {
+// templates, with methods declared after its type T and files beside it, and
+// returns its directory. The package always holds base.gohtml, so the embed
+// pattern has a match before the command adds a file.
+func definitionModule(t *testing.T, methods string, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	writeTestFile(t, dir, "base.gohtml", `{{define "base"}}{{end}}`)
 	writeTestFile(t, dir, "m.go", `package m
 
 import (
@@ -152,7 +156,7 @@ var source embed.FS
 var templates = template.Must(template.ParseFS(source, "*.gohtml"))
 
 type T struct{}
-`)
+`+methods)
 	for name, content := range files {
 		writeTestFile(t, dir, name, content)
 	}
@@ -166,7 +170,7 @@ func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
-	dir := definitionModule(t, map[string]string{
+	dir := definitionModule(t, "", map[string]string{
 		"index.gohtml": "{{define \"GET /bar Bar()\"}}{{end}}\n\n{{define \"GET /foo Index()\"}}{{end}}\n",
 	})
 
@@ -244,4 +248,82 @@ func TestGenerateDefRejectsFragmentWithDocument(t *testing.T) {
 
 	require.EqualError(t, err, "--output-fragment and --output-document are mutually exclusive")
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
+}
+
+// TestGenerateDefPrintsMethodStubForUndefinedMethod states that stdout holds a
+// method stub, and nothing else, when the receiver type has no method the route
+// calls: the receiver comes from the muxt.json entry with package_defaults
+// applied, else from --use-receiver-type, and is a pointer receiver when the
+// type already has a method on a pointer.
+func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	const (
+		valueStub   = "func (T) Index(ctx context.Context, id string) any {\n\treturn nil\n}\n"
+		pointerStub = "func (*T) Index(ctx context.Context, id string) any {\n\treturn nil\n}\n"
+	)
+	for _, tt := range []struct {
+		name     string
+		methods  string
+		muxtJSON string
+		flags    []string
+		want     string
+	}{
+		{name: "entry names the receiver", muxtJSON: `{"packages": {".": {"use_receiver_type": "T"}}}`, want: valueStub},
+		{name: "package_defaults names the receiver", muxtJSON: `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {}}}`, want: valueStub},
+		{name: "flag names the receiver", flags: []string{"--use-receiver-type=T"}, want: valueStub},
+		{name: "type has a pointer method", methods: "\nfunc (*T) Other() any { return nil }\n", flags: []string{"--use-receiver-type=T"}, want: pointerStub},
+		{name: "no receiver type known", want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			files := map[string]string{}
+			if tt.muxtJSON != "" {
+				files["muxt.json"] = tt.muxtJSON
+			}
+			dir := definitionModule(t, tt.methods, files)
+			args := append([]string{"generate", "def", "GET /foo/{id} Index(ctx, id)", "--output-file=index.gohtml"}, tt.flags...)
+
+			stdout, _, err := runCommandArgs(dir, args, runners{load: loadFromGoCommand})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, stdout, "stdout")
+		})
+	}
+}
+
+// TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory states that
+// --use-receiver-type fails with a *muxtjson.ConfiguredDirectoryError when the
+// directory has a muxt.json entry, since the entry already names the receiver.
+func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "muxt.json", `{"packages": {".": {"use_receiver_type": "T"}}}`)
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
+
+	_, ok := errors.AsType[*muxtjson.ConfiguredDirectoryError](err)
+	require.True(t, ok, "error is a *muxtjson.ConfiguredDirectoryError: %v", err)
+	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
+}
+
+// TestGenerateDefPrintsNoStubForDefinedMethod states that stdout is empty, and
+// the define is still written, when the receiver type already has the method.
+func TestGenerateDefPrintsNoStubForDefinedMethod(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := definitionModule(t, "\nfunc (T) Index(ctx context.Context, id string) any { return nil }\n", map[string]string{
+		"muxt.json": `{"packages": {".": {"use_receiver_type": "T"}}}`,
+	})
+	goFile, err := os.ReadFile(filepath.Join(dir, "m.go"))
+	require.NoError(t, err)
+	writeTestFile(t, dir, "m.go", strings.Replace(string(goFile), "import (\n", "import (\n\t\"context\"\n", 1))
+
+	stdout, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo/{id} Index(ctx, id)", "--output-file=index.gohtml"}, runners{load: loadFromGoCommand})
+
+	require.NoError(t, err)
+	assert.Empty(t, stdout, "stdout")
+	got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
+	require.NoError(t, err)
+	assert.Equal(t, "{{define \"GET /foo/{id} Index(ctx, id)\"}}{{end}}\n", string(got), "index.gohtml")
 }

@@ -3,25 +3,32 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"go/types"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/muxtjson"
 	"github.com/typelate/muxt/internal/scaffold"
+	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/template/html"
 )
 
 // generateDefinitionCommand is muxt generate def NAME: it adds a route template
 // to a template file of the package in the working directory. It never edits
-// Go source.
+// Go source; a method the route calls and the receiver lacks is printed to
+// stdout as a stub for the person to place.
 func generateDefinitionCommand(workingDirectory *string, getEnv func(string) string, loadPackages packageLoader) *cobra.Command {
 	var (
 		templateFile string
+		receiverType string
 		fragment     bool
 		document     bool
 	)
@@ -39,26 +46,59 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 			if document {
 				body = scaffold.Document
 			}
-			return scaffoldDefinition(cmd, *workingDirectory, args[0], templateFile, body, getEnv, loadPackages)
+			config, err := definitionConfiguration(*workingDirectory, cmd.Flags(), receiverType, getEnv)
+			if err != nil {
+				return err
+			}
+			return scaffoldDefinition(cmd, *workingDirectory, args[0], templateFile, body, config, getEnv, loadPackages)
 		},
 	}
 	cmd.Flags().StringVar(&templateFile, outputFile, "", "the .gohtml file in the working directory to add the template to")
+	cmd.Flags().StringVar(&receiverType, useReceiverType, "", "the receiver type to print a method stub for, when no muxt.json entry names it")
 	cmd.Flags().BoolVar(&fragment, outputFragment, false, "make the template an empty fragment (the default)")
 	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
 }
 
-// scaffoldDefinition appends the define for name to templateFile in wd and
-// reports it on stderr. Everything is checked before anything is written.
-func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body scaffold.Body, getEnv func(string) string, loadPackages packageLoader) error {
+// definitionConfiguration returns the configuration of the package in wd: the
+// muxt.json entry for it, with package_defaults applied, or generate's defaults
+// with the receiver type the flag gave. The flag is a second source for what an
+// entry already says, so entryJobFor rejects it in a configured directory.
+func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
+	var given []string
+	if flags.Changed(useReceiverType) {
+		given = append(given, useReceiverType)
+	}
+	job, found, err := entryJobFor(wd, given, getEnv)
+	if err != nil {
+		return generate.RoutesFileConfiguration{}, err
+	}
+	if found {
+		return job.Config, nil
+	}
+	noVersion := func() (string, bool) { return "", false }
+	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, noVersion)
+	if err != nil {
+		return generate.RoutesFileConfiguration{}, err
+	}
+	config.ReceiverType = receiverType
+	return config, nil
+}
+
+// scaffoldDefinition appends the define for name to templateFile in wd,
+// reports it on stderr, and prints the method stub, if any, to stdout.
+// Everything is checked before anything is written.
+func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body scaffold.Body, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
 	if err := checkTemplateFileName(templateFile); err != nil {
 		return err
 	}
 	if err := muxt.CheckDefinitionName(name); err != nil {
 		return err
 	}
+	var stub string
 	if loadPackages != nil {
-		if err := checkNotDefined(wd, name, getEnv, loadPackages); err != nil {
+		var err error
+		if stub, err = inspectPackage(wd, name, config, loadPackages); err != nil {
 			return err
 		}
 	}
@@ -71,30 +111,30 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", templateFile, err)
 	}
-	_, err = fmt.Fprintf(cmd.ErrOrStderr(), "wrote %s: %s\n", templateFile, name)
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "wrote %s: %s\n", templateFile, name); err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), stub)
 	return err
 }
 
-// checkNotDefined loads the package in wd and returns a
+// inspectPackage loads the package in wd and returns a
 // *scaffold.DuplicateDefinitionError when its templates already define name.
-// A package it cannot load, or one with no templates variable, is an error
-// too: the check would otherwise pass for want of anything to check.
-func checkNotDefined(wd, name string, getEnv func(string) string, loadPackages packageLoader) error {
-	noVersion := func() (string, bool) { return "", false }
-	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, noVersion)
-	if err != nil {
-		return err
-	}
+// Otherwise it returns the stubs of the methods the route calls that the
+// receiver type does not define, empty when no receiver type is configured. A
+// package it cannot load, or one with no templates variable, is an error too:
+// the check would otherwise pass for want of anything to check.
+func inspectPackage(wd, name string, config generate.RoutesFileConfiguration, loadPackages packageLoader) (string, error) {
 	cannotCheck := func(err error) error {
 		return fmt.Errorf("cannot check whether %q is already defined: %w", name, err)
 	}
-	_, pl, err := loadPackages(wd, []string{wd}, nil)
+	_, pl, err := loadPackages(wd, []string{wd}, []string{config.ReceiverPackage})
 	if err != nil {
-		return cannotCheck(err)
+		return "", cannotCheck(err)
 	}
 	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
 	if err != nil {
-		return cannotCheck(err)
+		return "", cannotCheck(err)
 	}
 	for _, variable := range pkg.Variables {
 		if variable.Set.Lookup(name) == nil {
@@ -104,9 +144,89 @@ func checkNotDefined(wd, name string, getEnv func(string) string, loadPackages p
 		if position, ok := variable.NamePosition(name); ok {
 			duplicate.File, duplicate.Line = relativeTo(wd, position.Filename), position.Line
 		}
-		return duplicate
+		return "", duplicate
 	}
-	return nil
+	if config.ReceiverType == "" {
+		return "", nil
+	}
+	receiver, err := load.Receiver(wd, pl, config.ReceiverPackage, config.ReceiverType)
+	if err != nil {
+		return "", err
+	}
+	return methodStubs(pkg, receiver, name, load.StandardLibrary(pl))
+}
+
+// methodStubs returns a stub for each method the route name calls that
+// receiver does not define, as muxt infers its signature. A method the receiver
+// has gives no stub. Stubs use a pointer receiver when the type's own methods
+// do.
+func methodStubs(pkg source.Package, receiver *types.Named, name string, checker muxt.Checker) (string, error) {
+	templates, err := html.New("").Parse(scaffold.Definition(name, scaffold.Fragment))
+	if err != nil {
+		return "", fmt.Errorf("parsing %q: %w", name, err)
+	}
+	pointer := hasPointerMethod(receiver)
+	probe := source.Package{Fset: pkg.Fset, Types: pkg.Types, Variables: []source.Variable{{Name: "probe", Set: templates}}}
+	defs, err := muxt.ResolveDefinitions(probe, receiver, checker)
+	if err != nil {
+		return "", err
+	}
+	qualify := func(p *types.Package) string {
+		if p == receiver.Obj().Pkg() {
+			return ""
+		}
+		return p.Name()
+	}
+	var stubs []string
+	for _, def := range defs {
+		for _, inferred := range def.SynthesizedMethods() {
+			method, _, _ := strings.Cut(inferred, "(")
+			spec, err := methodSpec(receiver, pointer, method, qualify)
+			if err != nil {
+				return "", err
+			}
+			stub, err := scaffold.MethodStub(spec)
+			if err != nil {
+				return "", err
+			}
+			stubs = append(stubs, stub)
+		}
+	}
+	return strings.Join(stubs, "\n"), nil
+}
+
+// hasPointerMethod reports whether receiver declares a method on its pointer
+// type. Only declared methods count: a method has a position only when it is
+// written in source, and muxt adds the ones it infers without one.
+func hasPointerMethod(receiver *types.Named) bool {
+	for method := range receiver.Methods() {
+		if !method.Pos().IsValid() {
+			continue
+		}
+		if _, ok := method.Signature().Recv().Type().(*types.Pointer); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// methodSpec describes the method named name that muxt added to receiver.
+func methodSpec(receiver *types.Named, pointer bool, name string, qualify types.Qualifier) (scaffold.MethodSpec, error) {
+	for method := range receiver.Methods() {
+		if method.Name() != name {
+			continue
+		}
+		sig := method.Signature()
+		spec := scaffold.MethodSpec{Receiver: receiver.Obj().Name(), Pointer: pointer, Name: name}
+		for param := range sig.Params().Variables() {
+			spec.Params = append(spec.Params, scaffold.Param{Name: param.Name(), Type: types.TypeString(param.Type(), qualify)})
+		}
+		for result := range sig.Results().Variables() {
+			spec.Results = append(spec.Results, types.TypeString(result.Type(), qualify))
+		}
+		return spec, nil
+	}
+	return scaffold.MethodSpec{}, fmt.Errorf("method %s inferred for %s is not on the type", name, receiver.Obj().Name())
 }
 
 // relativeTo returns file relative to dir. The go command may report a path
