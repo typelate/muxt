@@ -36,3 +36,25 @@ type UnexportedSharedFSError struct {
 func (e UnexportedSharedFSError) Error() string {
 	return fmt.Sprintf("%s: %s.%s is unexported; ParseFS reads only an exported embed.FS variable of another package", e.Position, e.Package, e.Name)
 }
+
+// NotEmbedFSError is the error for a ParseFS argument that names an exported
+// variable of another package whose type is not embed.FS. Only an embed.FS
+// carries the files its //go:embed matched, so any other fs.FS is refused.
+type NotEmbedFSError struct {
+	// Position is the argument, relative to the package directory.
+	Position token.Position
+
+	// Package is the argument's qualifier, as written.
+	Package string
+
+	// Name is the variable's name.
+	Name string
+
+	// Type is the variable's type as go/types prints it, such as io/fs.FS.
+	Type string
+}
+
+// Error is one line: the position, what failed and how to fix it.
+func (e NotEmbedFSError) Error() string {
+	return fmt.Sprintf("%s: %s.%s is a %s, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", e.Position, e.Package, e.Name, e.Type)
+}

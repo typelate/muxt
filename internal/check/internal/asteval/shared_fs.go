@@ -32,6 +32,11 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	if !arg.Sel.IsExported() {
 		return nil, "", UnexportedSharedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}
 	}
+	// The analyzed package's type information types the selector; a var
+	// that is not an embed.FS has no embedded files this function can read.
+	if v, ok := scope.Info.Uses[arg.Sel].(*types.Var); ok && !isEmbedFS(v.Type()) {
+		return nil, "", NotEmbedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name, Type: types.TypeString(v.Type(), nil)}
+	}
 	relative, err := RelativeFilePaths(other.Dir, other.EmbedFiles...)
 	if err != nil {
 		return nil, "", fmt.Errorf("calculating relative paths of files embedded by %s: %w", importPath, err)
@@ -41,4 +46,10 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 		return nil, "", err
 	}
 	return joinFilePaths(other.Dir, matches...), importPath, nil
+}
+
+// isEmbedFS reports whether t is the embed package's FS type.
+func isEmbedFS(t types.Type) bool {
+	named, ok := t.(*types.Named)
+	return ok && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == "embed" && named.Obj().Name() == "FS"
 }

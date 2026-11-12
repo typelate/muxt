@@ -274,3 +274,32 @@ var templateSource embed.FS
 	require.Error(t, err, "generate: %s", output)
 	assert.Contains(t, output, "workspace.go:14:10: fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package", "generate output")
 }
+
+// TestGenerateReportsSharedVariableThatIsNotEmbedFS states that a ParseFS
+// argument naming an exported variable of another package that is an fs.FS,
+// not an embed.FS, fails with muxt's message at the argument's position.
+func TestGenerateReportsSharedVariableThatIsNotEmbedFS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/fragments.go": `package fragments
+
+import (
+	"embed"
+	"io/fs"
+)
+
+//go:embed *.gohtml
+var TemplateSource embed.FS
+
+var Other fs.FS = TemplateSource
+`,
+		"workspace/workspace.go": workspaceReadingFS("fragments.Other"),
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
+
+	require.Error(t, err, "generate: %s", output)
+	assert.Contains(t, output, "workspace.go:14:10: fragments.Other is a io/fs.FS, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
+}
