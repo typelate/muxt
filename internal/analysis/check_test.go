@@ -75,7 +75,7 @@ func TestFindUnusedTemplates(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got := findUnusedTemplates(parseTemplates(t, tt.templates), tt.executed)
+			got := findUnusedTemplates(parseTemplates(t, tt.templates), tt.executed, func(string) bool { return true })
 			assert.Equal(t, tt.want, got, "findUnusedTemplates")
 		})
 	}
@@ -133,7 +133,7 @@ func TestPartitionUnusedTemplates(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			routes, partials := partitionUnusedTemplates(parseTemplates(t, tt.templates), tt.unused)
+			routes, partials := partitionUnusedTemplates(parseTemplates(t, tt.templates), tt.unused, func(string) bool { return true })
 			assert.Equal(t, tt.wantRoutes, routes, "routes")
 			assert.Equal(t, tt.wantPartials, partials, "partials")
 		})
@@ -241,12 +241,12 @@ func TestTemplatesWithoutATreeAreSkipped(t *testing.T) {
 		assert.True(t, seen["undefined"], "collectTemplateReferences reached %v, want undefined", seen)
 	})
 	t.Run("partitionUnusedTemplates", func(t *testing.T) {
-		routes, partials := partitionUnusedTemplates(ts, []string{"GET / Home()"})
+		routes, partials := partitionUnusedTemplates(ts, []string{"GET / Home()"}, func(string) bool { return true })
 		assert.Len(t, routes, 1, "partitionUnusedTemplates() routes, want the route only")
 		assert.Empty(t, partials, "partitionUnusedTemplates() partials, want the route only")
 	})
 	t.Run("findUnusedTemplates", func(t *testing.T) {
-		got := findUnusedTemplates(ts, executed())
+		got := findUnusedTemplates(ts, executed(), func(string) bool { return true })
 		assert.Equal(t, []string{"GET / Home()"}, got, "findUnusedTemplates() want only the route")
 	})
 	t.Run("executeTemplateTree", func(t *testing.T) {

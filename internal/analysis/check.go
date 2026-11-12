@@ -335,7 +335,8 @@ func callLine(qualifier types.Qualifier, call source.Call) string {
 // are not routes are listed without an error.
 func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTemplates map[string][]TemplateExecution, allowUnused bool) []error {
 	var errs []error
-	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates))
+	own := func(string) bool { return true }
+	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates, own), own)
 	if len(unusedRoutes) > 0 {
 		// Route templates with no ExecuteTemplate caller usually mean
 		// the generated routes file is missing or stale, not that the
@@ -394,7 +395,11 @@ func firstWritten(root *template.ListNode) template.Node {
 // A plain template referenced from a route template's tree is pending
 // that route's wiring rather than unused, so it is omitted entirely:
 // its route is already reported.
-func partitionUnusedTemplates(ts *html.Template, unused []string) (routes, partials []string) {
+//
+// own reports whether the analyzed package owns the named template. A
+// partial it does not own is left out of partials, since the package that
+// owns it is the one that can remove it; route templates are always kept.
+func partitionUnusedTemplates(ts *html.Template, unused []string, own func(name string) bool) (routes, partials []string) {
 	pending := make(map[string]bool)
 	for _, t := range ts.Templates() {
 		if muxt.IsRouteDefinitionName(t.Name()) && t.Tree != nil {
@@ -406,6 +411,7 @@ func partitionUnusedTemplates(ts *html.Template, unused []string) (routes, parti
 		case muxt.IsRouteDefinitionName(name):
 			routes = append(routes, name)
 		case pending[name]:
+		case !own(name):
 		default:
 			partials = append(partials, name)
 		}
@@ -475,7 +481,12 @@ func followTemplate(ts *html.Template, name string, seen map[string]bool) {
 // A template is considered "used" if it:
 // 1. Is executed via ExecuteTemplate calls in the code
 // 2. Is referenced via {{template "name"}} from a used template
-func findUnusedTemplates(ts *html.Template, executedTemplates map[string][]TemplateExecution) []string {
+//
+// own is the predicate partitionUnusedTemplates applies to partials. It is a
+// parameter here so both steps are given the one predicate; a template it
+// rejects is still reported unused, and the partition decides what to do
+// with it.
+func findUnusedTemplates(ts *html.Template, executedTemplates map[string][]TemplateExecution, own func(name string) bool) []string {
 	allTemplates := ts.Templates()
 	if len(allTemplates) == 0 {
 		return nil
