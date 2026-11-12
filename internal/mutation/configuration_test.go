@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/internal/configjson"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/mutation"
 )
 
@@ -33,11 +33,11 @@ func TestConfigurationJSON(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			written, err := json.Marshal(tt.config, configjson.Options())
+			written, err := json.Marshal(tt.config, composite.ConfigurationOptions())
 			require.NoError(t, err)
 
 			var read mutation.Configuration
-			require.NoError(t, json.Unmarshal(written, &read, configjson.Options()))
+			require.NoError(t, json.Unmarshal(written, &read, composite.ConfigurationOptions()))
 			assert.Equal(t, tt.config, read)
 		})
 	}
@@ -47,7 +47,7 @@ func TestConfigurationJSON(t *testing.T) {
 // not compile is reported where it was read.
 func TestConfigurationJSONRejectsABadPattern(t *testing.T) {
 	var config mutation.Configuration
-	err := json.Unmarshal([]byte(`{"TemplatePattern":"("}`), &config, configjson.Options())
+	err := json.Unmarshal([]byte(`{"TemplatePattern":"("}`), &config, composite.ConfigurationOptions())
 	require.ErrorContains(t, err, "error parsing regexp")
 	require.ErrorContains(t, err, "TemplatePattern")
 }

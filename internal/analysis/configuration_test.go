@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/configjson"
+	"github.com/typelate/muxt/internal/composite"
 )
 
 // TestListingConfigurationJSON states how a listing's configuration reads
@@ -17,8 +17,8 @@ import (
 // runs with: a --match pattern is the text it was written as, and a field
 // the command line left alone is null rather than an empty list, so a
 // configuration read back is the one the command line produced.
-// regexp.Regexp reads and writes itself, as a TextMarshaler; configjson
-// says the rest.
+// regexp.Regexp reads and writes itself, as a TextMarshaler;
+// composite.ConfigurationOptions says the rest.
 func TestListingConfigurationJSON(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -37,12 +37,12 @@ func TestListingConfigurationJSON(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			written, err := json.Marshal(tt.config, configjson.Options())
+			written, err := json.Marshal(tt.config, composite.ConfigurationOptions())
 			require.NoError(t, err)
 			assert.JSONEq(t, tt.want, string(written))
 
 			var read analysis.TemplateCallersConfiguration
-			require.NoError(t, json.Unmarshal(written, &read, configjson.Options()))
+			require.NoError(t, json.Unmarshal(written, &read, composite.ConfigurationOptions()))
 			assert.Equal(t, tt.config, read)
 		})
 	}
@@ -52,7 +52,7 @@ func TestListingConfigurationJSON(t *testing.T) {
 // that does not compile is reported where it was read.
 func TestListingConfigurationJSONRejectsABadPattern(t *testing.T) {
 	var config analysis.TemplateCallsConfiguration
-	err := json.Unmarshal([]byte(`{"FilterTemplates":["("]}`), &config, configjson.Options())
+	err := json.Unmarshal([]byte(`{"FilterTemplates":["("]}`), &config, composite.ConfigurationOptions())
 	require.ErrorContains(t, err, "error parsing regexp")
 	require.ErrorContains(t, err, "FilterTemplates")
 }

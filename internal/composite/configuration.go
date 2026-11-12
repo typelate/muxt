@@ -1,4 +1,8 @@
-// Package configjson says how muxt reads and writes a command's
+package composite
+
+import "encoding/json/v2"
+
+// ConfigurationOptions says how muxt reads and writes a command's
 // configuration as JSON.
 //
 // It is how the snapshot archives in internal/{generate,analysis,mutation}
@@ -9,12 +13,7 @@
 //
 // Patterns say nothing here: regexp.Regexp reads and writes itself as the
 // text it was compiled from.
-package configjson
-
-import "encoding/json/v2"
-
-// Options reads and writes a configuration the way muxt holds one.
-func Options() json.Options {
+func ConfigurationOptions() json.Options {
 	return json.JoinOptions(
 		json.FormatNilSliceAsNull(true),
 		json.FormatNilMapAsNull(true),

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/txtar"
 
-	"github.com/typelate/muxt/internal/configjson"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/load/loadtest"
@@ -121,7 +121,7 @@ func configuration(t *testing.T, archive *txtar.Archive) generate.RoutesFileConf
 			continue
 		}
 		var config generate.RoutesFileConfiguration
-		require.NoError(t, json.Unmarshal(file.Data, &config, configjson.Options()), "config.json")
+		require.NoError(t, json.Unmarshal(file.Data, &config, composite.ConfigurationOptions()), "config.json")
 		return config
 	}
 	require.FailNow(t, "the archive has no config.json")
