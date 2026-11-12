@@ -91,6 +91,15 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 	}
 }
 
+// Create writes an empty muxt.json into dir, the file a flagless generate
+// reads before any entry is added.
+func Create(dir string) error {
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte("{\n\t\"packages\": {}\n}\n"), 0o644); err != nil {
+		return fmt.Errorf("creating %s: %w", FileName, err)
+	}
+	return nil
+}
+
 // KeyFor returns the slash-separated path of dir relative to the directory
 // holding f, the key its Packages entry uses. The directory itself is ".".
 func (f *File) KeyFor(dir string) (string, error) {

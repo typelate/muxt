@@ -48,6 +48,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 	}
 
 	addGenerateFlags(cmd.Flags(), &config, &deprecatedTemplatesVar)
+	cmd.AddCommand(generateConfigCommand(workingDirectory))
 
 	return cmd
 }
