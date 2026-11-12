@@ -57,8 +57,8 @@ cmpenv stderr want-refused.txt
 {{end}}
 -- want-unused.txt --
 Unused templates (allowed by --allow-unused):
-  - $WORK/template.gohtml:18:22: "raw text"
-  - $WORK/template.gohtml:11:21: "refused"
+  - template.gohtml:18:22: "raw text"
+  - template.gohtml:11:21: "refused"
 -- routed-refused --
 {{define "GET / Index()"}}
 <p>1 < 2</p>
@@ -80,22 +80,22 @@ Unused templates (allowed by --allow-unused):
 {{define "raw text"}}<script>{{/* c */}}var n = {{.N}};</script
 {{end}}
 -- want-refused.txt --
-$WORK/template.gohtml:11:34: html/template refuses this template: "<" in attribute name: "<!-- "
+template.gohtml:11:34: html/template refuses this template: "<" in attribute name: "<!-- "
 
 -- want-err.txt --
-$WORK/template.gohtml:6:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:7:6: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:8:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:9:17: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:6:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:7:6: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:8:6: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:9:17: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
 
 $WORK/template_routes.go:37:13 ExecuteTemplate "GET / Index()" *TemplateData[RoutesReceiver, Data]
-$WORK/template.gohtml:3:11: executing "GET / Index()" at <.Result.Missing>: field or method Missing not found on Data
-$WORK/template.gohtml:4:12: executing "GET / Index()" at <.Result.Nope>: field or method Nope not found on Data
-$WORK/template.gohtml:5:20: executing "GET / Index()" at <.Result.Gone>: field or method Gone not found on Data
-$WORK/template.gohtml:5:60: executing "GET / Index()" at <.Result.Lost>: field or method Lost not found on Data
-$WORK/template.gohtml:6:20: executing "GET / Index()" at <.Result.Bang>: field or method Bang not found on Data
-$WORK/template.gohtml:7:20: executing "GET / Index()" at <.Result.Query>: field or method Query not found on Data
-$WORK/template.gohtml:8:19: executing "GET / Index()" at <.Result.Bogus>: field or method Bogus not found on Data
+template.gohtml:3:11: executing "GET / Index()" at <.Result.Missing>: field or method Missing not found on Data
+template.gohtml:4:12: executing "GET / Index()" at <.Result.Nope>: field or method Nope not found on Data
+template.gohtml:5:20: executing "GET / Index()" at <.Result.Gone>: field or method Gone not found on Data
+template.gohtml:5:60: executing "GET / Index()" at <.Result.Lost>: field or method Lost not found on Data
+template.gohtml:6:20: executing "GET / Index()" at <.Result.Bang>: field or method Bang not found on Data
+template.gohtml:7:20: executing "GET / Index()" at <.Result.Query>: field or method Query not found on Data
+template.gohtml:8:19: executing "GET / Index()" at <.Result.Bogus>: field or method Bogus not found on Data
 
 -- go.mod --
 module server

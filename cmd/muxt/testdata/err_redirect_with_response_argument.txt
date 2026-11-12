@@ -64,11 +64,11 @@ $WORK/template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" cal
 
 $WORK/template.gohtml:1:13: template "GET /with-response WithResponse(ctx, response)" calls RedirectSeeOther but WithResponse takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call http.Redirect in the method
 -- want-check.txt --
-$WORK/template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" calls StatusCode but WithStatus takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method
+template.gohtml:5:13: template "GET /status WithStatus(ctx, response)" calls StatusCode but WithStatus takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call response.WriteHeader in the method
 
-$WORK/template.gohtml:1:13: template "GET /with-response WithResponse(ctx, response)" calls RedirectSeeOther but WithResponse takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call http.Redirect in the method
+template.gohtml:1:13: template "GET /with-response WithResponse(ctx, response)" calls RedirectSeeOther but WithResponse takes the http.ResponseWriter, so muxt writes no status code or redirect for this route: either drop the response argument or call http.Redirect in the method
 
 Route templates with no generated handler; run muxt generate to wire them up:
-  - $WORK/template.gohtml:6:2: "GET /status WithStatus(ctx, response)"
-  - $WORK/template.gohtml:2:2: "GET /with-response WithResponse(ctx, response)"
-  - $WORK/template.gohtml:12:2: "GET /without-response WithoutResponse(ctx)"
+  - template.gohtml:6:2: "GET /status WithStatus(ctx, response)"
+  - template.gohtml:2:2: "GET /with-response WithResponse(ctx, response)"
+  - template.gohtml:12:2: "GET /without-response WithoutResponse(ctx)"

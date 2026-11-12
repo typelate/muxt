@@ -41,17 +41,17 @@ Each action is resolved against the type of dot at that point: field accesses, m
 {{end}}
 ```
 
-Each error names the call site, then the template position and what failed:
+Each error names the call site, then the template position and what failed. A template file is named relative to the directory `muxt` runs in (after `-C`), so a file of a shared package reads `../fragments/layout.gohtml:1:28`; a path outside the module is printed absolute:
 
 ```text
 /home/me/app/template_routes.go:38:13 ExecuteTemplate "GET /user GetUser(ctx)" *TemplateData[RoutesReceiver, User]
-/home/me/app/template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: field or method Phone not found on User
+template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: field or method Phone not found on User
 ```
 
 `-v` follows a field or method error with the declaration of the type it was looked up on:
 
 ```text
-/home/me/app/template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: field or method Phone not found on User
+template.gohtml:3:13: executing "GET /user GetUser(ctx)" at <.Result.Phone>: field or method Phone not found on User
 
   type User struct {
     Email string
@@ -75,9 +75,9 @@ Check also fails on:
 
   ```text
   /home/me/app/server.go:17:9 ExecuteTemplate "intakes" AdminPage
-  /home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+  footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
 
-  /home/me/app/footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
+  footer.gohtml:1:30: executing "footer" at <.Viewer>: field or method Viewer not found on AdminPage
     also reached from:
       /home/me/app/server.go:21:9 ExecuteTemplate "users" AdminPage
       /home/me/app/server.go:25:9 ExecuteTemplate "settings" AdminPage

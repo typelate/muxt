@@ -9,13 +9,13 @@ muxt generate --use-receiver-type=T
 cmpenv stderr want-err.txt
 
 -- want-err.txt --
-$WORK/template.gohtml:4:18: html/template writes this <!-- as text inside <title>; browsers show it
-$WORK/template.gohtml:8:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:9:4: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
-$WORK/template.gohtml:10:4: browsers end this comment at the "<!-->" at 10:4 but html/template strips through the "-->" at 12:1, hiding the markup between
-$WORK/template.gohtml:14:23: html/template writes this <!-- as text inside <textarea>; browsers show it
-$WORK/template.gohtml:15:4: browsers end this comment at the "--!>" at 15:11 but html/template strips through the "-->" at 15:39, hiding the markup between
-$WORK/template.gohtml:16:6: html/template strips this comment, but browsers read <xmp> content as raw text and keep it
+template.gohtml:4:18: html/template writes this <!-- as text inside <title>; browsers show it
+template.gohtml:8:4: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:9:4: html/template escapes this "<?", so browsers show it as text; comment with {{/* */}} or <!-- -->
+template.gohtml:10:4: browsers end this comment at the "<!-->" at 10:4 but html/template strips through the "-->" at 12:1, hiding the markup between
+template.gohtml:14:23: html/template writes this <!-- as text inside <textarea>; browsers show it
+template.gohtml:15:4: browsers end this comment at the "--!>" at 15:11 but html/template strips through the "-->" at 15:39, hiding the markup between
+template.gohtml:16:6: html/template strips this comment, but browsers read <xmp> content as raw text and keep it
 
 -- template.gohtml --
 {{define "GET / Index()"}}

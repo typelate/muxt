@@ -8,16 +8,16 @@ cmpenv stderr want-err.txt
 
 -- want-err.txt --
 $WORK/main.go:22:6 ExecuteTemplate "data.json.tmpl" Data
-$WORK/data.json.tmpl:1:55: executing "data.json.tmpl" at <.Missing>: field or method Missing not found on Data
+data.json.tmpl:1:55: executing "data.json.tmpl" at <.Missing>: field or method Missing not found on Data
 
 $WORK/main.go:23:6 ExecuteTemplate "prose.txt.tmpl" Data
-$WORK/prose.txt.tmpl:2:28: executing "prose.txt.tmpl" at <.Gone>: field or method Gone not found on Data
+prose.txt.tmpl:2:28: executing "prose.txt.tmpl" at <.Gone>: field or method Gone not found on Data
 
 $WORK/main.go:24:6 ExecuteTemplate "literal" Data
 literal:2:28: executing "literal" at <.Lost>: field or method Lost not found on Data
 
 $WORK/main.go:25:6 ExecuteTemplate "def" Data
-$WORK/def.json.tmpl:1:36: executing "def" at <.Nope>: field or method Nope not found on Data
+def.json.tmpl:1:36: executing "def" at <.Nope>: field or method Nope not found on Data
 
 -- data.json.tmpl --
 {"a": "<x", "n": {{.N}}, "tag": "<{{.Name}}>", "m": {{.Missing}}}

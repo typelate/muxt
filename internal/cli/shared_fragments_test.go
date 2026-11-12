@@ -350,6 +350,33 @@ var TemplateSource embed.FS
 	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
 
+// TestCheckNamesSharedFileRelativeToWorkingDirectory states that an error in a
+// shared file's template names the file relative to the directory muxt runs in,
+// with line and column, and that a template of the package's own file in the
+// same run is named from the same base. The working directory is the base
+// after -C is applied, so -C workspace prints what running inside workspace
+// prints.
+func TestCheckNamesSharedFileRelativeToWorkingDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/layout.gohtml": `{{define "layout"}}<main>{{.Nope}}</main>{{end}}`,
+		"workspace/own.gohtml":    `{{define "orphan"}}<i></i>{{end}}`,
+	})
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.Error(t, err, "check: %s", output)
+	assert.Contains(t, output, "../fragments/layout.gohtml:1:28: executing \"layout\" at <.Nope>", "check output")
+	assert.Contains(t, output, `  - own.gohtml:1:20: "orphan"`, "check output")
+	assert.NotContains(t, output, filepath.Join(dir, "fragments"), "check output names no absolute template path")
+	assert.NotContains(t, output, filepath.Join(dir, "workspace", "own.gohtml"), "check output names no absolute template path")
+}
+
 // TestCheckStillReportsUnusedOwnTemplate states that exempting the other
 // package's templates leaves the package's own unused template reported, and
 // that a route template in a shared file with no generated handler is reported

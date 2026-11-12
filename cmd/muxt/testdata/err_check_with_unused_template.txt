@@ -15,12 +15,12 @@ stdout '^ok: 2 templates$'
 
 -- want-allowed.txt --
 Unused templates (allowed by --allow-unused):
-  - $WORK/index.gohtml:5:28: "orphan-partial"
-  - $WORK/template.gohtml:36:28: "unused-partial"
+  - index.gohtml:5:28: "orphan-partial"
+  - template.gohtml:36:28: "unused-partial"
 -- want-err.txt --
 Unused templates:
-  - $WORK/index.gohtml:5:28: "orphan-partial"
-  - $WORK/template.gohtml:36:28: "unused-partial"
+  - index.gohtml:5:28: "orphan-partial"
+  - template.gohtml:36:28: "unused-partial"
 -- template.gohtml --
 {{define "GET / Endpoint()" }}
 Hello

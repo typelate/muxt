@@ -42,6 +42,15 @@ type CheckConfiguration struct {
 	AllowUnused bool
 
 	TemplatesVariables []string
+
+	// Dir is the working directory muxt was started in, after -C. Each
+	// template path Check prints is relative to it, so one run names every
+	// file from one base. Empty leaves the paths as the templates carry them.
+	Dir string
+
+	// ModuleRoot bounds Dir: a template path outside it is printed
+	// absolute. Empty means Dir.
+	ModuleRoot string
 }
 
 // CheckResult counts the ExecuteTemplate calls Check found, so the caller
@@ -62,6 +71,7 @@ type CheckResult struct {
 func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (CheckResult, error) {
 	var errs []error
 	var result CheckResult
+	logger = relativePaths(logger, config.Dir, config.ModuleRoot, pkg)
 	qualifier := astgen.NewTypeFormatter(pkg.Types.Path()).Qualifier
 
 	for _, lt := range pkg.Variables {
