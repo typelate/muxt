@@ -106,7 +106,17 @@ type Definition struct {
 
 	// Tree is the template's parse tree.
 	Tree *template.Tree
+
+	// Package is the import path of the package whose embed.FS the
+	// template's file came from, empty for the package that declares the
+	// variable. A {{define}} inherits the file's package.
+	Package string
 }
+
+// Shared reports whether the template was defined in another package's
+// files. It is what a consumer asks to leave a template alone that the
+// analyzed package does not own.
+func (d Definition) Shared() bool { return d.Package != "" }
 
 // Span is a run of bytes in a file.
 type Span struct {

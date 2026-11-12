@@ -65,6 +65,7 @@ func readVariable(pkg *packages.Package, name string) (source.Variable, error) {
 			End:          source.Span{Position: d.End.Position, Length: d.End.Length},
 			TemplateName: source.Span{Position: d.TemplateName.Position, Length: d.TemplateName.Length},
 			Tree:         d.Tree,
+			Package:      d.Package,
 		}
 	}
 	literal := make(map[*ast.CallExpr]bool)
