@@ -135,3 +135,46 @@ func TestGenerateIncludesRouteFromAnotherPackage(t *testing.T) {
 	require.NoError(t, err, "ReadDir")
 	assert.Equal(t, before, after, "files in the fragments directory")
 }
+
+// TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
+// other package's directory its //go:embed pattern does not match is not
+// parsed, even when the ParseFS patterns would match it, so a template only
+// that file defines is undefined.
+func TestCheckReadsOnlyFilesTheOtherPackageEmbeds(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/notes.txt":   `{{define "draft"}}draft{{end}}`,
+		"workspace/page.gohtml": `{{define "GET /{$} Home()"}}{{template "draft" .}}{{end}}`,
+		"workspace/workspace.go": `package workspace
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*")).
+	ParseFS(templateSource, "*.gohtml"))
+
+type T struct{}
+
+func (T) Home() string { return "home" }
+`,
+	})
+
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.Error(t, err, "check: %s", output)
+	assert.Contains(t, output, `"draft"`, "check output")
+}
