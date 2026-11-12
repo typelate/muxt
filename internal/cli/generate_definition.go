@@ -18,7 +18,6 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/muxtjson"
 	"github.com/typelate/muxt/internal/scaffold"
 	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/template/html"
@@ -79,8 +78,7 @@ func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType strin
 	if found {
 		return job.Config, nil
 	}
-	noVersion := func() (string, bool) { return "", false }
-	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, noVersion)
+	config, err := defaultConfiguration(wd, getEnv)
 	if err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}

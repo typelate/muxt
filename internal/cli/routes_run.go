@@ -45,9 +45,6 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 // chooses what generate writes: with no shared flag given and a muxt.json
 // entry for wd, the entry decides; otherwise the flags do.
 func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
-	// A listing never writes a header, so it has no use for the version that
-	// would be recorded in one.
-	noVersion := func() (string, bool) { return "", false }
 	flagNames := givenGenerateFlags(flags)
 	if len(flagNames) > 0 {
 		if err := rejectConfiguredDirectory(wd, flagNames); err != nil {
@@ -72,7 +69,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	}
 	// Only the three shared flags are read from the command line, so the
 	// rest of the configuration is what an empty entry gives.
-	config, err := entryConfiguration(muxtjson.Entry{}, wd, getEnv, noVersion)
+	config, err := defaultConfiguration(wd, getEnv)
 	if err != nil {
 		return nil, err
 	}

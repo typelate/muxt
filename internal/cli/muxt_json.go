@@ -105,9 +105,6 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 	if err != nil || lookup.File == nil {
 		return generateJob{}, false, err
 	}
-	// A command that reads a package writes no header, so the version that
-	// would be recorded in one is not needed.
-	noVersion := func() (string, bool) { return "", false }
 	_, jobs, found, err := entryJobs(dir, getEnv, noVersion)
 	if err != nil || !found {
 		return generateJob{}, false, err
@@ -229,4 +226,15 @@ func entryConfiguration(e muxtjson.Entry, dir string, getEnv func(string) string
 		return generate.RoutesFileConfiguration{}, err
 	}
 	return config, nil
+}
+
+// noVersion is the version func of a command that writes no header, so it has
+// no use for the version a header would record.
+func noVersion() (string, bool) { return "", false }
+
+// defaultConfiguration is what generate's defaults and the environment give a
+// package with no muxt.json entry, for a command that reads a package and sets
+// only the few fields it has flags for.
+func defaultConfiguration(dir string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
+	return entryConfiguration(muxtjson.Entry{}, dir, getEnv, noVersion)
 }
