@@ -487,6 +487,23 @@ func builtins() map[string]any {
 // written as an error string literal.
 const unreadableFuncsMessage = "Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one"
 
+// sharedFuncsHint tells a caller who passes another package's FuncMap var how
+// to share functions. Muxt reads a FuncMap only where it is written, so the
+// functions must be exported and listed in a literal in the package that
+// parses. It is empty unless arg is a qualified name such as fragments.Funcs,
+// since only then is there a package to name in the hint.
+func sharedFuncsHint(arg ast.Expr) string {
+	sel, ok := arg.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	qualifier, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("; to share functions across packages, export them and write template.FuncMap{\"name\": %s.Func}", qualifier.Name)
+}
+
 // firstArgumentToParseFSMessage is the error for a ParseFS first argument that
 // is neither a package-level variable nor a variable of an imported package.
 // It names both forms, so the caller sees the shared one.
@@ -508,7 +525,7 @@ func evaluateFuncMap(workingDirectory string, typesInfo *types.Info, pkg *types.
 	arg := call.Args[0]
 	lit, ok := resolvePackageLevel(files, arg).(*ast.CompositeLit)
 	if !ok {
-		return wrapWithFilename(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("%s (got %s)", unreadableFuncsMessage, astgen.Format(arg)))
+		return wrapWithFilename(workingDirectory, fileSet, arg.Pos(), fmt.Errorf("%s (got %s)%s", unreadableFuncsMessage, astgen.Format(arg), sharedFuncsHint(arg)))
 	}
 	if typesInfo != nil {
 		litType := typesInfo.TypeOf(lit)

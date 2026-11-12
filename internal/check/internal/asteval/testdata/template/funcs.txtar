@@ -24,6 +24,8 @@ var (
 
 	templatesNoArgs = template.New("x").Funcs()
 
+	templatesQualifiedArg = template.New("x").Funcs(fragments.Funcs)
+
 	templatesWrongTypePackageName = template.New("x").Funcs(wrong.FuncMap{})
 
   templatesWrongTypeName = template.New("x").Funcs(template.Wrong{})

@@ -342,6 +342,11 @@ func TestEvaluateTemplateSelector(t *testing.T) {
 		_, err := evalTemplates(t, dir, "templatesWrongArg", "missing_func.gohtml", "greet.gohtml")
 		require.ErrorContains(t, err, `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one (got wrong)`)
 	})
+	t.Run("Func qualified argument from another package", func(t *testing.T) {
+		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
+		_, err := evalTemplates(t, dir, "templatesQualifiedArg", "greet.gohtml")
+		require.ErrorContains(t, err, `Funcs: cannot read funcs: muxt reads a template.FuncMap literal, or a package-level var or const holding one (got fragments.Funcs); to share functions across packages, export them and write template.FuncMap{"name": fragments.Func}`)
+	})
 	t.Run("Func wrong too many args", func(t *testing.T) {
 		dir := createTestDir(t, filepath.FromSlash("testdata/template/funcs.txtar"))
 		_, err := evalTemplates(t, dir, "templatesTwoArgs", "missing_func.gohtml", "greet.gohtml")
