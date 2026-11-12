@@ -14,6 +14,17 @@ func (e *ExistsError) Error() string {
 	return fmt.Sprintf("%s already exists; nothing was written", e.Path)
 }
 
+// NoFileError reports a generate package run with no muxt.json between Dir and
+// the module root, so there is no file to add the entry to.
+type NoFileError struct {
+	Dir string
+}
+
+// Error returns the fix on one line.
+func (e *NoFileError) Error() string {
+	return "no muxt.json found; create one with: muxt generate config"
+}
+
 // ParseError reports a muxt.json that is not valid JSON. Line and Col are the
 // 1-based position of the byte the parser rejected, so a person can find it
 // without counting bytes.

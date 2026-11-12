@@ -117,6 +117,42 @@ func writeNew(path, shown string, data []byte) error {
 	return nil
 }
 
+// Save rewrites the file in its one stable form: tab indent, package_defaults
+// before packages, keys sorted, one trailing newline. It writes a temporary
+// file beside it and renames that over it, so a failure leaves the old file.
+func (f *File) Save() error {
+	if f.Packages == nil {
+		f.Packages = map[string]Entry{}
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "\t")
+	if err := enc.Encode(f); err != nil {
+		return fmt.Errorf("encoding %s: %w", f.Name, err)
+	}
+	tmp, err := os.CreateTemp(f.Dir, FileName+".*")
+	if err != nil {
+		return fmt.Errorf("writing %s: %w", f.Name, err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("writing %s: %w", f.Name, err)
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("writing %s: %w", f.Name, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("writing %s: %w", f.Name, err)
+	}
+	if err := os.Rename(tmp.Name(), filepath.Join(f.Dir, FileName)); err != nil {
+		return fmt.Errorf("writing %s: %w", f.Name, err)
+	}
+	return nil
+}
+
 // KeyFor returns the slash-separated path of dir relative to the directory
 // holding f, the key its Packages entry uses. The directory itself is ".".
 func (f *File) KeyFor(dir string) (string, error) {
