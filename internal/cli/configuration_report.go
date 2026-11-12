@@ -22,14 +22,19 @@ import (
 //		{"Source": "defaults", "Settings": [{"Key": "output_file", "Value": "template_routes.go"}]}
 //	]
 //
-// The groups and their settings are arrays, not objects, because their order
-// is part of what the report says.
+// The two groups from a muxt.json, packages["<key>"] and package_defaults, also
+// have a File member holding that file's path, relative to the working
+// directory. Text writes that path once above both, since a reader sees the
+// file first and then its entry. The groups and their settings are arrays, not
+// objects, because their order is part of what the report says.
 type configurationReport []settingGroup
 
-// settingGroup is the settings that come from one source.
+// settingGroup is the settings that come from one source. File is the muxt.json
+// the source is in, empty for flags and defaults.
 type settingGroup struct {
 	Source   string
 	Settings []setting
+	File     string `json:",omitzero"`
 }
 
 // setting is one muxt.json key and the value the run uses for it.
@@ -65,8 +70,8 @@ func newConfigurationReport(f *muxtjson.File, key string, flagNames []string, co
 	}
 	if f != nil {
 		sources = append(sources,
-			source{group: settingGroup{Source: fmt.Sprintf("%s packages[%q]", f.Name, key)}, gives: givenBy(f.Packages[key])},
-			source{group: settingGroup{Source: f.Name + " package_defaults"}, gives: givenBy(f.Defaults)},
+			source{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: givenBy(f.Packages[key])},
+			source{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: givenBy(f.Defaults)},
 		)
 	}
 	defaults := settingGroup{Source: "defaults"}
@@ -105,17 +110,28 @@ func newConfigurationReport(f *muxtjson.File, key string, flagNames []string, co
 
 // WriteTo writes the section as text: one heading per source, a line per
 // setting written so it can be pasted into muxt.json, and a blank line after.
+// The file heading of a muxt.json's groups is written once, before the first of
+// them, and the groups and their settings are indented under it.
 func (r configurationReport) WriteTo(w io.Writer) (int64, error) {
 	var buf bytes.Buffer
 	buf.WriteString("Configuration:\n")
+	var file string
 	for _, group := range r {
-		fmt.Fprintf(&buf, "  %s:\n", group.Source)
+		indent := "  "
+		if group.File != "" {
+			if group.File != file {
+				fmt.Fprintf(&buf, "  %s:\n", group.File)
+				file = group.File
+			}
+			indent = "    "
+		}
+		fmt.Fprintf(&buf, "%s%s:\n", indent, group.Source)
 		for _, s := range group.Settings {
 			value, err := json.Marshal(s.Value)
 			if err != nil {
 				return 0, fmt.Errorf("writing %s: %w", s.Key, err)
 			}
-			fmt.Fprintf(&buf, "    %q: %s\n", s.Key, value)
+			fmt.Fprintf(&buf, "%s  %q: %s\n", indent, s.Key, value)
 		}
 	}
 	buf.WriteString("\n")

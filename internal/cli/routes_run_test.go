@@ -129,7 +129,7 @@ func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
 
 	assert.True(t, strings.HasPrefix(text, "Configuration:\n"), "section starts with its heading:\n%s", text)
 	for _, key := range muxtJSONEntryKeys() {
-		assert.Equal(t, 1, strings.Count(text, "\n    \""+key+"\": "), "lines for %q in:\n%s", key, text)
+		assert.Equal(t, 1, strings.Count(text, "\""+key+"\": "), "lines for %q in:\n%s", key, text)
 	}
 }
 
@@ -198,9 +198,34 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 
 	text := reportOf(t, workspace, "")
 
-	const want = "Configuration:\n  ../muxt.json packages[\"workspace\"]:\n    \"use_receiver_type\": \"T1\"\n  defaults:\n"
+	const want = "Configuration:\n  ../muxt.json:\n    packages[\"workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
+}
+
+// TestRoutesConfigurationJSONNamesMuxtJSONFile states that with --format json
+// the two muxt.json groups hold the file's path in File, and their Source is the
+// packages key or package_defaults without it, while the defaults group has no File.
+func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"workspace": {"use_receiver_type": "T1"}}}`)
+	jobs, err := routesJobsOf(t, workspace, "")
+	require.NoError(t, err, "muxt")
+	require.NotEmpty(t, jobs, "jobs")
+
+	data, err := json.Marshal(jobs[0].Report)
+	require.NoError(t, err, "marshaling the report")
+
+	var groups []struct{ Source, File string }
+	require.NoError(t, json.Unmarshal(data, &groups), "groups:\n%s", data)
+	want := []struct{ Source, File string }{
+		{Source: `packages["workspace"]`, File: filepath.Join("..", muxtjson.FileName)},
+		{Source: "package_defaults", File: filepath.Join("..", muxtjson.FileName)},
+		{Source: "defaults"},
+	}
+	assert.Equal(t, want, groups, "groups")
 }
 
 // TestRoutesConfigurationDefaults states that where no muxt.json is found the
@@ -252,7 +277,7 @@ func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 
 	text := reportOf(t, dir, "")
 
-	const want = "Configuration:\n  muxt.json packages[\".\"]:\n    \"use_receiver_type\": \"T1\"\n  muxt.json package_defaults:\n    \"output_htmx\": true\n  defaults:\n"
+	const want = "Configuration:\n  muxt.json:\n    packages[\".\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 }
 
@@ -307,7 +332,7 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 
 	below, _, err := listWithLoader(t, filepath.Join(dir, "workspace"))
 	require.NoError(t, err, "muxt in workspace")
-	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json packages\["workspace"\]:\n    "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
+	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json:\n    packages\["workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
 }
 
 // TestRoutesConfigurationGroupsFlags states that a setting given as a flag, in
