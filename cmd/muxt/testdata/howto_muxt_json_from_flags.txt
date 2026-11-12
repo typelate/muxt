@@ -1,0 +1,125 @@
+# Move two packages' generate flags into one muxt.json with package_defaults,
+# then generate both with a single muxt generate at the top.
+
+muxt generate
+cmp stdout want-stdout.txt
+exec go test ./...
+
+# A flag in a directory with an entry is rejected, and nothing is written.
+cd workspace
+! muxt generate --output-htmx
+cmpenv stderr ../want-err.txt
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"package_defaults": {
+		"output_htmx": true
+	},
+	"packages": {
+		"example.com/m": {
+			"use_receiver_type": "Server"
+		},
+		"example.com/m/workspace": {
+			"use_receiver_type": "T"
+		}
+	}
+}
+-- want-stdout.txt --
+example.com/m/workspace
+wrote template_routes.go: 1 route
+example.com/m
+wrote template_routes.go: 1 route
+-- want-err.txt --
+Error: configure generate with fields in ../muxt.json instead of flags
+-- server.go --
+package m
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m/workspace"
+)
+
+//go:embed *.gohtml
+var templateFS embed.FS
+
+var templates = template.Must(template.ParseFS(templateFS, "*"))
+
+type Server struct {
+	Workspace workspace.T
+}
+
+func (Server) Home() string { return "home" }
+-- home.gohtml --
+{{define "GET /{$} Home()"}}<p>{{.Result}}</p>{{end}}
+-- server_test.go --
+package m
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHome(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+		t.Errorf("GET / status = %d, want %d", got, want)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "<p>home</p>") {
+		t.Errorf("GET / body = %q, want it to contain <p>home</p>", body)
+	}
+}
+-- workspace/workspace.go --
+package workspace
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFS embed.FS
+
+var templates = template.Must(template.ParseFS(templateFS, "*"))
+
+type T struct{}
+
+func (T) Index() string { return "workspace" }
+-- workspace/index.gohtml --
+{{define "GET /{$} Index()"}}<p>{{.Result}}</p>{{end}}
+-- workspace/workspace_test.go --
+package workspace
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestIndex(t *testing.T) {
+	mux := http.NewServeMux()
+	TemplateRoutes(mux, T{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+		t.Errorf("GET / status = %d, want %d", got, want)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "<p>workspace</p>") {
+		t.Errorf("GET / body = %q, want it to contain <p>workspace</p>", body)
+	}
+}
