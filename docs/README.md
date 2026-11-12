@@ -29,6 +29,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
 - [Add custom template functions](how-to/template-functions.md): register `Funcs` so `muxt check` sees them
 - [Keep part of a template as written](how-to/keep-template-formatting.md): `muxt:fmt` directives
 - [Move generate flags into muxt.json](how-to/muxt-json.md): one file and one `go:generate` line for many packages
+- [Share template fragments between packages](how-to/shared-template-fragments.md): one layout and one set of partials for several sub-packages
 
 ## Reference
 
