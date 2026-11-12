@@ -836,3 +836,19 @@ func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
 	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
 	assert.Equal(t, "linked", jobs[0].Key, "generate job key")
 }
+
+// TestGenerateRejectsMuxtJSONWithoutGoMod states that a muxt.json with no
+// go.mod at or above it fails a muxt generate, since its packages keys are
+// import paths and the module path names them. The runner is not called.
+func TestGenerateRejectsMuxtJSONWithoutGoMod(t *testing.T) {
+	dir := t.TempDir()
+	writeMuxtJSON(t, dir, `{"packages": {".": {}}}`)
+
+	called, err := generateFailureOf(t, dir)
+
+	var noModule *muxtjson.NoModuleError
+	require.ErrorAs(t, err, &noModule, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, noModule.Path, "path")
+	assert.Equal(t, "muxt.json: no go.mod found at or above the file; package keys are import paths", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}

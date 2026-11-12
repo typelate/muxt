@@ -248,7 +248,15 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 	if err := checkKeys(shown, data, deprecated); err != nil {
 		return nil, err
 	}
-	f.Dir = filepath.Dir(path)
+	dir := filepath.Dir(path)
+	_, _, hasModule, err := moduleOf(dir)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", shown, err)
+	}
+	if !hasModule {
+		return nil, &NoModuleError{Path: shown}
+	}
+	f.Dir = dir
 	f.Name = shown
 	return &f, nil
 }

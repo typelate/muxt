@@ -362,7 +362,7 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 // --use-receiver-type fails with a *muxtjson.ConfiguredDirectoryError when the
 // directory has a muxt.json entry, since the entry already names the receiver.
 func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeTestFile(t, dir, "muxt.json", `{"packages": {".": {"use_receiver_type": "T"}}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})

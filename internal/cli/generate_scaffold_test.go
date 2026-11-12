@@ -79,7 +79,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		"}\n"
 
 	t.Run("in the file's directory", func(t *testing.T) {
-		root := t.TempDir()
+		root := moduleDir(t)
 		require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 		require.NoError(t, os.Mkdir(filepath.Join(root, "admin"), 0o755))
 
@@ -92,7 +92,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 	})
 
 	t.Run("in a sub-directory", func(t *testing.T) {
-		root := t.TempDir()
+		root := moduleDir(t)
 		require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
 		admin := filepath.Join(root, "admin")
 		require.NoError(t, os.Mkdir(admin, 0o755))
@@ -127,7 +127,7 @@ func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
 // TestGeneratePackageRecordsGivenFlags states that a generate flag given to
 // muxt generate package is recorded under its key, and a flag not given is not.
 func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
 
 	_, err := runCommand(t, root, "generate package workspace --output-htmx")
@@ -148,7 +148,7 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 // entry generate would reject fails the command, and that nothing is written:
 // not the directory, not muxt.json.
 func TestGeneratePackageRejectsInvalidEntryAndWritesNothing(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	const existing = `{"packages": {}}`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 
@@ -179,7 +179,7 @@ func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
 		{name: "package_defaults", defaults: `{"package_defaults": {"use_receiver_type": "Admin"}}`, commandLine: "generate package workspace", wantType: "Admin", wantRecorded: ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := moduleDir(t)
 			require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(tt.defaults), 0o644))
 
 			_, err := runCommand(t, root, tt.commandLine)
@@ -224,7 +224,7 @@ func declaredTypeNames(file *ast.File) []string {
 // prints each path it wrote with the muxt.json entry, relative to the working
 // directory.
 func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
 
 	stdout, err := runCommand(t, root, "generate package workspace")
@@ -242,7 +242,7 @@ func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
 // TestGeneratePackageRefusesExistingDirectory states that muxt generate package
 // fails, and changes nothing, when the directory it would create exists.
 func TestGeneratePackageRefusesExistingDirectory(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	const existing = `{"packages": {}}`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 	require.NoError(t, os.Mkdir(filepath.Join(root, "workspace"), 0o755))
@@ -262,7 +262,7 @@ func TestGeneratePackageRefusesExistingDirectory(t *testing.T) {
 // TestGeneratePackageRejectsNameThatIsNotAnIdentifier states that a package
 // name with a path separator fails before anything is written.
 func TestGeneratePackageRejectsNameThatIsNotAnIdentifier(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	const existing = `{"packages": {}}`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 
@@ -280,7 +280,7 @@ func TestGeneratePackageRejectsNameThatIsNotAnIdentifier(t *testing.T) {
 // muxt.json between the working directory and the module root fails with the
 // command that creates one, and writes nothing.
 func TestGeneratePackageNeedsMuxtJSON(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644))
 
 	_, err := runCommand(t, root, "generate package workspace")

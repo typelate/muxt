@@ -172,3 +172,15 @@ type KeyOutsideError struct {
 func (e *KeyOutsideError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is outside the file's directory", e.Path, e.Key)
 }
+
+// NoModuleError reports a muxt.json with no go.mod at or above it. Its packages
+// keys are import paths, which only a module path can complete, so the file
+// cannot be read. Path is the file, relative to the working directory.
+type NoModuleError struct {
+	Path string
+}
+
+// Error returns the path and the fact that keys are import paths on one line.
+func (e *NoModuleError) Error() string {
+	return fmt.Sprintf("%s: no go.mod found at or above the file; package keys are import paths", e.Path)
+}
