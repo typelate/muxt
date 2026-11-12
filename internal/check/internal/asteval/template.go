@@ -103,14 +103,14 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			// Variable receiver — apply method to existing template.
 			switch sel.Sel.Name {
 			case "ParseFS":
-				filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+				filePaths, pkgPath, err := evaluateCallParseFilesArgs(scope, call)
 				if err != nil {
 					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
 				if meta != nil {
 					meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 				}
-				t, err := parseFiles(chain.Templates, false, fm, meta, "", chain.LeftDelim, chain.RightDelim, filePaths...)
+				t, err := parseFiles(chain.Templates, false, fm, meta, pkgPath, chain.LeftDelim, chain.RightDelim, filePaths...)
 				return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 			case "Parse":
 				if len(call.Args) != 1 {
@@ -174,14 +174,14 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			}
 			return chain.result(template.New[*types.Signature](templateNames[0]), chain.LeftDelim, chain.RightDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+			filePaths, pkgPath, err := evaluateCallParseFilesArgs(scope, call)
 			if err != nil {
 				return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 			}
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, "", chain.LeftDelim, chain.RightDelim, filePaths...)
+			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, pkgPath, chain.LeftDelim, chain.RightDelim, filePaths...)
 			return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 		default:
 			return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name))))
@@ -232,14 +232,14 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			}
 			return chain.result(t, upLDelim, upRDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
+			filePaths, pkgPath, err := evaluateCallParseFilesArgs(scope, call)
 			if err != nil {
 				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(up, false, fm, meta, "", upLDelim, upRDelim, filePaths...)
+			t, err := parseFiles(up, false, fm, meta, pkgPath, upLDelim, upRDelim, filePaths...)
 			return chain.result(t, upLDelim, upRDelim, err)
 		case "Option":
 			list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
@@ -556,32 +556,47 @@ func evaluateFuncMap(workingDirectory string, typesInfo *types.Info, pkg *types.
 	return nil
 }
 
-// evaluateCallParseFilesArgs resolves the files a ParseFS call reads. Matched
-// paths are joined onto base, the directory the embedded paths are relative
-// to, which is not always the working directory used to render errors: it is
-// the package directory of whichever package declares the embed.FS variable.
-func evaluateCallParseFilesArgs(workingDirectory, base string, fileSet *token.FileSet, call *ast.CallExpr, files []*ast.File, embeddedPaths []string) ([]string, error) {
+// evaluateCallParseFilesArgs resolves the files a ParseFS call reads and the
+// import path of the package that owns them, empty for the analyzed package.
+// Matched paths are joined onto base, the directory the embedded paths are
+// relative to, which is not always the working directory used to render
+// errors: it is the package directory of whichever package declares the
+// embed.FS variable.
+func evaluateCallParseFilesArgs(scope Scope, call *ast.CallExpr) (paths []string, importPath string, err error) {
+	workingDirectory, fileSet, files := scope.Dir, scope.Fset, scope.Files
 	if len(call.Args) < 1 {
-		return nil, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("missing required arguments"))
+		return nil, "", wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("missing required arguments"))
 	}
-	var decls []*ast.GenDecl
-	for _, decl := range astgen.IterateGenDecl(files, token.VAR) {
-		decls = append(decls, decl)
-	}
-	matches, err := embedFSFilePaths(workingDirectory, fileSet, decls, call.Args[0], embeddedPaths)
-	if err != nil {
-		return nil, err
+	base := scope.Dir
+	var matches []string
+	if shared, ok := call.Args[0].(*ast.SelectorExpr); ok {
+		absolute, owner, err := sharedFiles(scope, shared)
+		if err != nil {
+			return nil, "", err
+		}
+		importPath, base = owner, scope.Imports[owner].Dir
+		if matches, err = RelativeFilePaths(base, absolute...); err != nil {
+			return nil, "", fmt.Errorf("calculating relative paths of files embedded by %s: %w", owner, err)
+		}
+	} else {
+		var decls []*ast.GenDecl
+		for _, decl := range astgen.IterateGenDecl(files, token.VAR) {
+			decls = append(decls, decl)
+		}
+		if matches, err = embedFSFilePaths(workingDirectory, fileSet, decls, call.Args[0], scope.Embedded); err != nil {
+			return nil, "", err
+		}
 	}
 	templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args[1:])
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	filtered := matches[:0]
 	for _, ef := range matches {
 		for j, pattern := range templateNames {
 			match, err := filepath.Match(pattern, ef)
 			if err != nil {
-				return nil, wrapWithFilename(workingDirectory, fileSet, call.Args[j+1].Pos(), fmt.Errorf("bad pattern %q: %w", pattern, err))
+				return nil, "", wrapWithFilename(workingDirectory, fileSet, call.Args[j+1].Pos(), fmt.Errorf("bad pattern %q: %w", pattern, err))
 			}
 			if !match {
 				continue
@@ -590,7 +605,7 @@ func evaluateCallParseFilesArgs(workingDirectory, base string, fileSet *token.Fi
 			break
 		}
 	}
-	return joinFilePaths(base, filtered...), nil
+	return joinFilePaths(base, filtered...), importPath, nil
 }
 
 // embedFSFilePaths finds the //go:embed declaration of the variable exp names

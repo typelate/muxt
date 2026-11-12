@@ -28,8 +28,12 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 		Types: pkg.Types,
 		Files: pkg.Syntax,
 	}
+	imports, err := embedPackages(pkg)
+	if err != nil {
+		return source.Package{}, err
+	}
 	for _, name := range variables {
-		variable, err := readVariable(pkg, name)
+		variable, err := readVariable(pkg, name, imports)
 		if err != nil {
 			return source.Package{}, err
 		}
@@ -41,8 +45,8 @@ func Package(dir string, pl []*packages.Package, variables []string) (source.Pac
 // readVariable evaluates the templates variable name in pkg: its template set,
 // the functions its templates may call, where each template was defined,
 // and the ExecuteTemplate calls made on it.
-func readVariable(pkg *packages.Package, name string) (source.Variable, error) {
-	lt, ts, err := htmlTemplates(name, pkg)
+func readVariable(pkg *packages.Package, name string, imports map[string]source.EmbedPackage) (source.Variable, error) {
+	lt, ts, err := htmlTemplates(name, pkg, imports)
 	if err != nil {
 		return source.Variable{}, err
 	}

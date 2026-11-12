@@ -44,7 +44,7 @@ func main() {
 `)
 		pkg := loadTestPackage(t, dir)
 
-		templates, err := check.LoadTemplates(pkg, "ts")
+		templates, err := check.LoadTemplates(pkg, "ts", nil)
 		require.NoError(t, err)
 		require.NotNil(t, templates)
 
@@ -86,7 +86,7 @@ func main() {
 `)
 		pkg := loadTestPackage(t, dir)
 
-		tsTemplates, err := check.LoadTemplates(pkg, "ts")
+		tsTemplates, err := check.LoadTemplates(pkg, "ts", nil)
 		require.NoError(t, err)
 		var tsNames []string
 		for call := range tsTemplates.ExecuteTemplateCalls() {
@@ -94,7 +94,7 @@ func main() {
 		}
 		assert.Equal(t, []string{"a"}, tsNames, "only calls on ts should be reported")
 
-		otherTemplates, err := check.LoadTemplates(pkg, "other")
+		otherTemplates, err := check.LoadTemplates(pkg, "other", nil)
 		require.NoError(t, err)
 		var otherNames []string
 		for call := range otherTemplates.ExecuteTemplateCalls() {
@@ -118,7 +118,7 @@ func main() { _ = ts }
 `)
 		pkg := loadTestPackage(t, dir)
 
-		templates, err := check.LoadTemplates(pkg, "ts")
+		templates, err := check.LoadTemplates(pkg, "ts", nil)
 		require.NoError(t, err)
 
 		assert.Contains(t, templates.Functions(), "greet", "should include the registered func")
@@ -134,7 +134,7 @@ func main() {}
 `)
 		pkg := loadTestPackage(t, dir)
 
-		_, err := check.LoadTemplates(pkg, "doesNotExist")
+		_, err := check.LoadTemplates(pkg, "doesNotExist", nil)
 		require.ErrorContains(t, err, "not found")
 	})
 }
@@ -151,7 +151,7 @@ var ts = template.Must(template.New("index").Parse(`+"`"+`<h1>{{.}}</h1>{{define
 func main() { _ = ts.ExecuteTemplate(os.Stdout, "index", nil) }
 `)
 	pkg := loadTestPackage(t, dir)
-	ts, err := check.LoadTemplates(pkg, "ts")
+	ts, err := check.LoadTemplates(pkg, "ts", nil)
 	require.NoError(t, err)
 
 	tree, ok := ts.FindTree("row")
@@ -175,7 +175,7 @@ var ts = template.Must(template.New("g").Funcs(template.FuncMap{
 func main() { _ = ts }
 `)
 	pkg := loadTestPackage(t, dir)
-	ts, err := check.LoadTemplates(pkg, "ts")
+	ts, err := check.LoadTemplates(pkg, "ts", nil)
 	require.NoError(t, err)
 
 	collected := ts.CollectedFunctions()
@@ -197,7 +197,7 @@ var ts = template.Must(template.New("index").Parse(`+"`"+`<h1>x</h1>{{define "ro
 func main() { _ = ts.ExecuteTemplate(os.Stdout, "index", nil) }
 `)
 	pkg := loadTestPackage(t, dir)
-	ts, err := check.LoadTemplates(pkg, "ts")
+	ts, err := check.LoadTemplates(pkg, "ts", nil)
 	require.NoError(t, err)
 
 	tmpl, ok := ts.Template()
@@ -226,7 +226,7 @@ var ts = template.Must(template.New("scratch").New("page").Parse(`+"`"+`{{define
 func main() { _ = ts.ExecuteTemplate(os.Stdout, "a", nil) }
 `)
 	pkg := loadTestPackage(t, dir)
-	ts, err := check.LoadTemplates(pkg, "ts")
+	ts, err := check.LoadTemplates(pkg, "ts", nil)
 	require.NoError(t, err)
 
 	tmpl, ok := ts.Template()
@@ -265,7 +265,7 @@ func TestLoadTemplates_templateVariables(t *testing.T) {
 	})
 
 	t.Run("html template variable parsed from embedded files", func(t *testing.T) {
-		lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates")
+		lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates", nil)
 		require.NoError(t, err)
 
 		ts, ok := lt.HTML()
@@ -297,7 +297,7 @@ func TestLoadTemplates_templateVariables(t *testing.T) {
 	})
 
 	t.Run("text template variable parsed from a literal", func(t *testing.T) {
-		lt, err := check.LoadTemplates(testPkg, "loadTextTemplates")
+		lt, err := check.LoadTemplates(testPkg, "loadTextTemplates", nil)
 		require.NoError(t, err)
 
 		ts, ok := lt.Text()
@@ -315,7 +315,7 @@ func TestLoadTemplates_templateVariables(t *testing.T) {
 	})
 
 	t.Run("unknown variable", func(t *testing.T) {
-		_, err := check.LoadTemplates(testPkg, "noSuchVariable")
+		_, err := check.LoadTemplates(testPkg, "noSuchVariable", nil)
 		require.ErrorContains(t, err, "noSuchVariable not found")
 	})
 }
@@ -324,7 +324,7 @@ func TestParseNodePosition_loadedTemplate(t *testing.T) {
 	testPkg := find(t, loadTestPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates")
+	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates", nil)
 	require.NoError(t, err)
 
 	tree, ok := lt.FindTree("farewell")
@@ -340,7 +340,7 @@ func TestCollectedFunctions(t *testing.T) {
 	testPkg := find(t, loadTestPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates")
+	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates", nil)
 	require.NoError(t, err)
 
 	collected := lt.CollectedFunctions()
@@ -359,7 +359,7 @@ func TestLoadTemplates_escaperFunctions(t *testing.T) {
 	testPkg := find(t, loadTestPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	lt, err := check.LoadTemplates(testPkg, "loadEscaperTemplates")
+	lt, err := check.LoadTemplates(testPkg, "loadEscaperTemplates", nil)
 	require.NoError(t, err)
 
 	tree, ok := lt.FindTree("link")
@@ -389,7 +389,7 @@ func TestExecuteTemplateCalls(t *testing.T) {
 	testPkg := find(t, loadTestPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates")
+	lt, err := check.LoadTemplates(testPkg, "loadHTMLTemplates", nil)
 	require.NoError(t, err)
 
 	require.NoError(t, renderGreeting(io.Discard))
@@ -427,7 +427,7 @@ var templates = template.New("x")
 		PkgPath: "example.com/x",
 		Fset:    fileSet,
 		Syntax:  []*ast.File{file},
-	}, "templates")
+	}, "templates", nil)
 	require.ErrorContains(t, err, "loaded without type information",
 		"a silently empty result would be undiagnosable")
 }

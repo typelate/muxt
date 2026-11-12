@@ -63,7 +63,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		pkg := loadTestPackage(t, dir)
 		dir = filepath.Dir(pkg.GoFiles[0])
 
-		ts, err := check.LoadTemplates(pkg, "templates")
+		ts, err := check.LoadTemplates(pkg, "templates", nil)
 		require.NoError(t, err)
 
 		for name, want := range map[string]string{
@@ -98,7 +98,7 @@ var _ = fmt.Sprint
 		pkg := loadTestPackage(t, dir)
 		dir = filepath.Dir(pkg.GoFiles[0])
 
-		ts, err := check.LoadTemplates(pkg, "templates")
+		ts, err := check.LoadTemplates(pkg, "templates", nil)
 		require.NoError(t, err)
 
 		def, ok := ts.FindDefinition("greeting")
@@ -114,7 +114,7 @@ var _ = fmt.Sprint
 		pkg := loadTestPackage(t, dir)
 		dir = filepath.Dir(pkg.GoFiles[0])
 
-		ts, err := check.LoadTemplates(pkg, "templates")
+		ts, err := check.LoadTemplates(pkg, "templates", nil)
 		require.NoError(t, err)
 
 		def, ok := ts.FindDefinition("greeting")

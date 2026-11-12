@@ -14,6 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/source"
 	html "github.com/typelate/muxt/template/html"
 )
 
@@ -160,8 +161,8 @@ func packageInDirectory(list []*packages.Package, dir string) (*packages.Package
 // html/template value; muxt introspects template names and trees without
 // executing, so a text/template set works through an html/template value
 // carrying the same trees.
-func htmlTemplates(templatesVariable string, pkg *packages.Package) (*check.Templates, *html.Template, error) {
-	lt, err := check.LoadTemplates(pkg, templatesVariable)
+func htmlTemplates(templatesVariable string, pkg *packages.Package, imports map[string]source.EmbedPackage) (*check.Templates, *html.Template, error) {
+	lt, err := check.LoadTemplates(pkg, templatesVariable, imports)
 	if err != nil {
 		return nil, nil, err
 	}

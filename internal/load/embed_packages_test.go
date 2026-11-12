@@ -1,0 +1,76 @@
+package load
+
+import (
+	"go/ast"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// writeModule writes files, keyed by slash-separated path, under a new
+// temporary directory and returns it with symbolic links resolved, so paths
+// the go command reports compare equal to paths built from it.
+func writeModule(t *testing.T, files map[string]string) string {
+	t.Helper()
+	t.Setenv("GOWORK", "off")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err, "EvalSymlinks")
+	for name, content := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+	return dir
+}
+
+// TestEmbedPackagesDescribesImportedPackage states that the map holds an
+// imported package of the module with its module path, directory, sorted
+// absolute embedded files and the declaration of its exported embed.FS, read
+// from the load that produced the package, not from a second one.
+func TestEmbedPackagesDescribesImportedPackage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module example.com/m\n\ngo 1.24\n",
+		"fragments/fragments.go": `package fragments
+
+import "embed"
+
+//go:embed *.gohtml
+var TemplateSource embed.FS
+`,
+		"fragments/layout.gohtml": `{{define "layout"}}{{end}}`,
+		"fragments/a.gohtml":      `{{define "a"}}{{end}}`,
+		"fragments/notes.txt":     `{{define "draft"}}{{end}}`,
+		"workspace/workspace.go": `package workspace
+
+import _ "example.com/m/fragments"
+`,
+	})
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+	pkg, ok := packageInDirectory(pl, filepath.Join(dir, "workspace"))
+	require.True(t, ok, "packageInDirectory")
+
+	got, err := embedPackages(pkg)
+
+	require.NoError(t, err, "embedPackages")
+	fragments, ok := got["example.com/m/fragments"]
+	require.True(t, ok, "embedPackages() has no example.com/m/fragments: %v", got)
+	assert.Equal(t, "example.com/m", fragments.ModulePath, "ModulePath")
+	assert.Equal(t, filepath.Join(dir, "fragments"), fragments.Dir, "Dir")
+	assert.Equal(t, []string{
+		filepath.Join(dir, "fragments", "a.gohtml"),
+		filepath.Join(dir, "fragments", "layout.gohtml"),
+	}, fragments.EmbedFiles, "EmbedFiles")
+	require.Len(t, fragments.Vars, 1, "Vars")
+	spec, ok := fragments.Vars[0].Specs[0].(*ast.ValueSpec)
+	require.True(t, ok, "Vars[0].Specs[0] is %T", fragments.Vars[0].Specs[0])
+	assert.Equal(t, "TemplateSource", spec.Names[0].Name, "declared variable")
+	assert.Equal(t, filepath.Join(dir, "fragments", "fragments.go"), pkg.Fset.Position(spec.Pos()).Filename,
+		"the declaration is positioned in the load's token.FileSet")
+}

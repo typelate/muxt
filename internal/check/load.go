@@ -12,6 +12,7 @@ import (
 
 	"github.com/typelate/muxt/internal/check/internal/asteval"
 	"github.com/typelate/muxt/internal/check/internal/astgen"
+	muxtsource "github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/template"
 	htttemplate "github.com/typelate/muxt/template/html"
 )
@@ -26,7 +27,11 @@ import (
 // The package must be loaded with syntax, type information, and embed
 // files (packages.NeedSyntax, NeedTypes, NeedTypesInfo, and
 // NeedEmbedFiles).
-func LoadTemplates(pkg *packages.Package, templatesVariable string) (*Templates, error) {
+//
+// imports are the other packages whose embedded files a ParseFS call may
+// read, by import path; nil means a ParseFS call can read only the
+// package's own.
+func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[string]muxtsource.EmbedPackage) (*Templates, error) {
 	if pkg.TypesInfo == nil || pkg.Types == nil {
 		return nil, fmt.Errorf("package %s was loaded without type information; load it with packages.NeedTypes and packages.NeedTypesInfo", pkg.PkgPath)
 	}
@@ -64,7 +69,10 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string) (*Templates,
 		baseline[name] = sig
 	}
 	meta := new(asteval.TemplateMetadata)
-	scope := asteval.Scope{Types: pkg.Types, Info: pkg.TypesInfo, Fset: pkg.Fset, Files: pkg.Syntax, Dir: workingDirectory, Embedded: embeddedPaths}
+	scope := asteval.Scope{Types: pkg.Types, Info: pkg.TypesInfo, Fset: pkg.Fset, Files: pkg.Syntax, Dir: workingDirectory, Embedded: embeddedPaths, Imports: imports}
+	if pkg.Module != nil {
+		scope.ModulePath = pkg.Module.Path
+	}
 	ts, _, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Variable: templatesVariable}, value, functions, make(map[string]any), meta)
 	if err != nil {
 		return nil, err
