@@ -64,7 +64,8 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string) (*Templates,
 		baseline[name] = sig
 	}
 	meta := new(asteval.TemplateMetadata)
-	ts, _, _, err := asteval.EvaluateTemplateSelector(nil, pkg.Types, pkg.TypesInfo, value, workingDirectory, templatesVariable, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, functions, make(map[string]any), meta)
+	scope := asteval.Scope{Types: pkg.Types, Info: pkg.TypesInfo, Fset: pkg.Fset, Files: pkg.Syntax, Dir: workingDirectory, Embedded: embeddedPaths}
+	ts, _, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Variable: templatesVariable}, value, functions, make(map[string]any), meta)
 	if err != nil {
 		return nil, err
 	}

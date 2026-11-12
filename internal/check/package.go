@@ -405,6 +405,8 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 		return nil, []error{fmt.Errorf("failed to calculate relative path for embedded files: %w", err)}
 	}
 
+	scope := asteval.Scope{Types: pkg.Types, Info: pkg.TypesInfo, Fset: pkg.Fset, Files: pkg.Syntax, Dir: workingDirectory, Embedded: embeddedPaths}
+
 	var resolveErrs []error
 
 	resolveExpr := func(obj types.Object, name string, expr ast.Expr) {
@@ -413,7 +415,8 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 		}
 		funcTypeMap := asteval.DefaultFunctions(pkg.Types)
 		meta := &asteval.TemplateMetadata{}
-		ts, left, right, err := asteval.EvaluateTemplateSelector(nil, pkg.Types, pkg.TypesInfo, expr, workingDirectory, name, "", "", pkg.Fset, pkg.Syntax, embeddedPaths, funcTypeMap, make(map[string]any), meta)
+		ts, end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Variable: name}, expr, funcTypeMap, make(map[string]any), meta)
+		left, right := end.LeftDelim, end.RightDelim
 		if err != nil {
 			resolveErrs = append(resolveErrs, err)
 			return
@@ -505,12 +508,12 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 				return true
 			}
 			meta := &asteval.TemplateMetadata{}
-			ts, left, right, err := asteval.EvaluateTemplateSelector(rt.templates, pkg.Types, pkg.TypesInfo, call, workingDirectory, "", rt.leftDelim, rt.rightDelim, pkg.Fset, pkg.Syntax, embeddedPaths, rt.functions, make(map[string]any), meta)
+			ts, end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Templates: rt.templates, LeftDelim: rt.leftDelim, RightDelim: rt.rightDelim}, call, rt.functions, make(map[string]any), meta)
 			if err != nil {
 				return true
 			}
 			rt.templates = ts
-			rt.leftDelim, rt.rightDelim = left, right
+			rt.leftDelim, rt.rightDelim = end.LeftDelim, end.RightDelim
 			rt.metadata.EmbedFilePaths = append(rt.metadata.EmbedFilePaths, meta.EmbedFilePaths...)
 			rt.metadata.ParseCalls = append(rt.metadata.ParseCalls, meta.ParseCalls...)
 			rt.metadata.Sources = append(rt.metadata.Sources, meta.Sources...)

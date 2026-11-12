@@ -78,142 +78,143 @@ func recordParsedLiteral(meta *TemplateMetadata, arg ast.Expr, rootName, leftDel
 	})
 }
 
-func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *types.Package, typesInfo *types.Info, expression ast.Expr, workingDirectory, templatesVariable, lDelim, rDelim string, fileSet *token.FileSet, files []*ast.File, embeddedPaths []string, funcTypeMaps TemplateFunctions, fm map[string]any, meta *TemplateMetadata) (*template.Template[*types.Signature], string, string, error) {
+func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, funcs TemplateFunctions, fm map[string]any, meta *TemplateMetadata) (*template.Template[*types.Signature], Chain, error) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok {
-		return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, expression.Pos(), fmt.Errorf("expected call expression"))
+		return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, expression.Pos(), fmt.Errorf("expected call expression")))
 	}
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
-		return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unexpected expression %T: %s", call.Fun, astgen.Format(call.Fun)))
+		return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unexpected expression %T: %s", call.Fun, astgen.Format(call.Fun))))
 	}
 	switch x := sel.X.(type) {
 	default:
-		return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, sel.X.Pos(), fmt.Errorf("expected exactly one argument %s got %d", astgen.Format(sel.X), len(call.Args)))
+		return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, sel.X.Pos(), fmt.Errorf("expected exactly one argument %s got %d", astgen.Format(sel.X), len(call.Args))))
 	case *ast.Ident:
-		if !IsTemplatePkgIdent(typesInfo, x) {
-			if ts == nil {
-				return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, sel.X.Pos(), fmt.Errorf("expected template package got %s", astgen.Format(sel.X)))
+		if !IsTemplatePkgIdent(scope.Info, x) {
+			if chain.Templates == nil {
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, sel.X.Pos(), fmt.Errorf("expected template package got %s", astgen.Format(sel.X))))
 			}
 			// Variable receiver — apply method to existing template.
 			switch sel.Sel.Name {
 			case "ParseFS":
-				filePaths, err := evaluateCallParseFilesArgs(workingDirectory, fileSet, call, files, embeddedPaths)
+				filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 				if err != nil {
-					return nil, lDelim, rDelim, err
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
 				if meta != nil {
 					meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 				}
-				t, err := parseFiles(ts, false, fm, meta, lDelim, rDelim, filePaths...)
-				return t, lDelim, rDelim, err
+				t, err := parseFiles(chain.Templates, false, fm, meta, chain.LeftDelim, chain.RightDelim, filePaths...)
+				return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 			case "Parse":
 				if len(call.Args) != 1 {
-					return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly one string literal argument")))
 				}
-				sl, err := StringLiteralExpression(workingDirectory, fileSet, call.Args[0])
+				sl, err := StringLiteralExpression(scope.Dir, scope.Fset, call.Args[0])
 				if err != nil {
-					return nil, lDelim, rDelim, err
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
-				recordParsedLiteral(meta, call.Args[0], ts.Name(), lDelim, rDelim, ts.ParseOptions())
-				t, err := ts.Parse(sl)
-				return t, lDelim, rDelim, err
+				recordParsedLiteral(meta, call.Args[0], chain.Templates.Name(), chain.LeftDelim, chain.RightDelim, chain.Templates.ParseOptions())
+				t, err := chain.Templates.Parse(sl)
+				return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 			case "Funcs", "Functions":
-				if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, files, call, fm, funcTypeMaps); err != nil {
-					return nil, lDelim, rDelim, err
+				if err := evaluateFuncMap(scope.Dir, scope.Info, scope.Types, scope.Fset, scope.Files, call, fm, funcs); err != nil {
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
 				sigs := make(map[string]*types.Signature)
-				for name, sig := range funcTypeMaps {
+				for name, sig := range funcs {
 					sigs[name] = sig
 				}
-				return ts.Functions(sigs), lDelim, rDelim, nil
+				return chain.result(chain.Templates.Functions(sigs), chain.LeftDelim, chain.RightDelim, nil)
 			case "Option":
-				list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+				list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 				if err != nil {
-					return nil, lDelim, rDelim, err
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
-				t, err := ts.Option(list...)
+				t, err := chain.Templates.Option(list...)
 				if err != nil {
-					return nil, lDelim, rDelim, err
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
-				return t, lDelim, rDelim, nil
+				return chain.result(t, chain.LeftDelim, chain.RightDelim, nil)
 			case "Delimiters", "Delims":
 				if len(call.Args) != 2 {
-					return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly two string literal arguments"))
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly two string literal arguments")))
 				}
-				list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+				list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 				if err != nil {
-					return nil, lDelim, rDelim, err
+					return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 				}
-				return ts.Delimiters(list[0], list[1]), list[0], list[1], nil
+				return chain.result(chain.Templates.Delimiters(list[0], list[1]), list[0], list[1], nil)
 			default:
-				return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported method %s on variable receiver", sel.Sel.Name))
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported method %s on variable receiver", sel.Sel.Name)))
 			}
 		}
 		switch sel.Sel.Name {
 		case "Must":
 			if len(call.Args) != 1 {
-				return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one argument %s got %d", astgen.Format(sel.X), len(call.Args)))
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly one argument %s got %d", astgen.Format(sel.X), len(call.Args))))
 			}
-			return EvaluateTemplateSelector(ts, pkg, typesInfo, call.Args[0], workingDirectory, templatesVariable, lDelim, rDelim, fileSet, files, embeddedPaths, funcTypeMaps, fm, meta)
+			return EvaluateTemplateSelector(scope, chain, call.Args[0], funcs, fm, meta)
 		case "New":
 			if len(call.Args) != 1 {
-				return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly one string literal argument")))
 			}
-			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+			templateNames, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 			if err != nil {
-				return nil, lDelim, rDelim, err
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 			}
-			if isTextTemplatePkgIdent(typesInfo, x) {
-				return template.NewText[*types.Signature](templateNames[0]), lDelim, rDelim, nil
+			if isTextTemplatePkgIdent(scope.Info, x) {
+				return chain.result(template.NewText[*types.Signature](templateNames[0]), chain.LeftDelim, chain.RightDelim, nil)
 			}
-			return template.New[*types.Signature](templateNames[0]), lDelim, rDelim, nil
+			return chain.result(template.New[*types.Signature](templateNames[0]), chain.LeftDelim, chain.RightDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(workingDirectory, fileSet, call, files, embeddedPaths)
+			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 			if err != nil {
-				return nil, lDelim, rDelim, err
+				return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 			}
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(nil, isTextTemplatePkgIdent(typesInfo, x), fm, meta, lDelim, rDelim, filePaths...)
-			return t, lDelim, rDelim, err
+			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, chain.LeftDelim, chain.RightDelim, filePaths...)
+			return chain.result(t, chain.LeftDelim, chain.RightDelim, err)
 		default:
-			return nil, lDelim, rDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name)))
+			return chain.result(nil, chain.LeftDelim, chain.RightDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name))))
 		}
 	case *ast.CallExpr:
-		up, upLDelim, upRDelim, err := EvaluateTemplateSelector(ts, pkg, typesInfo, sel.X, workingDirectory, templatesVariable, lDelim, rDelim, fileSet, files, embeddedPaths, funcTypeMaps, fm, meta)
+		up, upChain, err := EvaluateTemplateSelector(scope, chain, sel.X, funcs, fm, meta)
 		if err != nil {
-			return nil, lDelim, rDelim, err
+			return chain.result(nil, chain.LeftDelim, chain.RightDelim, err)
 		}
+		upLDelim, upRDelim := upChain.LeftDelim, upChain.RightDelim
 		switch sel.Sel.Name {
 		case "Delimiters", "Delims":
 			if len(call.Args) != 2 {
-				return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly two string literal arguments"))
+				return chain.result(nil, upLDelim, upRDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly two string literal arguments")))
 			}
-			list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+			list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
-			return up.Delimiters(list[0], list[1]), list[0], list[1], nil
+			return chain.result(up.Delimiters(list[0], list[1]), list[0], list[1], nil)
 		case "Parse":
 			if len(call.Args) != 1 {
-				return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
+				return chain.result(nil, upLDelim, upRDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly one string literal argument")))
 			}
-			sl, err := StringLiteralExpression(workingDirectory, fileSet, call.Args[0])
+			sl, err := StringLiteralExpression(scope.Dir, scope.Fset, call.Args[0])
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			recordParsedLiteral(meta, call.Args[0], up.Name(), upLDelim, upRDelim, up.ParseOptions())
 			t, err := up.Parse(sl)
-			return t, upLDelim, upRDelim, err
+			return chain.result(t, upLDelim, upRDelim, err)
 		case "New":
 			if len(call.Args) != 1 {
-				return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Lparen, fmt.Errorf("expected exactly one string literal argument"))
+				return chain.result(nil, upLDelim, upRDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Lparen, fmt.Errorf("expected exactly one string literal argument")))
 			}
-			templateNames, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+			templateNames, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			// Create a new associated template
 			// htt.Template doesn't have a New method on instances, so we use AddParseTree
@@ -222,40 +223,40 @@ func EvaluateTemplateSelector(ts *template.Template[*types.Signature], pkg *type
 			newTree, _ := template.ParseTree(templateNames[0], templateNames[0], "", nil, options)
 			t, err := up.AddParseTree(templateNames[0], newTree)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
-			return t, upLDelim, upRDelim, nil
+			return chain.result(t, upLDelim, upRDelim, nil)
 		case "ParseFS":
-			filePaths, err := evaluateCallParseFilesArgs(workingDirectory, fileSet, call, files, embeddedPaths)
+			filePaths, err := evaluateCallParseFilesArgs(scope.Dir, scope.Fset, call, scope.Files, scope.Embedded)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
 			t, err := parseFiles(up, false, fm, meta, upLDelim, upRDelim, filePaths...)
-			return t, upLDelim, upRDelim, err
+			return chain.result(t, upLDelim, upRDelim, err)
 		case "Option":
-			list, err := StringLiteralExpressionList(workingDirectory, fileSet, files, call.Args)
+			list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			t, err := up.Option(list...)
 			if err != nil {
-				return nil, upLDelim, upRDelim, err
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
-			return t, upLDelim, upRDelim, nil
+			return chain.result(t, upLDelim, upRDelim, nil)
 		case "Funcs", "Functions":
-			if err := evaluateFuncMap(workingDirectory, typesInfo, pkg, fileSet, files, call, fm, funcTypeMaps); err != nil {
-				return nil, upLDelim, upRDelim, err
+			if err := evaluateFuncMap(scope.Dir, scope.Info, scope.Types, scope.Fset, scope.Files, call, fm, funcs); err != nil {
+				return chain.result(nil, upLDelim, upRDelim, err)
 			}
 			sigs := make(map[string]*types.Signature)
-			for name, sig := range funcTypeMaps {
+			for name, sig := range funcs {
 				sigs[name] = sig
 			}
-			return up.Functions(sigs), upLDelim, upRDelim, nil
+			return chain.result(up.Functions(sigs), upLDelim, upRDelim, nil)
 		default:
-			return nil, upLDelim, upRDelim, wrapWithFilename(workingDirectory, fileSet, call.Fun.Pos(), fmt.Errorf("unsupported method %s", sel.Sel.Name))
+			return chain.result(nil, upLDelim, upRDelim, wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported method %s", sel.Sel.Name)))
 		}
 	}
 }
