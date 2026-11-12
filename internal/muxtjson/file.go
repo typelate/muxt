@@ -94,8 +94,25 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 // Create writes an empty muxt.json into dir, the file a flagless generate
 // reads before any entry is added.
 func Create(dir string) error {
-	if err := os.WriteFile(filepath.Join(dir, FileName), []byte("{\n\t\"packages\": {}\n}\n"), 0o644); err != nil {
-		return fmt.Errorf("creating %s: %w", FileName, err)
+	return writeNew(filepath.Join(dir, FileName), FileName, []byte("{\n\t\"packages\": {}\n}\n"))
+}
+
+// writeNew creates path with data and fails with an *ExistsError, writing
+// nothing, when path already exists. shown is the name the error gives it.
+func writeNew(path, shown string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
+		return &ExistsError{Path: shown}
+	}
+	if err != nil {
+		return fmt.Errorf("creating %s: %w", shown, err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("writing %s: %w", shown, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("writing %s: %w", shown, err)
 	}
 	return nil
 }

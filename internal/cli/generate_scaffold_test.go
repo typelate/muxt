@@ -35,6 +35,21 @@ func TestGenerateConfigWritesEmptyMuxtJSON(t *testing.T) {
 	assert.Equal(t, "{\n\t\"packages\": {}\n}\n", string(got), "muxt.json")
 }
 
+// TestGenerateConfigLeavesExistingMuxtJSON states that muxt generate config
+// fails, and writes nothing, when the working directory has a muxt.json.
+func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
+	dir := t.TempDir()
+	const existing = "{\n  \"packages\": {\".\": {\"output_htmx\": true}}\n}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(existing), 0o644))
+
+	_, err := runCommand(t, dir, "generate config")
+
+	require.EqualError(t, err, "muxt.json already exists; nothing was written")
+	got, err := os.ReadFile(filepath.Join(dir, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}
+
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {

@@ -2,6 +2,18 @@ package muxtjson
 
 import "fmt"
 
+// ExistsError reports a file or directory a command would create that is
+// already there, so the command wrote nothing. Path is the name the message
+// gives it, relative to the working directory.
+type ExistsError struct {
+	Path string
+}
+
+// Error returns the name and the fact that nothing was written, on one line.
+func (e *ExistsError) Error() string {
+	return fmt.Sprintf("%s already exists; nothing was written", e.Path)
+}
+
 // ParseError reports a muxt.json that is not valid JSON. Line and Col are the
 // 1-based position of the byte the parser rejected, so a person can find it
 // without counting bytes.
