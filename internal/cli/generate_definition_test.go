@@ -210,3 +210,27 @@ func TestGenerateDefOutputDocumentWritesAHTMLDocument(t *testing.T) {
 	assert.Equal(t, scaffold.Definition("GET /foo Index()", scaffold.Document)+"\n", string(got), "index.gohtml")
 	assert.Contains(t, string(got), "<!DOCTYPE html>\n<html lang=\"en\">", "index.gohtml holds a document")
 }
+
+// TestGenerateDefOutputFragmentWritesAnEmptyDefine states that
+// --output-fragment, or neither of the two body flags, makes the define empty.
+func TestGenerateDefOutputFragmentWritesAnEmptyDefine(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+	}{
+		{name: "fragment flag", args: []string{"--output-fragment"}},
+		{name: "neither flag"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			args := append([]string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, tt.args...)
+
+			_, _, err := runCommandArgs(dir, args, runners{})
+
+			require.NoError(t, err)
+			got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
+			require.NoError(t, err)
+			assert.Equal(t, "{{define \"GET /foo Index()\"}}{{end}}\n", string(got), "index.gohtml")
+		})
+	}
+}

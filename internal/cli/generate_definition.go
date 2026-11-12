@@ -22,6 +22,7 @@ import (
 func generateDefinitionCommand(workingDirectory *string, getEnv func(string) string, loadPackages packageLoader) *cobra.Command {
 	var (
 		templateFile string
+		fragment     bool
 		document     bool
 	)
 	cmd := &cobra.Command{
@@ -39,6 +40,7 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 		},
 	}
 	cmd.Flags().StringVar(&templateFile, outputFile, "", "the .gohtml file in the working directory to add the template to")
+	cmd.Flags().BoolVar(&fragment, outputFragment, false, "make the template an empty fragment (the default)")
 	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
 }
