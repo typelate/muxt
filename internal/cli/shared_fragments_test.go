@@ -350,6 +350,36 @@ var TemplateSource embed.FS
 	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
 
+// TestCheckStillReportsUnusedOwnTemplate states that exempting the other
+// package's templates leaves the package's own unused template reported, and
+// that a route template in a shared file with no generated handler is reported
+// too, since the package generates the handlers of the routes it parses.
+func TestCheckStillReportsUnusedOwnTemplate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+		"workspace/own.gohtml":    `{{define "orphan"}}<i></i>{{end}}`,
+	})
+	workspace := filepath.Join(dir, "workspace")
+
+	output, err := runMuxt(t, workspace, "check")
+
+	require.Error(t, err, "check before generate: %s", output)
+	assert.Contains(t, output, "Route templates with no generated handler", "check output")
+	assert.Contains(t, output, `"GET /shared SharedPage()"`, "check output")
+
+	output, err = runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.Error(t, err, "check: %s", output)
+	assert.Contains(t, output, "Unused templates:", "check output")
+	assert.Contains(t, output, `"orphan"`, "check output")
+}
+
 // TestCheckDoesNotReportUnusedSharedTemplate states that a template defined in
 // the other package's file that the package never calls is not reported as
 // unused: the package that owns the file is the one that can remove it.
