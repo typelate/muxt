@@ -169,7 +169,8 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 }
 
 // checkKeys returns a *KeyFormError for the first packages key, in sorted
-// order, that is not in clean form, or a *DeprecatedKeyError or
+// order, that is not in clean form, a *KeyOutsideError for one that leaves the
+// file's directory, or a *DeprecatedKeyError or
 // *UnknownKeyError for the first entry key that is an old flag name or that
 // Entry has no field for. json.Unmarshal drops unknown keys without a word, so
 // the keys are read again here.
@@ -186,6 +187,11 @@ func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 		// is written in the form path.Clean gives it.
 		if clean := path.Clean(dir); clean != dir {
 			return &KeyFormError{Path: shown, Key: dir, Clean: clean}
+		}
+		// A key is a directory below the file's own, so a checked-out
+		// muxt.json cannot point generate at, or write into, another place.
+		if dir != "." && !filepath.IsLocal(filepath.FromSlash(dir)) {
+			return &KeyOutsideError{Path: shown, Key: dir}
 		}
 		where := fmt.Sprintf("packages[%q]", dir)
 		for _, key := range slices.Sorted(maps.Keys(raw.Packages[dir])) {

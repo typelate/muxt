@@ -110,3 +110,15 @@ type DeprecatedKeyError struct {
 func (e *DeprecatedKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q is deprecated; write %q", e.Path, e.Where, e.Key, e.Replacement)
 }
+
+// KeyOutsideError reports a packages key that names a directory outside the
+// one holding the muxt.json, such as "../other" or "/abs". A file checked into
+// a repository must not make muxt generate write elsewhere on the machine.
+type KeyOutsideError struct {
+	Path, Key string
+}
+
+// Error returns the path and the key on one line.
+func (e *KeyOutsideError) Error() string {
+	return fmt.Sprintf("%s: packages key %q is outside the file's directory", e.Path, e.Key)
+}

@@ -607,3 +607,26 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 	assert.Equal(t, workspace, jobs[0].Dir, "generate job dir")
 	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "generate job receiver type")
 }
+
+// TestGenerateRejectsMuxtJSONKeyOutsideDirectory states that a muxt.json
+// packages key that leaves the file's directory fails a muxt generate, naming
+// the key, so no job directory is built from it. The runner is not called.
+func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
+	for _, key := range []string{"../other", "/abs", ".."} {
+		t.Run(key, func(t *testing.T) {
+			dir := t.TempDir()
+			file, err := json.Marshal(map[string]any{"packages": map[string]any{key: map[string]any{}}})
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), file, 0o644))
+
+			called, err := generateFailureOf(t, dir)
+
+			var outside *muxtjson.KeyOutsideError
+			require.ErrorAs(t, err, &outside, "error %v", err)
+			assert.Equal(t, muxtjson.FileName, outside.Path, "path")
+			assert.Equal(t, key, outside.Key, "key")
+			assert.Equal(t, `muxt.json: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
+			assert.False(t, called, "generate runner called")
+		})
+	}
+}
