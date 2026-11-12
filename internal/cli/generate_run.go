@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -140,18 +141,34 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			return err
 		}
 		warnPartialAST(stderr, pl)
+		// changed holds the directories written since the last load. A load
+		// that came before a write saw its package without the new files, so
+		// a job importing one of them needs a fresh load; one that imports
+		// none can use the load it has.
+		var changed []string
 		for _, job := range importOrder(pl, jobs) {
 			if len(jobs) > 1 {
 				// Several directories write to one stream, so each says
 				// whose lines follow.
 				_, _ = fmt.Fprintln(stdout, job.Key)
 			}
+			dir := job.Config.OutputDirectory(job.Dir)
+			if slices.ContainsFunc(changed, func(written string) bool { return load.Imports(pl, dir, written) }) {
+				if _, pl, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
+					return err
+				}
+				changed = nil
+			}
 			files, err := resolveJob(cmd, pl, job)
 			if err != nil {
 				return err
 			}
-			if err := writeJob(stdout, stderr, job, files); err != nil {
+			wrote, err := writeJob(stdout, stderr, job, files)
+			if err != nil {
 				return err
+			}
+			if wrote {
+				changed = append(changed, dir)
 			}
 		}
 		return nil
@@ -201,15 +218,47 @@ func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob) ([]
 }
 
 // writeJob writes files to job's directory and removes the generated files of
-// an earlier run that files no longer holds.
-func writeJob(stdout io.Writer, stderr *log.Logger, job generateJob, files []generate.GeneratedFile) error {
+// an earlier run that files no longer holds. changed is whether any file it
+// wrote or removed differs from what was on disk before.
+func writeJob(stdout io.Writer, stderr *log.Logger, job generateJob, files []generate.GeneratedFile) (changed bool, err error) {
 	owned, err := ownedGeneratedFiles(job.Dir, job.Config.RoutesFunction, stderr)
 	if err != nil {
-		return err
+		return false, err
+	}
+	paths := slices.Collect(maps.Keys(owned))
+	for _, file := range files {
+		paths = append(paths, file.Path)
+	}
+	before, err := readFiles(paths)
+	if err != nil {
+		return false, err
 	}
 	written, err := writeGeneratedFiles(stdout, files, job.Config)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return removeOrphans(owned, written)
+	if err := removeOrphans(owned, written); err != nil {
+		return false, err
+	}
+	after, err := readFiles(paths)
+	if err != nil {
+		return false, err
+	}
+	return !maps.Equal(before, after), nil
+}
+
+// readFiles returns the content of each of paths that exists.
+func readFiles(paths []string) (map[string]string, error) {
+	contents := make(map[string]string, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", path, err)
+		}
+		contents[path] = string(data)
+	}
+	return contents, nil
 }

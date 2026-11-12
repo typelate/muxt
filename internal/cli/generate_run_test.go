@@ -139,3 +139,22 @@ func TestGenerateMuxtJSONEntriesInImportOrder(t *testing.T) {
 	const want = "b\nwrote template_routes.go: 1 route\na\nwrote template_routes.go: 1 route\n"
 	assert.Equal(t, want, stdout, "stdout")
 }
+
+// TestGenerateReloadsPackagesWhenADependencyChanged states that when package a
+// imports b, a run that creates b's routes file loads the packages again
+// before resolving a, and a run that finds both routes files current loads
+// them once.
+func TestGenerateReloadsPackagesWhenADependencyChanged(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{"a": "A", "b": "B"}, map[string][]string{"a": {"b"}})
+
+	_, loads, err := generateWithLoader(t, dir)
+	require.NoError(t, err, "first generate")
+	assert.Equal(t, 2, loads, "package loads when b's routes file is created")
+
+	_, loads, err = generateWithLoader(t, dir)
+	require.NoError(t, err, "second generate")
+	assert.Equal(t, 1, loads, "package loads when both routes files are current")
+}
