@@ -89,21 +89,49 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 }
 
 // requireEntryDirectory returns a *muxtjson.MissingDirectoryError unless dir,
-// the directory of key in f, is a directory. wd is the working directory the
-// error names dir relative to.
+// the directory of key in f, is a directory, and a
+// *muxtjson.OutsideDirectoryError when it is one that a symbolic link resolves
+// outside f's directory. wd is the working directory the errors name dir
+// relative to.
 func requireEntryDirectory(f *muxtjson.File, key, wd, dir string) error {
-	info, err := os.Stat(dir)
-	if err == nil && info.IsDir() {
-		return nil
-	}
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("muxt.json entry %q: %w", key, err)
+	info, statErr := os.Stat(dir)
+	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
 	}
 	rel, err := filepath.Rel(wd, dir)
 	if err != nil {
 		return fmt.Errorf("directory of muxt.json entry %q from %s: %w", key, wd, err)
 	}
-	return &muxtjson.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
+	if statErr != nil || !info.IsDir() {
+		return &muxtjson.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
+	}
+	inside, err := resolvesInside(f.Dir, dir)
+	if err != nil {
+		return fmt.Errorf("muxt.json entry %q: %w", key, err)
+	}
+	if !inside {
+		return &muxtjson.OutsideDirectoryError{Path: f.Name, Key: key, Dir: rel}
+	}
+	return nil
+}
+
+// resolvesInside reports whether dir, with its symbolic links followed, is
+// base or below it, with base's links followed too. Both sides resolve because
+// the temporary directory of a test may itself sit behind a link.
+func resolvesInside(base, dir string) (bool, error) {
+	realBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return false, fmt.Errorf("resolving %s: %w", base, err)
+	}
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false, fmt.Errorf("resolving %s: %w", dir, err)
+	}
+	rel, err := filepath.Rel(realBase, realDir)
+	if err != nil {
+		return false, fmt.Errorf("directory %s from %s: %w", realDir, realBase, err)
+	}
+	return filepath.IsLocal(rel), nil
 }
 
 // packageLoader is the only way a run asks for packages, so one go command

@@ -630,3 +630,47 @@ func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateRejectsMuxtJSONLinkOutsideDirectory states that a packages key
+// whose directory is a symbolic link to a directory outside the muxt.json's
+// directory fails a flagless muxt generate, naming the key, before the generate
+// runner is called.
+func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	elsewhere := filepath.Join(root, "elsewhere")
+	require.NoError(t, os.Mkdir(project, 0o755))
+	require.NoError(t, os.Mkdir(elsewhere, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(project, muxtjson.FileName), []byte(`{"packages": {"linked": {}}}`), 0o644))
+	if err := os.Symlink(elsewhere, filepath.Join(project, "linked")); err != nil {
+		t.Skipf("creating a symbolic link: %v", err)
+	}
+
+	called, err := generateFailureOf(t, project)
+
+	var outside *muxtjson.OutsideDirectoryError
+	require.ErrorAs(t, err, &outside, "error %v", err)
+	assert.Equal(t, muxtjson.FileName, outside.Path, "path")
+	assert.Equal(t, "linked", outside.Key, "key")
+	assert.Equal(t, "linked", outside.Dir, "dir")
+	assert.Equal(t, `muxt.json: packages["linked"]: directory linked resolves outside the file's directory`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
+// TestGenerateAcceptsMuxtJSONLinkInsideDirectory states that a packages key
+// whose directory is a symbolic link to another directory inside the muxt.json's
+// directory is a job like any other. The runner records the job it is handed.
+func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
+	dir := t.TempDir()
+	inside := filepath.Join(dir, "inside")
+	require.NoError(t, os.Mkdir(inside, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {"linked": {}}}`), 0o644))
+	if err := os.Symlink(inside, filepath.Join(dir, "linked")); err != nil {
+		t.Skipf("creating a symbolic link: %v", err)
+	}
+
+	jobs := generateJobsOf(t, dir, "generate")
+
+	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
+	assert.Equal(t, "linked", jobs[0].Key, "generate job key")
+}

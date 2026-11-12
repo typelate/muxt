@@ -68,6 +68,19 @@ func (e *MissingDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q]: directory %s does not exist", e.Path, e.Key, e.Dir)
 }
 
+// OutsideDirectoryError reports a muxt.json entry whose directory is a symbolic
+// link that resolves outside the directory holding the file. Key is the
+// packages key and Dir the key's directory relative to the working directory,
+// the way the person would type it.
+type OutsideDirectoryError struct {
+	Path, Key, Dir string
+}
+
+// Error returns the path, the entry, and the directory on one line.
+func (e *OutsideDirectoryError) Error() string {
+	return fmt.Sprintf("%s: packages[%q]: directory %s resolves outside the file's directory", e.Path, e.Key, e.Dir)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.
