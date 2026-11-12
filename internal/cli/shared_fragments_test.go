@@ -258,6 +258,40 @@ func TestGenerateMultipleFilesWritesOnlyInThePackage(t *testing.T) {
 	assert.Equal(t, before, after, "files in the fragments directory")
 }
 
+// TestGenerateMuxtJSONEntriesSharingAnEmbedFS states that two muxt.json entries
+// that both parse the other package's files are loaded once, each routes file
+// includes the shared route, and nothing is written into the other package's
+// directory.
+func TestGenerateMuxtJSONEntriesSharingAnEmbedFS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+		"billing/billing.go":      strings.Replace(workspaceReadingFS("example.com/m/fragments", "fragments.TemplateSource"), "package workspace", "package billing", 1),
+		"billing/page.gohtml":     `{{define "GET /billing Home()"}}{{template "layout" .}}{{end}}`,
+		"muxt.json": `{"packages": {
+	"example.com/m/workspace": {"use_receiver_type": "T"},
+	"example.com/m/billing": {"use_receiver_type": "T"}
+}}`,
+	})
+	before, err := os.ReadDir(filepath.Join(dir, "fragments"))
+	require.NoError(t, err, "ReadDir")
+
+	_, loads, err := generateWithLoader(t, dir)
+
+	require.NoError(t, err, "generate")
+	assert.Equal(t, 1, loads, "package loads")
+	for _, pkg := range []string{"workspace", "billing"} {
+		routes, err := os.ReadFile(filepath.Join(dir, pkg, "template_routes.go"))
+		require.NoError(t, err, "routes file of %s", pkg)
+		assert.Contains(t, string(routes), "SharedPage(", "%s includes the shared route", pkg)
+	}
+	after, err := os.ReadDir(filepath.Join(dir, "fragments"))
+	require.NoError(t, err, "ReadDir")
+	assert.Equal(t, before, after, "files in the fragments directory")
+}
+
 // TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
 // other package's directory its //go:embed pattern does not match is not
 // parsed, even when the ParseFS patterns would match it, so a template only
