@@ -1,4 +1,4 @@
-package scaffold
+package generate
 
 import (
 	"bytes"
@@ -20,13 +20,13 @@ type MethodSpec struct {
 	// Name is the method name.
 	Name string
 	// Params are the method's parameters in order.
-	Params []Param
+	Params []MethodParam
 	// Results are the types of the method's results.
 	Results []string
 }
 
-// Param is one method parameter.
-type Param struct {
+// MethodParam is one method parameter.
+type MethodParam struct {
 	// Name is the parameter name.
 	Name string
 	// Type is the parameter's type as Go source reads it, such as

@@ -1,7 +1,4 @@
-// Package scaffold builds the Go source of a new muxt package directory. It
-// builds go/ast nodes rather than parsing source text, so the output is what
-// the printer formats.
-package scaffold
+package generate
 
 import (
 	"bytes"
@@ -12,8 +9,10 @@ import (
 	"strconv"
 )
 
-// PackageSpec is what a new package directory needs.
-type PackageSpec struct {
+// PackageFileSpec is what a new package directory needs. PackageFile builds
+// go/ast nodes rather than parsing source text, so the output is what the
+// printer formats.
+type PackageFileSpec struct {
 	// Name is the package name, which is also the directory and file stem.
 	Name string
 	// ReceiverType is the struct type the generated routes call methods on.
@@ -25,14 +24,14 @@ type PackageSpec struct {
 // templates, and the receiver type, with a blank line between each group.
 const formattedLines = 13
 
-// Package returns the file name and formatted source of the Go file for the
+// PackageFile returns the file name and formatted source of the Go file for the
 // package directory described by spec. The file declares the package, the
 // embedded templates and the parsed templates, and the receiver type as an
 // empty struct.
 //
 // The printer decides blank lines and where a comment goes from positions, so
 // each node is placed on the line it has in the formatted file.
-func Package(spec PackageSpec) (filename string, src []byte, err error) {
+func PackageFile(spec PackageFileSpec) (filename string, src []byte, err error) {
 	fset := token.NewFileSet()
 	tf := fset.AddFile(spec.Name+".go", -1, (formattedLines+1)*10)
 	offsets := make([]int, formattedLines+1)

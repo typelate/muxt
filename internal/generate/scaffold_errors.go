@@ -1,4 +1,4 @@
-package scaffold
+package generate
 
 import "fmt"
 

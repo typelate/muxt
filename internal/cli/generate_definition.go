@@ -18,7 +18,6 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/scaffold"
 	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/template/html"
 )
@@ -44,9 +43,9 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 			if fragment && document {
 				return fmt.Errorf("--%s and --%s are mutually exclusive", outputFragment, outputDocument)
 			}
-			body := scaffold.Fragment
+			body := generate.FragmentBody
 			if document {
-				body = scaffold.Document
+				body = generate.DocumentBody
 			}
 			config, err := definitionConfiguration(*workingDirectory, cmd.Flags(), receiverType, getEnv)
 			if err != nil {
@@ -91,7 +90,7 @@ func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType strin
 // Everything is checked before anything is written. With no templateFile it
 // prints a txtar archive of the files it would write instead, and writes
 // nothing.
-func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body scaffold.Body, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
+func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body generate.DefineBody, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
 	if templateFile != "" {
 		if err := checkTemplateFileName(templateFile); err != nil {
 			return err
@@ -107,7 +106,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 			return err
 		}
 	}
-	define := scaffold.Definition(name, body)
+	define := generate.DefineBlock(name, body)
 	if templateFile == "" {
 		return writeDefinitionArchive(cmd.OutOrStdout(), name, define, stub)
 	}
@@ -116,7 +115,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("reading %s: %w", templateFile, err)
 	}
-	content := scaffold.AppendDefinition(existing, define)
+	content := generate.AppendDefinition(existing, define)
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", templateFile, err)
 	}
@@ -128,7 +127,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 }
 
 // inspectPackage loads the package in wd and returns a
-// *scaffold.DuplicateDefinitionError when its templates already define name.
+// *generate.DuplicateDefinitionError when its templates already define name.
 // Otherwise it returns the stubs of the methods the route calls that the
 // receiver type does not define, empty when no receiver type is configured. A
 // package it cannot load, or one with no templates variable, is an error too:
@@ -149,7 +148,7 @@ func inspectPackage(wd, name string, config generate.RoutesFileConfiguration, lo
 		if variable.Set.Lookup(name) == nil {
 			continue
 		}
-		duplicate := &scaffold.DuplicateDefinitionError{Name: name}
+		duplicate := &generate.DuplicateDefinitionError{Name: name}
 		if position, ok := variable.NamePosition(name); ok {
 			duplicate.File, duplicate.Line = relativeTo(wd, position.Filename), position.Line
 		}
@@ -170,7 +169,7 @@ func inspectPackage(wd, name string, config generate.RoutesFileConfiguration, lo
 // has gives no stub. Stubs use a pointer receiver when the type's own methods
 // do.
 func methodStubs(pkg source.Package, receiver *types.Named, name string, checker muxt.Checker) (string, error) {
-	templates, err := html.New("").Parse(scaffold.Definition(name, scaffold.Fragment))
+	templates, err := html.New("").Parse(generate.DefineBlock(name, generate.FragmentBody))
 	if err != nil {
 		return "", fmt.Errorf("parsing %q: %w", name, err)
 	}
@@ -194,7 +193,7 @@ func methodStubs(pkg source.Package, receiver *types.Named, name string, checker
 			if err != nil {
 				return "", err
 			}
-			stub, err := scaffold.MethodStub(spec)
+			stub, err := generate.MethodStub(spec)
 			if err != nil {
 				return "", err
 			}
@@ -220,22 +219,22 @@ func hasPointerMethod(receiver *types.Named) bool {
 }
 
 // methodSpec describes the method named name that muxt added to receiver.
-func methodSpec(receiver *types.Named, pointer bool, name string, qualify types.Qualifier) (scaffold.MethodSpec, error) {
+func methodSpec(receiver *types.Named, pointer bool, name string, qualify types.Qualifier) (generate.MethodSpec, error) {
 	for method := range receiver.Methods() {
 		if method.Name() != name {
 			continue
 		}
 		sig := method.Signature()
-		spec := scaffold.MethodSpec{Receiver: receiver.Obj().Name(), Pointer: pointer, Name: name}
+		spec := generate.MethodSpec{Receiver: receiver.Obj().Name(), Pointer: pointer, Name: name}
 		for param := range sig.Params().Variables() {
-			spec.Params = append(spec.Params, scaffold.Param{Name: param.Name(), Type: types.TypeString(param.Type(), qualify)})
+			spec.Params = append(spec.Params, generate.MethodParam{Name: param.Name(), Type: types.TypeString(param.Type(), qualify)})
 		}
 		for result := range sig.Results().Variables() {
 			spec.Results = append(spec.Results, types.TypeString(result.Type(), qualify))
 		}
 		return spec, nil
 	}
-	return scaffold.MethodSpec{}, fmt.Errorf("method %s inferred for %s is not on the type", name, receiver.Obj().Name())
+	return generate.MethodSpec{}, fmt.Errorf("method %s inferred for %s is not on the type", name, receiver.Obj().Name())
 }
 
 // relativeTo returns file relative to dir. The go command may report a path
@@ -262,7 +261,7 @@ func writeDefinitionArchive(w io.Writer, name, define, stub string) error {
 	if err != nil {
 		return err
 	}
-	archive := &txtar.Archive{Files: []txtar.File{{Name: base + ".gohtml", Data: scaffold.AppendDefinition(nil, define)}}}
+	archive := &txtar.Archive{Files: []txtar.File{{Name: base + ".gohtml", Data: generate.AppendDefinition(nil, define)}}}
 	if stub != "" {
 		archive.Files = append(archive.Files, txtar.File{Name: base + ".go", Data: []byte(stub)})
 	}
@@ -274,7 +273,7 @@ func writeDefinitionArchive(w io.Writer, name, define, stub string) error {
 // The identifier is the one muxt uses for the route's generated names, so it is
 // asked of muxt rather than derived from the name here.
 func routeFileBase(name string) (string, error) {
-	templates, err := html.New("").Parse(scaffold.Definition(name, scaffold.Fragment))
+	templates, err := html.New("").Parse(generate.DefineBlock(name, generate.FragmentBody))
 	if err != nil {
 		return "", fmt.Errorf("parsing %q: %w", name, err)
 	}

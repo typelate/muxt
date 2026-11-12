@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxtjson"
-	"github.com/typelate/muxt/internal/scaffold"
 )
 
 // runCommandArgs runs a muxt command with args in dir, which a template name
@@ -94,7 +94,7 @@ func TestGenerateDefWithoutOutputFilePrintsArchive(t *testing.T) {
 		want string
 	}{
 		{name: "fragment", want: "-- index.gohtml --\n{{define \"GET /foo Index()\"}}{{end}}\n"},
-		{name: "document", args: []string{"--output-document"}, want: "-- index.gohtml --\n" + scaffold.Definition("GET /foo Index()", scaffold.Document) + "\n"},
+		{name: "document", args: []string{"--output-document"}, want: "-- index.gohtml --\n" + generate.DefineBlock("GET /foo Index()", generate.DocumentBody) + "\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -135,7 +135,7 @@ func TestGenerateDefWithoutOutputFilePrintsStubInArchive(t *testing.T) {
 			stdout, stderr, err := runCommandArgs(dir, []string{"generate", "def", tt.route, "--use-receiver-type=T"}, runners{load: loadFromGoCommand})
 
 			require.NoError(t, err)
-			want := "-- " + tt.base + ".gohtml --\n" + scaffold.Definition(tt.route, scaffold.Fragment) + "\n" +
+			want := "-- " + tt.base + ".gohtml --\n" + generate.DefineBlock(tt.route, generate.FragmentBody) + "\n" +
 				"-- " + tt.base + ".go --\n" + tt.stub
 			assert.Equal(t, want, stdout, "stdout")
 			assert.Empty(t, stderr, "stderr")
@@ -243,9 +243,9 @@ func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=other.gohtml"}, runners{load: loadFromGoCommand})
 
 	require.EqualError(t, err, `template "GET /foo Index()" is already defined at index.gohtml:3`)
-	duplicate, ok := errors.AsType[*scaffold.DuplicateDefinitionError](err)
-	require.True(t, ok, "error is a *scaffold.DuplicateDefinitionError")
-	assert.Equal(t, scaffold.DuplicateDefinitionError{Name: "GET /foo Index()", File: "index.gohtml", Line: 3}, *duplicate)
+	duplicate, ok := errors.AsType[*generate.DuplicateDefinitionError](err)
+	require.True(t, ok, "error is a *generate.DuplicateDefinitionError")
+	assert.Equal(t, generate.DuplicateDefinitionError{Name: "GET /foo Index()", File: "index.gohtml", Line: 3}, *duplicate)
 	assert.NoFileExists(t, filepath.Join(dir, "other.gohtml"))
 }
 
@@ -277,7 +277,7 @@ func TestGenerateDefOutputDocumentWritesAHTMLDocument(t *testing.T) {
 	require.NoError(t, err)
 	got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
 	require.NoError(t, err)
-	assert.Equal(t, scaffold.Definition("GET /foo Index()", scaffold.Document)+"\n", string(got), "index.gohtml")
+	assert.Equal(t, generate.DefineBlock("GET /foo Index()", generate.DocumentBody)+"\n", string(got), "index.gohtml")
 	assert.Contains(t, string(got), "<!DOCTYPE html>\n<html lang=\"en\">", "index.gohtml holds a document")
 }
 

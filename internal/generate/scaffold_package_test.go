@@ -1,4 +1,4 @@
-package scaffold
+package generate
 
 import (
 	"go/ast"
@@ -14,22 +14,22 @@ import (
 // a new package declares its package name, its receiver type, and the two
 // variables that embed and parse the package's templates.
 func TestPackageDeclaresPackageTypeAndTemplateVariables(t *testing.T) {
-	filename, src, err := Package(PackageSpec{Name: "workspace", ReceiverType: "T"})
+	filename, src, err := PackageFile(PackageFileSpec{Name: "workspace", ReceiverType: "T"})
 
 	require.NoError(t, err)
 	assert.Equal(t, "workspace.go", filename, "file name")
 	file, err := parser.ParseFile(token.NewFileSet(), filename, src, parser.AllErrors)
 	require.NoError(t, err, "source parses")
 	assert.Equal(t, "workspace", file.Name.Name, "package name")
-	assert.Contains(t, declaredNames(file, token.TYPE), "T", "receiver type")
-	assert.Contains(t, declaredNames(file, token.VAR), "templateSource", "embedded files variable")
-	assert.Contains(t, declaredNames(file, token.VAR), "templates", "parsed templates variable")
+	assert.Contains(t, declaredGenDeclNames(file, token.TYPE), "T", "receiver type")
+	assert.Contains(t, declaredGenDeclNames(file, token.VAR), "templateSource", "embedded files variable")
+	assert.Contains(t, declaredGenDeclNames(file, token.VAR), "templates", "parsed templates variable")
 }
 
 // TestPackageSourceIsGolden states the exact formatted file for a receiver
 // type named T.
 func TestPackageSourceIsGolden(t *testing.T) {
-	_, src, err := Package(PackageSpec{Name: "workspace", ReceiverType: "T"})
+	_, src, err := PackageFile(PackageFileSpec{Name: "workspace", ReceiverType: "T"})
 
 	require.NoError(t, err)
 	const want = `package workspace
@@ -49,8 +49,8 @@ type T struct{}
 	assert.Equal(t, want, string(src))
 }
 
-// declaredNames returns the names declared by the GenDecls of kind tok in file.
-func declaredNames(file *ast.File, tok token.Token) []string {
+// declaredGenDeclNames returns the names declared by the GenDecls of kind tok in file.
+func declaredGenDeclNames(file *ast.File, tok token.Token) []string {
 	var names []string
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)

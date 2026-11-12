@@ -1,4 +1,4 @@
-package scaffold
+package generate
 
 import (
 	"testing"
@@ -18,7 +18,7 @@ func TestMethodStub(t *testing.T) {
 	}{
 		{
 			name: "value receiver",
-			spec: MethodSpec{Receiver: "T", Name: "Index", Params: []Param{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "string"}}, Results: []string{"any"}},
+			spec: MethodSpec{Receiver: "T", Name: "Index", Params: []MethodParam{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "string"}}, Results: []string{"any"}},
 			want: "func (T) Index(ctx context.Context, id string) any {\n\treturn nil\n}\n",
 		},
 		{
@@ -28,7 +28,7 @@ func TestMethodStub(t *testing.T) {
 		},
 		{
 			name: "no results",
-			spec: MethodSpec{Receiver: "T", Name: "Events", Params: []Param{{Name: "send", Type: "func(any) error"}}},
+			spec: MethodSpec{Receiver: "T", Name: "Events", Params: []MethodParam{{Name: "send", Type: "func(any) error"}}},
 			want: "func (T) Events(send func(any) error) {\n}\n",
 		},
 	} {

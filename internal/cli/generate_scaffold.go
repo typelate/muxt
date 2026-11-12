@@ -16,7 +16,6 @@ import (
 
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxtjson"
-	"github.com/typelate/muxt/internal/scaffold"
 )
 
 // generatePackageCommand is muxt generate package NAME: it creates ./NAME and
@@ -92,7 +91,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", name, err)
 	}
-	filename, src, err := scaffold.Package(scaffold.PackageSpec{Name: name, ReceiverType: receiver})
+	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver})
 	if err != nil {
 		return err
 	}

@@ -1,20 +1,20 @@
-package scaffold
+package generate
 
 import "strconv"
 
-// Body is what a new define holds: the choice between a template that
+// DefineBody is what a new define holds: the choice between a template that
 // contributes a fragment to a page and one that is a page.
-type Body int
+type DefineBody int
 
 const (
-	// Fragment is an empty define, for a route that renders part of a page.
-	Fragment Body = iota
-	// Document is a define holding an empty HTML document, for a route that
+	// FragmentBody is an empty define, for a route that renders part of a page.
+	FragmentBody DefineBody = iota
+	// DocumentBody is a define holding an empty HTML document, for a route that
 	// renders a whole page.
-	Document
+	DocumentBody
 )
 
-// document is the page a Document define holds, indented as muxt fmt leaves it.
+// document is the page a DocumentBody define holds, indented as muxt fmt leaves it.
 const document = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,11 +26,11 @@ const document = `<!DOCTYPE html>
 </html>
 `
 
-// Definition returns the define action that adds the route template name to a
+// DefineBlock returns the define action that adds the route template name to a
 // template file, holding body.
-func Definition(name string, body Body) string {
+func DefineBlock(name string, body DefineBody) string {
 	content := ""
-	if body == Document {
+	if body == DocumentBody {
 		content = document
 	}
 	return "{{define " + strconv.Quote(name) + "}}" + content + "{{end}}"

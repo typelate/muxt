@@ -1,4 +1,4 @@
-package scaffold
+package generate
 
 import (
 	"testing"
@@ -42,7 +42,7 @@ func TestDefinitionDocumentHoldsAnHTMLDocument(t *testing.T) {
 </html>
 {{end}}`
 
-	got := Definition("GET /foo Index()", Document)
+	got := DefineBlock("GET /foo Index()", DocumentBody)
 
-	assert.Equal(t, want, got, "Definition(name, Document)")
+	assert.Equal(t, want, got, "DefineBlock(name, DocumentBody)")
 }
