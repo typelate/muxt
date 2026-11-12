@@ -47,7 +47,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 			return nil, err
 		}
 	} else {
-		jobs, found, err := entryJobs(wd, getEnv, noVersion)
+		_, jobs, found, err := entryJobs(wd, getEnv, noVersion)
 		if err != nil {
 			return nil, err
 		}

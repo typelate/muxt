@@ -40,7 +40,7 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 			return nil, err
 		}
 	} else {
-		jobs, found, err := entryJobs(wd, getEnv, version)
+		_, jobs, found, err := entryJobs(wd, getEnv, version)
 		if err != nil {
 			return nil, err
 		}
@@ -62,36 +62,38 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 // entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
 // In the file's own directory that is one job per entry, and every entry is
 // validated before any job is returned. In a sub-directory it is that
-// directory's entry alone. found is false when the flags decide the run.
-func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (jobs []generateJob, found bool, err error) {
+// directory's entry alone. found is false when the flags decide the run. file
+// is the muxt.json the jobs came from, for a caller that says where each
+// setting came from.
+func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *muxtjson.File, jobs []generateJob, found bool, err error) {
 	f, key, _, found, err := lookupMuxtJSONEntry(wd)
 	if err != nil || f == nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	keys := []string{key}
 	if key != "." {
 		if !found {
-			return nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
+			return nil, nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
 		}
 	} else {
 		if len(f.Packages) == 0 {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 		keys = f.Keys()
 	}
 	for _, k := range keys {
 		dir := f.DirOf(k)
 		if err := requireEntryDirectory(f, k, wd, dir); err != nil {
-			return nil, false, err
+			return nil, nil, false, err
 		}
 		entry, _ := f.Resolve(k)
 		config, err := entryConfiguration(entry, dir, getEnv, version)
 		if err != nil {
-			return nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
+			return nil, nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
 		}
 		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
 	}
-	return jobs, true, nil
+	return f, jobs, true, nil
 }
 
 // requireEntryDirectory returns a *muxtjson.MissingDirectoryError unless dir,
