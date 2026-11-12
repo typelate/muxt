@@ -8,15 +8,12 @@ cmp stdout want-out.txt
 
 env MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
 muxt generate --use-receiver-type=T
-cmp stdout want-silenced.txt
+! stdout .
 
 exec go vet .
 
 -- want-out.txt --
 warning: GET /export uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
-wrote template_routes.go: 2 routes
--- want-silenced.txt --
-wrote template_routes.go: 2 routes
 -- template.gohtml --
 {{- define "GET /export Export(ctx, response)" -}}{{- end -}}
 {{- define "GET / Home(ctx)" -}}hi{{- end -}}

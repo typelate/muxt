@@ -66,14 +66,14 @@ func (%s) %sPage() any { return nil }
 
 // generateWithLoader runs a flagless muxt generate in dir with the real
 // generate runner and the go command, counting how often packages are loaded.
-func generateWithLoader(t *testing.T, dir string) (stdout string, loads int, err error) {
+func generateWithLoader(t *testing.T, dir string, flags ...string) (stdout string, loads int, err error) {
 	t.Helper()
 	counting := func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
 		loads++
 		return loadFromGoCommand(root, dirs, patterns)
 	}
 	var out bytes.Buffer
-	err = commands(dir, []string{"generate"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
+	err = commands(dir, append([]string{"generate"}, flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
 		generate: generateRunner(counting),
 	})
 	return out.String(), loads, err
@@ -103,10 +103,30 @@ func TestGenerateEveryMuxtJSONEntryLoadsOnce(t *testing.T) {
 	}
 }
 
-// TestGenerateEveryMuxtJSONEntryNamesEachDirectory states that a run over
-// several entries prints each entry's key before that directory's output,
-// and a run over one entry prints no key.
+// TestGenerateEveryMuxtJSONEntryNamesEachDirectory states that with -v a run
+// over several entries prints each entry's key before that directory's
+// output, and a run over one entry prints no key.
 func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+
+	stdout, _, err := generateWithLoader(t, dir, "-v")
+
+	require.NoError(t, err, "generate -v")
+	const want = "example.com/m\ngenerating handler for pattern GET /Root\nwrote template_routes.go: 1 route\nexample.com/m/workspace\ngenerating handler for pattern GET /Space\nwrote template_routes.go: 1 route\n"
+	assert.Equal(t, want, stdout, "stdout")
+
+	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"), "-v")
+
+	require.NoError(t, err, "generate -v in workspace")
+	assert.Equal(t, "generating handler for pattern GET /Space\nwrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
+}
+
+// TestGenerateSucceedsQuietly states that without -v a run that generates
+// without problems prints nothing, over one entry and over several.
+func TestGenerateSucceedsQuietly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
@@ -115,13 +135,12 @@ func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	stdout, _, err := generateWithLoader(t, dir)
 
 	require.NoError(t, err, "generate")
-	const want = "example.com/m\nwrote template_routes.go: 1 route\nexample.com/m/workspace\nwrote template_routes.go: 1 route\n"
-	assert.Equal(t, want, stdout, "stdout")
+	assert.Empty(t, stdout, "stdout of a run over several entries")
 
 	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"))
 
 	require.NoError(t, err, "generate in workspace")
-	assert.Equal(t, "wrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
+	assert.Empty(t, stdout, "stdout of a run over one entry")
 }
 
 // TestGenerateMuxtJSONEntriesInImportOrder states that a muxt generate over
@@ -133,10 +152,10 @@ func TestGenerateMuxtJSONEntriesInImportOrder(t *testing.T) {
 	}
 	dir := entryModule(t, map[string]string{"a": "A", "b": "B"}, map[string][]string{"a": {"b"}})
 
-	stdout, _, err := generateWithLoader(t, dir)
+	stdout, _, err := generateWithLoader(t, dir, "-v")
 
-	require.NoError(t, err, "generate")
-	const want = "example.com/m/b\nwrote template_routes.go: 1 route\nexample.com/m/a\nwrote template_routes.go: 1 route\n"
+	require.NoError(t, err, "generate -v")
+	const want = "example.com/m/b\ngenerating handler for pattern GET /B\nwrote template_routes.go: 1 route\nexample.com/m/a\ngenerating handler for pattern GET /A\nwrote template_routes.go: 1 route\n"
 	assert.Equal(t, want, stdout, "stdout")
 }
 
@@ -193,8 +212,9 @@ func (A) APage() any { return nil }
 	stdout, _, err := generateWithLoader(t, dir)
 
 	require.Error(t, err, "generate with a receiver type a does not declare")
-	const want = "example.com/m/b\nwrote template_routes.go: 1 route\nexample.com/m/a\n"
-	assert.Equal(t, want, stdout, "stdout names b's output, then a, which failed")
+	assert.Empty(t, stdout, "stdout")
+	assert.ErrorContains(t, err, "example.com/m/a: ", "the error names the package that failed")
+	assert.NotContains(t, err.Error(), "example.com/m/b", "the error names only the failed package")
 	assert.FileExists(t, filepath.Join(dir, "b", "template_routes.go"), "b's routes file")
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "a's routes file")
 }

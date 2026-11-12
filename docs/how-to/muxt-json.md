@@ -84,14 +84,7 @@ The package load is the expensive part of `muxt generate`; one run generates eve
 go generate ./...
 ```
 
-```text
-example.com/m/workspace
-wrote template_routes.go: 1 route
-example.com/m
-wrote template_routes.go: 1 route
-```
-
-Each entry's import path is printed first because there is more than one. `example.com/m` imports `example.com/m/workspace`, so the workspace is written first.
+It prints nothing; `-v` lists what was written. `example.com/m` imports `example.com/m/workspace`, so the workspace is written first.
 
 Run `muxt generate` inside `workspace` and it writes that entry only. A directive left in a sub-package generates that package a second time.
 

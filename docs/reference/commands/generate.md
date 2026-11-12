@@ -6,11 +6,7 @@ Writes `template_routes.go`: one `http.Handler` per route template, the `RoutesR
 muxt generate --use-receiver-type=Server
 ```
 
-```text
-wrote template_routes.go: 3 routes
-```
-
-Parameter and result types come from `--use-receiver-type` ([type resolution](../call-parameters.md#type-resolution)). Flags: [cli.md](../cli.md#flags). `-v` prints each handler as it is generated.
+It prints nothing on success. Parameter and result types come from `--use-receiver-type` ([type resolution](../call-parameters.md#type-resolution)). Flags: [cli.md](../cli.md#flags). `-v` prints each handler as it is generated and each file written (`wrote template_routes.go: 3 routes`).
 
 The `go:generate` form, next to the [templates variable](../templates-variable.md):
 

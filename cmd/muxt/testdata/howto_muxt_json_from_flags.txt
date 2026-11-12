@@ -2,6 +2,8 @@
 # then generate both with a single muxt generate at the top.
 
 muxt generate
+! stdout .
+muxt generate -v
 cmp stdout want-stdout.txt
 exec go test ./...
 
@@ -30,8 +32,10 @@ go 1.22
 }
 -- want-stdout.txt --
 example.com/m/workspace
+generating handler for pattern GET /{$}
 wrote template_routes.go: 1 route
 example.com/m
+generating handler for pattern GET /{$}
 wrote template_routes.go: 1 route
 -- want-err.txt --
 Error: configure generate with fields in ../muxt.json instead of flags

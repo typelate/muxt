@@ -77,7 +77,13 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			dirs = append(dirs, job.Dir)
 			patterns = append(patterns, job.Config.ReceiverPackage)
 		}
+		// What was written is for -v; a run that has nothing to say is silent.
 		stdout := cmd.OutOrStdout()
+		verbose := jobs[0].Config.Verbose
+		wroteTo := io.Discard
+		if verbose {
+			wroteTo = stdout
+		}
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
 		_, pl, err := loadPackages(jobs[0].Dir, dirs, patterns)
 		if err != nil {
@@ -95,25 +101,31 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		}
 		for _, i := range importOrder(pl, outputDirs) {
 			job := jobs[i]
+			// With several directories a failure names its package, since
+			// nothing else says which one it was.
+			failed := func(err error) error { return err }
 			if len(jobs) > 1 {
-				// Several directories write to one stream, so each says
-				// whose lines follow.
-				_, _ = fmt.Fprintln(stdout, job.Key)
+				failed = func(err error) error { return fmt.Errorf("%s: %w", job.Key, err) }
+				if verbose {
+					// Several directories write to one stream, so each
+					// says whose lines follow.
+					_, _ = fmt.Fprintln(stdout, job.Key)
+				}
 			}
 			dir := job.Config.OutputDirectory(job.Dir)
 			if slices.ContainsFunc(changed, func(written string) bool { return load.Imports(pl, dir, written) }) {
 				if _, pl, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
-					return err
+					return failed(err)
 				}
 				changed = nil
 			}
-			files, err := resolveJob(cmd, pl, job)
+			files, err := resolveJob(cmd, pl, job, len(jobs) > 1)
 			if err != nil {
-				return err
+				return failed(err)
 			}
-			wrote, err := writeJob(stdout, stderr, job, files)
+			wrote, err := writeJob(wroteTo, stderr, job, files)
 			if err != nil {
-				return err
+				return failed(err)
 			}
 			if wrote {
 				changed = append(changed, dir)
@@ -149,22 +161,29 @@ func importOrder(pl []*packages.Package, dirs []string) []int {
 
 // resolveJob returns the files job generates from the loaded packages pl. A
 // failure that explains itself over several lines is printed before it is
-// returned.
-func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob) ([]generate.GeneratedFile, error) {
+// returned, after job's key when several jobs run, since that printed text
+// replaces the returned error.
+func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob, several bool) ([]generate.GeneratedFile, error) {
+	report := func(err error) {
+		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && several {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
+		}
+		printMultiLineError(cmd, err)
+	}
 	config := job.Config
 	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(job.Dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
-		printMultiLineError(cmd, err)
+		report(err)
 		return nil, err
 	}
 	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
 	if err != nil {
-		printMultiLineError(cmd, err)
+		report(err)
 		return nil, err
 	}
 	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, log.New(cmd.OutOrStdout(), "", 0))
 	if err != nil {
-		printMultiLineError(cmd, err)
+		report(err)
 		return nil, err
 	}
 	return files, nil

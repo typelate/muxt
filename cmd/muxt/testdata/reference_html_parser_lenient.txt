@@ -8,7 +8,7 @@
 # Routed, it type checks, and check reports only the refusal.
 
 muxt generate --use-receiver-type=T
-stdout 'wrote template_routes.go: 1 route'
+! stdout .
 muxt check --allow-unused
 stdout 'ok: 1 template'
 cmpenv stderr want-unused.txt

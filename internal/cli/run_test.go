@@ -60,7 +60,7 @@ func TestRunGenerate(t *testing.T) {
 	wd := newModule(t)
 
 	t.Run("the first run writes a file per template file", func(t *testing.T) {
-		stdout, _, err := execute(t, wd, "generate", "--output-multiple-files")
+		stdout, _, err := execute(t, wd, "generate", "--output-multiple-files", "-v")
 		require.NoError(t, err, "generate")
 		for _, want := range []string{"wrote old_template_routes_gen.go: 1 route\n", "wrote template_routes.go: 0 routes\n"} {
 			assert.Contains(t, stdout, want, "generate output")
