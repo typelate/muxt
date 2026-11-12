@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"slices"
 
 	"github.com/spf13/pflag"
@@ -54,6 +55,58 @@ func rejectConfiguredDirectory(wd string, flagNames []string) error {
 		return err
 	}
 	return &muxtjson.ConfiguredDirectoryError{Path: f.Name, Flags: flagNames}
+}
+
+// givenEntryFlags returns the sorted names of the flags passed that a muxt.json
+// entry also sets. Only these decide whether the entry or the flags configure a
+// command: a flag such as --verbose or --format is not configuration, and a
+// command's own flags, such as --allow-unused, do not stop the entry applying.
+// The deprecated name of the templates variable flag counts as that flag.
+func givenEntryFlags(flags *pflag.FlagSet) []string {
+	var given []string
+	flags.Visit(func(f *pflag.Flag) {
+		if f.Name == deprecatedTemplatesVariable || slices.ContainsFunc(entryFields(), func(field entryField) bool { return field.Name == f.Name }) {
+			given = append(given, f.Name)
+		}
+	})
+	slices.Sort(given)
+	return given
+}
+
+// entryJobFor returns the job the muxt.json entry for dir gives a command run
+// in dir, and found is false when the command's own settings decide instead.
+// The entry is read the way generate reads it, so a directory below a muxt.json
+// with no entry for it is a *muxtjson.MissingEntryError, as it is for generate.
+// The command takes only the settings it has flags for from the job.
+func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
+	// A path that is not a directory has no entry. The command's runner is
+	// what says so, and a search for muxt.json under a file would fail first
+	// with a message about muxt.json.
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return generateJob{}, false, nil
+	}
+	if len(flagNames) > 0 {
+		return generateJob{}, false, nil
+	}
+	f, key, _, _, err := lookupMuxtJSONEntry(dir)
+	if err != nil || f == nil {
+		return generateJob{}, false, err
+	}
+	// A command that reads a package writes no header, so the version that
+	// would be recorded in one is not needed.
+	noVersion := func() (string, bool) { return "", false }
+	_, jobs, found, err := entryJobs(dir, getEnv, noVersion)
+	if err != nil || !found {
+		return generateJob{}, false, err
+	}
+	// entryJobs returns every entry when dir is the file's own directory, so
+	// the job for dir is the one whose key is dir's.
+	for _, job := range jobs {
+		if job.Key == key {
+			return job, true, nil
+		}
+	}
+	return generateJob{}, false, nil
 }
 
 // entryField ties one muxt.json key to the flag and configuration field it

@@ -10,7 +10,7 @@ import (
 	"github.com/typelate/muxt/internal/analysis"
 )
 
-func checkCommand(workingDirectory *string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
+func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.CheckConfiguration
 		ignoredReceiverType    string
@@ -23,6 +23,7 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			flagNames := givenEntryFlags(cmd.Flags())
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -32,6 +33,13 @@ func checkCommand(workingDirectory *string, run func(*cobra.Command, string, ana
 			dir, err := packageDirectory(checkCommandName, *workingDirectory, args)
 			if err != nil {
 				return err
+			}
+			job, found, err := entryJobFor(dir, flagNames, getEnv)
+			if err != nil {
+				return err
+			}
+			if found {
+				config.TemplatesVariables = job.Config.TemplatesVariables
 			}
 			return run(cmd, dir, config)
 		},

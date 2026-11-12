@@ -133,7 +133,7 @@ The documentation for this version is in the binary:
 	rootCmd.AddCommand(
 		generateCommand(workingDirectory, getEnv, version, run.generate),
 		versionCommand(version),
-		checkCommand(workingDirectory, run.check),
+		checkCommand(workingDirectory, getEnv, run.check),
 		formatCommand(workingDirectory, run.format),
 		listTemplateCallersCommand(workingDirectory, run.callers),
 		listTemplateCallsCommand(workingDirectory, run.calls),
