@@ -28,6 +28,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
 - [Add custom template functions](how-to/template-functions.md): register `Funcs` so `muxt check` sees them
 - [Keep part of a template as written](how-to/keep-template-formatting.md): `muxt:fmt` directives
+- [Move generate flags into muxt.json](how-to/muxt-json.md): one file and one `go:generate` line for many packages
 
 ## Reference
 
@@ -46,6 +47,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
 - [Call Parameters](reference/call-parameters.md): what each argument binds and how it is parsed
 - [Call Results](reference/call-results.md): what a method may return and how it renders
 - [Templates Variable](reference/templates-variable.md): how muxt finds templates
+- [muxt.json](reference/muxt-json.md): generate settings for several packages in one file
 - [Type Checking](reference/type-checking.md): what `muxt check` verifies and what it cannot
 - [Template Comments](reference/template-comments.md): which comments reach the response, and why to use `{{/* */}}`
 - [Package Layout](reference/package-layout.md): a full package

@@ -6,7 +6,7 @@
 
 | Command | Aliases | Does |
 |---|---|---|
-| [`generate`](commands/generate.md) | `gen`, `g` | Write the routes file. |
+| [`generate`](commands/generate.md) | `gen`, `g` | Write the routes file. Sub-commands `config`, `package`, `def` ([generate](commands/generate.md#muxtjson)). |
 | [`check`](commands/check.md) | `c` | Type-check each template against the data it receives. |
 | [`fmt`](commands/fmt.md) | | Format `.gohtml` files without changing the rendered page. |
 | [`list-template-callers`](commands/list-template-callers.md) | `callers` | List what renders each template. |
@@ -22,9 +22,18 @@
 
 Each command's `--help` shows its summary and the line naming its full reference page. `muxt --help` gives an overview instead: what muxt does, the usual order of its main commands, and where its documentation is.
 
-`muxt` with no subcommand prints the package's routes and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods:
+When a [`muxt.json`](muxt-json.md) is found, `generate` reads its settings, `check` and the two list commands read `use_templates_variable`, and bare `muxt` shows each setting with its source.
+
+`muxt` with no subcommand prints the resolved configuration, the package's routes, and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods. With no `muxt.json`, every setting shows under `defaults:`:
 
 ```text
+Configuration:
+  defaults:
+    "input_static_assets_directory": ""
+    "output_datastar": false
+    ...
+    "use_templates_variable": ["templates"]
+
 Template Routes:
   - GET /{$} List(ctx)
 

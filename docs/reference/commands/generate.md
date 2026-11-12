@@ -18,6 +18,22 @@ The `go:generate` form, next to the [templates variable](../templates-variable.m
 //go:generate go run github.com/typelate/muxt generate --use-receiver-type=Server
 ```
 
+## muxt.json
+
+With no flags, `generate` reads [`muxt.json`](../muxt-json.md): in the file's directory it writes every entry, elsewhere the directory's entry. In a directory an entry configures, a flag is rejected and nothing is written; `-v` and `-C` are accepted:
+
+```text
+Error: configure generate with fields in muxt.json instead of flags
+```
+
+| Sub-command | Aliases | Does | Flags |
+|---|---|---|---|
+| `config` | `configuration` | Write an empty `muxt.json` in the working directory; fails if one exists. | none |
+| `package NAME` | | Create the package directory and its entry. | the `generate` flags, stored in the entry |
+| `def NAME` | `definition` | Add a route template named `NAME` to a template file. | `--output-file`, `--output-document`, `--output-fragment`, `--use-receiver-type` |
+
+Steps: [move generate flags into muxt.json](../../how-to/muxt-json.md).
+
 ## Files
 
 `--output-multiple-files` writes `template_routes.go` plus one `<name>_template_routes_gen.go` per `.gohtml` file ([reference_cleanup_switch_to_multiple_files.txt](../../../cmd/muxt/testdata/reference_cleanup_switch_to_multiple_files.txt)).

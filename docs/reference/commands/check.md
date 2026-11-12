@@ -2,6 +2,8 @@
 
 Type-checks each template against the data type at its `ExecuteTemplate` call site and reports templates nothing renders.
 
+`use_templates_variable` comes from the directory's [`muxt.json`](../muxt-json.md) entry when there is one; `--use-templates-variable` is rejected there.
+
 ```bash
 muxt check
 ```

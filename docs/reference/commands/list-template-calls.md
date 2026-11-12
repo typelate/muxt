@@ -2,6 +2,8 @@
 
 Lists, for each template, the `{{template}}` actions it makes.
 
+`use_templates_variable` comes from the directory's [`muxt.json`](../muxt-json.md) entry when there is one; `--use-templates-variable` is rejected there.
+
 ```bash
 muxt list-template-calls --match='^PATCH'
 ```

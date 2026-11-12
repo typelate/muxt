@@ -2,6 +2,8 @@
 
 Lists, for each template, the Go `ExecuteTemplate` call sites and the `{{template}}` actions that render it.
 
+`use_templates_variable` comes from the directory's [`muxt.json`](../muxt-json.md) entry when there is one; `--use-templates-variable` is rejected there.
+
 ```bash
 muxt list-template-callers --match=error --match='^GET'
 ```
