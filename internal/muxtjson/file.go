@@ -193,19 +193,21 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 
 // checkKeys returns a *KeyFormError for the first packages key, in sorted
 // order, that is not in clean form, a *KeyOutsideError for one that leaves the
-// file's directory, or a *DeprecatedKeyError, a *DashedKeyError, or an
-// *UnknownKeyError for the first entry key that is an old flag name, is written
-// with dashes where the underscore form is a key, or that Entry has no field
-// for. json.Unmarshal drops unknown keys without a word, so
-// the keys are read again here.
+// file's directory, or the entry-key errors of checkEntryKeys for package_defaults
+// and then for each packages entry. json.Unmarshal drops unknown keys without a
+// word, so the keys are read again here.
 func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 	var raw struct {
-		Packages map[string]map[string]json.RawMessage `json:"packages"`
+		PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
+		Packages        map[string]map[string]json.RawMessage `json:"packages"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("parsing %s: %w", shown, err)
 	}
 	known := entryKeys()
+	if err := checkEntryKeys(shown, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
+		return err
+	}
 	for _, dir := range slices.Sorted(maps.Keys(raw.Packages)) {
 		// Two spellings of one directory would be two entries, so each key
 		// is written in the form path.Clean gives it.
@@ -217,21 +219,30 @@ func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 		if dir != "." && !filepath.IsLocal(filepath.FromSlash(dir)) {
 			return &KeyOutsideError{Path: shown, Key: dir}
 		}
-		where := fmt.Sprintf("packages[%q]", dir)
-		for _, key := range slices.Sorted(maps.Keys(raw.Packages[dir])) {
-			if replacement, ok := deprecated[key]; ok {
-				return &DeprecatedKeyError{Path: shown, Where: where, Key: key, Replacement: replacement}
-			}
-			if slices.Contains(known, key) {
-				continue
-			}
-			// The dashed spelling is named only when the underscore form is a
-			// key, so a typo with dashes still reads as an unknown key.
-			if underscored := strings.ReplaceAll(key, "-", "_"); slices.Contains(known, underscored) {
-				return &DashedKeyError{Path: shown, Where: where, Key: key, Underscored: underscored}
-			}
-			return &UnknownKeyError{Path: shown, Where: where, Key: key}
+		if err := checkEntryKeys(shown, fmt.Sprintf("packages[%q]", dir), raw.Packages[dir], deprecated, known); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// checkEntryKeys returns the error for the first key, in sorted order, of the
+// entry where names: a *DeprecatedKeyError, a *DashedKeyError, or an
+// *UnknownKeyError. known is entryKeys.
+func checkEntryKeys(shown, where string, keys map[string]json.RawMessage, deprecated map[string]string, known []string) error {
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		if replacement, ok := deprecated[key]; ok {
+			return &DeprecatedKeyError{Path: shown, Where: where, Key: key, Replacement: replacement}
+		}
+		if slices.Contains(known, key) {
+			continue
+		}
+		// The dashed spelling is named only when the underscore form is a
+		// key, so a typo with dashes still reads as an unknown key.
+		if underscored := strings.ReplaceAll(key, "-", "_"); slices.Contains(known, underscored) {
+			return &DashedKeyError{Path: shown, Where: where, Key: key, Underscored: underscored}
+		}
+		return &UnknownKeyError{Path: shown, Where: where, Key: key}
 	}
 	return nil
 }

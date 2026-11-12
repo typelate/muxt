@@ -226,6 +226,54 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	})
 }
 
+// TestGenerateRejectsPackageDefaultsKey states that a package_defaults key
+// that an entry could not have fails a flagless muxt generate, naming the key
+// under package_defaults. The runner is not called.
+func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
+	t.Run("unknown", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"zzz": true}, "packages": {".": {}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		called, err := generateFailureOf(t, dir)
+
+		var unknown *muxtjson.UnknownKeyError
+		require.ErrorAs(t, err, &unknown, "error %v", err)
+		assert.Equal(t, "package_defaults", unknown.Where, "where")
+		assert.Equal(t, "zzz", unknown.Key, "key")
+		assert.Equal(t, `muxt.json: package_defaults: unknown key "zzz"`, err.Error(), "message")
+		assert.False(t, called, "generate runner called")
+	})
+
+	t.Run("dashed", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"use-receiver-type": "T"}, "packages": {".": {}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		called, err := generateFailureOf(t, dir)
+
+		var dashed *muxtjson.DashedKeyError
+		require.ErrorAs(t, err, &dashed, "error %v", err)
+		assert.Equal(t, "package_defaults", dashed.Where, "where")
+		assert.Equal(t, `muxt.json: package_defaults: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.False(t, called, "generate runner called")
+	})
+
+	t.Run("deprecated", func(t *testing.T) {
+		dir := t.TempDir()
+		const file = `{"package_defaults": {"receiver_type": "T"}, "packages": {".": {}}}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+		called, err := generateFailureOf(t, dir)
+
+		var deprecated *muxtjson.DeprecatedKeyError
+		require.ErrorAs(t, err, &deprecated, "error %v", err)
+		assert.Equal(t, "package_defaults", deprecated.Where, "where")
+		assert.Equal(t, `muxt.json: package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
+		assert.False(t, called, "generate runner called")
+	})
+}
+
 // TestGenerateIgnoresMuxtJSONAboveModuleRoot states that a muxt.json in a
 // directory above the module root is not read: the walk stops at the directory
 // holding go.mod. Nothing is loaded: the generate runner records the job it is
