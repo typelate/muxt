@@ -137,6 +137,23 @@ func TestGenerateIncludesRouteFromAnotherPackage(t *testing.T) {
 	assert.Equal(t, before, after, "files in the fragments directory")
 }
 
+// TestGenerateNotesMissingMethodOfSharedRoute states that a route template in
+// the other package's file whose method the receiver type lacks gets the note
+// a route in the package's own file gets, naming the method.
+func TestGenerateNotesMissingMethodOfSharedRoute(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
+	})
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate", "--use-receiver-type=T")
+
+	require.NoError(t, err, "generate: %s", output)
+	assert.Contains(t, output, "note: T does not define SharedPage() any", "generate output")
+}
+
 // TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
 // other package's directory its //go:embed pattern does not match is not
 // parsed, even when the ParseFS patterns would match it, so a template only
