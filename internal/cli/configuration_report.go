@@ -9,8 +9,8 @@ import (
 	"slices"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // configurationReport is the Configuration section of the route listing: every
@@ -45,7 +45,7 @@ type setting struct {
 
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *muxtjson.File, key string, flagNames []string, config generate.RoutesFileConfiguration) (configurationReport, error) {
+func newConfigurationReport(f *composite.File, key string, flagNames []string, config generate.RoutesFileConfiguration) (configurationReport, error) {
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
@@ -56,7 +56,7 @@ func newConfigurationReport(f *muxtjson.File, key string, flagNames []string, co
 	}
 	// Apply writes into a scratch configuration; only whether the entry gave
 	// the key matters here.
-	givenBy := func(entry muxtjson.Entry) func(entryField) (bool, error) {
+	givenBy := func(entry composite.Entry) func(entryField) (bool, error) {
 		return func(field entryField) (bool, error) {
 			return field.Apply(new(generate.RoutesFileConfiguration), entry)
 		}

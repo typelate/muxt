@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/load"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // routesJob is one package directory the route listing reads. It is a
@@ -23,7 +23,7 @@ type routesJob struct {
 // newRoutesJob is the job for a generateJob, with the report of its
 // configuration. f is the muxt.json the job's entry came from, nil when flags
 // configured it, and flagNames are the flags that did.
-func newRoutesJob(f *muxtjson.File, flagNames []string, job generateJob) (routesJob, error) {
+func newRoutesJob(f *composite.File, flagNames []string, job generateJob) (routesJob, error) {
 	report, err := newConfigurationReport(f, job.Key, flagNames, job.Config)
 	if err != nil {
 		return routesJob{}, err

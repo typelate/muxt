@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // runCommandArgs runs a muxt command with args in dir, which a template name
@@ -359,7 +359,7 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 }
 
 // TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory states that
-// --use-receiver-type fails with a *muxtjson.ConfiguredDirectoryError when the
+// --use-receiver-type fails with a *composite.ConfiguredDirectoryError when the
 // directory has a muxt.json entry, since the entry already names the receiver.
 func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 	dir := moduleDir(t)
@@ -367,8 +367,8 @@ func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
-	_, ok := errors.AsType[*muxtjson.ConfiguredDirectoryError](err)
-	require.True(t, ok, "error is a *muxtjson.ConfiguredDirectoryError: %v", err)
+	_, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
+	require.True(t, ok, "error is a *composite.ConfiguredDirectoryError: %v", err)
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
 

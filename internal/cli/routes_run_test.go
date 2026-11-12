@@ -17,7 +17,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/muxtjson"
+	"github.com/typelate/muxt/internal/composite"
 )
 
 // routesJobsOf runs commandLine in wd with a runner that records the jobs
@@ -37,7 +37,7 @@ func routesJobsOf(t *testing.T, wd, commandLine string) ([]routesJob, error) {
 // writeMuxtJSON writes a muxt.json holding file into dir.
 func writeMuxtJSON(t *testing.T, dir, file string) {
 	t.Helper()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 }
 
 // TestRoutesListsMuxtJSONEntry states that bare muxt with no flags, in a
@@ -75,9 +75,9 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 
 	jobs, err := routesJobsOf(t, workspace, "--use-receiver-type=Server --use-templates-variable=pages")
 
-	var configured *muxtjson.ConfiguredDirectoryError
+	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
-	assert.Equal(t, filepath.Join("..", muxtjson.FileName), configured.Path, "path")
+	assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
 	assert.Equal(t, []string{"use-receiver-type", "use-templates-variable"}, configured.Flags, "flags")
 	assert.Empty(t, jobs, "jobs")
 }
@@ -93,9 +93,9 @@ func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 
 	jobs, err := routesJobsOf(t, workspace, "")
 
-	var missing *muxtjson.MissingEntryError
+	var missing *composite.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, filepath.Join("..", muxtjson.FileName), missing.Path, "path")
+	assert.Equal(t, filepath.Join("..", composite.FileName), missing.Path, "path")
 	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 	assert.Empty(t, jobs, "jobs")
 
@@ -221,8 +221,8 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	var groups []struct{ Source, File string }
 	require.NoError(t, json.Unmarshal(data, &groups), "groups:\n%s", data)
 	want := []struct{ Source, File string }{
-		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join("..", muxtjson.FileName)},
-		{Source: "package_defaults", File: filepath.Join("..", muxtjson.FileName)},
+		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join("..", composite.FileName)},
+		{Source: "package_defaults", File: filepath.Join("..", composite.FileName)},
 		{Source: "defaults"},
 	}
 	assert.Equal(t, want, groups, "groups")

@@ -14,8 +14,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // generatePackageCommand is muxt generate package NAME: it creates ./NAME and
@@ -45,16 +45,16 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if !token.IsIdentifier(name) {
 		return fmt.Errorf("package name %q must be a Go identifier", name)
 	}
-	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
+	f, found, err := composite.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
 		return err
 	}
 	if !found {
-		return &muxtjson.NoFileError{Dir: wd}
+		return &composite.NoFileError{Dir: wd}
 	}
 	dir := filepath.Join(wd, name)
 	if _, err := os.Stat(dir); err == nil {
-		return &muxtjson.ExistsError{Path: name}
+		return &composite.ExistsError{Path: name}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("checking %s: %w", name, err)
 	}
@@ -79,14 +79,14 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if f.Defaults.UseReceiverType == nil || *f.Defaults.UseReceiverType != receiver {
 		entry.UseReceiverType = &receiver
 	}
-	candidate := &muxtjson.File{Dir: f.Dir, Name: f.Name, Defaults: f.Defaults, Packages: maps.Clone(f.Packages)}
+	candidate := &composite.File{Dir: f.Dir, Name: f.Name, Defaults: f.Defaults, Packages: maps.Clone(f.Packages)}
 	if candidate.Packages == nil {
-		candidate.Packages = map[string]muxtjson.Entry{}
+		candidate.Packages = map[string]composite.Entry{}
 	}
 	candidate.Packages[key] = entry
 	resolved, _ := candidate.Resolve(key)
 	if _, err := entryConfiguration(resolved, dir, getEnv, version); err != nil {
-		return &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
+		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 	}
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", name, err)
@@ -120,7 +120,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 // entryFromFlags returns the entry that records each generate flag given, under
 // its muxt.json key, with the value the flag holds. usesTemplatesVariable is
 // true when the deprecated templates variable flag was given instead.
-func entryFromFlags(flags *pflag.FlagSet, config generate.RoutesFileConfiguration, usesTemplatesVariable bool) (muxtjson.Entry, error) {
+func entryFromFlags(flags *pflag.FlagSet, config generate.RoutesFileConfiguration, usesTemplatesVariable bool) (composite.Entry, error) {
 	values := map[string]any{}
 	for _, field := range entryFields() {
 		given := flags.Changed(field.Name) || (field.Name == useTemplatesVariable && usesTemplatesVariable)
@@ -130,11 +130,11 @@ func entryFromFlags(flags *pflag.FlagSet, config generate.RoutesFileConfiguratio
 	}
 	data, err := json.Marshal(values)
 	if err != nil {
-		return muxtjson.Entry{}, fmt.Errorf("encoding generate flags: %w", err)
+		return composite.Entry{}, fmt.Errorf("encoding generate flags: %w", err)
 	}
-	var entry muxtjson.Entry
+	var entry composite.Entry
 	if err := json.Unmarshal(data, &entry); err != nil {
-		return muxtjson.Entry{}, fmt.Errorf("reading generate flags: %w", err)
+		return composite.Entry{}, fmt.Errorf("reading generate flags: %w", err)
 	}
 	return entry, nil
 }
@@ -149,10 +149,10 @@ func generateConfigCommand(workingDirectory *string) *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
-			if err := muxtjson.Create(*workingDirectory); err != nil {
+			if err := composite.Create(*workingDirectory); err != nil {
 				return err
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), "wrote "+muxtjson.FileName)
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "wrote "+composite.FileName)
 			return err
 		},
 	}

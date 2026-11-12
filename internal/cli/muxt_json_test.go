@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // TestEveryGenerateFlagHasMuxtJSONKey states that the generate flags, minus
@@ -41,10 +41,10 @@ func TestEveryGenerateFlagHasMuxtJSONKey(t *testing.T) {
 	assert.Empty(t, namesNotIn(keys, flagNames), "muxt.json keys with no generate flag")
 }
 
-// muxtJSONEntryKeys returns the json key of each field of muxtjson.Entry.
+// muxtJSONEntryKeys returns the json key of each field of composite.Entry.
 func muxtJSONEntryKeys() []string {
 	var keys []string
-	entry := reflect.TypeFor[muxtjson.Entry]()
+	entry := reflect.TypeFor[composite.Entry]()
 	for i := range entry.NumField() {
 		name, _, _ := strings.Cut(entry.Field(i).Tag.Get("json"), ",")
 		if name != "" && name != "-" {
@@ -179,7 +179,7 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 func TestGenerateAppliesPackageDefaults(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
 
@@ -195,7 +195,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	t.Run("string", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {"use_receiver_type": "Server"}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		jobs := generateJobsOf(t, dir, "generate")
 
@@ -206,7 +206,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	t.Run("list is replaced", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use_templates_variable": ["templates", "pages"]}, "packages": {"example.com/m": {"use_templates_variable": ["admin"]}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		jobs := generateJobsOf(t, dir, "generate")
 
@@ -217,7 +217,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	t.Run("false overrides a default of true", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"output_routes_func_with_logger_param": true}, "packages": {"example.com/m": {"output_routes_func_with_logger_param": false}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		jobs := generateJobsOf(t, dir, "generate")
 
@@ -233,11 +233,11 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"zzz": true}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		called, err := generateFailureOf(t, dir)
 
-		var unknown *muxtjson.UnknownKeyError
+		var unknown *composite.UnknownKeyError
 		require.ErrorAs(t, err, &unknown, "error %v", err)
 		assert.Equal(t, "package_defaults", unknown.Where, "where")
 		assert.Equal(t, "zzz", unknown.Key, "key")
@@ -248,11 +248,11 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	t.Run("dashed", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use-receiver-type": "T"}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		called, err := generateFailureOf(t, dir)
 
-		var dashed *muxtjson.DashedKeyError
+		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
 		assert.Equal(t, "package_defaults", dashed.Where, "where")
 		assert.Equal(t, `muxt.json: package_defaults: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
@@ -262,11 +262,11 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	t.Run("deprecated", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"package_defaults": {"receiver_type": "T"}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		called, err := generateFailureOf(t, dir)
 
-		var deprecated *muxtjson.DeprecatedKeyError
+		var deprecated *composite.DeprecatedKeyError
 		require.ErrorAs(t, err, &deprecated, "error %v", err)
 		assert.Equal(t, "package_defaults", deprecated.Where, "where")
 		assert.Equal(t, `muxt.json: package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
@@ -305,14 +305,14 @@ func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
 func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 	dir := moduleDir(t)
 	const file = "{\n  \"packages\": {\n    \".\": x\n  }\n}\n"
-	path := filepath.Join(dir, muxtjson.FileName)
+	path := filepath.Join(dir, composite.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
-	var parseErr *muxtjson.ParseError
+	var parseErr *composite.ParseError
 	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, parseErr.Path, "path")
+	assert.Equal(t, composite.FileName, parseErr.Path, "path")
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 10, parseErr.Col, "column")
 	assert.Equal(t, "muxt.json:3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
@@ -328,13 +328,13 @@ func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = "{\n  \"packages\": {\n    \"workspace\": x\n  }\n}\n"
-	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, workspace)
 
-	var parseErr *muxtjson.ParseError
+	var parseErr *composite.ParseError
 	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	assert.Equal(t, filepath.Join("..", muxtjson.FileName), parseErr.Path, "path")
+	assert.Equal(t, filepath.Join("..", composite.FileName), parseErr.Path, "path")
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 18, parseErr.Col, "column")
 	assert.Equal(t, "../muxt.json:3:18: invalid character 'x' looking for beginning of value", err.Error(), "message")
@@ -347,14 +347,14 @@ func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
 func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"packages": {"example.com/m": {"nope": true}}}`
-	path := filepath.Join(dir, muxtjson.FileName)
+	path := filepath.Join(dir, composite.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
-	var unknown *muxtjson.UnknownKeyError
+	var unknown *composite.UnknownKeyError
 	require.ErrorAs(t, err, &unknown, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, unknown.Path, "path")
+	assert.Equal(t, composite.FileName, unknown.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, unknown.Where, "where")
 	assert.Equal(t, "nope", unknown.Key, "key")
 	assert.Equal(t, `muxt.json: packages["example.com/m"]: unknown key "nope"`, err.Error(), "message")
@@ -367,14 +367,14 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"packages": {"example.com/m": {"receiver_type": "Server"}}}`
-	path := filepath.Join(dir, muxtjson.FileName)
+	path := filepath.Join(dir, composite.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
-	var deprecated *muxtjson.DeprecatedKeyError
+	var deprecated *composite.DeprecatedKeyError
 	require.ErrorAs(t, err, &deprecated, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, deprecated.Path, "path")
+	assert.Equal(t, composite.FileName, deprecated.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, deprecated.Where, "where")
 	assert.Equal(t, "receiver_type", deprecated.Key, "key")
 	assert.Equal(t, "use_receiver_type", deprecated.Replacement, "replacement")
@@ -390,7 +390,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 	t.Run("underscored keys reach the generator", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server", "output_routes_func": "Mount"}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		got := generateConfigurationOf(t, dir, "generate")
 
@@ -401,13 +401,13 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 	t.Run("dashed key fails naming the underscore form", func(t *testing.T) {
 		dir := moduleDir(t)
 		const file = `{"packages": {"example.com/m": {"use-receiver-type": "Server"}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		called, err := generateFailureOf(t, dir)
 
-		var dashed *muxtjson.DashedKeyError
+		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
-		assert.Equal(t, muxtjson.FileName, dashed.Path, "path")
+		assert.Equal(t, composite.FileName, dashed.Path, "path")
 		assert.Equal(t, `packages["example.com/m"]`, dashed.Where, "where")
 		assert.Equal(t, "use-receiver-type", dashed.Key, "key")
 		assert.Equal(t, "use_receiver_type", dashed.Underscored, "underscored")
@@ -422,14 +422,14 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"packages": {"example.com/m": {"output_htmx": true, "output_datastar": true}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
 	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
-	var invalid *muxtjson.InvalidEntryError
+	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, composite.FileName, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
 	assert.EqualError(t, invalid.Err, flagMessage, "flag error")
 	assert.Equal(t, `muxt.json: packages["example.com/m"]: `+flagMessage, err.Error(), "message")
@@ -443,16 +443,16 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"packages": {"example.com/m": {"output_multipart_max_memory": "lots"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
 	var flagCfg generate.RoutesFileConfiguration
 	flagErr := (&multipartMaxMemoryFlag{cfg: &flagCfg}).Set("lots")
 	require.Error(t, flagErr)
-	var invalid *muxtjson.InvalidEntryError
+	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, composite.FileName, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
 	assert.Equal(t, `muxt.json: packages["example.com/m"]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
 	assert.False(t, called, "generate runner called")
@@ -475,13 +475,13 @@ func TestGenerateRejectsRelativeMuxtJSONKey(t *testing.T) {
 			dir := moduleDir(t)
 			file, err := json.Marshal(map[string]any{"packages": map[string]any{tt.key: map[string]any{}}})
 			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), file, 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), file, 0o644))
 
 			called, err := generateFailureOf(t, dir)
 
-			var keyForm *muxtjson.KeyFormError
+			var keyForm *composite.KeyFormError
 			require.ErrorAs(t, err, &keyForm, "error %v", err)
-			assert.Equal(t, muxtjson.FileName, keyForm.Path, "path")
+			assert.Equal(t, composite.FileName, keyForm.Path, "path")
 			assert.Equal(t, tt.key, keyForm.Key, "key")
 			assert.Equal(t, tt.want, keyForm.ImportPath, "import path")
 			assert.Equal(t, `muxt.json: packages key "`+tt.key+`" is not an import path; write "`+tt.want+`"`, err.Error(), "message")
@@ -527,13 +527,13 @@ func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m": {}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, workspace)
 
-	var missing *muxtjson.MissingEntryError
+	var missing *composite.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, filepath.Join("..", muxtjson.FileName), missing.Path, "path")
+	assert.Equal(t, filepath.Join("..", composite.FileName), missing.Path, "path")
 	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 	assert.Equal(t, `../muxt.json: no packages entry "example.com/m/workspace"; add one to generate this directory`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
@@ -551,13 +551,13 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m/workspace": {}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOfLine(t, workspace, "generate --output-htmx")
 
-	var configured *muxtjson.ConfiguredDirectoryError
+	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
-	assert.Equal(t, filepath.Join("..", muxtjson.FileName), configured.Path, "path")
+	assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
 	assert.Equal(t, []string{"output-htmx"}, configured.Flags, "flags")
 	assert.Equal(t, "configure generate with fields in ../muxt.json instead of flags", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
@@ -570,7 +570,7 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 	dir := moduleDir(t)
 	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	var jobs []generateJob
 	err := commands(dir, strings.Fields("generate -v"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
@@ -601,7 +601,7 @@ func TestGenerateVerboseSetsEveryEntryJob(t *testing.T) {
 		t.Run(tc.commandLine, func(t *testing.T) {
 			dir := moduleDir(t)
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {"example.com/m": {}, "example.com/m/workspace": {}}}`), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m": {}, "example.com/m/workspace": {}}}`), 0o644))
 
 			jobs := generateJobsOf(t, dir, tc.commandLine)
 
@@ -623,7 +623,7 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/workspace": {"use_receiver_type": "T1"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(parent, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	var jobs []generateJob
 	err := commands(parent, strings.Fields("-C workspace generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
@@ -647,7 +647,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}, "example.com/m": {"use_receiver_type": "Root"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
 
@@ -667,14 +667,14 @@ func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 	dir := moduleDir(t)
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
 	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/workspace": {"output_htmx": true, "output_datastar": true}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
 
 	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
-	var invalid *muxtjson.InvalidEntryError
+	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, invalid.Path, "path")
+	assert.Equal(t, composite.FileName, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m/workspace"]`, invalid.Where, "where")
 	assert.Equal(t, `muxt.json: packages["example.com/m/workspace"]: `+flagMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
@@ -688,7 +688,7 @@ func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
 
@@ -706,7 +706,7 @@ func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"example.com/m": {"output_htmx": true, "output_datastar": true}, "example.com/m/workspace": {"use_receiver_type": "T1"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, workspace, "generate")
 
@@ -734,13 +734,13 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 			dir := moduleDir(t)
 			tt.setup(t, dir)
 			const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/gone": {"use_receiver_type": "T1"}}}`
-			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 			called, err := generateFailureOf(t, dir)
 
-			var missing *muxtjson.MissingDirectoryError
+			var missing *composite.MissingDirectoryError
 			require.ErrorAs(t, err, &missing, "error %v", err)
-			assert.Equal(t, muxtjson.FileName, missing.Path, "path")
+			assert.Equal(t, composite.FileName, missing.Path, "path")
 			assert.Equal(t, "example.com/m/gone", missing.Key, "key")
 			assert.Equal(t, "gone", missing.Dir, "dir")
 			assert.Equal(t, `muxt.json: packages["example.com/m/gone"]: directory gone does not exist`, err.Error(), "message")
@@ -819,13 +819,13 @@ func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 			dir := moduleDir(t)
 			file, err := json.Marshal(map[string]any{"packages": map[string]any{key: map[string]any{}}})
 			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), file, 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), file, 0o644))
 
 			called, err := generateFailureOf(t, dir)
 
-			var outside *muxtjson.KeyOutsideError
+			var outside *composite.KeyOutsideError
 			require.ErrorAs(t, err, &outside, "error %v", err)
-			assert.Equal(t, muxtjson.FileName, outside.Path, "path")
+			assert.Equal(t, composite.FileName, outside.Path, "path")
 			assert.Equal(t, key, outside.Key, "key")
 			assert.Equal(t, `muxt.json: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
@@ -845,7 +845,7 @@ func TestGenerateRejectsMuxtJSONKeyInModuleOutsideDirectory(t *testing.T) {
 
 	called, err := generateFailureOf(t, hypertext)
 
-	var outside *muxtjson.KeyOutsideError
+	var outside *composite.KeyOutsideError
 	require.ErrorAs(t, err, &outside, "error %v", err)
 	assert.Equal(t, `muxt.json: packages key "example.com/m/internal/other" is outside the file's directory`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
@@ -861,16 +861,16 @@ func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
 	elsewhere := filepath.Join(root, "elsewhere")
 	require.NoError(t, os.Mkdir(project, 0o755))
 	require.NoError(t, os.Mkdir(elsewhere, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(project, muxtjson.FileName), []byte(`{"packages": {"example.com/m/project/linked": {}}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(project, composite.FileName), []byte(`{"packages": {"example.com/m/project/linked": {}}}`), 0o644))
 	if err := os.Symlink(elsewhere, filepath.Join(project, "linked")); err != nil {
 		t.Skipf("creating a symbolic link: %v", err)
 	}
 
 	called, err := generateFailureOf(t, project)
 
-	var outside *muxtjson.OutsideDirectoryError
+	var outside *composite.OutsideDirectoryError
 	require.ErrorAs(t, err, &outside, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, outside.Path, "path")
+	assert.Equal(t, composite.FileName, outside.Path, "path")
 	assert.Equal(t, "example.com/m/project/linked", outside.Key, "key")
 	assert.Equal(t, "linked", outside.Dir, "dir")
 	assert.Equal(t, `muxt.json: packages["example.com/m/project/linked"]: directory linked resolves outside the file's directory`, err.Error(), "message")
@@ -884,7 +884,7 @@ func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
 	dir := moduleDir(t)
 	inside := filepath.Join(dir, "inside")
 	require.NoError(t, os.Mkdir(inside, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {"example.com/m/linked": {}}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m/linked": {}}}`), 0o644))
 	if err := os.Symlink(inside, filepath.Join(dir, "linked")); err != nil {
 		t.Skipf("creating a symbolic link: %v", err)
 	}
@@ -904,9 +904,9 @@ func TestGenerateRejectsMuxtJSONWithoutGoMod(t *testing.T) {
 
 	called, err := generateFailureOf(t, dir)
 
-	var noModule *muxtjson.NoModuleError
+	var noModule *composite.NoModuleError
 	require.ErrorAs(t, err, &noModule, "error %v", err)
-	assert.Equal(t, muxtjson.FileName, noModule.Path, "path")
+	assert.Equal(t, composite.FileName, noModule.Path, "path")
 	assert.Equal(t, "muxt.json: no go.mod found at or above the file; package keys are import paths", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }

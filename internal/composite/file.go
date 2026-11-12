@@ -1,6 +1,7 @@
-// Package muxtjson reads a muxt.json file, which records the generate flags of
-// package directories so a flagless muxt generate knows what to write.
-package muxtjson
+// Package composite is the muxt.json file, which composes the generate
+// configuration of several packages in one module so a flagless muxt generate
+// knows what to write for each.
+package composite
 
 import (
 	"bytes"

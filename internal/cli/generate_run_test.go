@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/typelate/muxt/internal/muxtjson"
+	"github.com/typelate/muxt/internal/composite"
 )
 
 // entryModule writes a module whose packages are the keys of receivers, each
@@ -60,7 +60,7 @@ func (%s) %sPage() any { return nil }
 	for _, e := range entries {
 		all = append(all, e)
 	}
-	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {`+strings.Join(all, ",")+`}}`)
+	writeTestFile(t, dir, composite.FileName, `{"packages": {`+strings.Join(all, ",")+`}}`)
 	return dir
 }
 
@@ -188,7 +188,7 @@ type A struct{}
 func (A) APage() any { return nil }
 `)
 	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
-	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "Missing"}, "example.com/m/b": {"use_receiver_type": "B"}}}`)
+	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "Missing"}, "example.com/m/b": {"use_receiver_type": "B"}}}`)
 
 	stdout, _, err := generateWithLoader(t, dir)
 

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/muxtjson"
+	"github.com/typelate/muxt/internal/composite"
 )
 
 // templatesVariablesOf runs commandLine in wd with runners that record the
@@ -107,7 +107,7 @@ func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 
 	_, err := templatesVariablesOf(t, workspace, "check")
 
-	var missing *muxtjson.MissingEntryError
+	var missing *composite.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
 	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 }
@@ -134,9 +134,9 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 				callers: func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error { ran = true; return nil },
 			})
 
-			var configured *muxtjson.ConfiguredDirectoryError
+			var configured *composite.ConfiguredDirectoryError
 			require.ErrorAs(t, err, &configured, "error %v", err)
-			assert.Equal(t, filepath.Join("..", muxtjson.FileName), configured.Path, "path")
+			assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
 			assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
 			assert.False(t, ran, "the command ran")
 		})

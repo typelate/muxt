@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/muxtjson"
 )
 
 // generateJob is one package directory and what to generate it with. Key is
@@ -55,7 +55,7 @@ func givenEntryFlags(flags *pflag.FlagSet) []string {
 // entryLookup is where a directory stands in the nearest muxt.json.
 type entryLookup struct {
 	// File is the muxt.json at or above the directory, nil when there is none.
-	File *muxtjson.File
+	File *composite.File
 	// Key is the directory's packages key in File.
 	Key string
 	// HasEntry is false when File has no entry under Key, which is not an
@@ -66,9 +66,9 @@ type entryLookup struct {
 // lookupMuxtJSONEntry finds the nearest muxt.json at or above wd and the key
 // for wd in it.
 func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
-	f, found, err := muxtjson.Find(wd, deprecatedMuxtJSONKeys())
+	f, found, err := composite.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
-		// Find's errors already name the file, and a *muxtjson.ParseError
+		// Find's errors already name the file, and a *composite.ParseError
 		// must reach the caller as it is.
 		return entryLookup{}, err
 	}
@@ -83,7 +83,7 @@ func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
 	return entryLookup{File: f, Key: key, HasEntry: hasEntry}, nil
 }
 
-// rejectConfiguredDirectory returns a *muxtjson.ConfiguredDirectoryError when
+// rejectConfiguredDirectory returns a *composite.ConfiguredDirectoryError when
 // the muxt.json for wd has an entry for it, since that entry configures the
 // directory and flags would be a second source for the same fields.
 func rejectConfiguredDirectory(wd string, flagNames []string) error {
@@ -91,7 +91,7 @@ func rejectConfiguredDirectory(wd string, flagNames []string) error {
 	if err != nil || !lookup.HasEntry {
 		return err
 	}
-	return &muxtjson.ConfiguredDirectoryError{Path: lookup.File.Name, Flags: flagNames}
+	return &composite.ConfiguredDirectoryError{Path: lookup.File.Name, Flags: flagNames}
 }
 
 // entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
@@ -100,7 +100,7 @@ func rejectConfiguredDirectory(wd string, flagNames []string) error {
 // directory's entry alone. found is false when the flags decide the run. file
 // is the muxt.json the jobs came from, for a caller that says where each
 // setting came from.
-func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *muxtjson.File, jobs []generateJob, found bool, err error) {
+func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *composite.File, jobs []generateJob, found bool, err error) {
 	lookup, err := lookupMuxtJSONEntry(wd)
 	if err != nil || lookup.File == nil {
 		return nil, nil, false, err
@@ -113,7 +113,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 	keys := []string{key}
 	if key != ownKey {
 		if !lookup.HasEntry {
-			return nil, nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
+			return nil, nil, false, &composite.MissingEntryError{Path: f.Name, Key: key}
 		}
 	} else {
 		if len(f.Packages) == 0 {
@@ -129,7 +129,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 		entry, _ := f.Resolve(k)
 		config, err := entryConfiguration(entry, dir, getEnv, version)
 		if err != nil {
-			return nil, nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
+			return nil, nil, false, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
 		}
 		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
 	}
@@ -142,7 +142,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 // for dir would be a second source for the same settings, so it is rejected by
 // rejectConfiguredDirectory. Without them the entry is read the way generate
 // reads it, so a directory below a muxt.json with no entry for it is a
-// *muxtjson.MissingEntryError, as it is for generate. The command takes only
+// *composite.MissingEntryError, as it is for generate. The command takes only
 // the settings it has flags for from the job.
 func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
 	// A path that is not a directory has no entry. The command's runner is
@@ -172,12 +172,12 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 	return generateJob{}, false, nil
 }
 
-// requireEntryDirectory returns a *muxtjson.MissingDirectoryError unless dir,
+// requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,
 // the directory of key in f, is a directory, and a
-// *muxtjson.OutsideDirectoryError when it is one that a symbolic link resolves
+// *composite.OutsideDirectoryError when it is one that a symbolic link resolves
 // outside f's directory. wd is the working directory the errors name dir
 // relative to.
-func requireEntryDirectory(f *muxtjson.File, key, wd, dir string) error {
+func requireEntryDirectory(f *composite.File, key, wd, dir string) error {
 	info, statErr := os.Stat(dir)
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
@@ -187,14 +187,14 @@ func requireEntryDirectory(f *muxtjson.File, key, wd, dir string) error {
 		return fmt.Errorf("directory of muxt.json entry %q from %s: %w", key, wd, err)
 	}
 	if statErr != nil || !info.IsDir() {
-		return &muxtjson.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
+		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
 	}
 	inside, err := resolvesInside(f.Dir, dir)
 	if err != nil {
 		return fmt.Errorf("muxt.json entry %q: %w", key, err)
 	}
 	if !inside {
-		return &muxtjson.OutsideDirectoryError{Path: f.Name, Key: key, Dir: rel}
+		return &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: rel}
 	}
 	return nil
 }
@@ -226,5 +226,5 @@ func noVersion() (string, bool) { return "", false }
 // package with no muxt.json entry, for a command that reads a package and sets
 // only the few fields it has flags for.
 func defaultConfiguration(dir string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
-	return entryConfiguration(muxtjson.Entry{}, dir, getEnv, noVersion)
+	return entryConfiguration(composite.Entry{}, dir, getEnv, noVersion)
 }

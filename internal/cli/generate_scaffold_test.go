@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/internal/muxtjson"
+	"github.com/typelate/muxt/internal/composite"
 )
 
 // runCommand runs a muxt command line in dir, with no configuration runners,
@@ -133,7 +133,7 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 	_, err := runCommand(t, root, "generate package workspace --output-htmx")
 
 	require.NoError(t, err)
-	var got muxtjson.File
+	var got composite.File
 	data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &got))
@@ -189,7 +189,7 @@ func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
 			require.NoError(t, err, "workspace.go parses")
 			assert.Equal(t, "workspace", file.Name.Name, "package name")
 			assert.Contains(t, declaredTypeNames(file), tt.wantType, "receiver type")
-			var got muxtjson.File
+			var got composite.File
 			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(data, &got))
