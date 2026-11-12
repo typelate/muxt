@@ -349,3 +349,23 @@ var TemplateSource embed.FS
 	require.Error(t, err, "generate: %s", output)
 	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
+
+// TestCheckDoesNotReportUnusedSharedTemplate states that a template defined in
+// the other package's file that the package never calls is not reported as
+// unused: the package that owns the file is the one that can remove it.
+func TestCheckDoesNotReportUnusedSharedTemplate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/footer.gohtml": `{{define "footer"}}<footer></footer>{{end}}`,
+	})
+	workspace := filepath.Join(dir, "workspace")
+	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
+	require.NoError(t, err, "generate: %s", output)
+
+	output, err = runMuxt(t, workspace, "check")
+
+	require.NoError(t, err, "check: %s", output)
+	assert.NotContains(t, output, "Unused templates", "check output")
+}

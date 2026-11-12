@@ -112,7 +112,8 @@ func Check(config CheckConfiguration, logger *log.Logger, pkg source.Package) (C
 		diagnostics.reportOtherCalls(logger)
 
 		if walkedEveryCall {
-			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates, config.AllowUnused)...)
+			own := func(name string) bool { return !lt.Definitions[name].Shared() }
+			errs = append(errs, reportUnusedTemplates(logger, lt.Set, executedTemplates, own, config.AllowUnused)...)
 		}
 	}
 
@@ -333,9 +334,8 @@ func callLine(qualifier types.Qualifier, call source.Call) string {
 // reportUnusedTemplates logs the templates no ExecuteTemplate call reaches
 // and returns one error per kind. With allowUnused, unused templates that
 // are not routes are listed without an error.
-func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTemplates map[string][]TemplateExecution, allowUnused bool) []error {
+func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTemplates map[string][]TemplateExecution, own func(name string) bool, allowUnused bool) []error {
 	var errs []error
-	own := func(string) bool { return true }
 	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates, own), own)
 	if len(unusedRoutes) > 0 {
 		// Route templates with no ExecuteTemplate caller usually mean
