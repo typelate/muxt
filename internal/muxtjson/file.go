@@ -20,7 +20,7 @@ import (
 // FileName is the name of the configuration file muxt looks for.
 const FileName = "muxt.json"
 
-// File is a muxt.json. Dir is the directory holding the file, set by Read.
+// File is a muxt.json. Dir is the directory holding the file, set by Find.
 // Packages is keyed by the full import path of each package, as Go names it,
 // such as "example.com/internal/hypertext/workspace".
 type File struct {
@@ -64,7 +64,7 @@ func (f *File) Resolve(key string) (e Entry, found bool) {
 // above the module belongs to another project, so it is not read. When no
 // go.mod is found on the way up, the walk goes to the filesystem root. found is
 // false when the walk ends without a muxt.json. deprecated maps an old key to
-// its replacement, as Read takes it.
+// its replacement, as Find takes it.
 func Find(wd string, deprecated map[string]string) (f *File, found bool, err error) {
 	start, err := filepath.Abs(wd)
 	if err != nil {
@@ -78,7 +78,7 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 		if err != nil {
 			return nil, false, fmt.Errorf("path of %s from %s: %w", dir, start, err)
 		}
-		f, err := Read(filepath.Join(dir, FileName), shown, deprecated)
+		f, err := read(filepath.Join(dir, FileName), shown, deprecated)
 		if err == nil {
 			return f, true, nil
 		}
@@ -171,13 +171,13 @@ func (f *File) KeyFor(dir string) (string, error) {
 	return path.Join(f.module, filepath.ToSlash(rel)), nil
 }
 
-// Keys returns the packages keys sorted. Read rejects a key that is not an
+// Keys returns the packages keys sorted. Find rejects a key that is not an
 // import path in clean form, so the keys are the ones a person wrote.
 func (f *File) Keys() []string {
 	return slices.Sorted(maps.Keys(f.Packages))
 }
 
-// DirOf returns the absolute directory of a packages key, which Read has
+// DirOf returns the absolute directory of a packages key, which Find has
 // checked is an import path in f's module.
 func (f *File) DirOf(key string) string {
 	rel := strings.TrimPrefix(strings.TrimPrefix(key, f.module), "/")
@@ -237,11 +237,11 @@ type Entry struct {
 	UseTemplatesVariable []string `json:"use_templates_variable,omitempty"`
 }
 
-// Read reads the muxt.json at path. shown is the name its errors give the
+// read reads the muxt.json at path. shown is the name its errors give the
 // file, relative to the working directory, so a message names the file the
 // way the person typed it. A missing file is an error that matches
 // fs.ErrNotExist.
-func Read(path, shown string, deprecated map[string]string) (*File, error) {
+func read(path, shown string, deprecated map[string]string) (*File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", shown, err)
