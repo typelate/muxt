@@ -25,6 +25,19 @@ func writeTestFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
+// testModule is the module path of the go.mod moduleDir writes, so a test
+// spells a package's import path as testModule + "/dir".
+const testModule = "example.com/m"
+
+// moduleDir returns a temporary directory holding a go.mod for testModule, the
+// root a muxt.json needs for its packages keys to be import paths.
+func moduleDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module "+testModule+"\n")
+	return dir
+}
+
 func TestPlural(t *testing.T) {
 	for _, tt := range []struct {
 		n    int

@@ -45,7 +45,7 @@ func writeMuxtJSON(t *testing.T, dir, file string) {
 // variable and receiver type, with package_defaults applied. The shared flags
 // that run settings (-v, --format) do not count as configuration.
 func TestRoutesListsMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"package_defaults": {"use_receiver_type_package": "example.com/m/types"}, "packages": {".": {"use_templates_variable": ["pages"], "use_receiver_type": "Server"}}}`)
 
 	for _, commandLine := range []string{"", "-v", "--format json"} {
@@ -68,7 +68,7 @@ func TestRoutesListsMuxtJSONEntry(t *testing.T) {
 // shares with an entry, given where muxt.json has an entry for the working
 // directory, fails with the error generate returns, and nothing is listed.
 func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"workspace": {}}}`)
@@ -86,7 +86,7 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 // flags in a directory below a muxt.json with no entry for it fails with the
 // error generate returns. With a flag, the flags configure the listing.
 func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {".": {}}}`)
@@ -122,7 +122,7 @@ func reportOf(t *testing.T, wd, commandLine string) string {
 // section holds each muxt.json entry key exactly once, as a line written the
 // way muxt.json writes it, whether the entry sets it or not.
 func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"packages": {".": {"use_receiver_type": "Server"}}}`)
 
 	text := reportOf(t, dir, "")
@@ -191,7 +191,7 @@ func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
 // directory, and the entry's key, written as its muxt.json key and value, and
 // that the setting is not repeated under another heading.
 func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`)
@@ -207,7 +207,7 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 // the two muxt.json groups hold the file's path in File, and their Source is the
 // packages key or package_defaults without it, while the defaults group has no File.
 func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"workspace": {"use_receiver_type": "T1"}}}`)
@@ -233,7 +233,7 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 // generate would use after defaulting, in the order muxt generate --help lists
 // the flags.
 func TestRoutesConfigurationDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
 
 	text := reportOf(t, dir, "")
@@ -272,7 +272,7 @@ func TestRoutesConfigurationDefaults(t *testing.T) {
 // between the packages heading and defaults, and that a setting the entry sets
 // itself stays under the packages heading.
 func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {".": {"use_receiver_type": "T1"}}}`)
 
 	text := reportOf(t, dir, "")
@@ -339,7 +339,7 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 // a directory no muxt.json entry configures, is under the heading flags, ahead
 // of defaults, so it is not reported as a default it overrode.
 func TestRoutesConfigurationGroupsFlags(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
 
 	text := reportOf(t, dir, "--use-receiver-type=T1 --use-templates-variable=pages")

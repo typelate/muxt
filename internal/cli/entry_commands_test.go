@@ -41,7 +41,7 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 // flags in a directory a muxt.json entry configures lists the callers of the
 // templates variable that entry names.
 func TestCallersReadsMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-callers")
@@ -54,7 +54,7 @@ func TestCallersReadsMuxtJSONEntry(t *testing.T) {
 // in a directory a muxt.json entry configures lists the calls of the templates
 // variable that entry names.
 func TestCallsReadsMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-calls")
@@ -67,7 +67,7 @@ func TestCallsReadsMuxtJSONEntry(t *testing.T) {
 // directory a muxt.json entry configures checks the templates variable that
 // entry names.
 func TestCheckReadsMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "check")
@@ -81,7 +81,7 @@ func TestCheckReadsMuxtJSONEntry(t *testing.T) {
 // is not a package directory; looking for a muxt.json under a file must not
 // fail first with a message about muxt.json.
 func TestCheckLeavesAFileArgumentToTheRunner(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644))
 
 	for _, command := range []string{"check", "list-template-calls", "list-template-callers"} {
@@ -100,7 +100,7 @@ func TestCheckLeavesAFileArgumentToTheRunner(t *testing.T) {
 // flags in a directory below a muxt.json with no entry for it fails with the
 // error generate returns.
 func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {".": {}}}`)
@@ -116,7 +116,7 @@ func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 // listings given a flag the muxt.json entry for the working directory also sets
 // fail with the error generate returns, and the command does not run.
 func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"workspace": {}}}`)
@@ -147,7 +147,7 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 // flags a command has that a muxt.json entry does not set, such as --verbose,
 // --format and --match, do not stop the entry configuring the command.
 func TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_templates_variable": ["pages"]}}}`)

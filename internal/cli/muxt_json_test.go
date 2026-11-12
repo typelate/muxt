@@ -101,7 +101,7 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 		{name: "output_static_assets_path", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input_static_assets_directory": "assets", "output_static_assets_path": "/static"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := moduleDir(t)
 			want := generateConfigurationOf(t, dir, "generate "+tt.args)
 
 			file, err := json.Marshal(map[string]any{"packages": map[string]any{".": tt.entry}})
@@ -119,7 +119,7 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 // default identifiers. Those defaults rename every name not given explicitly,
 // so the entry must mark its name as given to keep it.
 func TestMuxtJSONEntryNameSurvivesUnexportedDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"output_exported_default_identifiers": false, "output_routes_func": "Mount"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
@@ -148,7 +148,7 @@ func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.Rou
 // directory configures a flagless muxt generate there. Nothing is loaded: the
 // generate runner records the job it is handed.
 func TestGenerateWithMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"use_receiver_type": "Server", "output_routes_func": "templateRoutes"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
@@ -177,7 +177,7 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 // entry leaves unset reaches that entry's configuration on a flagless muxt
 // generate. Nothing is loaded: the generate runner records the job it is handed.
 func TestGenerateAppliesPackageDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -193,7 +193,7 @@ func TestGenerateAppliesPackageDefaults(t *testing.T) {
 // extended, and a boolean the entry sets to false overrides a default of true.
 func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	t.Run("string", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {"use_receiver_type": "Server"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -204,7 +204,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	})
 
 	t.Run("list is replaced", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use_templates_variable": ["templates", "pages"]}, "packages": {".": {"use_templates_variable": ["admin"]}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -215,7 +215,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 	})
 
 	t.Run("false overrides a default of true", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"output_routes_func_with_logger_param": true}, "packages": {".": {"output_routes_func_with_logger_param": false}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -231,7 +231,7 @@ func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
 // under package_defaults. The runner is not called.
 func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"zzz": true}, "packages": {".": {}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -246,7 +246,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	})
 
 	t.Run("dashed", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"use-receiver-type": "T"}, "packages": {".": {}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -260,7 +260,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 	})
 
 	t.Run("deprecated", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"package_defaults": {"receiver_type": "T"}, "packages": {".": {}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -279,7 +279,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 // holding go.mod. Nothing is loaded: the generate runner records the job it is
 // handed.
 func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	module := filepath.Join(parent, "module")
 	require.NoError(t, os.Mkdir(module, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(module, "go.mod"), []byte("module example.com/m\n"), 0o644))
@@ -303,7 +303,7 @@ func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
 // valid JSON fails a flagless muxt generate at the byte the parser rejects,
 // naming the file and the line and column. The runner is not called.
 func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = "{\n  \"packages\": {\n    \".\": x\n  }\n}\n"
 	path := filepath.Join(dir, muxtjson.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
@@ -324,7 +324,7 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 // flagless muxt generate, naming the file relative to the working directory.
 // The runner is not called.
 func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = "{\n  \"packages\": {\n    \"workspace\": x\n  }\n}\n"
@@ -345,7 +345,7 @@ func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
 // generate flag reads fails a flagless muxt generate, naming the key, its
 // entry, and the file. The runner is not called.
 func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"nope": true}}}`
 	path := filepath.Join(dir, muxtjson.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
@@ -365,7 +365,7 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 // that is a deprecated flag name fails a flagless muxt generate, naming the
 // key and the key to write instead. The runner is not called.
 func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"receiver_type": "Server"}}}`
 	path := filepath.Join(dir, muxtjson.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
@@ -388,7 +388,7 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 // form would accept, fails a flagless muxt generate naming the underscore form.
 func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 	t.Run("underscored keys reach the generator", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"packages": {".": {"use_receiver_type": "Server", "output_routes_func": "Mount"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -399,7 +399,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 	})
 
 	t.Run("dashed key fails naming the underscore form", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := moduleDir(t)
 		const file = `{"packages": {".": {"use-receiver-type": "Server"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -420,7 +420,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 // whose values a generate flag rejects fails a flagless muxt generate with the
 // flag's own error under the entry's location. The runner is not called.
 func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"output_htmx": true, "output_datastar": true}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -441,7 +441,7 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 // flagless muxt generate, naming the file once, the entry, and the key, then
 // the flag's own error. The runner is not called.
 func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"output_multipart_max_memory": "lots"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -462,7 +462,7 @@ func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 // not in clean form fails a muxt generate, even one with flags, naming the key
 // and its clean form. The runner is not called.
 func TestGenerateRejectsUncleanMuxtJSONKey(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {"./workspace/": {}}}`
 	path := filepath.Join(dir, muxtjson.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
@@ -483,7 +483,7 @@ func TestGenerateRejectsUncleanMuxtJSONKey(t *testing.T) {
 // the file and the missing key. With a generate flag the same directory is
 // generated from the flags. The runner is not called for the failure.
 func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {".": {}}}`
@@ -507,7 +507,7 @@ func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 // the person to configure the directory in the file. The flag names are the
 // ones given, sorted. The runner is not called.
 func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"workspace": {}}}`
@@ -528,7 +528,7 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 // from that entry. Verbose is not a generate setting, so it does not reject the
 // entry. The runner records the job it is handed.
 func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	const file = `{"packages": {".": {"use_receiver_type": "Server"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
 
@@ -559,7 +559,7 @@ func TestGenerateVerboseSetsEveryEntryJob(t *testing.T) {
 		{commandLine: "generate", want: false},
 	} {
 		t.Run(tc.commandLine, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := moduleDir(t)
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {".": {}, "workspace": {}}}`), 0o644))
 
@@ -579,7 +579,7 @@ func TestGenerateVerboseSetsEveryEntryJob(t *testing.T) {
 // generate flag, so it does not reject the entries. The runner records the job
 // it is handed.
 func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {".": {"use_receiver_type": "Root"}, "workspace": {"use_receiver_type": "T1"}}}`
@@ -603,7 +603,7 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 // directory holding a muxt.json hands the generate runner one job per entry,
 // in key order, each configured by its own entry. Nothing is loaded.
 func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}, ".": {"use_receiver_type": "Root"}}}`
@@ -624,7 +624,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 // generate in the muxt.json directory fails when any entry has values a flag
 // rejects, naming that entry, and the generate runner is not called.
 func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
 	const file = `{"packages": {".": {"use_receiver_type": "Root"}, "workspace": {"output_htmx": true, "output_datastar": true}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
@@ -644,7 +644,7 @@ func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 // entry is workspace, run in the muxt.json directory, generates workspace alone:
 // the directory itself has no entry, so nothing is generated for it.
 func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`
@@ -662,7 +662,7 @@ func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
 // generate in workspace, a sub-directory, generates only workspace's entry. An
 // invalid entry for the muxt.json directory does not fail that run.
 func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {".": {"output_htmx": true, "output_datastar": true}, "workspace": {"use_receiver_type": "T1"}}}`
@@ -691,7 +691,7 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := moduleDir(t)
 			tt.setup(t, dir)
 			const file = `{"packages": {".": {"use_receiver_type": "Root"}, "gone": {"use_receiver_type": "T1"}}}`
 			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
@@ -750,7 +750,7 @@ func generateFailureOfLine(t *testing.T, dir, commandLine string) (called bool, 
 // the muxt.json found in a parent. Nothing is loaded: the generate runner
 // records the job it is handed.
 func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
-	parent := t.TempDir()
+	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	const file = `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`
@@ -776,7 +776,7 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 	for _, key := range []string{"../other", "/abs", ".."} {
 		t.Run(key, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := moduleDir(t)
 			file, err := json.Marshal(map[string]any{"packages": map[string]any{key: map[string]any{}}})
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), file, 0o644))
@@ -798,7 +798,7 @@ func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 // directory fails a flagless muxt generate, naming the key, before the generate
 // runner is called.
 func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
-	root := t.TempDir()
+	root := moduleDir(t)
 	project := filepath.Join(root, "project")
 	elsewhere := filepath.Join(root, "elsewhere")
 	require.NoError(t, os.Mkdir(project, 0o755))
@@ -823,7 +823,7 @@ func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
 // whose directory is a symbolic link to another directory inside the muxt.json's
 // directory is a job like any other. The runner records the job it is handed.
 func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	inside := filepath.Join(dir, "inside")
 	require.NoError(t, os.Mkdir(inside, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(`{"packages": {"linked": {}}}`), 0o644))
