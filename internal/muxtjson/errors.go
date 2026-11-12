@@ -56,6 +56,18 @@ func (e *MissingEntryError) Error() string {
 	return fmt.Sprintf("%s: no packages entry %q; add one to generate this directory", e.Path, e.Key)
 }
 
+// MissingDirectoryError reports a muxt.json entry whose directory does not
+// exist or is a file. Key is the packages key and Dir the key's directory
+// relative to the working directory, the way the person would type it.
+type MissingDirectoryError struct {
+	Path, Key, Dir string
+}
+
+// Error returns the path, the entry, and the directory on one line.
+func (e *MissingDirectoryError) Error() string {
+	return fmt.Sprintf("%s: packages[%q]: directory %s does not exist", e.Path, e.Key, e.Dir)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

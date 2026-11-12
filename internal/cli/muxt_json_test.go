@@ -514,6 +514,39 @@ func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
 	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "job receiver type")
 }
 
+// TestGenerateRejectsMissingMuxtJSONDirectory states that a muxt.json entry for
+// a directory that does not exist, or that is a file, fails a flagless muxt
+// generate in the muxt.json directory, naming the key before any entry is
+// generated. The generate runner is not called.
+func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		setup func(t *testing.T, dir string)
+	}{
+		{name: "missing", setup: func(*testing.T, string) {}},
+		{name: "file", setup: func(t *testing.T, dir string) {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "gone"), []byte("not a directory\n"), 0o644))
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tt.setup(t, dir)
+			const file = `{"packages": {".": {"use-receiver-type": "Root"}, "gone": {"use-receiver-type": "T1"}}}`
+			require.NoError(t, os.WriteFile(filepath.Join(dir, muxtjson.FileName), []byte(file), 0o644))
+
+			called, err := generateFailureOf(t, dir)
+
+			var missing *muxtjson.MissingDirectoryError
+			require.ErrorAs(t, err, &missing, "error %v", err)
+			assert.Equal(t, muxtjson.FileName, missing.Path, "path")
+			assert.Equal(t, "gone", missing.Key, "key")
+			assert.Equal(t, "gone", missing.Dir, "dir")
+			assert.Equal(t, `muxt.json: packages["gone"]: directory gone does not exist`, err.Error(), "message")
+			assert.False(t, called, "generate runner called")
+		})
+	}
+}
+
 // generateJobsOf runs a generate command line in dir and returns the jobs the
 // generate runner is handed. Nothing is loaded.
 func generateJobsOf(t *testing.T, dir, commandLine string) []generateJob {

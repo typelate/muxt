@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"go/token"
+	"io/fs"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -69,6 +73,9 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 	}
 	for _, k := range keys {
 		dir := f.DirOf(k)
+		if err := requireEntryDirectory(f, k, wd, dir); err != nil {
+			return nil, false, err
+		}
 		config, err := entryConfiguration(f.Packages[k], dir, getEnv, version)
 		if err != nil {
 			return nil, false, &muxtjson.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
@@ -76,6 +83,24 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
 	}
 	return jobs, true, nil
+}
+
+// requireEntryDirectory returns a *muxtjson.MissingDirectoryError unless dir,
+// the directory of key in f, is a directory. wd is the working directory the
+// error names dir relative to.
+func requireEntryDirectory(f *muxtjson.File, key, wd, dir string) error {
+	info, err := os.Stat(dir)
+	if err == nil && info.IsDir() {
+		return nil
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("muxt.json entry %q: %w", key, err)
+	}
+	rel, err := filepath.Rel(wd, dir)
+	if err != nil {
+		return fmt.Errorf("directory of muxt.json entry %q from %s: %w", key, wd, err)
+	}
+	return &muxtjson.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
 }
 
 // packageLoader is the only way a run asks for packages, so one go command
