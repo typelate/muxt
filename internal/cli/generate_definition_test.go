@@ -336,8 +336,8 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 		flags    []string
 		want     string
 	}{
-		{name: "entry names the receiver", muxtJSON: `{"packages": {".": {"use_receiver_type": "T"}}}`, want: valueStub},
-		{name: "package_defaults names the receiver", muxtJSON: `{"package_defaults": {"use_receiver_type": "T"}, "packages": {".": {}}}`, want: valueStub},
+		{name: "entry names the receiver", muxtJSON: `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`, want: valueStub},
+		{name: "package_defaults names the receiver", muxtJSON: `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {}}}`, want: valueStub},
 		{name: "flag names the receiver", flags: []string{"--use-receiver-type=T"}, want: valueStub},
 		{name: "type has a pointer method", methods: "\nfunc (*T) Other() any { return nil }\n", flags: []string{"--use-receiver-type=T"}, want: pointerStub},
 		{name: "no receiver type known", want: ""},
@@ -363,7 +363,7 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 // directory has a muxt.json entry, since the entry already names the receiver.
 func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 	dir := moduleDir(t)
-	writeTestFile(t, dir, "muxt.json", `{"packages": {".": {"use_receiver_type": "T"}}}`)
+	writeTestFile(t, dir, "muxt.json", `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
@@ -379,7 +379,7 @@ func TestGenerateDefPrintsNoStubForDefinedMethod(t *testing.T) {
 		t.Skip("loads packages with the go command")
 	}
 	dir := definitionModule(t, "\nfunc (T) Index(ctx context.Context, id string) any { return nil }\n", map[string]string{
-		"muxt.json": `{"packages": {".": {"use_receiver_type": "T"}}}`,
+		"muxt.json": `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`,
 	})
 	goFile, err := os.ReadFile(filepath.Join(dir, "m.go"))
 	require.NoError(t, err)

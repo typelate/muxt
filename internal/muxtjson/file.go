@@ -21,11 +21,16 @@ import (
 const FileName = "muxt.json"
 
 // File is a muxt.json. Dir is the directory holding the file, set by Read.
-// Packages is keyed by slash-separated directory, relative to Dir, such as ".".
+// Packages is keyed by the full import path of each package, as Go names it,
+// such as "example.com/internal/hypertext/workspace".
 type File struct {
 	// Dir is the absolute directory holding the file, so package directories
 	// can be found from it.
 	Dir string `json:"-"`
+	// module is the module path of the nearest go.mod at or above Dir, and
+	// moduleDir the directory holding it. An import path in the module is
+	// the module path joined with a directory below moduleDir.
+	module, moduleDir string
 	// Name is the file's path relative to the working directory the search
 	// started from. Errors name the file this way.
 	Name string `json:"-"`
@@ -153,25 +158,30 @@ func (f *File) Save() error {
 	return nil
 }
 
-// KeyFor returns the slash-separated path of dir relative to the directory
-// holding f, the key its Packages entry uses. The directory itself is ".".
+// KeyFor returns the import path of dir, the key its Packages entry uses: the
+// module path of the nearest go.mod joined with dir's slash path from the
+// directory holding that go.mod. Go names a package this way, so the key
+// reads the same wherever the file sits in the module. dir must be the file's
+// directory or below it.
 func (f *File) KeyFor(dir string) (string, error) {
-	rel, err := filepath.Rel(f.Dir, dir)
+	rel, err := filepath.Rel(f.moduleDir, dir)
 	if err != nil {
 		return "", fmt.Errorf("key for %s: %w", dir, err)
 	}
-	return filepath.ToSlash(rel), nil
+	return path.Join(f.module, filepath.ToSlash(rel)), nil
 }
 
-// Keys returns the packages keys sorted. Read rejects a key not in clean form,
-// so the keys are the ones a person wrote.
+// Keys returns the packages keys sorted. Read rejects a key that is not an
+// import path in clean form, so the keys are the ones a person wrote.
 func (f *File) Keys() []string {
 	return slices.Sorted(maps.Keys(f.Packages))
 }
 
-// DirOf returns the absolute directory of a packages key.
+// DirOf returns the absolute directory of a packages key, which Read has
+// checked is an import path in f's module.
 func (f *File) DirOf(key string) string {
-	return filepath.Join(f.Dir, filepath.FromSlash(key))
+	rel := strings.TrimPrefix(strings.TrimPrefix(key, f.module), "/")
+	return filepath.Join(f.moduleDir, filepath.FromSlash(rel))
 }
 
 // Entry holds the generate flags of one package directory. JSON keys are the
@@ -245,28 +255,29 @@ func Read(path, shown string, deprecated map[string]string) (*File, error) {
 		}
 		return nil, fmt.Errorf("parsing %s: %w", shown, err)
 	}
-	if err := checkKeys(shown, data, deprecated); err != nil {
-		return nil, err
-	}
-	dir := filepath.Dir(path)
-	_, _, hasModule, err := moduleOf(dir)
+	f.Dir = filepath.Dir(path)
+	f.Name = shown
+	var hasModule bool
+	f.module, f.moduleDir, hasModule, err = moduleOf(f.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", shown, err)
 	}
 	if !hasModule {
 		return nil, &NoModuleError{Path: shown}
 	}
-	f.Dir = dir
-	f.Name = shown
+	if err := f.checkKeys(data, deprecated); err != nil {
+		return nil, err
+	}
 	return &f, nil
 }
 
-// checkKeys returns a *KeyFormError for the first packages key, in sorted
-// order, that is not in clean form, a *KeyOutsideError for one that leaves the
-// file's directory, or the entry-key errors of checkEntryKeys for package_defaults
+// checkKeys returns the checkPackageKey error for the first packages key, in
+// sorted order, that is not an import path of a package at or below the file's
+// directory, or the entry-key errors of checkEntryKeys for package_defaults
 // and then for each packages entry. json.Unmarshal drops unknown keys without a
 // word, so the keys are read again here.
-func checkKeys(shown string, data []byte, deprecated map[string]string) error {
+func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
+	shown := f.Name
 	var raw struct {
 		PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
 		Packages        map[string]map[string]json.RawMessage `json:"packages"`
@@ -278,22 +289,61 @@ func checkKeys(shown string, data []byte, deprecated map[string]string) error {
 	if err := checkEntryKeys(shown, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
 		return err
 	}
-	for _, dir := range slices.Sorted(maps.Keys(raw.Packages)) {
-		// Two spellings of one directory would be two entries, so each key
-		// is written in the form path.Clean gives it.
-		if clean := path.Clean(dir); clean != dir {
-			return &KeyFormError{Path: shown, Key: dir, Clean: clean}
+	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
+		if err := f.checkPackageKey(key); err != nil {
+			return err
 		}
-		// A key is a directory below the file's own, so a checked-out
-		// muxt.json cannot point generate at, or write into, another place.
-		if dir != "." && !filepath.IsLocal(filepath.FromSlash(dir)) {
-			return &KeyOutsideError{Path: shown, Key: dir}
-		}
-		if err := checkEntryKeys(shown, fmt.Sprintf("packages[%q]", dir), raw.Packages[dir], deprecated, known); err != nil {
+		if err := checkEntryKeys(shown, fmt.Sprintf("packages[%q]", key), raw.Packages[key], deprecated, known); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// checkPackageKey returns a *KeyFormError for a key that is a directory
+// relative to the file, or an import path of the module that is not clean, and
+// a *KeyOutsideError for one that names a package outside the file's
+// directory, so a checked-out muxt.json cannot point generate at, or write
+// into, another place. Two spellings of one package would be two entries, so
+// each key is the form path.Clean gives it.
+func (f *File) checkPackageKey(key string) error {
+	if clean := path.Clean(key); f.inModule(clean) {
+		if clean != key {
+			return &KeyFormError{Path: f.Name, Key: key, ImportPath: clean}
+		}
+		if rel, err := filepath.Rel(f.Dir, f.DirOf(key)); err != nil || !filepath.IsLocal(rel) {
+			return &KeyOutsideError{Path: f.Name, Key: key}
+		}
+		return nil
+	}
+	// A key that is not an import path of the module is either a directory
+	// the way keys used to be written, which has an import path to name, or
+	// the import path of some other package.
+	if !isRelative(key) {
+		return &KeyOutsideError{Path: f.Name, Key: key}
+	}
+	dir := filepath.FromSlash(key)
+	if !filepath.IsLocal(dir) {
+		return &KeyOutsideError{Path: f.Name, Key: key}
+	}
+	want, err := f.KeyFor(filepath.Join(f.Dir, dir))
+	if err != nil {
+		return err
+	}
+	return &KeyFormError{Path: f.Name, Key: key, ImportPath: want}
+}
+
+// inModule reports whether importPath is the file's module path or below it.
+func (f *File) inModule(importPath string) bool {
+	return importPath == f.module || strings.HasPrefix(importPath, f.module+"/")
+}
+
+// isRelative reports whether key is written as a directory rather than an
+// import path. The first element of an import path that is not in the file's
+// own module is a domain, which holds a dot; "workspace" and "." do not.
+func isRelative(key string) bool {
+	first, _, _ := strings.Cut(key, "/")
+	return !strings.Contains(first, ".") || first == "." || first == ".."
 }
 
 // checkEntryKeys returns the error for the first key, in sorted order, of the

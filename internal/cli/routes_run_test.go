@@ -46,7 +46,7 @@ func writeMuxtJSON(t *testing.T, dir, file string) {
 // that run settings (-v, --format) do not count as configuration.
 func TestRoutesListsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"package_defaults": {"use_receiver_type_package": "example.com/m/types"}, "packages": {".": {"use_templates_variable": ["pages"], "use_receiver_type": "Server"}}}`)
+	writeMuxtJSON(t, dir, `{"package_defaults": {"use_receiver_type_package": "example.com/m/types"}, "packages": {"example.com/m": {"use_templates_variable": ["pages"], "use_receiver_type": "Server"}}}`)
 
 	for _, commandLine := range []string{"", "-v", "--format json"} {
 		jobs, err := routesJobsOf(t, dir, commandLine)
@@ -71,7 +71,7 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"workspace": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
 
 	jobs, err := routesJobsOf(t, workspace, "--use-receiver-type=Server --use-templates-variable=pages")
 
@@ -89,14 +89,14 @@ func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {".": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": {}}}`)
 
 	jobs, err := routesJobsOf(t, workspace, "")
 
 	var missing *muxtjson.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
 	assert.Equal(t, filepath.Join("..", muxtjson.FileName), missing.Path, "path")
-	assert.Equal(t, "workspace", missing.Key, "key")
+	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 	assert.Empty(t, jobs, "jobs")
 
 	jobs, err = routesJobsOf(t, workspace, "--use-receiver-type=T1")
@@ -123,7 +123,7 @@ func reportOf(t *testing.T, wd, commandLine string) string {
 // way muxt.json writes it, whether the entry sets it or not.
 func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {".": {"use_receiver_type": "Server"}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_receiver_type": "Server"}}}`)
 
 	text := reportOf(t, dir, "")
 
@@ -194,11 +194,11 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`)
 
 	text := reportOf(t, workspace, "")
 
-	const want = "Configuration:\n  ../muxt.json:\n    packages[\"workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
+	const want = "Configuration:\n  ../muxt.json:\n    packages[\"example.com/m/workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
 }
@@ -210,7 +210,7 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"workspace": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`)
 	jobs, err := routesJobsOf(t, workspace, "")
 	require.NoError(t, err, "muxt")
 	require.NotEmpty(t, jobs, "jobs")
@@ -221,7 +221,7 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	var groups []struct{ Source, File string }
 	require.NoError(t, json.Unmarshal(data, &groups), "groups:\n%s", data)
 	want := []struct{ Source, File string }{
-		{Source: `packages["workspace"]`, File: filepath.Join("..", muxtjson.FileName)},
+		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join("..", muxtjson.FileName)},
 		{Source: "package_defaults", File: filepath.Join("..", muxtjson.FileName)},
 		{Source: "defaults"},
 	}
@@ -273,11 +273,11 @@ func TestRoutesConfigurationDefaults(t *testing.T) {
 // itself stays under the packages heading.
 func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {".": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {"example.com/m": {"use_receiver_type": "T1"}}}`)
 
 	text := reportOf(t, dir, "")
 
-	const want = "Configuration:\n  muxt.json:\n    packages[\".\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
+	const want = "Configuration:\n  muxt.json:\n    packages[\"example.com/m\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 }
 
@@ -308,7 +308,7 @@ func TestRoutesListsEveryMuxtJSONEntryFromOneLoad(t *testing.T) {
 			sections := map[string]string{".": "GET /Root RootPage()", "workspace": "GET /Space SpacePage()"}
 			var want []string
 			for _, key := range tt.order {
-				want = append(want, `\n*`+regexp.QuoteMeta(key)+`\nConfiguration:\n.*Template Routes:\n  - `+regexp.QuoteMeta(sections[key])+`\n.*Template Functions:\n`)
+				want = append(want, `\n*`+regexp.QuoteMeta(importPath(key))+`\nConfiguration:\n.*Template Routes:\n  - `+regexp.QuoteMeta(sections[key])+`\n.*Template Functions:\n`)
 			}
 			assert.Regexp(t, `(?s)\A`+strings.Join(want, "")+`\n*\z`, stdout, "stdout")
 		})
@@ -327,12 +327,12 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 
 	atTop, _, err := listWithLoader(t, dir)
 	require.NoError(t, err, "muxt at the top")
-	assert.Regexp(t, `\A(?s:other\nConfiguration:\n.*Template Routes:\n  - GET /Other OtherPage\(\)\n.*workspace\nConfiguration:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, atTop, "stdout at the top")
-	assert.NotContains(t, atTop, "\n.\n", "a key the file does not have")
+	assert.Regexp(t, `\A(?s:example\.com/m/other\nConfiguration:\n.*Template Routes:\n  - GET /Other OtherPage\(\)\n.*example\.com/m/workspace\nConfiguration:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, atTop, "stdout at the top")
+	assert.NotContains(t, atTop, "\nexample.com/m\n", "a key the file does not have")
 
 	below, _, err := listWithLoader(t, filepath.Join(dir, "workspace"))
 	require.NoError(t, err, "muxt in workspace")
-	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json:\n    packages\["workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
+	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json:\n    packages\["example\.com/m/workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
 }
 
 // TestRoutesConfigurationGroupsFlags states that a setting given as a flag, in
@@ -371,6 +371,6 @@ func TestRoutesJSONNamesEachEntry(t *testing.T) {
 	}
 
 	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
-	assert.Equal(t, []string{".", "workspace"}, keysOf(t, dir), "keys over two entries")
+	assert.Equal(t, []string{testModule, testModule + "/workspace"}, keysOf(t, dir), "keys over two entries")
 	assert.Equal(t, []string{""}, keysOf(t, filepath.Join(dir, "workspace")), "keys over one package")
 }

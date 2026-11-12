@@ -70,8 +70,12 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 	if err != nil || f == nil {
 		return nil, nil, false, err
 	}
+	ownKey, err := f.KeyFor(f.Dir)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("muxt.json entry for %s: %w", f.Dir, err)
+	}
 	keys := []string{key}
-	if key != "." {
+	if key != ownKey {
 		if !found {
 			return nil, nil, false, &muxtjson.MissingEntryError{Path: f.Name, Key: key}
 		}

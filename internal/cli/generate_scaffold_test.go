@@ -61,7 +61,7 @@ func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
 // directory, keeps the entries already there, and rewrites the file in its
 // stable form.
 func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
-	const existing = `{"package_defaults": {"use_templates_variable": ["pages"]}, "packages": {"admin": {"output_htmx": true}}}`
+	const existing = `{"package_defaults": {"use_templates_variable": ["pages"]}, "packages": {"example.com/m/admin": {"output_htmx": true}}}`
 	const want = "{\n" +
 		"\t\"package_defaults\": {\n" +
 		"\t\t\"use_templates_variable\": [\n" +
@@ -69,10 +69,10 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		"\t\t]\n" +
 		"\t},\n" +
 		"\t\"packages\": {\n" +
-		"\t\t\"admin\": {\n" +
+		"\t\t\"example.com/m/admin\": {\n" +
 		"\t\t\t\"output_htmx\": true\n" +
 		"\t\t},\n" +
-		"\t\t\"workspace\": {\n" +
+		"\t\t\"example.com/m/workspace\": {\n" +
 		"\t\t\t\"use_receiver_type\": \"T\"\n" +
 		"\t\t}\n" +
 		"\t}\n" +
@@ -102,7 +102,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		require.NoError(t, err)
 		got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 		require.NoError(t, err)
-		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"admin/workspace\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n", string(got), "muxt.json")
+		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"example.com/m/admin/workspace\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n", string(got), "muxt.json")
 	})
 }
 
@@ -137,7 +137,7 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &got))
-	entry := got.Packages["workspace"]
+	entry := got.Packages[importPath("workspace")]
 	require.NotNil(t, entry.OutputHTMX, "output_htmx of packages[workspace]")
 	assert.True(t, *entry.OutputHTMX, "output_htmx of packages[workspace]")
 	assert.Nil(t, entry.OutputDatastar, "output_datastar of packages[workspace]")
@@ -193,7 +193,7 @@ func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(data, &got))
-			recorded := got.Packages["workspace"].UseReceiverType
+			recorded := got.Packages[importPath("workspace")].UseReceiverType
 			if tt.wantRecorded == "" {
 				assert.Nil(t, recorded, "use_receiver_type of packages[workspace]")
 			} else {
@@ -230,7 +230,7 @@ func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
 	stdout, err := runCommand(t, root, "generate package workspace")
 
 	require.NoError(t, err)
-	assert.Equal(t, "wrote workspace/workspace.go\nwrote workspace/workspace.gohtml\nwrote muxt.json: packages[\"workspace\"]\n", stdout, "stdout")
+	assert.Equal(t, "wrote workspace/workspace.go\nwrote workspace/workspace.gohtml\nwrote muxt.json: packages[\"example.com/m/workspace\"]\n", stdout, "stdout")
 	html, err := os.ReadFile(filepath.Join(root, "workspace", "workspace.gohtml"))
 	require.NoError(t, err)
 	assert.Empty(t, html, "workspace.gohtml")

@@ -54,7 +54,7 @@ type %s struct{}
 func (%s) %sPage() any { return nil }
 `, name, blank.String(), receiver, receiver, receiver))
 		writeTestFile(t, pkgDir, "page.gohtml", fmt.Sprintf(`{{define "GET /%s %sPage()"}}<p>{{.}}</p>{{end}}`, receiver, receiver))
-		entries[key] = fmt.Sprintf(`%q: {"use_receiver_type": %q}`, key, receiver)
+		entries[key] = fmt.Sprintf(`%q: {"use_receiver_type": %q}`, importPath(key), receiver)
 	}
 	var all []string
 	for _, e := range entries {
@@ -115,7 +115,7 @@ func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	stdout, _, err := generateWithLoader(t, dir)
 
 	require.NoError(t, err, "generate")
-	const want = ".\nwrote template_routes.go: 1 route\nworkspace\nwrote template_routes.go: 1 route\n"
+	const want = "example.com/m\nwrote template_routes.go: 1 route\nexample.com/m/workspace\nwrote template_routes.go: 1 route\n"
 	assert.Equal(t, want, stdout, "stdout")
 
 	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"))
@@ -136,7 +136,7 @@ func TestGenerateMuxtJSONEntriesInImportOrder(t *testing.T) {
 	stdout, _, err := generateWithLoader(t, dir)
 
 	require.NoError(t, err, "generate")
-	const want = "b\nwrote template_routes.go: 1 route\na\nwrote template_routes.go: 1 route\n"
+	const want = "example.com/m/b\nwrote template_routes.go: 1 route\nexample.com/m/a\nwrote template_routes.go: 1 route\n"
 	assert.Equal(t, want, stdout, "stdout")
 }
 
@@ -188,12 +188,12 @@ type A struct{}
 func (A) APage() any { return nil }
 `)
 	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
-	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"a": {"use_receiver_type": "Missing"}, "b": {"use_receiver_type": "B"}}}`)
+	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "Missing"}, "example.com/m/b": {"use_receiver_type": "B"}}}`)
 
 	stdout, _, err := generateWithLoader(t, dir)
 
 	require.Error(t, err, "generate with a receiver type a does not declare")
-	const want = "b\nwrote template_routes.go: 1 route\na\n"
+	const want = "example.com/m/b\nwrote template_routes.go: 1 route\nexample.com/m/a\n"
 	assert.Equal(t, want, stdout, "stdout names b's output, then a, which failed")
 	assert.FileExists(t, filepath.Join(dir, "b", "template_routes.go"), "b's routes file")
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "a's routes file")

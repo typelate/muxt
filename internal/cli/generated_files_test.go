@@ -38,6 +38,15 @@ func moduleDir(t *testing.T) string {
 	return dir
 }
 
+// importPath returns the import path of dir, a slash path below the directory
+// moduleDir returns, where "." is the module's root.
+func importPath(dir string) string {
+	if dir == "." {
+		return testModule
+	}
+	return testModule + "/" + dir
+}
+
 func TestPlural(t *testing.T) {
 	for _, tt := range []struct {
 		n    int

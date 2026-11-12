@@ -55,16 +55,18 @@ func (e *UnknownKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
 }
 
-// KeyFormError reports a packages key that is not in clean form, such as
-// "./workspace/". Clean is the form to write instead, so two spellings of one
-// directory cannot both be keys.
+// KeyFormError reports a packages key that is not an import path in the clean
+// form Go names a package by: a directory relative to the file, such as
+// "workspace" or "./workspace/", which keys used to be, or an import path with
+// a stray slash. ImportPath is the key to write instead, so two spellings of
+// one package cannot both be keys.
 type KeyFormError struct {
-	Path, Key, Clean string
+	Path, Key, ImportPath string
 }
 
-// Error returns the path, the key, and its clean form on one line.
+// Error returns the path, the key, and the import path to write on one line.
 func (e *KeyFormError) Error() string {
-	return fmt.Sprintf("%s: packages key %q is not in clean form; write %q", e.Path, e.Key, e.Clean)
+	return fmt.Sprintf("%s: packages key %q is not an import path; write %q", e.Path, e.Key, e.ImportPath)
 }
 
 // MissingEntryError reports a directory below a muxt.json that the file has no
@@ -161,9 +163,11 @@ func (e *DashedKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q is written with underscores; write %q", e.Path, e.Where, e.Key, e.Underscored)
 }
 
-// KeyOutsideError reports a packages key that names a directory outside the
-// one holding the muxt.json, such as "../other" or "/abs". A file checked into
-// a repository must not make muxt generate write elsewhere on the machine.
+// KeyOutsideError reports a packages key that names a package outside the
+// directory holding the muxt.json: an import path of another module or above
+// the file's directory, or a relative path such as "../other" or "/abs". A file
+// checked into a repository must not make muxt generate write elsewhere on the
+// machine.
 type KeyOutsideError struct {
 	Path, Key string
 }

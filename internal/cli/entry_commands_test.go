@@ -42,7 +42,7 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 // templates variable that entry names.
 func TestCallersReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-callers")
 
@@ -55,7 +55,7 @@ func TestCallersReadsMuxtJSONEntry(t *testing.T) {
 // variable that entry names.
 func TestCallsReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-calls")
 
@@ -68,7 +68,7 @@ func TestCallsReadsMuxtJSONEntry(t *testing.T) {
 // entry names.
 func TestCheckReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {".": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
 
 	got, err := templatesVariablesOf(t, dir, "check")
 
@@ -103,13 +103,13 @@ func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {".": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": {}}}`)
 
 	_, err := templatesVariablesOf(t, workspace, "check")
 
 	var missing *muxtjson.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, "workspace", missing.Key, "key")
+	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 }
 
 // TestEntryFlagsRejectedWhereMuxtJSONConfigures states that check and the two
@@ -119,7 +119,7 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"workspace": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
 
 	for _, commandLine := range []string{
 		"check --use-templates-variable=x",
@@ -150,7 +150,7 @@ func TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures(t *testing.T) 
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {"use_templates_variable": ["pages"]}}}`)
 
 	for _, commandLine := range []string{
 		"check --allow-unused -v",

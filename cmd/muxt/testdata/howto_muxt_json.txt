@@ -3,6 +3,7 @@
 
 muxt generate config
 muxt generate package workspace
+stdout 'wrote muxt.json: packages\["example.com/m/workspace"\]'
 
 # The route goes in a template file; the method stub the receiver lacks goes
 # to stdout, and the person appends it to the Go file.
