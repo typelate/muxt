@@ -140,6 +140,63 @@ func TestGenerateMuxtJSONEntriesInImportOrder(t *testing.T) {
 	assert.Equal(t, want, stdout, "stdout")
 }
 
+// TestGenerateKeepsDependencyWhenDependentFails states that when package a
+// imports b and a's entry names a receiver type a does not declare, a flagless
+// muxt generate fails, and b's routes file is still written, since directories
+// are written one at a time in import order.
+func TestGenerateKeepsDependencyWhenDependentFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "a"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "b"), 0o755))
+	writeTestFile(t, dir, "b/package.go", `package b
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+
+type B struct{}
+
+func (B) BPage() any { return nil }
+`)
+	writeTestFile(t, dir, "b/page.gohtml", `{{define "GET /B BPage()"}}<p>{{.}}</p>{{end}}`)
+	writeTestFile(t, dir, "a/package.go", `package a
+
+import (
+	"embed"
+	"html/template"
+
+	_ "example.com/m/b"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+
+type A struct{}
+
+func (A) APage() any { return nil }
+`)
+	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
+	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"a": {"use-receiver-type": "Missing"}, "b": {"use-receiver-type": "B"}}}`)
+
+	_, _, err := generateWithLoader(t, dir)
+
+	require.Error(t, err, "generate with a receiver type a does not declare")
+	assert.FileExists(t, filepath.Join(dir, "b", "template_routes.go"), "b's routes file")
+	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "a's routes file")
+}
+
 // TestGenerateReloadsPackagesWhenADependencyChanged states that when package a
 // imports b, a run that creates b's routes file loads the packages again
 // before resolving a, and a run that finds both routes files current loads
