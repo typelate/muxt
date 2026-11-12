@@ -310,6 +310,20 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json packages\["workspace"\]:\n    "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
 }
 
+// TestRoutesConfigurationGroupsFlags states that a setting given as a flag, in
+// a directory no muxt.json entry configures, is under the heading flags, ahead
+// of defaults, so it is not reported as a default it overrode.
+func TestRoutesConfigurationGroupsFlags(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+
+	text := reportOf(t, dir, "--use-receiver-type=T1 --use-templates-variable=pages")
+
+	const want = "Configuration:\n  flags:\n    \"use_receiver_type\": \"T1\"\n    \"use_templates_variable\": [\"pages\"]\n  defaults:\n"
+	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
+	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
+}
+
 // TestRoutesJSONNamesEachEntry states that with --format json a listing over
 // several entries gives each listing a Key member holding its packages key, and
 // a listing over one package has none.

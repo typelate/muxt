@@ -40,40 +40,60 @@ type setting struct {
 
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *muxtjson.File, key string, config generate.RoutesFileConfiguration) (configurationReport, error) {
-	// The sources in the order a setting looks for its value: the entry
-	// itself, then package_defaults. A setting neither gives is a default.
-	var groups []settingGroup
-	var entries []muxtjson.Entry
-	if f != nil {
-		groups = append(groups,
-			settingGroup{Source: fmt.Sprintf("%s packages[%q]", f.Name, key)},
-			settingGroup{Source: f.Name + " package_defaults"},
-		)
-		entries = append(entries, f.Packages[key], f.Defaults)
+func newConfigurationReport(f *muxtjson.File, key string, flagNames []string, config generate.RoutesFileConfiguration) (configurationReport, error) {
+	// The sources in the order a setting looks for its value: the command
+	// line, the entry itself, then package_defaults. A setting none of them
+	// gives is a default. Flags and an entry never configure one run, so at
+	// most one of the first two is present.
+	type source struct {
+		group settingGroup
+		gives func(entryField) (bool, error)
 	}
-	groups = append(groups, settingGroup{Source: "defaults"})
+	// Apply writes into a scratch configuration; only whether the entry gave
+	// the key matters here.
+	givenBy := func(entry muxtjson.Entry) func(entryField) (bool, error) {
+		return func(field entryField) (bool, error) {
+			return field.Apply(new(generate.RoutesFileConfiguration), entry)
+		}
+	}
+	var sources []source
+	if len(flagNames) > 0 {
+		sources = append(sources, source{
+			group: settingGroup{Source: "flags"},
+			gives: func(field entryField) (bool, error) { return slices.Contains(flagNames, field.Name), nil },
+		})
+	}
+	if f != nil {
+		sources = append(sources,
+			source{group: settingGroup{Source: fmt.Sprintf("%s packages[%q]", f.Name, key)}, gives: givenBy(f.Packages[key])},
+			source{group: settingGroup{Source: f.Name + " package_defaults"}, gives: givenBy(f.Defaults)},
+		)
+	}
+	defaults := settingGroup{Source: "defaults"}
 
 	// muxt generate --help lists flags by name, so the report does too.
 	fields := entryFields()
 	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
 	for _, field := range fields {
 		s := setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
-		source := len(entries)
-		for i, entry := range entries {
-			// Apply writes into a scratch configuration; only whether the
-			// entry gave the key matters here.
-			given, err := field.Apply(new(generate.RoutesFileConfiguration), entry)
+		group := &defaults
+		for i := range sources {
+			given, err := sources[i].gives(field)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %w", groups[i].Source, err)
+				return nil, fmt.Errorf("%s: %w", sources[i].group.Source, err)
 			}
 			if given {
-				source = i
+				group = &sources[i].group
 				break
 			}
 		}
-		groups[source].Settings = append(groups[source].Settings, s)
+		group.Settings = append(group.Settings, s)
 	}
+	groups := []settingGroup{}
+	for _, s := range sources {
+		groups = append(groups, s.group)
+	}
+	groups = append(groups, defaults)
 	var report configurationReport
 	for _, group := range groups {
 		if len(group.Settings) > 0 {

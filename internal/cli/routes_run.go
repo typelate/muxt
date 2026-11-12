@@ -22,9 +22,9 @@ type routesJob struct {
 
 // newRoutesJob is the job for a generateJob, with the report of its
 // configuration. f is the muxt.json the job's entry came from, nil when flags
-// configured it.
-func newRoutesJob(f *muxtjson.File, job generateJob) (routesJob, error) {
-	report, err := newConfigurationReport(f, job.Key, job.Config)
+// configured it, and flagNames are the flags that did.
+func newRoutesJob(f *muxtjson.File, flagNames []string, job generateJob) (routesJob, error) {
+	report, err := newConfigurationReport(f, job.Key, flagNames, job.Config)
 	if err != nil {
 		return routesJob{}, err
 	}
@@ -48,7 +48,8 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	// A listing never writes a header, so it has no use for the version that
 	// would be recorded in one.
 	noVersion := func() (string, bool) { return "", false }
-	if flagNames := givenGenerateFlags(flags); len(flagNames) > 0 {
+	flagNames := givenGenerateFlags(flags)
+	if len(flagNames) > 0 {
 		if err := rejectConfiguredDirectory(wd, flagNames); err != nil {
 			return nil, err
 		}
@@ -62,7 +63,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 			for i, job := range jobs {
 				// Verbose is a run setting, never a muxt.json key.
 				job.Config.Verbose = flagConfig.Verbose
-				if listing[i], err = newRoutesJob(f, job); err != nil {
+				if listing[i], err = newRoutesJob(f, nil, job); err != nil {
 					return nil, err
 				}
 			}
@@ -79,7 +80,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	config.ReceiverPackage = flagConfig.ReceiverPackage
 	config.ReceiverType = flagConfig.ReceiverType
 	config.TemplatesVariables = flagConfig.TemplatesVariables
-	job, err := newRoutesJob(nil, generateJob{Dir: wd, Config: config})
+	job, err := newRoutesJob(nil, flagNames, generateJob{Dir: wd, Config: config})
 	if err != nil {
 		return nil, err
 	}
