@@ -190,9 +190,11 @@ func (A) APage() any { return nil }
 	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
 	writeTestFile(t, dir, muxtjson.FileName, `{"packages": {"a": {"use_receiver_type": "Missing"}, "b": {"use_receiver_type": "B"}}}`)
 
-	_, _, err := generateWithLoader(t, dir)
+	stdout, _, err := generateWithLoader(t, dir)
 
 	require.Error(t, err, "generate with a receiver type a does not declare")
+	const want = "b\nwrote template_routes.go: 1 route\na\n"
+	assert.Equal(t, want, stdout, "stdout names b's output, then a, which failed")
 	assert.FileExists(t, filepath.Join(dir, "b", "template_routes.go"), "b's routes file")
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "a's routes file")
 }
