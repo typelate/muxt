@@ -180,7 +180,12 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		// a job importing one of them needs a fresh load; one that imports
 		// none can use the load it has.
 		var changed []string
-		for _, job := range importOrder(pl, jobs) {
+		outputDirs := make([]string, len(jobs))
+		for i, job := range jobs {
+			outputDirs[i] = job.Config.OutputDirectory(job.Dir)
+		}
+		for _, i := range importOrder(pl, outputDirs) {
+			job := jobs[i]
 			if len(jobs) > 1 {
 				// Several directories write to one stream, so each says
 				// whose lines follow.
@@ -209,16 +214,21 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 	}
 }
 
-// importOrder returns jobs so that a job follows every job whose package it
-// imports, and jobs with no import between them keep their order. The go
-// command rejects import cycles, so there is always a job to take next.
-func importOrder(pl []*packages.Package, jobs []generateJob) []generateJob {
-	remaining := slices.Clone(jobs)
-	ordered := make([]generateJob, 0, len(jobs))
+// importOrder returns the indexes of dirs, the package directory of each job,
+// so that a directory follows every directory it imports, and directories with
+// no import between them keep their order. The go command rejects import
+// cycles, so there is always a directory to take next. It takes directories,
+// not jobs, so a run that lists packages orders them the way generate does.
+func importOrder(pl []*packages.Package, dirs []string) []int {
+	remaining := make([]int, len(dirs))
+	for i := range remaining {
+		remaining[i] = i
+	}
+	ordered := make([]int, 0, len(dirs))
 	for len(remaining) > 0 {
-		next := slices.IndexFunc(remaining, func(job generateJob) bool {
-			return !slices.ContainsFunc(remaining, func(dependency generateJob) bool {
-				return load.Imports(pl, job.Config.OutputDirectory(job.Dir), dependency.Config.OutputDirectory(dependency.Dir))
+		next := slices.IndexFunc(remaining, func(i int) bool {
+			return !slices.ContainsFunc(remaining, func(dependency int) bool {
+				return load.Imports(pl, dirs[i], dirs[dependency])
 			})
 		})
 		next = max(next, 0)
