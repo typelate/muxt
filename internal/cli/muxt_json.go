@@ -75,9 +75,12 @@ func givenEntryFlags(flags *pflag.FlagSet) []string {
 
 // entryJobFor returns the job the muxt.json entry for dir gives a command run
 // in dir, and found is false when the command's own settings decide instead.
-// The entry is read the way generate reads it, so a directory below a muxt.json
-// with no entry for it is a *muxtjson.MissingEntryError, as it is for generate.
-// The command takes only the settings it has flags for from the job.
+// flagNames are the entry's flags the command was given: with any, the entry
+// for dir would be a second source for the same settings, so it is rejected by
+// rejectConfiguredDirectory. Without them the entry is read the way generate
+// reads it, so a directory below a muxt.json with no entry for it is a
+// *muxtjson.MissingEntryError, as it is for generate. The command takes only
+// the settings it has flags for from the job.
 func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
 	// A path that is not a directory has no entry. The command's runner is
 	// what says so, and a search for muxt.json under a file would fail first
@@ -86,7 +89,7 @@ func entryJobFor(dir string, flagNames []string, getEnv func(string) string) (ge
 		return generateJob{}, false, nil
 	}
 	if len(flagNames) > 0 {
-		return generateJob{}, false, nil
+		return generateJob{}, false, rejectConfiguredDirectory(dir, flagNames)
 	}
 	f, key, _, _, err := lookupMuxtJSONEntry(dir)
 	if err != nil || f == nil {

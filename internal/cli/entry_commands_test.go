@@ -111,3 +111,57 @@ func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	require.ErrorAs(t, err, &missing, "error %v", err)
 	assert.Equal(t, "workspace", missing.Key, "key")
 }
+
+// TestEntryFlagsRejectedWhereMuxtJSONConfigures states that check and the two
+// listings given a flag the muxt.json entry for the working directory also sets
+// fail with the error generate returns, and the command does not run.
+func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	writeMuxtJSON(t, parent, `{"packages": {"workspace": {}}}`)
+
+	for _, commandLine := range []string{
+		"check --use-templates-variable=x",
+		"list-template-calls --use-templates-variable=x",
+		"list-template-callers --use-templates-variable=x",
+	} {
+		t.Run(commandLine, func(t *testing.T) {
+			ran := false
+			err := commands(workspace, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+				check:   func(*cobra.Command, string, analysis.CheckConfiguration) error { ran = true; return nil },
+				calls:   func(*cobra.Command, string, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
+				callers: func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error { ran = true; return nil },
+			})
+
+			var configured *muxtjson.ConfiguredDirectoryError
+			require.ErrorAs(t, err, &configured, "error %v", err)
+			assert.Equal(t, filepath.Join("..", muxtjson.FileName), configured.Path, "path")
+			assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
+			assert.False(t, ran, "the command ran")
+		})
+	}
+}
+
+// TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures states that the
+// flags a command has that a muxt.json entry does not set, such as --verbose,
+// --format and --match, do not stop the entry configuring the command.
+func TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	writeMuxtJSON(t, parent, `{"packages": {"workspace": {"use_templates_variable": ["pages"]}}}`)
+
+	for _, commandLine := range []string{
+		"check --allow-unused -v",
+		"list-template-calls --format json --match x -v",
+		"list-template-callers --format json -v",
+	} {
+		t.Run(commandLine, func(t *testing.T) {
+			got, err := templatesVariablesOf(t, workspace, commandLine)
+
+			require.NoError(t, err, "muxt %s", commandLine)
+			assert.Equal(t, []string{"pages"}, got, "templates variables")
+		})
+	}
+}
