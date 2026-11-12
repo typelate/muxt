@@ -276,6 +276,20 @@ func TestGeneratePackageRejectsNameThatIsNotAnIdentifier(t *testing.T) {
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
 }
 
+// TestGeneratePackageNeedsMuxtJSON states that muxt generate package with no
+// muxt.json between the working directory and the module root fails with the
+// command that creates one, and writes nothing.
+func TestGeneratePackageNeedsMuxtJSON(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644))
+
+	_, err := runCommand(t, root, "generate package workspace")
+
+	require.EqualError(t, err, "no muxt.json found; create one with: muxt generate config")
+	_, statErr := os.Stat(filepath.Join(root, "workspace"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
+}
+
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
