@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json/v2"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -176,6 +177,44 @@ func TestMutationsSkipSharedFiles(t *testing.T) {
 	assert.Contains(t, output, "page.gohtml", "mutants of the package's own file")
 	assert.NotContains(t, output, "layout.gohtml", "mutants of the shared file")
 	assert.NotContains(t, output, "fragments", "mutants of the shared file")
+}
+
+// TestFmtWriteLeavesSharedFilesAlone states that muxt fmt -w . in a package
+// that parses the other package's files rewrites the package's own templates
+// and no file in the other package's directory. Naming the other directory
+// does rewrite its file, so the shared file is one fmt would change.
+func TestFmtWriteLeavesSharedFilesAlone(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	unformatted := "{{define \"%s\"}}<div>\n<p>text</p>\n</div>{{end}}\n"
+	dir := fragmentsModule(t, map[string]string{
+		"fragments/layout.gohtml": fmt.Sprintf(unformatted, "layout"),
+		"workspace/page.gohtml":   fmt.Sprintf(unformatted, "GET /{$} Home()"),
+	})
+	shared := filepath.Join(dir, "fragments", "layout.gohtml")
+	own := filepath.Join(dir, "workspace", "page.gohtml")
+	sharedBefore, err := os.ReadFile(shared)
+	require.NoError(t, err, "read shared file")
+	ownBefore, err := os.ReadFile(own)
+	require.NoError(t, err, "read own file")
+
+	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "fmt", "-w", ".")
+
+	require.NoError(t, err, "fmt: %s", output)
+	ownAfter, err := os.ReadFile(own)
+	require.NoError(t, err, "read own file")
+	assert.NotEqual(t, string(ownBefore), string(ownAfter), "the package's own file is formatted")
+	sharedAfter, err := os.ReadFile(shared)
+	require.NoError(t, err, "read shared file")
+	assert.Equal(t, string(sharedBefore), string(sharedAfter), "the shared file")
+
+	output, err = runMuxt(t, filepath.Join(dir, "workspace"), "fmt", "-w", "../fragments")
+
+	require.NoError(t, err, "fmt: %s", output)
+	sharedAfter, err = os.ReadFile(shared)
+	require.NoError(t, err, "read shared file")
+	assert.NotEqual(t, string(sharedBefore), string(sharedAfter), "the shared file, when fmt is told to format it")
 }
 
 // TestCheckReadsOnlyFilesTheOtherPackageEmbeds states that a file in the
