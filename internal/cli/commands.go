@@ -128,9 +128,8 @@ The documentation for this version is in the binary:
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
 
-	addUseTemplatesVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.TemplatesVariables, &deprecatedTemplatesVar)
-	addUseReceiverTypeVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverType)
-	addUseReceiverTypePackageVarToFlagSet(rootCmd.Flags(), &rootCommandConfig.ReceiverPackage)
+	register(rootCmd.Flags(), rootSettings(&rootCommandConfig))
+	addDeprecatedTemplatesVariable(rootCmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
 	rootCmd.Flags().String("format", "text", "output format (text or json)")
 

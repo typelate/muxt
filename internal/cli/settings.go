@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -110,4 +111,20 @@ func templatesVariableSetting(p *[]string) setting {
 		Deprecated: []string{deprecatedFindTemplatesVariable},
 		Example:    "views",
 	})
+}
+
+// rootSettings is what bare muxt reads from the command line that configures
+// a package: the templates variable and the receiver.
+func rootSettings(c *analysis.DefinitionsConfiguration) []setting {
+	return []setting{
+		templatesVariableSetting(&c.TemplatesVariables),
+		receiverTypeSetting(&c.ReceiverType),
+		receiverPackageSetting(&c.ReceiverPackage),
+	}
+}
+
+// templatesSettings is what check, the listings and test-template-mutations
+// read from the command line that configures a package.
+func templatesSettings(templatesVariables *[]string) []setting {
+	return []setting{templatesVariableSetting(templatesVariables)}
 }

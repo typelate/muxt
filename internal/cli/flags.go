@@ -19,20 +19,6 @@ func isDefaultTemplatesVariable(in *[]string) bool {
 	return in != nil && len(*in) == 1 && (*in)[0] == defaultTemplatesVariableName
 }
 
-func addUseTemplatesVarToFlagSet(flagSet *pflag.FlagSet, out *[]string, deprecated *string) {
-	flagSet.StringSliceVar(out, useTemplatesVariable, []string{defaultTemplatesVariableName}, useTemplatesVariableHelp)
-	flagSet.StringVar(deprecated, deprecatedTemplatesVariable, "", "DEPRECATED: use --"+useTemplatesVariable+" instead. "+useTemplatesVariableHelp)
-	markDeprecated(flagSet, deprecatedTemplatesVariable, useTemplatesVariable)
-}
-
-func addUseReceiverTypeVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
-	flagSet.StringVar(out, useReceiverType, "", useReceiverTypeHelp)
-}
-
-func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
-	flagSet.StringVar(out, useReceiverTypePackage, "", useReceiverTypePackageHelp)
-}
-
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")
 }

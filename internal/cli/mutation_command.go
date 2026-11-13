@@ -93,7 +93,8 @@ working tree is never written to.`,
 		},
 	}
 
-	addUseTemplatesVarToFlagSet(cmd.Flags(), &config.TemplatesVariables, &deprecatedTemplatesVar)
+	register(cmd.Flags(), templatesSettings(&config.TemplatesVariables))
+	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
 	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")
 	cmd.Flags().BoolVar(&config.DryRun, "dry-run", false, "enumerate the mutants and report them without running any tests")

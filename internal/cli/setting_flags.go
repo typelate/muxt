@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -40,14 +41,11 @@ func generateSettingFlags() []string {
 func rootSettingFlags() []string {
 	return settingFlags(func(set *pflag.FlagSet) {
 		var (
-			variables  []string
+			config     analysis.DefinitionsConfiguration
 			deprecated string
-			receiver   string
-			pkg        string
 		)
-		addUseTemplatesVarToFlagSet(set, &variables, &deprecated)
-		addUseReceiverTypeVarToFlagSet(set, &receiver)
-		addUseReceiverTypePackageVarToFlagSet(set, &pkg)
+		register(set, rootSettings(&config))
+		addDeprecatedTemplatesVariable(set, &deprecated)
 	})
 }
 
@@ -59,7 +57,8 @@ func templatesSettingFlags() []string {
 			variables  []string
 			deprecated string
 		)
-		addUseTemplatesVarToFlagSet(set, &variables, &deprecated)
+		register(set, templatesSettings(&variables))
+		addDeprecatedTemplatesVariable(set, &deprecated)
 	})
 }
 
