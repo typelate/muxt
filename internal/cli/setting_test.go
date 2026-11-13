@@ -300,13 +300,17 @@ func TestEncodeRecordsTheSettingsGivenByCurrentName(t *testing.T) {
 	assert.Equal(t, map[string]string{"name": `"Mount"`, "loud": `true`, "limit": `"61 MiB"`}, got, "recorded entry; a size is recorded as the flag prints it")
 }
 
-func TestEncodeLeavesOutADeprecatedSpelling(t *testing.T) {
+func TestEncodeRecordsADeprecatedSpellingUnderTheCurrentKey(t *testing.T) {
 	_, fs, settings := parsedToy(t, "--old-name=Other")
 
 	e, err := encode(settings, givenFlags(fs, settings))
 
 	require.NoError(t, err, "encode")
-	assert.Empty(t, e, "recorded entry")
+	got := map[string]string{}
+	for key, value := range e {
+		got[key] = string(value)
+	}
+	assert.Equal(t, map[string]string{"name": `"Other"`}, got, "recorded entry")
 }
 
 func TestEncodeRecordsTheHandTemplatesVariable(t *testing.T) {

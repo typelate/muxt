@@ -68,11 +68,6 @@ func TestGeneratePackageRecordsToday(t *testing.T) {
 		name, commandLine, want string
 	}{
 		{
-			name:        "a deprecated spelling is not recorded and the receiver stays T",
-			commandLine: "generate package a --receiver-type=X --routes-func=R",
-			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n",
-		},
-		{
 			name:        "the deprecated templates variable is recorded under the current key",
 			commandLine: "generate package a --templates-variable x",
 			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\",\n\t\t\t\"use_templates_variable\": [\n\t\t\t\t\"x\"\n\t\t\t]\n\t\t}\n\t}\n}\n",

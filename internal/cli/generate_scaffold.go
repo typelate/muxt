@@ -98,7 +98,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 		}
 		receiver = defaultReceiver
 	}
-	if flags.Changed(useReceiverType) {
+	if given.has(useReceiverType) {
 		receiver = config.ReceiverType
 	}
 	if !hasDefault || defaultReceiver != receiver {

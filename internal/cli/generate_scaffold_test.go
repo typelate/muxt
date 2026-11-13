@@ -128,20 +128,44 @@ func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
 // TestGeneratePackageRecordsGivenFlags states that a generate flag given to
 // muxt generate package is recorded under its key, and a flag not given is not.
 func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
-	root := moduleDir(t)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
+	for _, tt := range []struct {
+		name, commandLine string
+		want              map[string]string
+		wantAbsent        []string
+	}{
+		{
+			name:        "a switch",
+			commandLine: "generate package workspace --output-htmx",
+			want:        map[string]string{"output_htmx": "true"},
+			wantAbsent:  []string{"output_datastar", "output_file"},
+		},
+		{
+			name:        "a deprecated spelling is recorded under the current key",
+			commandLine: "generate package workspace --receiver-type=X --routes-func=R",
+			want:        map[string]string{"use_receiver_type": `"X"`, "output_routes_func": `"R"`},
+			wantAbsent:  []string{"receiver_type", "routes_func"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := moduleDir(t)
+			require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
 
-	_, err := runCommand(t, root, "generate package workspace --output-htmx")
+			_, err := runCommand(t, root, tt.commandLine)
 
-	require.NoError(t, err)
-	var got composite.File
-	data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
-	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(data, &got))
-	entry := got.Packages[importPath("workspace")]
-	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of packages[workspace]")
-	assert.NotContains(t, entry, "output_datastar", "packages[workspace]")
-	assert.NotContains(t, entry, "output_file", "packages[workspace]")
+			require.NoError(t, err)
+			var got composite.File
+			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(data, &got))
+			entry := got.Packages[importPath("workspace")]
+			for key, want := range tt.want {
+				assert.JSONEq(t, want, string(entry[key]), "%s of packages[workspace]", key)
+			}
+			for _, key := range tt.wantAbsent {
+				assert.NotContains(t, entry, key, "packages[workspace]")
+			}
+		})
+	}
 }
 
 // TestGeneratePackageRejectsInvalidEntryAndWritesNothing states that a merged

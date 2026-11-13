@@ -441,14 +441,11 @@ func decode(settings []setting, e composite.Entry) error {
 
 // encode returns the entry that records each setting g gives, under its key,
 // with the value the field holds. A setting given by a deprecated spelling is
-// not recorded, except the templates variable by --templates-variable, which
-// the command line has always recorded.
+// recorded under its current key, since the file has no other spelling.
 func encode(settings []setting, g givenSettings) (composite.Entry, error) {
 	e := composite.Entry{}
 	for _, s := range settings {
-		recorded := slices.Contains(g[s.name], s.name) ||
-			(s.name == useTemplatesVariable && slices.Contains(g[s.name], deprecatedTemplatesVariable))
-		if !recorded {
+		if !g.has(s.name) {
 			continue
 		}
 		value, err := s.encode()
