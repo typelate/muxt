@@ -89,6 +89,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputMultipartMaxMemory, Example: "64MB",
 			Usage: `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`,
 		}),
+		stringSetting(&c.StaticAssetsDirectory, spec[string]{
+			Name: inputStaticAssetsDirectory, Example: "static",
+			Usage: `A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.`,
+		}),
 	}
 }
 

@@ -51,8 +51,7 @@ const (
 	useReceiverTypeHelp        = `The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file.`
 	useReceiverTypePackageHelp = `The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.`
 
-	inputStaticAssetsDirectoryHelp = `A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.`
-	outputStaticAssetsPathHelp     = `The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.`
+	outputStaticAssetsPathHelp = `The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.`
 
 	errIdentSuffix = " value must be a well-formed Go identifier"
 )

@@ -36,7 +36,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.StaticAssetsDirectory, inputStaticAssetsDirectory, "", inputStaticAssetsDirectoryHelp)
 	flagSet.StringVar(&g.StaticAssetsPath, outputStaticAssetsPath, "", outputStaticAssetsPathHelp)
 }
 
