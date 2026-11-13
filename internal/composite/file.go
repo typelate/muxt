@@ -299,6 +299,16 @@ func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("parsing %s: %w", f.Name, err)
 	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return fmt.Errorf("parsing %s: %w", f.Name, err)
+	}
+	topKnown := []string{"package_defaults", "packages"}
+	for _, key := range slices.Sorted(maps.Keys(top)) {
+		if !slices.Contains(topKnown, key) {
+			return &UnknownKeyError{Path: f.Name, Key: key, Suggestion: closestKey(key, topKnown)}
+		}
+	}
 	known := entryKeys()
 	if err := checkEntryKeys(f.Name, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
 		return err
@@ -376,9 +386,43 @@ func checkEntryKeys(path, where string, keys map[string]json.RawMessage, depreca
 		if underscored := strings.ReplaceAll(key, "-", "_"); slices.Contains(known, underscored) {
 			return &DashedKeyError{Path: path, Where: where, Key: key, Underscored: underscored}
 		}
-		return &UnknownKeyError{Path: path, Where: where, Key: key}
+		return &UnknownKeyError{Path: path, Where: where, Key: key, Suggestion: closestKey(key, known)}
 	}
 	return nil
+}
+
+// closestKey returns the key of known nearest to key by edit distance, or ""
+// when none is within a fifth of key's length (at least one edit), so a hint
+// is a likely typo and never a guess.
+func closestKey(key string, known []string) string {
+	best, bestDistance := "", max(1, len(key)/5)+1
+	for _, k := range known {
+		if d := editDistance(key, k); d < bestDistance {
+			best, bestDistance = k, d
+		}
+	}
+	return best
+}
+
+// editDistance returns the Levenshtein distance between a and b.
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
 }
 
 // entryKeys returns the json key of each Entry field: the keys an entry accepts.

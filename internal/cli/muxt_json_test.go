@@ -943,3 +943,19 @@ func TestGenerateRejectsMuxtJSONWithoutPackages(t *testing.T) {
 	config := generateConfigurationOf(t, dir, "generate --use-receiver-type T1")
 	assert.Equal(t, "T1", config.ReceiverType, "receiver type from flags")
 }
+
+// TestGenerateRejectsUnknownTopLevelKey states that a misspelled top-level key
+// fails a flagless muxt generate and names the key it was meant to be, rather
+// than dropping the defaults it holds. The runner is not called.
+func TestGenerateRejectsUnknownTopLevelKey(t *testing.T) {
+	dir := moduleDir(t)
+	const file = `{"package_default": {"output_htmx": true}, "packages": {"example.com/m": {}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var unknown *composite.UnknownKeyError
+	require.ErrorAs(t, err, &unknown, "error %v", err)
+	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: unknown key "package_default"; did you mean "package_defaults"?`, err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}

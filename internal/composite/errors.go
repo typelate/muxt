@@ -48,15 +48,25 @@ func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
-// UnknownKeyError reports a key in a muxt.json entry that no generate flag
-// reads. Where names the entry, such as packages["."].
+// UnknownKeyError reports a key in a muxt.json that nothing reads: a key of an
+// entry that no generate flag reads, or a top-level key other than
+// package_defaults and packages. Where names the entry, such as
+// packages["."], and is empty for a top-level key. Suggestion is the closest
+// known key, empty when none is close, so a typo names its fix.
 type UnknownKeyError struct {
-	Path, Where, Key string
+	Path, Where, Key, Suggestion string
 }
 
-// Error returns the path, the entry, and the key on one line.
+// Error returns the path, the entry, the key, and the suggestion on one line.
 func (e *UnknownKeyError) Error() string {
-	return fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
+	msg := fmt.Sprintf("%s: unknown key %q", e.Path, e.Key)
+	if e.Where != "" {
+		msg = fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
+	}
+	if e.Suggestion != "" {
+		msg += fmt.Sprintf("; did you mean %q?", e.Suggestion)
+	}
+	return msg
 }
 
 // KeyFormError reports a packages key that is not an import path in the clean

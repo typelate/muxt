@@ -25,6 +25,6 @@ Only a flagless `muxt generate` needs an entry. In a directory with none, the ot
 
 `muxt generate config` creates the file, `muxt generate package NAME` adds an entry, `muxt generate def NAME` adds a route template.
 
-Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" is written with underscores; write "use_receiver_type"`, `unknown key "KEY"`, `no packages entry "KEY"; add one to generate this directory`.
+Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" is written with underscores; write "use_receiver_type"`, `unknown key "KEY"; did you mean "KNOWN"?`, `no packages entry "KEY"; add one to generate this directory`.
 
 Steps: [move generate flags](../how-to/muxt-json.md).
