@@ -61,6 +61,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputRoutesFuncWithPathPrefix, Deprecated: []string{deprecatedPathPrefix}, Example: "true",
 			Usage: `Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method.`,
 		}),
+		boolSetting(&c.Middleware, spec[bool]{
+			Name: outputRoutesFuncWithMiddlewareParam, Example: "true",
+			Usage: `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`,
+		}),
 	}
 }
 
