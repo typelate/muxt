@@ -1,6 +1,6 @@
 == no muxt.json, root: generate generate -v
 generate key="" file="" dir="." receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== no muxt.json, root: muxt 
+== no muxt.json, root: muxt
 routes key="" file="" dir="." receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == no muxt.json, root: check check
 check dir="." templates=[templates] allow-unused=false
@@ -15,7 +15,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="." templates=[templates]
 == no muxt.json, package: generate generate -v
 generate key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== no muxt.json, package: muxt 
+== no muxt.json, package: muxt
 routes key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == no muxt.json, package: check check
 check dir="contacts" templates=[templates] allow-unused=false
@@ -32,7 +32,7 @@ mutations dir="contacts" templates=[templates]
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
-== entries, file directory: muxt 
+== entries, file directory: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
@@ -58,7 +58,7 @@ generate key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" r
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
-== entries and root entry, file directory: muxt 
+== entries and root entry, file directory: muxt
 routes key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
@@ -85,7 +85,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="." templates=[templates]
 == entries, contacts: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
-== entries, contacts: muxt 
+== entries, contacts: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 == entries, contacts: check check
 check dir="contacts" templates=[templates] allow-unused=false
@@ -100,7 +100,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="contacts" templates=[templates]
 == entries, inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
-== entries, inventory: muxt 
+== entries, inventory: muxt
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 == entries, inventory: check check
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
@@ -115,7 +115,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="inventory" templates=[catalogTemplates]
 == entries, tasks: generate generate -v
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
-== entries, tasks: muxt 
+== entries, tasks: muxt
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
 == entries, tasks: check check
 check dir="tasks" templates=[templates] allow-unused=false
@@ -130,7 +130,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="tasks" templates=[templates]
 == entries, no entry for extra: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
-== entries, no entry for extra: muxt 
+== entries, no entry for extra: muxt
 routes key="" file="" dir="extra" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == entries, no entry for extra: check check
 check dir="extra" templates=[templates] allow-unused=false
@@ -204,7 +204,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="extra" templates=[pages]
 == empty packages, file directory: generate generate -v
 error: $BASE/muxt.json: packages is empty; add a package with: muxt generate package NAME
-== empty packages, file directory: muxt 
+== empty packages, file directory: muxt
 routes key="" file="" dir="." receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == empty packages, file directory: check check
 check dir="." templates=[templates] allow-unused=false
@@ -219,7 +219,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="." templates=[templates]
 == empty packages, contacts: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/contacts"; add one to generate this directory
-== empty packages, contacts: muxt 
+== empty packages, contacts: muxt
 routes key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == empty packages, contacts: check check
 check dir="contacts" templates=[templates] allow-unused=false
@@ -234,7 +234,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="contacts" templates=[templates]
 == stale entry, file directory: generate generate -v
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
-== stale entry, file directory: muxt 
+== stale entry, file directory: muxt
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
 == stale entry, file directory: check check
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
@@ -249,7 +249,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts ghost
 == stale entry, contacts: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== stale entry, contacts: muxt 
+== stale entry, contacts: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] htmx=false verbose=false report=[package_defaults@muxt.json defaults@]
 == stale entry, contacts: check check
 check dir="contacts" templates=[templates] allow-unused=false
@@ -264,7 +264,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="contacts" templates=[templates]
 == listed directory that does not exist: generate generate -v
 generate key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== listed directory that does not exist: muxt 
+== listed directory that does not exist: muxt
 routes key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == listed directory that does not exist: check check
 check dir="ghost" templates=[templates] allow-unused=false
@@ -296,7 +296,7 @@ mutations dir="ghost" templates=[pages]
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
-== -C module: muxt 
+== -C module: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
@@ -319,7 +319,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
 == -C inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
-== -C inventory: muxt 
+== -C inventory: muxt
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 == -C inventory: check check
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
@@ -334,7 +334,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="inventory" templates=[catalogTemplates]
 == -C extra: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
-== -C extra: muxt 
+== -C extra: muxt
 routes key="" file="" dir="extra" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == -C extra: check check
 check dir="extra" templates=[templates] allow-unused=false
@@ -349,7 +349,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="extra" templates=[templates]
 == -C directory that does not exist, below the file: generate generate -v
 generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== -C directory that does not exist, below the file: muxt 
+== -C directory that does not exist, below the file: muxt
 routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == -C directory that does not exist, below the file: check check
 check dir="typo" templates=[templates] allow-unused=false
@@ -364,7 +364,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 mutations dir="typo" templates=[templates]
 == -C directory that does not exist, no muxt.json: generate generate -v
 generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
-== -C directory that does not exist, no muxt.json: muxt 
+== -C directory that does not exist, no muxt.json: muxt
 routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == -C directory that does not exist, no muxt.json: check check
 check dir="typo" templates=[templates] allow-unused=false

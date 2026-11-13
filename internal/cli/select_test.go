@@ -113,7 +113,9 @@ func (r *selectionRecord) line(format string, args ...any) {
 // line ended in.
 func recordSelection(base, wd string, args ...string) (string, error) {
 	r := &selectionRecord{base: base}
-	err := commands(wd, args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
+	// A command line with no arguments is an empty list, not a nil one: cobra
+	// reads the arguments of the test binary, such as -update, for a nil list.
+	err := commands(wd, append([]string{}, args...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
 		generate: func(_ *cobra.Command, jobs []packageJob) error {
 			for _, job := range jobs {
 				r.line("generate key=%q file=%q dir=%q receiver=%q receiver-package=%q templates=%v output=%q htmx=%t logger=%t verbose=%t",
@@ -260,7 +262,11 @@ func selectionCells() []selectionCell {
 	} {
 		for _, c := range selectionCommands() {
 			args := append(append([]string(nil), c.args...), s.flags[c.name]...)
-			cells = append(cells, selectionCell{name: s.name + ": " + c.name + " " + strings.Join(args, " "), muxJSON: s.muxJSON, wd: s.wd, dashC: s.dashC, args: args})
+			// Joined, not concatenated with a space, so a command with no
+			// arguments has a name with no trailing space for an editor to
+			// strip from the golden.
+			name := s.name + ": " + strings.Join(append([]string{c.name}, args...), " ")
+			cells = append(cells, selectionCell{name: name, muxJSON: s.muxJSON, wd: s.wd, dashC: s.dashC, args: args})
 		}
 	}
 
@@ -323,7 +329,7 @@ func runSelectionCell(t *testing.T, c selectionCell) string {
 // The runners record, so a cell is the jobs the command would run and the
 // configuration of each, or the error the command line ended in. What a run
 // does with a loaded package is not in a cell; the load stands in for it.
-// Rewrite the file with UPDATE_SELECT_MATRIX=1 and read the diff.
+// Rewrite the file with -update and read the diff.
 func TestEveryCommandSelects(t *testing.T) {
 	const goldenPath = "testdata/select_matrix.txt"
 	cells := selectionCells()
@@ -331,7 +337,7 @@ func TestEveryCommandSelects(t *testing.T) {
 	for i, c := range cells {
 		got[i] = runSelectionCell(t, c)
 	}
-	if os.Getenv("UPDATE_SELECT_MATRIX") != "" {
+	if *update {
 		var sb strings.Builder
 		for i, c := range cells {
 			fmt.Fprintf(&sb, "== %s\n%s", c.name, got[i])
