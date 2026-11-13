@@ -82,32 +82,11 @@ type fsRead struct{ embed, parse []string }
 // only files under its own package. known is false when no call is left, or
 // when one of them cannot be read from this package's syntax alone.
 func parseFSCalls(pkg *packages.Package, wd, variable string) (calls []fsRead, known bool) {
-	var (
-		value     ast.Expr
-		valueFile *ast.File
-	)
-	for _, file := range pkg.Syntax {
-		for _, decl := range file.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if !ok || gen.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gen.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for i, ident := range vs.Names {
-					if ident.Name == variable && i < len(vs.Values) {
-						value, valueFile = vs.Values[i], file
-					}
-				}
-			}
-		}
-	}
-	if value == nil {
+	declared, ok := findVar(pkg, variable)
+	if !ok || declared.index >= len(declared.spec.Values) {
 		return nil, false
 	}
+	value, valueFile := declared.spec.Values[declared.index], declared.file
 	readable := true
 	ast.Inspect(value, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -200,6 +179,43 @@ func readParseFS(pkg *packages.Package, call *ast.CallExpr) (fsRead, bool) {
 // variable name.
 func embedPatterns(pkg *packages.Package, name string) ([]string, bool) {
 	const prefix = "//go:embed"
+	declared, ok := findVar(pkg, name)
+	if !ok {
+		return nil, false
+	}
+	var patterns []string
+	for _, group := range []*ast.CommentGroup{declared.decl.Doc, declared.spec.Doc} {
+		if group == nil {
+			continue
+		}
+		for _, line := range group.List {
+			rest, ok := strings.CutPrefix(line.Text, prefix)
+			if !ok {
+				continue
+			}
+			for _, field := range strings.Fields(rest) {
+				if unquoted, err := strconv.Unquote(field); err == nil {
+					field = unquoted
+				}
+				patterns = append(patterns, field)
+			}
+		}
+	}
+	return patterns, len(patterns) > 0
+}
+
+// varDecl is a package-level variable's declaration: the file, the var
+// declaration and the spec that names it, and which of the spec's names it is.
+type varDecl struct {
+	file  *ast.File
+	decl  *ast.GenDecl
+	spec  *ast.ValueSpec
+	index int
+}
+
+// findVar returns the declaration of the package-level variable name in the
+// syntax pkg was loaded with.
+func findVar(pkg *packages.Package, name string) (varDecl, bool) {
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -207,37 +223,19 @@ func embedPatterns(pkg *packages.Package, name string) ([]string, bool) {
 				continue
 			}
 			for _, spec := range gen.Specs {
-				vs := spec.(*ast.ValueSpec)
-				declares := false
-				for _, ident := range vs.Names {
-					declares = declares || ident.Name == name
-				}
-				if !declares {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
 					continue
 				}
-				var patterns []string
-				for _, group := range []*ast.CommentGroup{gen.Doc, vs.Doc} {
-					if group == nil {
-						continue
-					}
-					for _, line := range group.List {
-						rest, ok := strings.CutPrefix(line.Text, prefix)
-						if !ok {
-							continue
-						}
-						for _, field := range strings.Fields(rest) {
-							if unquoted, err := strconv.Unquote(field); err == nil {
-								field = unquoted
-							}
-							patterns = append(patterns, field)
-						}
+				for i, ident := range vs.Names {
+					if ident.Name == name {
+						return varDecl{file: file, decl: gen, spec: vs, index: i}, true
 					}
 				}
-				return patterns, len(patterns) > 0
 			}
 		}
 	}
-	return nil, false
+	return varDecl{}, false
 }
 
 // anyMatches reports whether a pattern matches the file name in the package
