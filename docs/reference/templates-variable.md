@@ -45,7 +45,7 @@ var templates = template.Must(template.Must(template.New("").
 
 - The other package's own `//go:embed` patterns decide which files exist.
 - A route template in a shared file is a route of every package that parses it.
-- A later definition of a name replaces an earlier one; bare `muxt` lists these under `Overrides:` ([cli](cli.md)). A shared file replacing the package's own definition is an error: parse the shared FS first.
+- A later definition of a name replaces an earlier one, as in `html/template`; bare `muxt` lists these under `Overrides:` ([cli](cli.md)). A shared file replacing the package's own definition is an error: parse the shared FS first.
 - Share functions by exporting them and naming each in a `FuncMap` literal. `Funcs(fragments.Funcs)` is an error that says so.
 - A variable that is unexported, not an `embed.FS`, has no `//go:embed` directive, or is from another module or the standard library is an error naming the rule.
 - Shared templates are outside both the [unused check](commands/check.md) and mutation testing in every package, so nothing reports a shared template that no package uses. A shared route template with no generated handler is still reported.

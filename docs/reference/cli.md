@@ -40,7 +40,16 @@ Template Routes:
 Template Functions:
 ```
 
-When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: one entry per name, with the absolute `file:line:col` of the last define clause dropped from a package other than the kept one's, and of the one kept, which renders, on lines of their own: `replaced: /home/me/app/fragments/layout.gohtml:3:9`, `kept:     /home/me/app/workspace/page.gohtml:1:9`. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
+A name defined in another package's files and again later in the chain is listed under `Overrides:`, with the `file:line:col` of each `{{define` ([rule](templates-variable.md#sharing-another-packages-files)):
+
+```text
+Overrides:
+  - layout
+      replaced: /home/me/app/fragments/layout.gohtml:1:1
+      kept:     /home/me/app/workspace/over.gohtml:1:1
+```
+
+`--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
 
 ### Keyed output
 

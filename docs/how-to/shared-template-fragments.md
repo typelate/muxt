@@ -84,6 +84,4 @@ Parsing the shared FS after the package's own files, so a shared file replaces t
 /home/me/app/workspace/over.gohtml:1:1: template "layout" is replaced by /home/me/app/fragments/layout.gohtml:1:1; parse the shared embed.FS before this package's own files
 ```
 
-`muxt check` never reports a shared template as unused.
-
-The same module, run end to end: [howto_shared_template_fragments.txt](../../cmd/muxt/testdata/howto_shared_template_fragments.txt). Rules and errors: [Templates Variable](../reference/templates-variable.md#sharing-another-packages-files).
+The same module, run end to end: [howto_shared_template_fragments.txt](../../cmd/muxt/testdata/howto_shared_template_fragments.txt). Rules, errors and which shared templates `muxt check` reports unused: [Templates Variable](../reference/templates-variable.md#sharing-another-packages-files).

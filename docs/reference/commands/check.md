@@ -49,6 +49,6 @@ muxt check --allow-unused
 ## Edge cases
 
 - **A non-literal template name.** A call whose template name is not a literal, as in a `render(w, name, data)` helper, may render any template, so while one exists no template is reported unused. It does not need `--allow-unused`: check names that call with an `ExecuteTemplate not checked` line and reports nothing unused.
-- **Files of another package.** A template from another package's `embed.FS` ([Templates Variable](../templates-variable.md#sharing-another-packages-files)) is never reported unused unless it is a route template with no generated handler; a template in the package's own files is still reported.
+- **Files of another package.** A template from another package's `embed.FS` is not reported unused: [rule and exception](../templates-variable.md#sharing-another-packages-files). A template in the package's own files is still reported.
 - **Shared templates.** A template shared between two templates variables is reported when either leaves it unused ([err_template_in_shared_file_unused_by_one_variable.txt](../../../cmd/muxt/testdata/err_template_in_shared_file_unused_by_one_variable.txt)).
 - **`text/template` sets.** A `text/template` set is text, so the HTML comment and markup checks do not apply to it.
