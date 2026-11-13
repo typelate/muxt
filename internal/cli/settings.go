@@ -77,6 +77,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputDatastar, Example: "true",
 			Usage: `Frames Server-Sent Events with the Datastar patch protocol: SSETemplateData gains the patch option setters and WriteTo emits datastar-patch-elements events. Mutually exclusive with --output-htmx.`,
 		}),
+		boolSetting(&c.OutputExportedDefaultIdentifiers, spec[bool]{
+			Name: outputExportedDefaultIdentifiers, Default: true, Example: "false",
+			Usage: `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`,
+		}),
 	}
 }
 
